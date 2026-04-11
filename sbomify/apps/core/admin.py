@@ -27,13 +27,13 @@ from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.vulnerability_scanning.admin import (
+    ComponentDependencyTrackMappingAdmin,
     DependencyTrackServerAdmin,
-    ReleaseDependencyTrackMappingAdmin,
     TeamVulnerabilitySettingsAdmin,
 )
 from sbomify.apps.vulnerability_scanning.models import (
+    ComponentDependencyTrackMapping,
     DependencyTrackServer,
-    ReleaseDependencyTrackMapping,
     TeamVulnerabilitySettings,
 )
 
@@ -538,4 +538,4 @@ admin_site.register(BillingPlan, BillingPlanAdmin)
 # Register vulnerability scanning models
 admin_site.register(DependencyTrackServer, DependencyTrackServerAdmin)
 admin_site.register(TeamVulnerabilitySettings, TeamVulnerabilitySettingsAdmin)
-admin_site.register(ReleaseDependencyTrackMapping, ReleaseDependencyTrackMappingAdmin)
+admin_site.register(ComponentDependencyTrackMapping, ComponentDependencyTrackMappingAdmin)

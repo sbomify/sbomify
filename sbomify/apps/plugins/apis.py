@@ -23,12 +23,36 @@ from .sdk.enums import RunStatus
 router = Router(tags=["plugins"])
 
 
+def _is_run_skipped(run: AssessmentRun) -> bool:
+    """Check if an assessment run was skipped by the plugin (not actually scanned).
+
+    Release-per-pair plugins (e.g. Dependency Track) return a skipped result
+    when their preconditions aren't met — for example, a cron-triggered DT
+    scan on an SBOM with no release association. The run completes (no
+    error, no findings) but it shouldn't be counted as "passing" because
+    the plugin never actually scanned anything. The plugin signals this
+    via ``result.metadata.skipped = True``.
+    """
+    if not run.result or not isinstance(run.result, dict):
+        return False
+    metadata = run.result.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return bool(metadata.get("skipped"))
+
+
 def _is_run_failing(run: AssessmentRun) -> bool:
     """Check if a completed assessment run has issues.
 
     For security plugins: any vulnerability (total_findings > 0 from by_severity) is a failure.
     For compliance/other plugins: fail_count > 0 or error_count > 0 is a failure.
+
+    Skipped runs are NOT failing — they never scanned, so they produced no
+    findings. They're not passing either (see ``_compute_status_summary``).
     """
+    if _is_run_skipped(run):
+        return False
+
     if not run.result or not isinstance(run.result, dict):
         return False
 
@@ -48,19 +72,61 @@ def _is_run_failing(run: AssessmentRun) -> bool:
     return fail_count > 0 or error_count > 0
 
 
-def _run_to_schema(run: AssessmentRun) -> AssessmentRunSchema:
-    """Convert an AssessmentRun model to schema."""
-    # Try to get display name from registered plugin
-    display_name = None
-    try:
-        plugin = RegisteredPlugin.objects.get(name=run.plugin_name)
-        display_name = plugin.display_name
-    except RegisteredPlugin.DoesNotExist:
-        pass
+def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
+    """Fetch display names for a set of plugin names in a single query.
+
+    Avoids the N+1 query pattern that would result from looking up each
+    run's plugin_name individually during schema conversion. Returns a
+    dict mapping plugin_name → display_name.
+    """
+    if not plugin_names:
+        return {}
+    return {
+        p.name: p.display_name
+        for p in RegisteredPlugin.objects.filter(name__in=plugin_names).only("name", "display_name")
+    }
+
+
+def _run_to_schema(
+    run: AssessmentRun,
+    display_names: dict[str, str] | None = None,
+) -> AssessmentRunSchema:
+    """Convert an AssessmentRun model to schema.
+
+    Args:
+        run: The AssessmentRun to serialize.
+        display_names: Optional prefetched map of plugin_name → display_name.
+            Callers that serialize multiple runs should prefetch this once
+            via ``_get_plugin_display_names_map`` to avoid N+1 queries.
+            When None, falls back to a per-call DB lookup for backward
+            compatibility with single-run callers.
+    """
+    if display_names is not None:
+        display_name = display_names.get(run.plugin_name)
+    else:
+        # Fallback: legacy single-run callers
+        display_name = None
+        try:
+            plugin = RegisteredPlugin.objects.only("display_name").get(name=run.plugin_name)
+            display_name = plugin.display_name
+        except RegisteredPlugin.DoesNotExist:
+            pass
+
+    # Populate release_ids from the M2M. Callers that want to avoid an N+1
+    # per-run lookup should prefetch ``releases`` on the queryset before
+    # calling this function — both batch serialization sites in this module
+    # do that via _get_latest_assessment_runs_for_sbom and the API endpoint
+    # querysets.
+    # Sort in Python (not .order_by) to preserve the prefetch cache
+    releases = sorted(run.releases.all(), key=lambda r: r.name)
+    release_ids = [str(rel.id) for rel in releases]
+    release_names = [rel.name for rel in releases]
 
     return AssessmentRunSchema(
         id=str(run.id),
         sbom_id=str(run.sbom_id),
+        release_ids=release_ids,
+        release_names=release_names,
         plugin_name=run.plugin_name,
         plugin_version=run.plugin_version,
         plugin_display_name=display_name,
@@ -76,7 +142,13 @@ def _run_to_schema(run: AssessmentRun) -> AssessmentRunSchema:
 
 
 def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummary:
-    """Compute status summary from a list of runs."""
+    """Compute status summary from a list of runs.
+
+    Skipped runs (see ``_is_run_skipped``) are tracked in their own count
+    and do NOT inflate ``passing_count``. This prevents misleading "all
+    green" reporting when a plugin like Dependency Track was triggered but
+    didn't actually scan (e.g., SBOM had no release association).
+    """
     if not runs:
         return AssessmentStatusSummary(overall_status="no_assessments")
 
@@ -84,10 +156,13 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
     failing = 0
     pending = 0
     in_progress = 0
+    skipped = 0
 
     for run in runs:
         if run.status == RunStatus.COMPLETED.value:
-            if _is_run_failing(run):
+            if _is_run_skipped(run):
+                skipped += 1
+            elif _is_run_failing(run):
                 failing += 1
             else:
                 passing += 1
@@ -98,7 +173,8 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
         elif run.status == RunStatus.FAILED.value:
             failing += 1
 
-    # Determine overall status
+    # Determine overall status. Skipped is a neutral state — it does not
+    # drive the overall_status field by itself; only pass/fail/pending do.
     if in_progress > 0:
         overall_status = "in_progress"
     elif pending > 0:
@@ -107,6 +183,10 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
         overall_status = "has_failures"
     elif passing > 0:
         overall_status = "all_pass"
+    elif skipped > 0:
+        # Only skipped runs — no real pass/fail signal. Treat as
+        # "no assessments ran" from the user's perspective.
+        overall_status = "no_assessments"
     else:
         overall_status = "no_assessments"
 
@@ -117,6 +197,7 @@ def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummar
         failing_count=failing,
         pending_count=pending,
         in_progress_count=in_progress,
+        skipped_count=skipped,
     )
 
 
@@ -135,32 +216,33 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
             all_runs=[],
         )
 
-    # Get all runs for this SBOM
-    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).order_by("-created_at"))
+    # Get all runs for this SBOM, ordered newest-first. Prefetch the
+    # ``releases`` M2M so per-run serialization doesn't trigger N+1.
+    all_runs = list(AssessmentRun.objects.filter(sbom_id=sbom_id).prefetch_related("releases").order_by("-created_at"))
 
-    # Get latest run per plugin using a subquery
-    latest_run_ids = (
-        AssessmentRun.objects.filter(sbom_id=sbom_id)
-        .values("plugin_name")
-        .annotate(
-            latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
-                .order_by("-created_at")
-                .values("id")[:1]
-            )
-        )
-        .values_list("latest_id", flat=True)
-    )
-    latest_runs = [run for run in all_runs if run.id in list(latest_run_ids)]
+    # Latest-per-plugin selection: under the scan-once-per-SBOM model, each
+    # plugin produces at most one current run for an SBOM, so a single pass
+    # over the newest-first list picks the right row per plugin_name.
+    seen_plugins: set[str] = set()
+    latest_runs: list[AssessmentRun] = []
+    for run in all_runs:
+        if run.plugin_name in seen_plugins:
+            continue
+        seen_plugins.add(run.plugin_name)
+        latest_runs.append(run)
 
     # Compute status summary from latest runs only
     status_summary = _compute_status_summary(latest_runs)
 
+    # Prefetch display names for all plugin_names present in this response
+    # in a single query so serialization stays O(n) without per-run lookups.
+    display_names = _get_plugin_display_names_map({run.plugin_name for run in all_runs})
+
     return SBOMAssessmentsResponse(
         sbom_id=sbom_id,
         status_summary=status_summary,
-        latest_runs=[_run_to_schema(run) for run in latest_runs],
-        all_runs=[_run_to_schema(run) for run in all_runs],
+        latest_runs=[_run_to_schema(run, display_names) for run in latest_runs],
+        all_runs=[_run_to_schema(run, display_names) for run in all_runs],
     )
 
 
@@ -170,43 +252,53 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
 
     Returns only what's needed for the assessment badge component.
     """
-    # Get latest run per plugin
-    latest_run_ids = (
+    # Fetch only the latest run per plugin_name via Subquery/OuterRef —
+    # bounded to ``enabled plugins per SBOM`` rather than the full run
+    # history. Under the scan-once-per-SBOM model there's one run per
+    # plugin per SBOM so this lookup is a simple group-by-plugin.
+    latest_ids = list(
         AssessmentRun.objects.filter(sbom_id=sbom_id)
         .values("plugin_name")
         .annotate(
             latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                )
                 .order_by("-created_at")
                 .values("id")[:1]
             )
         )
         .values_list("latest_id", flat=True)
     )
-
-    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_run_ids))
+    latest_ids = [pk for pk in latest_ids if pk is not None]
+    latest_runs = list(AssessmentRun.objects.filter(id__in=latest_ids))
     status_summary = _compute_status_summary(latest_runs)
+
+    # Prefetch display names once — avoids N+1 in the per-plugin loop below.
+    display_names = _get_plugin_display_names_map({run.plugin_name for run in latest_runs})
 
     # Build per-plugin summary
     plugins: list[dict[str, Any]] = []
     for run in latest_runs:
-        # Try to get display name
-        display_name = run.plugin_name
-        try:
-            plugin = RegisteredPlugin.objects.get(name=run.plugin_name)
-            display_name = plugin.display_name
-        except RegisteredPlugin.DoesNotExist:
-            pass
+        display_name = display_names.get(run.plugin_name, run.plugin_name)
 
-        # Determine plugin status
+        # Determine plugin status. "skipped" is its own status (distinct
+        # from "pass") so frontends can render a neutral badge for runs
+        # that completed without actually scanning (e.g., DT with no
+        # release association).
         if run.status == RunStatus.COMPLETED.value:
             result = run.result or {}
             summary = result.get("summary", {})
-            if _is_run_failing(run):
+            if _is_run_skipped(run):
+                plugin_status = "skipped"
+                findings_count = 0
+            elif _is_run_failing(run):
                 plugin_status = "fail"
+                findings_count = summary.get("total_findings", 0)
             else:
                 plugin_status = "pass"
-            findings_count = summary.get("total_findings", 0)
+                findings_count = summary.get("total_findings", 0)
         elif run.status in (RunStatus.PENDING.value, RunStatus.RUNNING.value):
             plugin_status = "pending"
             findings_count = 0
@@ -231,6 +323,7 @@ def get_sbom_assessment_badge(request: HttpRequest, sbom_id: str) -> AssessmentB
         passing_count=status_summary.passing_count,
         failing_count=status_summary.failing_count,
         pending_count=status_summary.pending_count,
+        skipped_count=status_summary.skipped_count,
         plugins=plugins,
     )
 

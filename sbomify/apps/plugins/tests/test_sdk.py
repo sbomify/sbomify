@@ -96,6 +96,7 @@ class TestPluginMetadata:
             "name": "test-plugin",
             "version": "1.0.0",
             "category": "security",
+            "scan_mode": "one_shot",
         }
 
 

@@ -12,6 +12,17 @@
                     <div class="tw-collapsible-header" @click="expanded = !expanded">
                         <div class="flex items-center gap-3 flex-grow min-w-0">
                             <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                            {# release_names is populated by _run_to_schema from the M2M #}
+                            {% if run.release_names %}
+                                <span class="flex items-center gap-1 flex-wrap">
+                                    {% for name in run.release_names %}
+                                        <span class="tw-badge-secondary"
+                                              title="Release this scan result applies to">
+                                            <i class="fas fa-tag mr-1"></i>{{ name }}
+                                        </span>
+                                    {% endfor %}
+                                </span>
+                            {% endif %}
                             {% if run.status == 'completed' %}
                                 {% if security_total %}
                                     <span class="tw-badge-secondary">
@@ -231,6 +242,17 @@
                 <div class="tw-collapsible-header" @click="expanded = !expanded">
                     <div class="flex items-center gap-3 flex-grow min-w-0">
                         <span class="font-semibold text-text">{{ run.plugin_display_name|default:run.plugin_name }}</span>
+                        {# release_names is populated by _run_to_schema from the M2M #}
+                        {% if run.release_names %}
+                            <span class="flex items-center gap-1 flex-wrap">
+                                {% for name in run.release_names %}
+                                    <span class="tw-badge-secondary"
+                                          title="Release this scan result applies to">
+                                        <i class="fas fa-tag mr-1"></i>{{ name }}
+                                    </span>
+                                {% endfor %}
+                            </span>
+                        {% endif %}
                         {% if run.status == 'completed' %}
                             {% if has_issues %}
                                 <span class="tw-badge-secondary">

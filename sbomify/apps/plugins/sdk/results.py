@@ -7,7 +7,7 @@ All plugins return normalized AssessmentResult objects with Finding entries.
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .enums import AssessmentCategory
+from .enums import AssessmentCategory, ScanMode
 
 
 @dataclass
@@ -21,11 +21,21 @@ class PluginMetadata:
         name: Plugin identifier (e.g., "ntia-minimum-elements", "osv", "checksum").
         version: Semantic version of the plugin (e.g., "1.0.0").
         category: Assessment category for classification and behavior.
+        scan_mode: Whether the plugin completes in one pass (ONE_SHOT) or
+            polls an external system across retries (CONTINUOUS). Continuous
+            plugins should override ``sync_release_tags()`` on the base class
+            if they maintain release-scoped downstream state (e.g., DT project
+            version tags). Defaults to ONE_SHOT.
+        supported_bom_types: Optional list of BOM types the plugin supports
+            (e.g., ["sbom"], ["sbom", "vex"]). None means all BOM types are
+            accepted. The orchestrator uses this to skip plugins whose bom_type
+            does not match the SBOM under assessment.
     """
 
     name: str
     version: str
     category: AssessmentCategory
+    scan_mode: ScanMode = ScanMode.ONE_SHOT
     supported_bom_types: list[str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -38,6 +48,7 @@ class PluginMetadata:
             "name": self.name,
             "version": self.version,
             "category": self.category.value,
+            "scan_mode": self.scan_mode.value,
         }
         if self.supported_bom_types is not None:
             result["supported_bom_types"] = self.supported_bom_types

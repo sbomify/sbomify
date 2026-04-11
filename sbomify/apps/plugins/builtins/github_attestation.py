@@ -22,7 +22,7 @@ import requests
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
-from sbomify.apps.plugins.sdk.enums import AssessmentCategory
+from sbomify.apps.plugins.sdk.enums import AssessmentCategory, ScanMode
 from sbomify.apps.plugins.sdk.results import (
     AssessmentResult,
     AssessmentSummary,
@@ -126,6 +126,7 @@ class GitHubAttestationPlugin(AssessmentPlugin):
             name="github-attestation",
             version=self.VERSION,
             category=AssessmentCategory.ATTESTATION,
+            scan_mode=ScanMode.CONTINUOUS,
             supported_bom_types=["sbom"],
         )
 

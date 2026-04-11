@@ -891,3 +891,43 @@ class TestGetComponentsLatestSbomAssessmentsBatch:
 
         result = get_components_latest_sbom_assessments_batch([component])
         assert result[str(component.id)] == []
+
+
+@pytest.mark.django_db
+class TestGetLatestAssessmentRunsForSbom:
+    """Tests for _get_latest_assessment_runs_for_sbom under the scan-once-per-SBOM model.
+
+    Each plugin produces one run per SBOM regardless of how many releases the
+    SBOM is linked to. The per-release breakdown lives on AssessmentRun.releases
+    M2M and surfaces in the UI as badges on the single plugin card.
+    """
+
+    def test_sbom_level_plugin_returns_one_run(self, sbom, ntia_plugin):
+        """The latest run per plugin is returned (duplicates filtered out)."""
+        from sbomify.apps.plugins.public_assessment_utils import _get_latest_assessment_runs_for_sbom
+
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 5, "error_count": 0}},
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.MANUAL.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
+        ntia_runs = [r for r in runs if r.plugin_name == "ntia-minimum-elements-2021"]
+        assert len(ntia_runs) == 1, "Expected exactly one NTIA run (latest only)"
+

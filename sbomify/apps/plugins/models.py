@@ -23,7 +23,10 @@ class RegisteredPlugin(models.Model):
         name: Unique plugin identifier (e.g., "checksum", "ntia", "osv").
         display_name: Human-readable name for UI display.
         description: Description of what the plugin does.
-        category: Assessment category for classification.
+        category: Assessment category for classification (security, compliance,
+            attestation, license). Under the scan-once-per-SBOM model, all
+            plugins run on SBOM upload; release associations update the
+            existing run's M2M without triggering a rescan.
         version: Current version of the plugin.
         plugin_class_path: Python import path to the plugin class.
         is_enabled: Whether the plugin is available for teams to use.
@@ -189,9 +192,22 @@ class AssessmentRun(models.Model):
     analysis and audit trails. Results are stored as JSON following the
     AssessmentResult schema.
 
+    Unit of work: one scan per (SBOM, plugin) pair. A single run can cover
+    multiple releases that share the same SBOM bytes — tracked via the
+    ``releases`` M2M. When a new release association is created for an
+    already-scanned SBOM, the existing run's M2M is extended and downstream
+    integrations (e.g. DT project tags) are updated — no new scan is
+    performed. This matches DT's "one project version per unique risk state"
+    guidance and avoids redundant scans of identical bytes.
+
     Attributes:
         id: UUID primary key.
         sbom: Foreign key to the SBOM being assessed.
+        releases: M2M to Release (via AssessmentRunRelease). The set of
+            releases this run's result applies to. Populated at run
+            completion from the current ReleaseArtifact state for the
+            SBOM, and updated when new release associations are created
+            or removed afterwards.
         plugin_name: Plugin identifier (denormalized from result).
         plugin_version: Plugin version (denormalized from result).
         plugin_config_hash: SHA256 hash of plugin configuration.
@@ -228,6 +244,19 @@ class AssessmentRun(models.Model):
         on_delete=models.CASCADE,
         related_name="assessment_runs",
     )
+    releases: "models.ManyToManyField[Any, Any]" = models.ManyToManyField(
+        "core.Release",
+        through="AssessmentRunRelease",
+        related_name="assessment_runs",
+        blank=True,
+        help_text=(
+            "Releases whose SBOM this run's result covers. Populated from "
+            "ReleaseArtifact state at scan time and updated when new "
+            "associations are created. Empty for SBOM-level plugin runs "
+            "(e.g. NTIA) that are deterministic on bytes regardless of "
+            "release context."
+        ),
+    )
 
     # Plugin identification (denormalized for efficient querying)
     plugin_name = models.CharField(
@@ -250,7 +279,7 @@ class AssessmentRun(models.Model):
 
     # Execution metadata
     run_reason = models.CharField(
-        max_length=30,
+        max_length=50,
         choices=[(r.value, r.name.replace("_", " ").title()) for r in RunReason],
         help_text="Why this assessment was triggered",
     )
@@ -344,3 +373,43 @@ class AssessmentRun(models.Model):
             True if status is COMPLETED.
         """
         return self.status == RunStatus.COMPLETED.value
+
+
+class AssessmentRunRelease(models.Model):
+    """Through table linking AssessmentRun to Release (M2M).
+
+    One scan (AssessmentRun) covers all Releases that share the scanned SBOM.
+    When a new ReleaseArtifact is created for an already-scanned SBOM, a row
+    is added here instead of triggering a new scan. When a ReleaseArtifact is
+    deleted (or the ``latest`` pointer moves to a different SBOM), the row is
+    removed so downstream tag state (e.g. DT project tags) stays consistent.
+
+    Attributes:
+        assessment_run: The scan whose result covers this release.
+        release: The release the scan result applies to.
+        created_at: When this association was created (for audit / ordering).
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("plugins").label + "_assessment_run_releases"
+        unique_together = [("assessment_run", "release")]
+        indexes = [
+            models.Index(fields=["assessment_run", "release"]),
+            models.Index(fields=["release", "assessment_run"]),
+        ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    assessment_run = models.ForeignKey(
+        AssessmentRun,
+        on_delete=models.CASCADE,
+        related_name="release_associations",
+    )
+    release = models.ForeignKey(
+        "core.Release",
+        on_delete=models.CASCADE,
+        related_name="run_associations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.assessment_run_id} ↔ {self.release_id}"

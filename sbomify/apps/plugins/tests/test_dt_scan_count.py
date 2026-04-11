@@ -1,8 +1,9 @@
-"""Tests for DT plugin server selection.
+"""Tests for DT plugin server selection and project naming.
 
 Verifies that DependencyTrackPlugin._select_dt_server correctly selects
-a server, and that capacity is determined by actual mapping count
-(not a fragile counter).
+a server, that capacity is determined by actual mapping count
+(not a fragile counter), and that the DT project naming follows the
+DT-canonical one-project-per-component pattern.
 """
 
 from unittest.mock import MagicMock, patch
@@ -36,12 +37,12 @@ class TestTrackedObjectCount:
     """Test that capacity is based on actual mapping count."""
 
     def test_tracked_object_count(self) -> None:
-        """tracked_object_count returns the number of release mappings."""
-        from sbomify.apps.core.models import Product, Release
+        """tracked_object_count returns the number of component mappings."""
+        from sbomify.apps.core.models import Component
         from sbomify.apps.teams.models import Team
         from sbomify.apps.vulnerability_scanning.models import (
+            ComponentDependencyTrackMapping,
             DependencyTrackServer,
-            ReleaseDependencyTrackMapping,
         )
 
         team = Team.objects.create(name="Test Team", key="test-team-count", billing_plan="business")
@@ -55,10 +56,9 @@ class TestTrackedObjectCount:
 
         assert server.tracked_object_count == 0
 
-        product = Product.objects.create(name="Test Product", team=team)
-        release = Release.objects.create(name="v1.0", product=product)
-        ReleaseDependencyTrackMapping.objects.create(
-            release=release,
+        component = Component.objects.create(name="Test Component", team=team)
+        ComponentDependencyTrackMapping.objects.create(
+            component=component,
             dt_server=server,
             dt_project_uuid="00000000-0000-0000-0000-000000000001",
             dt_project_name="test-project",
@@ -69,11 +69,11 @@ class TestTrackedObjectCount:
 
     def test_at_capacity(self) -> None:
         """is_available_for_scan returns False when at capacity."""
-        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.core.models import Component
         from sbomify.apps.teams.models import Team
         from sbomify.apps.vulnerability_scanning.models import (
+            ComponentDependencyTrackMapping,
             DependencyTrackServer,
-            ReleaseDependencyTrackMapping,
         )
 
         team = Team.objects.create(name="Test Team", key="test-team-cap", billing_plan="business")
@@ -85,10 +85,9 @@ class TestTrackedObjectCount:
             max_concurrent_scans=1,
         )
 
-        product = Product.objects.create(name="Test Product", team=team)
-        release = Release.objects.create(name="v1.0", product=product)
-        ReleaseDependencyTrackMapping.objects.create(
-            release=release,
+        component = Component.objects.create(name="Test Component", team=team)
+        ComponentDependencyTrackMapping.objects.create(
+            component=component,
             dt_server=server,
             dt_project_uuid="00000000-0000-0000-0000-000000000001",
             dt_project_name="test-project",
@@ -96,3 +95,5 @@ class TestTrackedObjectCount:
 
         assert server.tracked_object_count == 1
         assert server.is_available_for_scan is False
+
+

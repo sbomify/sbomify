@@ -65,6 +65,15 @@ class SBOMContext:
         component_id: The ID of the component this SBOM belongs to.
         team_id: The ID of the team that owns the component.
         bom_type: The BOM type discriminator (e.g., 'sbom', 'vex', 'cbom'). See ADR-006.
+        release_id: The primary key of the Release whose association triggered
+            this assessment (from the ReleaseArtifact post_save signal).
+            Under the scan-once-per-SBOM model, a single scan covers ALL
+            releases linked to the SBOM — this field is an informational
+            hint only, NOT a scoping key. Continuous plugins (scan_mode=
+            CONTINUOUS) should use ``sync_release_tags()`` to reconcile
+            release state after completion rather than acting on this field.
+            None means the trigger was not release-scoped (upload, cron,
+            manual).
         signature_blob_key: S3 key for the stored cryptographic signature (if attached).
         signature_type: Signature format (e.g., 'cosign-bundle', 'pgp-detached').
         provenance_blob_key: S3 key for the stored in-toto DSSE provenance envelope (if attached).
@@ -78,6 +87,7 @@ class SBOMContext:
     component_id: str | None = None
     team_id: int | None = None
     bom_type: str | None = None
+    release_id: str | None = None
     signature_blob_key: str | None = None
     signature_type: str | None = None
     provenance_blob_key: str | None = None
@@ -189,4 +199,26 @@ class AssessmentPlugin(ABC):
         Raises:
             Any exception will be caught by the framework and recorded
             as a failed assessment run with the error message.
+        """
+
+    def sync_release_tags(self, *, sbom_id: str, run_id: str, release: Any) -> None:
+        """Reconcile downstream release state after the AssessmentRun.releases M2M changes.
+
+        Called by the framework (orchestrator at run completion, attach/detach
+        tasks on release association changes) for plugins whose metadata
+        declares ``scan_mode = ScanMode.CONTINUOUS``. One-shot plugins do
+        not need this because they have no long-lived downstream state to
+        keep in sync.
+
+        The default implementation is a no-op. Continuous plugins that
+        maintain release-scoped state in an external system (e.g.,
+        Dependency Track project version tags) should override this
+        method to push the canonical release set from the M2M.
+
+        Args:
+            sbom_id: The SBOM primary key.
+            run_id: The AssessmentRun primary key whose M2M changed.
+            release: The Release instance that triggered the change, or
+                None when called at run completion or after a release
+                deletion.
         """

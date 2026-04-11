@@ -70,26 +70,70 @@ def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
 
 
 def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
-    """Get the latest assessment run for each plugin for an SBOM."""
-    # Get the latest run per plugin
-    latest_run_ids = (
+    """Get the latest assessment run per plugin for an SBOM.
+
+    Scan-once-per-SBOM model (sbomify/sbomify#881): one run per plugin,
+    regardless of how many releases the SBOM is linked to. The per-release
+    breakdown lives on ``AssessmentRun.releases`` M2M and is surfaced in the
+    UI as badges on the single plugin card.
+
+    Uses Subquery/OuterRef to fetch only the newest row per plugin_name
+    (no DISTINCT ON — portable to SQLite). Prefetches ``releases`` so the
+    card template can render the release badges without N+1 lookups.
+    """
+    latest_ids = list(
         AssessmentRun.objects.filter(sbom_id=sbom_id)
         .values("plugin_name")
         .annotate(
             latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                )
                 .order_by("-created_at")
                 .values("id")[:1]
             )
         )
         .values_list("latest_id", flat=True)
     )
-    return list(AssessmentRun.objects.filter(id__in=latest_run_ids))
+    latest_ids = [pk for pk in latest_ids if pk is not None]
+    if not latest_ids:
+        return []
+    return sorted(
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
+        key=lambda r: r.plugin_name,
+    )
+
+
+def _is_run_skipped(run: AssessmentRun) -> bool:
+    """Check if an assessment run was skipped by the plugin (not actually scanned).
+
+    Release-per-pair plugins like Dependency Track return a skipped result
+    (``result.metadata.skipped = True``) when their preconditions aren't
+    met — for example, a cron-triggered DT scan on an SBOM with no release
+    association. Skipped runs complete without error and without findings,
+    but they shouldn't be counted as "passing" because the plugin never
+    actually scanned anything.
+    """
+    if not run.result or not isinstance(run.result, dict):
+        return False
+    metadata = run.result.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return bool(metadata.get("skipped"))
 
 
 def _is_run_passing(run: AssessmentRun) -> bool:
-    """Check if an assessment run is passing (completed with no failures)."""
+    """Check if an assessment run is passing (completed and actually scanned clean).
+
+    Skipped runs are NOT passing — the plugin never executed its scan, so
+    "no findings" carries no signal. They're excluded from public "all
+    clean" aggregations to avoid showing a green badge for an SBOM whose
+    DT scan was skipped (e.g., no release association).
+    """
     if run.status != RunStatus.COMPLETED.value:
+        return False
+    if _is_run_skipped(run):
         return False
 
     result = run.result or {}
@@ -504,8 +548,6 @@ def get_products_latest_sbom_assessments_batch(
         return {str(p.id): [] for p in products}
 
     # Step 3: Get all assessment runs for these SBOMs (batch query)
-    from django.db.models import OuterRef, Subquery
-
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
         .values("sbom_id", "plugin_name")
@@ -635,6 +677,8 @@ def get_components_latest_sbom_assessments_batch(
     sbom_ids = list(sbom_to_component.keys())
 
     # Step 2: Get all assessment runs for these SBOMs (batch query)
+    from django.db.models import OuterRef, Subquery
+
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
         .values("sbom_id", "plugin_name")

@@ -90,7 +90,13 @@ def _build_plugin_stats(request: HttpRequest, team_key: str) -> dict[str, Any] |
     """Build plugin summary stats from the API."""
     status_code, plugin_settings = get_team_plugin_settings(request, team_key)
     if status_code != 200:
-        logger.warning("Failed to load plugin settings for team %s: status=%s", team_key, status_code)
+        # Intentionally do NOT include team_key in the log message: CodeQL
+        # flags it as "clear-text logging of sensitive information" because
+        # team_key is a URL path parameter (user-controlled input). Structured
+        # log correlation for this warning is available via the request's
+        # standard Django request-id middleware, which already scopes every
+        # log entry to the team implicitly through the URL.
+        logger.warning("Failed to load plugin settings: status=%s", status_code)
         return None
 
     available = plugin_settings.get("available_plugins", [])

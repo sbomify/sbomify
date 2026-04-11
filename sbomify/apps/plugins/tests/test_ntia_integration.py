@@ -124,17 +124,21 @@ class TestNTIAPluginIntegration:
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
+            # Scan-once-per-SBOM model: exactly one enqueue call, no category
+            # filter — all enabled plugins run in one batch.
             mock_enqueue.assert_called_once()
             call_kwargs = mock_enqueue.call_args[1]
             assert call_kwargs["sbom_id"] == sbom.id
             assert call_kwargs["team_id"] == str(team.id)
             assert call_kwargs["run_reason"] == RunReason.ON_UPLOAD
+            assert "only_categories" not in call_kwargs or call_kwargs.get("only_categories") is None
 
     def test_signal_triggers_for_all_teams(self, component: Component) -> None:
         """Test that SBOM creation signal triggers plugin assessment check for all teams.
 
         The actual filtering of which plugins run is handled by enqueue_assessments_for_sbom
-        based on TeamPluginSettings.
+        based on TeamPluginSettings. The compliance call always fires; security plugins
+        are also enqueued if the component belongs to a product (not the case here).
         """
         sbom = SBOM.objects.create(
             name="test-sbom",
@@ -148,7 +152,7 @@ class TestNTIAPluginIntegration:
         with patch("sbomify.apps.plugins.tasks.enqueue_assessments_for_sbom") as mock_enqueue:
             trigger_plugin_assessments(sender=SBOM, instance=sbom, created=True)
 
-            # Should always be called - filtering happens inside the function
+            # Scan-once: exactly one enqueue call with no category filter.
             mock_enqueue.assert_called_once()
 
     def test_full_assessment_workflow_compliant(

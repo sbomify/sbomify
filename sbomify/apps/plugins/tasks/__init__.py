@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, TypedDict
 
 import dramatiq
 from django.db import connection, transaction
@@ -44,9 +44,16 @@ from sbomify.task_utils import format_task_error
 
 from ..orchestrator import PluginOrchestrator, PluginOrchestratorError
 from ..sdk.base import RetryLaterError
-from ..sdk.enums import RunReason
+from ..sdk.enums import RunReason, ScanMode
 
 logger = logging.getLogger(__name__)
+
+
+class _PluginInfo(TypedDict):
+    """Registry snapshot row used by enqueue_assessments_for_sbom."""
+
+    category: str
+
 
 # Default cutoff for backfilling SBOMs when plugins are enabled (in hours)
 # Only SBOMs created within this window will be queued for assessment
@@ -87,6 +94,7 @@ def run_assessment_task(
     config: dict[str, Any] | None = None,
     triggered_by_user_id: int | None = None,
     triggered_by_token_id: str | None = None,
+    release_id: str | None = None,
     _retry_later_count: int = 0,
     _existing_run_id: str | None = None,
 ) -> dict[str, Any]:
@@ -106,6 +114,9 @@ def run_assessment_task(
         config: Optional configuration overrides for the plugin.
         triggered_by_user_id: Optional ID of user who triggered a manual run.
         triggered_by_token_id: Optional ID of API token used to trigger the run.
+        release_id: Optional ID of the triggering Release. Passed as an
+            informational hint via SBOMContext.release_id (not persisted on
+            AssessmentRun — releases use the M2M populated at completion).
         _retry_later_count: Internal counter for RetryLaterError retries.
         _existing_run_id: Internal ID of existing AssessmentRun to reuse (for retries).
 
@@ -160,6 +171,7 @@ def run_assessment_task(
                     triggered_by_user=triggered_by_user,
                     triggered_by_token=triggered_by_token,
                     existing_run_id=_existing_run_id,
+                    release_id=release_id,
                 )
             except RetryLaterError as e:
                 # Capture retry info inside atomic block so transaction commits
@@ -192,6 +204,7 @@ def run_assessment_task(
                     "config": config,
                     "triggered_by_user_id": triggered_by_user_id,
                     "triggered_by_token_id": triggered_by_token_id,
+                    "release_id": release_id,
                     "_retry_later_count": _retry_later_count + 1,
                 }
                 if run_id is not None:
@@ -311,6 +324,7 @@ def enqueue_assessment(
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
     delay_ms: int | None = None,
+    release_id: str | None = None,
 ) -> None:
     """Enqueue an assessment to be run asynchronously.
 
@@ -331,6 +345,9 @@ def enqueue_assessment(
         delay_ms: Optional delay in milliseconds before the task runs.
             Useful for plugins that depend on external systems (e.g., attestation
             plugins that need to wait for GitHub to process attestations).
+        release_id: Optional ID of the triggering Release. Passed as an
+            informational hint via SBOMContext.release_id (not persisted on
+            AssessmentRun — releases use the M2M populated at completion).
 
     Example:
         >>> from sbomify.apps.plugins.tasks import enqueue_assessment
@@ -349,6 +366,7 @@ def enqueue_assessment(
     task_user_id = triggered_by_user.id if triggered_by_user else None
     task_token_id = str(triggered_by_token.id) if triggered_by_token else None
     task_delay_ms = delay_ms
+    task_release_id = release_id
 
     def _send_task() -> None:
         """Send the assessment task to the queue."""
@@ -361,6 +379,7 @@ def enqueue_assessment(
                 "config": task_config,
                 "triggered_by_user_id": task_user_id,
                 "triggered_by_token_id": task_token_id,
+                "release_id": task_release_id,
                 "_retry_later_count": 0,
                 "_existing_run_id": None,
             },
@@ -408,29 +427,311 @@ def enqueue_assessment(
 ATTESTATION_DELAY_MS = 120_000
 
 
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=3,
+    time_limit=120000,  # 2 minutes — lightweight M2M update + optional DT tag PATCH
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_delay(60),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def attach_release_to_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]:
+    """Attach a newly-created release to existing AssessmentRuns for the SBOM.
+
+    Called by the ReleaseArtifact post_save signal handler. Finds the most
+    recent completed run per plugin for the given SBOM and adds the release
+    to each run's ``releases`` M2M. For plugins that expose a
+    ``sync_release_tags`` hook (currently only Dependency Track), the task
+    also asks the plugin to update its downstream tag state — e.g. PATCH
+    the DT project version's tags so the new release shows up in DT.
+
+    Race (Option A): if no completed run exists yet (the upload-triggered
+    scan is still running), this task is a no-op. The orchestrator's
+    run-completion step reads the current ReleaseArtifact set and will
+    include the just-created row naturally.
+
+    Args:
+        sbom_id: The SBOM primary key.
+        release_id: The Release primary key to attach.
+
+    Returns:
+        {"attached_runs": N, "synced_plugins": [...]}
+    """
+    connection.ensure_connection()
+
+    from sbomify.apps.core.models import Release
+
+    from ..models import AssessmentRun, AssessmentRunRelease
+    from ..sdk.enums import RunStatus
+
+    try:
+        release = Release.objects.select_related("product").get(pk=release_id)
+    except Release.DoesNotExist:
+        logger.debug(
+            "[TASK_attach_release] Release %s no longer exists, skipping attach for SBOM %s",
+            release_id,
+            sbom_id,
+        )
+        return {"attached_runs": 0, "synced_plugins": []}
+
+    # One run per plugin — latest completed-or-failed wins per plugin_name.
+    # Including FAILED runs ensures the M2M is populated even when the last
+    # scan failed (e.g. DT server unreachable). Without this, a release
+    # added after a failed scan would never get its tags synced until the
+    # next successful cron re-scan. Tag sync only runs for COMPLETED runs
+    # (see the sync_hook guard below).
+    # Prefer COMPLETED over FAILED: if both exist for a plugin, use the
+    # COMPLETED one (it has valid DT state to sync). Only fall back to
+    # FAILED if no COMPLETED run exists (M2M still gets populated so the
+    # next cron re-scan picks up the release).
+    latest_run_ids_by_plugin: dict[str, str] = {}
+    latest_run_statuses: dict[str, str] = {}
+    runs_qs = (
+        AssessmentRun.objects.filter(
+            sbom_id=sbom_id,
+            status__in=[RunStatus.COMPLETED.value, RunStatus.FAILED.value],
+        )
+        .order_by("plugin_name", "-created_at")
+        .values("id", "plugin_name", "status")
+    )
+    seen_plugins: set[str] = set()
+    for row in runs_qs:
+        pname = row["plugin_name"]
+        if pname in seen_plugins:
+            # Already found a run for this plugin; only replace if the
+            # existing pick was FAILED and this one is COMPLETED (prefer
+            # COMPLETED for tag sync).
+            if latest_run_statuses.get(pname) == RunStatus.FAILED.value and row["status"] == RunStatus.COMPLETED.value:
+                latest_run_ids_by_plugin[pname] = str(row["id"])
+                latest_run_statuses[pname] = row["status"]
+            continue
+        seen_plugins.add(pname)
+        latest_run_ids_by_plugin[pname] = str(row["id"])
+        latest_run_statuses[pname] = row["status"]
+
+    if not latest_run_ids_by_plugin:
+        logger.debug(
+            "[TASK_attach_release] No completed/failed runs for SBOM %s yet; "
+            "the in-flight scan will pick up release %s at completion",
+            sbom_id,
+            release_id,
+        )
+        return {"attached_runs": 0, "synced_plugins": []}
+
+    # Bulk-create the M2M rows (idempotent via unique_together).
+    # ignore_conflicts=True means rows that already exist are skipped silently.
+    # Note: bulk_create with ignore_conflicts returns input list regardless of
+    # how many were actually inserted, so we count before/after to get the
+    # real number of new associations.
+    new_associations = [
+        AssessmentRunRelease(assessment_run_id=run_id, release_id=release_id)
+        for run_id in latest_run_ids_by_plugin.values()
+    ]
+    with transaction.atomic():
+        AssessmentRunRelease.objects.bulk_create(new_associations, ignore_conflicts=True)
+
+    # Continuous plugins maintain release-scoped downstream state (e.g. DT
+    # project version tags). Ask them to re-sync after the M2M update, but
+    # ONLY for COMPLETED runs — failed runs have no DT project version to
+    # tag (the upload never succeeded). The M2M row is still attached so
+    # that the next successful scan picks up the release at completion.
+    synced: list[str] = []
+    for plugin_name, run_id in latest_run_ids_by_plugin.items():
+        if latest_run_statuses.get(plugin_name) != RunStatus.COMPLETED.value:
+            continue
+        try:
+            plugin = _load_plugin_by_name(plugin_name)
+        except Exception:
+            logger.debug(
+                "[TASK_attach_release] Plugin %s not loadable, skipping tag sync",
+                plugin_name,
+            )
+            continue
+        if plugin.get_metadata().scan_mode == ScanMode.CONTINUOUS:
+            try:
+                plugin.sync_release_tags(sbom_id=sbom_id, run_id=run_id, release=release)
+                synced.append(plugin_name)
+            except Exception:
+                logger.warning(
+                    "[TASK_attach_release] Plugin %s sync_release_tags raised for SBOM %s, "
+                    "release %s — M2M row is still attached",
+                    plugin_name,
+                    sbom_id,
+                    release_id,
+                    exc_info=True,
+                )
+
+    logger.info(
+        "[TASK_attach_release] Attached release %s to %d run(s) for SBOM %s, synced plugins: %s",
+        release_id,
+        len(new_associations),
+        sbom_id,
+        synced,
+    )
+    return {"attached_runs": len(new_associations), "synced_plugins": synced}
+
+
+@dramatiq.actor(
+    queue_name="plugins",
+    max_retries=3,
+    time_limit=120000,
+    store_results=True,
+)
+@retry(
+    retry=retry_if_exception_type((OperationalError, DatabaseError)),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_delay(60),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def detach_release_from_runs_task(sbom_id: str, release_id: str) -> dict[str, Any]:
+    """Detach a removed release from AssessmentRuns for an SBOM (Stage 5 Issue A).
+
+    Called by the ReleaseArtifact post_delete signal handler. Removes the
+    release from every AssessmentRun M2M for the SBOM and asks each plugin
+    that exposes a ``sync_release_tags`` hook to re-push the canonical tag
+    set (minus the just-removed release). Uses the same Q2=B "re-read full
+    canonical set" semantic as the attach path, so DT tag state converges
+    correctly regardless of ordering.
+
+    Args:
+        sbom_id: The SBOM primary key.
+        release_id: The Release primary key whose association was removed.
+
+    Returns:
+        {"detached_runs": N, "synced_plugins": [...]}
+    """
+    connection.ensure_connection()
+
+    from sbomify.apps.core.models import Release
+
+    from ..models import AssessmentRun, AssessmentRunRelease
+    from ..sdk.enums import RunStatus
+
+    # Remove the M2M rows for this (sbom, release) pair across all runs.
+    # Note: if the Release itself was deleted, the M2M rows are already
+    # gone via CASCADE, so this delete is a no-op in that case.
+    with transaction.atomic():
+        detached_count, _ = AssessmentRunRelease.objects.filter(
+            assessment_run__sbom_id=sbom_id,
+            release_id=release_id,
+        ).delete()
+
+    if detached_count == 0:
+        logger.debug(
+            "[TASK_detach_release] No M2M rows to detach for SBOM %s, release %s (already removed or never attached)",
+            sbom_id,
+            release_id,
+        )
+
+    # Find completed runs for this SBOM (one per plugin) whose tag state may
+    # now be stale, and ask their plugins to re-sync from the updated M2M.
+    latest_run_ids_by_plugin: dict[str, str] = {}
+    runs_qs = (
+        AssessmentRun.objects.filter(sbom_id=sbom_id, status=RunStatus.COMPLETED.value)
+        .order_by("plugin_name", "-created_at")
+        .values("id", "plugin_name")
+    )
+    seen_plugins: set[str] = set()
+    for row in runs_qs:
+        if row["plugin_name"] in seen_plugins:
+            continue
+        seen_plugins.add(row["plugin_name"])
+        latest_run_ids_by_plugin[row["plugin_name"]] = str(row["id"])
+
+    if not latest_run_ids_by_plugin:
+        return {"detached_runs": detached_count, "synced_plugins": []}
+
+    # Resolve a Release object to pass to sync_release_tags. If the release
+    # was deleted outright (not just removed from this SBOM), pass None —
+    # sync_release_tags re-reads the full canonical set from the M2M and
+    # doesn't strictly need the triggering release.
+    try:
+        release_obj = Release.objects.get(pk=release_id)
+    except Release.DoesNotExist:
+        release_obj = None  # Release was deleted; canonical set is still valid
+
+    synced: list[str] = []
+    for plugin_name, run_id in latest_run_ids_by_plugin.items():
+        try:
+            plugin = _load_plugin_by_name(plugin_name)
+        except Exception:
+            logger.debug(
+                "[TASK_detach_release] Plugin %s not loadable, skipping tag sync",
+                plugin_name,
+            )
+            continue
+        if plugin.get_metadata().scan_mode == ScanMode.CONTINUOUS:
+            try:
+                plugin.sync_release_tags(sbom_id=sbom_id, run_id=run_id, release=release_obj)
+                synced.append(plugin_name)
+            except Exception:
+                logger.warning(
+                    "[TASK_detach_release] Plugin %s sync_release_tags raised for SBOM %s, "
+                    "release %s — M2M row is still detached",
+                    plugin_name,
+                    sbom_id,
+                    release_id,
+                    exc_info=True,
+                )
+
+    logger.info(
+        "[TASK_detach_release] Detached release %s from %d M2M row(s) for SBOM %s, synced plugins: %s",
+        release_id,
+        detached_count,
+        sbom_id,
+        synced,
+    )
+    return {"detached_runs": detached_count, "synced_plugins": synced}
+
+
+def _load_plugin_by_name(plugin_name: str) -> Any:
+    """Instantiate a plugin by name from the registry.
+
+    Used by attach/detach tasks to inspect metadata and call lifecycle hooks.
+    Returns an instance with default config. Raises on any load failure.
+    """
+    from ..models import RegisteredPlugin
+
+    plugin_record = RegisteredPlugin.objects.get(name=plugin_name)
+    module_path, class_name = plugin_record.plugin_class_path.rsplit(".", 1)
+    import importlib
+
+    module = importlib.import_module(module_path)
+    plugin_class = getattr(module, class_name)
+    return plugin_class()
+
+
 def enqueue_assessments_for_sbom(
     sbom_id: str,
     team_id: str,
     run_reason: RunReason,
+    *,
+    release_id: str | None = None,
+    only_categories: set[str] | None = None,
     triggered_by_user: User | None = None,
     triggered_by_token: AccessToken | None = None,
 ) -> list[str]:
     """Enqueue all enabled assessments for an SBOM.
 
-    This convenience function looks up the team's plugin settings
-    and enqueues tasks for each enabled plugin.
-
-    Task dispatch is transaction-safe: tasks are deferred until after the
-    current transaction commits (via enqueue_assessment's on_commit wrapper),
-    ensuring the SBOM is visible to workers when tasks run.
-
-    Attestation plugins are delayed by ATTESTATION_DELAY_MS to allow external
-    systems (e.g., GitHub) time to process attestations before verification.
+    Looks up the team's plugin settings and enqueues tasks for each enabled plugin,
+    optionally filtered by category. Tasks are deferred via on_commit so the SBOM
+    is visible to workers. Attestation plugins are delayed by ATTESTATION_DELAY_MS
+    to give external systems (e.g., GitHub) time to process them.
 
     Args:
         sbom_id: The SBOM's primary key.
         team_id: The team's primary key.
         run_reason: Why assessments are being triggered.
+        release_id: Optional ID of the triggering Release. Passed as an
+            informational hint via SBOMContext.release_id. None means "not
+            release-scoped" (upload, cron, manual).
+        only_categories: Optional set of AssessmentCategory values (as strings)
+            to restrict enqueueing. None means run all enabled plugins.
+            See sbomify/sbomify#873 and #881.
         triggered_by_user: Optional user who triggered the assessments.
         triggered_by_token: Optional API token used to trigger the assessments.
 
@@ -450,8 +751,8 @@ def enqueue_assessments_for_sbom(
         return []
 
     # Filter to only enabled plugins in the registry and get their categories
-    available_plugins = {
-        p.name: p.category
+    available_plugins: dict[str, _PluginInfo] = {
+        p.name: {"category": p.category}
         for p in RegisteredPlugin.objects.filter(
             is_enabled=True,
             name__in=enabled_plugins,
@@ -464,11 +765,17 @@ def enqueue_assessments_for_sbom(
             logger.warning(f"[PLUGIN] Plugin '{plugin_name}' enabled for team {team_id} but not available in registry")
             continue
 
+        plugin_info = available_plugins[plugin_name]
+        plugin_category = plugin_info["category"]
+
+        # Filter by category when only_categories is specified
+        if only_categories is not None and plugin_category not in only_categories:
+            continue
+
         # Get plugin-specific config if any
         plugin_config = settings.get_plugin_config(plugin_name)
 
         # Apply delay for attestation plugins to allow external systems to process
-        plugin_category = available_plugins[plugin_name]
         delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
 
         enqueue_assessment(
@@ -479,6 +786,7 @@ def enqueue_assessments_for_sbom(
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
             delay_ms=delay_ms,
+            release_id=release_id,
         )
         enqueued.append(plugin_name)
 
@@ -590,9 +898,9 @@ def enqueue_assessments_for_existing_sboms_task(
             ).values("sbom_id", "plugin_name")
         }
 
-        # Get plugin categories for delay calculation
-        available_plugins = {
-            p.name: p.category
+        # Get plugin categories for filtering and delay calculation
+        available_plugins: dict[str, _PluginInfo] = {
+            p.name: {"category": p.category}
             for p in RegisteredPlugin.objects.filter(
                 is_enabled=True,
                 name__in=enabled_plugins,
@@ -615,8 +923,18 @@ def enqueue_assessments_for_existing_sboms_task(
 
             # Enqueue assessments for plugins that need runs
             for plugin_name in plugins_needing_runs:
+                plugin_info = available_plugins.get(plugin_name)
+
+                plugin_category = plugin_info["category"] if plugin_info else None
+
+                # The backfill skips security category plugins (e.g., dependency-track,
+                # osv) because vulnerability scanners need release context and are
+                # handled by the scheduled cron tasks. Compliance/attestation plugins
+                # are deterministic on SBOM bytes and safe to backfill immediately.
+                if plugin_category == AssessmentCategory.SECURITY.value:
+                    continue
+
                 plugin_config = plugin_configs.get(plugin_name)
-                plugin_category = available_plugins.get(plugin_name)
 
                 # Apply delay for attestation plugins
                 delay_ms = ATTESTATION_DELAY_MS if plugin_category == AssessmentCategory.ATTESTATION.value else None
@@ -653,10 +971,159 @@ def enqueue_assessments_for_existing_sboms_task(
         }
 
 
-# --- Scheduled OSV scanning tasks ---
-# These tasks run release-centric scans with plan-based cadence:
-# - Community teams: weekly (Sundays at 2 AM)
-# - Business/Enterprise teams: daily (at 2 AM)
+# --- Scheduled security plugin scanning tasks ---
+# Scan-once-per-SBOM cron scans with plugin- and plan-based cadences:
+# - OSV community teams: weekly (Sundays at 2 AM)
+# - OSV business/enterprise teams: daily (at 2 AM)
+# - DT business/enterprise teams: hourly
+# Each SBOM is scanned at most once per skip window, regardless of how many
+# releases it is linked to. Release tracking uses the AssessmentRun.releases M2M.
+
+
+def _is_community_team(team: Any) -> bool:
+    """Check if team is on Community plan (or no plan)."""
+    return not team.billing_plan or team.billing_plan == "community"
+
+
+def _is_paid_team(team: Any) -> bool:
+    """Check if team is on a paid plan (Business or Enterprise)."""
+    return team.billing_plan in ("business", "enterprise")
+
+
+def _run_scheduled_security_scans(
+    plugin_name: str,
+    plan_filter: Callable[..., bool],
+    skip_hours: int,
+    task_name: str,
+    only_cyclonedx: bool = False,
+) -> dict[str, Any]:
+    """Generic helper for scheduled security plugin scans (scan-once-per-SBOM).
+
+    Iterates unique SBOMs (with at least one ReleaseArtifact) for teams with the
+    plugin enabled and matching the billing-plan filter. Enqueues one assessment
+    per SBOM unless a recent AssessmentRun exists within the skip window. Release
+    tracking is handled by the AssessmentRun.releases M2M at scan completion.
+
+    Args:
+        plugin_name: Registered plugin slug (e.g. "osv", "dependency-track").
+        plan_filter: Callable(team) -> bool selecting teams for this cadence.
+        skip_hours: Skip SBOMs scanned within this many hours.
+        task_name: Short label used in log messages.
+        only_cyclonedx: If True, restrict to CycloneDX SBOMs (required for DT).
+
+    Returns:
+        Dictionary with scan statistics.
+    """
+    from sbomify.apps.sboms.models import SBOM
+
+    from ..models import AssessmentRun, TeamPluginSettings
+
+    logger.info(f"[TASK_{task_name}] Starting {plugin_name} scan")
+    connection.ensure_connection()
+
+    stats: dict[str, Any] = {
+        "status": "completed",
+        "plugin_name": plugin_name,
+        "teams_scanned": 0,
+        "sboms_found": 0,
+        "assessments_enqueued": 0,
+        "skipped_recent": 0,
+    }
+
+    try:
+        # Find teams with this plugin enabled, filtered by billing plan.
+        team_configs: dict[int, dict[str, Any]] = {}
+        for settings_obj in TeamPluginSettings.objects.select_related("team"):
+            if not settings_obj.is_plugin_enabled(plugin_name):
+                continue
+            if not plan_filter(settings_obj.team):
+                continue
+            team_configs[settings_obj.team_id] = settings_obj.get_plugin_config(plugin_name) or {}
+
+        if not team_configs:
+            logger.info(f"[TASK_{task_name}] No teams with {plugin_name} enabled")
+            return stats
+
+        team_ids = set(team_configs.keys())
+        stats["teams_scanned"] = len(team_ids)
+
+        # Recent-run dedup: unique sbom_ids already scanned by this plugin
+        # within the skip window. Scan-once-per-SBOM model — we no longer
+        # dedup per (sbom, release) pair because one scan covers all the
+        # SBOM's current releases via the AssessmentRun.releases M2M.
+        cutoff = timezone.now() - timedelta(hours=skip_hours)
+        recent_sbom_ids: set[str] = set(
+            AssessmentRun.objects.filter(
+                plugin_name=plugin_name,
+                created_at__gte=cutoff,
+                status__in=["completed", "running", "pending"],
+                sbom__component__team_id__in=team_ids,
+            ).values_list("sbom_id", flat=True)
+        )
+
+        # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
+        # with at least one ReleaseArtifact link is eligible — the scan will
+        # cover all of its current releases via the M2M populated at run
+        # completion. Uses Exists() on ReleaseArtifact rather than a reverse
+        # accessor join to keep the query small and avoid name-coupling.
+        from django.db.models import Exists, OuterRef
+
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        sbom_qs = (
+            SBOM.objects.filter(
+                bom_type=SBOM.BomType.SBOM,
+                component__team_id__in=team_ids,
+            )
+            .annotate(
+                has_release_artifact=Exists(
+                    ReleaseArtifact.objects.filter(
+                        sbom_id=OuterRef("pk"),
+                        # Defense-in-depth: only count same-team release artifacts
+                        release__product__team_id=OuterRef("component__team_id"),
+                    )
+                )
+            )
+            .filter(has_release_artifact=True)
+            .values("id", "component__team_id", "format")
+            .distinct()
+        )
+
+        if only_cyclonedx:
+            sbom_qs = sbom_qs.filter(format="cyclonedx")
+
+        for sbom_row in sbom_qs.iterator(chunk_size=500):
+            stats["sboms_found"] += 1
+            sbom_id_str = str(sbom_row["id"])
+
+            if sbom_id_str in recent_sbom_ids:
+                stats["skipped_recent"] += 1
+                continue
+
+            team_id = sbom_row["component__team_id"]
+            plugin_config = team_configs.get(team_id) or None
+
+            enqueue_assessment(
+                sbom_id=sbom_id_str,
+                plugin_name=plugin_name,
+                run_reason=RunReason.SCHEDULED_REFRESH,
+                config=plugin_config,
+            )
+            stats["assessments_enqueued"] += 1
+
+        logger.info(
+            "[TASK_%s] Completed: %d %s assessments enqueued across %d teams, %d skipped (recent)",
+            task_name,
+            stats["assessments_enqueued"],
+            plugin_name,
+            stats["teams_scanned"],
+            stats["skipped_recent"],
+        )
+        return stats
+
+    except Exception as e:
+        logger.exception(f"[TASK_{task_name}] Failed: {e}")
+        return {**stats, "status": "failed", "error": str(e)}
 
 
 @cron("0 2 * * Sun")  # type: ignore[untyped-decorator]  # Weekly on Sundays at 2 AM
@@ -675,15 +1142,14 @@ def enqueue_assessments_for_existing_sboms_task(
 def weekly_osv_scan_task() -> dict[str, Any]:
     """Weekly OSV vulnerability scan for Community teams.
 
-    Scans all SBOMs in releases and latest component SBOMs for teams
-    on the Community plan (or no billing plan). Skips SBOMs that already
-    have a recent OSV assessment run (within 7 days).
+    Scans eligible SBOMs (with at least one release association) for Community-plan
+    teams. Skips SBOMs with an OSV run within 7 days.
 
     Returns:
         Dictionary with scan statistics.
     """
-    logger.info("[TASK_weekly_osv_scan] Starting weekly OSV scan for Community teams")
-    return _run_scheduled_osv_scans(
+    return _run_scheduled_security_scans(
+        plugin_name="osv",
         plan_filter=_is_community_team,
         skip_hours=168,  # 7 days
         task_name="weekly_osv_scan",
@@ -706,161 +1172,18 @@ def weekly_osv_scan_task() -> dict[str, Any]:
 def daily_osv_scan_task() -> dict[str, Any]:
     """Daily OSV vulnerability scan for Business/Enterprise teams.
 
-    Scans all SBOMs in releases and latest component SBOMs for teams
-    on Business or Enterprise plans. Skips SBOMs that already have
-    a recent OSV assessment run (within 24 hours).
+    Scans eligible SBOMs (with at least one release association) for paid teams.
+    Skips SBOMs with an OSV run within 24 hours.
 
     Returns:
         Dictionary with scan statistics.
     """
-    logger.info("[TASK_daily_osv_scan] Starting daily OSV scan for Business/Enterprise teams")
-    return _run_scheduled_osv_scans(
+    return _run_scheduled_security_scans(
+        plugin_name="osv",
         plan_filter=_is_paid_team,
         skip_hours=24,
         task_name="daily_osv_scan",
     )
-
-
-def _is_community_team(team: Any) -> bool:
-    """Check if team is on Community plan (or no plan)."""
-    return not team.billing_plan or team.billing_plan == "community"
-
-
-def _is_paid_team(team: Any) -> bool:
-    """Check if team is on a paid plan (Business or Enterprise)."""
-    return team.billing_plan in ("business", "enterprise")
-
-
-def _run_scheduled_osv_scans(
-    plan_filter: Callable[..., bool],
-    skip_hours: int,
-    task_name: str,
-) -> dict[str, Any]:
-    """Shared logic for scheduled OSV scans.
-
-    Queries all releases with SBOMs and latest component SBOMs,
-    filters teams by billing plan, and enqueues OSV assessments.
-
-    Args:
-        plan_filter: Callable that takes a team and returns True if it
-            should be included in this scan cadence.
-        skip_hours: Skip SBOMs with a recent OSV assessment run within
-            this many hours.
-        task_name: Name for logging.
-
-    Returns:
-        Dictionary with scan statistics.
-    """
-    from sbomify.apps.core.models import ReleaseArtifact
-    from sbomify.apps.sboms.models import SBOM
-
-    from ..models import AssessmentRun
-
-    connection.ensure_connection()
-
-    stats: dict[str, Any] = {
-        "status": "completed",
-        "teams_scanned": 0,
-        "sboms_found": 0,
-        "assessments_enqueued": 0,
-        "skipped_recent": 0,
-        "skipped_team_filter": 0,
-    }
-
-    try:
-        # Collect unique SBOMs from releases (all releases with SBOMs)
-        sboms_to_scan: dict[str, tuple[SBOM, str]] = {}  # sbom_id -> (sbom, source)
-
-        release_artifacts = (
-            ReleaseArtifact.objects.filter(sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM)
-            .select_related("sbom__component__team", "release__product")
-            .only(
-                "sbom__id",
-                "sbom__component__team__id",
-                "sbom__component__team__billing_plan",
-                "sbom__component__team__key",
-                "release__product__name",
-                "release__name",
-            )
-        )
-
-        for artifact in release_artifacts:
-            sbom = artifact.sbom
-            assert sbom is not None  # guaranteed by sbom__isnull=False filter
-            team = sbom.component.team
-
-            if not plan_filter(team):
-                stats["skipped_team_filter"] += 1
-                continue
-
-            if sbom.id not in sboms_to_scan:
-                sboms_to_scan[sbom.id] = (sbom, "release")
-
-        # Also include latest SBOM per component (for component-view coverage)
-        from sbomify.apps.sboms.models import Component
-
-        components = Component.objects.filter(
-            component_type=Component.ComponentType.BOM,
-        ).select_related("team")
-
-        for component in components:
-            team = component.team
-            if not plan_filter(team):
-                continue
-
-            # Only scan actual SBOMs, not VEX/CBOM/etc (OSV only supports bom_type=sbom)
-            latest_sbom = component.sbom_set.filter(bom_type=SBOM.BomType.SBOM).order_by("-created_at").first()
-            if latest_sbom and latest_sbom.id not in sboms_to_scan:
-                sboms_to_scan[latest_sbom.id] = (latest_sbom, "component_latest")
-
-        stats["sboms_found"] = len(sboms_to_scan)
-
-        if not sboms_to_scan:
-            logger.info(f"[TASK_{task_name}] No SBOMs found for scanning")
-            return stats
-
-        # Check for recent assessment runs to skip
-        cutoff = timezone.now() - timedelta(hours=skip_hours)
-        recent_run_sbom_ids = set(
-            AssessmentRun.objects.filter(
-                plugin_name="osv",
-                sbom_id__in=list(sboms_to_scan.keys()),
-                created_at__gte=cutoff,
-                status__in=["completed", "running", "pending"],
-            ).values_list("sbom_id", flat=True)
-        )
-
-        # Track unique teams
-        teams_seen: set[str] = set()
-
-        for sbom_id, (sbom, source) in sboms_to_scan.items():
-            if sbom_id in recent_run_sbom_ids:
-                stats["skipped_recent"] += 1
-                continue
-
-            team = sbom.component.team
-            if team.key:
-                teams_seen.add(team.key)
-
-            enqueue_assessment(
-                sbom_id=str(sbom_id),
-                plugin_name="osv",
-                run_reason=RunReason.SCHEDULED_REFRESH,
-            )
-            stats["assessments_enqueued"] += 1
-
-        stats["teams_scanned"] = len(teams_seen)
-
-        logger.info(
-            f"[TASK_{task_name}] Completed: {stats['assessments_enqueued']} assessments enqueued "
-            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent)"
-        )
-
-        return stats
-
-    except Exception as e:
-        logger.exception(f"[TASK_{task_name}] Failed: {e}")
-        return {**stats, "status": "failed", "error": str(e)}
 
 
 # --- Scheduled Dependency Track scanning task ---
@@ -882,109 +1205,16 @@ def _run_scheduled_osv_scans(
 def hourly_dt_scan_task() -> dict[str, Any]:
     """Hourly DT vulnerability scan for Business/Enterprise teams.
 
-    Enqueues DT plugin assessments for all releases with SBOMs where
-    the team uses Dependency Track. Skips recently-assessed SBOMs
-    (within 1 hour).
+    Scans eligible CycloneDX SBOMs (with at least one release association) for paid
+    teams with DT enabled. Skips SBOMs with a DT run within 1 hour.
 
     Returns:
         Dictionary with scan statistics.
     """
-    from sbomify.apps.core.models import ReleaseArtifact
-    from sbomify.apps.sboms.models import SBOM
-
-    from ..models import AssessmentRun, TeamPluginSettings
-
-    logger.info("[TASK_hourly_dt_scan] Starting hourly DT scan for Business/Enterprise teams")
-
-    connection.ensure_connection()
-
-    stats: dict[str, Any] = {
-        "status": "completed",
-        "teams_scanned": 0,
-        "sboms_found": 0,
-        "assessments_enqueued": 0,
-        "skipped_recent": 0,
-        "skipped_non_cyclonedx": 0,
-    }
-
-    try:
-        # Find teams with DT plugin enabled and paid plans
-        dt_team_configs: dict[int, dict[str, Any]] = {}  # team_id -> plugin_config
-        for settings in TeamPluginSettings.objects.filter(
-            team__billing_plan__in=["business", "enterprise"],
-        ).select_related("team"):
-            if settings.is_plugin_enabled("dependency-track"):
-                dt_team_configs[settings.team_id] = settings.get_plugin_config("dependency-track")
-
-        if not dt_team_configs:
-            logger.info("[TASK_hourly_dt_scan] No teams with DT enabled")
-            return stats
-
-        dt_team_ids = set(dt_team_configs.keys())
-
-        # Collect SBOMs from releases for these teams
-        sboms_to_scan: dict[str, tuple[SBOM, str]] = {}
-
-        release_artifacts = ReleaseArtifact.objects.filter(
-            sbom__isnull=False,
-            sbom__bom_type=SBOM.BomType.SBOM,
-            sbom__component__team_id__in=dt_team_ids,
-        ).select_related("sbom__component__team", "release__product")
-
-        for artifact in release_artifacts:
-            sbom = artifact.sbom
-            assert sbom is not None  # guaranteed by sbom__isnull=False filter
-            if sbom.id not in sboms_to_scan:
-                sboms_to_scan[sbom.id] = (sbom, "release")
-
-        stats["sboms_found"] = len(sboms_to_scan)
-        stats["teams_scanned"] = len(dt_team_ids)
-
-        if not sboms_to_scan:
-            logger.info("[TASK_hourly_dt_scan] No SBOMs found for DT scanning")
-            return stats
-
-        # Check for recent DT assessment runs to skip (within 1 hour)
-        cutoff = timezone.now() - timedelta(hours=1)
-        recent_run_sbom_ids = set(
-            AssessmentRun.objects.filter(
-                plugin_name="dependency-track",
-                sbom_id__in=list(sboms_to_scan.keys()),
-                created_at__gte=cutoff,
-                status__in=["completed", "running", "pending"],
-            ).values_list("sbom_id", flat=True)
-        )
-
-        for sbom_id, (sbom, source) in sboms_to_scan.items():
-            if sbom_id in recent_run_sbom_ids:
-                stats["skipped_recent"] += 1
-                continue
-
-            # DT only supports CycloneDX — skip SPDX and other formats
-            if getattr(sbom, "format", None) != "cyclonedx":
-                stats["skipped_non_cyclonedx"] += 1
-                continue
-
-            # Pass team's plugin config for DT server selection
-            team_id = sbom.component.team_id
-            plugin_config = dt_team_configs.get(team_id) or None
-
-            enqueue_assessment(
-                sbom_id=str(sbom_id),
-                plugin_name="dependency-track",
-                run_reason=RunReason.SCHEDULED_REFRESH,
-                config=plugin_config,
-            )
-            stats["assessments_enqueued"] += 1
-
-        logger.info(
-            f"[TASK_hourly_dt_scan] Completed: {stats['assessments_enqueued']} DT assessments enqueued "
-            f"across {stats['teams_scanned']} teams, {stats['skipped_recent']} skipped (recent), "
-            f"{stats['skipped_non_cyclonedx']} skipped (non-CycloneDX)"
-        )
-
-        return stats
-
-    except Exception as e:
-        logger.exception(f"[TASK_hourly_dt_scan] Failed: {e}")
-        return {**stats, "status": "failed", "error": str(e)}
+    return _run_scheduled_security_scans(
+        plugin_name="dependency-track",
+        plan_filter=_is_paid_team,
+        skip_hours=1,
+        task_name="hourly_dt_scan",
+        only_cyclonedx=True,
+    )

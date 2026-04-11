@@ -20,7 +20,7 @@ from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
-from .sdk.enums import RunReason, RunStatus
+from .sdk.enums import RunReason, RunStatus, ScanMode
 from .utils import compute_config_hash, compute_content_digest
 
 if TYPE_CHECKING:
@@ -90,6 +90,7 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
+        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Execute a plugin assessment with full lifecycle management.
 
@@ -109,6 +110,10 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
+            release_id: Optional ID of the triggering Release. Passed to
+                plugins as an informational hint via ``SBOMContext.release_id``
+                (not persisted on AssessmentRun — releases are tracked via
+                the ``releases`` M2M populated at run completion).
 
         Returns:
             The AssessmentRun record with results, or None if the SBOM's
@@ -157,7 +162,12 @@ class PluginOrchestrator:
                 f"with plugin {metadata.name} v{metadata.version}"
             )
         else:
-            # Create the AssessmentRun record in PENDING state
+            # Create the AssessmentRun record in PENDING state. Under the
+            # scan-once-per-SBOM model, releases are attached via the M2M
+            # at run completion (see _sync_run_releases), not at creation
+            # time. The ``release_id`` argument threaded through callers
+            # is kept only as an informational hint for plugins via
+            # ``SBOMContext.release_id`` and is not written to a FK here.
             assessment_run = AssessmentRun.objects.create(
                 sbom_id=sbom_id,
                 plugin_name=metadata.name,
@@ -203,6 +213,7 @@ class PluginOrchestrator:
                 component_id=sbom_instance.component_id,
                 team_id=sbom_instance.component.team_id if sbom_instance.component else None,
                 bom_type=sbom_instance.bom_type,
+                release_id=release_id,
                 signature_blob_key=sbom_instance.signature_blob_key,
                 signature_type=sbom_instance.signature_type,
                 provenance_blob_key=sbom_instance.provenance_blob_key,
@@ -239,6 +250,31 @@ class PluginOrchestrator:
                     "completed_at",
                 ]
             )
+
+            # Populate the releases M2M from the CURRENT ReleaseArtifact state.
+            # This is the source-of-truth moment: whichever releases link to this
+            # SBOM at run-completion time are the releases the result covers.
+            # Security plugins have release-scoped results (DT/OSV); compliance
+            # plugins are deterministic on bytes so the M2M is informational for
+            # them but still populated so the UI can show "this compliance scan
+            # applies to: latest, v5.0.0" without a separate query.
+            self._sync_run_releases(assessment_run, sbom_id)
+
+            # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
+            # scoped downstream state (e.g. DT project version tags). After
+            # the M2M is populated, call sync_release_tags so the plugin can
+            # reconcile against the final canonical release set. One-shot
+            # plugins skip this — they have no long-lived external state.
+            if metadata.scan_mode == ScanMode.CONTINUOUS:
+                try:
+                    plugin.sync_release_tags(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
+                except Exception:
+                    logger.warning(
+                        "[PLUGIN] sync_release_tags raised for run %s — M2M is still "
+                        "populated correctly; downstream tags may be stale until next sync",
+                        assessment_run.id,
+                        exc_info=True,
+                    )
 
             logger.info(
                 f"[PLUGIN] Completed run {assessment_run.id} for SBOM {sbom_id} "
@@ -279,6 +315,41 @@ class PluginOrchestrator:
         assessment_run.error_message = error_message
         assessment_run.completed_at = timezone.now()
         assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+
+    def _sync_run_releases(self, assessment_run: AssessmentRun, sbom_id: str) -> None:
+        """Populate AssessmentRun.releases M2M from current ReleaseArtifact state.
+
+        Called at run completion. Reads the set of Release IDs currently linked
+        to this SBOM via ReleaseArtifact, and inserts a row in
+        AssessmentRunRelease for each. Idempotent via unique_together.
+
+        Race note (see user-decided Option A): if a ReleaseArtifact is created
+        while this scan is still running, the completion step picks up the new
+        release naturally because we read the current state here. The
+        release-association signal handler sees an in-progress run and no-ops,
+        relying on this completion step to populate the M2M correctly.
+        """
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        from .models import AssessmentRunRelease
+
+        # Filter to same-team releases only (defense-in-depth against admin-created
+        # cross-team ReleaseArtifact rows that bypass the API-layer team check).
+        sbom_team_id = assessment_run.sbom.component.team_id
+        release_ids = list(
+            ReleaseArtifact.objects.filter(
+                sbom_id=sbom_id,
+                release__product__team_id=sbom_team_id,
+            )
+            .values_list("release_id", flat=True)
+            .distinct()
+        )
+        if not release_ids:
+            return
+        AssessmentRunRelease.objects.bulk_create(
+            [AssessmentRunRelease(assessment_run=assessment_run, release_id=rid) for rid in release_ids],
+            ignore_conflicts=True,
+        )
 
     def _check_dependencies(self, sbom_id: str, plugin_name: str) -> dict[str, Any] | None:
         """Check dependency status for a plugin.
@@ -517,6 +588,7 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
+        release_id: str | None = None,
     ) -> AssessmentRun | None:
         """Run an assessment by plugin name.
 
@@ -531,6 +603,8 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
+            release_id: Optional ID of the Release this assessment targets.
+                See :py:meth:`run_assessment` for details.
 
         Returns:
             The AssessmentRun record with results, or None if skipped
@@ -544,4 +618,5 @@ class PluginOrchestrator:
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
             existing_run_id=existing_run_id,
+            release_id=release_id,
         )

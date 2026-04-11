@@ -5,7 +5,7 @@ assessment plugins in sbomify.
 """
 
 from .base import AssessmentPlugin, RetryLaterError
-from .enums import AssessmentCategory, RunReason, RunStatus
+from .enums import AssessmentCategory, RunReason, RunStatus, ScanMode
 from .results import AssessmentResult, AssessmentSummary, Finding, PluginMetadata
 
 __all__ = [
@@ -18,4 +18,5 @@ __all__ = [
     "RetryLaterError",
     "RunReason",
     "RunStatus",
+    "ScanMode",
 ]
