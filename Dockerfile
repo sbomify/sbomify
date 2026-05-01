@@ -146,9 +146,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Install system dependencies & uv
 # Debug tools (redis-tools, postgresql-client) are installed in dev stage only
 # libpq-dev and gcc are needed for building C extensions during dependency installation
+# WeasyPrint (used by sbomify.apps.compliance.services.pdf_service to convert
+# CRA bundle markdown to PDF) needs Pango ≥1.4.4 and the JPEG / OpenJPEG / ffi
+# shared libs at runtime — Cairo is no longer required since WeasyPrint v52.5.
+# These libs ship in the Debian "trixie-slim" base, so no PPA is needed.
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libjpeg-dev \
+    libopenjp2-7-dev \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --root-user-action=ignore uv
 

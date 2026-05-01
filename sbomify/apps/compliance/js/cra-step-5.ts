@@ -86,6 +86,7 @@ function craStep5() {
     showPreviewModal: false,
     previewTitle: '',
     isLoadingPreview: false,
+    downloadingDocPdf: false,
     stepUrls: {} as Record<string, string>,
 
     init() {
@@ -138,6 +139,55 @@ function craStep5() {
     get compliancePercent(): number {
       if (!this.totalControls) return 0;
       return Math.round((this.satisfiedCount / this.totalControls) * 100);
+    },
+
+    /**
+     * Download an on-demand PDF rendering of a CRA document.
+     *
+     * The endpoint streams ``application/pdf`` with
+     * ``Content-Disposition: attachment``, so we pass the response
+     * blob through ``URL.createObjectURL`` and trigger a synthetic
+     * anchor click to land it in the user's Downloads folder. Done
+     * via fetch (rather than a plain ``<a href=...>``) so we can
+     * surface a 503 ``pdf_renderer_unavailable`` error inline as a
+     * toast — the renderer is best-effort in distroless prod.
+     */
+    async downloadDocumentPdf(kind: string, label: string): Promise<void> {
+      if (this.downloadingDocPdf) return;
+      this.downloadingDocPdf = true;
+      try {
+        const resp = await fetch(
+          `/api/v1/compliance/cra/${this.assessmentId}/documents/${kind}/download`,
+        );
+        if (!resp.ok) {
+          let message = `Failed to download ${label} PDF`;
+          try {
+            const err = await resp.json();
+            if (err?.error) message = err.error;
+          } catch {
+            /* non-JSON error payload — keep default */
+          }
+          showError(message);
+          return;
+        }
+        const blob = await resp.blob();
+        const headerName = resp.headers.get('Content-Disposition') || '';
+        const match = headerName.match(/filename="?([^";]+)"?/);
+        const filename = match?.[1] || `${kind}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showSuccess(`${label} PDF downloaded.`);
+      } catch {
+        showError('Network error while downloading PDF');
+      } finally {
+        this.downloadingDocPdf = false;
+      }
     },
 
     async previewDocument(kind: string, label: string): Promise<void> {

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
@@ -24,6 +26,8 @@ from .schemas import (
     ObservationCreateSchema,
     ObservationSchema,
     SBOMStatusSchema,
+    SignatureResponseSchema,
+    SignatureSchema,
     StalenessSchema,
     StepContextSchema,
     StepDataSchema,
@@ -417,6 +421,236 @@ def preview_document(request: HttpRequest, assessment_id: str, kind: str) -> _Re
         return preview.status_code or 400, ErrorResponse(error=preview.error or "Unknown error")
 
     return 200, {"content": preview.value}
+
+
+# Filename slugs per document kind. Used as the ``Content-Disposition``
+# attachment name so the file lands in Downloads with a recognisable
+# title rather than ``declaration_of_conformity.pdf`` (the raw
+# DocumentKind enum value, with underscores). Kept in sync with the
+# bundle layout in ``services/export_service._DOC_PATH_MAP``.
+_DOC_PDF_FILENAME: dict[str, str] = {
+    "vdp": "vulnerability-disclosure-policy.pdf",
+    "risk_assessment": "risk-assessment.pdf",
+    "user_instructions": "user-instructions.pdf",
+    "decommissioning_guide": "secure-decommissioning.pdf",
+    "early_warning": "early-warning-template.pdf",
+    "full_notification": "vulnerability-notification-template.pdf",
+    "final_report": "final-report-template.pdf",
+    "declaration_of_conformity": "declaration-of-conformity.pdf",
+}
+
+
+@router.get("/cra/{assessment_id}/documents/{kind}/download")
+def download_document_pdf(request: HttpRequest, assessment_id: str, kind: str) -> HttpResponse:
+    """Render the named CRA document on-demand and return it as a PDF.
+
+    Reuses the same markdown source the bundle export ships, runs it
+    through ``markdown_to_pdf``, and streams the result with a
+    ``Content-Disposition: attachment`` header so the browser triggers
+    a download rather than rendering inline. We render fresh on every
+    request (rather than fetching a cached PDF from S3) so a signature
+    update or staleness flip is reflected immediately — the operator
+    doesn't have to re-export the whole bundle to grab one document.
+
+    Falls back to a 503 ``ErrorResponse`` when WeasyPrint is unavailable
+    (distroless prod without Pango); the client can still hit the
+    ``/preview`` endpoint and copy markdown manually in that case.
+    """
+    from django.http import JsonResponse
+
+    from .services.document_generation_service import get_document_preview
+    from .services.pdf_service import markdown_to_pdf
+
+    result = _get_assessment_or_error(request, assessment_id)
+    if not isinstance(result, CRAAssessment):
+        # ``_Response`` returns ``(status, ErrorResponse)`` — wrap into
+        # JsonResponse so this view's signature stays HttpResponse.
+        status, body = result
+        return JsonResponse({"error": getattr(body, "error", "Unknown error")}, status=status)
+
+    preview = get_document_preview(result, kind)
+    if not preview.ok:
+        return JsonResponse(
+            {"error": preview.error or "Unknown error"},
+            status=preview.status_code or 400,
+        )
+
+    pdf_bytes = markdown_to_pdf(preview.value or "", title=_DOC_PDF_FILENAME.get(kind, kind))
+    if pdf_bytes is None:
+        return JsonResponse(
+            {
+                "error": "PDF rendering is unavailable on this server. Use the markdown preview instead.",
+                "error_code": "pdf_renderer_unavailable",
+            },
+            status=503,
+        )
+
+    filename = _DOC_PDF_FILENAME.get(kind, f"{kind}.pdf")
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+_SIGNATURE_FIELD_MAX = 255
+_SIGNATURE_IMAGE_MAX_BYTES = 64 * 1024  # ~64 KB ceiling for the canvas PNG payload.
+_SIGNATURE_DATA_URL_PREFIX = "data:image/png;base64,"
+# PNG signature — every valid PNG starts with these 8 bytes (ISO/IEC 15948).
+# Used to reject payloads that pass the data-URL prefix check but carry
+# something other than an actual PNG (a transposed JPEG, a hand-crafted
+# blob with the right header, base64-encoded HTML, etc.).
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+@router.get(
+    "/cra/{assessment_id}/signature",
+    response={200: SignatureResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
+)
+def get_doc_signature(request: HttpRequest, assessment_id: str) -> _Response:
+    """Read the manufacturer signature block stored on the assessment."""
+    result = _get_assessment_or_error(request, assessment_id)
+    if not isinstance(result, CRAAssessment):
+        return result
+    return 200, SignatureResponseSchema(
+        place=result.signature_place,
+        name=result.signature_name,
+        function=result.signature_function,
+        image=result.signature_image,
+        signed_at=result.signed_at.isoformat() if result.signed_at else None,
+        is_signed=result.is_signed,
+    )
+
+
+@router.put(
+    "/cra/{assessment_id}/signature",
+    response={200: SignatureResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
+def save_doc_signature(request: HttpRequest, assessment_id: str, payload: SignatureSchema) -> _Response:
+    """Save the manufacturer signature block.
+
+    The signature image must be a base64-encoded PNG data URL produced
+    by the wizard's ``signature_pad`` canvas. We validate the prefix
+    and an upper byte cap server-side because:
+
+    * the canvas can in principle return arbitrarily large payloads
+      if a future UI change resizes the drawing surface, and
+    * the field is rendered into the DoC template as ``data:image/png;
+      base64,...`` — anything other than a real PNG would either render
+      as a broken image (best case) or get scheme-blocked by the
+      ``mark_safe`` rendering path (worst case).
+
+    Saving the signature bumps any existing DoC ``CRAGeneratedDocument``
+    to ``is_stale=True`` so the wizard's "Refresh Stale Documents"
+    button picks it up — the operator must regenerate before the
+    public reader will surface the updated declaration. We do not
+    auto-regenerate here because a signature change is a deliberate
+    legal act and we want the operator to confirm by clicking
+    Generate.
+    """
+    from datetime import datetime, timezone
+
+    from django.db import transaction
+
+    result = _get_assessment_or_error(request, assessment_id, require_mutable=True)
+    if not isinstance(result, CRAAssessment):
+        return result
+
+    # Length caps on the text fields. Trim trailing whitespace before
+    # validating so users pasting from a doc do not trip the cap on a
+    # stray newline.
+    place = payload.place.strip()
+    name = payload.name.strip()
+    function = payload.function.strip()
+    if not (place and name and function):
+        return 400, ErrorResponse(
+            error="Place, name, and function are all required.",
+            error_code="signature_incomplete",
+        )
+    for field_name, value in (("place", place), ("name", name), ("function", function)):
+        if len(value) > _SIGNATURE_FIELD_MAX:
+            return 400, ErrorResponse(
+                error=f"{field_name} must be {_SIGNATURE_FIELD_MAX} characters or fewer.",
+                error_code="signature_field_too_long",
+            )
+
+    # Image validation runs in four stages so a payload that survives
+    # the prefix check can't slip past as malformed bytes:
+    #   1. data-URL prefix gate
+    #   2. strict base64 decode (rejects whitespace / invalid alphabet)
+    #   3. PNG magic-byte check on the decoded payload
+    #   4. decoded-byte size cap (the previous version capped the
+    #      base64 string length, which over-counted by ~33%)
+    # We don't decode the IDAT or count non-blank pixels — the front
+    # end already enforces ``pad.isEmpty()``, and a bytes-level PNG
+    # check is sufficient to keep the DoC renderer / WeasyPrint from
+    # blowing up on garbage server-side.
+    image = payload.image
+    if not image.startswith(_SIGNATURE_DATA_URL_PREFIX):
+        return 400, ErrorResponse(
+            error="Signature image must be a base64-encoded PNG data URL.",
+            error_code="signature_invalid_image",
+        )
+
+    encoded = image[len(_SIGNATURE_DATA_URL_PREFIX) :]
+    if not encoded:
+        return 400, ErrorResponse(
+            error="Signature image must contain a base64-encoded PNG payload.",
+            error_code="signature_invalid_image",
+        )
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return 400, ErrorResponse(
+            error="Signature image must be valid base64.",
+            error_code="signature_invalid_image",
+        )
+    if not decoded.startswith(_PNG_MAGIC):
+        return 400, ErrorResponse(
+            error="Signature image must be a valid PNG.",
+            error_code="signature_invalid_image",
+        )
+    if len(decoded) > _SIGNATURE_IMAGE_MAX_BYTES:
+        return 400, ErrorResponse(
+            error="Signature image is too large.",
+            error_code="signature_image_too_large",
+        )
+
+    user = request.user if request.user.is_authenticated else None
+    with transaction.atomic():
+        result.signature_place = place
+        result.signature_name = name
+        result.signature_function = function
+        result.signature_image = image
+        result.signed_at = datetime.now(tz=timezone.utc)
+        result.signed_by = user
+        result.save(
+            update_fields=[
+                "signature_place",
+                "signature_name",
+                "signature_function",
+                "signature_image",
+                "signed_at",
+                "signed_by",
+                "updated_at",
+            ]
+        )
+        # Force a stale flag on the existing DoC so the operator
+        # regenerates before publishing the new signature.
+        from .models import CRAGeneratedDocument
+
+        CRAGeneratedDocument.objects.filter(
+            assessment=result,
+            document_kind=CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY,
+        ).update(is_stale=True)
+
+    return 200, SignatureResponseSchema(
+        place=result.signature_place,
+        name=result.signature_name,
+        function=result.signature_function,
+        image=result.signature_image,
+        signed_at=result.signed_at.isoformat() if result.signed_at else None,
+        is_signed=result.is_signed,
+    )
 
 
 @router.post(

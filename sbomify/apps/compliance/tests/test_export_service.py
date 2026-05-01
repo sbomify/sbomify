@@ -280,13 +280,14 @@ class TestBuildExportPackage:
     def test_manifest_format_version_bump(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
     ):
-        """Manifest format bumped to 1.1 when the integrity block +
-        is_placeholder field were added; downstream consumers pin on
-        this version to decide whether to expect the new fields."""
+        """Manifest format bumped to 1.2 when the per-document PDF
+        rendering shipped — downstream consumers that pin on the version
+        can decide whether to expect a sibling ``.pdf`` next to each
+        ``.md`` in the manifest's files array."""
         mock_get_content.return_value = b"mock content"
 
         result = build_export_package(assessment_with_docs, sample_user)
-        assert result.value.manifest["format_version"] == "1.1"
+        assert result.value.manifest["format_version"] == "1.2"
 
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_sha256_round_trips_through_shasum(

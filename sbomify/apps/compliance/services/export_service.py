@@ -23,6 +23,7 @@ from sbomify.apps.compliance.services._reference_data import (
     read_harmonised_standards_bytes,
 )
 from sbomify.apps.compliance.services.oscal_service import serialize_assessment_results
+from sbomify.apps.compliance.services.pdf_service import markdown_to_pdf
 from sbomify.apps.core.models import Component
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.services.results import ServiceResult
@@ -69,7 +70,25 @@ _FORMAT_EXT_MAP: dict[str, str] = {"cyclonedx": "cdx.json", "spdx": "spdx.json"}
 # this constant so they can't drift. 1.0 was the original CRA export
 # scaffolding; 1.1 added manufacturer.is_placeholder and the integrity
 # block; bump to 1.2+ on the next schema change.
-_MANIFEST_FORMAT_VERSION = "1.1"
+_MANIFEST_FORMAT_VERSION = "1.2"
+
+# Human-readable PDF document titles per CRA document kind. Used as
+# the ``<title>`` of the rendered PDF (the PDF reader's tab/header)
+# and in the worker logs when a render fails so the operator can
+# tell which document broke without grepping the manifest. Keyed by
+# the ``DocumentKind`` enum (rather than raw string literals) so a
+# rename of the choice value gets a hard mypy / typo error here
+# instead of silently dropping the entry on a stale string match.
+_DOC_PDF_TITLE: dict[CRAGeneratedDocument.DocumentKind, str] = {
+    CRAGeneratedDocument.DocumentKind.VDP: "Vulnerability Disclosure Policy",
+    CRAGeneratedDocument.DocumentKind.RISK_ASSESSMENT: "CRA Risk Assessment",
+    CRAGeneratedDocument.DocumentKind.USER_INSTRUCTIONS: "User Instructions (Annex II)",
+    CRAGeneratedDocument.DocumentKind.DECOMMISSIONING_GUIDE: "Secure Decommissioning Guide",
+    CRAGeneratedDocument.DocumentKind.EARLY_WARNING: "CRA Article 14 — Early Warning",
+    CRAGeneratedDocument.DocumentKind.FULL_NOTIFICATION: "CRA Article 14 — Vulnerability Notification",
+    CRAGeneratedDocument.DocumentKind.FINAL_REPORT: "CRA Article 14 — Final Report",
+    CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY: "EU Declaration of Conformity",
+}
 
 
 def _integrity_readme(manifest_sha256: str) -> str:
@@ -92,7 +111,15 @@ def _integrity_readme(manifest_sha256: str) -> str:
         "- `integrity` block — self-describes the hash algorithm and\n"
         "  the companion files (`metadata/manifest.sha256`,\n"
         "  `metadata/INTEGRITY.md`). Old consumers that read\n"
-        "  `format_version: 1.0` should ignore unknown keys.\n\n"
+        "  `format_version: 1.0` should ignore unknown keys.\n"
+        "- 1.2 — every Markdown document is now rendered to a sibling\n"
+        "  `.pdf` and listed in the manifest beside the `.md` source.\n"
+        "  The `.md` remains the source of truth (auditors verify the\n"
+        "  hash against the manifest); the `.pdf` is a convenience\n"
+        "  rendering for paper-shaped regulatory filings. If the\n"
+        "  rendering pipeline was unavailable when the bundle was\n"
+        "  built, the `.pdf` entry is simply absent — its omission\n"
+        "  is benign.\n\n"
         "This CRA export bundle ships with two integrity primitives:\n\n"
         "- `metadata/manifest.json` — per-file SHA-256 hashes for every "
         "artefact listed in its `files` array. `metadata/manifest.json`, "
@@ -243,7 +270,9 @@ def build_export_package(
         ar_bytes = ar_json.encode("utf-8")
         _write_to_zip(zf, f"{prefix}/oscal/assessment-results.json", ar_bytes, manifest_files, "OSCAL AR")
 
-        # 3. Generated documents
+        # 3. Generated documents — every ``.md`` gets a sibling ``.pdf``
+        # rendered via ``_write_md_with_pdf``; ``security.txt`` is plain
+        # text per RFC 9116 so we stay on ``_write_to_zip`` for it.
         docs = CRAGeneratedDocument.objects.filter(assessment=assessment)
         for doc in docs:
             zip_path = _DOC_PATH_MAP.get(doc.document_kind)
@@ -252,7 +281,19 @@ def build_export_package(
             content = _get_generated_doc_content(doc, s3_client=docs_s3)
             if content:
                 cra_ref = _DOC_CRA_REF.get(doc.document_kind, "")
-                _write_to_zip(zf, f"{prefix}/{zip_path}", content, manifest_files, cra_ref)
+                full_path = f"{prefix}/{zip_path}"
+                if zip_path.endswith(".md"):
+                    # ``document_kind`` is a ``CharField(choices=...)`` so the
+                    # raw value is a plain ``str``; convert to the enum so
+                    # ``_DOC_PDF_TITLE`` (keyed by enum) resolves cleanly.
+                    # ``DocumentKind(doc.document_kind)`` is safe here
+                    # because ``_DOC_PATH_MAP`` already filtered out any
+                    # unrecognised kind via the earlier ``continue``.
+                    enum_kind = CRAGeneratedDocument.DocumentKind(doc.document_kind)
+                    pdf_title = _DOC_PDF_TITLE.get(enum_kind, doc.document_kind)
+                    _write_md_with_pdf(zf, full_path, content, manifest_files, cra_ref, pdf_title=pdf_title)
+                else:
+                    _write_to_zip(zf, full_path, content, manifest_files, cra_ref)
 
         # 4. SBOMs from product components — fetch only the latest SBOM per component
         from django.db.models import OuterRef, Subquery
@@ -294,13 +335,16 @@ def build_export_package(
 
         # 6. Article 14 reporting README — documents the 2026-09-11
         # reporting deadline, the ENISA Single Reporting Platform, and
-        # which template to use for each deadline.
-        _write_to_zip(
+        # which template to use for each deadline. Rendered to PDF
+        # alongside the ``.md`` so notified bodies that only accept
+        # filings on paper still get a usable copy.
+        _write_md_with_pdf(
             zf,
             f"{prefix}/article-14/README_REPORTING.md",
             _article_14_reporting_readme().encode("utf-8"),
             manifest_files,
             "Article 14 / Article 16",
+            pdf_title="CRA Article 14 — Reporting Obligations",
         )
 
         # 7. Manifest — built after all other files are written so manifest_files
@@ -408,6 +452,35 @@ def _write_to_zip(
             "cra_reference": cra_reference,
         }
     )
+
+
+def _write_md_with_pdf(
+    zf: zipfile.ZipFile,
+    md_path: str,
+    md_bytes: bytes,
+    manifest_files: list[dict[str, str]],
+    cra_reference: str,
+    *,
+    pdf_title: str,
+) -> None:
+    """Write a markdown file and best-effort sibling PDF.
+
+    Both copies share the same ``cra_reference`` so manifest readers
+    can group them. The PDF is a convenience rendering — if WeasyPrint
+    is unavailable or rendering fails (logged inside
+    ``markdown_to_pdf``) we silently skip it and the bundle still
+    ships the markdown source. Auditors verifying compliance against
+    the manifest hashes only need the ``.md`` to be intact; the
+    matching ``.pdf`` saves them from running pandoc themselves.
+    """
+    _write_to_zip(zf, md_path, md_bytes, manifest_files, cra_reference)
+    if not md_path.endswith(".md"):
+        return
+    pdf_bytes = markdown_to_pdf(md_bytes.decode("utf-8", errors="replace"), title=pdf_title)
+    if pdf_bytes is None:
+        return
+    pdf_path = md_path[: -len(".md")] + ".pdf"
+    _write_to_zip(zf, pdf_path, pdf_bytes, manifest_files, cra_reference)
 
 
 # CRA export bundle URLs expire in 15 minutes rather than the boto3

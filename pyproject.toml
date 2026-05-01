@@ -51,6 +51,18 @@ dependencies = [
     # the library lets it actually perform signature verification instead
     # of always reporting "library not available".
     "sigstore>=4.2.0",
+    # Renders the CRA bundle's markdown documents (Declaration of
+    # Conformity, VDP, risk assessment, etc.) to PDF so the export ZIP
+    # ships both ``.md`` (machine-friendly) and ``.pdf`` (human/auditor
+    # friendly) copies side by side. WeasyPrint is the right pick over
+    # xhtml2pdf / ReportLab because it (a) renders modern CSS via Pango,
+    # (b) accepts ``data:image/png;base64,`` URLs for the embedded
+    # signature image without extra disk/I-O plumbing, and (c) uses
+    # the same HTML produced by the existing markdown_to_html helper
+    # so we avoid maintaining a second renderer. System deps for
+    # WeasyPrint (libpango, libjpeg, libopenjp2, libffi) are added in
+    # the Dockerfile's python-common-code stage.
+    "weasyprint>=66.0,<67",
 ]
 
 [project.urls]

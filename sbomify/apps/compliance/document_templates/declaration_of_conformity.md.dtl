@@ -80,11 +80,12 @@ The following artefacts accompanying this declaration demonstrate conformity:
 
 ## Signed for and on behalf of the manufacturer
 
-- **Place:** _______________
+{# All-or-nothing: ``is_signed`` is true only when every Annex V Section 8 field is present, so a partial save (text without image, or vice-versa) renders as fully blank rather than a half-signed DoC that an auditor could mistake for the real thing. #}
+- **Place:** {% if is_signed %}{{ signature_place }}{% else %}_______________{% endif %}
 - **Date:** {{ date }}
-- **Name:** _______________
-- **Function:** _______________
-- **Signature:** _______________
+- **Name:** {% if is_signed %}{{ signature_name }}{% else %}_______________{% endif %}
+- **Function:** {% if is_signed %}{{ signature_function }}{% else %}_______________{% endif %}
+- **Signature:** {% if is_signed %}![Signature]({{ signature_image }}){% else %}_______________{% endif %}
 
 ***
 

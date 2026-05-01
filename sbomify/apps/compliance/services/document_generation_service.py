@@ -450,6 +450,18 @@ def _build_declaration_context(assessment: CRAAssessment, base: dict[str, Any]) 
     # Annex V item 7 — support period is part of the declaration scope
     # and must be visible on the DoC, not only in the risk assessment.
     base["support_period_end"] = assessment.support_period_end.isoformat() if assessment.support_period_end else None
+    # Annex V item 8 — signature block. Pass through the captured
+    # values so the template can render filled fields (in which case
+    # the underscore placeholders are dropped). Text fields are
+    # markdown-escaped because they're rendered into a Markdown
+    # paragraph; ``signature_image`` is a static ``data:image/png``
+    # URL and goes straight through — the API layer enforces the
+    # data-URL prefix and a size cap.
+    base["signature_place"] = _sanitize(assessment.signature_place, escape_markdown=True)
+    base["signature_name"] = _sanitize(assessment.signature_name, escape_markdown=True)
+    base["signature_function"] = _sanitize(assessment.signature_function, escape_markdown=True)
+    base["signature_image"] = assessment.signature_image
+    base["is_signed"] = assessment.is_signed
     return base
 
 

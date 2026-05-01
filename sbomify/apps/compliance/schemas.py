@@ -110,3 +110,29 @@ class StepContextSchema(Schema):
 class ErrorResponse(Schema):
     error: str
     error_code: str = "error"
+
+
+class SignatureSchema(Schema):
+    """Manufacturer signature block for the Declaration of Conformity.
+
+    ``signature_image`` is a ``data:image/png;base64,...`` URL produced by
+    the front-end signature pad. Field-level size and format checks live
+    on the API side (see ``save_doc_signature``); the schema simply types
+    the wire payload.
+    """
+
+    place: str
+    name: str
+    function: str
+    image: str
+
+
+class SignatureResponseSchema(Schema):
+    """Read-side view of the signature block."""
+
+    place: str
+    name: str
+    function: str
+    image: str
+    signed_at: str | None = None
+    is_signed: bool
