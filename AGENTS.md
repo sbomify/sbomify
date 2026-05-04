@@ -277,7 +277,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 
 ### Authentication
 
-Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requires `127.0.0.1 keycloak` in `/etc/hosts` for dev. Dev test users: `jdoe/foobar123` and `ssmith/foobar123`. Tests use Django's `force_login`, not Keycloak.
+Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requires `127.0.0.1 keycloak` in `/etc/hosts` for dev. All Keycloak traffic goes through Caddy (`http://keycloak:8000/`) — `KC_HOSTNAME_URL` is the browser-facing URL, `KEYCLOAK_SERVER_URL` is the internal Docker address for backend API calls. Dev test users: `jdoe/foobar123` and `ssmith/foobar123`. Tests use Django's `force_login`, not Keycloak.
 
 ### Team Roles and Permissions
 

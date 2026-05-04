@@ -47,6 +47,7 @@ KEYCLOAK_CLIENT_ID=sbomify
 KEYCLOAK_CLIENT_SECRET=your-secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
+KC_HOSTNAME=keycloak.example.com
 
 # S3 Storage
 AWS_ENDPOINT_URL_S3=https://s3.example.com
@@ -132,6 +133,7 @@ KEYCLOAK_CLIENT_ID=sbomify
 KEYCLOAK_CLIENT_SECRET=secret
 KEYCLOAK_REALM=sbomify
 KC_HOSTNAME_URL=https://keycloak.example.com/
+KC_HOSTNAME=keycloak.example.com
 
 # S3
 AWS_ENDPOINT_URL_S3=https://s3.example.com
