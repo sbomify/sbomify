@@ -8,7 +8,8 @@ import pytest
 from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
-from playwright.sync_api import Browser, BrowserContext, Error as PlaywrightError, Locator, Page, Playwright, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright, sync_playwright
+from playwright.sync_api import Error as PlaywrightError
 
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
@@ -150,6 +151,56 @@ def dismiss_toasts(page: Page) -> None:
         }
         document.querySelectorAll('.tw-toast').forEach(el => el.remove());
     }""")
+
+
+def auto_dismiss_toasts(page: Page) -> None:
+    """Continuously drain toast notifications for the lifetime of the page.
+
+    Some recordings cross routes that lazy-load HTMX panels which fail
+    in the screencast environment (no real S3, no Stripe, no
+    notification websocket). The resulting "Failed to load …" toasts
+    have nothing to do with the flow being recorded but pile up in
+    frame and distract the viewer. This helper installs a
+    ``MutationObserver`` on the toast container that drains any new
+    toast as soon as it is appended — observers fire only on actual
+    DOM mutations, so it adds zero polling overhead vs. a
+    ``setInterval(..., 100)`` loop.
+
+    The observer is registered as an ``init_script``, so every
+    document the recording navigates through gets a fresh observer
+    automatically. The observer is bound to the page and is garbage
+    collected with it; no explicit clear is required.
+    """
+    page.add_init_script(
+        """
+        (() => {
+            const drain = (root) => {
+                const container = root.getElementById
+                    ? root.getElementById('toast-container')
+                    : null;
+                if (container) {
+                    const data = window.Alpine?.$data(container);
+                    if (data && Array.isArray(data.toasts)) data.toasts = [];
+                }
+                root.querySelectorAll?.('.tw-toast').forEach((el) => el.remove());
+            };
+            const start = () => {
+                drain(document);
+                const obs = new MutationObserver((muts) => {
+                    for (const m of muts) {
+                        if (m.addedNodes && m.addedNodes.length) {
+                            drain(document);
+                            return;
+                        }
+                    }
+                });
+                obs.observe(document.body, { childList: true, subtree: true });
+            };
+            if (document.body) start();
+            else document.addEventListener('DOMContentLoaded', start, { once: true });
+        })();
+        """
+    )
 
 
 def rewrite_localhost_urls(page: Page) -> None:
