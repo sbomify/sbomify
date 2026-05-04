@@ -33,6 +33,7 @@ import pytest
 from playwright.sync_api import Page
 
 from conftest import (
+    auto_dismiss_toasts,
     click_into_row,
     hover_and_click,
     navigate_to_components,
@@ -168,37 +169,19 @@ def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
     return pied_piper_with_sboms
 
 
-def _suppress_error_toasts(page: Page) -> None:
-    """Drain any toast notifications during the recording.
-
-    The component detail page lazy-loads several HTMX panels (release
-    history, vulnerability summary). In the screencast environment a
-    handful of those endpoints fail and pop "Failed to load …" toasts
-    that have nothing to do with the signature flow. A 100 ms drain
-    interval keeps those transient errors out of the recording.
-    """
-    page.add_init_script(
-        """
-        (() => {
-            const drain = () => {
-                const container = document.getElementById('toast-container');
-                if (container) {
-                    const data = window.Alpine?.$data(container);
-                    if (data && Array.isArray(data.toasts)) data.toasts = [];
-                }
-                document.querySelectorAll('.tw-toast').forEach((el) => el.remove());
-            };
-            setInterval(drain, 100);
-        })();
-        """
-    )
-
-
 @pytest.mark.django_db(transaction=True)
 def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict) -> None:
     page = recording_page
 
-    _suppress_error_toasts(page)
+    # Component detail + SBOM detail pages lazy-load HTMX panels
+    # (release history, vulnerability summary, notification websocket)
+    # that fail in the screencast environment and pop "Failed to load
+    # …" toasts unrelated to the signature flow. The shared
+    # ``auto_dismiss_toasts`` helper attaches a MutationObserver that
+    # drains those toasts the moment they are appended — observers
+    # only fire on real DOM mutations, so there is no polling
+    # overhead and no interval to clean up.
+    auto_dismiss_toasts(page)
     start_on_dashboard(page)
 
     # ── 1. Components page ──────────────────────────────────────────────
