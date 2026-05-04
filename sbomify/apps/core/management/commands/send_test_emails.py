@@ -46,6 +46,15 @@ class Command(BaseCommand):
         website_base_url = normalize_base_url(getattr(settings, "WEBSITE_BASE_URL", base_url))
         recipient = options["recipient"]
 
+        # Mirror the production trial length so the rendered email
+        # text matches what a real signup would see — ``teams/signals.py``
+        # builds its context from ``settings.TRIAL_PERIOD_DAYS``, and
+        # hard-coding a different value here would silently drift the
+        # moment that setting changes. ``14`` is a safe fallback for
+        # ``test_settings`` / dev shells that haven't loaded the env.
+        trial_period_days = int(getattr(settings, "TRIAL_PERIOD_DAYS", 14))
+        trial_end_date = timezone.now() + timedelta(days=trial_period_days)
+
         # Mock data for templates
         mock_team = type("Team", (), {"name": "Acme Corp", "key": "acme-corp"})()
         mock_user = type(
@@ -253,8 +262,8 @@ class Command(BaseCommand):
                     **base_context,
                     "user": mock_user,
                     "team": mock_team,
-                    "TRIAL_PERIOD_DAYS": 14,
-                    "trial_end_date": timezone.now() + timedelta(days=14),
+                    "TRIAL_PERIOD_DAYS": trial_period_days,
+                    "trial_end_date": trial_end_date,
                     "plan_limits": {
                         "max_products": 10,
                         "max_projects": 25,
@@ -274,8 +283,8 @@ class Command(BaseCommand):
                     "workspace_name": "Acme Corp",
                     "app_base_url": base_url,
                     "is_trial": True,
-                    "trial_end_date": timezone.now() + timedelta(days=14),
-                    "TRIAL_PERIOD_DAYS": 14,
+                    "trial_end_date": trial_end_date,
+                    "TRIAL_PERIOD_DAYS": trial_period_days,
                     "plan_limits": {
                         "max_products": 10,
                         "max_projects": 25,
