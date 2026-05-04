@@ -45,31 +45,52 @@ from conftest import (
     pace,
     start_on_dashboard,
 )
-from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument
+from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument, OSCALFinding
 
 
-def _seed_export_ready_documents(assessment: CRAAssessment) -> None:
-    """Create non-stale ``CRAGeneratedDocument`` rows for every kind.
+def _seed_export_ready_state(assessment: CRAAssessment) -> None:
+    """Drive ``export_available`` to ``True`` so Step 5's CTA enables.
 
-    Step 5's "Export Compliance Bundle" button is gated behind a
-    ``exportAvailable`` predicate that requires every document kind
-    to have a non-stale generated row. Without these rows the
-    closing frame of the recording would show the CTA in a disabled
-    state — the wrong message for a FAQ that talks about pressing
-    that button. We seed placeholders here (dummy storage_key /
-    content_hash) so the button renders enabled; the recording
-    deliberately hovers and never clicks, so no real export is
-    attempted against the test environment.
+    ``wizard_service._compute_compliance_summary`` gates the Export
+    Compliance Bundle button behind three conjuncts:
+
+    1. Steps 1-4 in ``completed_steps`` (the recording mutates this
+       directly between page loads, so already covered).
+    2. Zero unanswered ``OSCALFinding`` rows. The CRA wizard bulk-
+       creates 21 findings (one per Annex I control) at status
+       ``unanswered`` when the assessment is built, and the
+       screencast never opens Step 3's checklist deeply enough to
+       answer them. We flip every finding to ``satisfied`` here.
+    3. One non-stale ``CRAGeneratedDocument`` for every
+       ``DocumentKind`` value. We seed placeholders (dummy
+       ``storage_key`` / ``content_hash``).
+
+    Both seedings use ``get_or_create`` / ``update`` so re-running
+    the screencast against a DB that already carries some state
+    (for example a prior run that survived) does not raise
+    ``IntegrityError`` on the unique constraints
+    (``OSCALFinding`` is unique on (assessment_result, control) and
+    ``CRAGeneratedDocument`` is unique on (assessment, document_kind)).
+
+    The recording deliberately hovers the Export CTA and never
+    clicks it, so no real export is attempted against the test
+    environment.
     """
+    OSCALFinding.objects.filter(
+        assessment_result=assessment.oscal_assessment_result,
+    ).update(status=OSCALFinding.FindingStatus.SATISFIED)
+
     DocumentKind = CRAGeneratedDocument.DocumentKind  # noqa: N806
     for kind in DocumentKind.values:
-        CRAGeneratedDocument.objects.create(
+        CRAGeneratedDocument.objects.update_or_create(
             assessment=assessment,
             document_kind=kind,
-            storage_key=f"compliance/{assessment.id}/{kind}.md",
-            content_hash="0" * 64,
-            is_stale=False,
-            version=1,
+            defaults={
+                "storage_key": f"compliance/{assessment.id}/{kind}.md",
+                "content_hash": "0" * 64,
+                "is_stale": False,
+                "version": 1,
+            },
         )
 
 
@@ -177,7 +198,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # placeholders so Step 5's CTA renders enabled when we get there.
     product = pied_piper_with_sboms["product"]
     assessment = CRAAssessment.objects.get(product=product)
-    _seed_export_ready_documents(assessment)
+    _seed_export_ready_state(assessment)
 
     # ── 8. Step 1: Product Profile ──────────────────────────────────────
     # Walk every named section so the recording captures the full shape
