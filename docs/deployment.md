@@ -406,15 +406,15 @@ Example bucket policy for media:
 If you prefer not to use the deploy script:
 
 ```bash
-docker pull sbomifyhub/sbomify:latest
-DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' sbomifyhub/sbomify:latest | cut -d'@' -f2)
+docker pull ghcr.io/sbomify/sbomify:latest
+DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/sbomify/sbomify:latest | cut -d'@' -f2)
 
 # Verify (optional)
 cosign verify-attestation \
   --type https://slsa.dev/provenance/v1 \
   --certificate-identity-regexp "^https://github.com/sbomify/sbomify/.*" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  "sbomifyhub/sbomify@${DIGEST}"
+  "ghcr.io/sbomify/sbomify@${DIGEST}"
 
 # Deploy
 docker compose --env-file ./override.env up -d --force-recreate --remove-orphans

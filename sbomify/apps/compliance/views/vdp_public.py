@@ -1,108 +1,29 @@
-"""Public VDP and security.txt views for the trust center."""
+"""Public VDP and security.txt views for the trust center.
+
+The shared markdown / S3 helpers used to live here as underscore-
+prefixed module locals; they have been moved to
+``views/_public_helpers.py`` so the DoC public view (and any future
+trust-center reader) can import them without reaching into another
+view module's private API.
+"""
 
 from __future__ import annotations
 
-import html
 import logging
-import re
-from typing import Any
-from urllib.parse import urlparse
 
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
 from django.utils.safestring import mark_safe
 from django.views import View
 
-from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument
+from sbomify.apps.compliance.models import CRAGeneratedDocument
+from sbomify.apps.compliance.views._public_helpers import (
+    fetch_doc_from_s3,
+    get_document_content,
+    markdown_to_html,
+)
 
 logger = logging.getLogger(__name__)
-
-_SAFE_URL_SCHEMES = frozenset(("http", "https", "mailto"))
-
-
-def _sanitize_url(url: str) -> str:
-    """Only allow safe URL schemes to prevent javascript:/data: XSS."""
-    parsed = urlparse(url)
-    if parsed.scheme not in _SAFE_URL_SCHEMES:
-        return "#"
-    return url
-
-
-def _markdown_to_html(text: str) -> str:
-    """Convert simple Markdown to HTML. Handles headings, bold, italic, links, lists, hr, paragraphs."""
-    escaped = html.escape(text)
-    lines = escaped.split("\n")
-    result: list[str] = []
-    in_list = False
-
-    for line in lines:
-        stripped = line.strip()
-
-        # Horizontal rule
-        if re.fullmatch(r"-{3,}", stripped):
-            if in_list:
-                result.append("</ul>")
-                in_list = False
-            result.append("<hr>")
-            continue
-
-        # Headings
-        m = re.match(r"^(#{1,6})\s+(.+)$", stripped)
-        if m:
-            if in_list:
-                result.append("</ul>")
-                in_list = False
-            level = len(m.group(1))
-            result.append(f"<h{level}>{_inline_markup(m.group(2))}</h{level}>")
-            continue
-
-        # List items
-        if stripped.startswith("- ") or stripped.startswith("* "):
-            if not in_list:
-                result.append("<ul>")
-                in_list = True
-            result.append(f"<li>{_inline_markup(stripped[2:])}</li>")
-            continue
-
-        # Empty line
-        if not stripped:
-            if in_list:
-                result.append("</ul>")
-                in_list = False
-            continue
-
-        # Paragraph
-        if in_list:
-            result.append("</ul>")
-            in_list = False
-        result.append(f"<p>{_inline_markup(stripped)}</p>")
-
-    if in_list:
-        result.append("</ul>")
-
-    return "\n".join(result)
-
-
-def _inline_markup(text: str) -> str:
-    """Convert inline Markdown: bold, italic, links.
-
-    URLs are sanitized to only allow http, https, and mailto schemes.
-    """
-
-    def _safe_link(m: re.Match[str]) -> str:
-        link_text = m.group(1)
-        url = _sanitize_url(m.group(2))
-        return f'<a href="{url}" class="text-primary hover:underline">{link_text}</a>'
-
-    # Links: [text](url) — sanitize URL scheme
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_link, text)
-    # Bold: **text**
-    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
-    # Italic: *text*
-    text = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
-    # Inline code: `text`
-    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
-    return text
 
 
 class ProductVDPPublicView(View):
@@ -121,12 +42,12 @@ class ProductVDPPublicView(View):
             return HttpResponseNotFound("Product not found")
 
         # Get the VDP document
-        vdp_content = _get_document_content(product, CRAGeneratedDocument.DocumentKind.VDP)
+        vdp_content = get_document_content(product, CRAGeneratedDocument.DocumentKind.VDP)
         if not vdp_content:
             return HttpResponseNotFound("No VDP available for this product")
 
-        # Safe: _markdown_to_html escapes all input via html.escape() before adding markup
-        vdp_html = mark_safe(_markdown_to_html(vdp_content))  # nosec B703 B308  # noqa: S308
+        # Safe: markdown_to_html escapes all input via html.escape() before adding markup
+        vdp_html = mark_safe(markdown_to_html(vdp_content))  # nosec B703 B308  # noqa: S308
 
         return render(
             request,
@@ -174,39 +95,8 @@ class SecurityTxtView(View):
         if not doc:
             return HttpResponseNotFound("Not found")
 
-        content = _fetch_doc_from_s3(doc)
+        content = fetch_doc_from_s3(doc)
         if not content:
             return HttpResponseNotFound("Not found")
 
         return HttpResponse(content, content_type="text/plain; charset=utf-8")
-
-
-def _get_document_content(product: Any, document_kind: str) -> str | None:
-    """Get rendered document content for a product's CRA assessment."""
-    try:
-        assessment = CRAAssessment.objects.get(product=product)
-    except CRAAssessment.DoesNotExist:
-        return None
-
-    doc = CRAGeneratedDocument.objects.filter(
-        assessment=assessment,
-        document_kind=document_kind,
-    ).first()
-
-    if not doc:
-        return None
-
-    return _fetch_doc_from_s3(doc)
-
-
-def _fetch_doc_from_s3(doc: CRAGeneratedDocument) -> str | None:
-    """Fetch document content from S3 and return as string."""
-    try:
-        from sbomify.apps.core.object_store import S3Client
-
-        s3 = S3Client("DOCUMENTS")
-        data = s3.get_document_data(doc.storage_key)
-        return data.decode("utf-8") if data else None
-    except Exception:
-        logger.exception("Failed to fetch document %s from S3", doc.storage_key)
-        return None

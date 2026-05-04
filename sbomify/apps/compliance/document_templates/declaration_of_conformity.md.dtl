@@ -4,26 +4,26 @@
 
 ## 1. Product Identification
 
-**Name:** {{ product_name }}
-{% if product_description %}
-**Type/Model:** {{ product_description }}
-{% endif %}
-**Unique Identifier:** {{ product_uuid }}
+- **Name:** {{ product_name }}
+- **Unique Identifier:** {{ product_uuid }}
 
 ## 2. Manufacturer
 
-**Name:** {{ manufacturer_name }}
+- **Name:** {{ manufacturer_name }}
+{% if manufacturer_address %}
+- **Address:** {{ manufacturer_address }}
+{% endif %}
+{% if manufacturer_email %}
+- **Email:** {{ manufacturer_email }}
+{% endif %}
+{% if manufacturer_website %}
+- **Website:** {{ manufacturer_website }}
+{% endif %}
 {% if manufacturer_is_placeholder %}
 > ⚠️  Annex V item 2 requires the manufacturer's legal name. This
 > placeholder MUST be replaced before the declaration is signed —
 > configure the manufacturer entity on the team profile and regenerate
 > the document.
-{% endif %}
-{% if manufacturer_address %}
-**Address:** {{ manufacturer_address }}
-{% endif %}
-{% if manufacturer_website %}
-**Website:** {{ manufacturer_website }}
 {% endif %}
 
 ## 3. Responsibility Statement
@@ -32,7 +32,9 @@ This EU declaration of conformity is issued under the sole responsibility of the
 
 ## 4. Object of Declaration
 
-{{ product_name }}{% if product_description %} — {{ product_description }}{% endif %}
+{{ product_name }}{% if product_description %}
+
+{{ product_description }}{% endif %}
 
 ## 5. Conformity Statement
 
@@ -54,10 +56,10 @@ The object of the declaration described above is in conformity with Regulation (
 
 ## 7. Conformity Assessment
 
-**Product Category:** {{ product_category_display }}
-**Procedure:** {{ conformity_procedure_display }}
+- **Product Category:** {{ product_category_display }}
+- **Procedure:** {{ conformity_procedure_display }}
 {% if support_period_end %}
-**Support Period Ends:** {{ support_period_end }} (Article 13(8))
+- **Support Period Ends:** {{ support_period_end }} (Article 13(8))
 {% endif %}
 
 ## 8. Supporting Documentation (Annex VII)
@@ -75,11 +77,16 @@ The following artefacts accompanying this declaration demonstrate conformity:
 - `metadata/manifest.json` + `metadata/manifest.sha256` — per-file SHA-256 manifest + self-hash for integrity verification
 
 ---
-**Signed for and on behalf of:**
-**Place:** _______________
-**Date:** {{ date }}
-**Name:** _______________
-**Function:** _______________
-**Signature:** _______________
----
+
+## Signed for and on behalf of the manufacturer
+
+{# All-or-nothing: ``is_signed`` is true only when every Annex V Section 8 field is present, so a partial save (text without image, or vice-versa) renders as fully blank rather than a half-signed DoC that an auditor could mistake for the real thing. #}
+- **Place:** {% if is_signed %}{{ signature_place }}{% else %}_______________{% endif %}
+- **Date:** {{ date }}
+- **Name:** {% if is_signed %}{{ signature_name }}{% else %}_______________{% endif %}
+- **Function:** {% if is_signed %}{{ signature_function }}{% else %}_______________{% endif %}
+- **Signature:** {% if is_signed %}![Signature]({{ signature_image }}){% else %}_______________{% endif %}
+
+***
+
 *This declaration is drawn up in accordance with CRA Article 28 and Annex V.*

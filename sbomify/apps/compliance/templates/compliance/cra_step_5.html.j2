@@ -79,6 +79,84 @@
                             </div>
                         </div>
                     </div>
+                    {% comment %}
+                    Manufacturer signature pad. Captures the Annex V signature
+                    block (place / name / function / drawn signature) so the
+                    generated DoC fills in those fields instead of underscore
+                    placeholders. Saving marks the existing DoC stale; the
+                    operator must regenerate to publish the new signature.
+                    {% endcomment %}
+                    <div class="tw-card" x-data="craDocSignature()" x-init="init()">
+                        <div class="px-6 py-4 border-b border-border">
+                            <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                                <i class="fas fa-signature text-primary"></i>
+                                Sign the Declaration of Conformity
+                            </h2>
+                            <p class="text-sm text-text-muted mt-1">
+                                CRA Annex V Section 8 — captured once and embedded in the rendered DoC. Saving marks the DoC stale; click <em>Generate Declaration of Conformity</em> below to refresh it.
+                            </p>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="space-y-4">
+                                <div class="grid gap-4 md:grid-cols-3">
+                                    <label class="text-sm">
+                                        <span class="block mb-1 text-text font-medium">Place <span class="text-error">*</span></span>
+                                        <input type="text"
+                                               x-model="place"
+                                               maxlength="255"
+                                               placeholder="City, country"
+                                               class="tw-form-input w-full">
+                                    </label>
+                                    <label class="text-sm">
+                                        <span class="block mb-1 text-text font-medium">Name <span class="text-error">*</span></span>
+                                        <input type="text"
+                                               x-model="name"
+                                               maxlength="255"
+                                               placeholder="Full legal name"
+                                               class="tw-form-input w-full">
+                                    </label>
+                                    <label class="text-sm">
+                                        <span class="block mb-1 text-text font-medium">Function <span class="text-error">*</span></span>
+                                        <input type="text"
+                                               x-model="roleFunction"
+                                               maxlength="255"
+                                               placeholder="Role / title"
+                                               class="tw-form-input w-full">
+                                    </label>
+                                </div>
+                                <div>
+                                    <span class="block mb-1 text-sm text-text font-medium">Signature <span class="text-error">*</span></span>
+                                    <div class="border border-border rounded-lg bg-white"
+                                         style="height: 160px">
+                                        <canvas x-ref="canvas"
+                                                aria-label="Signature pad — draw your signature with mouse or touch"
+                                                class="w-full h-full block touch-none"></canvas>
+                                    </div>
+                                    <p class="text-xs text-text-muted mt-1 m-0">
+                                        Drawn signature is captured as a PNG and embedded in the DoC. This is a digitally captured signature, not an eIDAS-qualified electronic signature.
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <button type="button" @click="clearPad()" class="tw-btn-secondary">
+                                        <i class="fas fa-eraser mr-2"></i> Clear
+                                    </button>
+                                    <button type="button"
+                                            @click="save()"
+                                            :disabled="isSaving"
+                                            class="tw-btn-primary">
+                                        <span x-show="!isSaving"><i class="fas fa-save mr-2"></i> Save signature</span>
+                                        <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving…</span>
+                                    </button>
+                                    <template x-if="isSigned && signedAt">
+                                        <span class="text-xs text-text-muted ml-auto">
+                                            <i class="fas fa-check-circle text-success mr-1"></i>
+                                            Last signed <span x-text="new Date(signedAt).toLocaleString()"></span>
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="tw-card">
                         <div class="px-6 py-4 border-b border-border">
                             <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
@@ -100,6 +178,15 @@
                                     data-testid="preview-doc-btn"
                                     class="tw-btn-secondary w-full">
                                 <i class="fas fa-eye mr-2"></i> Preview Declaration of Conformity
+                            </button>
+                            {# On-demand DoC PDF — sidesteps the full bundle export when an auditor or notified body just wants the signed Article 28 declaration as a PDF #}
+                            <button type="button"
+                                    @click="downloadDocumentPdf('declaration_of_conformity', 'Declaration of Conformity')"
+                                    :disabled="downloadingDocPdf"
+                                    data-testid="download-doc-pdf-btn"
+                                    class="tw-btn-secondary w-full">
+                                <span x-show="!downloadingDocPdf"><i class="fas fa-file-pdf mr-2"></i> Download Declaration of Conformity (PDF)</span>
+                                <span x-show="downloadingDocPdf" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Preparing PDF…</span>
                             </button>
                             <button @click="exportBundle()"
                                     :disabled="isExporting || !exportAvailable"
@@ -241,7 +328,13 @@
                                 </div>
                             </template>
                             <template x-if="!isLoadingPreview">
-                                <div class="prose prose-sm max-w-none text-text prose-headings:text-text prose-strong:text-text prose-a:text-primary prose-code:text-text prose-table:text-sm prose-td:py-1 prose-th:py-1 prose-hr:border-border/50"
+                                {% comment %}
+                                prose-code:before/after override strips the literal backticks Tailwind Typography
+                                wraps inline-code spans with. They were rendering as visible characters around
+                                each path in DoC §8 (the markdown emits proper <code> spans; the backticks were
+                                CSS decoration, not template output).
+                                {% endcomment %}
+                                <div class="prose prose-sm max-w-none text-text prose-headings:text-text prose-strong:text-text prose-a:text-primary prose-code:text-text prose-code:before:content-none prose-code:after:content-none prose-table:text-sm prose-td:py-1 prose-th:py-1 prose-hr:border-border/50"
                                      x-html="previewContent"></div>
                             </template>
                         </div>

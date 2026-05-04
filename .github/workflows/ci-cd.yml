@@ -611,7 +611,7 @@ jobs:
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
           COMPONENT_VERSION: ${{ steps.version.outputs.version }}
-          DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:${{ steps.version.outputs.docker_tag }}
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.github-image }}:${{ steps.version.outputs.docker_tag }}
           ADDITIONAL_PACKAGES_FILE: dockerfile_packages.txt
           PRODUCT_RELEASE: ${{ matrix.has_product_release && format('["{0}:{1}"]', matrix.product_release_id, steps.version.outputs.version) || '' }}
           SBOM_FORMAT: ${{ matrix.format }}
@@ -758,7 +758,7 @@ jobs:
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
           COMPONENT_VERSION: ${{ steps.version.outputs.version }}
-          DOCKER_IMAGE: ${{ needs.docker-build.outputs.docker-hub-image }}:${{ steps.version.outputs.docker_tag }}
+          DOCKER_IMAGE: ${{ needs.docker-build.outputs.github-image }}:${{ steps.version.outputs.docker_tag }}
           ADDITIONAL_PACKAGES_FILE: dockerfile_packages.txt
           PRODUCT_RELEASE: ${{ matrix.has_product_release && format('["{0}:{1}"]', matrix.product_release_id, steps.version.outputs.version) || '' }}
           SBOM_FORMAT: ${{ matrix.format }}

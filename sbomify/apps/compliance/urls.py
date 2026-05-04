@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views.cra_product_list import CRAProductListView
 from .views.cra_wizard import CRAScopeScreeningView, CRAStartAssessmentView, CRAStepView, CRAWizardShellView
+from .views.doc_public import ProductDoCPublicView
 from .views.vdp_public import ProductVDPPublicView
 
 app_name = "compliance"
@@ -18,5 +19,10 @@ urlpatterns = [
         "public/product/<str:product_id>/vdp/",
         ProductVDPPublicView.as_view(),
         name="product_vdp_public",
+    ),
+    path(
+        "public/product/<str:product_id>/declaration-of-conformity/",
+        ProductDoCPublicView.as_view(),
+        name="product_doc_public",
     ),
 ]

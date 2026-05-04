@@ -65,7 +65,7 @@ services:
       retries: 5
 
   sbomify-backend:
-    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -127,7 +127,7 @@ services:
     stop_grace_period: 10s
 
   sbomify-migrations:
-    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -143,7 +143,7 @@ services:
         condition: service_healthy
 
   sbomify-worker:
-    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}

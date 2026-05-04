@@ -324,6 +324,49 @@ class CRAAssessment(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
 
+    # ── Signature block (Annex V Section 8) ───────────────────────────
+    # Captured once via the wizard's signature pad; stored alongside
+    # the assessment so the DoC template can render filled values
+    # instead of underscore placeholders. ``signature_image`` carries a
+    # base64-encoded PNG data URL (size-capped at the API layer; small
+    # canvases produce <30 KB output).
+    signature_place = models.CharField(max_length=255, blank=True, default="")
+    signature_name = models.CharField(max_length=255, blank=True, default="")
+    signature_function = models.CharField(max_length=255, blank=True, default="")
+    signature_image = models.TextField(blank=True, default="")
+    signed_at = models.DateTimeField(null=True, blank=True)
+    signed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="User who saved the signature on this assessment.",
+    )
+
+    @property
+    def is_signed(self) -> bool:
+        """Whether the manufacturer signature block is fully captured.
+
+        Mirrors the API's signing rules so that records populated outside
+        the API (admin, manual SQL, future migration) don't render as
+        "signed" when they have only whitespace text or a stub image
+        with no payload. Returns ``True`` only when:
+
+        - every Annex V text field is non-empty after stripping
+        - ``signature_image`` carries a non-empty payload after the
+          ``data:image/png;base64,`` prefix
+
+        Date is automatic so it's not part of the gate.
+        """
+        text_fields_ok = all(
+            (getattr(self, name) or "").strip() for name in ("signature_place", "signature_name", "signature_function")
+        )
+        image = self.signature_image or ""
+        prefix = "data:image/png;base64,"
+        image_has_payload = image.startswith(prefix) and len(image) > len(prefix)
+        return text_fields_ok and image_has_payload
+
     def __str__(self) -> str:
         return f"CRA Assessment for {self.product} ({self.status})"
 
