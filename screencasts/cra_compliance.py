@@ -1,28 +1,31 @@
 """Record the CRA Compliance Wizard screencast.
 
-Drives the full wizard end-to-end: Dashboard → Products → Pied Piper
-product → Continue Assessment → walk every panel of every step
-(Steps 1–5) → exercise Step 3's three tabs (checklist, vulnerability,
-incident) → land on Step 5 with the Export Compliance Bundle CTA in
-view. The recording's job is to give the FAQ a visual companion that
-covers what each step actually contains, not just the headline of
-each step — so we scroll every named section into the viewport and
-linger long enough for a viewer to read the heading.
+Drives the full flow end-to-end: Dashboard → Products → Pied Piper
+product → CRA Compliance card "Start Scope Screening" → walk the
+five Article 2/3 scope questions → save → land in the wizard shell
+→ walk every panel of every step (Steps 1–5) → exercise Step 3's
+three tabs (Security Checklist, Vulnerability Handling, Incident
+Reporting) → close on Step 5 with the Export Compliance Bundle CTA
+in view. The recording's job is to give the FAQ a visual companion
+that covers what each step actually contains, not just the headline
+of each step — so we scroll every named section into the viewport
+and linger long enough for a viewer to read the heading.
 
 The screencast pairs with the FAQ article at
-``how-do-i-use-cra-compliance``. We pre-create the CRAScopeScreening,
-OSCAL catalog/result and CRAAssessment via ORM rather than driving
-the scope-screening checkboxes, because the screening uses an Alpine
-x-model with a default that is reactive at init time — clicking the
-visual label is racy on first paint and a flaky gate would invalidate
-the whole recording.
+``how-do-i-use-cra-compliance``. We deliberately do NOT pre-create
+the ``CRAScopeScreening`` or ``CRAAssessment``: the FAQ wants viewers
+to see the actual screening UI (FAQ §1) being filled in, and the
+backend builds the assessment + OSCAL catalog/result on save. Once
+the screening is saved we read the assessment back from the ORM and
+mutate ``completed_steps`` + ``current_step`` between step
+navigations so the stepper shows the realistic in-progress shape
+(current step blue, completed green, rest muted) rather than
+implying everything is already done.
 
-To keep the stepper visually honest we update ``completed_steps`` and
-``current_step`` on the assessment as the recording moves between
-steps, then ``page.goto()`` directly. ``CRAStepView`` accepts any step
-number, so we do not need to click stepper links (which only render
-for steps already in ``completed_steps``); driving the database
-mirrors what the user would see after pressing Save & Continue.
+``CRAStepView`` accepts any step number, so we do not need to click
+stepper links (which only render for steps already in
+``completed_steps``); driving the database mirrors what the user
+would see after pressing Save & Continue.
 """
 
 import pytest
@@ -35,59 +38,7 @@ from conftest import (
     pace,
     start_on_dashboard,
 )
-from sbomify.apps.compliance.models import (
-    CRAAssessment,
-    CRAScopeScreening,
-    OSCALAssessmentResult,
-    OSCALCatalog,
-)
-
-
-@pytest.fixture
-def pied_piper_with_cra_assessment(pied_piper_with_sboms: dict) -> dict:
-    """Extend pied_piper_with_sboms with a CRAAssessment ready for the wizard.
-
-    Pre-creates the scope screening (cra_applies=True), an OSCAL catalog
-    and assessment result, and a CRAAssessment linked to the product so
-    the wizard shell renders Step 1 immediately. Returns the same dict
-    plus an 'assessment' key.
-    """
-    product = pied_piper_with_sboms["product"]
-    team = product.team
-
-    CRAScopeScreening.objects.create(
-        product=product,
-        team=team,
-        has_data_connection=True,
-        is_own_use_only=False,
-        is_testing_version=False,
-        is_covered_by_other_legislation=False,
-        is_dual_use=False,
-    )
-
-    catalog = OSCALCatalog.objects.create(
-        name="BSI TR-03183-1",
-        version="1.0",
-        catalog_json={"metadata": {"title": "BSI TR-03183-1 (screencast stub)"}},
-    )
-    oscal_result = OSCALAssessmentResult.objects.create(
-        catalog=catalog,
-        team=team,
-        title="CRA OSCAL Result",
-    )
-    assessment = CRAAssessment.objects.create(
-        team=team,
-        product=product,
-        oscal_assessment_result=oscal_result,
-        # Fresh state — the recording advances completed_steps as it
-        # moves through the wizard so the stepper shows the realistic
-        # in-progress shape (current step blue, completed green, rest
-        # muted) rather than implying everything is already done.
-        completed_steps=[],
-        current_step=1,
-    )
-
-    return {**pied_piper_with_sboms, "assessment": assessment}
+from sbomify.apps.compliance.models import CRAAssessment
 
 
 def _suppress_error_toasts(page: Page) -> None:
@@ -118,7 +69,7 @@ def _suppress_error_toasts(page: Page) -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -> None:
+def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
 
     _suppress_error_toasts(page)
@@ -136,18 +87,78 @@ def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -
     pace(page, 1500)
 
     # ── 3. Show the CRA Compliance card ──────────────────────────────────
-    # The card sits mid-page among the product detail panels. With an
-    # assessment present the CTA reads "Continue Assessment" — that is
-    # the resume path most users will see day-to-day.
-    continue_btn = page.locator("a:has-text('Continue Assessment')").first
-    continue_btn.wait_for(state="visible", timeout=15_000)
-    continue_btn.scroll_into_view_if_needed()
-    pace(page, 2000)
+    # No assessment exists yet, so the card's CTA reads "Start Scope
+    # Screening" — the FAQ §1 entry point that gates the whole wizard.
+    start_screening_btn = page.locator("a:has-text('Start Scope Screening')").first
+    start_screening_btn.wait_for(state="visible", timeout=15_000)
+    start_screening_btn.scroll_into_view_if_needed()
+    pace(page, 2500)
 
-    # ── 4. Open the wizard ──────────────────────────────────────────────
-    hover_and_click(page, continue_btn)
+    # ── 4. Open the scope-screening page ────────────────────────────────
+    hover_and_click(page, start_screening_btn)
     page.wait_for_load_state("networkidle")
     pace(page, 2000)
+
+    # ── 5. Scope screening: walk the five Article 2/3 questions ─────────
+    # FAQ §1 enumerates these explicitly. Each ``tw-card`` carries a
+    # checkbox plus a one-line legal-basis link; viewers should see
+    # the shape of the page before any interaction so they recognise
+    # what they are clicking on.
+    page.locator("h1:has-text('CRA Scope Screening')").first.wait_for(state="visible", timeout=15_000)
+    pace(page, 2500)
+
+    screening_questions = [
+        "Product has a data connection",
+        "Manufactured exclusively for own use",
+        "Testing or pre-release version",
+        "Covered by exempted EU legislation",
+        "Dual-use (civilian + defence)",
+    ]
+    for q in screening_questions:
+        page.locator(f"span:has-text('{q}')").first.scroll_into_view_if_needed()
+        pace(page, 1500)
+
+    # The data-connection question is the inclusion gate — checking
+    # it flips the verdict card from "CRA does not apply" to "CRA
+    # applies" without leaving the page. ``check()`` drives the input
+    # directly so Alpine's ``x-model`` reliably picks up the change;
+    # clicking on the wrapping ``<label>`` is racy on first paint
+    # because the Alpine reactivity is mid-init.
+    data_conn_input = page.locator("input[x-model='hasDataConnection']").first
+    data_conn_input.scroll_into_view_if_needed()
+    pace(page, 800)
+    data_conn_input.check()
+    pace(page, 2500)
+
+    # Show the verdict flip — "CRA applies to this product" card.
+    # The card is gated by ``x-show="craApplies"`` so we wait for it
+    # to become visible (Alpine evaluates the predicate after the
+    # input change above).
+    verdict_heading = page.locator("h3:has-text('CRA applies to this product')").first
+    verdict_heading.wait_for(state="visible", timeout=10_000)
+    verdict_heading.scroll_into_view_if_needed()
+    pace(page, 2500)
+
+    # Save & Continue — backend creates the OSCAL catalog /
+    # AssessmentResult / CRAAssessment in one go and redirects to
+    # Step 1.
+    save_btn = page.locator("button:has-text('Save & Continue to Wizard')").first
+    save_btn.scroll_into_view_if_needed()
+    pace(page, 800)
+    hover_and_click(page, save_btn)
+    # Match both ``/step/1`` and ``/step/1/`` — Django serves the
+    # canonical form with the trailing slash but the matcher needs
+    # the optional segment to avoid a flaky timeout on environments
+    # where the redirect lands on either form.
+    page.wait_for_url("**/cra/*/step/**", timeout=20_000)
+    page.wait_for_load_state("networkidle")
+    pace(page, 2000)
+
+    # Read the freshly-created assessment back so the rest of the
+    # recording can advance ``completed_steps`` + ``current_step``
+    # between page navigations and keep the stepper visually honest.
+    product = pied_piper_with_sboms["product"]
+    assessment = CRAAssessment.objects.get(product=product)
 
     # ── 5. Step 1: Product Profile ──────────────────────────────────────
     # Walk every named section so the recording captures the full shape
@@ -178,7 +189,6 @@ def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -
     # the stepper then renders Step 1 with a green check and Step 2 as
     # the active blue marker, matching what the user would see after
     # pressing Save & Continue from Step 1.
-    assessment = pied_piper_with_cra_assessment["assessment"]
     assessment.completed_steps = [1]
     assessment.current_step = 2
     assessment.save(update_fields=["completed_steps", "current_step"])
