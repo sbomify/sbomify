@@ -15,12 +15,16 @@ The screencast pairs with the FAQ article at
 ``how-do-i-use-cra-compliance``. We deliberately do NOT pre-create
 the ``CRAScopeScreening`` or ``CRAAssessment``: the FAQ wants viewers
 to see the actual screening UI (FAQ §1) being filled in, and the
-backend builds the assessment + OSCAL catalog/result on save. Once
-the screening is saved we read the assessment back from the ORM and
-mutate ``completed_steps`` + ``current_step`` between step
-navigations so the stepper shows the realistic in-progress shape
-(current step blue, completed green, rest muted) rather than
-implying everything is already done.
+backend builds the assessment + OSCAL catalog/result on save (using
+``ensure_cra_catalog``, which is collision-safe). Once the screening
+is saved we read the assessment back from the ORM, seed
+``CRAGeneratedDocument`` placeholders for every CRA document kind
+(so Step 5's Export Compliance Bundle button renders enabled
+without actually triggering an export), and mutate
+``completed_steps`` + ``current_step`` between step navigations so
+the stepper shows the realistic in-progress shape (current step
+blue, completed green, rest muted) rather than implying everything
+is already done.
 
 ``CRAStepView`` accepts any step number, so we do not need to click
 stepper links (which only render for steps already in
@@ -28,51 +32,60 @@ stepper links (which only render for steps already in
 would see after pressing Save & Continue.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import Page
 
 from conftest import (
     PIED_PIPER_PRODUCT_NAME,
+    auto_dismiss_toasts,
     hover_and_click,
     navigate_to_products,
     pace,
     start_on_dashboard,
 )
-from sbomify.apps.compliance.models import CRAAssessment
+from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument
 
 
-def _suppress_error_toasts(page: Page) -> None:
-    """Continuously dismiss any toast notifications during the recording.
+def _seed_export_ready_documents(assessment: CRAAssessment) -> None:
+    """Create non-stale ``CRAGeneratedDocument`` rows for every kind.
 
-    The product detail page lazy-loads several HTMX panels (Releases,
-    Identifiers, Vulnerability Trends). In the screencast environment
-    a few of those endpoints fail and pop "Failed to load …" toasts
-    that have nothing to do with the wizard flow. We register a
-    100 ms interval that drains the toast container so transient
-    errors never make it into the recording.
+    Step 5's "Export Compliance Bundle" button is gated behind a
+    ``exportAvailable`` predicate that requires every document kind
+    to have a non-stale generated row. Without these rows the
+    closing frame of the recording would show the CTA in a disabled
+    state — the wrong message for a FAQ that talks about pressing
+    that button. We seed placeholders here (dummy storage_key /
+    content_hash) so the button renders enabled; the recording
+    deliberately hovers and never clicks, so no real export is
+    attempted against the test environment.
     """
-    page.add_init_script(
-        """
-        (() => {
-            const drain = () => {
-                const container = document.getElementById('toast-container');
-                if (container) {
-                    const data = window.Alpine?.$data(container);
-                    if (data && Array.isArray(data.toasts)) data.toasts = [];
-                }
-                document.querySelectorAll('.tw-toast').forEach((el) => el.remove());
-            };
-            setInterval(drain, 100);
-        })();
-        """
-    )
+    DocumentKind = CRAGeneratedDocument.DocumentKind  # noqa: N806
+    for kind in DocumentKind.values:
+        CRAGeneratedDocument.objects.create(
+            assessment=assessment,
+            document_kind=kind,
+            storage_key=f"compliance/{assessment.id}/{kind}.md",
+            content_hash="0" * 64,
+            is_stale=False,
+            version=1,
+        )
 
 
 @pytest.mark.django_db(transaction=True)
 def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
 
-    _suppress_error_toasts(page)
+    # The wizard's product detail page lazy-loads HTMX panels
+    # (Releases, Identifiers, Vulnerability Trends) that fail in the
+    # screencast environment and pop "Failed to load …" toasts
+    # unrelated to the wizard flow. The shared
+    # ``auto_dismiss_toasts`` helper attaches a MutationObserver
+    # that drains those toasts the moment they are appended; the
+    # observer runs only on real DOM mutations rather than a 100 ms
+    # ``setInterval`` loop, so it adds zero polling overhead.
+    auto_dismiss_toasts(page)
     start_on_dashboard(page)
 
     # ── 1. Navigate to Products ──────────────────────────────────────────
@@ -119,6 +132,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         page.locator(f"span:has-text('{q}')").first.scroll_into_view_if_needed()
         pace(page, 700)
 
+    # ── 6. Tick the data-connection inclusion gate ──────────────────────
     # The data-connection question is the inclusion gate — checking
     # it flips the verdict card from "CRA does not apply" to "CRA
     # applies" without leaving the page. ``check()`` drives the input
@@ -140,28 +154,32 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     verdict_heading.scroll_into_view_if_needed()
     pace(page, 1500)
 
-    # Save & Continue — backend creates the OSCAL catalog /
-    # AssessmentResult / CRAAssessment in one go and redirects to
-    # Step 1.
+    # ── 7. Save & Continue ──────────────────────────────────────────────
+    # Backend creates the OSCAL catalog (via ``ensure_cra_catalog``,
+    # so re-running the screencast after another test seeded the
+    # same row does not raise ``IntegrityError``), the
+    # AssessmentResult, and the CRAAssessment in one go, then
+    # redirects to Step 1.
     save_btn = page.locator("button:has-text('Save & Continue to Wizard')").first
+    save_btn.wait_for(state="visible", timeout=10_000)
     save_btn.scroll_into_view_if_needed()
     pace(page, 400)
     hover_and_click(page, save_btn)
-    # Match both ``/step/1`` and ``/step/1/`` — Django serves the
-    # canonical form with the trailing slash but the matcher needs
-    # the optional segment to avoid a flaky timeout on environments
-    # where the redirect lands on either form.
-    page.wait_for_url("**/cra/*/step/**", timeout=20_000)
+    # Match Step 1 specifically (with optional trailing slash). A
+    # broader ``**/cra/*/step/**`` would silently swallow an
+    # unexpected redirect to a different step; matching ``/step/1``
+    # explicitly fails loudly if the backend lands us elsewhere.
+    page.wait_for_url(re.compile(r".*/cra/[^/]+/step/1/?$"), timeout=20_000)
     page.wait_for_load_state("networkidle")
     pace(page, 2000)
 
-    # Read the freshly-created assessment back so the rest of the
-    # recording can advance ``completed_steps`` + ``current_step``
-    # between page navigations and keep the stepper visually honest.
+    # Read the freshly-created assessment back, then seed the export
+    # placeholders so Step 5's CTA renders enabled when we get there.
     product = pied_piper_with_sboms["product"]
     assessment = CRAAssessment.objects.get(product=product)
+    _seed_export_ready_documents(assessment)
 
-    # ── 5. Step 1: Product Profile ──────────────────────────────────────
+    # ── 8. Step 1: Product Profile ──────────────────────────────────────
     # Walk every named section so the recording captures the full shape
     # of the first step. The wizard is sticky-headed; scrolling each h2
     # into view brings the next panel above the fold without the
@@ -181,11 +199,11 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         page.locator(f"h2:has-text('{heading}')").first.scroll_into_view_if_needed()
         pace(page, 2000)
 
-    # ── 6. Scroll back up so the stepper is fully visible ───────────────
+    # ── 9. Scroll back up so the stepper is fully visible ───────────────
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
-    # ── 7. Advance to Step 2 (SBOM Compliance) ──────────────────────────
+    # ── 10. Advance to Step 2 (SBOM Compliance) ─────────────────────────
     # Mark Step 1 complete and advance current_step before navigating —
     # the stepper then renders Step 1 with a green check and Step 2 as
     # the active blue marker, matching what the user would see after
@@ -197,7 +215,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 2000)
 
-    # ── 8. Step 2: SBOM Compliance ──────────────────────────────────────
+    # ── 11. Step 2: SBOM Compliance ─────────────────────────────────────
     # "SBOM Compliance Summary" is the rolled-up BSI TR-03183 status
     # across the product; "Components" lists each component with its
     # individual findings. Walking both gives viewers the per-product /
@@ -211,7 +229,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
-    # ── 9. Advance to Step 3 (Security & Vulnerability) ─────────────────
+    # ── 12. Advance to Step 3 (Security & Vulnerability) ────────────────
     # Step 3 has three tabs (Annex I checklist, vulnerability disclosure,
     # incident reporting) all driven from one Alpine ``activeTab``
     # state. The recording exercises each tab so the FAQ can refer
@@ -254,7 +272,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
-    # ── 10. Advance to Step 4 (User Information) ────────────────────────
+    # ── 13. Advance to Step 4 (User Information) ────────────────────────
     # Annex II inputs that drive the "User Instructions" generated
     # document. Walk every named section so the FAQ can call out what
     # the operator has to fill in here.
@@ -281,7 +299,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
-    # ── 11. Advance to Step 5 (Review & Export) ─────────────────────────
+    # ── 14. Advance to Step 5 (Review & Export) ─────────────────────────
     # Step 5 is what the FAQ leads with as the deliverable. Walk every
     # panel: Compliance Summary (rolled-up posture), Export (the
     # bundle CTA), Last Export Bundle (manifest preview), Documents
@@ -301,7 +319,10 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # not click. Clicking would kick off a real export that the
     # screencast environment cannot complete (no S3, no signing). The
     # FAQ's "What is in the export bundle" section unpacks what the
-    # button produces.
+    # button produces. The placeholder ``CRAGeneratedDocument`` rows
+    # we seeded earlier flip ``exportAvailable`` to true so the CTA
+    # renders enabled — without that the closing frame would show a
+    # greyed-out button which is the wrong message for the FAQ.
     export_heading = page.locator("h2:has-text('Export')").first
     export_heading.scroll_into_view_if_needed()
     pace(page, 2000)
