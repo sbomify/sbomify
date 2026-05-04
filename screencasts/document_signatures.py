@@ -1,19 +1,33 @@
 """Record the document-signature screencast.
 
-Drives: Dashboard → Components → click into the Compression Core Library
-component → SBOM list with the new "Signed" + "Provenance" badges
-visible → linger so a viewer can read the FAQ tie-in. Pairs with the
-``how-do-i-use-signature-files`` FAQ on sbomify.com.
+Drives: Dashboard → Components → click into the Compression Core
+Library component → SBOM list with the new "Signed" + "Provenance"
+badges visible → linger on the badges → close on the SBOM
+Verification plugin's "All Passed" Assessment Results card. Pairs
+with the ``how-do-i-use-signature-files`` FAQ on sbomify.com.
 
-The recording does NOT call the signature upload API live — POSTing
-the bundle bytes from inside Playwright would couple the recording to
-S3 / signature-store wiring that flakes in the test environment.
-Instead we set ``signature_blob_key`` and ``signature_type`` on the
-target SBOM via ORM in the fixture, which is the only thing the
-component-detail template actually reads to render the badges. The
-visible result is identical to a real upload, and the recording
-stays deterministic.
+The recording does NOT call the signature upload API or run the
+real plugin pipeline — POSTing bundle bytes from inside Playwright
+or waiting on an asynchronous Dramatiq plugin run would couple the
+recording to S3 / signature-store / worker wiring that flakes in
+the test environment. Instead the fixture seeds the visible state
+directly via ORM:
+
+- ``signature_blob_key`` / ``signature_type`` / ``provenance_blob_key``
+  on the target SBOM — drive the Signed / Provenance badges.
+- A completed ``AssessmentRun`` for the ``sbom-verification`` plugin
+  with five passing findings — drives the Assessment Results card's
+  "All Passed" badge so the closing frame shows the same visible
+  outcome a real signed-and-attested SBOM would produce.
+
+The visible UX is indistinguishable from a real upload-then-scan
+flow, the recording stays deterministic, and we cover the worker
+wait state in the FAQ rather than baking a flaky polling loop into
+the screencast.
 """
+
+import uuid
+from datetime import datetime, timezone
 
 import pytest
 from playwright.sync_api import Page
@@ -25,6 +39,7 @@ from conftest import (
     pace,
     start_on_dashboard,
 )
+from sbomify.apps.plugins.models import AssessmentRun
 
 # The first component in ``PIED_PIPER_COMPONENTS`` — the natural lead
 # in the recording's narrative because the badges read most clearly on
@@ -32,9 +47,79 @@ from conftest import (
 SIGNED_COMPONENT_NAME = "Compression Core Library"
 
 
+def _verification_result(plugin_name: str, plugin_version: str) -> dict:
+    """Build the AssessmentResult JSON for a passing sbom-verification run.
+
+    The card reads ``run.result["summary"]`` to compute its overall
+    status, so the dict matches the schema produced by the real
+    plugin (see ``sbomify/apps/plugins/sdk/results.py``). All five
+    canonical findings are reported as ``pass``; the rolled-up
+    ``verification:attestation`` summary finding is included so
+    BSI / FDA / NTIA's ``requires_one_of: attestation`` clause
+    finds a satisfying signal.
+    """
+    now = datetime.now(tz=timezone.utc).isoformat()
+    findings = [
+        {
+            "id": fid,
+            "title": title,
+            "description": desc,
+            "severity": "info",
+            "status": "pass",
+        }
+        for fid, title, desc in (
+            (
+                "verification:digest:integrity",
+                "SBOM digest integrity",
+                "Recomputed SHA-256 matches the stored hash.",
+            ),
+            (
+                "verification:signature:present",
+                "Signature attached",
+                "A detached signature is stored alongside the SBOM.",
+            ),
+            (
+                "verification:signature:valid",
+                "Signature verified",
+                "The stored cosign-bundle signature verifies against the SBOM bytes.",
+            ),
+            (
+                "verification:provenance:present",
+                "Provenance attached",
+                "A SLSA provenance attestation is stored alongside the SBOM.",
+            ),
+            (
+                "verification:provenance:digest",
+                "Provenance digest match",
+                "The provenance subject digest matches the SBOM hash.",
+            ),
+            (
+                "verification:attestation",
+                "Attestation summary",
+                "At least one cryptographic source verified for this SBOM.",
+            ),
+        )
+    ]
+    return {
+        "schema_version": "1.0",
+        "plugin_name": plugin_name,
+        "plugin_version": plugin_version,
+        "category": "attestation",
+        "assessed_at": now,
+        "summary": {
+            "total_findings": len(findings),
+            "pass_count": len(findings),
+            "fail_count": 0,
+            "warning_count": 0,
+            "error_count": 0,
+        },
+        "findings": findings,
+    }
+
+
 @pytest.fixture
 def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
-    """Mark one SBOM as signed + provenance-attested via ORM.
+    """Seed signature + provenance blobs and a passing verification run.
 
     The component-detail template renders the ``Signed`` badge when
     ``signature_blob_key`` is non-empty and the ``Provenance`` badge
@@ -42,10 +127,12 @@ def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
     recording show the two-badge layout the FAQ talks about without
     standing up actual S3 storage for the signature bytes.
 
-    The blob-key values are deliberately placeholder strings: the
-    component-detail view does not dereference them, it only checks
-    truthiness. Anything that round-trips through Django's text-field
-    serializer works.
+    The Assessment Results card on the SBOM detail page reads
+    completed ``AssessmentRun`` rows for the SBOM and renders the
+    "All Passed" badge when every run's summary reports zero
+    failures. We pre-create one for the ``sbom-verification``
+    plugin so the closing frame of the recording shows the
+    operator-visible payoff of attaching the artefacts.
     """
     sbom = pied_piper_with_sboms["sboms"][SIGNED_COMPONENT_NAME]
     sbom.signature_blob_key = f"signatures/{sbom.id}/cosign-bundle.sig"
@@ -58,6 +145,26 @@ def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
             "provenance_blob_key",
         ]
     )
+
+    plugin_name = "sbom-verification"
+    plugin_version = "1.0.0"
+    now = datetime.now(tz=timezone.utc)
+    AssessmentRun.objects.create(
+        id=uuid.uuid4(),
+        sbom=sbom,
+        plugin_name=plugin_name,
+        plugin_version=plugin_version,
+        plugin_config_hash="0" * 64,
+        category="attestation",
+        run_reason="sbom_uploaded",
+        status="completed",
+        started_at=now,
+        completed_at=now,
+        input_content_digest="0" * 64,
+        result=_verification_result(plugin_name, plugin_version),
+        result_schema_version="1.0",
+    )
+
     return pied_piper_with_sboms
 
 
@@ -137,33 +244,21 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     provenance_badge.scroll_into_view_if_needed()
     pace(page, 2500)
 
-    # ── 5. Hover the Signed badge ──────────────────────────────────────
-    # Move the cursor over the badge so the recording closes on the
-    # piece of UI the FAQ tells viewers to look for. Hovering (rather
-    # than clicking) keeps the badge as a passive indicator rather
-    # than implying it opens a panel — it does not.
-    box = sbom_signed_badge.bounding_box()
+    # ── 5. Wait for the SBOM Verification result to render ──────────────
+    # The Assessment Results card is HTMX-loaded after the page
+    # paint. ``All Passed`` is the headline pill that lights up when
+    # the seeded ``sbom-verification`` AssessmentRun's summary
+    # reports zero failures across every finding — the same outcome
+    # a real signed-and-attested SBOM produces once the worker
+    # finishes.
+    all_passed = page.locator("span:has-text('All Passed')").first
+    all_passed.wait_for(state="visible", timeout=20_000)
+    all_passed.scroll_into_view_if_needed()
+    pace(page, 2500)
+
+    # Hover the All Passed pill so the closing frame anchors on the
+    # operator-visible outcome the FAQ promises.
+    box = all_passed.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    pace(page, 2000)
-
-    # ── 6. Show the Plugins entry as the natural next step ──────────────
-    # The FAQ closes on a pointer to the SBOM Verification plugin
-    # which actually validates the signature. Hovering the sidebar
-    # link makes that hand-off visible without leaving the recording
-    # mid-load on a plugin-config page that has its own screencast.
-    plugins_link = page.locator("nav a:has-text('Plugins')").first
-    plugins_link.scroll_into_view_if_needed()
-    plugins_box = plugins_link.bounding_box()
-    if plugins_box:
-        page.mouse.move(plugins_box["x"] + plugins_box["width"] / 2, plugins_box["y"] + plugins_box["height"] / 2)
-    pace(page, 2000)
-
-    # Final hold so the closing frame is not mid-transition.
-    pace(page, 1000)
-
-
-# Suppress unused-import warning for ``hover_and_click`` — kept so
-# follow-up edits that need a real click on the badge don't have to
-# re-import. Same pattern other screencasts use.
-_ = hover_and_click
+    pace(page, 2500)
