@@ -239,6 +239,29 @@ class Command(BaseCommand):
                     "invitation": mock_invitation,
                 },
             },
+            # Sent from ``teams/signals.py`` once the post-signup trial
+            # subscription is provisioned. The signal is gated behind
+            # Stripe + a real User row, so the management command
+            # synthesises the same context the signal would build and
+            # exercises the template directly. Without this entry the
+            # path is silently untested.
+            {
+                "subject": "Welcome to sbomify",
+                "template_html": "teams/emails/new_user_email.html.j2",
+                "template_txt": "teams/emails/new_user_email.txt",
+                "context": {
+                    **base_context,
+                    "user": mock_user,
+                    "team": mock_team,
+                    "TRIAL_PERIOD_DAYS": 14,
+                    "trial_end_date": timezone.now() + timedelta(days=14),
+                    "plan_limits": {
+                        "max_products": 10,
+                        "max_projects": 25,
+                        "max_components": 100,
+                    },
+                },
+            },
             # Onboarding emails
             {
                 "subject": "Welcome to sbomify - Let's Get Started!",
