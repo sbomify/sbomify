@@ -1,10 +1,13 @@
 """Record the CRA Compliance Wizard screencast.
 
-Drives: Dashboard → Products → click into Pied Piper → CRA Compliance
-card → Continue Assessment → land on Step 1 (Product Profile) → walk
-the visible sections → navigate to Step 2 (SBOM Compliance) → navigate
-to Step 5 (Review & Export) → highlight the Export Compliance Bundle
-button.
+Drives the full wizard end-to-end: Dashboard → Products → Pied Piper
+product → Continue Assessment → walk every panel of every step
+(Steps 1–5) → exercise Step 3's three tabs (checklist, vulnerability,
+incident) → land on Step 5 with the Export Compliance Bundle CTA in
+view. The recording's job is to give the FAQ a visual companion that
+covers what each step actually contains, not just the headline of
+each step — so we scroll every named section into the viewport and
+linger long enough for a viewer to read the heading.
 
 The screencast pairs with the FAQ article at
 ``how-do-i-use-cra-compliance``. We pre-create the CRAScopeScreening,
@@ -147,24 +150,28 @@ def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -
     pace(page, 2000)
 
     # ── 5. Step 1: Product Profile ──────────────────────────────────────
-    # Walk the visible sections so the recording captures the shape of
-    # the first step. The wizard is sticky-headed; scrolling each h2
-    # into view brings the next panel above the fold.
-    product_info = page.locator("h2:has-text('Product Information')").first
-    product_info.wait_for(state="visible", timeout=15_000)
+    # Walk every named section so the recording captures the full shape
+    # of the first step. The wizard is sticky-headed; scrolling each h2
+    # into view brings the next panel above the fold without the
+    # navigation flicker of a fresh page load.
+    step_1_sections = [
+        "Product Information",
+        "CRA Classification",
+        "Harmonised Standards Applicability",
+        "Target EU Markets",
+        "Support Period",
+        "Intended Use",
+    ]
+    first_step_1 = page.locator(f"h2:has-text('{step_1_sections[0]}')").first
+    first_step_1.wait_for(state="visible", timeout=15_000)
     pace(page, 2500)
-
-    classification = page.locator("h2:has-text('CRA Classification')").first
-    classification.scroll_into_view_if_needed()
-    pace(page, 2500)
-
-    harmonised = page.locator("h2:has-text('Harmonised Standards Applicability')").first
-    harmonised.scroll_into_view_if_needed()
-    pace(page, 2500)
+    for heading in step_1_sections[1:]:
+        page.locator(f"h2:has-text('{heading}')").first.scroll_into_view_if_needed()
+        pace(page, 2000)
 
     # ── 6. Scroll back up so the stepper is fully visible ───────────────
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
-    pace(page, 2000)
+    pace(page, 1500)
 
     # ── 7. Advance to Step 2 (SBOM Compliance) ──────────────────────────
     # Mark Step 1 complete and advance current_step before navigating —
@@ -180,27 +187,94 @@ def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -
     pace(page, 2000)
 
     # ── 8. Step 2: SBOM Compliance ──────────────────────────────────────
-    # The first heading is "SBOM Compliance Summary" — the rolled-up
-    # BSI TR-03183 status across the product. Below it the
-    # "Components" panel lists each component with its individual
-    # findings. Walking both gives viewers the per-product / per-
-    # component shape the FAQ describes.
-    sbom_summary = page.locator("h2:has-text('SBOM Compliance Summary')").first
-    sbom_summary.wait_for(state="visible", timeout=15_000)
-    pace(page, 2500)
+    # "SBOM Compliance Summary" is the rolled-up BSI TR-03183 status
+    # across the product; "Components" lists each component with its
+    # individual findings. Walking both gives viewers the per-product /
+    # per-component shape the FAQ describes.
+    for heading in ("SBOM Compliance Summary", "Components"):
+        loc = page.locator(f"h2:has-text('{heading}')").first
+        loc.wait_for(state="visible", timeout=15_000)
+        loc.scroll_into_view_if_needed()
+        pace(page, 2500)
 
-    components_heading = page.locator("h2:has-text('Components')").first
-    components_heading.scroll_into_view_if_needed()
-    pace(page, 2500)
-
-    # ── 9. Advance to Step 5 (Review & Export) ──────────────────────────
-    # Mark Steps 1-4 complete to mirror a user who has worked through
-    # the wizard. Skipping Steps 3 and 4 keeps the recording tight;
-    # the FAQ enumerates them in prose. Step 5 is what the FAQ leads
-    # with as the deliverable, so it is worth the extra screen time.
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
+    # ── 9. Advance to Step 3 (Security & Vulnerability) ─────────────────
+    # Step 3 has three tabs (Annex I checklist, vulnerability disclosure,
+    # incident reporting) all driven from one Alpine ``activeTab``
+    # state. The recording exercises each tab so the FAQ can refer
+    # back to specific sections without saying "click somewhere on
+    # this page".
+    assessment.completed_steps = [1, 2]
+    assessment.current_step = 3
+    assessment.save(update_fields=["completed_steps", "current_step"])
+    page.goto(f"/compliance/cra/{assessment.id}/step/3/")
+    page.wait_for_load_state("networkidle")
+    pace(page, 2000)
+
+    # The default tab is "Security Checklist" — Annex I controls.
+    # Linger long enough for the viewer to take in the structure, then
+    # click the other two tabs in turn. Tab button labels and the
+    # ``activeTab`` state names differ ("Vulnerability Handling" vs
+    # ``activeTab === 'vulnerability'``); we drive on the visible
+    # button text because that is what the viewer actually sees.
+    checklist_tab = page.locator("button:has-text('Security Checklist')").first
+    if checklist_tab.count():
+        checklist_tab.scroll_into_view_if_needed()
+    pace(page, 2500)
+    page.evaluate("window.scrollBy({ top: 250, behavior: 'smooth' })")
+    pace(page, 2000)
+
+    vuln_tab = page.locator("button:has-text('Vulnerability Handling')").first
+    vuln_tab.wait_for(state="visible", timeout=10_000)
+    hover_and_click(page, vuln_tab)
+    pace(page, 2500)
+    page.locator("h2:has-text('Vulnerability Disclosure')").first.scroll_into_view_if_needed()
+    pace(page, 2000)
+
+    incident_tab = page.locator("button:has-text('Incident Reporting')").first
+    incident_tab.wait_for(state="visible", timeout=10_000)
+    hover_and_click(page, incident_tab)
+    pace(page, 2500)
+    page.locator("h2:has-text('Incident Reporting (Article 14)')").first.scroll_into_view_if_needed()
+    pace(page, 2000)
+
+    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
+    pace(page, 1500)
+
+    # ── 10. Advance to Step 4 (User Information) ────────────────────────
+    # Annex II inputs that drive the "User Instructions" generated
+    # document. Walk every named section so the FAQ can call out what
+    # the operator has to fill in here.
+    assessment.completed_steps = [1, 2, 3]
+    assessment.current_step = 4
+    assessment.save(update_fields=["completed_steps", "current_step"])
+    page.goto(f"/compliance/cra/{assessment.id}/step/4/")
+    page.wait_for_load_state("networkidle")
+    pace(page, 2000)
+
+    step_4_sections = [
+        "Product Type",
+        "Update & Distribution",
+        "Support Contact",
+        "Data & Decommissioning",
+    ]
+    first_step_4 = page.locator(f"h2:has-text('{step_4_sections[0]}')").first
+    first_step_4.wait_for(state="visible", timeout=15_000)
+    pace(page, 2500)
+    for heading in step_4_sections[1:]:
+        page.locator(f"h2:has-text('{heading}')").first.scroll_into_view_if_needed()
+        pace(page, 2000)
+
+    page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
+    pace(page, 1500)
+
+    # ── 11. Advance to Step 5 (Review & Export) ─────────────────────────
+    # Step 5 is what the FAQ leads with as the deliverable. Walk every
+    # panel: Compliance Summary (rolled-up posture), Export (the
+    # bundle CTA), Last Export Bundle (manifest preview), Documents
+    # (per-document staleness + preview/generate buttons).
     assessment.completed_steps = [1, 2, 3, 4]
     assessment.current_step = 5
     assessment.save(update_fields=["completed_steps", "current_step"])
@@ -208,14 +282,18 @@ def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -
     page.wait_for_load_state("networkidle")
     pace(page, 2000)
 
-    # ── 9. Highlight the Export Compliance Bundle button ────────────────
-    # Hover (do not click) the export CTA — clicking would kick off a
-    # real export that the screencast environment cannot complete (no
-    # S3, no signing). The FAQ's "What is in the export bundle"
-    # section unpacks what the button produces.
     summary_heading = page.locator("h2:has-text('Compliance Summary')").first
     summary_heading.wait_for(state="visible", timeout=15_000)
     pace(page, 2500)
+
+    # Highlight the Export Compliance Bundle button — hover only, do
+    # not click. Clicking would kick off a real export that the
+    # screencast environment cannot complete (no S3, no signing). The
+    # FAQ's "What is in the export bundle" section unpacks what the
+    # button produces.
+    export_heading = page.locator("h2:has-text('Export')").first
+    export_heading.scroll_into_view_if_needed()
+    pace(page, 2000)
 
     export_btn = page.locator("button:has-text('Export Compliance Bundle')").first
     export_btn.wait_for(state="visible", timeout=10_000)
@@ -224,4 +302,23 @@ def cra_compliance(recording_page: Page, pied_piper_with_cra_assessment: dict) -
     box = export_btn.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    pace(page, 2500)
+
+    # The "Last Export Bundle" card appears only when a previous
+    # export exists for this assessment. In the screencast environment
+    # there is no prior export, so we fall back to a no-op when the
+    # heading is absent — keeps the recording resilient to test data
+    # shape without fabricating an unrealistic bundle row.
+    bundle_card = page.locator("h2:has-text('Last Export Bundle')").first
+    if bundle_card.count():
+        bundle_card.scroll_into_view_if_needed()
+        pace(page, 2500)
+
+    documents_heading = page.locator("h2:has-text('Documents')").first
+    documents_heading.scroll_into_view_if_needed()
+    pace(page, 2500)
+    # One extra scroll so the bottom of the document list (Declaration
+    # of Conformity row + the Back link) is in view at the closing
+    # frame, mirroring how a user would end the wizard pass.
+    page.evaluate("window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })")
     pace(page, 2500)
