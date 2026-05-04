@@ -16,9 +16,13 @@ directly via ORM:
 - ``signature_blob_key`` / ``signature_type`` / ``provenance_blob_key``
   on the target SBOM — drive the Signed / Provenance badges.
 - A completed ``AssessmentRun`` for the ``sbom-verification`` plugin
-  with five passing findings — drives the Assessment Results card's
-  "All Passed" badge so the closing frame shows the same visible
-  outcome a real signed-and-attested SBOM would produce.
+  with five granular passing findings (digest integrity, signature
+  presence + validity, provenance presence + digest match) plus the
+  rolled-up ``verification:attestation`` summary finding that BSI /
+  FDA / NTIA's ``requires_one_of: attestation`` clause consumes —
+  drives the Assessment Results card's "All Passed" badge so the
+  closing frame shows the same visible outcome a real signed-and-
+  attested SBOM would produce.
 
 The visible UX is indistinguishable from a real upload-then-scan
 flow, the recording stays deterministic, and we cover the worker
@@ -40,7 +44,9 @@ from conftest import (
     pace,
     start_on_dashboard,
 )
+from sbomify.apps.plugins.builtins.verification import SBOMVerificationPlugin
 from sbomify.apps.plugins.models import AssessmentRun
+from sbomify.apps.plugins.sdk.enums import RunReason
 
 # The first component in ``PIED_PIPER_COMPONENTS`` — the natural lead
 # in the recording's narrative because the badges read most clearly on
@@ -147,8 +153,17 @@ def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
         ]
     )
 
+    # ``plugin_version`` is sourced from the live plugin so the
+    # Assessment Results card — and any follow-up tooling that
+    # pivots on (plugin_name, plugin_version) — sees the same
+    # identifier a real production run would emit; ``plugin_name``
+    # is a literal in the plugin's ``get_metadata()`` rather than a
+    # class attribute, so we mirror that here. ``RunReason.ON_UPLOAD``
+    # is the canonical enum value the UI's ``format_run_reason``
+    # helper translates to "Upload"; the previous ``"sbom_uploaded"``
+    # literal didn't round-trip through that mapping.
     plugin_name = "sbom-verification"
-    plugin_version = "1.0.0"
+    plugin_version = SBOMVerificationPlugin.VERSION
     now = datetime.now(tz=timezone.utc)
     AssessmentRun.objects.create(
         id=uuid.uuid4(),
@@ -157,7 +172,7 @@ def pied_piper_with_signed_sbom(pied_piper_with_sboms: dict) -> dict:
         plugin_version=plugin_version,
         plugin_config_hash="0" * 64,
         category="attestation",
-        run_reason="sbom_uploaded",
+        run_reason=RunReason.ON_UPLOAD.value,
         status="completed",
         started_at=now,
         completed_at=now,
