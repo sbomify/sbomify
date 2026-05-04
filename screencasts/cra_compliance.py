@@ -101,11 +101,12 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
 
     # ── 5. Scope screening: walk the five Article 2/3 questions ─────────
     # FAQ §1 enumerates these explicitly. Each ``tw-card`` carries a
-    # checkbox plus a one-line legal-basis link; viewers should see
-    # the shape of the page before any interaction so they recognise
-    # what they are clicking on.
+    # checkbox plus a one-line legal-basis link. Pace values here are
+    # tuned so the whole screening segment runs in ~6 s — long enough
+    # for a viewer to recognise each question, short enough not to
+    # drag against the rest of the wizard walk.
     page.locator("h1:has-text('CRA Scope Screening')").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 2500)
+    pace(page, 1200)
 
     screening_questions = [
         "Product has a data connection",
@@ -116,7 +117,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     ]
     for q in screening_questions:
         page.locator(f"span:has-text('{q}')").first.scroll_into_view_if_needed()
-        pace(page, 1500)
+        pace(page, 700)
 
     # The data-connection question is the inclusion gate — checking
     # it flips the verdict card from "CRA does not apply" to "CRA
@@ -126,9 +127,9 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # because the Alpine reactivity is mid-init.
     data_conn_input = page.locator("input[x-model='hasDataConnection']").first
     data_conn_input.scroll_into_view_if_needed()
-    pace(page, 800)
+    pace(page, 400)
     data_conn_input.check()
-    pace(page, 2500)
+    pace(page, 1200)
 
     # Show the verdict flip — "CRA applies to this product" card.
     # The card is gated by ``x-show="craApplies"`` so we wait for it
@@ -137,14 +138,14 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     verdict_heading = page.locator("h3:has-text('CRA applies to this product')").first
     verdict_heading.wait_for(state="visible", timeout=10_000)
     verdict_heading.scroll_into_view_if_needed()
-    pace(page, 2500)
+    pace(page, 1500)
 
     # Save & Continue — backend creates the OSCAL catalog /
     # AssessmentResult / CRAAssessment in one go and redirects to
     # Step 1.
     save_btn = page.locator("button:has-text('Save & Continue to Wizard')").first
     save_btn.scroll_into_view_if_needed()
-    pace(page, 800)
+    pace(page, 400)
     hover_and_click(page, save_btn)
     # Match both ``/step/1`` and ``/step/1/`` — Django serves the
     # canonical form with the trailing slash but the matcher needs
