@@ -125,6 +125,7 @@ services:
       replicas: ${WORKER_REPLICAS:-1}  # Use 1 replica by default in dev
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
+      - ./bin:/code/bin:ro       # Pick up launcher changes without rebuild
     environment:
       <<: *dev-env
 
