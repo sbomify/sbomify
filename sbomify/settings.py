@@ -463,6 +463,13 @@ DRAMATIQ_RESULT_BACKEND = {
     "BACKEND_OPTIONS": _dramatiq_redis_options,
 }
 
+# Redis-backed lock for the cron scheduler so only one worker replica
+# actually fires scheduled jobs, even though every replica spawns a
+# scheduler subprocess via bin/run_worker.py.
+DRAMATIQ_CRONTAB = {
+    "REDIS_URL": REDIS_WORKER_URL,
+}
+
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 

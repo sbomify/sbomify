@@ -125,17 +125,7 @@ services:
       replicas: ${WORKER_REPLICAS:-1}  # Use 1 replica by default in dev
     volumes:
       - ./sbomify:/code/sbomify # Mount local code for development
-    environment:
-      <<: *dev-env
-
-  sbomify-scheduler:
-    pull_policy: never  # Never pull from registry in dev, use local builds
-    build:
-      target: ${BUILD_TARGET:-python-app-dev}
-      args:
-        <<: *dev-env
-    volumes:
-      - ./sbomify:/code/sbomify # Mount local code for development
+      - ./bin:/code/bin:ro       # Pick up launcher changes without rebuild
     environment:
       <<: *dev-env
 
