@@ -155,17 +155,40 @@ services:
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
-    # bin/run_worker.py runs `manage.py rundramatiq` and spawns
-    # `manage.py crontab` as a subprocess so the cron scheduler runs alongside
-    # the worker. Single-leader scheduling across replicas is enforced by
-    # dramatiq-crontab's Redis lock (see DRAMATIQ_CRONTAB.REDIS_URL in settings).
     command:
-      - python
-      - /code/bin/run_worker.py
-      - -p
-      - "${DRAMATIQ_PROCESSES:-1}"
-      - -t
-      - "${DRAMATIQ_THREADS:-4}"
+      [
+        "python",
+        "manage.py",
+        "rundramatiq",
+        "-p",
+        "${DRAMATIQ_PROCESSES:-1}",
+        "-t",
+        "${DRAMATIQ_THREADS:-4}"
+      ]
+    depends_on:
+      sbomify-redis:
+        condition: service_healthy
+      sbomify-db:
+        condition: service_healthy
+    stop_grace_period: 30s
+
+  sbomify-scheduler:
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
+    build:
+      context: ${BUILD_CONTEXT:-.}
+      target: ${BUILD_TARGET:-python-app-prod}
+      args:
+        BUILD_ENV: ${BUILD_ENV:-production}
+    pull_policy: ${SBOMIFY_PULL_POLICY:-always}
+    restart: ${SBOMIFY_RESTART_POLICY:-always}
+    # Replicas pinned to 1: dramatiq-crontab uses a Redis lock so any extra
+    # instance exits with "Another scheduler is already running."
+    deploy:
+      replicas: 1
+    environment:
+      <<: *common-env
+      BILLING: ${BILLING:-False}
+    command: ["python", "manage.py", "crontab"]
     depends_on:
       sbomify-redis:
         condition: service_healthy

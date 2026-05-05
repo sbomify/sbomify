@@ -191,8 +191,7 @@ exclude_dirs = ["./.venv", ".claude", "tests.py", "sbom_format_schemas", "tests"
 # B101 = ignore assert_used
 # B404 = allow use of sub process module
 # B603 = allow calls to Popen with shell=False
-# B606 = allow os.exec* without a shell (same intent as B603 — no-shell is the safe pattern)
-skips = ["B101", "B404", "B603", "B606", "B608"]
+skips = ["B101", "B404", "B603", "B608"]
 
 [tool.ruff]
 line-length = 120

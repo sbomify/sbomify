@@ -463,10 +463,10 @@ DRAMATIQ_RESULT_BACKEND = {
     "BACKEND_OPTIONS": _dramatiq_redis_options,
 }
 
-# Redis-backed lock for the cron scheduler so only one worker replica
-# actually fires scheduled jobs. Each `sbomify-worker` container spawns
-# `manage.py crontab` as a subprocess via bin/run_worker.py; without this
-# lock all replicas would fire every job.
+# Redis-backed lock for the cron scheduler. The dedicated `sbomify-scheduler`
+# service runs `manage.py crontab` with replicas pinned to 1, so the lock
+# isn't strictly required today — but it makes accidental scaling safe (any
+# extra replica exits cleanly with "Another scheduler is already running.").
 DRAMATIQ_CRONTAB = {
     "REDIS_URL": REDIS_WORKER_URL,
 }
