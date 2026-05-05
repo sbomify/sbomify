@@ -155,10 +155,18 @@ services:
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
-    # Launches `manage.py rundramatiq` plus a `manage.py crontab` subprocess
-    # so the cron scheduler runs alongside the worker. Single-leader is
-    # enforced by dramatiq-crontab's Redis lock (DRAMATIQ_CRONTAB.REDIS_URL).
-    command: ["python", "/code/bin/run_worker.py"]
+    # Run dramatiq worker plus a `manage.py crontab` subprocess in the same
+    # container. Single-leader scheduling across replicas is enforced by
+    # dramatiq-crontab's Redis lock (see DRAMATIQ_CRONTAB.REDIS_URL in settings).
+    command:
+      - python
+      - -c
+      - |
+        import os, subprocess, sys
+        subprocess.Popen([sys.executable, "manage.py", "crontab"])
+        os.execvp(sys.executable, [sys.executable, "manage.py", "rundramatiq",
+                                    "-p", "${DRAMATIQ_PROCESSES:-1}",
+                                    "-t", "${DRAMATIQ_THREADS:-4}"])
     depends_on:
       sbomify-redis:
         condition: service_healthy
