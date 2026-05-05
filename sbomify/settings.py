@@ -537,6 +537,16 @@ LOGGING = {
             "level": os.getenv("LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        # Surface dramatiq + dramatiq-crontab info logs (heartbeat, scheduler
+        # liveness, actor execution). Without this, info-level logs from
+        # those packages fall through to the WARNING root logger and are
+        # silently dropped, making "did the cron actually fire?" hard to
+        # diagnose from container logs alone.
+        "dramatiq": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "sbomify.performance": {
             "handlers": ["console"],
             "level": "INFO",
