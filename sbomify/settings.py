@@ -464,8 +464,9 @@ DRAMATIQ_RESULT_BACKEND = {
 }
 
 # Redis-backed lock for the cron scheduler so only one worker replica
-# actually fires scheduled jobs, even though every replica spawns a
-# scheduler subprocess via bin/run_worker.py.
+# actually fires scheduled jobs. Each `sbomify-worker` container spawns
+# `manage.py crontab` as a subprocess (see the worker `command:` block in
+# docker-compose.yml); without this lock all replicas would fire every job.
 DRAMATIQ_CRONTAB = {
     "REDIS_URL": REDIS_WORKER_URL,
 }
