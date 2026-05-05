@@ -119,6 +119,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django.contrib.sites",
     "django_dramatiq",
+    "dramatiq_crontab",
     "django_extensions",
     "django_vite",
     "django_htmx",
