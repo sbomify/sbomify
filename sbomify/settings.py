@@ -119,6 +119,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django.contrib.sites",
     "django_dramatiq",
+    "dramatiq_crontab",
     "django_extensions",
     "django_vite",
     "django_htmx",
@@ -462,6 +463,14 @@ DRAMATIQ_RESULT_BACKEND = {
     "BACKEND_OPTIONS": _dramatiq_redis_options,
 }
 
+# Redis-backed lock for the cron scheduler. The dedicated `sbomify-scheduler`
+# service runs `manage.py crontab` with replicas pinned to 1, so the lock
+# isn't strictly required today — but it makes accidental scaling safe (any
+# extra replica exits cleanly with "Another scheduler is already running.").
+DRAMATIQ_CRONTAB = {
+    "REDIS_URL": REDIS_WORKER_URL,
+}
+
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
@@ -526,6 +535,16 @@ LOGGING = {
         "sbomify": {
             "handlers": ["console"],
             "level": os.getenv("LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        # Surface dramatiq + dramatiq-crontab info logs (heartbeat, scheduler
+        # liveness, actor execution). Without this, info-level logs from
+        # those packages fall through to the WARNING root logger and are
+        # silently dropped, making "did the cron actually fire?" hard to
+        # diagnose from container logs alone.
+        "dramatiq": {
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
         "sbomify.performance": {
