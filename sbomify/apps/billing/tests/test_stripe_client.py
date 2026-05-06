@@ -297,6 +297,7 @@ class TestStripeClient:
             success_url="https://example.com/success",
             cancel_url="https://example.com/cancel",
             metadata={},
+            allow_promotion_codes=True,
             api_key=self.client._api_key,
         )
 

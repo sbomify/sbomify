@@ -190,6 +190,7 @@ class StripeClient:
             "success_url": success_url,
             "cancel_url": cancel_url,
             "metadata": metadata or {},
+            "allow_promotion_codes": True,
             "api_key": self._api_key,
         }
 
