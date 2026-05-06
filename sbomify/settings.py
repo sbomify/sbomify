@@ -792,6 +792,14 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 TRIAL_PERIOD_DAYS = int(os.environ.get("TRIAL_PERIOD_DAYS", "14"))
 TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_DAYS", "3"))
 
+# Maximum age (in days, since signup or first-component creation) at which a
+# user is still eligible for an onboarding-drip email. Past this window the
+# sequence narrative no longer makes sense — sending "your quick start guide"
+# to someone who joined months ago feels off, and a long scheduler outage
+# could cause every backlog user to receive every drip simultaneously without
+# this guard.
+ONBOARDING_DRIP_MAX_AGE_DAYS = int(os.environ.get("ONBOARDING_DRIP_MAX_AGE_DAYS", "30"))
+
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
     "sbomify.apps.billing.notifications.get_notifications",

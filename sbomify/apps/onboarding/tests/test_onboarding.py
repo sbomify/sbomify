@@ -161,6 +161,70 @@ class TestOnboardingStatusModel:
         SBOM.objects.create(name="test-sbom", component=component)
         assert not status.should_receive_sbom_reminder(days_threshold=7)
 
+    def test_drip_window_caps_signup_anchored_emails(self, settings) -> None:
+        """Users past ONBOARDING_DRIP_MAX_AGE_DAYS skip signup-anchored drip emails.
+
+        Without this guard, a long scheduler outage would cause every backlog
+        user past every threshold to receive every drip email simultaneously.
+        """
+        settings.ONBOARDING_DRIP_MAX_AGE_DAYS = 30
+
+        test_user = User.objects.create_user(
+            username="oldsignup", email="oldsignup@example.com", password="testpass123"
+        )
+        test_team = Team.objects.create(name="Old Signup Team", key="old-signup-team")
+        Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
+
+        status = OnboardingStatus.objects.get(user=test_user)
+        status.mark_welcome_email_sent()
+        # Push signup back beyond the drip window
+        status.created_at = timezone.now() - timedelta(days=90)
+        status.save()
+
+        assert status.is_drip_window_expired
+        assert not status.should_receive_quick_start()
+        assert not status.should_receive_component_reminder()
+        assert not status.should_receive_collaboration()
+
+        # In-window users still receive the drip
+        status.created_at = timezone.now() - timedelta(days=12)
+        status.save()
+        assert not status.is_drip_window_expired
+        assert status.should_receive_quick_start()
+        assert status.should_receive_component_reminder()
+        assert status.should_receive_collaboration()
+
+    def test_first_sbom_window_caps_late_uploaders(self, settings) -> None:
+        """Users whose first component is older than the drip window skip the SBOM reminder.
+
+        The SBOM reminder is anchored to first-component creation, not signup,
+        so it has its own independent window check.
+        """
+        settings.ONBOARDING_DRIP_MAX_AGE_DAYS = 30
+
+        test_user = User.objects.create_user(
+            username="latesbom", email="latesbom@example.com", password="testpass123"
+        )
+        test_team = Team.objects.create(name="Late SBOM Team", key="late-sbom-team")
+        Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
+
+        status = OnboardingStatus.objects.get(user=test_user)
+        status.mark_component_created()
+        Component.objects.create(name="late-component", team=test_team)
+
+        # Component created 90 days ago — past the window
+        status.first_component_created_at = timezone.now() - timedelta(days=90)
+        status.save()
+
+        assert status.is_first_sbom_window_expired
+        assert not status.should_receive_sbom_reminder(days_threshold=7)
+
+        # Component created 14 days ago — still in window
+        status.first_component_created_at = timezone.now() - timedelta(days=14)
+        status.save()
+        assert not status.is_first_sbom_window_expired
+        assert status.should_receive_sbom_reminder(days_threshold=7)
+
 
 @pytest.mark.django_db
 class TestOnboardingEmailModel:

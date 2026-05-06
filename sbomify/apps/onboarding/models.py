@@ -102,19 +102,49 @@ class OnboardingStatus(models.Model):
         """Calculate days since user signup."""
         return (timezone.now() - self.created_at).days
 
+    @property
+    def is_drip_window_expired(self) -> bool:
+        """Past the signup-anchored window in which drip emails still make sense.
+
+        Caps eligibility for `quick_start`, `first_component`, and `collaboration`.
+        Without this, a long scheduler outage would cause every backlog user
+        to receive every drip type simultaneously when the scheduler comes online.
+        """
+        from django.conf import settings
+
+        return self.days_since_signup > settings.ONBOARDING_DRIP_MAX_AGE_DAYS
+
+    @property
+    def is_first_sbom_window_expired(self) -> bool:
+        """Past the first-component-anchored window for the SBOM upload reminder.
+
+        Anchored separately from signup: a user who creates a component late but
+        never uploads an SBOM should still get the reminder within the window
+        following the component creation.
+        """
+        from django.conf import settings
+
+        if self.first_component_created_at is None:
+            return False
+        days_since_component = (timezone.now() - self.first_component_created_at).days
+        return days_since_component > settings.ONBOARDING_DRIP_MAX_AGE_DAYS
+
     def should_receive_component_reminder(self, days_threshold: int = 3) -> bool:
         """
         Check if user should receive BOM component creation reminder.
 
         Only for workspace owners who:
         - Have had welcome email sent
-        - Signed up X+ days ago
+        - Signed up X+ days ago (and within the drip window)
         - Haven't created any BOM components in their workspace
         """
         if not self.welcome_email_sent:
             return False
 
         if self.days_since_signup < days_threshold:
+            return False
+
+        if self.is_drip_window_expired:
             return False
 
         # Check if user is a workspace owner
@@ -140,12 +170,15 @@ class OnboardingStatus(models.Model):
 
         Only for workspace owners who:
         - Have had welcome email sent
-        - Signed up at least 1 day ago
+        - Signed up at least 1 day ago (and within the drip window)
         """
         if not self.welcome_email_sent:
             return False
 
         if self.user_role != "owner":
+            return False
+
+        if self.is_drip_window_expired:
             return False
 
         return self.days_since_signup >= days_threshold
@@ -156,13 +189,16 @@ class OnboardingStatus(models.Model):
 
         Only for workspace owners who:
         - Have had welcome email sent
-        - Signed up 10+ days ago
+        - Signed up 10+ days ago (and within the drip window)
         - Are still the only member in their workspace (no invites sent)
         """
         if not self.welcome_email_sent:
             return False
 
         if self.days_since_signup < days_threshold:
+            return False
+
+        if self.is_drip_window_expired:
             return False
 
         if self.user_role != "owner":
@@ -183,7 +219,7 @@ class OnboardingStatus(models.Model):
 
         Only for workspace owners who:
         - Have created components
-        - Created components X+ days ago
+        - Created components X+ days ago (and within the drip window)
         - Haven't uploaded any SBOMs to their workspace
         """
         if not self.has_created_component:
@@ -194,6 +230,9 @@ class OnboardingStatus(models.Model):
 
         days_since_component = (timezone.now() - self.first_component_created_at).days
         if days_since_component < days_threshold:
+            return False
+
+        if self.is_first_sbom_window_expired:
             return False
 
         # Check if user is a workspace owner
