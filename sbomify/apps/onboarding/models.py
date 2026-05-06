@@ -41,6 +41,18 @@ class OnboardingStatus(models.Model):
     welcome_email_sent = models.BooleanField(default=False, help_text="Whether the welcome email has been sent")
     welcome_email_sent_at = models.DateTimeField(null=True, blank=True, help_text="When the welcome email was sent")
 
+    # Drip campaign anchor (separate from signup so we can reset the clock for
+    # backlog users without losing the actual signup timestamp). Eligibility
+    # checks for `quick_start`, `first_component`, and `collaboration` are
+    # measured from this point. Set when the welcome email is sent, and
+    # backfilled to deploy time for pre-existing rows so the campaign starts
+    # cleanly when the scheduler comes online for the first time.
+    drip_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the onboarding drip campaign clock started for this user",
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -102,19 +114,31 @@ class OnboardingStatus(models.Model):
         """Calculate days since user signup."""
         return (timezone.now() - self.created_at).days
 
+    @property
+    def days_since_drip_start(self) -> int:
+        """Days since the drip campaign clock started for this user.
+
+        Anchored on `drip_started_at` (set when welcome email is sent, or
+        backfilled to deploy time for pre-existing rows). Falls back to
+        signup time if `drip_started_at` is unset, which only happens for
+        users created before the migration ran.
+        """
+        anchor = self.drip_started_at or self.created_at
+        return (timezone.now() - anchor).days
+
     def should_receive_component_reminder(self, days_threshold: int = 3) -> bool:
         """
         Check if user should receive BOM component creation reminder.
 
         Only for workspace owners who:
         - Have had welcome email sent
-        - Signed up X+ days ago
+        - Are X+ days past the drip-campaign anchor
         - Haven't created any BOM components in their workspace
         """
         if not self.welcome_email_sent:
             return False
 
-        if self.days_since_signup < days_threshold:
+        if self.days_since_drip_start < days_threshold:
             return False
 
         # Check if user is a workspace owner
@@ -140,7 +164,7 @@ class OnboardingStatus(models.Model):
 
         Only for workspace owners who:
         - Have had welcome email sent
-        - Signed up at least 1 day ago
+        - Are at least 1 day past the drip-campaign anchor
         """
         if not self.welcome_email_sent:
             return False
@@ -148,7 +172,7 @@ class OnboardingStatus(models.Model):
         if self.user_role != "owner":
             return False
 
-        return self.days_since_signup >= days_threshold
+        return self.days_since_drip_start >= days_threshold
 
     def should_receive_collaboration(self, days_threshold: int = 10) -> bool:
         """
@@ -156,13 +180,13 @@ class OnboardingStatus(models.Model):
 
         Only for workspace owners who:
         - Have had welcome email sent
-        - Signed up 10+ days ago
+        - Are 10+ days past the drip-campaign anchor
         - Are still the only member in their workspace (no invites sent)
         """
         if not self.welcome_email_sent:
             return False
 
-        if self.days_since_signup < days_threshold:
+        if self.days_since_drip_start < days_threshold:
             return False
 
         if self.user_role != "owner":
