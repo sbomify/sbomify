@@ -463,13 +463,16 @@ DRAMATIQ_RESULT_BACKEND = {
     "BACKEND_OPTIONS": _dramatiq_redis_options,
 }
 
-# Redis-backed lock for the cron scheduler. The dedicated `sbomify-scheduler`
-# service runs `manage.py crontab` with replicas pinned to 1, so the lock
-# isn't strictly required today — but it makes accidental scaling safe (any
-# extra replica exits cleanly with "Another scheduler is already running.").
-DRAMATIQ_CRONTAB = {
-    "REDIS_URL": REDIS_WORKER_URL,
-}
+# Single-leader scheduling is enforced by `replicas: 1` on the
+# `sbomify-scheduler` Compose service (and the equivalent in any prod
+# orchestrator). We deliberately do NOT configure DRAMATIQ_CRONTAB.REDIS_URL
+# because upstream `dramatiq-crontab` builds its Redis lock via
+# `redis.Redis.from_url(url)` with no API for `ssl_ca_certs` — that fails
+# SSL handshake against private-CA Redis (rediss:// + REDIS_CA_CERTS), which
+# is how prod is deployed. Without REDIS_URL the package falls back to
+# FakeLock; brief overlap during rolling deploys is safe because every
+# scheduled actor is either idempotent (scans, purges, health checks) or
+# has actor-level dedup (OnboardingEmail unique_together for drip emails).
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
