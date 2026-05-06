@@ -5,14 +5,18 @@ from django.utils import timezone
 
 
 def backfill_drip_started_at(apps, schema_editor):
-    """Reset the drip clock to deploy time for all existing users.
+    """Reset the drip clock to deploy time for backlog welcome-emailed users.
 
-    The drip campaign cadence is anchored on `drip_started_at`, not signup.
-    For backlog users (welcome_email_sent=True, but signed up months ago)
-    we want the campaign to start fresh when the scheduler comes online —
-    each user goes through the full sequence (day 1, 3, 7, 10) over the
-    next ~10 days, rather than receiving every email simultaneously
-    because they've passed every threshold.
+    Scoped to rows where `welcome_email_sent=True AND drip_started_at IS NULL`
+    — the only cohort that would otherwise hit every drip threshold
+    simultaneously when the scheduler comes online for the first time.
+    Users who haven't received the welcome email yet are skipped so they
+    enter the campaign normally once welcome fires.
+
+    With `drip_started_at` reset to now, each backlog user goes through the
+    full sequence (day 1, 3, 7, 10) over the next ~10 days, rather than
+    receiving every email simultaneously because they've passed every
+    threshold via signup-anchored eligibility.
     """
     OnboardingStatus = apps.get_model("onboarding", "OnboardingStatus")
     OnboardingStatus.objects.filter(

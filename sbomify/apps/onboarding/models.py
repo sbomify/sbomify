@@ -44,9 +44,13 @@ class OnboardingStatus(models.Model):
     # Drip campaign anchor (separate from signup so we can reset the clock for
     # backlog users without losing the actual signup timestamp). Eligibility
     # checks for `quick_start`, `first_component`, and `collaboration` are
-    # measured from this point. Set when the welcome email is sent, and
-    # backfilled to deploy time for pre-existing rows so the campaign starts
-    # cleanly when the scheduler comes online for the first time.
+    # measured from this point.
+    #
+    # Backfilled to deploy time for pre-existing welcome-emailed users via
+    # migration 0005 so the campaign starts cleanly when the scheduler comes
+    # online for the first time. Left null on new signups — eligibility falls
+    # back to `created_at` in that case, which is essentially the same as
+    # welcome-sent time since welcome is signal-driven and instant.
     drip_started_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -118,10 +122,13 @@ class OnboardingStatus(models.Model):
     def days_since_drip_start(self) -> int:
         """Days since the drip campaign clock started for this user.
 
-        Anchored on `drip_started_at` (set when welcome email is sent, or
-        backfilled to deploy time for pre-existing rows). Falls back to
-        signup time if `drip_started_at` is unset, which only happens for
-        users created before the migration ran.
+        Anchored on `drip_started_at` when set, falling back to `created_at`
+        otherwise. `drip_started_at` is null in two cases:
+          1. New signups created after migration 0005 — they keep the null
+             default so eligibility remains signup-anchored (welcome is
+             signal-driven and instant, so created_at ≈ welcome-sent time).
+          2. Any pre-existing user the backfill migration didn't touch
+             (e.g. `welcome_email_sent=False`).
         """
         anchor = self.drip_started_at or self.created_at
         return (timezone.now() - anchor).days
