@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.schemas import ErrorCode
 from sbomify.apps.teams.models import Member, Team
 
@@ -23,18 +23,16 @@ class TestErrorResponseConsistency:
 
     def test_authentication_error_consistency(self, sample_team, sample_user):  # noqa: F811
         """Test that authentication errors are consistent across endpoints."""
-        # Create private items
         private_product = Product.objects.create(name="Private Product", team=sample_team, is_public=False)
-        private_project = Project.objects.create(name="Private Project", team=sample_team, is_public=False)
-        private_component = Component.objects.create(name="Private Component", team=sample_team, visibility=Component.Visibility.PRIVATE)
-        private_component.projects.add(private_project)
+        private_component = Component.objects.create(
+            name="Private Component", team=sample_team, visibility=Component.Visibility.PRIVATE
+        )
+        private_product.components.add(private_component)
 
         client = Client()
 
-        # Test endpoints that should return consistent authentication errors
         endpoints = [
             reverse("api-1:get_product", kwargs={"product_id": private_product.id}),
-            reverse("api-1:get_project", kwargs={"project_id": private_project.id}),
             reverse("api-1:get_component", kwargs={"component_id": private_component.id}),
             reverse("api-1:list_product_identifiers", kwargs={"product_id": private_product.id}),
             reverse("api-1:list_product_links", kwargs={"product_id": private_product.id}),
@@ -59,20 +57,17 @@ class TestErrorResponseConsistency:
         other_user = User.objects.create_user(username="otheruser", email="other@example.com", password="password123")
         Member.objects.create(user=other_user, team=other_team, role="owner")
 
-        # Create items owned by different team
         other_product = Product.objects.create(name="Other Product", team=other_team, is_public=False)
-        other_project = Project.objects.create(name="Other Project", team=other_team, is_public=False)
-        other_component = Component.objects.create(name="Other Component", team=other_team, visibility=Component.Visibility.PRIVATE)
-        other_component.projects.add(other_project)
+        other_component = Component.objects.create(
+            name="Other Component", team=other_team, visibility=Component.Visibility.PRIVATE
+        )
+        other_product.components.add(other_component)
 
         client = Client()
-        # Log in as user from sample_team (different team)
         client.force_login(sample_user)
 
-        # Test endpoints that should return consistent forbidden errors
         endpoints = [
             reverse("api-1:get_product", kwargs={"product_id": other_product.id}),
-            reverse("api-1:get_project", kwargs={"project_id": other_project.id}),
             reverse("api-1:get_component", kwargs={"component_id": other_component.id}),
         ]
 
@@ -93,10 +88,8 @@ class TestErrorResponseConsistency:
         client = Client()
         client.force_login(sample_user)
 
-        # Test endpoints that should return consistent not found errors
         test_cases = [
             (reverse("api-1:get_product", kwargs={"product_id": "nonexistent"}), ErrorCode.NOT_FOUND),
-            (reverse("api-1:get_project", kwargs={"project_id": "nonexistent"}), ErrorCode.NOT_FOUND),
             (reverse("api-1:get_component", kwargs={"component_id": "nonexistent"}), ErrorCode.NOT_FOUND),
         ]
 
@@ -105,13 +98,10 @@ class TestErrorResponseConsistency:
             assert response.status_code == 404
             data = response.json()
 
-            # All not found errors should include error_code
             assert "error_code" in data, f"Missing error_code in {endpoint}"
-            # Note: some endpoints might use specific error codes like PRODUCT_NOT_FOUND
             assert data["error_code"] in [
                 expected_error_code.value,
                 ErrorCode.PRODUCT_NOT_FOUND.value,
-                ErrorCode.PROJECT_NOT_FOUND.value,
                 ErrorCode.COMPONENT_NOT_FOUND.value,
             ]
 
@@ -167,10 +157,8 @@ class TestErrorResponseConsistency:
         session.pop("user_teams", None)
         session.save()
 
-        # Test endpoints that require team context
         endpoints = [
             reverse("api-1:create_product"),
-            reverse("api-1:create_project"),
             reverse("api-1:create_component"),
         ]
 
@@ -191,21 +179,16 @@ class TestErrorMessageStandardization:
 
     def test_authentication_message_standardization(self, sample_team):  # noqa: F811
         """Test that authentication error messages are standardized."""
-        # Create private items
         private_product = Product.objects.create(name="Private Product", team=sample_team, is_public=False)
-        private_project = Project.objects.create(name="Private Project", team=sample_team, is_public=False)
-        private_component = Component.objects.create(name="Private Component", team=sample_team, visibility=Component.Visibility.PRIVATE)
+        private_component = Component.objects.create(
+            name="Private Component", team=sample_team, visibility=Component.Visibility.PRIVATE
+        )
 
         client = Client()
 
-        # Test that all similar endpoints use the same authentication message
         endpoints_and_expected_messages = [
             (
                 reverse("api-1:get_product", kwargs={"product_id": private_product.id}),
-                "Authentication required for private items",
-            ),
-            (
-                reverse("api-1:get_project", kwargs={"project_id": private_project.id}),
                 "Authentication required for private items",
             ),
             (
@@ -227,18 +210,16 @@ class TestErrorMessageStandardization:
         other_user = User.objects.create_user(username="otheruser2", email="other2@example.com", password="password123")
         Member.objects.create(user=other_user, team=other_team, role="owner")
 
-        # Create items owned by different team
         other_product = Product.objects.create(name="Other Product", team=other_team, is_public=False)
-        other_project = Project.objects.create(name="Other Project", team=other_team, is_public=False)
-        other_component = Component.objects.create(name="Other Component", team=other_team, visibility=Component.Visibility.PRIVATE)
+        other_component = Component.objects.create(
+            name="Other Component", team=other_team, visibility=Component.Visibility.PRIVATE
+        )
 
         client = Client()
         client.force_login(sample_user)
 
-        # Test that all similar endpoints use the same forbidden message
         endpoints = [
             reverse("api-1:get_product", kwargs={"product_id": other_product.id}),
-            reverse("api-1:get_project", kwargs={"project_id": other_project.id}),
             reverse("api-1:get_component", kwargs={"component_id": other_component.id}),
         ]
 

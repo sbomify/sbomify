@@ -226,8 +226,8 @@ class ProductResponseSchema(BaseModel):
     team_id: str
     created_at: datetime
     is_public: bool
-    project_count: int | None = None
-    projects: list["ProjectSummarySchema"] | None = None
+    component_count: int | None = None
+    components: list["ComponentSummarySchema"] | None = None
     identifiers: list[ProductIdentifierSchema] | None = None
     links: list[ProductLinkSchema] | None = None
 
@@ -235,14 +235,6 @@ class ProductResponseSchema(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
-
-
-class ProjectSummarySchema(BaseModel):
-    """Summary schema for projects when included in other responses."""
-
-    id: str
-    name: str
-    is_public: bool
 
 
 class ComponentSummarySchema(BaseModel):

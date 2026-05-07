@@ -33,18 +33,13 @@ def test_private_items_invalid_plan_treated_as_public(sample_team_with_owner_mem
     assert _private_items_allowed(team) is False
 
 
-
-
-
-
-
-
 @pytest.mark.django_db
 def test_can_make_product_public_with_private_projects(
-    sample_team_with_owner_member, sample_user  # noqa: F811
+    sample_team_with_owner_member,
+    sample_user,  # noqa: F811
 ):
     """Test that making a product public succeeds even if it has private projects.
-    
+
     Private projects will simply not appear in public views.
     """
     client = Client()
@@ -68,8 +63,6 @@ def test_can_make_product_public_with_private_projects(
     product.refresh_from_db()
     assert product.is_public is True
     assert project.is_public is False  # Project remains private
-
-
 
 
 @pytest.mark.django_db
@@ -113,7 +106,8 @@ def test_community_plan_rejects_private_component(sample_team_with_owner_member,
 
 @pytest.mark.django_db
 def test_community_plan_put_update_product_requires_explicit_public_flag(
-    sample_team_with_owner_member, sample_user  # noqa: F811
+    sample_team_with_owner_member,
+    sample_user,  # noqa: F811
 ):
     """Community plan can update products when explicitly keeping them public."""
     client = Client()
@@ -137,11 +131,10 @@ def test_community_plan_put_update_product_requires_explicit_public_flag(
     assert response.json()["is_public"] is True
 
 
-
-
 @pytest.mark.django_db
 def test_community_plan_put_update_component_allows_public(
-    sample_team_with_owner_member, sample_user  # noqa: F811
+    sample_team_with_owner_member,
+    sample_user,  # noqa: F811
 ):
     """Community plan can update components (is_public=True required)."""
     client = Client()
@@ -230,10 +223,6 @@ def test_community_plan_put_cannot_make_component_private(sample_team_with_owner
     assert "cannot make items private" in response.json()["detail"]
 
 
-
-
-
-
 @pytest.mark.django_db
 def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user):  # noqa: F811
     """Test that valid operations are still allowed."""
@@ -245,7 +234,6 @@ def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user
         name="Test Plan",
         max_components=10,
         max_products=10,
-        max_projects=10,
     )
     team.billing_plan = "test_plan"
     team.save()
@@ -253,11 +241,11 @@ def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user
     client.login(username=sample_user.username, password="test")
     setup_test_session(client, team, team.members.first())
 
-    project = Project.objects.create(name="Test Project", team=team, is_public=False)
+    product = Product.objects.create(name="Test Product", team=team, is_public=False)
     component = Component.objects.create(name="Test Component", team=team, visibility=Component.Visibility.PUBLIC)
-    project.components.add(component)
+    product.components.add(component)
 
-    url = reverse("api-1:patch_project", kwargs={"project_id": project.id})
+    url = reverse("api-1:patch_product", kwargs={"product_id": product.id})
     response = client.patch(url, json.dumps({"is_public": True}), content_type="application/json")
 
     assert response.status_code == 200
@@ -267,16 +255,10 @@ def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user
     assert response.status_code == 200
 
     component_url = reverse("api-1:patch_component", kwargs={"component_id": component.id})
-    response = client.patch(
-        component_url, json.dumps({"visibility": "private"}), content_type="application/json"
-    )
+    response = client.patch(component_url, json.dumps({"visibility": "private"}), content_type="application/json")
 
     assert response.status_code == 200
     assert response.json()["visibility"] == "private"
-
-
-
-
 
 
 @pytest.mark.django_db
@@ -305,9 +287,8 @@ def test_workspace_public_view_filters_private_items(sample_team_with_owner_memb
 
     # Get public products
     public_products = _list_public_products(team)
-    
+
     product_names = [p["name"] for p in public_products]
     assert "Product with Public Project" in product_names
     assert "Product with Only Private Projects" not in product_names
     assert "Private Product" not in product_names
-
