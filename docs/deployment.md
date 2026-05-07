@@ -316,12 +316,25 @@ services:
     environment:
       REDIS_CA_CERTS: /certs/root_ca.crt
 
+  sbomify-scheduler:
+    volumes:
+      - *ca-volume
+    environment:
+      REDIS_CA_CERTS: /certs/root_ca.crt
+
   sbomify-migrations:
     volumes:
       - *ca-volume
     environment:
       DATABASE_SSLROOTCERT: /certs/root_ca.crt
 ```
+
+> **Important:** Every service that talks to Redis must mount the CA volume,
+> not just have `REDIS_CA_CERTS` set in its environment. The `sbomify-scheduler`
+> service in particular fires Dramatiq actor sends from APScheduler — if its
+> container can read the env var but cannot read the file at that path, the
+> first scheduled job crashes the scheduler with `FileNotFoundError` from
+> `ssl.load_verify_locations`.
 
 Deploy with:
 
