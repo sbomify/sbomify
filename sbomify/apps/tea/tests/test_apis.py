@@ -846,13 +846,11 @@ class TestTEAPrivateComponentVisibility:
 
     def test_private_component_not_in_product_release(self, tea_enabled_product, tea_enabled_component):
         """C4: Private components are excluded from product release component refs."""
-        from sbomify.apps.core.models import Component, Project, Release, ReleaseArtifact
+        from sbomify.apps.core.models import Component, Release, ReleaseArtifact
         from sbomify.apps.sboms.models import SBOM
 
-        # Create project linking component to product
-        project = Project.objects.create(team=tea_enabled_product.team, name="Test Project")
-        project.products.add(tea_enabled_product)
-        project.components.add(tea_enabled_component)
+        # Attach component directly to product
+        tea_enabled_product.components.add(tea_enabled_component)
 
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
@@ -1136,22 +1134,11 @@ class TestTEACollectionSignalSuppression:
 
     def test_refresh_latest_artifacts_single_bump(self, tea_enabled_product, tea_enabled_component):
         """Refreshing latest artifacts should bump version once, not per-artifact."""
-        from sbomify.apps.core.models import Project
         from sbomify.apps.sboms.models import SBOM
 
-        # Ensure component is linked to product via a project
-        project = Project.objects.filter(
-            components=tea_enabled_component,
-            products=tea_enabled_product,
-        ).first()
-
-        if not project:
-            project = Project.objects.create(
-                team=tea_enabled_product.team,
-                name="Test Project",
-            )
-            project.products.add(tea_enabled_product)
-            project.components.add(tea_enabled_component)
+        # Ensure component is attached to product via direct ProductComponent M2M
+        if not tea_enabled_product.components.filter(pk=tea_enabled_component.pk).exists():
+            tea_enabled_product.components.add(tea_enabled_component)
 
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)

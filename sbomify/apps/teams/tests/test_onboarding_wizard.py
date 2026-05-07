@@ -8,7 +8,7 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import ContactEntity, ContactProfile
 
 
@@ -271,10 +271,11 @@ class TestOnboardingWizard:
         assert entity is not None
         assert entity.email == sample_user.email
 
-    def test_product_project_component_auto_created(
+    def test_product_and_component_auto_created(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
-        """Test that Product, Project, and Component are auto-created with correct hierarchy."""
+        """Test that Product and Component are auto-created and the component is attached
+        directly to the product via the ProductComponent M2M (Project layer is gone)."""
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
 
@@ -300,18 +301,13 @@ class TestOnboardingWizard:
         product = Product.objects.filter(team=team, name="Hierarchy Test Corp").first()
         assert product is not None
 
-        # Verify Project
-        project = Project.objects.filter(team=team, name="Main Project").first()
-        assert project is not None
-
         # Verify Component with BOM type
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
         assert component.component_type == Component.ComponentType.BOM
 
-        # Verify hierarchy: product -> project -> component
-        assert project in product.projects.all()
-        assert component in project.components.all()
+        # Verify hierarchy: product -> component (direct M2M)
+        assert component in product.components.all()
 
     def test_component_has_contact_profile_persisted(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -635,10 +631,6 @@ class TestOnboardingWizard:
         assert product is not None
         assert product.is_public is True
 
-        project = Project.objects.filter(team=team, name="Main Project").first()
-        assert project is not None
-        assert project.is_public is True
-
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
         assert component.visibility == Component.Visibility.PUBLIC
@@ -657,7 +649,6 @@ class TestOnboardingWizard:
                 "name": "Business",
                 "description": "Business Plan",
                 "max_products": 10,
-                "max_projects": 10,
                 "max_components": 10,
             },
         )
@@ -686,10 +677,6 @@ class TestOnboardingWizard:
         product = Product.objects.filter(team=team, name="Business Corp").first()
         assert product is not None
         assert product.is_public is False
-
-        project = Project.objects.filter(team=team, name="Main Project").first()
-        assert project is not None
-        assert project.is_public is False
 
         component = Component.objects.filter(team=team, name="Main Component").first()
         assert component is not None
@@ -764,10 +751,8 @@ class TestOnboardingWizard:
         team.billing_plan = "community"
         team.save(update_fields=["billing_plan"])
 
-        # Pre-create assets up to the community plan limits (1 product, 1 project, 5 components)
+        # Pre-create assets up to the community plan limits (1 product, 5 components)
         product = Product.objects.create(name="Existing Product", team=team, is_public=True)
-        project = Project.objects.create(name="Existing Project", team=team, is_public=True)
-        product.projects.add(project)
         for i in range(5):
             comp = Component.objects.create(
                 name=f"Existing Component {i}",
@@ -775,7 +760,7 @@ class TestOnboardingWizard:
                 component_type=Component.ComponentType.BOM,
                 visibility=Component.Visibility.PUBLIC,
             )
-            project.components.add(comp)
+            product.components.add(comp)
 
         session = client.session
         session["current_team"] = {
@@ -800,10 +785,9 @@ class TestOnboardingWizard:
         team.refresh_from_db()
         assert team.has_completed_wizard is True
 
-        # Single product is renamed in place; project/component use get_or_create
-        # with fixed names, creating at most one of each when names differ.
+        # Single product is renamed in place; component uses get_or_create with a
+        # fixed "Main Component" name, creating at most one new component.
         assert Product.objects.filter(team=team).count() == 1  # renamed to "At Limit Corp"
-        assert Project.objects.filter(team=team).count() == 2  # "Existing Project" + "Main Project"
         assert Component.objects.filter(team=team).count() == 6  # 5 existing + "Main Component"
 
     def test_rerun_onboarding_updates_manufacturer_entity(
