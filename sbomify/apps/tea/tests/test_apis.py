@@ -1099,10 +1099,14 @@ class TestTEACollectionSignalSuppression:
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)
 
-        # Add an initial SBOM artifact directly (bypassing signals to set up test state)
+        # Add an initial SBOM artifact directly (bypassing signals to set up test state).
+        # The unique constraint on
+        # (component, version, format, qualifiers, bom_type) requires distinct
+        # ``version`` values for the two SBOMs created here.
         sbom1 = SBOM.objects.create(
             component=tea_enabled_component,
             name="SBOM v1",
+            version="1.0.0",
             format="cyclonedx",
             format_version="1.4",
             source="test",
@@ -1114,11 +1118,12 @@ class TestTEACollectionSignalSuppression:
         release.refresh_from_db()
         version_before = release.collection_version
 
-        # Create a replacement SBOM (same format, same component).
+        # Create a replacement SBOM (same format, same component, different version).
         # Signal auto-calls add_artifact_to_latest_release.
         SBOM.objects.create(
             component=tea_enabled_component,
             name="SBOM v2",
+            version="2.0.0",
             format="cyclonedx",
             format_version="1.5",
             source="test",
@@ -1143,11 +1148,14 @@ class TestTEACollectionSignalSuppression:
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)
 
-        # Create 3 SBOMs for the component (different formats)
-        for fmt, ver in [("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]:
+        # Create 3 SBOMs for the component (different formats / format versions).
+        # The unique constraint on (component, version, format, qualifiers, bom_type)
+        # requires distinct ``version`` values for the two cyclonedx SBOMs.
+        for idx, (fmt, ver) in enumerate([("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]):
             SBOM.objects.create(
                 component=tea_enabled_component,
                 name=f"SBOM {fmt} {ver}",
+                version=f"1.{idx}.0",
                 format=fmt,
                 format_version=ver,
                 source="test",
