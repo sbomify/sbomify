@@ -14,11 +14,10 @@ from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
 
-from ..models import SBOM, Component, Product, Project
+from ..models import SBOM, Component, Product
 from .fixtures import (
     sample_component,  # noqa: F401
     sample_product,  # noqa: F401
-    sample_project,  # noqa: F401
     sample_sbom,  # noqa: F401
 )
 
@@ -77,7 +76,6 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
 
     uris = [
         reverse("core:products_dashboard"),
-        reverse("core:projects_dashboard"),
         reverse("core:components_dashboard"),
     ]
 
@@ -124,41 +122,6 @@ def test_products_dashboard_renders_correctly(sample_team_with_owner_member):  #
     assert 'id="addProductForm"' in content
 
 
-# Removed: test_create_product - POST functionality moved to API tests
-
-
-# Removed: test_delete_product - POST functionality moved to API tests
-
-
-@pytest.mark.django_db
-def test_projects_dashboard_renders_correctly(sample_team_with_owner_member):  # Changed name
-    """Test that the projects dashboard renders correctly."""
-    client = Client()
-    team = sample_team_with_owner_member.team
-
-    team.key = number_to_random_token(team.id)
-    team.save()
-
-    client.force_login(team.members.first())
-    session = client.session
-    session["current_team"] = {"id": team.id, "role": "owner", "key": team.key}
-    session.save()
-
-    response = client.get(reverse("core:projects_dashboard"))
-    assert response.status_code == 200
-
-    # Check that the page contains the expected elements
-    content = response.content.decode()
-    assert 'id="projects-table-container"' in content
-    assert 'id="addProjectForm"' in content
-
-
-# Removed: test_create_project - POST functionality moved to API tests
-
-
-# Removed: test_delete_project - POST functionality moved to API tests
-
-
 @pytest.mark.django_db
 def test_components_dashboard_renders_correctly(sample_team_with_owner_member):  # Changed name
     """Test that the components dashboard renders correctly."""
@@ -194,7 +157,6 @@ def test_components_dashboard_renders_correctly(sample_team_with_owner_member): 
 @pytest.mark.django_db
 def test_details_page_only_accessible_when_logged_in(
     sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
 ):
@@ -203,7 +165,6 @@ def test_details_page_only_accessible_when_logged_in(
 
     uris = [
         reverse("core:product_details", kwargs={"product_id": sample_product.id}),
-        reverse("core:project_details", kwargs={"project_id": sample_project.id}),
         reverse("core:component_details", kwargs={"component_id": sample_component.id}),
     ]
 
@@ -231,22 +192,17 @@ def test_details_page_only_accessible_when_logged_in(
 @pytest.mark.django_db
 def test_public_pages_accessibility(
     sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
 ):
     sample_product.is_public = True
     sample_product.save()
 
-    sample_project.is_public = True
-    sample_project.save()
-
     sample_component.visibility = Component.Visibility.PUBLIC
     sample_component.save()
 
     uris = [
         reverse("core:product_details_public", kwargs={"product_id": sample_product.id}),
-        reverse("core:project_details_public", kwargs={"project_id": sample_project.id}),
         reverse("core:component_details_public", kwargs={"component_id": sample_component.id}),
     ]
 
@@ -259,9 +215,6 @@ def test_public_pages_accessibility(
         if "sbom" in uri:
             assert "component" in response.request["PATH_INFO"]
             assert "detailed" in response.request["PATH_INFO"]
-        elif "project" in uri:
-            # Project public pages redirect to the parent product page
-            assert "product" in response.request["PATH_INFO"]
         else:
             assert quote(response.request["PATH_INFO"]) == uri
 
@@ -270,7 +223,6 @@ def test_public_pages_accessibility(
 def test_unknown_detail_pages_fail_gracefully(sample_user):  # noqa: F811
     uris = [
         reverse("core:product_details", kwargs={"product_id": -1}),
-        reverse("core:project_details", kwargs={"project_id": -1}),
         reverse("core:component_details", kwargs={"component_id": -1}),
     ]
 
@@ -365,81 +317,6 @@ def test_transfer_component_to_team(
     # Verify component was transferred
     sample_component.refresh_from_db()
     assert sample_component.team == sample_team_with_owner_member.team
-
-
-@pytest.mark.django_db
-def test_sbom_download_project_not_found(client):
-    uri = reverse("core:sbom_download_project", kwargs={"project_id": "-1"})
-    response = client.get(uri)
-    assert response.status_code == 404
-
-
-@pytest.mark.django_db
-def test_sbom_download_project_private_unauthorized(client, sample_project):  # noqa: F811
-    sample_project.is_public = False
-    sample_project.save()
-
-    uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
-    response = client.get(uri)
-    assert response.status_code == 403
-
-
-@pytest.mark.django_db
-def test_sbom_download_project_public_success(client, sample_project, mocker):  # noqa: F811
-    sample_project.is_public = True
-    sample_project.save()
-
-    mock_zip_content = b"mock sbom content"
-    mock_get_package = mocker.patch("sbomify.apps.core.views.get_project_sbom_package")
-    # Return a string path for the SBOM file
-    mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
-
-    # Mock open to avoid actual file operations
-    mock_open = mocker.patch("builtins.open")
-    mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
-
-    uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
-    response = client.get(uri)
-
-    assert response.status_code == 200
-    assert response["Content-Type"] == "application/json"
-    assert response["Content-Disposition"] == f"attachment; filename={sample_project.name}.cdx.json"
-
-
-@pytest.mark.django_db
-def test_sbom_download_project_private_authorized(
-    client,
-    sample_project,  # noqa: F811
-    sample_user,  # noqa: F811
-    mocker,
-):
-    sample_project.is_public = False
-    sample_project.save()
-
-    # Login and set session data
-    client.force_login(sample_user)
-    session = client.session
-    session["current_team"] = {"role": "admin"}
-    session.save()
-
-    mock_zip_content = b"mock sbom content"
-    mock_get_package = mocker.patch("sbomify.apps.core.views.get_project_sbom_package")
-    # Return a string path for the SBOM file
-    mock_get_package.return_value = "/tmp/mock/path.json"  # nosec B108
-
-    # Mock open to avoid actual file operations
-    mock_open = mocker.patch("builtins.open")
-    mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
-
-    # Mock verify_item_access to return True for authorized access
-    mocker.patch("sbomify.apps.core.views.verify_item_access", return_value=True)
-
-    uri = reverse("core:sbom_download_project", kwargs={"project_id": sample_project.id})
-    response = client.get(uri)
-
-    assert response.status_code == 200
-    assert response["Content-Type"] == "application/json"
-    assert response["Content-Disposition"] == f"attachment; filename={sample_project.name}.cdx.json"
 
 
 @pytest.mark.django_db
