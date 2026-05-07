@@ -651,6 +651,7 @@ class Component(models.Model):
     # Keep the original metadata field for backward compatibility and migration
     metadata = models.JSONField(default=dict, blank=True)
     projects = models.ManyToManyField(Project, through="sboms.ProjectComponent")
+    products = models.ManyToManyField(Product, through="sboms.ProductComponent", related_name="components")
 
     def __str__(self) -> str:
         return f"{self.name}"
@@ -894,6 +895,25 @@ class ProjectComponent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.project_id} - {self.component_id}"
+
+
+class ProductComponent(models.Model):
+    """Direct Product↔Component link replacing the Product → Project → Component chain."""
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_products_components"
+        unique_together = ("product", "component")
+        indexes = [
+            models.Index(fields=["product", "component"]),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    component = models.ForeignKey(Component, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.product_id} - {self.component_id}"
 
 
 class SBOM(models.Model):
