@@ -511,8 +511,8 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
 
     with transaction.atomic():
-        # Remove component's existing linkages to projects if any
-        component.projects.clear()
+        # Remove component's existing linkages to products if any
+        component.products.clear()
         component.team_id = team_id
         component.save()
 

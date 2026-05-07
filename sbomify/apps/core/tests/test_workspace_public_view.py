@@ -5,8 +5,8 @@ from django.conf import settings
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Product, Project
-from sbomify.apps.sboms.models import ProductProject
+from sbomify.apps.core.models import Component, Product
+from sbomify.apps.sboms.models import ProductComponent
 from sbomify.apps.teams.models import Team
 
 
@@ -15,10 +15,14 @@ def test_workspace_public_page_renders_products_and_global_artifacts():
     client = Client()
     team = Team.objects.create(name="Public Workspace", is_public=True)
 
-    # Create a product with a public project (required for product to be shown)
+    # Create a product with a public component (required for product to be shown)
     product = Product.objects.create(name="Public Product", team=team, is_public=True)
-    project = Project.objects.create(name="Public Project", team=team, is_public=True)
-    ProductProject.objects.create(product=product, project=project)
+    component = Component.objects.create(
+        name="Public Component",
+        team=team,
+        visibility=Component.Visibility.PUBLIC,
+    )
+    ProductComponent.objects.create(product=product, component=component)
 
     Component.objects.create(
         name="Global Artifact",
@@ -196,45 +200,51 @@ def test_workspace_public_handles_none_colors():
 
 
 @pytest.mark.django_db
-def test_workspace_public_hides_products_with_no_public_projects():
-    """Products with 0 public projects should not be shown."""
+def test_workspace_public_hides_products_with_no_public_components():
+    """Products with 0 public components should not be shown."""
     client = Client()
     team = Team.objects.create(name="Public Workspace", is_public=True)
 
-    # Product with no projects
+    # Product with no components
     Product.objects.create(name="Empty Product", team=team, is_public=True)
 
-    # Product with private project only
-    product_with_private = Product.objects.create(name="Private Projects Only", team=team, is_public=True)
-    private_project = Project.objects.create(name="Private Project", team=team, is_public=False)
-    ProductProject.objects.create(product=product_with_private, project=private_project)
+    # Product with private component only
+    product_with_private = Product.objects.create(name="Private Components Only", team=team, is_public=True)
+    private_component = Component.objects.create(
+        name="Private Component", team=team, visibility=Component.Visibility.PRIVATE
+    )
+    ProductComponent.objects.create(product=product_with_private, component=private_component)
 
-    # Product with public project (should be shown)
-    product_with_public = Product.objects.create(name="Has Public Project", team=team, is_public=True)
-    public_project = Project.objects.create(name="Public Project", team=team, is_public=True)
-    ProductProject.objects.create(product=product_with_public, project=public_project)
+    # Product with public component (should be shown)
+    product_with_public = Product.objects.create(name="Has Public Component", team=team, is_public=True)
+    public_component = Component.objects.create(
+        name="Public Component", team=team, visibility=Component.Visibility.PUBLIC
+    )
+    ProductComponent.objects.create(product=product_with_public, component=public_component)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Only the product with public projects should be shown
+    # Only the product with public components should be shown
     assert "Empty Product" not in content
-    assert "Private Projects Only" not in content
-    assert "Has Public Project" in content
+    assert "Private Components Only" not in content
+    assert "Has Public Component" in content
 
 
 @pytest.mark.django_db
 def test_workspace_public_hides_products_section_when_empty():
-    """Products section should be hidden when there are no products with public projects."""
+    """Products section should be hidden when there are no products with public components."""
     client = Client()
     team = Team.objects.create(name="Public Workspace", is_public=True)
 
-    # Create a product with no public projects
+    # Create a product with no public components
     product = Product.objects.create(name="Empty Product", team=team, is_public=True)
-    private_project = Project.objects.create(name="Private Project", team=team, is_public=False)
-    ProductProject.objects.create(product=product, project=private_project)
+    private_component = Component.objects.create(
+        name="Private Component", team=team, visibility=Component.Visibility.PRIVATE
+    )
+    ProductComponent.objects.create(product=product, component=private_component)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -266,10 +276,12 @@ def test_workspace_public_hides_compliance_artifacts_badge_when_zero():
     client = Client()
     team = Team.objects.create(name="Public Workspace", is_public=True)
 
-    # Add a product with public project to make the page have some content
+    # Add a product with public component to make the page have some content
     product = Product.objects.create(name="Public Product", team=team, is_public=True)
-    public_project = Project.objects.create(name="Public Project", team=team, is_public=True)
-    ProductProject.objects.create(product=product, project=public_project)
+    public_component = Component.objects.create(
+        name="Public Component", team=team, visibility=Component.Visibility.PUBLIC
+    )
+    ProductComponent.objects.create(product=product, component=public_component)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -295,8 +307,10 @@ def test_workspace_public_uses_configurable_description():
 
     # Add content so the page renders
     product = Product.objects.create(name="Product", team=team, is_public=True)
-    public_project = Project.objects.create(name="Project", team=team, is_public=True)
-    ProductProject.objects.create(product=product, project=public_project)
+    public_component = Component.objects.create(
+        name="Public Component", team=team, visibility=Component.Visibility.PUBLIC
+    )
+    ProductComponent.objects.create(product=product, component=public_component)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 
@@ -321,8 +335,10 @@ def test_workspace_public_uses_default_description_when_empty():
 
     # Add content so the page renders
     product = Product.objects.create(name="Product", team=team, is_public=True)
-    public_project = Project.objects.create(name="Project", team=team, is_public=True)
-    ProductProject.objects.create(product=product, project=public_project)
+    public_component = Component.objects.create(
+        name="Public Component", team=team, visibility=Component.Visibility.PUBLIC
+    )
+    ProductComponent.objects.create(product=product, component=public_component)
 
     response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
 

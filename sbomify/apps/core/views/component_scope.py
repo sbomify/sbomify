@@ -33,12 +33,13 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         is_global = target_scope == "workspace"
         component.is_global = is_global
         if is_global:
-            component.projects.clear()
+            # Detach from any product-level scoping when promoting to workspace scope
+            component.products.clear()
         component.save()
 
         if is_global:
             messages.success(request, "Component is now workspace-wide and visible on the Trust Center.")
         else:
-            messages.success(request, "Component is now project-scoped.")
+            messages.success(request, "Component is now product-scoped.")
 
         return redirect("core:component_details", component_id=component.id)

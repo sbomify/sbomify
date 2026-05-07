@@ -20,15 +20,6 @@ from sbomify.apps.sboms.models import (
 from sbomify.apps.sboms.models import (
     Product as SbomProduct,
 )
-from sbomify.apps.sboms.models import (
-    ProductProject as SbomProductProject,
-)
-from sbomify.apps.sboms.models import (
-    Project as SbomProject,
-)
-from sbomify.apps.sboms.models import (
-    ProjectComponent as SbomProjectComponent,
-)
 
 # Context-var flag to suppress collection versioning signals during bulk operations.
 # Uses contextvars (not threading.local) for safety in both sync and async contexts.
@@ -69,14 +60,6 @@ class User(AbstractUser):
 
 class Product(SbomProduct):
     """Proxy model for sboms.Product - moved to core app for better organization."""
-
-    class Meta:
-        proxy = True
-        app_label = "core"
-
-
-class Project(SbomProject):
-    """Proxy model for sboms.Project - moved to core app for better organization."""
 
     class Meta:
         proxy = True
@@ -214,22 +197,6 @@ class Component(SbomComponent):
         # `self.products` accessor is declared on sboms.Component and would
         # return sboms.Product instances.
         return Product.objects.filter(components=self).order_by("id").distinct()
-
-
-class ProductProject(SbomProductProject):
-    """Proxy model for sboms.ProductProject - moved to core app for better organization."""
-
-    class Meta:
-        proxy = True
-        app_label = "core"
-
-
-class ProjectComponent(SbomProjectComponent):
-    """Proxy model for sboms.ProjectComponent - moved to core app for better organization."""
-
-    class Meta:
-        proxy = True
-        app_label = "core"
 
 
 # New Release models

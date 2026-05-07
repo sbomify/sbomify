@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from sbomify.apps.core.admin import admin_site
-from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.teams.models import Invitation, Team
 
 
@@ -80,19 +80,18 @@ def dashboard_stats_teams(db):
 
 @pytest.fixture
 def dashboard_stats_content(db, dashboard_stats_teams):
-    """Create products, projects, and components for testing 30-day metrics."""
+    """Create products and components for testing 30-day metrics."""
     now = timezone.now()
-    thirty_days_ago = now - timedelta(days=30)
     sixty_days_ago = now - timedelta(days=60)
-    
+
     team = dashboard_stats_teams[0]
-    
+
     # Create recent products (within 30 days)
     recent_product = Product.objects.create(
         name="Recent Product",
         team=team,
     )
-    
+
     # Create old product (more than 30 days ago)
     old_product = Product.objects.create(
         name="Old Product",
@@ -100,47 +99,30 @@ def dashboard_stats_content(db, dashboard_stats_teams):
     )
     # Manually update created_at to be older
     Product.objects.filter(pk=old_product.pk).update(created_at=sixty_days_ago)
-    
-    # Create recent project
-    recent_project = Project.objects.create(
-        name="Recent Project",
-        team=team,
-    )
-    
-    # Create old project
-    old_project = Project.objects.create(
-        name="Old Project",
-        team=team,
-    )
-    Project.objects.filter(pk=old_project.pk).update(created_at=sixty_days_ago)
-    
+
     # Create recent component
     recent_component = Component.objects.create(
         name="Recent Component",
         team=team,
     )
-    
+
     # Create old component
     old_component = Component.objects.create(
         name="Old Component",
         team=team,
     )
     Component.objects.filter(pk=old_component.pk).update(created_at=sixty_days_ago)
-    
+
     yield {
         "recent_product": recent_product,
         "old_product": old_product,
-        "recent_project": recent_project,
-        "old_project": old_project,
         "recent_component": recent_component,
         "old_component": old_component,
     }
-    
+
     # Cleanup
     recent_product.delete()
     old_product.delete()
-    recent_project.delete()
-    old_project.delete()
     recent_component.delete()
     old_component.delete()
 
@@ -243,18 +225,6 @@ class TestDashboardStats:
         assert stats["products_30d"] == 1
         # Total products should be 2
         assert stats["products"] == 2
-    
-    def test_projects_30d_only_counts_recent_projects(self, dashboard_stats_content):
-        """Test that projects_30d only counts projects created in last 30 days."""
-        from django.core.cache import cache
-        cache.delete("admin_dashboard_stats")
-        
-        stats = admin_site.get_dashboard_stats()
-        
-        # Should only count the recent project
-        assert stats["projects_30d"] == 1
-        # Total projects should be 2
-        assert stats["projects"] == 2
     
     def test_components_30d_only_counts_recent_components(self, dashboard_stats_content):
         """Test that components_30d only counts components created in last 30 days."""

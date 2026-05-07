@@ -1738,9 +1738,9 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     setattr(component, field, value)
 
             if component.is_global:
-                # Optimization: Only clear if there are actually projects to clear
-                if component.projects.exists():
-                    component.projects.clear()
+                # Optimization: Only detach if there are actually products to detach from
+                if component.products.exists():
+                    component.products.clear()
 
             # Validate before saving (auto-clearing in save() handles invalid states gracefully)
             try:

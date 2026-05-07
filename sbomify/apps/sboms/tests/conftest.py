@@ -10,7 +10,6 @@ from .fixtures import (
     sample_billing_plan,
     sample_component,
     sample_product,
-    sample_project,
     sample_sbom,
 )
 
@@ -23,7 +22,6 @@ __all__ = [
     "sample_billing_plan",
     "sample_component",
     "sample_product",
-    "sample_project",
     "sample_sbom",
 ]
 

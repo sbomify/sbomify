@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import pytest
 from django.core.cache import cache
 
-from sbomify.apps.core.models import Component, Product, Project, Release
+from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
@@ -54,18 +54,6 @@ def product_with_slug(db, custom_domain_team):
         is_public=True,
     )
     return product
-
-
-@pytest.fixture
-def project_with_slug(db, custom_domain_team, product_with_slug):
-    """Create a public project with a predictable slug."""
-    project = Project.objects.create(
-        name="My Test Project",  # slug will be "my-test-project"
-        team=custom_domain_team,
-        is_public=True,
-    )
-    project.products.add(product_with_slug)
-    return project
 
 
 @pytest.fixture

@@ -9,7 +9,7 @@ from django.urls import reverse
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.apis import _private_items_allowed
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.sboms.tests.test_views import setup_test_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
@@ -34,18 +34,18 @@ def test_private_items_invalid_plan_treated_as_public(sample_team_with_owner_mem
 
 
 @pytest.mark.django_db
-def test_can_make_product_public_with_private_projects(
+def test_can_make_product_public_with_private_components(
     sample_team_with_owner_member,
     sample_user,  # noqa: F811
 ):
-    """Test that making a product public succeeds even if it has private projects.
+    """Test that making a product public succeeds even if it has private components.
 
-    Private projects will simply not appear in public views.
+    Private components will simply not appear in public views.
     """
     client = Client()
     team = sample_team_with_owner_member.team
 
-    BillingPlan.objects.create(key="test_plan", name="Test Plan", max_components=10, max_products=10, max_projects=10)
+    BillingPlan.objects.create(key="test_plan", name="Test Plan", max_components=10, max_products=10)
     team.billing_plan = "test_plan"
     team.save()
 
@@ -53,16 +53,19 @@ def test_can_make_product_public_with_private_projects(
     setup_test_session(client, team, team.members.first())
 
     product = Product.objects.create(name="Test Product", team=team, is_public=False)
-    project = Project.objects.create(name="Test Project", team=team, is_public=False)
-    product.projects.add(project)
+    component = Component.objects.create(
+        name="Private Component", team=team, visibility=Component.Visibility.PRIVATE
+    )
+    product.components.add(component)
 
     url = reverse("api-1:patch_product", kwargs={"product_id": product.id})
     response = client.patch(url, json.dumps({"is_public": True}), content_type="application/json")
 
     assert response.status_code == 200
     product.refresh_from_db()
+    component.refresh_from_db()
     assert product.is_public is True
-    assert project.is_public is False  # Project remains private
+    assert component.visibility == Component.Visibility.PRIVATE  # Component remains private
 
 
 @pytest.mark.django_db
@@ -263,21 +266,25 @@ def test_valid_operations_are_allowed(sample_team_with_owner_member, sample_user
 
 @pytest.mark.django_db
 def test_workspace_public_view_filters_private_items(sample_team_with_owner_member):
-    """Test that workspace public view only shows products with public projects."""
+    """Test that workspace public view only shows products with publicly-visible components."""
     team = sample_team_with_owner_member.team
     team.is_public = True
     team.save()
 
     # Create products with different visibility scenarios
-    # 1. Public product with public project - SHOULD SHOW
-    product1 = Product.objects.create(name="Product with Public Project", team=team, is_public=True)
-    public_project = Project.objects.create(name="Public Project", team=team, is_public=True)
-    product1.projects.add(public_project)
+    # 1. Public product with public component - SHOULD SHOW
+    product1 = Product.objects.create(name="Product with Public Component", team=team, is_public=True)
+    public_component = Component.objects.create(
+        name="Public Component", team=team, visibility=Component.Visibility.PUBLIC
+    )
+    product1.components.add(public_component)
 
-    # 2. Public product with only private projects - SHOULD NOT SHOW
-    product2 = Product.objects.create(name="Product with Only Private Projects", team=team, is_public=True)
-    private_project = Project.objects.create(name="Private Project", team=team, is_public=False)
-    product2.projects.add(private_project)
+    # 2. Public product with only private components - SHOULD NOT SHOW
+    product2 = Product.objects.create(name="Product with Only Private Components", team=team, is_public=True)
+    private_component = Component.objects.create(
+        name="Private Component", team=team, visibility=Component.Visibility.PRIVATE
+    )
+    product2.components.add(private_component)
 
     # 3. Private product - SHOULD NOT SHOW
     Product.objects.create(name="Private Product", team=team, is_public=False)
@@ -289,6 +296,6 @@ def test_workspace_public_view_filters_private_items(sample_team_with_owner_memb
     public_products = _list_public_products(team)
 
     product_names = [p["name"] for p in public_products]
-    assert "Product with Public Project" in product_names
-    assert "Product with Only Private Projects" not in product_names
+    assert "Product with Public Component" in product_names
+    assert "Product with Only Private Components" not in product_names
     assert "Private Product" not in product_names
