@@ -15,7 +15,7 @@ from django.views import View
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.core.models import User
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     ContactEntity,
@@ -421,9 +421,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         product, _ = Product.objects.get_or_create(
                             name=company_name, team=team, defaults={"is_public": is_public}
                         )
-                    project, _ = Project.objects.get_or_create(
-                        name="Main Project", team=team, defaults={"is_public": is_public}
-                    )
 
                     component_metadata = create_default_component_metadata(
                         user=request.user, team_id=team.id, custom_metadata=None
@@ -447,8 +444,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         )
                         component.save()
 
-                    product.projects.add(project)
-                    project.components.add(component)
+                    product.components.add(component)
 
                     team.name = format_workspace_name(company_name)
                     team.has_completed_wizard = True

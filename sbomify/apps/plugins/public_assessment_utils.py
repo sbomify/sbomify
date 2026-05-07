@@ -16,7 +16,7 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
 
 if TYPE_CHECKING:
-    from sbomify.apps.core.models import Component, Product, Project
+    from sbomify.apps.core.models import Component, Product
 
 
 @dataclass
@@ -40,27 +40,15 @@ class ComponentAssessmentStatus:
 
 
 @dataclass
-class ProjectAssessmentStatus:
-    """Aggregated assessment status for a project."""
-
-    project_id: str
-    project_name: str
-    all_pass: bool  # True if all components pass all assessments
-    has_assessments: bool
-    passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL components
-    component_statuses: list[ComponentAssessmentStatus]
-
-
-@dataclass
 class ProductAssessmentStatus:
     """Aggregated assessment status for a product."""
 
     product_id: str
     product_name: str
-    all_pass: bool  # True if all projects (and their components) pass all assessments
+    all_pass: bool  # True if all components pass all assessments
     has_assessments: bool
-    passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL projects/components
-    project_statuses: list[ProjectAssessmentStatus]
+    passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL components
+    component_statuses: list[ComponentAssessmentStatus]
 
 
 def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
@@ -227,31 +215,28 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     )
 
 
-def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus:
-    """Get aggregated assessment status for a project.
+def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus:
+    """Get aggregated assessment status for a product.
 
-    A project passes an assessment if ALL its components pass that assessment.
-    Only public components are considered for public display.
+    A product passes an assessment if ALL its public components pass that assessment.
     """
     from sbomify.apps.core.models import Component
 
-    # Get public components in this project
     components = Component.objects.filter(
-        projects=project,
+        products=product,
         visibility=Component.Visibility.PUBLIC,
     ).distinct()
 
     if not components.exists():
-        return ProjectAssessmentStatus(
-            project_id=str(project.id),
-            project_name=project.name,
+        return ProductAssessmentStatus(
+            product_id=str(product.id),
+            product_name=product.name,
             all_pass=False,
             has_assessments=False,
             passing_assessments=[],
             component_statuses=[],
         )
 
-    # Get status for each component
     component_statuses = []
     component_passing: list[set[str]] = []
 
@@ -261,7 +246,6 @@ def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus
         if status.has_assessments:
             component_passing.append({p.plugin_name for p in status.passing_assessments})
 
-    # Find assessments that pass for ALL components
     if not component_passing:
         common_passing: set[str] = set()
     else:
@@ -269,73 +253,6 @@ def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus
 
     has_assessments = any(cs.has_assessments for cs in component_statuses)
 
-    # Get display info for common passing assessments
-    plugin_info = _get_plugin_display_names()
-    passing_assessments = []
-    for plugin_name in sorted(common_passing):
-        display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
-        passing_assessments.append(
-            PassingAssessment(
-                plugin_name=plugin_name,
-                plugin_display_name=display_name,
-                category=category,
-            )
-        )
-
-    all_pass = len(common_passing) > 0 if has_assessments else False
-
-    return ProjectAssessmentStatus(
-        project_id=str(project.id),
-        project_name=project.name,
-        all_pass=all_pass,
-        has_assessments=has_assessments,
-        passing_assessments=passing_assessments,
-        component_statuses=component_statuses,
-    )
-
-
-def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus:
-    """Get aggregated assessment status for a product.
-
-    A product passes an assessment if ALL its public projects (and their components) pass.
-    """
-    from sbomify.apps.core.models import Project
-
-    # Get public projects in this product
-    projects = Project.objects.filter(
-        products=product,
-        is_public=True,
-    ).distinct()
-
-    if not projects.exists():
-        return ProductAssessmentStatus(
-            product_id=str(product.id),
-            product_name=product.name,
-            all_pass=False,
-            has_assessments=False,
-            passing_assessments=[],
-            project_statuses=[],
-        )
-
-    # Get status for each project
-    project_statuses = []
-    project_passing: list[set[str]] = []
-
-    for project in projects:
-        status = get_project_assessment_status(project)
-        project_statuses.append(status)
-        if status.has_assessments:
-            project_passing.append({p.plugin_name for p in status.passing_assessments})
-
-    # Find assessments that pass for ALL projects
-    if not project_passing:
-        common_passing: set[str] = set()
-    else:
-        common_passing = set.intersection(*project_passing) if project_passing else set()
-
-    has_assessments = any(ps.has_assessments for ps in project_statuses)
-
-    # Get display info for common passing assessments
     plugin_info = _get_plugin_display_names()
     passing_assessments = []
     for plugin_name in sorted(common_passing):
@@ -356,7 +273,7 @@ def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus
         all_pass=all_pass,
         has_assessments=has_assessments,
         passing_assessments=passing_assessments,
-        project_statuses=project_statuses,
+        component_statuses=component_statuses,
     )
 
 
@@ -431,7 +348,7 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
             all_pass=False,
             has_assessments=False,
             passing_assessments=[],
-            project_statuses=[],  # Not populated for latest-SBOM mode
+            component_statuses=[],
         )
 
     # Get latest SBOM assessment status for each component
@@ -468,15 +385,13 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
 
     all_pass = len(common_passing) > 0 if has_any_assessments else False
 
-    # project_statuses left empty intentionally - this function focuses on
-    # component-level aggregation via latest SBOMs, not project hierarchy
     return ProductAssessmentStatus(
         product_id=str(product.id),
         product_name=product.name,
         all_pass=all_pass,
         has_assessments=has_any_assessments,
         passing_assessments=passing_assessments,
-        project_statuses=[],
+        component_statuses=[],
     )
 
 

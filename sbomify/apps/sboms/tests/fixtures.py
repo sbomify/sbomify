@@ -16,7 +16,7 @@ from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import Member
 
-from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from ..models import SBOM, Component, Product, ProductComponent
 from ..schemas import SPDXSchema
 
 FIXTURES_DIR = Path(__file__).parent / "fixture_data"
@@ -714,45 +714,26 @@ def sample_product(
 
 
 @pytest.fixture
-def sample_project(
-    sample_product: Product,  # noqa: F811
-) -> Generator[Project, Any, None]:
-    with transaction.atomic():
-        project = Project(product=sample_product, name="test project", team_id=sample_product.team_id)
-        project.save()
-
-        product_project = ProductProject(product=sample_product, project=project)
-        product_project.save()
-
-    yield project
-
-    with transaction.atomic():
-        product_project.delete()
-        project.delete()
-
-
-@pytest.fixture
 def sample_component(
-    sample_project: Project,  # noqa: F811
+    sample_product: Product,  # noqa: F811
 ) -> Generator[Component, Any, None]:
     with transaction.atomic():
-        component = Component(project=sample_project, name="test component", team_id=sample_project.team_id)
+        component = Component(name="test component", team_id=sample_product.team_id)
         component.save()
 
-        project_component = ProjectComponent(project=sample_project, component=component)
-        project_component.save()
+        product_component = ProductComponent(product=sample_product, component=component)
+        product_component.save()
 
     yield component
 
     with transaction.atomic():
-        project_component.delete()
+        product_component.delete()
         component.delete()
 
 
 @pytest.fixture
 def sample_sbom(
     sample_team_with_owner_member: Member,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
 ) -> Generator[SBOM, Any, None]:
 

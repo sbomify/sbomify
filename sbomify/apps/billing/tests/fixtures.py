@@ -5,7 +5,7 @@ import stripe
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
-from sbomify.apps.sboms.models import Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.sboms.models import Component, Product, ProductComponent
 from sbomify.apps.teams.models import Team
 
 
@@ -229,49 +229,14 @@ def multiple_products(team_with_business_plan: Team, community_plan: BillingPlan
 
 
 @pytest.fixture
-def test_project(team_with_business_plan: Team) -> Project:
-    """Create a test project and clean it up after the test."""
-    project = Project.objects.create(
-        name=f"Test Project {team_with_business_plan.key}",
-        team=team_with_business_plan,
-    )
-    yield project
-    project.delete()
-
-
-@pytest.fixture
-def multiple_projects(
-    team_with_business_plan: Team, test_product: Product, community_plan: BillingPlan
-) -> list[Project]:
-    """Create multiple projects exceeding community plan limits and clean up after test."""
-    projects = []
-    for i in range(community_plan.max_projects + 1):
-        project = Project.objects.create(
-            name=f"Test Project {team_with_business_plan.key} {i}",
-            team=team_with_business_plan,
-        )
-        ProductProject.objects.create(
-            product=test_product,
-            project=project,
-        )
-        projects.append(project)
-    yield projects
-    for project in projects:
-        project.delete()
-
-
-@pytest.fixture
 def multiple_components(
-    team_with_business_plan: Team, test_project: Project, community_plan: BillingPlan
+    team_with_business_plan: Team, test_product: Product, community_plan: BillingPlan
 ) -> list[Component]:
     """Create multiple components exceeding community plan limits and clean up after test."""
     components = []
     for i in range(community_plan.max_components + 1):
         component = Component.objects.create(name=f"Test Component {i}", team=team_with_business_plan)
-        ProjectComponent.objects.create(
-            project=test_project,
-            component=component,
-        )
+        ProductComponent.objects.create(product=test_product, component=component)
         components.append(component)
     yield components
     for component in components:

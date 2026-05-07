@@ -5,7 +5,7 @@ from typing import Any
 from django import template
 from django.urls import reverse
 
-from sbomify.apps.core.models import Product, Project
+from sbomify.apps.core.models import Product
 
 register = template.Library()
 
@@ -107,30 +107,21 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
         return {"crumbs": crumbs}
 
     elif item_type == "component":
-        # For components, show the parent product (via project)
-        if isinstance(item, dict):
-            public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
-        else:
-            public_projects = item.projects.filter(is_public=True)
+        component_id = item.get("id") if isinstance(item, dict) else item.id
+        public_products = Product.objects.filter(components__id=component_id, is_public=True).order_by("id").distinct()
 
-        if public_projects.exists():
-            # Collect ALL public products across all public projects
-            public_products = (
-                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct()
+        if public_products.exists():
+            product = detect_product_from_referrer(public_products)
+            if not product:
+                product = public_products.first()
+
+            crumbs.append(
+                {
+                    "name": product.name,
+                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
+                    "icon": "fas fa-box",
+                }
             )
-
-            if public_products.exists():
-                product = detect_product_from_referrer(public_products)
-                if not product:
-                    product = public_products.first()
-
-                crumbs.append(
-                    {
-                        "name": product.name,
-                        "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
-                        "icon": "fas fa-box",
-                    }
-                )
 
     # For products, only the Trust Center crumb is shown (products are direct children of Trust Center)
     return {"crumbs": crumbs}
@@ -142,24 +133,16 @@ def get_breadcrumb_data(item: Any, item_type: Any) -> Any:
     crumbs = []
 
     if item_type == "component":
-        if isinstance(item, dict):
-            public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
-        else:
-            public_projects = item.projects.filter(is_public=True)
-
-        if public_projects.exists():
-            # Collect ALL public products across all public projects
-            public_products = (
-                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct()
+        component_id = item.get("id") if isinstance(item, dict) else item.id
+        public_products = Product.objects.filter(components__id=component_id, is_public=True).order_by("id").distinct()
+        if public_products.exists():
+            product = public_products.first()
+            crumbs.append(
+                {
+                    "name": product.name,  # type: ignore[union-attr]
+                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),  # type: ignore[union-attr]
+                    "type": "product",
+                }
             )
-            if public_products.exists():
-                product = public_products.first()
-                crumbs.append(
-                    {
-                        "name": product.name,  # type: ignore[union-attr]
-                        "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),  # type: ignore[union-attr]
-                        "type": "product",
-                    }
-                )
 
     return crumbs

@@ -36,12 +36,12 @@
                 {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
             </div>
         {% endif %}
-        {% if public_projects or passing_assessments %}
+        {% if public_components or passing_assessments %}
             <div class="flex flex-wrap gap-2 mb-6">
-                {% if public_projects %}
+                {% if public_components %}
                     <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                        <i class="fas fa-diagram-project"></i>
-                        {{ public_projects|length }} Project{{ public_projects|length|pluralize }}
+                        <i class="fas fa-puzzle-piece"></i>
+                        {{ public_components|length }} Component{{ public_components|length|pluralize }}
                     </span>
                 {% endif %}
                 {% for assessment in passing_assessments %}

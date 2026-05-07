@@ -111,27 +111,6 @@ class OnboardingProductForm(forms.Form):
     )
 
 
-class OnboardingProjectForm(forms.Form):
-    """Form for creating a project during onboarding."""
-
-    name = forms.CharField(
-        label="Project Name",
-        max_length=255,
-        required=True,
-        widget=forms.TextInput(
-            attrs={
-                "class": "form-control form-control-lg",
-                "placeholder": "Enter project name",
-                "autofocus": True,
-            }
-        ),
-        help_text=(
-            "Projects are logical groupings within your product. For example, a smart device might have "
-            "firmware, mobile app, and cloud backend projects."
-        ),
-    )
-
-
 class OnboardingComponentForm(forms.Form):
     """Form for creating a component during onboarding."""
 

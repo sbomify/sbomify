@@ -32,7 +32,7 @@ from sbomify.apps.core.utils import (
 from sbomify.apps.sboms.utils import verify_download_token
 from sbomify.apps.teams.models import ContactProfile
 
-from .models import SBOM, Component, Product, Project
+from .models import SBOM, Component, Product
 from .schemas import (
     ComponentMetaData,
     CycloneDXSupportedVersion,
@@ -129,7 +129,7 @@ def _broadcast_sbom_uploaded(component: Component, sbom: SBOM) -> None:
     )
 
 
-item_type_map = {"component": Component, "project": Project, "product": Product}
+item_type_map = {"component": Component, "product": Product}
 
 
 def _build_component_metadata_from_native_fields(component: Component) -> ComponentMetaData:
@@ -317,13 +317,13 @@ def _extract_spdx3_primary_package(
 
 def _public_api_item_access_checks(
     request: HttpRequest, item_type: str, item_id: str
-) -> Component | Project | Product | tuple[int, dict[str, str]]:
+) -> Component | Product | tuple[int, dict[str, str]]:
     if item_type not in item_type_map:
         return 400, {"detail": "Invalid item type"}
 
     model_class = item_type_map[item_type]
 
-    rec: Component | Project | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
+    rec: Component | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
 
     if not verify_item_access(request, rec, ["owner", "admin"]):
         return 403, {"detail": "Forbidden"}
