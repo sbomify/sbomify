@@ -120,15 +120,28 @@ def update_latest_release_on_product_components_changed(
     sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
 ) -> Any:
     """Refresh latest release artifacts when components are added/removed on a
-    product directly via the new ``ProductComponent`` M2M."""
+    product directly via the new ``ProductComponent`` M2M.
+
+    The M2M is declared on Component as ``products = ManyToManyField(Product,
+    related_name="components")``. Django reports:
+
+    - ``reverse=False`` when the change originates on the forward side
+      (``component.products.add(...)``): ``instance`` is the Component and
+      ``pk_set`` holds the Product PKs being attached/detached.
+    - ``reverse=True`` when the change originates on the reverse side
+      (``product.components.add(...)``): ``instance`` is the Product and
+      ``pk_set`` holds the Component PKs.
+    """
     if action not in ("post_add", "post_remove", "post_clear"):
         return
     from sbomify.apps.core.models import Product, Release
 
     if reverse:
-        product_ids = list(pk_set or ()) if action != "post_clear" else []
+        # Forward call site is ``product.components.add/remove/clear``.
+        product_ids: list[Any] = [instance.id]
     else:
-        product_ids = [instance.id]
+        # Forward call site is ``component.products.add/remove/clear``.
+        product_ids = list(pk_set or ()) if action != "post_clear" else []
 
     for prod_id in product_ids:
         try:
