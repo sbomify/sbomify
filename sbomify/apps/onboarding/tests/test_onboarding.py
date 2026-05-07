@@ -161,6 +161,48 @@ class TestOnboardingStatusModel:
         SBOM.objects.create(name="test-sbom", component=component)
         assert not status.should_receive_sbom_reminder(days_threshold=7)
 
+    def test_drip_clock_anchors_on_drip_started_at(self) -> None:
+        """Drip eligibility uses `drip_started_at`, not signup, as the clock.
+
+        This is what lets a long-dormant scheduler start sending the full
+        sequence to backlog users without firing every email simultaneously
+        — the migration resets `drip_started_at` to deploy time.
+        """
+        test_user = User.objects.create_user(
+            username="dripclock", email="dripclock@example.com", password="testpass123"
+        )
+        test_team = Team.objects.create(name="Drip Clock Team", key="drip-clock-team")
+        Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
+
+        status = OnboardingStatus.objects.get(user=test_user)
+        # Backlog scenario: signup 90d ago, but drip clock only just started
+        status.created_at = timezone.now() - timedelta(days=90)
+        status.welcome_email_sent = True
+        status.drip_started_at = timezone.now()  # equivalent to migration backfill
+        status.save()
+
+        # Day 0 of drip — none eligible yet
+        assert not status.should_receive_quick_start()
+        assert not status.should_receive_component_reminder()
+        assert not status.should_receive_collaboration()
+
+        # Day 1 of drip — quick_start eligible, others not
+        status.drip_started_at = timezone.now() - timedelta(days=1)
+        status.save()
+        assert status.should_receive_quick_start()
+        assert not status.should_receive_component_reminder()
+        assert not status.should_receive_collaboration()
+
+        # Day 3 of drip — first_component eligible (no component in workspace)
+        status.drip_started_at = timezone.now() - timedelta(days=3)
+        status.save()
+        assert status.should_receive_component_reminder()
+        assert not status.should_receive_collaboration()
+
+        # Day 10 of drip — collaboration eligible (solo workspace)
+        status.drip_started_at = timezone.now() - timedelta(days=10)
+        status.save()
+        assert status.should_receive_collaboration()
 
 @pytest.mark.django_db
 class TestOnboardingEmailModel:
