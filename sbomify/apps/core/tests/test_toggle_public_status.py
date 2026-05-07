@@ -38,8 +38,6 @@ class ProductTogglePublicStatusViewTest(AuthenticationTestCase):
         self.team = sample_product.team
 
     def test_toggle_product__when_private_product__should_make_it_public(self) -> None:
-        self.product.projects.all().update(is_public=True)
-
         self.product.is_public = False
         self.product.save()
 
@@ -54,8 +52,6 @@ class ProductTogglePublicStatusViewTest(AuthenticationTestCase):
         self.assertTrue(self.product.is_public)
 
     def test_toggle_product__when_public_product__should_make_it_private(self) -> None:
-        self.product.projects.all().update(is_public=False)
-
         self.team.billing_plan = "business"
         self.team.save()
 

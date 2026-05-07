@@ -88,16 +88,6 @@ class TestGetPublicPath:
         path = get_public_path("product", "prod123", is_custom_domain=False)
         assert path == "/public/product/prod123/"
 
-    def test_project_path_custom_domain(self):
-        """Test project path on custom domain."""
-        path = get_public_path("project", "proj123", is_custom_domain=True)
-        assert path == "/project/proj123/"
-
-    def test_project_path_main_domain(self):
-        """Test project path on main domain."""
-        path = get_public_path("project", "proj123", is_custom_domain=False)
-        assert path == "/public/project/proj123/"
-
     def test_component_path_custom_domain(self):
         """Test component path on custom domain."""
         path = get_public_path("component", "comp123", is_custom_domain=True)
@@ -338,10 +328,6 @@ class TestIsPublicUrlPath:
     def test_public_product_path(self):
         """Test that /public/product/ is recognized."""
         assert is_public_url_path("/public/product/123/") is True
-
-    def test_public_project_path(self):
-        """Test that /public/project/ is recognized."""
-        assert is_public_url_path("/public/project/456/") is True
 
     def test_public_component_path(self):
         """Test that /public/component/ is recognized."""

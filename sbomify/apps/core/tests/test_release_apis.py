@@ -626,9 +626,7 @@ def test_add_sbom_to_release(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure SBOM belongs to the component
     sample_sbom.component = sample_component
@@ -672,9 +670,7 @@ def test_add_document_to_release(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure document belongs to the component
     sample_document.component = sample_component
@@ -718,9 +714,7 @@ def test_remove_sbom_from_release(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure SBOM belongs to the component
     sample_sbom.component = sample_component
@@ -759,9 +753,7 @@ def test_remove_document_from_release(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure document belongs to the component
     sample_document.component = sample_component
@@ -831,9 +823,7 @@ def test_download_release_sbom_success(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure SBOM belongs to the component
     sample_sbom.component = sample_component
@@ -991,9 +981,7 @@ def test_add_duplicate_sbom_format_to_release(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Create two SBOMs with same format for same component (different versions to satisfy uniqueness)
     sbom1 = SBOM.objects.create(
@@ -1081,9 +1069,7 @@ def test_list_available_artifacts_for_release(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure artifacts belong to the component
     sample_sbom.component = sample_component
@@ -1138,9 +1124,7 @@ def test_list_available_artifacts_excludes_existing(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure artifacts belong to the component
     sample_sbom.component = sample_component
@@ -1737,8 +1721,7 @@ def test_release_artifacts_cascade_delete(
     # Ensure component is part of the product and same team
     sample_component.team = sample_product.team
     sample_component.save()
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
+    sample_product.components.add(sample_component)
 
     # Ensure artifacts belong to the component
     sample_sbom.component = sample_component
