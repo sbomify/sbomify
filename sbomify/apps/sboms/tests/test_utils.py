@@ -126,7 +126,7 @@ def test_get_component_metadata_creates_correct_external_reference_type(
         "metadata": {"component": {"name": "test-component", "type": "library", "version": "1.0.0"}},
     }
 
-    component = builder.get_component_metadata("test.json", sbom_data, "test-sbom-id")
+    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
 
     # Verify the component is of the correct type (always CycloneDX 1.6 now)
     assert isinstance(component, expected_component_type)
@@ -172,7 +172,7 @@ def test_get_component_metadata_unsupported_version():
         "metadata": {"component": {"name": "test-component", "type": "library"}},
     }
 
-    component = builder.get_component_metadata("test.json", sbom_data, "test-sbom-id")
+    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
 
     # The method should now be resilient and extract what it can
     assert component is not None
@@ -199,7 +199,7 @@ def test_get_component_metadata_invalid_bom_format():
         "metadata": {"component": {"name": "test-component", "type": "library"}},
     }
 
-    component = builder.get_component_metadata("test.json", sbom_data, "test-sbom-id")
+    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
     assert component is None
 
 
@@ -213,7 +213,7 @@ def test_get_component_metadata_missing_component():
         "metadata": {},  # Missing component
     }
 
-    component = builder.get_component_metadata("test.json", sbom_data, "test-sbom-id")
+    component = builder.get_component_metadata("test.json", sbom_data, "", "test-sbom-id")
     assert component is None
 
 
