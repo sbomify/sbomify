@@ -109,34 +109,34 @@
                                                        x-text="product.description.substring(0, 50) + (product.description.length > 50 ? '...' : '')">
                                                     </p>
                                                 </template>
-                                                {# Mobile: Show projects count #}
+                                                {# Mobile: Show components count #}
                                                 <div class="md:hidden mt-1">
                                                     <span class="text-xs text-text-muted"
-                                                          x-text="(product.projects?.length || 0) + ' project' + ((product.projects?.length || 0) !== 1 ? 's' : '')"></span>
+                                                          x-text="(product.components?.length || 0) + ' component' + ((product.components?.length || 0) !== 1 ? 's' : '')"></span>
                                                 </div>
                                             </div>
                                         </td>
                                         <td class="hidden md:table-cell">
-                                            <template x-if="product.projects && product.projects.length > 0">
+                                            <template x-if="product.components && product.components.length > 0">
                                                 <div class="flex flex-wrap gap-1.5">
-                                                    <template x-for="(project, idx) in product.projects.slice(0, 3)"
-                                                              :key="project.id">
-                                                        <a :href="'{% url 'core:project_details' 0 %}'.replace('0', project.id)"
+                                                    <template x-for="(component, idx) in product.components.slice(0, 3)"
+                                                              :key="component.id">
+                                                        <a :href="'{% url 'core:component_details' 0 %}'.replace('0', component.id)"
                                                            @click.stop
                                                            class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors hover:opacity-80"
                                                            :class="getProjectColor(idx)">
-                                                            <i class="fas fa-folder text-[10px] mr-1.5 opacity-70"></i>
-                                                            <span x-text="project.name"></span>
+                                                            <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
+                                                            <span x-text="component.name"></span>
                                                         </a>
                                                     </template>
-                                                    <template x-if="product.projects.length > 3">
+                                                    <template x-if="product.components.length > 3">
                                                         <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/30 text-text-muted"
-                                                              x-text="'+' + (product.projects.length - 3) + ' more'"></span>
+                                                              x-text="'+' + (product.components.length - 3) + ' more'"></span>
                                                     </template>
                                                 </div>
                                             </template>
-                                            <template x-if="!product.projects || product.projects.length === 0">
-                                                <span class="text-text-muted text-sm italic">No projects</span>
+                                            <template x-if="!product.components || product.components.length === 0">
+                                                <span class="text-text-muted text-sm italic">No components</span>
                                             </template>
                                         </td>
                                         <td>

@@ -73,49 +73,6 @@ class ProductTogglePublicStatusViewTest(AuthenticationTestCase):
         self.assertFalse(self.product.is_public)
 
 
-class ProjectTogglePublicStatusViewTest(AuthenticationTestCase):
-    @pytest.fixture(autouse=True)
-    def setup_test_data(self, sample_user, sample_project):
-        self.user = sample_user
-        self.project = sample_project
-        self.team = sample_project.team
-
-    def test_toggle_project__when_private_project__should_make_it_public(self) -> None:
-        from sbomify.apps.sboms.models import Component
-
-        self.project.components.all().update(visibility=Component.Visibility.PUBLIC)
-
-        self.project.is_public = False
-        self.project.save()
-
-        url = reverse("core:toggle_public_status", kwargs={"item_type": "project", "item_id": str(self.project.id)})
-        response = self.client.post(url, {"is_public": True})
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Project is now public"}]})
-        self.assertEqual(json.loads(response.content), {"is_public": True})
-
-        self.project.refresh_from_db()
-        self.assertTrue(self.project.is_public)
-
-    def test_toggle_project__when_public_project__should_make_it_private(self) -> None:
-        self.team.billing_plan = "business"
-        self.team.save()
-
-        self.project.is_public = True
-        self.project.save()
-
-        url = reverse("core:toggle_public_status", kwargs={"item_type": "project", "item_id": str(self.project.id)})
-        response = self.client.post(url, {"is_public": False})
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(json.loads(response["HX-Trigger"]), {"messages": [{"type": "success", "message": "Project is now private"}]})
-        self.assertEqual(json.loads(response.content), {"is_public": False})
-
-        self.project.refresh_from_db()
-        self.assertFalse(self.project.is_public)
-
-
 class ComponentTogglePublicStatusViewTest(AuthenticationTestCase):
     @pytest.fixture(autouse=True)
     def setup_test_data(self, sample_user, sample_component):

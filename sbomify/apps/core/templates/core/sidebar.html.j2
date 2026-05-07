@@ -37,13 +37,6 @@
                     </a>
                 </li>
                 <li class="px-3">
-                    <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'core:project' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
-                       href="{% url 'core:projects_dashboard' %}">
-                        <i class="fas fa-folder w-5 text-center {% if 'core:project' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
-                        <span>Projects</span>
-                    </a>
-                </li>
-                <li class="px-3">
                     <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg no-underline transition-colors {% if 'core:component' in current_view_name %}bg-primary/10 text-primary font-medium{% else %}text-text hover:bg-border/30{% endif %}"
                        href="{% url 'core:components_dashboard' %}">
                         <i class="fas fa-file-alt w-5 text-center {% if 'core:component' in current_view_name %}text-primary{% else %}text-text-muted{% endif %}"></i>
