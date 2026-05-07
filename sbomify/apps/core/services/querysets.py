@@ -25,6 +25,9 @@ def optimize_product_queryset(queryset: QuerySet[Product]) -> QuerySet[Product]:
             Prefetch("links", queryset=link_qs),
         )
         .annotate(component_count=Count("components", distinct=True))
+        # Stable order so paginated callers (e.g. list_products) don't drop or
+        # duplicate rows across pages when the underlying table order changes.
+        .order_by("name", "id")
     )
 
 
