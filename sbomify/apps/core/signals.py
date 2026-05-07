@@ -115,10 +115,12 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
         logger.error("Error updating latest release for Document %s", document_instance.id, exc_info=True)
 
 
-# Per-component cache of products affected by an in-flight ``component.products.clear()``.
-# Populated on ``pre_clear`` (when the M2M still resolves) and consumed on ``post_clear``
-# (when ``pk_set`` is None because the rows are already gone).
-_pending_clear_products: dict[Any, list[Any]] = {}
+# Attribute used on a Component instance to carry the snapshot of affected
+# product IDs from ``pre_clear`` to ``post_clear`` for ``component.products.clear()``.
+# Stored on the instance itself (not a module dict) so it's per-operation and
+# auto-cleaned with the instance — no concurrency races between workers/threads
+# clearing different Component instances, and no leak if ``post_clear`` never fires.
+_PENDING_CLEAR_ATTR = "_sbomify_pending_clear_product_ids"
 
 
 @receiver(m2m_changed, sender="sboms.ProductComponent")
@@ -149,21 +151,23 @@ def update_latest_release_on_product_components_changed(
         return
     from sbomify.apps.core.models import Product, Release
 
-    if reverse and action == "pre_clear":
-        # No-op: pre_clear on the reverse side gives us the Product instance,
-        # whose own ID we already know — nothing to snapshot.
-        return
-
-    if not reverse and action == "pre_clear":
-        # Forward-side pre_clear: snapshot the products this component is about
-        # to be detached from. Consumed below on post_clear.
-        _pending_clear_products[instance.pk] = list(instance.products.values_list("id", flat=True))
+    if action == "pre_clear":
+        if not reverse:
+            # Forward-side pre_clear: snapshot products this component is about
+            # to be detached from. Stored on the instance so it's per-operation.
+            setattr(instance, _PENDING_CLEAR_ATTR, list(instance.products.values_list("id", flat=True)))
+        # Reverse-side pre_clear has nothing to snapshot — instance is the
+        # Product whose own ID we already know.
         return
 
     if reverse:
         product_ids: list[Any] = [instance.id]
     elif action == "post_clear":
-        product_ids = _pending_clear_products.pop(instance.pk, [])
+        product_ids = getattr(instance, _PENDING_CLEAR_ATTR, []) or []
+        # Drop the snapshot once consumed so a subsequent reload of the same
+        # instance doesn't see stale data.
+        if hasattr(instance, _PENDING_CLEAR_ATTR):
+            delattr(instance, _PENDING_CLEAR_ATTR)
     else:
         product_ids = list(pk_set or ())
 
