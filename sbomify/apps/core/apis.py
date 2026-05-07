@@ -20,15 +20,15 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.queries import optimize_component_queryset, optimize_product_queryset, optimize_project_queryset
+from sbomify.apps.core.queries import optimize_component_queryset, optimize_product_queryset
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
-from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package, get_release_sbom_package
+from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
 from sbomify.apps.teams.models import ContactProfile, Team
 from sbomify.logging import getLogger
 
-from .models import Component, Product, Project, Release, ReleaseArtifact, User
+from .models import Component, Product, Release, ReleaseArtifact, User
 from .schemas import (
     ComponentCreateSchema,
     ComponentPatchSchema,
@@ -46,7 +46,6 @@ from .schemas import (
     PaginatedProductIdentifiersResponse,
     PaginatedProductLinksResponse,
     PaginatedProductsResponse,
-    PaginatedProjectsResponse,
     PaginatedReleaseArtifactsResponse,
     PaginatedReleasesResponse,
     PaginatedSBOMReleasesResponse,
@@ -64,10 +63,6 @@ from .schemas import (
     ProductPatchSchema,
     ProductResponseSchema,
     ProductUpdateSchema,
-    ProjectCreateSchema,
-    ProjectPatchSchema,
-    ProjectResponseSchema,
-    ProjectUpdateSchema,
     ReleaseArtifactAddResponseSchema,
     ReleaseArtifactCreateSchema,
     ReleaseCreateSchema,
@@ -123,11 +118,6 @@ class CreateItemRequest(BaseModel):
 
 class CreateItemResponse(BaseModel):
     id: str
-
-
-class CreateProjectRequest(BaseModel):
-    name: str
-    product_id: str
 
 
 router = Router(tags=["Products"], auth=(PersonalAccessTokenAuth(), django_auth))
@@ -267,16 +257,21 @@ def _build_item_response(
 
     if item_type == "product":
         base_response["description"] = item.description
-        base_response["project_count"] = item.project_count if hasattr(item, "project_count") else item.projects.count()
-        # Include actual projects data for frontend
-        base_response["projects"] = [
+        base_response["component_count"] = (
+            item.component_count if hasattr(item, "component_count") else item.components.count()
+        )
+        # Include components attached directly to this product
+        base_response["components"] = [
             {
-                "id": project.id,
-                "name": project.name,
-                "slug": project.slug,
-                "is_public": project.is_public,
+                "id": component.id,
+                "name": component.name,
+                "slug": component.slug,
+                "visibility": component.visibility,
+                "is_global": getattr(component, "is_global", False),
+                "component_type": component.component_type,
+                "component_type_display": component.get_component_type_display(),
             }
-            for project in item.projects.all()
+            for component in item.components.all()
         ]
         # Include identifiers data
         base_response["identifiers"] = [
@@ -304,24 +299,6 @@ def _build_item_response(
         base_response["release_date"] = item.release_date.isoformat() if item.release_date else None
         base_response["end_of_support"] = item.end_of_support.isoformat() if item.end_of_support else None
         base_response["end_of_life"] = item.end_of_life.isoformat() if item.end_of_life else None
-    elif item_type == "project":
-        base_response["component_count"] = (
-            item.component_count if hasattr(item, "component_count") else item.components.count()
-        )
-        base_response["metadata"] = item.metadata
-        # Include actual components data for frontend
-        base_response["components"] = [
-            {
-                "id": component.id,
-                "name": component.name,
-                "slug": component.slug,
-                "visibility": component.visibility,
-                "is_global": getattr(component, "is_global", False),
-                "component_type": component.component_type,
-                "component_type_display": component.get_component_type_display(),
-            }
-            for component in item.components.all()
-        ]
     elif item_type == "component":
         base_response["visibility"] = item.visibility
         base_response["gating_mode"] = item.gating_mode
@@ -469,9 +446,6 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
                 if resource_type == "product":
                     current_count = Product.objects.filter(team_id=team_id).count()
                     max_allowed = target_plan.max_products
-                elif resource_type == "project":
-                    current_count = Project.objects.filter(team_id=team_id).count()
-                    max_allowed = target_plan.max_projects
                 elif resource_type == "component":
                     current_count = Component.objects.filter(team_id=team_id).count()
                     max_allowed = target_plan.max_components
@@ -518,9 +492,6 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
     if resource_type == "product":
         current_count = Product.objects.filter(team_id=team_id).count()
         max_allowed = plan.max_products
-    elif resource_type == "project":
-        current_count = Project.objects.filter(team_id=team_id).count()
-        max_allowed = plan.max_projects
     elif resource_type == "component":
         current_count = Component.objects.filter(team_id=team_id).count()
         max_allowed = plan.max_components
@@ -755,7 +726,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
         with transaction.atomic():
             # Handle relationship updates separately
             update_data = payload.model_dump(exclude_unset=True)
-            project_ids = update_data.pop("project_ids", None)
+            component_ids = update_data.pop("component_ids", None)
 
             # Validate public/private constraints before making changes
             new_is_public = update_data.get("is_public", product.is_public)
@@ -764,20 +735,20 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
             if not new_is_public and product.is_public and not _private_items_allowed(product.team):
                 return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
 
-            # If updating project relationships, validate constraints
-            if project_ids is not None:
-                # Verify all projects exist and belong to the same team
-                projects = Project.objects.filter(id__in=project_ids, team_id=product.team_id)
-                if len(projects) != len(project_ids):
-                    return 400, {"detail": "Some projects were not found or inaccessible"}
+            # If updating component relationships, validate constraints
+            if component_ids is not None:
+                # Verify all components exist and belong to the same team
+                components = Component.objects.filter(id__in=component_ids, team_id=product.team_id)
+                if len(components) != len(component_ids):
+                    return 400, {"detail": "Some components were not found or inaccessible"}
 
-                # Verify access to all projects
-                for project in projects:
-                    if not verify_item_access(request, project, ["owner", "admin"]):
-                        return 403, {"detail": f"No permission to modify project {project.name}"}
+                # Verify access to all components
+                for component in components:
+                    if not verify_item_access(request, component, ["owner", "admin"]):
+                        return 403, {"detail": f"No permission to modify component {component.name}"}
 
-                # Update relationships
-                product.projects.set(projects)
+                # Update relationships via the new direct M2M
+                product.components.set(components)
 
             # Update simple fields
             for field, value in update_data.items():
@@ -1392,292 +1363,6 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
 
 
 # =============================================================================
-# PROJECT CRUD ENDPOINTS
-# =============================================================================
-
-
-@router.post(
-    "/projects",
-    response={201: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse},
-    tags=["Projects"],
-)
-def create_project(request: HttpRequest, payload: ProjectCreateSchema) -> Any:
-    """Create a new project."""
-    # Block guest members from creating projects
-    if _is_guest_member(request):
-        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
-
-    team_id = _get_user_team_id(request)
-    if not team_id:
-        return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
-
-    # Check billing limits
-    can_create, error_msg, error_code = _check_billing_limits(team_id, "project")
-    if not can_create:
-        return 403, {"detail": error_msg, "error_code": error_code}
-
-    try:
-        # Check if user has permission to create projects in this team
-        team = Team.objects.get(id=team_id)
-        if not verify_item_access(request, team, ["owner", "admin"]):
-            return 403, {"detail": "Only owners and admins can create projects", "error_code": ErrorCode.FORBIDDEN}
-
-        allow_private = _private_items_allowed(team)
-
-        with transaction.atomic():
-            project = Project.objects.create(
-                name=payload.name,
-                team_id=team_id,
-                metadata=payload.metadata,
-                is_public=True if not allow_private else False,
-            )
-
-        # Broadcast to workspace for real-time UI updates (after transaction commits)
-        assert team.key is not None
-        schedule_broadcast(team.key, "project_created", {"project_id": str(project.id), "name": project.name})
-
-        return 201, _build_item_response(request, project, "project")
-
-    except IntegrityError:
-        return 400, {
-            "detail": "A project with this name already exists in this team",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
-    except Team.DoesNotExist:
-        return 403, {"detail": "Workspace not found", "error_code": ErrorCode.TEAM_NOT_FOUND}
-    except Exception as e:
-        log.error(f"Error creating project: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-
-
-@router.get(
-    "/projects",
-    response={200: PaginatedProjectsResponse, 403: ErrorResponse},
-    auth=None,
-    tags=["Projects"],
-)
-@decorate_view(optional_token_auth)
-def list_projects(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
-    """List all projects - public projects for unauthenticated users, team projects for authenticated users."""
-    try:
-        is_internal_member = _is_internal_member(request)
-        # For authenticated non-guest users, show their team's projects
-        if is_internal_member:
-            team_id = _get_user_team_id(request)
-            if not team_id:
-                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
-
-            projects_queryset = optimize_project_queryset(Project.objects.filter(team_id=team_id))
-            has_crud_permissions = _get_team_crud_permission(request, team_id)
-        else:
-            # For unauthenticated or guest users, show only public projects
-            projects_queryset = optimize_project_queryset(Project.objects.filter(is_public=True))
-            has_crud_permissions = False
-
-        # Apply pagination
-        paginated_projects, pagination_meta = _paginate_queryset(projects_queryset, page, page_size)
-
-        # Build response items
-        items = [
-            _build_item_response(request, project, "project", has_crud_permissions) for project in paginated_projects
-        ]
-
-        return 200, PaginatedProjectsResponse(items=items, pagination=pagination_meta)
-    except Exception as e:
-        log.error(f"Error listing projects: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-
-
-@router.get(
-    "/projects/{project_id}",
-    response={200: ProjectResponseSchema, 403: ErrorResponse, 404: ErrorResponse},
-    auth=None,
-    tags=["Projects"],
-)
-@decorate_view(optional_token_auth)
-def get_project(request: HttpRequest, project_id: str) -> Any:
-    """Get a specific project by ID."""
-    try:
-        project = optimize_project_queryset(Project.objects.filter(pk=project_id)).get()
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
-
-    # If project is public, allow unauthenticated access
-    if project.is_public:
-        return 200, _build_item_response(request, project, "project")
-
-    # For private projects, require authentication and team access
-    if not request.user or not request.user.is_authenticated:
-        return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
-    return 200, _build_item_response(request, project, "project")
-
-
-@router.put(
-    "/projects/{project_id}",
-    response={200: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    tags=["Projects"],
-)
-def update_project(request: HttpRequest, project_id: str, payload: ProjectUpdateSchema) -> Any:
-    """Update a project."""
-    # Block guest members from updating projects
-    if _is_guest_member(request):
-        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
-
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update projects", "error_code": ErrorCode.FORBIDDEN}
-
-    try:
-        with transaction.atomic():
-            if payload.is_public is False and not _private_items_allowed(project.team):
-                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
-
-            project.name = payload.name
-            project.is_public = payload.is_public
-            project.metadata = payload.metadata
-            project.save()
-
-        return 200, _build_item_response(request, project, "project")
-
-    except IntegrityError:
-        return 400, {
-            "detail": "A project with this name already exists in this team",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
-    except Exception as e:
-        log.error(f"Error updating project {project_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-
-
-@router.patch(
-    "/projects/{project_id}",
-    response={200: ProjectResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
-    tags=["Projects"],
-)
-def patch_project(request: HttpRequest, project_id: str, payload: ProjectPatchSchema) -> Any:
-    """Partially update a project."""
-    # Block guest members from patching projects
-    if _is_guest_member(request):
-        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
-
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can update projects", "error_code": ErrorCode.FORBIDDEN}
-
-    try:
-        with transaction.atomic():
-            # Handle relationship updates separately
-            update_data = payload.model_dump(exclude_unset=True)
-            component_ids = update_data.pop("component_ids", None)
-
-            # Validate public/private constraints before making changes
-            new_is_public = update_data.get("is_public", project.is_public)
-
-            # Check billing plan restrictions when trying to make items private
-            if not new_is_public and project.is_public and not _private_items_allowed(project.team):
-                return 403, {"detail": PRIVATE_ITEMS_UPGRADE_MESSAGE}
-
-            # If making project private, check if it's assigned to any public products
-            if not new_is_public and project.is_public:
-                public_products = project.product_set.filter(is_public=True)
-                if public_products.exists():
-                    product_names = ", ".join(public_products.values_list("name", flat=True))
-                    return 400, {
-                        "detail": (
-                            f"Cannot make project private because it's assigned to public products: {product_names}. "
-                            "Please remove it from these products first or make the products private."
-                        )
-                    }
-
-            # If updating component relationships, validate constraints
-            if component_ids is not None:
-                # Verify all components exist and belong to the same team
-                components = Component.objects.filter(id__in=component_ids, team_id=project.team_id)
-                if len(components) != len(component_ids):
-                    return 400, {"detail": "Some components were not found or inaccessible"}
-
-                # Verify access to all components
-                for component in components:
-                    if not verify_item_access(request, component, ["owner", "admin"]):
-                        return 403, {"detail": f"No permission to modify component {component.name}"}
-
-                # Reject workspace-scoped components from being assigned to a project
-                global_components = [c for c in components if c.is_global]
-                if global_components:
-                    names = ", ".join(c.name for c in global_components)
-                    return 400, {
-                        "detail": f"Cannot assign workspace-scoped components to a project: {names}. "
-                        "Remove them from workspace scope first.",
-                        "error_code": ErrorCode.INVALID_DATA,
-                    }
-
-                # Update relationships
-                project.components.set(components)
-
-            # Update simple fields
-            for field, value in update_data.items():
-                setattr(project, field, value)
-            project.save()
-
-        return 200, _build_item_response(request, project, "project")
-
-    except IntegrityError:
-        return 400, {
-            "detail": "A project with this name already exists in this team",
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
-    except Exception as e:
-        log.error(f"Error patching project {project_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-
-
-@router.delete(
-    "/projects/{project_id}",
-    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
-    tags=["Projects"],
-)
-def delete_project(request: HttpRequest, project_id: str) -> Any:
-    """Delete a project."""
-    # Block guest members from deleting projects
-    if _is_guest_member(request):
-        return 403, {"detail": "Guest members can only access public pages", "error_code": ErrorCode.FORBIDDEN}
-
-    try:
-        project = Project.objects.select_related("team").get(pk=project_id)
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
-
-    if not verify_item_access(request, project, ["owner", "admin"]):
-        return 403, {"detail": "Only owners and admins can delete projects", "error_code": ErrorCode.FORBIDDEN}
-
-    # Capture data for broadcast before deletion
-    workspace_key = project.team.key
-    project_name = project.name
-
-    try:
-        project.delete()
-
-        # Broadcast to workspace for real-time UI updates (after transaction commits)
-        if workspace_key:
-            schedule_broadcast(workspace_key, "project_deleted", {"project_id": project_id, "name": project_name})
-
-        return 204, None
-    except Exception as e:
-        log.error(f"Error deleting project {project_id}: {e}")
-        return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
-
 
 # =============================================================================
 # COMPONENT CRUD ENDPOINTS
@@ -2552,7 +2237,6 @@ def get_dashboard_summary(
     request: HttpRequest,
     component_id: str | None = Query(None),  # type: ignore[type-arg]
     product_id: str | None = Query(None),  # type: ignore[type-arg]
-    project_id: str | None = Query(None),  # type: ignore[type-arg]
 ) -> Any:
     """Retrieve a summary of SBOM statistics and latest uploads for the user's teams."""
     is_internal_member = _is_internal_member(request)
@@ -2573,21 +2257,6 @@ def get_dashboard_summary(
                     }
         except Product.DoesNotExist:
             return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
-    elif project_id:
-        try:
-            project = Project.objects.get(pk=project_id)
-            if project.is_public:
-                # Allow unauthenticated access for public project stats
-                pass
-            else:
-                # Private project requires authentication
-                if not is_internal_member:
-                    return 403, {
-                        "detail": "Authentication required for private items",
-                        "error_code": ErrorCode.UNAUTHORIZED,
-                    }
-        except Project.DoesNotExist:
-            return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
     elif component_id:
         try:
             component = Component.objects.get(pk=component_id)
@@ -2615,13 +2284,11 @@ def get_dashboard_summary(
         user_teams_qs = Team.objects.filter(member__user=current_user)
         # Base querysets for the user's teams
         products_qs = Product.objects.filter(team__in=user_teams_qs)
-        projects_qs = Project.objects.filter(team__in=user_teams_qs)
         components_qs = Component.objects.filter(team__in=user_teams_qs)
     else:
         # For unauthenticated public access, create empty querysets (will be filtered by specific item below)
         user_teams_qs = Team.objects.none()
         products_qs = Product.objects.none()
-        projects_qs = Project.objects.none()
         components_qs = Component.objects.none()
 
     # Import SBOM here to avoid circular import
@@ -2631,16 +2298,10 @@ def get_dashboard_summary(
 
     # Apply context-specific filtering
     if product_id:
-        # When viewing a product, show projects and components within that product
+        # When viewing a product, show components within that product
         products_qs = products_qs.filter(id=product_id)
-        projects_qs = projects_qs.filter(products__id=product_id)
         components_qs = components_qs.filter(products__id=product_id)
         latest_sboms_qs = latest_sboms_qs.filter(component__products__id=product_id)
-    elif project_id:
-        # When viewing a project, show components within that project
-        projects_qs = projects_qs.filter(id=project_id)
-        components_qs = components_qs.filter(projects__id=project_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__id=project_id)
     elif component_id:
         # When viewing a component, filter SBOMs for that component only
         components_qs = components_qs.filter(id=component_id)
@@ -2648,7 +2309,6 @@ def get_dashboard_summary(
 
     # Get counts
     total_products = products_qs.count()
-    total_projects = projects_qs.count()
     total_components = components_qs.count()
 
     # Get latest uploads
@@ -2666,75 +2326,9 @@ def get_dashboard_summary(
 
     return 200, DashboardStatsResponse(
         total_products=total_products,
-        total_projects=total_projects,
         total_components=total_components,
         latest_uploads=latest_uploads_data,
     )
-
-
-@router.get(
-    "/projects/{project_id}/download",
-    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
-    auth=None,  # Allow unauthenticated access for public projects
-    tags=["Projects"],
-)
-@decorate_view(optional_token_auth)
-def download_project_sbom(
-    request: HttpRequest,
-    project_id: str,
-    output_format: str = Query("cyclonedx", alias="format", description="Output format: 'cyclonedx' or 'spdx'"),  # type: ignore[type-arg]
-    version: str = Query(None, description="Format version (e.g., '1.6', '1.7' for CDX, '2.3' for SPDX)"),  # type: ignore[type-arg]
-) -> Any:
-    """
-    Download the consolidated SBOM for a project.
-
-    Args:
-        output_format: Output format - "cyclonedx" (default) or "spdx"
-        version: Format version - e.g., "1.6", "1.7" for CycloneDX, "2.3" for SPDX.
-                 If not specified, uses the default version for the format.
-
-    Supported formats and versions:
-        - cyclonedx: 1.6 (default), 1.7
-
-    Note: SPDX format for project SBOMs is not yet supported.
-    """
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return 404, {"detail": "Project not found", "error_code": ErrorCode.NOT_FOUND}
-
-    # Check access permissions
-    if not project.is_public:
-        if not request.user or not request.user.is_authenticated:
-            return 403, {"detail": "Authentication required for private projects", "error_code": ErrorCode.UNAUTHORIZED}
-        if not verify_item_access(request, project, ["owner", "admin"]):
-            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
-
-    # Normalize format early
-    format_lower = output_format.lower()
-
-    try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Pass the user to the SBOM builder for signed URL generation
-            sbom_path = get_project_sbom_package(
-                project, Path(temp_dir), user=request.user, output_format=format_lower, version=version
-            )
-
-            # Determine file extension based on format
-            extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
-            filename = f"{project.name}{extension}"
-
-            with open(sbom_path, "rb") as f:
-                response = HttpResponse(f.read(), content_type="application/json")
-            response["Content-Disposition"] = f"attachment; filename={filename}"
-
-            return response
-    except ValueError as e:
-        # Format/version validation errors
-        return 400, {"detail": str(e), "error_code": ErrorCode.BAD_REQUEST}
-    except Exception as e:
-        log.error(f"Error generating project SBOM {project_id}: {e}")
-        return 500, {"detail": "Error generating project SBOM"}
 
 
 @router.get(
