@@ -242,6 +242,48 @@ def test_change_plan_to_business_annual(
     assert "redirect_url" in data
 
 
+@pytest.mark.django_db
+def test_change_plan_business_upgrade_passes_allow_promotion_codes(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+    business_plan: BillingPlan,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Business upgrade via change-plan API creates a Stripe session with promo codes enabled.
+
+    Regression guard: a previous version of `stripe_client.create_checkout_session`
+    omitted `allow_promotion_codes` from the session_data, so promo codes typed
+    into Stripe's hosted checkout were silently ignored on this code path.
+    """
+    import stripe
+
+    captured_kwargs: dict = {}
+
+    class TrackingCheckoutSession:
+        def __init__(self) -> None:
+            self.url = "https://checkout.stripe.com/test"
+
+        @classmethod
+        def create(cls, **kwargs):
+            captured_kwargs.update(kwargs)
+            return cls()
+
+    # Override the autouse mock_stripe fixture's CheckoutSession.create with one
+    # that captures kwargs so we can assert on them.
+    monkeypatch.setattr(stripe.checkout.Session, "create", TrackingCheckoutSession.create)
+
+    client.force_login(sample_user)
+    response = client.post(
+        reverse("api-1:change_plan"),
+        json.dumps({"team_key": team_with_business_plan.key, "plan": "business", "billing_period": "monthly"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    assert captured_kwargs.get("allow_promotion_codes") is True, (
+        "change-plan API must enable Stripe's promotion-code field on the hosted checkout page"
+    )
 
 
 
