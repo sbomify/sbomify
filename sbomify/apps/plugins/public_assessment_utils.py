@@ -406,38 +406,27 @@ def get_products_latest_sbom_assessments_batch(
     Returns a dict mapping product_id -> list of PassingAssessment.
     """
     from sbomify.apps.core.models import Component
-    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM, ProductComponent
 
     if not products:
         return {}
 
-    product_ids = [p.id for p in products]
+    public_product_ids = [p.id for p in products if getattr(p, "is_public", False)]
 
-    # Step 1: Get all public components for all products (single query)
-    components = (
-        Component.objects.filter(
-            products__id__in=product_ids,
-            visibility=Component.Visibility.PUBLIC,
-        )
-        .distinct()
-        .select_related("team")
-    )
-
-    # Build mapping: component_id -> set of product_ids the component belongs
-    # to (filtered to public products in the requested set).
+    # Build mapping: component_id -> set of product_ids the component belongs to
+    # (filtered to public products in the requested set). Walk the through table
+    # directly so we don't materialise a Component list and avoid a redundant
+    # DISTINCT-on-Component query.
     component_to_products: dict[str, set[str]] = {}
-    public_product_ids = {str(p.id) for p in products if getattr(p, "is_public", False)}
     if public_product_ids:
         for component_id, product_id in (
-            Component.objects.filter(
-                id__in=[c.id for c in components],
-                products__id__in=public_product_ids,
+            ProductComponent.objects.filter(
+                product_id__in=public_product_ids,
+                component__visibility=Component.Visibility.PUBLIC,
             )
-            .values_list("id", "products__id")
+            .values_list("component_id", "product_id")
             .iterator(chunk_size=1000)
         ):
-            if not product_id:
-                continue
             component_to_products.setdefault(str(component_id), set()).add(str(product_id))
 
     if not component_to_products:

@@ -115,6 +115,12 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
         logger.error("Error updating latest release for Document %s", document_instance.id, exc_info=True)
 
 
+# Per-component cache of products affected by an in-flight ``component.products.clear()``.
+# Populated on ``pre_clear`` (when the M2M still resolves) and consumed on ``post_clear``
+# (when ``pk_set`` is None because the rows are already gone).
+_pending_clear_products: dict[Any, list[Any]] = {}
+
+
 @receiver(m2m_changed, sender="sboms.ProductComponent")
 def update_latest_release_on_product_components_changed(
     sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
@@ -126,22 +132,40 @@ def update_latest_release_on_product_components_changed(
     related_name="components")``. Django reports:
 
     - ``reverse=False`` when the change originates on the forward side
-      (``component.products.add(...)``): ``instance`` is the Component and
-      ``pk_set`` holds the Product PKs being attached/detached.
+      (``component.products.add/remove/clear(...)``): ``instance`` is the
+      Component and ``pk_set`` holds the Product PKs (None for ``post_clear``).
     - ``reverse=True`` when the change originates on the reverse side
-      (``product.components.add(...)``): ``instance`` is the Product and
-      ``pk_set`` holds the Component PKs.
+      (``product.components.add/remove/clear(...)``): ``instance`` is the
+      Product and ``pk_set`` holds the Component PKs.
+
+    For ``post_clear`` on the forward side, ``pk_set`` is None and the M2M is
+    already empty, so we snapshot the affected product IDs on ``pre_clear``
+    (where the rows still exist) and consume the snapshot here. Without this,
+    callers like ``component.products.clear()`` (used by ComponentScopeView and
+    the transfer-component flow) would leave their old products with stale
+    ``latest`` releases.
     """
-    if action not in ("post_add", "post_remove", "post_clear"):
+    if action not in ("pre_clear", "post_add", "post_remove", "post_clear"):
         return
     from sbomify.apps.core.models import Product, Release
 
+    if reverse and action == "pre_clear":
+        # No-op: pre_clear on the reverse side gives us the Product instance,
+        # whose own ID we already know — nothing to snapshot.
+        return
+
+    if not reverse and action == "pre_clear":
+        # Forward-side pre_clear: snapshot the products this component is about
+        # to be detached from. Consumed below on post_clear.
+        _pending_clear_products[instance.pk] = list(instance.products.values_list("id", flat=True))
+        return
+
     if reverse:
-        # Forward call site is ``product.components.add/remove/clear``.
         product_ids: list[Any] = [instance.id]
+    elif action == "post_clear":
+        product_ids = _pending_clear_products.pop(instance.pk, [])
     else:
-        # Forward call site is ``component.products.add/remove/clear``.
-        product_ids = list(pk_set or ()) if action != "post_clear" else []
+        product_ids = list(pk_set or ())
 
     for prod_id in product_ids:
         try:

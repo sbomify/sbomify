@@ -7,7 +7,9 @@ inserts (same component reachable through multiple projects under the same produ
 silently dropped at the DB level, so the migration code does not need to track seen pairs.
 
 Reverse is intentionally a no-op: the legacy join tables still exist after this migration,
-so the data is recoverable until ``0061_drop_project_links`` runs.
+so the data is recoverable until ``0062_remove_product_projects_remove_project_products_and_more``
+(the destructive drop of ``Product.projects`` / ``Component.projects`` and the ``Project`` /
+``ProductProject`` / ``ProjectComponent`` models) runs.
 """
 
 from __future__ import annotations
