@@ -6,11 +6,11 @@
 {% load humanize %}
 {% block title %}{{ product.name }} - SBOM & Security{% endblock %}
 {% block meta_description %}
-    {{ product.name }} - Software Bill of Materials (SBOM) for this product. View projects, components, and download SBOMs.
+    {{ product.name }} - Software Bill of Materials (SBOM) for this product. View components and download SBOMs.
 {% endblock %}
 {% block og_title %}{{ product.name }} - Software Bill of Materials{% endblock %}
 {% block og_description %}
-    {{ product.name }} - View projects, components, and download Software Bill of Materials (SBOM) for this product.
+    {{ product.name }} - View components and download Software Bill of Materials (SBOM) for this product.
 {% endblock %}
 {% block breadcrumb %}
     {% breadcrumb product 'product' %}
@@ -56,6 +56,35 @@
     {% include 'compliance/components/public_vdp_link.html.j2' %}
     {% include 'compliance/components/public_doc_link.html.j2' %}
     {% include 'core/components/public_releases_list.html.j2' %}
+    {% if public_components %}
+        <div class="public-section">
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-puzzle-piece text-primary"></i>Components
+                    </h4>
+                </div>
+                <ul class="divide-y divide-border list-none p-0 m-0">
+                    {% for component in public_components %}
+                        <li class="px-6 py-4 flex items-start justify-between gap-4">
+                            <div class="min-w-0">
+                                <a class="text-text font-medium hover:text-primary no-underline"
+                                   href="{{ component.public_url }}">{{ component.name }}</a>
+                                <div class="text-text-muted text-xs mt-1">{{ component.component_type_display }}</div>
+                            </div>
+                            {% if component.passing_assessments %}
+                                <div class="flex flex-wrap gap-1 shrink-0">
+                                    {% for assessment in component.passing_assessments %}
+                                        {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    {% endif %}
     {% if has_downloadable_content %}
         <div class="public-section">
             <div class="tw-card">
