@@ -417,12 +417,17 @@ def get_products_latest_sbom_assessments_batch(
     # (filtered to public products in the requested set). Walk the through table
     # directly so we don't materialise a Component list and avoid a redundant
     # DISTINCT-on-Component query.
+    # Match the listing semantics in workspace_public + product_details_public:
+    # both PUBLIC and GATED components are publicly visible. Filtering only on
+    # PUBLIC here would leave gated components without passing-assessment badges
+    # even though the listing surface includes them.
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
     component_to_products: dict[str, set[str]] = {}
     if public_product_ids:
         for component_id, product_id in (
             ProductComponent.objects.filter(
                 product_id__in=public_product_ids,
-                component__visibility=Component.Visibility.PUBLIC,
+                component__visibility__in=public_visibilities,
             )
             .values_list("component_id", "product_id")
             .iterator(chunk_size=1000)
