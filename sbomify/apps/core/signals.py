@@ -142,6 +142,100 @@ def update_latest_release_on_product_projects_changed(
         logger.error("Error updating latest release for product %s", instance.id, exc_info=True)
 
 
+# --- Transition bridge: keep ProductComponent in sync with the legacy ---
+# Product → Project → Component chain while both M2Ms exist. Removed once
+# Project/ProductProject/ProjectComponent are dropped in the destructive
+# migration (Phase 6 of the Project-removal refactor).
+#
+# Both `post_save` (for direct `Through.objects.create`) and `m2m_changed`
+# (for `relation.add(...) / .set(...)`) are wired because Django doesn't
+# fire post_save on bulk M2M operations.
+
+
+def _sync_product_component_pairs(product_ids: list[Any], component_ids: list[Any]) -> None:
+    from sbomify.apps.sboms.models import ProductComponent
+
+    for prod_id in product_ids:
+        for comp_id in component_ids:
+            ProductComponent.objects.get_or_create(product_id=prod_id, component_id=comp_id)
+
+
+@receiver(post_save, sender="sboms.ProjectComponent")
+@receiver(post_save, sender="core.ProjectComponent")
+def sync_product_component_on_project_component_save(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
+    """When a Component is added to a Project via direct ORM create, link it
+    to every Product that contains that Project. Receives on both the real
+    sboms.ProjectComponent and its core.ProjectComponent proxy because Django
+    fires post_save with the actual saved model class as sender."""
+    if not created:
+        return
+    from sbomify.apps.sboms.models import ProductProject
+
+    product_ids = list(
+        ProductProject.objects.filter(project_id=instance.project_id).values_list("product_id", flat=True)
+    )
+    _sync_product_component_pairs(product_ids, [instance.component_id])
+
+
+@receiver(post_save, sender="sboms.ProductProject")
+@receiver(post_save, sender="core.ProductProject")
+def sync_product_component_on_product_project_save(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
+    """When a Project is added to a Product via direct ORM create, link every
+    Component in that Project to the Product. See sibling for proxy rationale."""
+    if not created:
+        return
+    from sbomify.apps.sboms.models import ProjectComponent
+
+    component_ids = list(
+        ProjectComponent.objects.filter(project_id=instance.project_id).values_list("component_id", flat=True)
+    )
+    _sync_product_component_pairs([instance.product_id], component_ids)
+
+
+@receiver(m2m_changed, sender="sboms.ProjectComponent")
+def sync_product_component_on_project_components_changed(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
+) -> Any:
+    """Mirror `project.components.add(...)` (and reverse `component.projects.add(...)`)
+    into the new direct ``ProductComponent`` M2M."""
+    if action != "post_add" or not pk_set:
+        return
+    from sbomify.apps.sboms.models import ProductProject
+
+    if reverse:
+        component_ids = [instance.pk]
+        project_ids = list(pk_set)
+    else:
+        component_ids = list(pk_set)
+        project_ids = [instance.pk]
+
+    product_ids = list(ProductProject.objects.filter(project_id__in=project_ids).values_list("product_id", flat=True))
+    _sync_product_component_pairs(product_ids, component_ids)
+
+
+@receiver(m2m_changed, sender="sboms.ProductProject")
+def sync_product_component_on_product_projects_changed(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
+) -> Any:
+    """Mirror `product.projects.add(...)` (and reverse `project.products.add(...)`)
+    into the new direct ``ProductComponent`` M2M."""
+    if action != "post_add" or not pk_set:
+        return
+    from sbomify.apps.sboms.models import ProjectComponent
+
+    if reverse:
+        project_ids = [instance.pk]
+        product_ids = list(pk_set)
+    else:
+        project_ids = list(pk_set)
+        product_ids = [instance.pk]
+
+    component_ids = list(
+        ProjectComponent.objects.filter(project_id__in=project_ids).values_list("component_id", flat=True)
+    )
+    _sync_product_component_pairs(product_ids, component_ids)
+
+
 @receiver(post_save, sender="core.ReleaseArtifact")
 def bump_collection_version_on_artifact_added(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
     """Bump the collection version when a new artifact is added to a release."""

@@ -73,7 +73,7 @@ class Command(BaseCommand):
         # Check document components using the new method (through product-project relationship)
         new_method_docs = (
             Component.objects.filter(
-                component_type="document", visibility=Component.Visibility.PUBLIC, projects__products=product
+                component_type="document", visibility=Component.Visibility.PUBLIC, products=product
             )
             .order_by("id")
             .distinct()

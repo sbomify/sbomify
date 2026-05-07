@@ -502,14 +502,14 @@ def create_product_external_references(product: Product, user: Any = None) -> li
         )
 
     # Add documents as external references (for document components that are part of this product)
-    # Get document components that are associated with projects that are part of this product
+    # Get document components that are part of this product
     # Authorization is handled at the API level, so we don't filter by is_public here
     from sbomify.apps.core.models import Component
 
     document_components = (
         Component.objects.filter(
             component_type="document",
-            projects__products=product,  # Only components that are in projects that are part of this product
+            products=product,
         )
         .distinct()
         .prefetch_related("document_set")
@@ -549,14 +549,14 @@ def create_product_spdx_external_references(product: Product, user: Any = None) 
         )
 
     # Add documents as external references (for document components that are part of this product)
-    # Get document components that are associated with projects that are part of this product
+    # Get document components that are part of this product
     # Authorization is handled at the API level, so we don't filter by is_public here
     from sbomify.apps.core.models import Component
 
     document_components = (
         Component.objects.filter(
             component_type="document",
-            projects__products=product,  # Only components that are in projects that are part of this product
+            products=product,
         )
         .distinct()
         .prefetch_related("document_set")

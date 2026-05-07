@@ -2634,8 +2634,8 @@ def get_dashboard_summary(
         # When viewing a product, show projects and components within that product
         products_qs = products_qs.filter(id=product_id)
         projects_qs = projects_qs.filter(products__id=product_id)
-        components_qs = components_qs.filter(projects__products__id=product_id)
-        latest_sboms_qs = latest_sboms_qs.filter(component__projects__products__id=product_id)
+        components_qs = components_qs.filter(products__id=product_id)
+        latest_sboms_qs = latest_sboms_qs.filter(component__products__id=product_id)
     elif project_id:
         # When viewing a project, show components within that project
         projects_qs = projects_qs.filter(id=project_id)
@@ -3483,7 +3483,7 @@ def list_release_artifacts(
         from sbomify.apps.sboms.models import SBOM
 
         product_components = (
-            Component.objects.filter(projects__products=release.product, team_id=release.product.team_id)
+            Component.objects.filter(products=release.product, team_id=release.product.team_id)
             .order_by("id")
             .distinct()
         )

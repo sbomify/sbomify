@@ -414,11 +414,10 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
     """
     from sbomify.apps.core.models import Component
 
-    # Get all public components in this product (via projects)
+    # Get all public components in this product
     components = (
         Component.objects.filter(
-            projects__products=product,
-            projects__is_public=True,
+            products=product,
             visibility=Component.Visibility.PUBLIC,
         )
         .distinct()
@@ -502,8 +501,7 @@ def get_products_latest_sbom_assessments_batch(
     # Step 1: Get all public components for all products (single query)
     components = (
         Component.objects.filter(
-            projects__products__id__in=product_ids,
-            projects__is_public=True,
+            products__id__in=product_ids,
             visibility=Component.Visibility.PUBLIC,
         )
         .distinct()

@@ -186,7 +186,7 @@ class ProductDetailsPublicView(View):
                 request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
             )
 
-        has_downloadable_content = SBOM.objects.filter(component__projects__products__id=resolved_id).exists()
+        has_downloadable_content = SBOM.objects.filter(component__products__id=resolved_id).exists()
         team = Team.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
