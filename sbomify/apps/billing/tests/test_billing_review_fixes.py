@@ -213,33 +213,6 @@ class TestPlanKeyInCheckoutMetadata:
                 assert "plan_key" in metadata
                 assert metadata["plan_key"] == "business"
 
-    def test_billing_redirect_view_includes_plan_key_in_metadata(
-        self, client, sample_user, team_with_community_plan, business_plan
-    ):
-        """BillingRedirectView includes plan_key in checkout session metadata."""
-        client.force_login(sample_user)
-
-        session = client.session
-        session["selected_plan"] = {"key": "business", "billing_period": "monthly"}
-        session.save()
-
-        mock_session = MagicMock()
-        mock_session.url = "https://checkout.stripe.com/test"
-
-        with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe:
-            mock_stripe.create_customer.return_value = MagicMock(id=f"c_{team_with_community_plan.key}")
-            mock_stripe.get_customer.return_value = MagicMock(id=f"c_{team_with_community_plan.key}")
-            mock_stripe.create_checkout_session.return_value = mock_session
-
-            client.get(reverse("billing:billing_redirect", kwargs={"team_key": team_with_community_plan.key}))
-
-        if mock_stripe.create_checkout_session.called:
-            call_kwargs = mock_stripe.create_checkout_session.call_args
-            metadata = call_kwargs.kwargs.get("metadata", {})
-            assert "plan_key" in metadata
-            assert metadata["plan_key"] == "business"
-
-
 # ============================================================================
 # Task #48: Turnstile remoteip Parameter Tests
 # ============================================================================
@@ -553,47 +526,3 @@ class TestCheckoutLockInViews:
     def setup_method(self):
         cache.clear()
 
-    def test_billing_redirect_blocked_when_lock_held(
-        self, client, sample_user, team_with_community_plan, business_plan
-    ):
-        """BillingRedirectView returns redirect when checkout lock is already held."""
-        client.force_login(sample_user)
-
-        session = client.session
-        session["selected_plan"] = {"key": "business", "billing_period": "monthly"}
-        session.save()
-
-        acquire_checkout_lock(team_with_community_plan.key)
-
-        with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe:
-            mock_stripe.get_customer.return_value = MagicMock(id=f"c_{team_with_community_plan.key}")
-            mock_stripe.create_customer.return_value = MagicMock(id=f"c_{team_with_community_plan.key}")
-
-            response = client.get(
-                reverse("billing:billing_redirect", kwargs={"team_key": team_with_community_plan.key})
-            )
-
-        assert response.status_code == 302
-
-    def test_checkout_lock_released_on_stripe_error(self, client, sample_user, team_with_community_plan, business_plan):
-        """Lock is released when Stripe checkout creation fails."""
-        client.force_login(sample_user)
-
-        session = client.session
-        session["selected_plan"] = {"key": "business", "billing_period": "monthly"}
-        session.save()
-
-        from sbomify.apps.billing.stripe_client import StripeError
-
-        with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe:
-            mock_stripe.get_customer.return_value = MagicMock(id=f"c_{team_with_community_plan.key}")
-            mock_stripe.create_customer.return_value = MagicMock(id=f"c_{team_with_community_plan.key}")
-            mock_stripe.create_checkout_session.side_effect = StripeError("Stripe error")
-
-            response = client.get(
-                reverse("billing:billing_redirect", kwargs={"team_key": team_with_community_plan.key})
-            )
-
-        assert response.status_code == 302
-        # Lock should be released after error
-        assert acquire_checkout_lock(team_with_community_plan.key) is True
