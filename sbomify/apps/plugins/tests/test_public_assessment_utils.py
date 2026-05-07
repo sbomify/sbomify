@@ -5,7 +5,7 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 
-from sbomify.apps.core.models import Component, Product, Project, ProjectComponent
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin
 from sbomify.apps.plugins.public_assessment_utils import (
     PassingAssessment,
@@ -14,12 +14,11 @@ from sbomify.apps.plugins.public_assessment_utils import (
     get_latest_sbom_for_component,
     get_product_assessment_status,
     get_product_latest_sbom_assessment_status,
-    get_project_assessment_status,
     get_sbom_passing_assessments,
     passing_assessments_to_dict,
 )
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunReason, RunStatus
-from sbomify.apps.sboms.models import SBOM, ProductProject
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 
 User = get_user_model()
@@ -278,52 +277,17 @@ class TestGetComponentAssessmentStatus:
         assert len(result.passing_assessments) == 0
 
 
-class TestGetProjectAssessmentStatus:
-    """Tests for get_project_assessment_status function."""
-
-    def test_project_with_all_passing_components(self, team, public_component, sbom, ntia_plugin):
-        """Project shows passing when all components pass."""
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True,
-        )
-        ProjectComponent.objects.create(project=project, component=public_component)
-
-        AssessmentRun.objects.create(
-            sbom=sbom,
-            plugin_name="ntia-minimum-elements-2021",
-            plugin_version="1.0.0",
-            plugin_config_hash="abc123",
-            category=AssessmentCategory.COMPLIANCE.value,
-            run_reason=RunReason.ON_UPLOAD.value,
-            status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
-        )
-
-        result = get_project_assessment_status(project)
-        assert result.has_assessments is True
-        assert result.all_pass is True
-        assert len(result.passing_assessments) == 1
-
-
 class TestGetProductAssessmentStatus:
     """Tests for get_product_assessment_status function."""
 
-    def test_product_with_all_passing_projects(self, team, public_component, sbom, ntia_plugin):
-        """Product shows passing when all projects pass."""
+    def test_product_with_all_passing_components(self, team, public_component, sbom, ntia_plugin):
+        """Product shows passing when all directly-attached components pass."""
         product = Product.objects.create(
             name="Test Product",
             team=team,
             is_public=True,
         )
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True,
-        )
-        ProductProject.objects.create(product=product, project=project)
-        ProjectComponent.objects.create(project=project, component=public_component)
+        product.components.add(public_component)
 
         AssessmentRun.objects.create(
             sbom=sbom,
@@ -533,13 +497,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             team=team,
             is_public=True,
         )
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True,
-        )
-        ProductProject.objects.create(product=product, project=project)
-        ProjectComponent.objects.create(project=project, component=public_component)
+        product.components.add(public_component)
 
         # Create older SBOM that fails
         older_sbom = SBOM.objects.create(
@@ -592,12 +550,6 @@ class TestGetProductLatestSbomAssessmentStatus:
             team=team,
             is_public=True,
         )
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True,
-        )
-        ProductProject.objects.create(product=product, project=project)
 
         # Create first component with passing latest SBOM
         component1 = Component.objects.create(
@@ -606,7 +558,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             visibility=Component.Visibility.PUBLIC,
             component_type="bom",
         )
-        ProjectComponent.objects.create(project=project, component=component1)
+        product.components.add(component1)
         sbom1 = SBOM.objects.create(
             name="SBOM 1",
             component=component1,
@@ -631,7 +583,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             visibility=Component.Visibility.PUBLIC,
             component_type="bom",
         )
-        ProjectComponent.objects.create(project=project, component=component2)
+        product.components.add(component2)
         sbom2 = SBOM.objects.create(
             name="SBOM 2",
             component=component2,
@@ -662,20 +614,13 @@ class TestGetProductLatestSbomAssessmentStatus:
             team=team,
             is_public=True,
         )
-        project = Project.objects.create(
-            name="Test Project",
-            team=team,
-            is_public=True,
-        )
-        ProductProject.objects.create(product=product, project=project)
-
         component = Component.objects.create(
             name="Component",
             team=team,
             visibility=Component.Visibility.PUBLIC,
             component_type="bom",
         )
-        ProjectComponent.objects.create(project=project, component=component)
+        product.components.add(component)
 
         sbom = SBOM.objects.create(
             name="SBOM",
@@ -734,12 +679,6 @@ class TestGetProductsLatestSbomAssessmentsBatch:
         product1 = Product.objects.create(name="Product 1", team=team, is_public=True)
         product2 = Product.objects.create(name="Product 2", team=team, is_public=True)
 
-        project1 = Project.objects.create(name="Project 1", team=team, is_public=True)
-        project2 = Project.objects.create(name="Project 2", team=team, is_public=True)
-
-        ProductProject.objects.create(product=product1, project=project1)
-        ProductProject.objects.create(product=product2, project=project2)
-
         comp1 = Component.objects.create(
             name="Comp 1", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
@@ -747,8 +686,8 @@ class TestGetProductsLatestSbomAssessmentsBatch:
             name="Comp 2", team=team, visibility=Component.Visibility.PUBLIC, component_type="bom"
         )
 
-        ProjectComponent.objects.create(project=project1, component=comp1)
-        ProjectComponent.objects.create(project=project2, component=comp2)
+        product1.components.add(comp1)
+        product2.components.add(comp2)
 
         sbom1 = SBOM.objects.create(name="SBOM 1", component=comp1, format="cyclonedx", format_version="1.6")
         sbom2 = SBOM.objects.create(name="SBOM 2", component=comp2, format="cyclonedx", format_version="1.6")
@@ -801,9 +740,7 @@ class TestGetProductsLatestSbomAssessmentsBatch:
         from sbomify.apps.plugins.public_assessment_utils import get_products_latest_sbom_assessments_batch
 
         product = Product.objects.create(name="Empty Product", team=team, is_public=True)
-        # Create project but don't add any components
-        project = Project.objects.create(name="Empty Project", team=team, is_public=True)
-        ProductProject.objects.create(product=product, project=project)
+        # Don't attach any components
 
         result = get_products_latest_sbom_assessments_batch([product])
         assert result[str(product.id)] == []
