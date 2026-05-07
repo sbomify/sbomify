@@ -508,13 +508,22 @@ def get_products_latest_sbom_assessments_batch(
         .select_related("team")
     )
 
-    # Build mapping: component_id -> list of product_ids it belongs to
+    # Build mapping: component_id -> set of product_ids the component belongs
+    # to (filtered to public products in the requested set).
     component_to_products: dict[str, set[str]] = {}
-    for component in components:
-        component_products = component.projects.filter(is_public=True, products__id__in=product_ids).values_list(
-            "products__id", flat=True
-        )
-        component_to_products[str(component.id)] = set(str(pid) for pid in component_products if pid)
+    public_product_ids = {str(p.id) for p in products if getattr(p, "is_public", False)}
+    if public_product_ids:
+        for component_id, product_id in (
+            Component.objects.filter(
+                id__in=[c.id for c in components],
+                products__id__in=public_product_ids,
+            )
+            .values_list("id", "products__id")
+            .iterator(chunk_size=1000)
+        ):
+            if not product_id:
+                continue
+            component_to_products.setdefault(str(component_id), set()).add(str(product_id))
 
     if not component_to_products:
         return {str(p.id): [] for p in products}

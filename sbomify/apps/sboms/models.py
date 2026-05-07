@@ -903,9 +903,6 @@ class ProductComponent(models.Model):
     class Meta:
         db_table = apps.get_app_config("sboms").label + "_products_components"
         unique_together = ("product", "component")
-        indexes = [
-            models.Index(fields=["product", "component"]),
-        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)

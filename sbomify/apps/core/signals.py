@@ -145,19 +145,54 @@ def update_latest_release_on_product_projects_changed(
 # --- Transition bridge: keep ProductComponent in sync with the legacy ---
 # Product → Project → Component chain while both M2Ms exist. Removed once
 # Project/ProductProject/ProjectComponent are dropped in the destructive
-# migration (Phase 6 of the Project-removal refactor).
+# migration (Phase 7 of the Project-removal refactor).
 #
 # Both `post_save` (for direct `Through.objects.create`) and `m2m_changed`
-# (for `relation.add(...) / .set(...)`) are wired because Django doesn't
-# fire post_save on bulk M2M operations.
+# (for `relation.add(...) / .set(...) / .remove(...) / .clear()`) are wired
+# because Django doesn't fire post_save on bulk M2M operations. We also
+# listen to `post_delete` on through models so direct `.delete()` mirrors.
 
 
 def _sync_product_component_pairs(product_ids: list[Any], component_ids: list[Any]) -> None:
     from sbomify.apps.sboms.models import ProductComponent
 
-    for prod_id in product_ids:
-        for comp_id in component_ids:
-            ProductComponent.objects.get_or_create(product_id=prod_id, component_id=comp_id)
+    if not product_ids or not component_ids:
+        return
+    rows = [
+        ProductComponent(product_id=prod_id, component_id=comp_id)
+        for prod_id in product_ids
+        for comp_id in component_ids
+    ]
+    ProductComponent.objects.bulk_create(rows, ignore_conflicts=True)
+
+
+def _unsync_unreachable_product_component_pairs(product_ids: list[Any], component_ids: list[Any]) -> None:
+    """Delete ProductComponent rows for (product, component) pairs that are
+    no longer reachable via any remaining ``Product → Project → Component``
+    legacy path. Bounded to the affected product/component sets so the
+    query stays small."""
+    from sbomify.apps.sboms.models import ProductComponent, ProductProject
+
+    if not product_ids or not component_ids:
+        return
+
+    reachable = set(
+        ProductProject.objects.filter(
+            product_id__in=product_ids,
+            project__projectcomponent__component_id__in=component_ids,
+        ).values_list("product_id", "project__projectcomponent__component_id")
+    )
+
+    candidates = set(
+        ProductComponent.objects.filter(
+            product_id__in=product_ids,
+            component_id__in=component_ids,
+        ).values_list("product_id", "component_id")
+    )
+
+    unreachable = candidates - reachable
+    for prod_id, comp_id in unreachable:
+        ProductComponent.objects.filter(product_id=prod_id, component_id=comp_id).delete()
 
 
 @receiver(post_save, sender="sboms.ProjectComponent")
@@ -192,48 +227,146 @@ def sync_product_component_on_product_project_save(sender: Any, instance: Any, c
     _sync_product_component_pairs([instance.product_id], component_ids)
 
 
+@receiver(post_delete, sender="sboms.ProjectComponent")
+@receiver(post_delete, sender="core.ProjectComponent")
+def sync_product_component_on_project_component_delete(sender: Any, instance: Any, **kwargs: Any) -> Any:
+    """When a ProjectComponent through-row is deleted directly, drop the
+    matching ProductComponent rows that are no longer reachable via any
+    other Project."""
+    from sbomify.apps.sboms.models import ProductProject
+
+    product_ids = list(
+        ProductProject.objects.filter(project_id=instance.project_id).values_list("product_id", flat=True)
+    )
+    _unsync_unreachable_product_component_pairs(product_ids, [instance.component_id])
+
+
+@receiver(post_delete, sender="sboms.ProductProject")
+@receiver(post_delete, sender="core.ProductProject")
+def sync_product_component_on_product_project_delete(sender: Any, instance: Any, **kwargs: Any) -> Any:
+    """When a ProductProject through-row is deleted directly, drop matching
+    ProductComponent rows that are no longer reachable via any other Project
+    under the same Product."""
+    from sbomify.apps.sboms.models import ProjectComponent
+
+    component_ids = list(
+        ProjectComponent.objects.filter(project_id=instance.project_id).values_list("component_id", flat=True)
+    )
+    _unsync_unreachable_product_component_pairs([instance.product_id], component_ids)
+
+
 @receiver(m2m_changed, sender="sboms.ProjectComponent")
 def sync_product_component_on_project_components_changed(
     sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
 ) -> Any:
-    """Mirror `project.components.add(...)` (and reverse `component.projects.add(...)`)
-    into the new direct ``ProductComponent`` M2M."""
-    if action != "post_add" or not pk_set:
+    """Mirror project↔component M2M changes into the new direct
+    ``ProductComponent`` M2M, including additions and removals (post_add,
+    post_remove, post_clear)."""
+    if action not in ("post_add", "post_remove", "post_clear"):
         return
-    from sbomify.apps.sboms.models import ProductProject
+    from sbomify.apps.sboms.models import ProductProject, ProjectComponent
 
-    if reverse:
+    if action == "post_clear":
+        if reverse:
+            component_ids = [instance.pk]
+            project_ids = list(
+                ProjectComponent.objects.filter(component_id=instance.pk).values_list("project_id", flat=True)
+            )
+        else:
+            project_ids = [instance.pk]
+            component_ids = list(
+                ProjectComponent.objects.filter(project_id=instance.pk).values_list("component_id", flat=True)
+            )
+    elif reverse:
         component_ids = [instance.pk]
-        project_ids = list(pk_set)
+        project_ids = list(pk_set or ())
     else:
-        component_ids = list(pk_set)
+        component_ids = list(pk_set or ())
         project_ids = [instance.pk]
 
+    if not project_ids or not component_ids:
+        return
+
     product_ids = list(ProductProject.objects.filter(project_id__in=project_ids).values_list("product_id", flat=True))
-    _sync_product_component_pairs(product_ids, component_ids)
+    if not product_ids:
+        return
+
+    if action == "post_add":
+        _sync_product_component_pairs(product_ids, component_ids)
+    else:
+        _unsync_unreachable_product_component_pairs(product_ids, component_ids)
 
 
 @receiver(m2m_changed, sender="sboms.ProductProject")
 def sync_product_component_on_product_projects_changed(
     sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
 ) -> Any:
-    """Mirror `product.projects.add(...)` (and reverse `project.products.add(...)`)
-    into the new direct ``ProductComponent`` M2M."""
-    if action != "post_add" or not pk_set:
+    """Mirror product↔project M2M changes into the new direct
+    ``ProductComponent`` M2M, including additions and removals."""
+    if action not in ("post_add", "post_remove", "post_clear"):
         return
-    from sbomify.apps.sboms.models import ProjectComponent
+    from sbomify.apps.sboms.models import ProductProject, ProjectComponent
 
-    if reverse:
+    if action == "post_clear":
+        if reverse:
+            project_ids = [instance.pk]
+            product_ids = list(
+                ProductProject.objects.filter(project_id=instance.pk).values_list("product_id", flat=True)
+            )
+        else:
+            product_ids = [instance.pk]
+            project_ids = list(
+                ProductProject.objects.filter(product_id=instance.pk).values_list("project_id", flat=True)
+            )
+    elif reverse:
         project_ids = [instance.pk]
-        product_ids = list(pk_set)
+        product_ids = list(pk_set or ())
     else:
-        project_ids = list(pk_set)
+        project_ids = list(pk_set or ())
         product_ids = [instance.pk]
+
+    if not project_ids or not product_ids:
+        return
 
     component_ids = list(
         ProjectComponent.objects.filter(project_id__in=project_ids).values_list("component_id", flat=True)
     )
-    _sync_product_component_pairs(product_ids, component_ids)
+    if not component_ids:
+        return
+
+    if action == "post_add":
+        _sync_product_component_pairs(product_ids, component_ids)
+    else:
+        _unsync_unreachable_product_component_pairs(product_ids, component_ids)
+
+
+@receiver(m2m_changed, sender="sboms.ProductComponent")
+def update_latest_release_on_product_components_changed(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
+) -> Any:
+    """Refresh latest release artifacts when components are added/removed on a
+    product directly via the new ``ProductComponent`` M2M."""
+    if action not in ("post_add", "post_remove", "post_clear"):
+        return
+    from sbomify.apps.core.models import Product, Release
+
+    if reverse:
+        product_ids = list(pk_set or ()) if action != "post_clear" else []
+    else:
+        product_ids = [instance.id]
+
+    for prod_id in product_ids:
+        try:
+            product = Product.objects.get(pk=prod_id)
+            latest_release = Release.get_or_create_latest_release(product)
+            latest_release.refresh_latest_artifacts()
+            logger.info(
+                "Refreshed latest release %s for product %s after component changes",
+                latest_release.id,
+                product.id,
+            )
+        except Exception:
+            logger.error("Error refreshing latest release for product %s", prod_id, exc_info=True)
 
 
 @receiver(post_save, sender="core.ReleaseArtifact")

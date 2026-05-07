@@ -737,18 +737,15 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
             # If updating component relationships, validate constraints
             if component_ids is not None:
-                # Verify all components exist and belong to the same team
-                components = Component.objects.filter(id__in=component_ids, team_id=product.team_id)
-                if len(components) != len(component_ids):
+                components_qs = Component.objects.filter(id__in=component_ids, team_id=product.team_id)
+                if components_qs.count() != len(set(component_ids)):
                     return 400, {"detail": "Some components were not found or inaccessible"}
 
-                # Verify access to all components
-                for component in components:
+                for component in components_qs:
                     if not verify_item_access(request, component, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify component {component.name}"}
 
-                # Update relationships via the new direct M2M
-                product.components.set(components)
+                product.components.set(components_qs)
 
             # Update simple fields
             for field, value in update_data.items():
