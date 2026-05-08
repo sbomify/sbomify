@@ -861,7 +861,7 @@ class ProductComponent(models.Model):
                 }
             )
 
-    def save(self, *args: Any, **kwargs: Any) -> None:  # type: ignore[override]
+    def save(self, *args: Any, **kwargs: Any) -> None:
         # Run validation on every persistence path. ``objects.create()`` /
         # ``.save()`` do not call ``full_clean()`` automatically — without
         # this override a caller could insert a cross-tenant row directly
