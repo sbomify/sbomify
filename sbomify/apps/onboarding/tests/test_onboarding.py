@@ -15,12 +15,10 @@ from sbomify.apps.core.models import Component
 from sbomify.apps.onboarding.models import OnboardingEmail, OnboardingStatus
 from sbomify.apps.onboarding.services import OnboardingEmailService
 from sbomify.apps.onboarding.tasks import (
-    process_first_component_sbom_reminders_batch_task,
     process_onboarding_sequence_batch_task,
     queue_welcome_email,
     send_collaboration_email_task,
     send_first_component_email_task,
-    send_first_component_sbom_email_task,
     send_first_sbom_email_task,
     send_quick_start_email_task,
     send_welcome_email_task,
@@ -380,71 +378,6 @@ class TestOnboardingEmailService:
         assert result is True  # Returns True but doesn't send
         assert len(mail.outbox) == 0
 
-    def test_send_first_component_sbom_email_component_focus(self) -> None:
-        """Test first component/SBOM email with component focus."""
-        # Create fresh user/team to avoid fixture conflicts
-        test_user = User.objects.create_user(username="comptest", email="comptest@example.com", password="test123")
-        test_team = Team.objects.create(name="Test Team", key="test-team")
-        Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
-
-        # Set up conditions for component reminder
-        onboarding_status = OnboardingStatus.objects.get(user=test_user)
-        onboarding_status.mark_welcome_email_sent()
-
-        # Set creation time to 4 days ago
-        past_time = timezone.now() - timedelta(days=4)
-        onboarding_status.created_at = past_time
-        onboarding_status.save()
-
-        mail.outbox = []
-
-        result = OnboardingEmailService.send_first_component_sbom_email(test_user)
-
-        assert result is True
-        assert len(mail.outbox) == 1
-
-        email = mail.outbox[0]
-        assert "component" in email.subject.lower()
-
-    def test_send_first_component_sbom_email_sbom_focus(self) -> None:
-        """Test first component/SBOM email with SBOM focus."""
-        # Create fresh user/team to avoid fixture conflicts
-        test_user = User.objects.create_user(username="sbomtest", email="sbomtest@example.com", password="test123")
-        test_team = Team.objects.create(name="SBOM Team", key="sbom-team")
-        Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
-
-        # Create component and set up conditions for SBOM reminder
-        Component.objects.create(name="test-component", team=test_team)
-        onboarding_status = OnboardingStatus.objects.get(user=test_user)
-        onboarding_status.mark_component_created()
-
-        # Set component creation time to 8 days ago
-        past_time = timezone.now() - timedelta(days=8)
-        onboarding_status.first_component_created_at = past_time
-        onboarding_status.save()
-
-        mail.outbox = []
-
-        result = OnboardingEmailService.send_first_component_sbom_email(test_user)
-
-        assert result is True
-        assert len(mail.outbox) == 1
-
-        email = mail.outbox[0]
-        assert "sbom" in email.subject.lower()
-
-    def test_send_first_component_sbom_email_not_eligible(self, sample_user) -> None:
-        """Test first component/SBOM email not sent if user not eligible."""
-        # User just signed up, not eligible yet (no team membership for non-fixture user)
-        test_user = User.objects.create_user(username="noteligt", email="noteligt@example.com", password="test123")
-
-        mail.outbox = []
-
-        result = OnboardingEmailService.send_first_component_sbom_email(test_user)
-
-        assert result is False
-        assert len(mail.outbox) == 0
-
     @patch("sbomify.apps.onboarding.services.EmailMultiAlternatives")
     def test_send_email_failure_handling(self, mock_send_mail: MagicMock, sample_user) -> None:
         """Test email sending failure handling."""
@@ -458,50 +391,6 @@ class TestOnboardingEmailService:
         email_record = OnboardingEmail.objects.get(user=sample_user, email_type=OnboardingEmail.EmailType.WELCOME)
         assert email_record.status == OnboardingEmail.EmailStatus.FAILED
         assert "SMTP send failure: Exception" in email_record.error_message
-
-    def test_get_users_for_first_component_sbom_reminder(self, ensure_billing_plans) -> None:
-        """Test getting users eligible for first component/SBOM reminder."""
-        # Create multiple users with different statuses
-        user1 = User.objects.create_user(username="user1", email="user1@example.com")
-        user2 = User.objects.create_user(username="user2", email="user2@example.com")
-        user3 = User.objects.create_user(username="user3", email="user3@example.com")
-
-        # Create teams
-        team1 = Team.objects.create(name="Team 1", key="team-1")
-        team2 = Team.objects.create(name="Team 2", key="team-2")
-        team3 = Team.objects.create(name="Team 3", key="team-3")
-
-        # User1: Eligible for component reminder (welcome sent, 4 days ago, no component)
-        Member.objects.create(user=user1, team=team1, role="owner", is_default_team=True)
-        status1 = OnboardingStatus.objects.get(user=user1)
-        status1.mark_welcome_email_sent()
-        status1.created_at = timezone.now() - timedelta(days=4)
-        status1.save()
-
-        # User2: Eligible for SBOM reminder (component created 8 days ago, no SBOM)
-        Member.objects.create(user=user2, team=team2, role="owner", is_default_team=True)
-        Component.objects.create(name="component-2", team=team2)
-        status2 = OnboardingStatus.objects.get(user=user2)
-        status2.mark_component_created()
-        status2.first_component_created_at = timezone.now() - timedelta(days=8)
-        status2.save()
-
-        # User3: Not eligible (workspace already has SBOM)
-        Member.objects.create(user=user3, team=team3, role="owner", is_default_team=True)
-        component3 = Component.objects.create(name="component-3", team=team3)
-        SBOM.objects.create(name="sbom-3", component=component3)
-        status3 = OnboardingStatus.objects.get(user=user3)
-        status3.mark_component_created()
-        status3.mark_sbom_uploaded()
-        status3.first_component_created_at = timezone.now() - timedelta(days=8)
-        status3.save()
-
-        eligible_users = OnboardingEmailService.get_users_for_first_component_sbom_reminder()
-
-        assert eligible_users.count() == 2  # Both user1 and user2 are eligible
-        assert user1 in eligible_users
-        assert user2 in eligible_users
-        assert user3 not in eligible_users
 
 
 @pytest.mark.django_db
@@ -523,77 +412,6 @@ class TestOnboardingTasks:
         # Should not raise an exception, just log and return
         send_welcome_email_task(99999)  # Non-existent user ID
         # No assertion needed - we just verify it doesn't raise
-
-    def test_send_first_component_sbom_email_task_success(self) -> None:
-        """Test first component/SBOM email task execution."""
-        # Create fresh user/team for component reminder
-        test_user = User.objects.create_user(username="tasktest", email="tasktest@example.com", password="test123")
-        test_team = Team.objects.create(name="Task Team", key="task-team")
-        Member.objects.create(user=test_user, team=test_team, role="owner", is_default_team=True)
-
-        # Set up conditions for component reminder
-        onboarding_status = OnboardingStatus.objects.get(user=test_user)
-        onboarding_status.mark_welcome_email_sent()
-
-        # Set creation time to 4 days ago
-        past_time = timezone.now() - timedelta(days=4)
-        onboarding_status.created_at = past_time
-        onboarding_status.save()
-
-        mail.outbox = []
-
-        send_first_component_sbom_email_task(test_user.id)
-
-        assert len(mail.outbox) == 1
-        assert mail.outbox[0].to == [test_user.email]
-
-    def test_send_first_component_sbom_email_task_not_eligible(self, sample_user) -> None:
-        """Test first component/SBOM email task when user not eligible."""
-        # User just signed up, not eligible yet (no team membership)
-        test_user = User.objects.create_user(username="notelig", email="notelig@example.com", password="test123")
-
-        mail.outbox = []
-
-        send_first_component_sbom_email_task(test_user.id)
-
-        # No email sent when user is not eligible
-        assert len(mail.outbox) == 0
-
-    @patch("sbomify.apps.onboarding.tasks.send_first_component_sbom_email_task")
-    def test_process_first_component_sbom_reminders_batch_task(
-        self, mock_task: MagicMock, ensure_billing_plans
-    ) -> None:
-        """Test batch processing of first component/SBOM reminders."""
-        # Create multiple users with different statuses
-        user1 = User.objects.create_user(username="user1", email="user1@example.com")
-        user2 = User.objects.create_user(username="user2", email="user2@example.com")
-
-        # Create teams
-        team1 = Team.objects.create(name="Team 1", key="team-1")
-        team2 = Team.objects.create(name="Team 2", key="team-2")
-
-        # User1: Eligible for component reminder
-        Member.objects.create(user=user1, team=team1, role="owner", is_default_team=True)
-        status1 = OnboardingStatus.objects.get(user=user1)
-        status1.mark_welcome_email_sent()
-        status1.created_at = timezone.now() - timedelta(days=4)
-        status1.save()
-
-        # User2: Eligible for SBOM reminder
-        Member.objects.create(user=user2, team=team2, role="owner", is_default_team=True)
-        Component.objects.create(name="component-2", team=team2)
-        status2 = OnboardingStatus.objects.get(user=user2)
-        status2.mark_component_created()
-        status2.first_component_created_at = timezone.now() - timedelta(days=8)
-        status2.save()
-
-        # Mock the individual task sending to avoid actual task queue
-        mock_task.send.return_value = MagicMock(message_id="test-task-id")
-
-        process_first_component_sbom_reminders_batch_task()
-
-        # Verify the task was called for both eligible users
-        assert mock_task.send.call_count == 2
 
     @patch("sbomify.apps.onboarding.tasks.send_welcome_email_task")
     def test_queue_welcome_email(self, mock_task: MagicMock, sample_user) -> None:
@@ -693,8 +511,8 @@ class TestOnboardingIntegration:
         # Should be eligible for component reminder
         assert onboarding_status.should_receive_component_reminder(days_threshold=3)
 
-        # Send first component/SBOM reminder (component focus)
-        result = OnboardingEmailService.send_first_component_sbom_email(test_user)
+        # Send the day-3 first-component reminder
+        result = OnboardingEmailService.send_first_component_email(test_user)
         assert result is True
 
         # Create component to simulate user action
@@ -1382,8 +1200,8 @@ class TestEdgeCasesAndErrorHandling:
 
         assert result is False
 
-    def test_first_component_sbom_integrity_error_concurrent_sent(self) -> None:
-        """T3: First component/SBOM email returns True when race and concurrent record is SENT."""
+    def test_first_component_integrity_error_concurrent_sent(self) -> None:
+        """T3: First component email returns True when race and concurrent record is SENT."""
         user = User.objects.create_user(username="ec3", email="ec3@example.com", password="test123")
         team = Team.objects.create(name="EC3 Team", key="ec3-team")
         Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
@@ -1397,7 +1215,7 @@ class TestEdgeCasesAndErrorHandling:
             """Simulate concurrent worker: create SENT record then raise IntegrityError."""
             OnboardingEmail.objects.create(
                 user=user,
-                email_type=OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM,
+                email_type=OnboardingEmail.EmailType.FIRST_COMPONENT,
                 subject="Component",
                 status=OnboardingEmail.EmailStatus.SENT,
             )
@@ -1407,12 +1225,12 @@ class TestEdgeCasesAndErrorHandling:
             patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"),
             patch.object(OnboardingEmail, "create_email", side_effect=create_and_raise),
         ):
-            result = OnboardingEmailService.send_first_component_sbom_email(user)
+            result = OnboardingEmailService.send_first_component_email(user)
 
         # Concurrent worker already sent → returns True
         assert result is True
 
-    def test_first_component_sbom_retry_after_failure(self) -> None:
+    def test_first_component_retry_after_failure(self) -> None:
         """T4: FAILED record is deleted and retry succeeds (render-before-delete ordering)."""
         user = User.objects.create_user(username="ec4", email="ec4@example.com", password="test123")
         team = Team.objects.create(name="EC4 Team", key="ec4-team")
@@ -1426,17 +1244,17 @@ class TestEdgeCasesAndErrorHandling:
         # Create a FAILED record
         OnboardingEmail.objects.create(
             user=user,
-            email_type=OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM,
+            email_type=OnboardingEmail.EmailType.FIRST_COMPONENT,
             subject="Component",
             status=OnboardingEmail.EmailStatus.FAILED,
         )
 
         with patch("sbomify.apps.onboarding.services.EmailMultiAlternatives"):
-            result = OnboardingEmailService.send_first_component_sbom_email(user)
+            result = OnboardingEmailService.send_first_component_email(user)
 
         assert result is True
         # FAILED record should be deleted, new SENT record should exist
-        records = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM)
+        records = OnboardingEmail.objects.filter(user=user, email_type=OnboardingEmail.EmailType.FIRST_COMPONENT)
         assert records.count() == 1
         assert records.first().status == OnboardingEmail.EmailStatus.SENT
 
@@ -1483,28 +1301,6 @@ class TestEdgeCasesAndErrorHandling:
 
         status.refresh_from_db()
         assert not status.has_created_component
-
-    def test_cross_reference_guard_excludes_users_with_new_sequence_emails(self) -> None:
-        """T7: get_users_for_first_component_sbom_reminder excludes users with newer sequence emails."""
-        user = User.objects.create_user(username="ec7", email="ec7@example.com", password="test123")
-        team = Team.objects.create(name="EC7 Team", key="ec7-team")
-        Member.objects.create(user=user, team=team, role="owner", is_default_team=True)
-
-        status = OnboardingStatus.objects.get(user=user)
-        status.mark_welcome_email_sent()
-        status.created_at = timezone.now() - timedelta(days=5)
-        status.save()
-
-        # User already received FIRST_COMPONENT from the new sequence
-        OnboardingEmail.objects.create(
-            user=user,
-            email_type=OnboardingEmail.EmailType.FIRST_COMPONENT,
-            subject="First Component",
-            status=OnboardingEmail.EmailStatus.SENT,
-        )
-
-        eligible = OnboardingEmailService.get_users_for_first_component_sbom_reminder()
-        assert user not in eligible
 
     def test_batch_skips_user_with_no_onboarding_status(self) -> None:
         """T8: Batch methods skip users without OnboardingStatus records."""
