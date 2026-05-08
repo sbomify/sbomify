@@ -5,7 +5,7 @@
 {% block content %}
     <div class="space-y-8 animate-[fadeInUp_0.4s_ease-out]">
         {# Plan Selection Content #}
-        <div class="max-w-6xl mx-auto" x-cloak x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, projects: {{ project_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
+        <div class="max-w-6xl mx-auto" x-cloak x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
             {% if team.billing_plan_limits.stripe_customer_id %}
                 '{% url 'billing:create_portal_session' team.key %}'
             {% else %}
@@ -55,7 +55,7 @@
             </section>
             {# Current Usage Section #}
             <section class="mb-8"
-                     x-show="usage.users > 0 || usage.products > 0 || usage.projects > 0 || usage.components > 0">
+                     x-show="usage.users > 0 || usage.products > 0 || usage.components > 0">
                 <div class="tw-settings-card max-w-3xl mx-auto">
                     <div class="px-6 py-4 border-b border-border">
                         <div class="flex items-center gap-3">
@@ -69,7 +69,7 @@
                         </div>
                     </div>
                     <div class="p-6">
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
                                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
                                     <i class="fas fa-users text-primary"></i>
@@ -83,13 +83,6 @@
                                 </div>
                                 <span class="text-2xl font-bold text-text block" x-text="usage.products"></span>
                                 <span class="text-text-muted text-xs">Products</span>
-                            </div>
-                            <div class="bg-background border border-border rounded-xl p-4 text-center">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-folder text-primary"></i>
-                                </div>
-                                <span class="text-2xl font-bold text-text block" x-text="usage.projects"></span>
-                                <span class="text-text-muted text-xs">Projects</span>
                             </div>
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
                                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">

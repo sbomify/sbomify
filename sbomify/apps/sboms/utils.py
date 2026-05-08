@@ -735,10 +735,23 @@ class ProductSBOMBuilder:
             component=main_component,
         )
 
-        # components section - aggregate all components attached directly to the product
+        # components section - aggregate all components attached directly to the product.
+        # Visibility gate: only PUBLIC + GATED components are eligible for the
+        # aggregated SBOM. The download endpoint only checks ``product.is_public``
+        # for the *product*; per-component filtering happens here. Without this
+        # filter, any private component attached to a public product would leak
+        # via the aggregated CycloneDX download.
         self.sbom.components = []
 
-        components_qs = product.components.select_related("team").prefetch_related("sbom_set").order_by("name")
+        from sbomify.apps.sboms.models import Component as SbomComponent
+
+        public_visibilities = (SbomComponent.Visibility.PUBLIC, SbomComponent.Visibility.GATED)
+        components_qs = (
+            product.components.filter(visibility__in=public_visibilities)
+            .select_related("team")
+            .prefetch_related("sbom_set")
+            .order_by("name")
+        )
         for component in components_qs:
             sbom_result = self.download_component_sbom(component)  # type: ignore[arg-type]
             if sbom_result is None:

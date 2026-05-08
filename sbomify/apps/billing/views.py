@@ -11,7 +11,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Count
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -498,14 +497,13 @@ class SelectPlanView(LoginRequiredMixin, View):
         }
         plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
 
-        stats = Product.objects.filter(team=team).aggregate(
-            product_count=Count("id"),
-            project_count=Count("project", distinct=True),
-            component_count=Count("project__component", distinct=True),
-        )
-        product_count: int = stats["product_count"]
-        project_count: int = stats["project_count"]
-        component_count: int = stats["component_count"]
+        # Count products and components across the team. Project counts were
+        # removed when the Project layer was deleted; the BillingPlan.max_projects
+        # downgrade guard below is intentionally skipped (see #18 in PR review).
+        from sbomify.apps.sboms.models import Component
+
+        product_count: int = Product.objects.filter(team=team).count()
+        component_count: int = Component.objects.filter(team=team).count()
 
         billing_limits = team.billing_plan_limits or {}
         current_plan_key = team.billing_plan or BillingPlan.KEY_COMMUNITY
@@ -529,12 +527,6 @@ class SelectPlanView(LoginRequiredMixin, View):
                         f"{product_count} products (limit: {plan.max_products})"
                     )
 
-                if plan.max_projects is not None and project_count > plan.max_projects:
-                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
-                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
-                        f"{project_count} projects (limit: {plan.max_projects})"
-                    )
-
                 if plan.max_components is not None and component_count > plan.max_components:
                     plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
                     plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
@@ -549,7 +541,6 @@ class SelectPlanView(LoginRequiredMixin, View):
                 "team_key": team_key,
                 "team": team,
                 "product_count": product_count,
-                "project_count": project_count,
                 "component_count": component_count,
             },
         )

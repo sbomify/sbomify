@@ -3,7 +3,6 @@ import { formatDate as sharedFormatDate } from '../../core/js/utils';
 interface Usage {
     users: number;
     products: number;
-    projects: number;
     components: number;
 }
 
