@@ -30,8 +30,13 @@ def _get_products_context(request: HttpRequest) -> dict[str, Any] | None:
     public_count = sum(1 for p in sorted_products if p.is_public)
     private_count = len(sorted_products) - public_count
 
-    # Serialize products for JSON (Alpine.js table). The shape must match the
-    # ProductResponseSchema / _build_item_response output the table consumes.
+    # Serialize products for JSON (Alpine.js table). This is intentionally a
+    # narrow projection of ProductResponseSchema — the table at
+    # core/templates/core/products_table.html.j2 only reads `id`, `name`,
+    # `description`, `is_public`, and `components[].{id,name}` for rendering
+    # and the row-expansion sub-list. If the table starts consuming more
+    # schema fields, expand this projection (and update the test in
+    # core/tests/test_products_table.py).
     products_json = [
         {
             "id": p.id,
