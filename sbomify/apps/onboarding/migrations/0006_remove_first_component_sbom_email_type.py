@@ -64,9 +64,12 @@ def merge_legacy_first_component_sbom_rows(apps: Any, schema_editor: Any) -> Non
     # Defensive: anything left with email_type=first_component_sbom (subject
     # didn't match either prefix — should not happen, but guard against
     # historical anomalies) is mapped to first_sbom, which is the day-7
-    # stage closest to the legacy email's last semantic. We avoid leaving
-    # any rows behind because the AlterField below would otherwise allow
-    # invalid choice values to linger in the DB.
+    # stage closest to the legacy email's last semantic. Django's `choices`
+    # aren't enforced at the database level, so leftover rows wouldn't
+    # cause an integrity error after AlterField — but application code
+    # would no longer recognize the deprecated value (no enum member, no
+    # template). Cleaning them up now keeps the table consistent with the
+    # post-migration model.
     leftover = OnboardingEmail.objects.filter(email_type="first_component_sbom")
     if leftover.exists():
         _retype_legacy_rows(
