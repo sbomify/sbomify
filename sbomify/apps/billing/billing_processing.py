@@ -504,7 +504,6 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
             else:
                 counts = get_team_asset_counts(str(team.id))
                 product_count = counts["products"]
-                project_count = counts["projects"]
                 component_count = counts["components"]
 
                 usage_exceeds_limits = False
@@ -513,10 +512,6 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 if target_plan.max_products is not None and product_count > target_plan.max_products:
                     usage_exceeds_limits = True
                     exceeded_resources.append(f"{product_count} products (limit: {target_plan.max_products})")
-
-                if target_plan.max_projects is not None and project_count > target_plan.max_projects:
-                    usage_exceeds_limits = True
-                    exceeded_resources.append(f"{project_count} projects (limit: {target_plan.max_projects})")
 
                 if target_plan.max_components is not None and component_count > target_plan.max_components:
                     usage_exceeds_limits = True

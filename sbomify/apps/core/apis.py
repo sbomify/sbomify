@@ -249,7 +249,7 @@ def _build_item_response(
         ),
     }
 
-    # Products and Projects use is_public; Components use visibility
+    # Products use is_public; Components use visibility.
     if item_type == "component":
         base_response["visibility"] = item.visibility
     else:
@@ -257,17 +257,19 @@ def _build_item_response(
 
     if item_type == "product":
         base_response["description"] = item.description
+        # `component_count` is annotated by `optimize_product_queryset`. The
+        # fallback exists only for ad-hoc callers that pass a non-optimised
+        # queryset; in the normal request path the annotation is always present.
         base_response["component_count"] = (
             item.component_count if hasattr(item, "component_count") else item.components.count()
         )
-        # Include components attached directly to this product
         base_response["components"] = [
             {
                 "id": component.id,
                 "name": component.name,
                 "slug": component.slug,
                 "visibility": component.visibility,
-                "is_global": getattr(component, "is_global", False),
+                "is_global": component.is_global,
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
             }

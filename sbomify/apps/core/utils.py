@@ -408,7 +408,7 @@ def _extract_team_id(item: Any) -> int | None:
 
 def verify_item_access(
     request: HttpRequest,
-    item: Any,  # Team | Product | Project | Component | SBOM
+    item: Any,  # Team | Product | Component | SBOM
     allowed_roles: list[Any] | None,
 ) -> bool:
     """

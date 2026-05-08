@@ -135,15 +135,12 @@ def check_downgrade_limit_exceeded(team: Team) -> NotificationSchema | None:
 
     counts = get_team_asset_counts(str(team.id))
     product_count = counts["products"]
-    project_count = counts["projects"]
     component_count = counts["components"]
 
     # Check if any limit is exceeded
     usage_exceeds_limits = False
 
     if target_plan.max_products is not None and product_count > target_plan.max_products:
-        usage_exceeds_limits = True
-    elif target_plan.max_projects is not None and project_count > target_plan.max_projects:
         usage_exceeds_limits = True
     elif target_plan.max_components is not None and component_count > target_plan.max_components:
         usage_exceeds_limits = True

@@ -73,7 +73,6 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
 
         return 200, UsageSchema(
             products=counts["products"],
-            projects=counts["projects"],
             components=counts["components"],
             current_plan=team.billing_plan if team.billing_plan else None,
         )

@@ -135,12 +135,12 @@ def get_breadcrumb_data(item: Any, item_type: Any) -> Any:
     if item_type == "component":
         component_id = item.get("id") if isinstance(item, dict) else item.id
         public_products = Product.objects.filter(components__id=component_id, is_public=True).order_by("id").distinct()
-        if public_products.exists():
-            product = public_products.first()
+        # Walrus narrows the type for mypy without an `# type: ignore`.
+        if product := public_products.first():
             crumbs.append(
                 {
-                    "name": product.name,  # type: ignore[union-attr]
-                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),  # type: ignore[union-attr]
+                    "name": product.name,
+                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
                     "type": "product",
                 }
             )

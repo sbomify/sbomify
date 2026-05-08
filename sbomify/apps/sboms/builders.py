@@ -89,7 +89,7 @@ class BaseSBOMBuilder(ABC):
         Initialize the builder.
 
         Args:
-            entity: The entity (project, product, or release) to build SBOM for
+            entity: The entity (product or release) to build SBOM for
             user: User for signed URL generation
         """
         self.entity = entity
@@ -979,7 +979,7 @@ def get_sbom_builder(
     Factory function to get the appropriate SBOM builder.
 
     Args:
-        entity_type: Type of entity ("project", "product", "release")
+        entity_type: Type of entity ("release"; "product" goes through ProductSBOMBuilder in utils.py)
         output_format: Output format (SBOMFormat.CYCLONEDX or SBOMFormat.SPDX)
         version: Format version (e.g., SBOMVersion.CDX_1_6, SBOMVersion.SPDX_2_3)
                  If None, defaults to latest version for the format

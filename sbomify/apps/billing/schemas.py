@@ -36,7 +36,6 @@ class PlanSchema(Schema):
 
 class UsageSchema(Schema):
     products: int
-    projects: int
     components: int
     current_plan: str | None
 
