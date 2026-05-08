@@ -13,24 +13,23 @@ from dramatiq_crontab import cron
 from .tasks import process_all_onboarding_reminders_task
 
 
-# Schedule onboarding reminder processing to run daily at 9:00 AM UTC
-# This will process first component/SBOM reminders that adapt based on user progress
+# Schedule onboarding reminder processing to run daily at 9:00 AM UTC.
+# Drives the 4-stage drip: quick start → first component → first SBOM → collaboration.
 @cron("0 9 * * *")  # type: ignore[untyped-decorator]  # Daily at 9:00 AM UTC
 @dramatiq.actor(queue_name="onboarding_cron", max_retries=1, time_limit=600000)
 def daily_onboarding_reminders() -> None:
     """
-    Daily task to process all onboarding reminder emails.
+    Daily task to process onboarding reminder emails.
 
-    This task runs once per day and:
-    1. Finds PRIMARY workspace owners eligible for the consolidated component/SBOM reminder
-    2. Queues individual adaptive email tasks for each eligible user
-    3. Ensures each user receives the email only once (tracks sent emails)
+    Runs once per day at 09:00 UTC and fans out the drip sequence:
 
-    The consolidated email adapts its content based on user progress and is sent only to workspace owners:
-    - Component focus: 3+ days since signup, welcome email sent, no SBOM components created
-    - SBOM focus: 7+ days since first component creation, has components but no SBOMs uploaded
+      - Quick Start (day 1)
+      - First Component (day 3, no component yet)
+      - First SBOM (day 7, component created but no SBOM yet)
+      - Collaboration (day 10, solo workspace)
 
-    The task is scheduled to run at 9:00 AM UTC to ensure emails are sent
-    during business hours in most timezones.
+    Per-user/per-type dedup is enforced by the ``OnboardingEmail`` table's
+    unique ``(user, email_type)`` constraint plus an explicit sent-emails
+    pre-filter in ``OnboardingEmailService.get_users_for_onboarding_sequence``.
     """
     process_all_onboarding_reminders_task.send()

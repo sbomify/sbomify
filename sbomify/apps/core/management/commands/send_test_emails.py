@@ -260,35 +260,7 @@ class Command(BaseCommand):
                     },
                 },
             },
-            {
-                "subject": "Time to Upload Your First SBOM! - sbomify",
-                "template_html": "onboarding/emails/first_component_sbom.html.j2",
-                "context": {
-                    **base_context,
-                    "user": mock_user,
-                    "user_role": "owner",
-                    "workspace_name": "Acme Corp",
-                    "app_base_url": base_url,
-                    "has_created_component": True,
-                    "needs_component": False,
-                    "needs_sbom": True,
-                },
-            },
-            {
-                "subject": "Ready to Create Your First Component? - sbomify",
-                "template_html": "onboarding/emails/first_component_sbom.html.j2",
-                "context": {
-                    **base_context,
-                    "user": mock_user,
-                    "user_role": "owner",
-                    "workspace_name": "Acme Corp",
-                    "app_base_url": base_url,
-                    "has_created_component": False,
-                    "needs_component": True,
-                    "needs_sbom": False,
-                },
-            },
-            # New onboarding sequence emails
+            # Onboarding sequence emails
             {
                 "subject": "Your quick start guide - sbomify",
                 "template_html": "onboarding/emails/quick_start.html.j2",

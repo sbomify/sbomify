@@ -252,7 +252,6 @@ class OnboardingEmail(models.Model):
         FIRST_COMPONENT = "first_component", "First Component"
         FIRST_SBOM = "first_sbom", "First SBOM"
         COLLABORATION = "collaboration", "Team Collaboration"
-        FIRST_COMPONENT_SBOM = "first_component_sbom", "First Component/SBOM"
 
     class EmailStatus(models.TextChoices):
         PENDING = "pending", "Pending"
