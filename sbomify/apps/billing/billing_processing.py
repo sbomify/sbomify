@@ -40,7 +40,6 @@ class BillingResourceType(str, Enum):
     """Resource types that are subject to billing limits."""
 
     PRODUCT = "product"
-    PROJECT = "project"
     COMPONENT = "component"
 
 
@@ -50,7 +49,6 @@ BILLING_RESOURCE_TYPES = {rt.value for rt in BillingResourceType}
 # Mapping from resource type to BillingPlan field name for limits
 RESOURCE_TYPE_TO_LIMIT_FIELD = {
     BillingResourceType.PRODUCT.value: "max_products",
-    BillingResourceType.PROJECT.value: "max_projects",
     BillingResourceType.COMPONENT.value: "max_components",
 }
 

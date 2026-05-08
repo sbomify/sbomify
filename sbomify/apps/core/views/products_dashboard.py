@@ -30,14 +30,15 @@ def _get_products_context(request: HttpRequest) -> dict[str, Any] | None:
     public_count = sum(1 for p in sorted_products if p.is_public)
     private_count = len(sorted_products) - public_count
 
-    # Serialize products for JSON (Alpine.js table)
+    # Serialize products for JSON (Alpine.js table). The shape must match the
+    # ProductResponseSchema / _build_item_response output the table consumes.
     products_json = [
         {
             "id": p.id,
             "name": p.name,
             "description": p.description or "",
             "is_public": p.is_public,
-            "projects": [{"id": proj.id, "name": proj.name} for proj in (p.projects or [])],
+            "components": [{"id": comp.id, "name": comp.name} for comp in (p.components or [])],
         }
         for p in sorted_products
     ]
