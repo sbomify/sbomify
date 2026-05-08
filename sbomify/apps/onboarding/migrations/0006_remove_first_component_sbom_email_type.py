@@ -37,12 +37,13 @@ def merge_legacy_first_component_sbom_rows(apps: Any, schema_editor: Any) -> Non
     # If a user already has a `first_sbom` row, drop the legacy one — the new
     # row is authoritative. Otherwise rewrite the legacy row's email_type so
     # the (user, email_type) pair represents the SBOM step in the new model.
-    user_ids_with_first_sbom = set(
-        OnboardingEmail.objects.filter(email_type="first_sbom").values_list("user_id", flat=True)
-    )
+    # Use a subquery rather than materialising the user_id set in Python — keeps
+    # memory bounded on large tenants and avoids the IN (?, ?, ...) parameter
+    # limit some DB drivers enforce on long ID lists.
+    users_with_first_sbom = OnboardingEmail.objects.filter(email_type="first_sbom").values("user_id")
 
-    legacy_rows.filter(user_id__in=user_ids_with_first_sbom).delete()
-    legacy_rows.exclude(user_id__in=user_ids_with_first_sbom).update(email_type="first_sbom")
+    legacy_rows.filter(user_id__in=users_with_first_sbom).delete()
+    legacy_rows.exclude(user_id__in=users_with_first_sbom).update(email_type="first_sbom")
 
 
 class Migration(migrations.Migration):

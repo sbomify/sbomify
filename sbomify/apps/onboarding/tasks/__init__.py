@@ -198,9 +198,11 @@ def process_all_onboarding_reminders_task() -> None:
     Process all onboarding reminder emails (the 4-stage drip sequence).
 
     Designed to be run on a schedule (e.g., daily via cron or periodic task).
-    Fans out to ``process_onboarding_sequence_batch_task``, which queues the
-    welcome / quick-start / first-component / first-sbom / collaboration
-    emails for users at the right point in their drip clock.
+    Fans out to ``process_onboarding_sequence_batch_task``, which queues
+    quick-start / first-component / first-sbom / collaboration emails for
+    users at the right point in their drip clock. The welcome email is NOT
+    part of this fan-out — it is signal-driven via ``queue_welcome_email``
+    on user creation, not on a daily cron.
     """
     try:
         logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
