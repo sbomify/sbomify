@@ -80,20 +80,52 @@ def merge_legacy_first_component_sbom_rows(apps: Any, schema_editor: Any) -> Non
 
 
 def _retype_legacy_rows(*, legacy_qs: Any, target_type: str, OnboardingEmail: Any) -> None:
-    """Rewrite ``legacy_qs`` rows to ``target_type``, deleting on conflict.
+    """Rewrite ``legacy_qs`` rows to ``target_type``, merging status on conflict.
 
-    If a user already has an ``OnboardingEmail`` row at ``target_type``,
-    that row is authoritative (it's the new sequence's record) and the
-    legacy row is dropped. Otherwise the legacy row's ``email_type`` is
-    updated in-place so its sent-status carries over.
+    Three cases:
 
-    Uses a Subquery against ``OnboardingEmail`` filtered by ``target_type``
+      1. **No conflict** (user has only the legacy row): update ``email_type``
+         in-place. Status, ``sent_at``, ``subject``, and ``error_message`` all
+         carry over unchanged.
+      2. **Conflict, legacy was SENT, target is not SENT** (user has both rows
+         but the legacy row is the only proof of delivery): promote the
+         target row to ``SENT`` and copy ``sent_at`` from the legacy row,
+         then delete the legacy row. Without this, the new sequence would
+         see the target row at PENDING/FAILED and resend the email even
+         though it was already delivered under the legacy type.
+      3. **Conflict, target is already SENT (or both rows are pre-send)**:
+         the target row is authoritative; just delete the legacy row.
+
+    Uses Subqueries against ``OnboardingEmail`` filtered by ``target_type``
     rather than materialising user IDs in Python — keeps memory bounded and
     sidesteps any DB driver IN-list parameter limit.
     """
     users_with_target = OnboardingEmail.objects.filter(email_type=target_type).values("user_id")
-    legacy_qs.filter(user_id__in=users_with_target).delete()
+
+    # Case 1: legacy rows for users without a target row → re-type in place.
     legacy_qs.exclude(user_id__in=users_with_target).update(email_type=target_type)
+
+    # Case 2: promote target rows that are still PENDING/FAILED to SENT when
+    # the legacy row already proved delivery. Iterating per row is acceptable
+    # here because the only candidates are the (small) intersection of
+    # legacy-SENT × target-not-SENT for the same user. We carry over both
+    # ``status`` and ``sent_at`` so the new sequence sees the same
+    # historical send timestamp.
+    legacy_sent_with_target = legacy_qs.filter(
+        status="sent",
+        user_id__in=users_with_target,
+    ).values("user_id", "sent_at")
+    for row in legacy_sent_with_target:
+        OnboardingEmail.objects.filter(
+            email_type=target_type,
+            user_id=row["user_id"],
+        ).exclude(status="sent").update(
+            status="sent",
+            sent_at=row["sent_at"],
+        )
+
+    # Case 3 (and remainder of case 2): drop the now-redundant legacy rows.
+    legacy_qs.filter(user_id__in=users_with_target).delete()
 
 
 class Migration(migrations.Migration):
