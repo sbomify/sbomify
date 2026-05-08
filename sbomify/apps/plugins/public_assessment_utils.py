@@ -219,12 +219,15 @@ def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus
     """Get aggregated assessment status for a product.
 
     A product passes an assessment if ALL its public components pass that assessment.
+    Visibility includes both PUBLIC and GATED so this matches the listing surface
+    used by ``workspace_public`` and ``product_details_public``.
     """
     from sbomify.apps.core.models import Component
 
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
     components = Component.objects.filter(
         products=product,
-        visibility=Component.Visibility.PUBLIC,
+        visibility__in=public_visibilities,
     ).distinct()
 
     if not components.exists():
@@ -325,17 +328,18 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
     """Get assessment status based on ONLY the latest SBOM per component in a product.
 
     A product passes an assessment if the latest SBOM of every public component
-    in the product passes that assessment.
+    in the product passes that assessment. Visibility includes both PUBLIC and
+    GATED so this matches the listing surface (workspace_public + product_details).
 
     This differs from get_product_assessment_status which checks ALL SBOMs.
     """
     from sbomify.apps.core.models import Component
 
-    # Get all public components in this product
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
     components = (
         Component.objects.filter(
             products=product,
-            visibility=Component.Visibility.PUBLIC,
+            visibility__in=public_visibilities,
         )
         .distinct()
         .order_by("name")

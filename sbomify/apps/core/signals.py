@@ -310,3 +310,47 @@ def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwarg
         pass
     except Exception:
         logger.error("Error cleaning up ComponentRelease for SBOM %s", instance.id, exc_info=True)
+
+
+@receiver(m2m_changed, sender="sboms.ProductComponent")
+def reject_cross_tenant_product_component_links(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
+) -> Any:
+    """Block any ``ProductComponent`` row that would link a Product and a
+    Component owned by different teams.
+
+    Without this guard, ``Component.products.add(...)`` /
+    ``Product.components.add(...)`` /
+    ``ProductComponent.objects.create(...)`` could silently create a
+    cross-tenant link (the only existing tenant check is in
+    ``patch_product``). This receiver enforces ``product.team_id ==
+    component.team_id`` at the M2M boundary.
+    """
+    if action != "pre_add" or not pk_set:
+        return
+    from django.core.exceptions import ValidationError
+
+    from sbomify.apps.sboms.models import Component, Product
+
+    if reverse:
+        # Forward callsite: ``component.products.add(*pks)`` — instance is
+        # the Component; pk_set holds the Product PKs being attached.
+        component_team_id = instance.team_id
+        for product_id in pk_set:
+            product_team_id = Product.objects.values_list("team_id", flat=True).filter(pk=product_id).first()
+            if product_team_id is not None and product_team_id != component_team_id:
+                raise ValidationError(
+                    f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
+                    f"product team={product_team_id}"
+                )
+    else:
+        # Forward callsite: ``product.components.add(*pks)`` — instance is
+        # the Product; pk_set holds the Component PKs being attached.
+        product_team_id = instance.team_id
+        for component_id in pk_set:
+            component_team_id = Component.objects.values_list("team_id", flat=True).filter(pk=component_id).first()
+            if component_team_id is not None and component_team_id != product_team_id:
+                raise ValidationError(
+                    f"Cross-tenant ProductComponent rejected: product team={product_team_id}, "
+                    f"component team={component_team_id}"
+                )

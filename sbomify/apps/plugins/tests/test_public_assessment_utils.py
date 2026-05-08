@@ -867,3 +867,43 @@ class TestGetLatestAssessmentRunsForSbom:
         runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
         ntia_runs = [r for r in runs if r.plugin_name == "ntia-minimum-elements-2021"]
         assert len(ntia_runs) == 1, "Expected exactly one NTIA run (latest only)"
+
+
+@pytest.mark.django_db
+class TestBatchVisibilityIncludesGated:
+    """Regression test: get_products_latest_sbom_assessments_batch must include
+    GATED components, not just PUBLIC, so the badges shown on the workspace
+    listing match what workspace_public + product_details_public render.
+    """
+
+    def test_gated_component_produces_passing_badge(self, team, ntia_plugin):
+        from sbomify.apps.plugins.public_assessment_utils import get_products_latest_sbom_assessments_batch
+
+        product = Product.objects.create(name="Gated-Only", team=team, is_public=True)
+        gated_comp = Component.objects.create(
+            name="Gated Comp",
+            team=team,
+            visibility=Component.Visibility.GATED,
+            component_type="bom",
+        )
+        product.components.add(gated_comp)
+
+        sbom = SBOM.objects.create(name="Gated SBOM", component=gated_comp, format="cyclonedx", format_version="1.6")
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="gated",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={"summary": {"fail_count": 0, "error_count": 0}},
+        )
+
+        result = get_products_latest_sbom_assessments_batch([product])
+
+        assessments = result.get(str(product.id), [])
+        plugin_names = [a.plugin_name for a in assessments]
+        assert "ntia-minimum-elements-2021" in plugin_names, (
+            f"GATED component should produce passing badge in batch result; got {plugin_names}"
+        )

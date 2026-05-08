@@ -36,13 +36,12 @@ import logging
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, Protocol, TypeVar
+from typing import Any, Optional, Protocol
 from uuid import uuid4
 
 from django.conf import settings
 from django.utils import timezone
 
-from sbomify.apps.core.models import Product, Release
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_7 as cdx17
 from sbomify.apps.sboms.sbom_format_schemas import spdx_2_3 as spdx23
@@ -67,10 +66,6 @@ class SBOMVersion(str, Enum):
     # SPDX versions
     SPDX_2_3 = "2.3"
     SPDX_3_0 = "3.0"
-
-
-# Type variable for entity types
-EntityT = TypeVar("EntityT", Product, "Release")
 
 
 class SBOMBuilderProtocol(Protocol):

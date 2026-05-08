@@ -661,3 +661,48 @@ def test_component_get_latest_artifacts_by_type(
     assert len(latest_artifacts["documents"]) == 1
     assert sbom in latest_artifacts["sboms"].values()
     assert document in latest_artifacts["documents"].values()
+
+
+# =============================================================================
+# Signal: pre_clear / post_clear on ProductComponent
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_component_products_clear_refreshes_previous_products_latest_releases(
+    sample_user,  # noqa: F811
+):
+    """Regression test for the pre_clear snapshot path in
+    ``update_latest_release_on_product_components_changed``.
+
+    When ``component.products.clear()`` fires (forward side, ``reverse=False``),
+    Django's m2m_changed delivers ``pk_set=None`` because the rows are already
+    gone by ``post_clear``. The signal handler snapshots affected product IDs
+    on ``pre_clear`` (stored on the instance) and consumes them in
+    ``post_clear`` to fan out ``Release.refresh_latest_artifacts()``.
+
+    Without this path, ComponentScopeView (which clears products when flipping
+    a component to workspace-scoped) would leave the previous products with
+    stale ``latest`` releases.
+    """
+    from sbomify.apps.teams.models import Team
+
+    team = Team.objects.create(name="signal-test-team")
+    component = Component.objects.create(name="snapshot-comp", team=team, component_type=Component.ComponentType.BOM)
+    p_a = Product.objects.create(name="P-A", team=team)
+    p_b = Product.objects.create(name="P-B", team=team)
+    component.products.add(p_a, p_b)
+
+    with patch("sbomify.apps.core.models.Release.refresh_latest_artifacts") as refresh:
+        component.products.clear()
+
+        # The signal should have fanned out a refresh for each previously-
+        # attached product. The exact call count is one per product (latest
+        # release reused via get_or_create_latest_release).
+        assert refresh.call_count >= 2, (
+            f"Expected ≥2 refresh calls (one per previously-attached product), got {refresh.call_count}"
+        )
+
+    # The pre_clear snapshot must have been consumed (deleted) so a stale
+    # value can't survive a subsequent reload of the same instance.
+    assert not hasattr(component, "_sbomify_pending_clear_product_ids")
