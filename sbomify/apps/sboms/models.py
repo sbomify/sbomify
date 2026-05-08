@@ -842,6 +842,27 @@ class ProductComponent(models.Model):
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def clean(self) -> None:
+        """Reject any row that would link a Product and a Component owned by
+        different teams. Complements the ``reject_cross_tenant_product_component_links``
+        ``m2m_changed`` receiver in ``core/signals.py`` — that one fires for
+        ``Component.products.add(...)`` / ``Product.components.add(...)``;
+        this guards direct ``ProductComponent.objects.create(...)`` whenever
+        the caller invokes ``full_clean()``.
+        """
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        if self.product_id and self.component_id and self.product.team_id != self.component.team_id:
+            raise ValidationError(
+                {
+                    "component": (
+                        f"Cross-tenant ProductComponent rejected: product team="
+                        f"{self.product.team_id}, component team={self.component.team_id}"
+                    )
+                }
+            )
+
     def __str__(self) -> str:
         return f"{self.product_id} - {self.component_id}"
 

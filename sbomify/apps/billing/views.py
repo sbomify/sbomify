@@ -497,9 +497,11 @@ class SelectPlanView(LoginRequiredMixin, View):
         }
         plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
 
-        # Count products and components across the team. Project counts were
-        # removed when the Project layer was deleted; the BillingPlan.max_projects
-        # downgrade guard below is intentionally skipped (see #18 in PR review).
+        # Count products and components per team. The Project layer was
+        # removed; ``BillingPlan.max_projects`` is no longer enforced and the
+        # corresponding downgrade-guard branch was deleted with it. The column
+        # itself is retained on BillingPlan pending a follow-up that drops it
+        # alongside any Stripe price-metadata migration.
         from sbomify.apps.sboms.models import Component
 
         product_count: int = Product.objects.filter(team=team).count()

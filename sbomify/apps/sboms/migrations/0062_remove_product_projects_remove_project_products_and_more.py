@@ -30,30 +30,29 @@ def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor:
       - no project containing the component is itself `is_public=True`
         with at least one public product attached
 
-    The demotion runs as the first operation of this migration, so the
-    `projects` reverse relation is still available on the historical model
-    state.
+    Implemented as a single SQL UPDATE over a subquery so we don't pull
+    candidate IDs into Python — important for tenants with large component
+    counts at deploy time. The `projects` reverse relation is still
+    available on the historical model state because RunPython runs before
+    any of the schema ops below.
     """
     Component = apps.get_model("sboms", "Component")
     PUBLIC = "public"
     GATED = "gated"
     PRIVATE = "private"
 
-    candidates = Component.objects.filter(
-        visibility__in=(PUBLIC, GATED),
-        products__is_public=True,
-    ).distinct()
-
     already_visible = Component.objects.filter(
         visibility__in=(PUBLIC, GATED),
         projects__is_public=True,
         projects__products__is_public=True,
-    ).values_list("id", flat=True)
-    already_visible_ids = set(already_visible)
+    )
 
-    demote_ids = [c.id for c in candidates if c.id not in already_visible_ids]
-    if demote_ids:
-        Component.objects.filter(id__in=demote_ids).update(visibility=PRIVATE)
+    Component.objects.filter(
+        visibility__in=(PUBLIC, GATED),
+        products__is_public=True,
+    ).exclude(
+        id__in=already_visible.values("id"),
+    ).update(visibility=PRIVATE)
 
 
 class Migration(migrations.Migration):

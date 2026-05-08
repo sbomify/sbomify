@@ -319,12 +319,22 @@ def reject_cross_tenant_product_component_links(
     """Block any ``ProductComponent`` row that would link a Product and a
     Component owned by different teams.
 
-    Without this guard, ``Component.products.add(...)`` /
-    ``Product.components.add(...)`` /
-    ``ProductComponent.objects.create(...)`` could silently create a
-    cross-tenant link (the only existing tenant check is in
-    ``patch_product``). This receiver enforces ``product.team_id ==
-    component.team_id`` at the M2M boundary.
+    The M2M is declared on Component as
+    ``products = ManyToManyField(Product, related_name="components")``.
+    Django reports:
+
+    - ``reverse=False`` for the forward call site
+      ``component.products.add(...)`` — ``instance`` is the Component and
+      ``pk_set`` holds the Product PKs being attached.
+    - ``reverse=True`` for the reverse call site
+      ``product.components.add(...)`` — ``instance`` is the Product and
+      ``pk_set`` holds the Component PKs being attached.
+
+    NB: ``ProductComponent.objects.create(product=..., component=...)``
+    bypasses ``m2m_changed`` entirely, so the through-model itself also
+    enforces the tenancy invariant via ``ProductComponent.clean()`` /
+    ``full_clean()`` (see ``sboms/models.py``). This receiver is the M2M
+    boundary; ``clean()`` is the through-model boundary.
     """
     if action != "pre_add" or not pk_set:
         return
@@ -333,19 +343,7 @@ def reject_cross_tenant_product_component_links(
     from sbomify.apps.sboms.models import Component, Product
 
     if reverse:
-        # Forward callsite: ``component.products.add(*pks)`` — instance is
-        # the Component; pk_set holds the Product PKs being attached.
-        component_team_id = instance.team_id
-        for product_id in pk_set:
-            product_team_id = Product.objects.values_list("team_id", flat=True).filter(pk=product_id).first()
-            if product_team_id is not None and product_team_id != component_team_id:
-                raise ValidationError(
-                    f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
-                    f"product team={product_team_id}"
-                )
-    else:
-        # Forward callsite: ``product.components.add(*pks)`` — instance is
-        # the Product; pk_set holds the Component PKs being attached.
+        # Reverse call site: product.components.add(*component_pks).
         product_team_id = instance.team_id
         for component_id in pk_set:
             component_team_id = Component.objects.values_list("team_id", flat=True).filter(pk=component_id).first()
@@ -353,4 +351,14 @@ def reject_cross_tenant_product_component_links(
                 raise ValidationError(
                     f"Cross-tenant ProductComponent rejected: product team={product_team_id}, "
                     f"component team={component_team_id}"
+                )
+    else:
+        # Forward call site: component.products.add(*product_pks).
+        component_team_id = instance.team_id
+        for product_id in pk_set:
+            product_team_id = Product.objects.values_list("team_id", flat=True).filter(pk=product_id).first()
+            if product_team_id is not None and product_team_id != component_team_id:
+                raise ValidationError(
+                    f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
+                    f"product team={product_team_id}"
                 )
