@@ -847,11 +847,9 @@ class ProductComponent(models.Model):
         different teams. Complements the ``reject_cross_tenant_product_component_links``
         ``m2m_changed`` receiver in ``core/signals.py`` — that one fires for
         ``Component.products.add(...)`` / ``Product.components.add(...)``;
-        this guards direct ``ProductComponent.objects.create(...)`` whenever
-        the caller invokes ``full_clean()``.
+        this guards direct ``ProductComponent.objects.create(...)`` and
+        ``.save()``.
         """
-        from django.core.exceptions import ValidationError
-
         super().clean()
         if self.product_id and self.component_id and self.product.team_id != self.component.team_id:
             raise ValidationError(
@@ -862,6 +860,14 @@ class ProductComponent(models.Model):
                     )
                 }
             )
+
+    def save(self, *args: Any, **kwargs: Any) -> None:  # type: ignore[override]
+        # Run validation on every persistence path. ``objects.create()`` /
+        # ``.save()`` do not call ``full_clean()`` automatically — without
+        # this override a caller could insert a cross-tenant row directly
+        # (the m2m_changed signal in core/signals.py only covers ``.add()``).
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.product_id} - {self.component_id}"

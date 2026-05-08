@@ -171,9 +171,17 @@ def update_latest_release_on_product_components_changed(
     else:
         product_ids = list(pk_set or ())
 
+    if not product_ids:
+        return
+
+    # Single query for all affected products instead of one .get() per id —
+    # bulk add/remove can pass dozens of PKs in pk_set.
+    products_by_id = Product.objects.in_bulk(product_ids)
     for prod_id in product_ids:
+        product = products_by_id.get(prod_id)
+        if product is None:
+            continue
         try:
-            product = Product.objects.get(pk=prod_id)
             latest_release = Release.get_or_create_latest_release(product)
             latest_release.refresh_latest_artifacts()
             logger.info(
@@ -342,11 +350,14 @@ def reject_cross_tenant_product_component_links(
 
     from sbomify.apps.sboms.models import Component, Product
 
+    pk_list = list(pk_set)
+
     if reverse:
         # Reverse call site: product.components.add(*component_pks).
         product_team_id = instance.team_id
-        for component_id in pk_set:
-            component_team_id = Component.objects.values_list("team_id", flat=True).filter(pk=component_id).first()
+        team_ids_by_component = dict(Component.objects.filter(pk__in=pk_list).values_list("id", "team_id"))
+        for component_id in pk_list:
+            component_team_id = team_ids_by_component.get(component_id)
             if component_team_id is not None and component_team_id != product_team_id:
                 raise ValidationError(
                     f"Cross-tenant ProductComponent rejected: product team={product_team_id}, "
@@ -355,8 +366,9 @@ def reject_cross_tenant_product_component_links(
     else:
         # Forward call site: component.products.add(*product_pks).
         component_team_id = instance.team_id
-        for product_id in pk_set:
-            product_team_id = Product.objects.values_list("team_id", flat=True).filter(pk=product_id).first()
+        team_ids_by_product = dict(Product.objects.filter(pk__in=pk_list).values_list("id", "team_id"))
+        for product_id in pk_list:
+            product_team_id = team_ids_by_product.get(product_id)
             if product_team_id is not None and product_team_id != component_team_id:
                 raise ValidationError(
                     f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
