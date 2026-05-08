@@ -526,8 +526,10 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
 
 
 def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
-    """
-    Download the aggregated SBOM file for all projects in a product.
+    """Download the aggregated SBOM file for a product.
+
+    Aggregates over the product's components (``Product → Component`` direct
+    M2M; the legacy ``Project`` layer was removed in PR #946).
 
     Query parameters:
         format: Output format - "cyclonedx" (default) or "spdx"
