@@ -11,6 +11,22 @@
 # automatically the moment this migration runs. The demotion converts those
 # components to PRIVATE so the previous tenant-controlled hiding behaviour is
 # preserved through the schema change.
+#
+# KNOWN LIMITATION — multi-product / multi-project components:
+# `Component.visibility` is a per-component scalar, not a per-(product, project)
+# relation. When a single component is attached to multiple projects (or to
+# multiple products), there is no way to "preserve the previous behaviour"
+# pointwise — pre-PR the component could legitimately be listed under one
+# product (whose project was public) while hidden under another (whose
+# project was private). This migration applies a SAFER-OF-the-two precedence
+# rule: if ANY project containing the component was public AND attached to a
+# public product, the component is left visible (PUBLIC/GATED untouched);
+# otherwise it is demoted to PRIVATE. The rationale is that demoting the
+# already-public-somewhere case would unilaterally hide content that was
+# legitimately exposed pre-PR, which is a bigger surprise than leaving a
+# previously-half-hidden component visible. Operators should review tenants
+# with components attached to multiple products if that precedence is wrong
+# for their org.
 
 from __future__ import annotations
 
@@ -56,7 +72,6 @@ def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor:
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("sboms", "0061_remove_productcomponent_sboms_produ_product_154d10_idx"),
         # Drop the core proxy models for Project/ProductProject/ProjectComponent

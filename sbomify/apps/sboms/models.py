@@ -608,8 +608,6 @@ class Component(models.Model):
         This is called explicitly via full_clean() in forms/serializers.
         Not called automatically in save() to avoid breaking bulk operations and migrations.
         """
-        from django.core.exceptions import ValidationError
-
         super().clean()
 
         # gating_mode can only be set when visibility is gated
