@@ -21,7 +21,6 @@
 
             .email-wrapper {
                 background-color: #f8fafc;
-                padding: 20px 0;
             }
 
             .email-container {
@@ -174,7 +173,7 @@
                bgcolor="#f8fafc"
                class="email-wrapper">
             <tr>
-                <td align="center">
+                <td align="center" style="padding: 20px 0;">
                     <table role="presentation"
                            cellpadding="0"
                            cellspacing="0"
@@ -205,7 +204,7 @@
                                 class="tagline-cell">The Security Artifact Hub</td>
                         </tr>
                         <tr>
-                            <td class="email-body">
+                            <td style="padding: 40px;" class="email-body">
                                 {% block content %}{% endblock %}
                                 {% block signoff %}
                                     <p>
@@ -217,7 +216,14 @@
                             </td>
                         </tr>
                         <tr>
-                            <td bgcolor="#f1f5f9" class="footer">
+                            <td bgcolor="#f1f5f9"
+                                align="center"
+                                style="background-color: #f1f5f9;
+                                       padding: 24px 40px;
+                                       text-align: center;
+                                       color: #64748b;
+                                       font-size: 14px"
+                                class="footer">
                                 <p>
                                     Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
                                 </p>
