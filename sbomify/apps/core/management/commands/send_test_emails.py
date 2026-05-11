@@ -19,7 +19,7 @@ from sbomify.apps.onboarding.utils import html_to_plain_text
 
 
 class Command(BaseCommand):
-    help = "Send test emails for all email templates to MailHog"
+    help = "Send test emails for all email templates to Mailpit"
 
     def add_arguments(self, parser: Any) -> Any:
         parser.add_argument(
@@ -335,4 +335,4 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Emails failed: {emails_failed}"))
             raise CommandError(f"{emails_failed} email(s) failed to send")
         self.stdout.write("")
-        self.stdout.write("Check MailHog at http://localhost:8025 to view the emails")
+        self.stdout.write("Check Mailpit at http://localhost:8025 to view the emails")

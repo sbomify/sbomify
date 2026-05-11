@@ -22,7 +22,7 @@ x-dev-env: &dev-env
   BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
   LOCAL_DEV: ${LOCAL_DEV:-True}
-  EMAIL_HOST: ${EMAIL_HOST:-mailhog}
+  EMAIL_HOST: ${EMAIL_HOST:-mailpit}
   EMAIL_PORT: ${EMAIL_PORT:-1025}
   USE_VITE_DEV_SERVER: ${USE_VITE_DEV_SERVER:-True}
   VITE_DEV_SERVER_PORT: ${VITE_DEV_SERVER_PORT:-5170}
@@ -161,14 +161,18 @@ services:
           memory: 512M
     restart: ${FRONTEND_RESTART_POLICY:-unless-stopped}
 
-  mailhog:
-    image: mailhog/mailhog:latest
+  mailpit:
+    image: axllent/mailpit:latest
     expose:
       - 1025
       - 8025
     ports:
       - "8025:8025"
-    hostname: mailhog
+    hostname: mailpit
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
 
   # Use Caddyfile.dev for development
   sbomify-caddy:
