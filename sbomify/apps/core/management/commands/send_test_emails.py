@@ -19,7 +19,10 @@ from sbomify.apps.onboarding.utils import html_to_plain_text
 
 
 class Command(BaseCommand):
-    help = "Send test emails for all email templates to Mailpit"
+    help = (
+        "Send test emails for all email templates via the configured EMAIL_BACKEND. "
+        "In dev (docker-compose.dev.yml) this captures into Mailpit at http://localhost:8025."
+    )
 
     def add_arguments(self, parser: Any) -> Any:
         parser.add_argument(
@@ -335,4 +338,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Emails failed: {emails_failed}"))
             raise CommandError(f"{emails_failed} email(s) failed to send")
         self.stdout.write("")
-        self.stdout.write("Check Mailpit at http://localhost:8025 to view the emails")
+        email_host = getattr(settings, "EMAIL_HOST", "?")
+        email_port = getattr(settings, "EMAIL_PORT", "?")
+        self.stdout.write(f"Sent via SMTP {email_host}:{email_port}.")
+        self.stdout.write("If using docker-compose.dev.yml, view captured emails at http://localhost:8025")
