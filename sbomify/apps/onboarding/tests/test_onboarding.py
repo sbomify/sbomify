@@ -3,6 +3,7 @@ Tests for onboarding functionality using pytest and existing fixtures.
 """
 
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -335,6 +336,90 @@ class TestEmailTemplateRendering:
         assert "<h1>" not in plain_text_content
 
         mock_render.assert_called_once_with("onboarding/emails/welcome.html.j2", context)
+
+
+@pytest.mark.django_db
+class TestEmailBaseDarkModeDefences:
+    """Regression-guard the dark-mode defences in core/emails/base.html.j2.
+
+    The user-reported bug (Gmail Android force-dark hides the wordmark)
+    was fixed by adding three things to the base template:
+
+      - ``color-scheme`` + ``supported-color-schemes`` meta tags
+      - ``[data-ogsc]`` / ``[data-ogsb]`` attribute selectors (Gmail Android,
+        Yahoo, Outlook iOS force-dark marker)
+      - inline ``style="display: ..."`` defaults on both logo ``<img>`` tags
+      - full ``@media (prefers-color-scheme: dark)`` rules covering body,
+        container, text, headings, links
+
+    If any of these regress, dark-mode rendering breaks again. This test
+    renders a representative onboarding email through the real template
+    stack and asserts every defence is in the rendered HTML.
+    """
+
+    def _render(self, template_name: str = "welcome") -> str:
+        from django.template.loader import render_to_string
+
+        return render_to_string(
+            f"onboarding/emails/{template_name}.html.j2",
+            {
+                "user": SimpleNamespace(first_name="Jonathan", username="jonathan"),
+                "base_url": "http://localhost:8000",
+                "app_base_url": "http://localhost:8000",
+            },
+        )
+
+    def test_color_scheme_meta_tags_present(self) -> None:
+        html = self._render()
+        assert '<meta name="color-scheme" content="light dark">' in html
+        assert '<meta name="supported-color-schemes" content="light dark">' in html
+
+    def test_force_dark_attribute_selectors_present(self) -> None:
+        html = self._render()
+        assert "[data-ogsc]" in html, "Gmail Android force-dark selector missing"
+        assert "[data-ogsb]" in html, "Outlook iOS / Yahoo force-dark selector missing"
+
+    def test_inline_logo_display_defaults_present(self) -> None:
+        html = self._render()
+        assert 'class="logo-light"' in html
+        assert 'class="logo-dark"' in html
+        # Both must carry inline display defaults so a <style>-stripping client
+        # still gets a sane default (light visible, dark hidden).
+        assert "display: inline-block" in html
+        assert "display: none" in html
+
+    def test_prefers_color_scheme_block_covers_full_email(self) -> None:
+        html = self._render()
+        # Locate the dark-mode media block and assert it touches every
+        # surface a reader sees, not just the logo (the original PR only
+        # swapped the logo, which left a white wordmark on a white card).
+        assert "@media (prefers-color-scheme: dark)" in html
+        # Snip out the dark block to inspect in isolation.
+        start = html.index("@media (prefers-color-scheme: dark)")
+        end = html.index("}", html.index("}", html.index("{", start)) + 1)
+        dark_block = html[start : end + 4000]  # window large enough to cover the whole rule
+        for selector in ("body", ".email-container", "h1", "h2", "p", "a", ".logo .logo-dark"):
+            assert selector in dark_block, f"{selector!r} not styled in @media (prefers-color-scheme: dark)"
+
+    def test_no_template_comment_leakage(self) -> None:
+        html = self._render()
+        # ``{# ... #}`` is single-line only — a previous iteration of the
+        # dark-mode fix accidentally used it across multiple lines and the
+        # comment text leaked into the rendered output. Guard against that
+        # regression by spot-checking known comment markers.
+        assert "color-scheme meta tags signal" not in html
+        assert "Inline display defaults so" not in html
+
+    def test_logo_sources_paired_correctly(self) -> None:
+        html = self._render()
+        # logo-light img uses the black-on-white SVG; logo-dark uses white-on-dark.
+        # If these get swapped, light-mode users see white text on white.
+        light_idx = html.index('class="logo-light"')
+        dark_idx = html.index('class="logo-dark"')
+        light_tag = html[max(0, light_idx - 400) : light_idx]
+        dark_tag = html[max(0, dark_idx - 400) : dark_idx]
+        assert "sbomify-black.svg" in light_tag
+        assert "sbomify-white.svg" in dark_tag
 
 
 @pytest.mark.django_db

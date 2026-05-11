@@ -5,13 +5,7 @@
         <meta name="description" content="sbomify platform notification">
         <meta name="keywords"
               content="sbomify, sbom, software bill of materials, security">
-        {% comment %}
-            color-scheme + supported-color-schemes: tell Gmail Android / Apple Mail
-            that this email is dark-mode aware. Without these, Gmail Android
-            force-inverts the white email background to dark and the @media-driven
-            logo swap below never fires — leaving the black-wordmark logo invisible
-            against the inverted dark background.
-        {% endcomment %}
+        {# color-scheme meta tags signal dark-mode-aware to Gmail Android / Apple Mail so they don't force-invert. #}
         <meta name="color-scheme" content="light dark">
         <meta name="supported-color-schemes" content="light dark">
         <title>
@@ -299,32 +293,43 @@
         <div class="email-container">
             <div class="header">
                 <div class="logo">
-                    {% comment %}
-                        Inline display defaults — if a mail client strips the
-                        <style> block entirely (e.g. some Outlook web modes),
-                        only the light logo renders by default, which still
-                        reads on the white email-container background.
-{% endcomment %}
-<img src="{{ base_url }}/static/img/sbomify-black.svg" alt="sbomify" height="40" width="221" style="display: inline-block; max-width: 221px; height: 40px; width: auto;" class="logo-light">
-<img src="{{ base_url }}/static/img/sbomify-white.svg" alt="sbomify" height="40" width="221" style="display: none; max-width: 221px; height: 40px; width: auto;" class="logo-dark">
-</div>
-<div class="tagline">The Security Artifact Hub</div>
-</div>
-{% block content %}{% endblock %}
-{% block signoff %}
-<p>
-Cheers,
-<br>
-<strong>The sbomify Team</strong>
-</p>
-{% endblock %}
-<div class="footer">
-<p>
-Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
-</p>
-{% now "Y" as this_year %}
-<p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
-</div>
-</div>
-</body>
+                    {# Inline display defaults so the light logo renders even if a client strips <style> blocks. #}
+                    <img src="{{ base_url }}/static/img/sbomify-black.svg"
+                         alt="sbomify"
+                         height="40"
+                         width="221"
+                         style="display: inline-block;
+                                max-width: 221px;
+                                height: 40px;
+                                width: auto"
+                         class="logo-light">
+                    <img src="{{ base_url }}/static/img/sbomify-white.svg"
+                         alt="sbomify"
+                         height="40"
+                         width="221"
+                         style="display: none;
+                                max-width: 221px;
+                                height: 40px;
+                                width: auto"
+                         class="logo-dark">
+                </div>
+                <div class="tagline">The Security Artifact Hub</div>
+            </div>
+            {% block content %}{% endblock %}
+            {% block signoff %}
+                <p>
+                    Cheers,
+                    <br>
+                    <strong>The sbomify Team</strong>
+                </p>
+            {% endblock %}
+            <div class="footer">
+                <p>
+                    Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
+                </p>
+                {% now "Y" as this_year %}
+                <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
 </html>
