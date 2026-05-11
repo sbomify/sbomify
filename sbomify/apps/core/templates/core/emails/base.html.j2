@@ -5,6 +5,15 @@
         <meta name="description" content="sbomify platform notification">
         <meta name="keywords"
               content="sbomify, sbom, software bill of materials, security">
+        {% comment %}
+            color-scheme + supported-color-schemes: tell Gmail Android / Apple Mail
+            that this email is dark-mode aware. Without these, Gmail Android
+            force-inverts the white email background to dark and the @media-driven
+            logo swap below never fires — leaving the black-wordmark logo invisible
+            against the inverted dark background.
+        {% endcomment %}
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
         <title>
             {% block title %}sbomify{% endblock %}
         </title>
@@ -203,6 +212,65 @@
             }
 
             @media (prefers-color-scheme: dark) {
+                body {
+                    background-color: #0f172a !important;
+                    color: #e2e8f0 !important;
+                }
+
+                .email-container {
+                    background-color: #1e293b !important;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+                }
+
+                .header {
+                    border-bottom-color: #334155 !important;
+                }
+
+                .tagline {
+                    color: #cbd5e1 !important;
+                }
+
+                h1,
+                h3 {
+                    color: #f1f5f9 !important;
+                }
+
+                h2 {
+                    color: #818cf8 !important;
+                }
+
+                p,
+                ul,
+                li {
+                    color: #cbd5e1 !important;
+                }
+
+                .highlight-box {
+                    background-color: #0f172a !important;
+                    border-left-color: #818cf8 !important;
+                }
+
+                .user-info {
+                    background-color: #422006 !important;
+                    border-color: #b45309 !important;
+                    color: #fde68a !important;
+                }
+
+                .footer {
+                    border-top-color: #334155 !important;
+                    color: #94a3b8 !important;
+                }
+
+                a,
+                .footer a {
+                    color: #818cf8 !important;
+                }
+
+                .button {
+                    background-color: #818cf8 !important;
+                    color: #0f172a !important;
+                }
+
                 .logo .logo-light {
                     display: none !important;
                 }
@@ -211,40 +279,52 @@
                     display: inline !important;
                 }
             }
+
+            /* Gmail Android / Yahoo "force dark" swap: these clients don't
+               fire prefers-color-scheme but DO add a [data-ogsc] / [data-ogsb]
+               attribute on elements they want to invert. Force the logo
+               swap there too — the client handles background inversion. */
+            [data-ogsc] .logo .logo-light,
+            [data-ogsb] .logo .logo-light {
+                display: none !important;
+            }
+
+            [data-ogsc] .logo .logo-dark,
+            [data-ogsb] .logo .logo-dark {
+                display: inline !important;
+            }
         </style>
     </head>
     <body>
         <div class="email-container">
             <div class="header">
                 <div class="logo">
-                    <img src="{{ base_url }}/static/img/sbomify-black.svg"
-                         alt="sbomify"
-                         height="40"
-                         width="221"
-                         class="logo-light">
-                    <img src="{{ base_url }}/static/img/sbomify-white.svg"
-                         alt="sbomify"
-                         height="40"
-                         width="221"
-                         class="logo-dark">
-                </div>
-                <div class="tagline">The Security Artifact Hub</div>
-            </div>
-            {% block content %}{% endblock %}
-            {% block signoff %}
-                <p>
-                    Cheers,
-                    <br>
-                    <strong>The sbomify Team</strong>
-                </p>
-            {% endblock %}
-            <div class="footer">
-                <p>
-                    Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
-                </p>
-                {% now "Y" as this_year %}
-                <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
-            </div>
-        </div>
-    </body>
+                    {% comment %}
+                        Inline display defaults — if a mail client strips the
+                        <style> block entirely (e.g. some Outlook web modes),
+                        only the light logo renders by default, which still
+                        reads on the white email-container background.
+{% endcomment %}
+<img src="{{ base_url }}/static/img/sbomify-black.svg" alt="sbomify" height="40" width="221" style="display: inline-block; max-width: 221px; height: 40px; width: auto;" class="logo-light">
+<img src="{{ base_url }}/static/img/sbomify-white.svg" alt="sbomify" height="40" width="221" style="display: none; max-width: 221px; height: 40px; width: auto;" class="logo-dark">
+</div>
+<div class="tagline">The Security Artifact Hub</div>
+</div>
+{% block content %}{% endblock %}
+{% block signoff %}
+<p>
+Cheers,
+<br>
+<strong>The sbomify Team</strong>
+</p>
+{% endblock %}
+<div class="footer">
+<p>
+Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
+</p>
+{% now "Y" as this_year %}
+<p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
+</div>
+</div>
+</body>
 </html>
