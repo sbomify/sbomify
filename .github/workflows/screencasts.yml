@@ -159,7 +159,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
-          aws s3 sync screencasts/output/ "s3://${R2_BUCKET}/screencasts/" \
+          aws s3 sync screencasts/output/ "s3://${R2_BUCKET}/" \
             --endpoint-url "$R2_ENDPOINT" \
             --content-type video/webm \
             --cache-control "public, max-age=300" \
