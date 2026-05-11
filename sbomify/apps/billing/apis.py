@@ -54,7 +54,7 @@ def get_plans(request: HttpRequest) -> tuple[int, Any]:
 def get_usage(request: HttpRequest) -> tuple[int, Any]:
     """Get current team's usage statistics.
 
-    Note: Usage data (product/project/component counts) is not sensitive billing data.
+    Note: Usage data (product/component counts) is not sensitive billing data.
     Any team member can view usage stats — the membership check below is sufficient.
     Owner-level access is not required here (unlike billing mutations).
     """

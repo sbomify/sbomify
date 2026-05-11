@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 # =============================================================================
 #
 # This module provides signed URL functionality for downloading private component
-# SBOMs. When generating product/project SBOMs that contain private components,
+# SBOMs. When generating aggregated product SBOMs that contain private components,
 # we need to provide access to those components without exposing them publicly.
 #
 # SECURITY CONSIDERATIONS:

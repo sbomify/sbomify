@@ -14,9 +14,9 @@ interface AssignableItem {
 }
 
 interface ItemAssignmentManagerParams {
-    parentType: 'product' | 'project';
+    parentType: 'product';
     parentId: string;
-    childType: 'project' | 'component';
+    childType: 'component';
     assignedItems?: AssignableItem[];
     availableItems?: AssignableItem[];
 }

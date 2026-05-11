@@ -125,7 +125,6 @@ export default function planSelection(initialData: {
             const baseFeatures: Feature[] = [
                 { key: 'unlimited-sboms', label: 'Unlimited SBOMs' },
                 { key: 'unlimited-products', label: 'Unlimited products' },
-                { key: 'unlimited-projects', label: 'Unlimited projects' },
                 { key: 'unlimited-components', label: 'Unlimited components' },
             ];
 
@@ -141,7 +140,7 @@ export default function planSelection(initialData: {
                 baseFeatures.push(
                     { key: 'includes-community', label: 'Everything in Community, plus:' },
                     { key: 'user-limit', label: 'Up to 5 users' },
-                    { key: 'private-data', label: 'Private components/projects/products' },
+                    { key: 'private-data', label: 'Private components/products' },
                     { key: 'ntia-compliance', label: 'NTIA Minimum Elements check' },
                     { key: 'vulnerability-scanning', label: 'Advanced vulnerability scanning (every 12 hours)' },
                     { key: 'product-identifiers', label: 'Product identifiers (SKUs/barcodes)' },

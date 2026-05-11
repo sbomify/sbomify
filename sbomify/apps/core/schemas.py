@@ -348,7 +348,6 @@ class ItemTypes(str, Enum):
     """Types of items in the system."""
 
     component = "component"
-    project = "project"
     product = "product"
 
 

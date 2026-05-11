@@ -39,8 +39,9 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
     Returns:
         Context dictionary for the breadcrumb template
 
-    Note: Projects no longer have standalone public pages - they are integrated
-    into product pages. Components link back to their parent product.
+    Note: Components attach directly to products under the post-#946
+    ``Product → Component`` model; the legacy Project layer is gone.
+    Components link back to their parent product(s) only.
     """
     crumbs = []
     request = context.get("request")

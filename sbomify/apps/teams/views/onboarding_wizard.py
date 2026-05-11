@@ -335,7 +335,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             company_name = form.cleaned_data["company_name"]
 
             # Skip billing limit checks during onboarding. The wizard creates at
-            # most one product/project/component via get_or_create and should never
+            # most one product/component pair via get_or_create and should never
             # be blocked — otherwise teams with pre-existing assets at the limit
             # get stuck in an infinite onboarding loop.
 

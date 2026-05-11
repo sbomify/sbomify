@@ -565,7 +565,7 @@ class Component(models.Model):
     )
     is_global = models.BooleanField(
         default=False,
-        help_text="Whether the component is available at the workspace level rather than scoped to a project",
+        help_text=("Whether the component is available at the workspace level instead of being attached to a product."),
     )
 
     # Native fields for contact information (migrated from JSONField)

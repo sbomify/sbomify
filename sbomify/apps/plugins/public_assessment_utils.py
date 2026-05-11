@@ -1,7 +1,7 @@
 """Utility functions for computing public assessment status.
 
 This module provides functions to aggregate assessment results for public display,
-showing only passing assessments at component, project, and product levels.
+showing only passing assessments at component and product levels.
 
 Key principle: Only show assessments that PASS. Never show failures on public pages.
 """
@@ -560,7 +560,7 @@ def get_components_latest_sbom_assessments_batch(
     """Get latest SBOM assessments for multiple components in a single batch.
 
     This is an optimized version of get_component_latest_sbom_assessment_status
-    for use when processing multiple components (e.g., product project listing).
+    for use when processing multiple components (e.g., product component listing).
 
     Returns a dict mapping component_id -> list of PassingAssessment.
     """

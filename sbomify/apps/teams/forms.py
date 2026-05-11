@@ -126,7 +126,7 @@ class OnboardingComponentForm(forms.Form):
             }
         ),
         help_text=(
-            "Components are the individual building blocks that make up your project. These can be libraries, "
+            "Components are the individual building blocks that make up your product. These can be libraries, "
             "microservices, firmware modules, or any other distinct piece of software."
         ),
     )
