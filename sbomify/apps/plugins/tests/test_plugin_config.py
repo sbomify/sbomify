@@ -24,7 +24,6 @@ def test_team(db) -> Team:
         defaults={
             "name": "Business",
             "max_products": 10,
-            "max_projects": 10,
             "max_components": 100,
             "max_users": 10,
         },
@@ -42,7 +41,6 @@ def enterprise_team(db) -> Team:
         defaults={
             "name": "Enterprise",
             "max_products": 100,
-            "max_projects": 100,
             "max_components": 1000,
             "max_users": 100,
         },
@@ -563,7 +561,6 @@ class TestHourlyDTScanTaskPluginSettings:
             defaults={
                 "name": "Business",
                 "max_products": 10,
-                "max_projects": 10,
                 "max_components": 100,
                 "max_users": 10,
             },

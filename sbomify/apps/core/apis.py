@@ -404,7 +404,6 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             team.billing_plan_limits.update(
                 {
                     "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
                     "max_components": plan.max_components,
                     "subscription_status": "active",
                     "last_updated": timezone.now().isoformat(),
@@ -474,7 +473,6 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             team.billing_plan_limits.update(
                 {
                     "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
                     "max_components": plan.max_components,
                     "subscription_status": "active",
                     "last_updated": timezone.now().isoformat(),
@@ -746,6 +744,19 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
                 for component in components_qs:
                     if not verify_item_access(request, component, ["owner", "admin"]):
                         return 403, {"detail": f"No permission to modify component {component.name}"}
+
+                # Workspace-scoped (``is_global=True``) components are
+                # explicitly NOT attached to any product — they live at the
+                # workspace level. Reject the patch instead of silently
+                # demoting them.
+                global_names = [c.name for c in components_qs if c.is_global]
+                if global_names:
+                    return 400, {
+                        "detail": (
+                            "Cannot attach workspace-scoped components to a product: " + ", ".join(global_names)
+                        ),
+                        "error_code": ErrorCode.INVALID_DATA,
+                    }
 
                 product.components.set(components_qs)
 
@@ -1612,9 +1623,10 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             component.is_global = payload.is_global
             component.metadata = payload.metadata
 
-            # Enforce scope exclusivity: If global, remove from all projects
+            # Enforce scope exclusivity: a workspace-scoped (global) component
+            # must not be attached to any product.
             if component.is_global:
-                component.projects.clear()
+                component.products.clear()
 
             # Validate before saving (auto-clearing in save() handles invalid states gracefully)
             try:

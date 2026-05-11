@@ -10,7 +10,6 @@ class BillingLimitsData(TypedDict, total=False):
     """Type definition for Team.billing_plan_limits JSON field."""
 
     max_products: int | None
-    max_projects: int | None
     max_components: int | None
     stripe_customer_id: str
     stripe_subscription_id: str
@@ -30,7 +29,6 @@ class PlanSchema(Schema):
     name: str
     description: str
     max_products: int | None
-    max_projects: int | None
     max_components: int | None
 
 

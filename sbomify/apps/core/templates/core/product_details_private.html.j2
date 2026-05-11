@@ -97,9 +97,9 @@
                 <span class="text-text-muted">Components</span>
             </div>
         </div>
-        {# Projects Assignment #}
+        {# Components Assignment #}
         <div>
-            {% include 'core/components/item_assignment_manager.html.j2' with parent_type='product' parent_id=product.id child_type='project' can_edit=product.has_crud_permissions %}
+            {% include 'core/components/item_assignment_manager.html.j2' with parent_type='product' parent_id=product.id child_type='component' can_edit=product.has_crud_permissions %}
         </div>
         {# CRA Compliance Card #}
         {% include "compliance/components/cra_product_card.html.j2" %}

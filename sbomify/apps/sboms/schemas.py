@@ -102,7 +102,6 @@ class DashboardSBOMUploadInfo(Schema):
 
 class DashboardStatsResponse(Schema):
     total_products: int
-    total_projects: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
 

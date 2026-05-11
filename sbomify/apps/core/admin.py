@@ -183,7 +183,6 @@ class DashboardView(admin.AdminSite):
                     "users": 0,
                     "teams": 0,
                     "products": 0,
-                    "projects": 0,
                     "components": 0,
                     "sboms": 0,
                     "users_per_team": [],

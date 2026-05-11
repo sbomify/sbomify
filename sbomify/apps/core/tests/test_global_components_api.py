@@ -220,7 +220,6 @@ def test_list_components_filter_excludes_global(authenticated_api_client, team_w
     assert all(item["is_global"] is False for item in items)
 
 
-@pytest.mark.skip(reason="Pending product decision on Component.is_global semantics under Product → Component model")
 @pytest.mark.django_db
 def test_patch_product_rejects_global_components(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
@@ -297,7 +296,6 @@ def test_list_components_filter_rejects_invalid_value(authenticated_api_client, 
     assert "is_global" in response.json()["detail"]
 
 
-@pytest.mark.skip(reason="Pending product decision on Component.is_global semantics under Product → Component model")
 @pytest.mark.django_db
 def test_patch_product_rejects_mixed_global_components(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client

@@ -74,8 +74,6 @@ class TeamAdminForm(_TeamFormBase):
                 # Set plan limits
                 if plan.max_products is not None:
                     billing_plan_limits["max_products"] = plan.max_products
-                if plan.max_projects is not None:
-                    billing_plan_limits["max_projects"] = plan.max_projects
                 if plan.max_components is not None:
                     billing_plan_limits["max_components"] = plan.max_components
 

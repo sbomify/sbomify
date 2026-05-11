@@ -27,7 +27,7 @@ class TestUIWorkflows:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="stats_plan", name="Stats Plan", max_components=10, max_products=10, max_projects=10
+            key="stats_plan", name="Stats Plan", max_components=10, max_products=10
         )
         team.billing_plan = "stats_plan"
         team.save()
@@ -59,7 +59,7 @@ class TestUIWorkflows:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10, max_projects=10
+            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10
         )
         team.billing_plan = "ui_workflow_plan"
         team.save()
@@ -109,7 +109,7 @@ class TestUIWorkflows:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10, max_projects=10
+            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10
         )
         team.billing_plan = "ui_workflow_plan"
         team.save()

@@ -27,9 +27,7 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return HttpResponseForbidden("Only owners and admins can change scope")
 
         target_scope = request.POST.get("target_scope")
-        # "product" is the canonical name post-Project-removal; "project" remains
-        # accepted as a deprecated alias so existing frontend posts don't 400.
-        if target_scope not in ("workspace", "product", "project"):
+        if target_scope not in ("workspace", "product"):
             return HttpResponseBadRequest("Invalid scope selection")
 
         is_global = target_scope == "workspace"

@@ -147,7 +147,6 @@ def test_change_plan_to_community(
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan == community_plan.key
     assert "max_products" in team_with_business_plan.billing_plan_limits
-    assert "max_projects" in team_with_business_plan.billing_plan_limits
     assert "max_components" in team_with_business_plan.billing_plan_limits
 
 

@@ -3262,7 +3262,6 @@ def test_patch_public_status_enterprise_plan_unrestricted(
         name="Enterprise",
         description="Enterprise plan",
         max_products=None,
-        max_projects=None,
         max_components=None,
     )
 

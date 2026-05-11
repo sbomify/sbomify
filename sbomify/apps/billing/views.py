@@ -412,7 +412,6 @@ class SelectPlanView(LoginRequiredMixin, View):
                 existing_limits.update(
                     {
                         "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
                         "max_components": plan.max_components,
                     }
                 )
@@ -498,10 +497,8 @@ class SelectPlanView(LoginRequiredMixin, View):
         plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
 
         # Count products and components per team. The Project layer was
-        # removed; ``BillingPlan.max_projects`` is no longer enforced and the
-        # corresponding downgrade-guard branch was deleted with it. The column
-        # itself is retained on BillingPlan pending a follow-up that drops it
-        # alongside any Stripe price-metadata migration.
+        # removed; the corresponding ``BillingPlan.max_projects`` quota
+        # (and its downgrade-guard branch) went with it in migration 0011.
         from sbomify.apps.sboms.models import Component
 
         product_count: int = Product.objects.filter(team=team).count()
@@ -639,7 +636,6 @@ class BillingReturnView(LoginRequiredMixin, View):
 
                     billing_limits: dict[str, Any] = {
                         "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
                         "max_components": plan.max_components,
                         "stripe_customer_id": customer.id,
                         "stripe_subscription_id": subscription.id,

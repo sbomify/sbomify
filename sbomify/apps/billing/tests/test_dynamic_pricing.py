@@ -23,7 +23,6 @@ def create_test_plan(**kwargs):
     defaults = {
         "description": "Test Description",
         "max_products": 10,
-        "max_projects": 10,
         "max_components": 100,
         "max_users": 5,
         "stripe_product_id": "prod_test",
@@ -44,7 +43,6 @@ class TestBillingPlanPricingProperties(TestCase):
             name="Business",
             description="Test Description",
             max_products=10,
-            max_projects=10,
             max_components=100,
             max_users=5,
             stripe_product_id="prod_test",
@@ -717,7 +715,6 @@ class TestIntegrationScenarios(TestCase):
             "stripe_subscription_id": "sub_test",
             "subscription_status": "active",
             "max_products": plan.max_products,
-            "max_projects": plan.max_projects,
             "max_components": plan.max_components,
         }
         self.team.save()

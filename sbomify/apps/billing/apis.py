@@ -43,7 +43,6 @@ def get_plans(request: HttpRequest) -> tuple[int, Any]:
                 "name": plan.name,
                 "description": plan.description,
                 "max_products": plan.max_products,
-                "max_projects": plan.max_projects,
                 "max_components": plan.max_components,
             }
         )

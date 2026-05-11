@@ -18,7 +18,6 @@ def community_plan() -> BillingPlan:
             "name": "Community",
             "description": "Free plan for small teams",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
             "stripe_product_id": None,
             "stripe_price_monthly_id": None,
@@ -37,7 +36,6 @@ def business_plan() -> BillingPlan:
             "name": "Business",
             "description": "For growing teams",
             "max_products": 10,
-            "max_projects": 20,
             "max_components": 100,
             "stripe_product_id": "prod_test_business",
             "stripe_price_monthly_id": "price_test_business_monthly",  # $199/month
@@ -60,7 +58,6 @@ def enterprise_plan() -> BillingPlan:
             "name": "Enterprise",
             "description": "For large organizations",
             "max_products": None,
-            "max_projects": None,
             "max_components": None,
             "stripe_product_id": "prod_test_enterprise",
             "stripe_price_monthly_id": "price_test_enterprise_monthly",

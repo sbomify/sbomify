@@ -68,7 +68,7 @@ def test_dashboard_pages_only_accessible_when_logged_in(sample_team_with_owner_m
 
     # Setup billing plan
     BillingPlan.objects.create(
-        key="dashboard_test_plan", name="Dashboard Test Plan", max_components=10, max_products=10, max_projects=10
+        key="dashboard_test_plan", name="Dashboard Test Plan", max_components=10, max_products=10
     )
     team.billing_plan = "dashboard_test_plan"
     team.key = number_to_random_token(team.id)

@@ -23,7 +23,7 @@ PATCH_API_MAP = {
 
 class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def post(self, request: HttpRequest, item_type: str, item_id: str) -> HttpResponse:
-        # For components, use visibility; for products/projects, use is_public
+        # For components, use visibility; for products, use is_public
         if item_type == "component":
             # Handle visibility field for components
             visibility = request.POST.get("visibility", "").strip().lower()

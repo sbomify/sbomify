@@ -77,7 +77,7 @@ def check_billing_limits(resource_type: str) -> Any:
     Decorator to check if a team has reached their billing plan limits.
 
     Args:
-        resource_type: Type of resource being created. Must be one of: 'product', 'project', or 'component'
+        resource_type: Type of resource being created. Must be one of: 'product' or 'component'
     """
 
     def decorator(view_func: Any) -> Any:
@@ -419,7 +419,6 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
                 billing_limits.update(
                     {
                         "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
                         "max_components": plan.max_components,
                     }
                 )
@@ -546,7 +545,6 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                         existing_limits.update(
                             {
                                 "max_products": target_plan.max_products,
-                                "max_projects": target_plan.max_projects,
                                 "max_components": target_plan.max_components,
                                 "subscription_status": "canceled",
                                 "cancel_at_period_end": False,
@@ -745,7 +743,7 @@ def get_current_limits(team: Team) -> dict[str, Any]:
         team: Team object
 
     Returns:
-        Dictionary with current limits (max_products, max_projects, max_components)
+        Dictionary with current limits (max_products, max_components)
     """
     if not is_billing_enabled():
         return get_unlimited_plan_limits()
@@ -757,7 +755,6 @@ def get_current_limits(team: Team) -> dict[str, Any]:
         plan = BillingPlan.objects.get(key=team.billing_plan)
         return {
             "max_products": plan.max_products,
-            "max_projects": plan.max_projects,
             "max_components": plan.max_components,
             "max_users": plan.max_users,
             "subscription_status": team.billing_plan_limits.get("subscription_status", "active")
@@ -825,7 +822,6 @@ def handle_checkout_completed(session: Any) -> None:
             team.has_selected_billing_plan = True
             billing_limits: dict[str, Any] = {
                 "max_products": plan.max_products,
-                "max_projects": plan.max_projects,
                 "max_components": plan.max_components,
                 "stripe_customer_id": session.customer,
                 "stripe_subscription_id": session.subscription,

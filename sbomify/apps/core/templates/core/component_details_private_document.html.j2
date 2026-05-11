@@ -9,14 +9,14 @@
                     {% if component.is_global %}
                         <i class="fas fa-building"></i>Workspace-wide
                     {% else %}
-                        <i class="fas fa-project-diagram"></i>Project-scoped
+                        <i class="fas fa-cube"></i>Product-scoped
                     {% endif %}
                 </span>
                 <p class="text-text-muted text-sm mb-0 mt-2">
                     {% if component.is_global %}
-                        Visible on the workspace Trust Center and not tied to projects.
+                        Visible on the workspace Trust Center and not attached to any product.
                     {% else %}
-                        Restricted to the projects this component is assigned to.
+                        Restricted to the products this component is assigned to.
                     {% endif %}
                 </p>
             </div>

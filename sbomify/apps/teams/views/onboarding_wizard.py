@@ -297,7 +297,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     "name": plan.name,
                     "description": plan.description or "",
                     "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
                     "max_components": plan.max_components,
                     "monthly_price": float(pricing.get("monthly_price") or 0),
                     "annual_price": float(pricing.get("annual_price") or 0),

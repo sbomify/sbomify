@@ -90,7 +90,6 @@ def business_plan(db):
         defaults={
             "name": "Business",
             "max_products": 10,
-            "max_projects": 20,
             "max_components": 100,
             "stripe_price_monthly_id": "price_monthly",
             "stripe_price_annual_id": "price_annual",
@@ -342,7 +341,6 @@ def test_billing_disabled_unlimited_limits():
 
     # With billing disabled, all limits should be None (unlimited)
     assert limits.get("max_products") is None
-    assert limits.get("max_projects") is None
     assert limits.get("max_components") is None
 
 
@@ -354,7 +352,6 @@ def test_billing_enabled_checks():
         key="business",
         name="Business",
         max_products=5,
-        max_projects=10,
         max_components=50,
         stripe_price_monthly_id="price_business_monthly",
         stripe_price_annual_id="price_business_annual",
@@ -367,7 +364,6 @@ def test_billing_enabled_checks():
         billing_plan="business",
         billing_plan_limits={
             "max_products": business_plan.max_products,
-            "max_projects": business_plan.max_projects,
             "max_components": business_plan.max_components,
             "subscription_status": "active",
         },

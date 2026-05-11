@@ -21,7 +21,6 @@ def community_plan() -> BillingPlan:
             "name": "Community",
             "description": "Free plan for small teams",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
             "stripe_product_id": None,
             "stripe_price_monthly_id": None,

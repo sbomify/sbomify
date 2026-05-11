@@ -171,7 +171,6 @@ def get_email_context(user: Any, **additional_context: Any) -> dict[str, Any]:
         context["TRIAL_PERIOD_DAYS"] = getattr(settings, "TRIAL_PERIOD_DAYS", 14)
         context["plan_limits"] = {
             "max_products": billing_limits.get("max_products"),
-            "max_projects": billing_limits.get("max_projects"),
             "max_components": billing_limits.get("max_components"),
         }
 

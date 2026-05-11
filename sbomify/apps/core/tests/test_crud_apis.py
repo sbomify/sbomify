@@ -437,7 +437,6 @@ def test_crud_operations_default_billing_plan_behavior(
         name="Community",
         description="Default Plan",
         max_products=10,
-        max_projects=10,
         max_components=10,
     )
 
@@ -1003,7 +1002,6 @@ class TestBillingPlanLimitsAPI:
                 "key": "limited_product_plan",
                 "name": "Limited Product Plan",
                 "max_products": 2,
-                "max_projects": 10,
                 "max_components": 10,
             },
         )
@@ -1053,7 +1051,6 @@ class TestBillingPlanLimitsAPI:
                 "key": "limited_component_plan",
                 "name": "Limited Component Plan",
                 "max_products": 10,
-                "max_projects": 10,
                 "max_components": 3,
             },
         )

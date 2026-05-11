@@ -28,7 +28,6 @@ def test_team(db) -> Team:
         defaults={
             "name": "Business",
             "max_products": 10,
-            "max_projects": 10,
             "max_components": 100,
             "max_users": 10,
         },

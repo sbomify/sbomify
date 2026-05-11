@@ -86,8 +86,9 @@ export function registerItemAssignmentManager() {
             this.isLoading = true;
             try {
                 const parentEndpoint = `/api/v1/${this.parentType}s/${this.parentId}`;
-                // When loading components for a project, exclude workspace-scoped (global) components
-                const availableEndpoint = this.parentType === 'project' && this.childType === 'component'
+                // When loading components for a product, exclude workspace-scoped
+                // (global) components — those live outside the product hierarchy.
+                const availableEndpoint = this.parentType === 'product' && this.childType === 'component'
                     ? `/api/v1/${this.childType}s?is_global=false`
                     : `/api/v1/${this.childType}s`;
 
@@ -96,9 +97,9 @@ export function registerItemAssignmentManager() {
                     $axios.get(availableEndpoint)
                 ]);
 
-                // Extract assigned items from parent response
-                const assignedKey = this.parentType === 'product' ? 'projects' : 'components';
-                this.assignedItems = parentRes.data[assignedKey] || [];
+                // Parent's child collection is always its components today
+                // (since Product is the only parent type in use post-#946).
+                this.assignedItems = parentRes.data.components || [];
 
                 // Filter out assigned items from available list
                 const allItems = availableRes.data.items || availableRes.data.results || availableRes.data;
