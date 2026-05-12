@@ -109,12 +109,20 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
 
     elif item_type == "component":
         component_id = item.get("id") if isinstance(item, dict) else item.id
-        public_products = Product.objects.filter(components__id=component_id, is_public=True).order_by("id").distinct()
+        # Limit columns + cap to a small set; the referrer-match loop only
+        # needs id/slug/name and there's no value in materialising every
+        # public product attached to a heavily-shared component.
+        public_products = (
+            Product.objects.filter(components__id=component_id, is_public=True)
+            .order_by("id")
+            .only("id", "name")
+            .distinct()[:25]
+        )
 
-        if public_products.exists():
+        if public_products:
             product = detect_product_from_referrer(public_products)
             if not product:
-                product = public_products.first()
+                product = public_products[0]
 
             crumbs.append(
                 {

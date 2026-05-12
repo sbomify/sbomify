@@ -20,7 +20,11 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
-from sbomify.apps.core.queries import optimize_component_queryset, optimize_product_queryset
+from sbomify.apps.core.queries import (
+    get_team_asset_count,
+    optimize_component_queryset,
+    optimize_product_queryset,
+)
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
@@ -445,10 +449,10 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
             else:
                 # Get current usage
                 if resource_type == "product":
-                    current_count = Product.objects.filter(team_id=team_id).count()
+                    current_count = get_team_asset_count(team_id, "product")
                     max_allowed = target_plan.max_products
                 elif resource_type == "component":
-                    current_count = Component.objects.filter(team_id=team_id).count()
+                    current_count = get_team_asset_count(team_id, "component")
                     max_allowed = target_plan.max_components
                 else:
                     max_allowed = None
@@ -490,10 +494,10 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
 
     # Get current count and limits
     if resource_type == "product":
-        current_count = Product.objects.filter(team_id=team_id).count()
+        current_count = get_team_asset_count(team_id, "product")
         max_allowed = plan.max_products
     elif resource_type == "component":
-        current_count = Component.objects.filter(team_id=team_id).count()
+        current_count = get_team_asset_count(team_id, "component")
         max_allowed = plan.max_components
     else:
         return False, f"Invalid resource type: {resource_type}", ErrorCode.INVALID_DATA

@@ -110,9 +110,13 @@ def forwards(apps: Any, schema_editor: Any) -> None:
                     if len(batch) >= _INSERT_BATCH:
                         _flush()
         _flush()
-    else:
-        # SQLite (tests) and any other vendor: drive the join with ORM iterators
-        # and a small in-memory lookup. The same cross-tenant filter applies.
+    elif connection.vendor == "sqlite":
+        # SQLite (tests only): drive the join with ORM iterators and a small
+        # in-memory lookup. The same cross-tenant filter applies. This path
+        # materialises Product/Component team mappings in Python and is NOT
+        # safe for very large workspaces — it is restricted to SQLite so a
+        # future deploy against MySQL/Oracle/etc. fails loudly rather than
+        # silently running the slow path against a production-scale dataset.
         product_team_by_id: dict[str, str] = dict(
             Product.objects.values_list("id", "team_id").iterator(chunk_size=_FETCH_BATCH)
         )
@@ -139,6 +143,11 @@ def forwards(apps: Any, schema_editor: Any) -> None:
                 if len(batch) >= _INSERT_BATCH:
                     _flush()
         _flush()
+    else:
+        raise NotImplementedError(
+            f"Backfill not implemented for database vendor {connection.vendor!r}. "
+            "Add a vendor-specific path before running this migration."
+        )
 
 
 class Migration(migrations.Migration):

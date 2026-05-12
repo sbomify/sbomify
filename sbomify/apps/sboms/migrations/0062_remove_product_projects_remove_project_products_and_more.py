@@ -40,11 +40,22 @@ def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor:
     component whose pre-PR public listing depended on a `Project.is_public`
     gate that this migration is about to remove.
 
-    A component is "newly visible" (and therefore demoted) iff:
+    A component is demoted to PRIVATE iff ALL of:
       - `visibility` is PUBLIC or GATED
-      - it is linked to at least one product where `is_public=True`
-      - no project containing the component is itself `is_public=True`
-        with at least one public product attached
+      - it is linked to at least one product where `is_public=True` (so the
+        post-PR cascade would now expose it on the trust center)
+      - AND it was NOT already exposed pre-PR via the legacy cascade — i.e.,
+        there is no path `Project.is_public=True ∧ ProductProject ∧ Product.is_public=True`
+        through which this component was already listed publicly.
+
+    Put another way: the migration leaves the component visible if it was
+    already visible somewhere pre-PR, and demotes it only if its sole
+    historical exposure required `Project.is_public=True` on a project that
+    happened to attach to a private product. The SQL below implements the
+    "already visible" subquery as
+    `Component.objects.filter(projects__is_public=True, projects__products__is_public=True)`
+    — which is the legacy cascade as a positive filter — and then excludes
+    that set from the demote target.
 
     Implemented as a single SQL UPDATE over a subquery so we don't pull
     candidate IDs into Python — important for tenants with large component
@@ -72,6 +83,17 @@ def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor:
 
 
 class Migration(migrations.Migration):
+    # Non-atomic so the visibility `RunPython` UPDATE commits before the
+    # subsequent destructive schema ops (`RemoveField`/`DeleteModel`) take
+    # `ACCESS EXCLUSIVE`. Wrapping a long data rewrite and several
+    # `DROP TABLE` / `DROP COLUMN` ops in one transaction holds heavy locks
+    # on `sboms_component` and `sboms_products` for the full demotion scan,
+    # which stalls every other writer on large tenants. Each op commits
+    # independently here; the demotion is idempotent and the schema drops
+    # are unconditional, so partial-failure rollback to an in-progress state
+    # is safe to resume.
+    atomic = False
+
     dependencies = [
         ("sboms", "0061_remove_productcomponent_sboms_produ_product_154d10_idx"),
         # Drop the core proxy models for Project/ProductProject/ProjectComponent

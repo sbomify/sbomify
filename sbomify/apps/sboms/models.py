@@ -565,7 +565,11 @@ class Component(models.Model):
     )
     is_global = models.BooleanField(
         default=False,
-        help_text=("Whether the component is available at the workspace level instead of being attached to a product."),
+        help_text=(
+            "Workspace-scoped component: not attached to any product. "
+            "Only DOCUMENT components may be global; setting this clears "
+            "any existing product attachments on save."
+        ),
     )
 
     # Native fields for contact information (migrated from JSONField)
@@ -620,6 +624,16 @@ class Component(models.Model):
                 {"nda_document": "nda_document can only be set when gating_mode is approval_plus_nda"}
             )
 
+        # is_global is only meaningful for DOCUMENT components — BOM components must
+        # attach to at least one product. The API layer enforces this too (see
+        # core/apis.py create/patch handlers), but having it in clean() means any
+        # form/serializer that calls full_clean() catches it without re-implementing
+        # the rule.
+        if self.is_global and self.component_type != self.ComponentType.DOCUMENT:
+            raise ValidationError(
+                {"is_global": "Only document components can be marked as workspace-wide (is_global=True)."}
+            )
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to auto-clear invalid field combinations.
 
@@ -645,7 +659,18 @@ class Component(models.Model):
             if self.nda_document_id:
                 self.nda_document = None
 
+        # Track whether is_global flipped to True so we can detach products
+        # AFTER the row is saved (M2M ops need a PK). Previously every
+        # caller (API, view, scope toggle) had to remember to call
+        # `component.products.clear()` themselves — the rule lived in four
+        # places, and the audit found two of them lacked test coverage.
+        # Centralising here means a future writer can't forget.
+        should_clear_products = bool(self.is_global and self.pk)
+
         super().save(*args, **kwargs)
+
+        if should_clear_products:
+            self.products.clear()
 
     @property
     def slug(self) -> str:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
@@ -123,7 +124,11 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
 _PENDING_CLEAR_ATTR = "_sbomify_pending_clear_product_ids"
 
 
-@receiver(m2m_changed, sender="sboms.ProductComponent")
+@receiver(
+    m2m_changed,
+    sender="sboms.ProductComponent",
+    dispatch_uid="sbomify.core.signals.update_latest_release_on_product_components_changed",
+)
 def update_latest_release_on_product_components_changed(
     sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
 ) -> Any:
@@ -320,7 +325,11 @@ def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwarg
         logger.error("Error cleaning up ComponentRelease for SBOM %s", instance.id, exc_info=True)
 
 
-@receiver(m2m_changed, sender="sboms.ProductComponent")
+@receiver(
+    m2m_changed,
+    sender="sboms.ProductComponent",
+    dispatch_uid="sbomify.core.signals.reject_cross_tenant_product_component_links",
+)
 def reject_cross_tenant_product_component_links(
     sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
 ) -> Any:
@@ -346,8 +355,12 @@ def reject_cross_tenant_product_component_links(
     """
     if action != "pre_add" or not pk_set:
         return
-    from django.core.exceptions import ValidationError
 
+    # Imported lazily to avoid circular imports during Django app loading.
+    # core/apps.py loads this module from ``ready()``, after every app has
+    # registered, so this is safe; but core/signals -> sboms/models is a
+    # cycle we keep deferred to make module-level testing/import order
+    # robust under reload (Gunicorn prefork, Dramatiq worker init).
     from sbomify.apps.sboms.models import Component, Product
 
     pk_list = list(pk_set)
