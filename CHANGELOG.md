@@ -88,6 +88,9 @@ hard-delete the legacy tables:
 6. `sboms.0063_alter_productcomponent_unique_together_and_more` — final
    constraint adjustments
 7. `billing.0011_remove_billingplan_max_projects`
+8. `sboms.0064_alter_component_is_global` — refreshes the `help_text` on
+   `Component.is_global` to document the new "workspace-scoped /
+   DOCUMENT-only" semantics (text-only change, no DB schema impact)
 
 #### Rollback
 
