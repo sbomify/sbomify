@@ -1,28 +1,26 @@
-{# Render a timestamp as a human-readable relative time ("5 days ago") with a
-   hover-over tooltip showing the absolute date + time.
+{% comment %}
+Render a timestamp as a human-readable relative time ("5 days ago") with a
+hover-over tooltip showing the absolute date + time.
 
-   Required kwarg:
-     timestamp — a `datetime` or `date` value. The component renders nothing
-                 if the value is falsy (uses `fallback` instead).
+Required kwarg:
+  timestamp - a `datetime` or `date` value. The component renders the
+              fallback if the value is falsy.
 
-   Optional kwargs:
-     fallback  — displayed when `timestamp` is None/empty. Default: "—"
-     suffix    — string appended after the relative time. Default: "ago"
+Optional kwarg:
+  fallback - displayed when `timestamp` is None/empty. Default: "—"
 
-   Usage examples:
-     {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
-     {% include 'core/components/relative_time.html.j2' with timestamp=invitation.created_at suffix='' %}
-     {% include 'core/components/relative_time.html.j2' with timestamp=record.updated_at fallback='Never' %}
+Usage:
+  {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+  {% include 'core/components/relative_time.html.j2' with timestamp=record.updated_at fallback='Never' %}
 
-   The component uses BOTH a native `title=` attribute (works without JS) AND
-   the project's `x-tooltip` Alpine directive (richer styling when Alpine is
-   loaded). #}
+Only the `x-tooltip` Alpine directive is bound (no native `title=`); having
+both would show two stacked tooltips in JS-enabled sessions. The tooltip
+text degrades gracefully — when Alpine isn't loaded, the span just shows
+the relative time, which is still useful.
+{% endcomment %}
 {% if timestamp %}
     <span class="cursor-help"
-          title="{{ timestamp|date:'M j, Y, H:i:s' }}"
-          x-tooltip="'{{ timestamp|date:'M j, Y, H:i:s'|escapejs }}'">{{ timestamp|timesince }}
-        {% if suffix|default:'ago' %}{{ suffix|default:'ago' }}{% endif %}
-    </span>
+          x-tooltip="'{{ timestamp|date:'M j, Y, H:i:s'|escapejs }}'">{{ timestamp|timesince }} ago</span>
 {% else %}
     <span class="text-text-muted">{{ fallback|default:"—" }}</span>
 {% endif %}
