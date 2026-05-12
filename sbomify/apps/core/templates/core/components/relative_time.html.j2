@@ -17,9 +17,16 @@ Only the `x-tooltip` Alpine directive is bound (no native `title=`); having
 both would show two stacked tooltips in JS-enabled sessions. The tooltip
 text degrades gracefully — when Alpine isn't loaded, the span just shows
 the relative time, which is still useful.
+
+Accessibility: the span carries `tabindex="0"` so keyboard users can
+focus it (which also triggers the Alpine tooltip), and an `aria-label`
+that includes BOTH the relative-time text AND the absolute timestamp so
+screen-reader users get the full context in one announcement.
 {% endcomment %}
 {% if timestamp %}
     <span class="cursor-help"
+          tabindex="0"
+          aria-label="{{ timestamp|timesince }} ago ({{ timestamp|date:'M j, Y, H:i:s' }})"
           x-tooltip="'{{ timestamp|date:'M j, Y, H:i:s'|escapejs }}'">{{ timestamp|timesince }} ago</span>
 {% else %}
     <span class="text-text-muted">{{ fallback|default:"—" }}</span>
