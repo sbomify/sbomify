@@ -560,7 +560,7 @@
                             <div class="flex items-center gap-3 text-sm text-text-muted">
                                 <span class="flex items-center gap-1">
                                     <i class="fas fa-calendar-alt text-xs"></i>
-                                    {{ company_nda_document.created_at|date:"M d, Y" }}
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=company_nda_document.created_at %}
                                 </span>
                                 {% if company_nda_document.file_size %}
                                     <span class="flex items-center gap-1">
