@@ -50,9 +50,7 @@ export function registerItemAssignmentManager() {
             this.loadData();
 
             // Listen for WebSocket events to refresh data
-            const relevantEvents = this.childType === 'component'
-                ? ['component_created', 'component_deleted']
-                : ['project_created', 'project_deleted'];
+            const relevantEvents = ['component_created', 'component_deleted'];
 
             this._wsHandler = ((event: CustomEvent) => {
                 if (relevantEvents.includes(event.detail?.type)) {

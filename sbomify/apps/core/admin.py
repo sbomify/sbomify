@@ -196,7 +196,6 @@ class DashboardView(admin.AdminSite):
                     "new_teams_30d": 0,
                     # 30-day content metrics
                     "products_30d": 0,
-                    "projects_30d": 0,
                     "components_30d": 0,
                     "active_users_7d": 0,
                     "active_users_30d": 0,

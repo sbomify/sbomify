@@ -34,7 +34,6 @@ class ErrorCode(str, Enum):
     TEAM_NOT_FOUND = "TEAM_NOT_FOUND"
     ITEM_NOT_FOUND = "ITEM_NOT_FOUND"
     PRODUCT_NOT_FOUND = "PRODUCT_NOT_FOUND"
-    PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
     COMPONENT_NOT_FOUND = "COMPONENT_NOT_FOUND"
     RELEASE_NOT_FOUND = "RELEASE_NOT_FOUND"
     COMPONENT_RELEASE_NOT_FOUND = "COMPONENT_RELEASE_NOT_FOUND"
@@ -182,7 +181,7 @@ class ProductLinkBulkUpdateSchema(BaseModel):
     links: list[ProductLinkCreateSchema]
 
 
-# Product/Project/Component schemas moved from sboms
+# Product/Component schemas moved from sboms
 class ProductCreateSchema(BaseModel):
     """Schema for creating a new Product."""
 

@@ -854,4 +854,4 @@ cdx15.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 cdx16.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 
 
-# Product/Project/Component CRUD schemas moved to core/schemas.py
+# Product/Component CRUD schemas moved to core/schemas.py

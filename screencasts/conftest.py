@@ -16,7 +16,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
-from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Member, Team
 
 RECORDING_WIDTH = 1280
@@ -254,14 +254,6 @@ def navigate_to_components(page: Page) -> None:
     """Click the sidebar Components link and wait for the page to load."""
     components_link = page.get_by_role("link", name="Components")
     hover_and_click(page, components_link)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1200)
-
-
-def navigate_to_projects(page: Page) -> None:
-    """Click the sidebar Projects link and wait for the page to load."""
-    projects_link = page.get_by_role("link", name="Projects")
-    hover_and_click(page, projects_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
 
@@ -562,45 +554,27 @@ PIED_PIPER_COMPONENTS = [
     "Data Pipeline Worker",
 ]
 
-PIED_PIPER_PROJECTS = {
-    "Pied Piper Frontend": ["Web Dashboard"],
-    "Pied Piper Backend": ["Compression Core Library", "REST API Service", "Data Pipeline Worker"],
-}
-
 PIED_PIPER_PRODUCT_NAME = "Pied Piper Compression Engine"
 
 
 @pytest.fixture
 def pied_piper_product(deletable_team: Team) -> dict:
-    """Create full Pied Piper hierarchy via ORM (4 components, 2 projects, 1 product).
+    """Create the Pied Piper hierarchy via ORM (4 components attached to 1 product).
 
-    Returns dict with keys: product, projects (dict), components (dict).
+    Returns dict with keys: product, components (dict).
     """
     team = deletable_team
 
-    # Components
-    components = {}
-    for name in PIED_PIPER_COMPONENTS:
-        components[name] = Component.objects.create(team=team, name=name)
+    components = {name: Component.objects.create(team=team, name=name) for name in PIED_PIPER_COMPONENTS}
 
-    # Projects + assign components
-    projects = {}
-    for proj_name, comp_names in PIED_PIPER_PROJECTS.items():
-        project = Project.objects.create(team=team, name=proj_name)
-        for comp_name in comp_names:
-            ProjectComponent.objects.create(project=project, component=components[comp_name])
-        projects[proj_name] = project
-
-    # Product + assign projects
     product = Product.objects.create(
         team=team,
         name=PIED_PIPER_PRODUCT_NAME,
         description="Middle-out compression platform for enterprise data optimization",
     )
-    for project in projects.values():
-        ProductProject.objects.create(product=product, project=project)
+    product.components.set(components.values())
 
-    return {"product": product, "projects": projects, "components": components}
+    return {"product": product, "components": components}
 
 
 @pytest.fixture

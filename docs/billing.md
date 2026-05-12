@@ -104,14 +104,14 @@ Use the `check_billing_limits` decorator to enforce plan limits:
 from sbomify.apps.billing.billing_processing import check_billing_limits
 
 class MyCreateView(View):
-    @check_billing_limits('product')  # or 'project', 'component'
+    @check_billing_limits('product')  # or 'component'
     def post(self, request, *args, **kwargs):
         # Create logic here
 ```
 
 Limits are stored in `Team.billing_plan_limits` JSONField:
 
-- `max_products`, `max_projects`, `max_components`
+- `max_products`, `max_components`
 - When billing is disabled (`BILLING=FALSE`), all teams get unlimited access
 
 ## Async Tasks & Cron Jobs

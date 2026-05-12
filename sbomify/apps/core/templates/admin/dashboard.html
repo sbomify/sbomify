@@ -178,7 +178,6 @@
                     <div class="subtitle">{% widthratio stats.active_users_7d stats.users 100 %}% of total</div>
                 </div>
             </div>
-
             <!-- Charts Grid -->
             <div class="charts-grid">
                 <!-- Billing Distribution -->
@@ -189,7 +188,6 @@
                         <canvas id="billingChart" class="chart-canvas hidden"></canvas>
                     </div>
                 </div>
-
                 <!-- User Growth Trend -->
                 <div class="stats-card">
                     <h3>User Growth (Last 30 Days)</h3>
@@ -198,7 +196,6 @@
                         <canvas id="growthChart" class="chart-canvas hidden"></canvas>
                     </div>
                 </div>
-
                 <!-- Onboarding Funnel -->
                 <div class="stats-card">
                     <h3>Onboarding Funnel</h3>
@@ -207,7 +204,6 @@
                         <canvas id="funnelChart" class="chart-canvas hidden"></canvas>
                     </div>
                 </div>
-
                 <!-- Product Health -->
                 <div class="stats-card">
                     <h3>Product Health</h3>
@@ -216,7 +212,6 @@
                         <canvas id="healthChart" class="chart-canvas hidden"></canvas>
                     </div>
                 </div>
-
                 <!-- Users per Workspace -->
                 <div class="stats-card">
                     <h3>Users per Workspace</h3>
@@ -225,7 +220,6 @@
                         <canvas id="usersPerWorkspaceChart" class="chart-canvas hidden"></canvas>
                     </div>
                 </div>
-
                 <!-- Components Overview -->
                 <div class="stats-card">
                     <h3>Components Overview</h3>
@@ -236,7 +230,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Chart.js now managed via Vite bundle -->
         <script>
             document.addEventListener('DOMContentLoaded', function() {
@@ -439,11 +432,11 @@
                     new Chart(document.getElementById('componentsChart'), {
                         type: 'bar',
                         data: {
-                            labels: ['Products', 'Projects', 'Components', 'SBOMs', 'SBOMs (30d)'],
+                            labels: ['Products', 'Components', 'SBOMs', 'SBOMs (30d)'],
                             datasets: [{
                                 label: 'Count',
-                                data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.sboms_30d }}],
-                                backgroundColor: ['#ff6384', '#36a2eb', '#ffcd56', '#4bc0c0', '#9966ff'],
+                                data: [{{ stats.products }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.sboms_30d }}],
+                                backgroundColor: ['#ff6384', '#ffcd56', '#4bc0c0', '#9966ff'],
                                 borderRadius: 4
                             }]
                         },
@@ -485,4 +478,3 @@
     {{ block.super }}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
 {% endblock %}
-

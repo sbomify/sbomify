@@ -477,7 +477,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 
 # ============================================================================
-# Product/Project/Component Views - Moved from sboms app
+# Product/Component Views - Moved from sboms app
 # ============================================================================
 
 # ============================================================================
