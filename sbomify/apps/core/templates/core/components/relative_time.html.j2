@@ -24,10 +24,12 @@ that includes BOTH the relative-time text AND the absolute timestamp so
 screen-reader users get the full context in one announcement.
 {% endcomment %}
 {% if timestamp %}
-    <span class="cursor-help"
-          tabindex="0"
-          aria-label="{{ timestamp|timesince }} ago ({{ timestamp|date:'M j, Y, H:i:s' }})"
-          x-tooltip="'{{ timestamp|date:'M j, Y, H:i:s'|escapejs }}'">{{ timestamp|timesince }} ago</span>
+    {% with absolute=timestamp|date:"M j, Y, H:i:s" relative=timestamp|timesince %}
+        <span class="cursor-help"
+              tabindex="0"
+              aria-label="{{ relative }} ago ({{ absolute }})"
+              x-tooltip="'{{ absolute|escapejs }}'">{{ relative }} ago</span>
+    {% endwith %}
 {% else %}
     <span class="text-text-muted">{{ fallback|default:"—" }}</span>
 {% endif %}
