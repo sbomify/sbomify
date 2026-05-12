@@ -33,7 +33,11 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         is_global = target_scope == "workspace"
         component.is_global = is_global
         if is_global:
-            # Detach from any product-level scoping when promoting to workspace scope
+            # Belt-and-suspenders detach: ``Component.save()`` ALSO detaches
+            # products when ``is_global=True`` (see sboms/models.py). The
+            # explicit clear here keeps the pre-save state consistent for any
+            # form/admin path that introspects the relationship between this
+            # field-flip and the persist call.
             component.products.clear()
         component.save()
 

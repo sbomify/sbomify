@@ -647,6 +647,16 @@ class Component(models.Model):
         - Breaking existing tests
 
         Validation should be done explicitly via full_clean() in forms/serializers/APIs.
+
+        FOOT-GUN: ``Component.objects.filter(...).update(is_global=True)`` and
+        ``Component.objects.bulk_update([c], ['is_global'])`` BYPASS this
+        method entirely (this is Django's documented behaviour for the bulk
+        operations listed above). If you flip ``is_global`` via either of
+        those code paths you MUST also call ``component.products.clear()``
+        explicitly, otherwise the workspace-scope invariant breaks
+        silently. There are no such call sites in the codebase today;
+        ``sboms/tests/test_product_component_tenancy.py::test_queryset_update_bypasses_save_invariant``
+        pins the bypass so a future fix is flagged for review.
         """
         # Auto-clear gating_mode if visibility is not gated
         if self.visibility != self.Visibility.GATED:

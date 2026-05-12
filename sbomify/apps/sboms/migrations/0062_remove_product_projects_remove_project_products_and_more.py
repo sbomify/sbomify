@@ -30,9 +30,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.db import migrations
+
+logger = logging.getLogger("sbomify.migrations")
 
 
 def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor: Any) -> None:
@@ -74,12 +77,28 @@ def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor:
         projects__products__is_public=True,
     )
 
-    Component.objects.filter(
-        visibility__in=(PUBLIC, GATED),
-        products__is_public=True,
-    ).exclude(
-        id__in=already_visible.values("id"),
-    ).update(visibility=PRIVATE)
+    demoted_count = (
+        Component.objects.filter(
+            visibility__in=(PUBLIC, GATED),
+            products__is_public=True,
+        )
+        .exclude(
+            id__in=already_visible.values("id"),
+        )
+        .update(visibility=PRIVATE)
+    )
+
+    # Operator-facing log line. Captures the impact of this irreversible
+    # demotion at deploy time so an operator who is unsure whether the
+    # migration touched their tenants can grep deploy logs for the count.
+    # Logged at INFO (deploy-runner default) so it survives default
+    # Sentry/Loki ingestion.
+    logger.info(
+        "migration 0062: demoted visibility=PRIVATE on %d component rows "
+        "(previously PUBLIC/GATED under a private project, would otherwise "
+        "have become publicly visible after Project layer removal)",
+        demoted_count,
+    )
 
 
 class Migration(migrations.Migration):

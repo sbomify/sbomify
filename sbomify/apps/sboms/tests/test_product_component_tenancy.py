@@ -69,6 +69,36 @@ class TestSignalRejectsCrossTenantM2M:
         with pytest.raises(ValidationError, match=r"Cross-tenant"):
             product.components.set([component])
 
+    def test_forward_set_rejects_cross_tenant(self, cross_tenant_pair):
+        """Symmetry test for ``component.products.set([cross_tenant_product])``.
+
+        Both directions of the M2M (``.set()`` on either side) trigger the
+        same ``m2m_changed pre_add`` receiver; we exercise both so a future
+        refactor that mistakenly handles only the reverse case fails here.
+        """
+        product, component = cross_tenant_pair
+        with pytest.raises(ValidationError, match=r"Cross-tenant"):
+            component.products.set([product])
+
+    def test_reverse_set_mixed_list_rejects(self, two_teams):
+        """A ``.set()`` call with a list containing BOTH same-team and
+        cross-tenant entries must reject the whole call (the signal iterates
+        ``pk_set`` and raises on the first cross-tenant pk). Without this
+        test, a future short-circuit on ``len(pk_set) == 1`` would silently
+        allow the mixed case through.
+
+        The raise leaves the test transaction in a broken state, so we only
+        assert on the exception itself — Django rolls back the whole `.set()`
+        atomic block, so no rows are committed regardless.
+        """
+        team_a, team_b = two_teams
+        product = Product.objects.create(name="A's Product", team=team_a)
+        same_team_c = Component.objects.create(name="A's Component", team=team_a)
+        cross_tenant_c = Component.objects.create(name="B's Component", team=team_b)
+
+        with pytest.raises(ValidationError, match=r"Cross-tenant"):
+            product.components.set([same_team_c, cross_tenant_c])
+
     def test_forward_add_allows_same_tenant(self, same_tenant_pair):
         product, component = same_tenant_pair
         component.products.add(product)
@@ -146,6 +176,74 @@ class TestComponentIsGlobalInvariants:
 
         component.refresh_from_db()
         assert component.products.count() == 1, "Non-global save must leave products alone"
+
+    def test_save_does_not_reattach_on_global_to_product(self, two_teams):
+        """Demoting a component from workspace-scope (is_global=True) back to
+        product-scope (is_global=False) must NOT re-attach the products that
+        were detached on promotion. The previous attachments are gone — the
+        caller is responsible for re-attaching the component to whichever
+        products it should now belong to.
+        """
+        team_a, _ = two_teams
+        product = Product.objects.create(name="P", team=team_a)
+        component = Component.objects.create(
+            name="C",
+            team=team_a,
+            component_type=Component.ComponentType.DOCUMENT,
+        )
+        component.products.add(product)
+        assert component.products.count() == 1
+
+        # Promote to global — products detach.
+        component.is_global = True
+        component.save()
+        component.refresh_from_db()
+        assert component.products.count() == 0
+
+        # Demote back to product-scope — products MUST STAY detached.
+        component.is_global = False
+        component.save()
+        component.refresh_from_db()
+        assert component.products.count() == 0, (
+            "Demoting from is_global=True back to False must NOT re-attach products"
+        )
+
+    def test_queryset_update_bypasses_save_invariant(self, two_teams):
+        """Foot-gun pin: ``Component.objects.filter(...).update(is_global=True)``
+        bypasses ``Component.save()`` entirely, so the products-detach
+        invariant does NOT fire. This is Django's documented behaviour for
+        ``QuerySet.update``; the test exists so a future maintainer who
+        adds a ``CheckConstraint`` or DB trigger to close this hole is
+        flagged here intentionally.
+
+        Any code path doing ``Component.objects.filter(...).update(is_global=True)``
+        without explicitly calling ``component.products.clear()`` first is
+        a bug. There are currently no such call sites in the codebase
+        (verified by grep at the time this test was written).
+        """
+        team_a, _ = two_teams
+        product = Product.objects.create(name="P", team=team_a)
+        component = Component.objects.create(
+            name="C",
+            team=team_a,
+            component_type=Component.ComponentType.DOCUMENT,
+        )
+        component.products.add(product)
+
+        # Bypass save() via QuerySet.update
+        Component.objects.filter(pk=component.pk).update(is_global=True)
+
+        component.refresh_from_db()
+        assert component.is_global is True
+        # The invariant is NOT enforced by QuerySet.update — the M2M
+        # still has the row. This pins the bypass so a future fix
+        # (e.g., a pre_save signal, CheckConstraint, or DB trigger)
+        # that closes the gap will be caught here for explicit review.
+        assert component.products.count() == 1, (
+            "QuerySet.update bypasses Component.save() invariant. "
+            "If this assertion starts failing, a new enforcement mechanism "
+            "has been added — update this test to assert the new contract."
+        )
 
     def test_clean_rejects_global_on_bom_component(self, two_teams):
         team_a, _ = two_teams

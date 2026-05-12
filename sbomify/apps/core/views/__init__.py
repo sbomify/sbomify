@@ -511,7 +511,13 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
 
     with transaction.atomic():
-        # Remove component's existing linkages to products if any
+        # SEMANTICALLY REQUIRED clear (NOT the belt-and-suspenders pattern).
+        # We're about to change ``component.team_id`` to a different team.
+        # If we left the M2M attached, those rows would become cross-tenant
+        # the instant the team flip commits, and the
+        # ``reject_cross_tenant_product_component_links`` signal would
+        # reject any subsequent ``add()`` to this component. The clear MUST
+        # happen before the team change.
         component.products.clear()
         component.team_id = team_id
         component.save()

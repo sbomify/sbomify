@@ -299,3 +299,36 @@ def test_workspace_public_view_filters_private_items(sample_team_with_owner_memb
     assert "Product with Public Component" in product_names
     assert "Product with Only Private Components" not in product_names
     assert "Private Product" not in product_names
+
+
+@pytest.mark.django_db
+def test_workspace_public_view_shows_gated_components(sample_team_with_owner_member):  # noqa: F811
+    """A GATED component on a public product appears on the workspace public
+    listing — the post-PR-946 visibility cascade rule is
+    ``Product.is_public=True AND Component.visibility ∈ {PUBLIC, GATED}``.
+
+    GATED is a gating mode for access (visitors see metadata + request
+    access workflow) but the component still surfaces on the trust center.
+    Without this test, a future regression that narrows the listing rule to
+    PUBLIC-only would silently hide every gated component from public
+    listings.
+    """
+    team = sample_team_with_owner_member.team
+    team.is_public = True
+    team.save()
+
+    product = Product.objects.create(name="Product with Gated Component", team=team, is_public=True)
+    gated_component = Component.objects.create(
+        name="Gated Component", team=team, visibility=Component.Visibility.GATED
+    )
+    product.components.add(gated_component)
+
+    from sbomify.apps.core.views.workspace_public import _list_public_products
+
+    public_products = _list_public_products(team)
+    product_names = [p["name"] for p in public_products]
+
+    assert "Product with Gated Component" in product_names, (
+        "GATED components on public products must appear in the public listing "
+        "(post-PR-946 cascade rule)"
+    )

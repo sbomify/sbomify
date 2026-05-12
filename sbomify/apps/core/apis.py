@@ -233,14 +233,13 @@ def _ensure_latest_release_exists(product: "Product") -> None:
         log.warning(f"Failed to ensure latest release for product {product.id}: {e}")
 
 
-def _build_item_response(
+def _build_item_base(
     request: HttpRequest,
     item: Any,
-    item_type: str,
-    has_crud_permissions: bool | None = None,
-) -> Any:
-    """Build a standardized response for items."""
-    base_response = {
+    has_crud_permissions: bool | None,
+) -> dict[str, Any]:
+    """Fields common to every item-type response."""
+    return {
         "id": item.id,
         "name": item.name,
         "slug": item.slug,
@@ -253,72 +252,104 @@ def _build_item_response(
         ),
     }
 
-    # Products use is_public; Components use visibility.
-    if item_type == "component":
-        base_response["visibility"] = item.visibility
-    else:
-        base_response["is_public"] = item.is_public
 
+def _build_product_response(
+    request: HttpRequest,
+    product: Any,
+    has_crud_permissions: bool | None = None,
+) -> dict[str, Any]:
+    """Build the API response for a single Product.
+
+    NB: this function expects ``product`` to have been fetched through
+    ``optimize_product_queryset()`` so that ``component_count``,
+    ``components``, ``identifiers``, and ``links`` are already
+    prefetched/annotated. The ``hasattr`` fallbacks below are belt-and-
+    suspenders for ad-hoc callers; relying on them in a request path
+    would trigger N+1.
+    """
+    response = _build_item_base(request, product, has_crud_permissions)
+    response["is_public"] = product.is_public
+    response["description"] = product.description
+    response["component_count"] = (
+        product.component_count if hasattr(product, "component_count") else product.components.count()
+    )
+    response["components"] = [
+        {
+            "id": component.id,
+            "name": component.name,
+            "slug": component.slug,
+            "visibility": component.visibility,
+            "is_global": component.is_global,
+            "component_type": component.component_type,
+            "component_type_display": component.get_component_type_display(),
+        }
+        for component in product.components.all()
+    ]
+    response["identifiers"] = [
+        {
+            "id": identifier.id,
+            "identifier_type": identifier.identifier_type,
+            "value": identifier.value,
+            "created_at": identifier.created_at.isoformat(),
+        }
+        for identifier in product.identifiers.all()
+    ]
+    response["links"] = [
+        {
+            "id": link.id,
+            "link_type": link.link_type,
+            "title": link.title,
+            "url": link.url,
+            "description": link.description,
+            "created_at": link.created_at.isoformat(),
+        }
+        for link in product.links.all()
+    ]
+    # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
+    response["release_date"] = product.release_date.isoformat() if product.release_date else None
+    response["end_of_support"] = product.end_of_support.isoformat() if product.end_of_support else None
+    response["end_of_life"] = product.end_of_life.isoformat() if product.end_of_life else None
+    return response
+
+
+def _build_component_response(
+    request: HttpRequest,
+    component: Any,
+    has_crud_permissions: bool | None = None,
+) -> dict[str, Any]:
+    """Build the API response for a single Component."""
+    response = _build_item_base(request, component, has_crud_permissions)
+    response["visibility"] = component.visibility
+    response["gating_mode"] = component.gating_mode
+    response["nda_document_id"] = str(component.nda_document.id) if component.nda_document_id else None
+    response["sbom_count"] = component.sbom_count if hasattr(component, "sbom_count") else component.sbom_set.count()
+    response["document_count"] = (
+        component.document_count if hasattr(component, "document_count") else component.document_set.count()
+    )
+    response["metadata"] = component.metadata
+    response["component_type"] = component.component_type
+    response["component_type_display"] = component.get_component_type_display()
+    response["is_global"] = getattr(component, "is_global", False)
+    return response
+
+
+def _build_item_response(
+    request: HttpRequest,
+    item: Any,
+    item_type: str,
+    has_crud_permissions: bool | None = None,
+) -> Any:
+    """Dispatch to the per-type response builder.
+
+    Kept as a thin dispatcher because 12 call sites pass an `item_type`
+    string. New code should call ``_build_product_response`` /
+    ``_build_component_response`` directly.
+    """
     if item_type == "product":
-        base_response["description"] = item.description
-        # `component_count` is annotated by `optimize_product_queryset`. The
-        # fallback exists only for ad-hoc callers that pass a non-optimised
-        # queryset; in the normal request path the annotation is always present.
-        base_response["component_count"] = (
-            item.component_count if hasattr(item, "component_count") else item.components.count()
-        )
-        base_response["components"] = [
-            {
-                "id": component.id,
-                "name": component.name,
-                "slug": component.slug,
-                "visibility": component.visibility,
-                "is_global": component.is_global,
-                "component_type": component.component_type,
-                "component_type_display": component.get_component_type_display(),
-            }
-            for component in item.components.all()
-        ]
-        # Include identifiers data
-        base_response["identifiers"] = [
-            {
-                "id": identifier.id,
-                "identifier_type": identifier.identifier_type,
-                "value": identifier.value,
-                "created_at": identifier.created_at.isoformat(),
-            }
-            for identifier in item.identifiers.all()
-        ]
-        # Include links data
-        base_response["links"] = [
-            {
-                "id": link.id,
-                "link_type": link.link_type,
-                "title": link.title,
-                "url": link.url,
-                "description": link.description,
-                "created_at": link.created_at.isoformat(),
-            }
-            for link in item.links.all()
-        ]
-        # Include lifecycle event fields (aligned with Common Lifecycle Enumeration)
-        base_response["release_date"] = item.release_date.isoformat() if item.release_date else None
-        base_response["end_of_support"] = item.end_of_support.isoformat() if item.end_of_support else None
-        base_response["end_of_life"] = item.end_of_life.isoformat() if item.end_of_life else None
-    elif item_type == "component":
-        base_response["visibility"] = item.visibility
-        base_response["gating_mode"] = item.gating_mode
-        base_response["nda_document_id"] = str(item.nda_document.id) if item.nda_document_id else None
-        base_response["sbom_count"] = item.sbom_count if hasattr(item, "sbom_count") else item.sbom_set.count()
-        base_response["document_count"] = (
-            item.document_count if hasattr(item, "document_count") else item.document_set.count()
-        )
-        base_response["metadata"] = item.metadata
-        base_response["component_type"] = item.component_type
-        base_response["component_type_display"] = item.get_component_type_display()
-        base_response["is_global"] = getattr(item, "is_global", False)
-
-    return base_response
+        return _build_product_response(request, item, has_crud_permissions)
+    if item_type == "component":
+        return _build_component_response(request, item, has_crud_permissions)
+    raise ValueError(f"Unknown item_type: {item_type!r}")
 
 
 def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any:
@@ -1629,6 +1660,11 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
 
             # Enforce scope exclusivity: a workspace-scoped (global) component
             # must not be attached to any product.
+            # Note: ``Component.save()`` ALSO detaches products when
+            # ``is_global=True`` (see sboms/models.py). Keeping this explicit
+            # clear is belt-and-suspenders so the M2M is empty *before* the
+            # save (full_clean/admin paths that introspect the relationship
+            # mid-update see the consistent state).
             if component.is_global:
                 component.products.clear()
 
@@ -1756,7 +1792,11 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     setattr(component, field, value)
 
             if component.is_global:
-                # Optimization: Only detach if there are actually products to detach from
+                # Optimization: Only detach if there are actually products to detach from.
+                # Belt-and-suspenders: ``Component.save()`` ALSO detaches products
+                # when ``is_global=True`` (see sboms/models.py). Keeping this
+                # explicit clear here so the M2M is empty *before* save returns
+                # to callers that re-query the relationship post-PATCH.
                 if component.products.exists():
                     component.products.clear()
 
