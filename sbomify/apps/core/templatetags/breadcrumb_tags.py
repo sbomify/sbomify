@@ -110,8 +110,15 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
     elif item_type == "component":
         component_id = item.get("id") if isinstance(item, dict) else item.id
         # Limit columns + cap to a small set; the referrer-match loop only
-        # needs id/slug/name and there's no value in materialising every
-        # public product attached to a heavily-shared component.
+        # needs `id`, `name`, and `Product.slug`, and there's no value in
+        # materialising every public product attached to a heavily-shared
+        # component.
+        #
+        # `Product.slug` is a `@property` computed from `name` via
+        # `slugify()` (see sboms/models.py), not a deferred DB column —
+        # so `.only("id", "name")` covers `detect_product_from_referrer`'s
+        # access pattern (`product.id`, `product.name`, `product.slug`)
+        # without triggering an N+1.
         public_products = (
             Product.objects.filter(components__id=component_id, is_public=True)
             .order_by("id")

@@ -10,7 +10,7 @@ Accepted
 
 sbomify's workspace hierarchy was designed in 2024 as four levels:
 
-```
+```text
 Workspace (Team) → Product → Project → Component → SBOM / Document
 ```
 
@@ -50,7 +50,7 @@ undermined the layer's value:
 
 Collapse the hierarchy to three levels:
 
-```
+```text
 Workspace (Team) → Product → Component → SBOM / Document
 ```
 
@@ -70,7 +70,7 @@ which are updated in lockstep.
 
 A component appears on the public trust center iff:
 
-```
+```text
 Product.is_public = True
 AND Component.visibility ∈ {PUBLIC, GATED}
 ```

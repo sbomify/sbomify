@@ -11,13 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 The Project layer has been removed from the workspace hierarchy. The model goes from
 
-```
+```text
 Workspace (Team) → Product → Project → Component → SBOM / Document
 ```
 
 to
 
-```
+```text
 Workspace (Team) → Product → Component → SBOM / Document
 ```
 
