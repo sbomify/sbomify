@@ -107,7 +107,13 @@ def test_error_response_schema_round_trip():
         "name": ["Component with this Team and Name already exists."]
     }, "ErrorResponse.errors must round-trip through pydantic serialization."
 
-    # Without `errors` set, the field is None (omitted in the wire response
-    # by django-ninja's default exclude_none behaviour).
+    # Without `errors` set, the field defaults to None at the pydantic
+    # level. Note: django-ninja does NOT apply `exclude_none` by default,
+    # so the wire response includes `"errors": null` rather than omitting
+    # the key entirely (verified by `teams/tests/test_contact_profiles.py
+    # ::test_get_contact_profile_not_found`, which asserts
+    # `errors: None` in the JSON body for a 404 response). Clients that
+    # need to distinguish "field not set" from "field has no errors"
+    # should treat both `null` and missing as "no per-field info".
     resp_no_errors = ErrorResponse(detail="not found", error_code=ErrorCode.NOT_FOUND)
     assert resp_no_errors.errors is None
