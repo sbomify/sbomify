@@ -55,6 +55,13 @@ class ErrorCode(str, Enum):
 class ErrorResponse(BaseModel):
     detail: str
     error_code: Optional[ErrorCode] = None
+    # Optional per-field validation errors. Shape matches Django's
+    # `ValidationError.message_dict`: `{"<field-name>": ["<msg1>", "<msg2>"]}`.
+    # Without declaring this here, django-ninja silently strips the `errors`
+    # key from the response body (it serializes against the OpenAPI schema),
+    # so clients can't tell whether a 400 was a missing field, duplicate
+    # name, invalid choice, etc. See issue #952 for the full rationale.
+    errors: Optional[dict[str, list[str]]] = None
 
     class Config:
         use_enum_values = True
