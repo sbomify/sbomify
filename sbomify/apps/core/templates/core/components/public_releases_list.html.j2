@@ -43,7 +43,7 @@
                                         {% if release.version %}
                                             <code class="text-primary bg-primary/5 px-1.5 py-0.5 rounded text-[0.65rem] font-mono">{{ release.version }}</code>
                                         {% endif %}
-                                        <span>{{ release.released_at|default:release.created_at|naturaltime }}</span>
+                                        <span>{{ release.released_at|default_if_none:release.created_at|naturaltime }}</span>
                                     </div>
                                 </td>
                                 <td class="py-3 px-4 hidden md:table-cell">
@@ -80,8 +80,8 @@
                                     {% endif %}
                                 </td>
                                 <td class="py-3 px-4 text-text-muted text-sm whitespace-nowrap hidden md:table-cell">
-                                    <span title="{{ release.released_at|default:release.created_at }}">
-                                        {{ release.released_at|default:release.created_at|naturaltime }}
+                                    <span title="{{ release.released_at|default_if_none:release.created_at }}">
+                                        {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                                     </span>
                                 </td>
                                 <td class="py-3 px-4 text-right">

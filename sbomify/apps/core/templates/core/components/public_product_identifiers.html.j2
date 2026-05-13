@@ -28,7 +28,7 @@
                                             <div class="barcode-wrapper inline-block"
                                                  x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                                 <svg data-barcode-id="{{ identifier.id }}"
-                                                     class="barcode-svg max-w-40 h-auto"
+                                                     class="barcode-svg max-w-[150px] h-auto"
                                                      x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
                                                 </svg>
                                                 <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
