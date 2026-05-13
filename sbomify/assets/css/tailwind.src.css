@@ -2231,6 +2231,19 @@ html.no-transitions * {
   border-bottom: none;
 }
 
+/* Tighter table cell padding on small screens so 3-column tables
+   (Name + Created + Actions) fit in 375px viewports without a horizontal
+   scrollbar. The desktop padding (1rem) eats ~96px of horizontal space
+   across three columns — too much when the viewport is barely 320px wide
+   after card chrome. */
+@media (max-width: 640px) {
+  .tw-table th,
+  .tw-table td {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
 /* Sortable header */
 .tw-table-sortable {
   cursor: pointer;
