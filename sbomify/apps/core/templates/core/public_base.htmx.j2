@@ -918,160 +918,223 @@
                 color: var(--brand-color);
                 font-size: 0.75rem;
             }
-</style>
-{% block extra_css %}{% endblock %}
-<title>
-{% block title %}{% endblock %}
--
-{% if brand.name %}
-{{ brand.name }}
-{% else %}
-sbomify
-{% endif %}
-</title>
-{% endblock %}
-{% vite_hmr_client %}
-</head>
-<body class="public-page" data-theme="public">
-<!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
-{% if request.user.is_authenticated and team and team.key %}
-<div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
-{% endif %}
-<!-- Public Page Layout -->
-{% include "core/components/messages.html.j2" %}
-<div class="public-page-layout">
-<!-- Brand Header -->
-<header class="public-header">
-<div class="public-header-container">
-<div class="header-spacer"></div>
-<div class="brand-section">
-{% workspace_public_url as trust_center_url %}
-{% if trust_center_url %}
-<a href="{{ trust_center_url }}" class="brand-logo-link" title="Trust Center Home">
-{% if brand.brand_image %}
-<img src="{{ brand.brand_image }}" alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo" class="brand-logo" width="32" height="32">
-{% else %}
-<img src="{% static 'img/sbomify.svg' %}" alt="sbomify Logo" class="brand-logo" width="32" height="32">
-{% endif %}
-</a>
-{% else %}
-{% if brand.brand_image %}
-<img src="{{ brand.brand_image }}" alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo" class="brand-logo" width="32" height="32">
-{% else %}
-<img src="{% static 'img/sbomify.svg' %}" alt="sbomify Logo" class="brand-logo" width="32" height="32">
-{% endif %}
-{% endif %}
-</div>
-<div class="header-actions">
-{# Theme Toggle #}
-<div class="theme-toggle" x-data="themeToggle()" @click.outside="open = false" @keydown.escape.window="open = false">
-<button class="theme-toggle-btn" type="button" @click="open = !open" :aria-expanded="open" :title="'Theme: ' + currentLabel">
-<i :class="currentIcon"></i>
-</button>
-<div class="theme-toggle-menu" x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 transform scale-100" x-transition:leave-end="opacity-0 transform scale-95" x-cloak>
-<button type="button" class="theme-toggle-item" :class="{ 'active': theme === 'light' }" @click="setTheme('light')">
-<span class="item-content">
-<i class="fas fa-sun"></i>
-<span>Light</span>
-</span>
-<i class="fas fa-check check-icon" x-show="theme === 'light'"></i>
-</button>
-<button type="button" class="theme-toggle-item" :class="{ 'active': theme === 'dark' }" @click="setTheme('dark')">
-<span class="item-content">
-<i class="fas fa-moon"></i>
-<span>Dark</span>
-</span>
-<i class="fas fa-check check-icon" x-show="theme === 'dark'"></i>
-</button>
-<button type="button" class="theme-toggle-item" :class="{ 'active': theme === 'system' }" @click="setTheme('system')">
-<span class="item-content">
-<i class="fas fa-desktop"></i>
-<span>System</span>
-</span>
-<i class="fas fa-check check-icon" x-show="theme === 'system'"></i>
-</button>
-</div>
-</div>
-{% if user.is_authenticated %}
-{% load teams %}
-{% user_workspaces as available_workspaces %}
-{% if available_workspaces|length > 1 %}
-<div class="workspace-dropdown" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
-<button class="workspace-dropdown-btn" type="button" @click="open = !open" :aria-expanded="open" title="Switch workspace">
-<i class="fas fa-briefcase"></i>
-{% if request.session.current_team %}
-<span class="workspace-name-desktop">{{ request.session.current_team.name|workspace_display }}</span>
-<span class="workspace-name-mobile">Workspace</span>
-{% else %}
-<span>Switch Workspace</span>
-{% endif %}
-<i class="fas fa-chevron-down chevron" :class="{ 'rotated': open }"></i>
-</button>
-<div class="workspace-dropdown-menu" x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 transform scale-100" x-transition:leave-end="opacity-0 transform scale-95" x-cloak>
-<div class="workspace-dropdown-header">Switch Workspace</div>
-{% for t_key, t_info in available_workspaces.items %}
-<a class="workspace-dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}" href="{% url 'teams:switch_team' t_key %}">
-<span class="item-content">
-<i class="fas fa-folder"></i>
-{{ t_info.name|workspace_display }}
-</span>
-{% if request.session.current_team.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
-</a>
-{% endfor %}
-</div>
-</div>
-{% endif %}
-{% else %}
-<a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}" class="workspace-dropdown-btn" style="text-decoration: none">
-<i class="fas fa-sign-in-alt"></i>
-<span>Log In</span>
-</a>
-{% endif %}
-</div>
-{% block header_content %}{% endblock %}
-</div>
-</header>
-<!-- Main Content -->
-<main class="public-main">
-<div class="public-content-container">
-<!-- Breadcrumb Navigation -->
-{% block breadcrumb %}{% endblock %}
-<!-- Page Content -->
-{% block content %}{% endblock %}
-</div>
-</main>
-<!-- Footer -->
-<footer class="public-footer">
-<div class="public-footer-container">
-<div class="footer-content-wrapper">
-<div class="footer-title">
-{% if brand.name %}
-{{ brand.name }}
-{% else %}
-sbomify
-{% endif %}
-Trust Center
-</div>
-<div class="footer-divider-full"></div>
-<div class="footer-bottom-row">
-<div class="footer-copyright">
-© {% now "Y" %}
-{% if brand.name %}
-{{ brand.name }}
-{% else %}
-sbomify
-{% endif %}
-</div>
-<div class="footer-powered">
-Powered by <a class="footer-powered-link" href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by" target="_blank" rel="noopener noreferrer">sbomify</a>
-</div>
-</div>
-</div>
-</div>
-</footer>
-</div>
-{# Theme Toggle Script #}
-<script>
+            </style>
+            {% block extra_css %}{% endblock %}
+            <title>
+                {% block title %}{% endblock %}
+                -
+                {% if brand.name %}
+                    {{ brand.name }}
+                {% else %}
+                    sbomify
+                {% endif %}
+            </title>
+        {% endblock %}
+        {% vite_hmr_client %}
+    </head>
+    <body class="public-page" data-theme="public">
+        <!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
+        {% if request.user.is_authenticated and team and team.key %}
+            <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
+        {% endif %}
+        <!-- Public Page Layout -->
+        {% include "core/components/messages.html.j2" %}
+        <div class="public-page-layout">
+            <!-- Brand Header -->
+            <header class="public-header">
+                <div class="public-header-container">
+                    <div class="header-spacer"></div>
+                    <div class="brand-section">
+                        {% workspace_public_url as trust_center_url %}
+                        {% if trust_center_url %}
+                            <a href="{{ trust_center_url }}"
+                               class="brand-logo-link"
+                               title="Trust Center Home">
+                                {% if brand.brand_image %}
+                                    <img src="{{ brand.brand_image }}"
+                                         alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                         class="brand-logo"
+                                         width="32"
+                                         height="32">
+                                {% else %}
+                                    <img src="{% static 'img/sbomify.svg' %}"
+                                         alt="sbomify Logo"
+                                         class="brand-logo"
+                                         width="32"
+                                         height="32">
+                                {% endif %}
+                            </a>
+                        {% else %}
+                            {% if brand.brand_image %}
+                                <img src="{{ brand.brand_image }}"
+                                     alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
+                                     class="brand-logo"
+                                     width="32"
+                                     height="32">
+                            {% else %}
+                                <img src="{% static 'img/sbomify.svg' %}"
+                                     alt="sbomify Logo"
+                                     class="brand-logo"
+                                     width="32"
+                                     height="32">
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="header-actions">
+                        {# Theme Toggle #}
+                        <div class="theme-toggle"
+                             x-data="themeToggle()"
+                             @click.outside="open = false"
+                             @keydown.escape.window="open = false">
+                            <button class="theme-toggle-btn"
+                                    type="button"
+                                    @click="open = !open"
+                                    :aria-expanded="open"
+                                    :title="'Theme: ' + currentLabel">
+                                <i :class="currentIcon"></i>
+                            </button>
+                            <div class="theme-toggle-menu"
+                                 x-show="open"
+                                 x-transition:enter="transition ease-out duration-100"
+                                 x-transition:enter-start="opacity-0 transform scale-95"
+                                 x-transition:enter-end="opacity-100 transform scale-100"
+                                 x-transition:leave="transition ease-in duration-75"
+                                 x-transition:leave-start="opacity-100 transform scale-100"
+                                 x-transition:leave-end="opacity-0 transform scale-95"
+                                 x-cloak>
+                                <button type="button"
+                                        class="theme-toggle-item"
+                                        :class="{ 'active': theme === 'light' }"
+                                        @click="setTheme('light')">
+                                    <span class="item-content">
+                                        <i class="fas fa-sun"></i>
+                                        <span>Light</span>
+                                    </span>
+                                    <i class="fas fa-check check-icon" x-show="theme === 'light'"></i>
+                                </button>
+                                <button type="button"
+                                        class="theme-toggle-item"
+                                        :class="{ 'active': theme === 'dark' }"
+                                        @click="setTheme('dark')">
+                                    <span class="item-content">
+                                        <i class="fas fa-moon"></i>
+                                        <span>Dark</span>
+                                    </span>
+                                    <i class="fas fa-check check-icon" x-show="theme === 'dark'"></i>
+                                </button>
+                                <button type="button"
+                                        class="theme-toggle-item"
+                                        :class="{ 'active': theme === 'system' }"
+                                        @click="setTheme('system')">
+                                    <span class="item-content">
+                                        <i class="fas fa-desktop"></i>
+                                        <span>System</span>
+                                    </span>
+                                    <i class="fas fa-check check-icon" x-show="theme === 'system'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        {% if user.is_authenticated %}
+                            {% load teams %}
+                            {% user_workspaces as available_workspaces %}
+                            {% if available_workspaces|length > 1 %}
+                                <div class="workspace-dropdown"
+                                     x-data="{ open: false }"
+                                     @click.outside="open = false"
+                                     @keydown.escape.window="open = false">
+                                    <button class="workspace-dropdown-btn"
+                                            type="button"
+                                            @click="open = !open"
+                                            :aria-expanded="open"
+                                            title="Switch workspace">
+                                        <i class="fas fa-briefcase"></i>
+                                        {% if request.session.current_team %}
+                                            <span class="workspace-name-desktop">{{ request.session.current_team.name|workspace_display }}</span>
+                                            <span class="workspace-name-mobile">Workspace</span>
+                                        {% else %}
+                                            <span>Switch Workspace</span>
+                                        {% endif %}
+                                        <i class="fas fa-chevron-down chevron" :class="{ 'rotated': open }"></i>
+                                    </button>
+                                    <div class="workspace-dropdown-menu"
+                                         x-show="open"
+                                         x-transition:enter="transition ease-out duration-100"
+                                         x-transition:enter-start="opacity-0 transform scale-95"
+                                         x-transition:enter-end="opacity-100 transform scale-100"
+                                         x-transition:leave="transition ease-in duration-75"
+                                         x-transition:leave-start="opacity-100 transform scale-100"
+                                         x-transition:leave-end="opacity-0 transform scale-95"
+                                         x-cloak>
+                                        <div class="workspace-dropdown-header">Switch Workspace</div>
+                                        {% for t_key, t_info in available_workspaces.items %}
+                                            <a class="workspace-dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}"
+                                               href="{% url 'teams:switch_team' t_key %}">
+                                                <span class="item-content">
+                                                    <i class="fas fa-folder"></i>
+                                                    {{ t_info.name|workspace_display }}
+                                                </span>
+                                                {% if request.session.current_team.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}"
+                               class="workspace-dropdown-btn"
+                               style="text-decoration: none">
+                                <i class="fas fa-sign-in-alt"></i>
+                                <span>Log In</span>
+                            </a>
+                        {% endif %}
+                    </div>
+                    {% block header_content %}{% endblock %}
+                </div>
+            </header>
+            <!-- Main Content -->
+            <main class="public-main">
+                <div class="public-content-container">
+                    <!-- Breadcrumb Navigation -->
+                    {% block breadcrumb %}{% endblock %}
+                    <!-- Page Content -->
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+            <!-- Footer -->
+            <footer class="public-footer">
+                <div class="public-footer-container">
+                    <div class="footer-content-wrapper">
+                        <div class="footer-title">
+                            {% if brand.name %}
+                                {{ brand.name }}
+                            {% else %}
+                                sbomify
+                            {% endif %}
+                            Trust Center
+                        </div>
+                        <div class="footer-divider-full"></div>
+                        <div class="footer-bottom-row">
+                            <div class="footer-copyright">
+                                © {% now "Y" %}
+                                {% if brand.name %}
+                                    {{ brand.name }}
+                                {% else %}
+                                    sbomify
+                                {% endif %}
+                            </div>
+                            <div class="footer-powered">
+                                Powered by <a class="footer-powered-link"
+    href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by"
+    target="_blank"
+    rel="noopener noreferrer">sbomify</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+        {# Theme Toggle Script #}
+        <script>
             // Helper to apply theme (sets data-theme and CSS variables)
             function applyTheme(isDark) {
                 const html = document.documentElement;
@@ -1137,9 +1200,10 @@ Powered by <a class="footer-powered-link" href="https://sbomify.com?utm_source=s
                     }
                 };
             }
-</script>
-{% block scripts %}{% endblock %}
-{% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
-{% htmx_script %}
-</body>
+        </script>
+        {% block scripts %}
+        {% endblock %}
+        {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+        {% htmx_script %}
+    </body>
 </html>

@@ -1015,7 +1015,7 @@
 @media (max-width: 576px) {
     .public-item-header {
         padding: var(--spacing-md);
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
     }
 
     .public-item-title {
@@ -1159,7 +1159,7 @@
 
     /* Section cards */
     .public-section {
-        margin-bottom: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
     }
 
     .public-section>.card {
