@@ -114,7 +114,8 @@
                                 <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
                                 <p class="text-sm text-text-muted m-0">
                                     <i class="fas fa-clock text-xs mr-1"></i>
-                                    Created {{ token.created_at|timesince }} ago
+                                    Created
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
                                 </p>
                             </div>
                             <div class="flex-shrink-0">
@@ -144,7 +145,8 @@
                                 </p>
                                 <p class="text-sm text-text-muted m-0">
                                     <i class="fas fa-clock text-xs mr-1"></i>
-                                    Created {{ token.created_at|timesince }} ago
+                                    Created
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
                                 </p>
                             </div>
                             <div class="flex-shrink-0">

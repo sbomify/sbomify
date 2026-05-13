@@ -192,7 +192,8 @@
                                 <div class="flex items-center gap-4 mt-1">
                                     <span class="text-xs text-text-muted flex items-center gap-1">
                                         <i class="fas fa-calendar-plus"></i>
-                                        Sent {{ invitation.created_at|date:"M j, Y" }}
+                                        Sent
+                                        {% include 'core/components/relative_time.html.j2' with timestamp=invitation.created_at %}
                                     </span>
                                     <span class="text-xs text-text-muted flex items-center gap-1">
                                         <i class="fas fa-hourglass-half"></i>

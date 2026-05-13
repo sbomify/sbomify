@@ -1,0 +1,35 @@
+{% comment %}
+Render a timestamp as a human-readable relative time ("5 days ago") with a
+hover-over tooltip showing the absolute date + time.
+
+Required kwarg:
+  timestamp - a `datetime` or `date` value. The component renders the
+              fallback if the value is falsy.
+
+Optional kwarg:
+  fallback - displayed when `timestamp` is None/empty. Default: "—"
+
+Usage:
+  {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+  {% include 'core/components/relative_time.html.j2' with timestamp=record.updated_at fallback='Never' %}
+
+Only the `x-tooltip` Alpine directive is bound (no native `title=`); having
+both would show two stacked tooltips in JS-enabled sessions. The tooltip
+text degrades gracefully — when Alpine isn't loaded, the span just shows
+the relative time, which is still useful.
+
+Accessibility: the span carries `tabindex="0"` so keyboard users can
+focus it (which also triggers the Alpine tooltip), and an `aria-label`
+that includes BOTH the relative-time text AND the absolute timestamp so
+screen-reader users get the full context in one announcement.
+{% endcomment %}
+{% if timestamp %}
+    {% with absolute=timestamp|date:"M j, Y, H:i:s" relative=timestamp|timesince %}
+        <span class="cursor-help"
+              tabindex="0"
+              aria-label="{{ relative }} ago ({{ absolute }})"
+              x-tooltip="'{{ absolute|escapejs }}'">{{ relative }} ago</span>
+    {% endwith %}
+{% else %}
+    <span class="text-text-muted">{{ fallback|default:"—" }}</span>
+{% endif %}

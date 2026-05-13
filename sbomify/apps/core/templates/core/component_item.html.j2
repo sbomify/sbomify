@@ -98,7 +98,9 @@
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
                     <i class="fas fa-calendar text-primary text-xs"></i>
                     <span class="text-text-muted">Uploaded:</span>
-                    <span class="font-semibold text-text">{{ item.created_at|date:"M d, Y" }}</span>
+                    <span class="font-semibold text-text">
+                        {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+                    </span>
                 </div>
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
                     <i class="fas fa-upload text-info text-xs"></i>
@@ -132,7 +134,9 @@
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
                     <i class="fas fa-calendar text-primary text-xs"></i>
                     <span class="text-text-muted">Uploaded:</span>
-                    <span class="font-semibold text-text">{{ item.created_at|date:"M d, Y" }}</span>
+                    <span class="font-semibold text-text">
+                        {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+                    </span>
                 </div>
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
                     <i class="fas fa-upload text-primary text-xs"></i>
