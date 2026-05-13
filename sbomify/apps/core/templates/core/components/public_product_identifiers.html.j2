@@ -3,11 +3,7 @@
 {% if product_identifiers %}
     <div class="public-section" x-data="productIdentifiersBarcodes()">
         <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-fingerprint text-primary"></i>Product Identifiers
-                </h4>
-            </div>
+            {% include 'core/components/public_section_header.html.j2' with title='Product Identifiers' icon='fa-fingerprint' %}
             <div class="p-6">
                 <div class="overflow-x-auto">
                     <table class="tw-table w-full text-sm">
@@ -32,7 +28,7 @@
                                             <div class="barcode-wrapper inline-block"
                                                  x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                                 <svg data-barcode-id="{{ identifier.id }}"
-                                                     class="barcode-svg max-w-[150px] h-auto"
+                                                     class="barcode-svg max-w-40 h-auto"
                                                      x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']">
                                                 </svg>
                                                 <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"

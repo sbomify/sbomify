@@ -23,10 +23,10 @@
                     <thead>
                         <tr class="bg-border/30">
                             <th class="text-left py-3 px-4 font-medium text-text-muted">Release</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Version</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell">Version</th>
                             <th class="text-left py-3 px-4 font-medium text-text-muted">Status</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Description</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Released</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell">Description</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell">Released</th>
                             <th class="text-right py-3 px-4 font-medium text-text-muted"></th>
                         </tr>
                     </thead>
@@ -38,8 +38,15 @@
                                        class="font-semibold text-text hover:text-primary no-underline">
                                         {{ release.name }}
                                     </a>
+                                    {# Mobile-only inline meta — duplicates hidden columns on small screens #}
+                                    <div class="md:hidden mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+                                        {% if release.version %}
+                                            <code class="text-primary bg-primary/5 px-1.5 py-0.5 rounded text-[0.65rem] font-mono">{{ release.version }}</code>
+                                        {% endif %}
+                                        <span>{{ release.released_at|default:release.created_at|naturaltime }}</span>
+                                    </div>
                                 </td>
-                                <td class="py-3 px-4">
+                                <td class="py-3 px-4 hidden md:table-cell">
                                     {% if release.version %}
                                         <code class="text-primary bg-primary/5 px-2 py-0.5 rounded text-xs">{{ release.version }}</code>
                                     {% else %}
@@ -65,21 +72,21 @@
                                         {% endif %}
                                     </div>
                                 </td>
-                                <td class="py-3 px-4 text-text-muted max-w-xs">
+                                <td class="py-3 px-4 text-text-muted max-w-xs hidden lg:table-cell">
                                     {% if release.description %}
                                         <span title="{{ release.description }}">{{ release.description|truncatechars:50 }}</span>
                                     {% else %}
                                         <span class="text-text-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="py-3 px-4 text-text-muted text-sm whitespace-nowrap">
+                                <td class="py-3 px-4 text-text-muted text-sm whitespace-nowrap hidden md:table-cell">
                                     <span title="{{ release.released_at|default:release.created_at }}">
                                         {{ release.released_at|default:release.created_at|naturaltime }}
                                     </span>
                                 </td>
                                 <td class="py-3 px-4 text-right">
                                     <a href="{{ release.public_url }}"
-                                       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors no-underline">
+                                       class="inline-flex items-center gap-1.5 min-h-9 px-3 py-2 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors no-underline">
                                         View
                                         <i class="fas fa-arrow-right text-[0.625rem]"></i>
                                     </a>

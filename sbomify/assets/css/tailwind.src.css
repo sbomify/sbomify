@@ -1604,6 +1604,21 @@ html.no-transitions * {
   border: 1px solid rgb(var(--color-info) / 0.2);
 }
 
+/* Neutral chip — squared variant for table-like contexts (counts, types).
+   Pair with utilities like .whitespace-nowrap as needed. */
+.tw-chip-neutral {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  background-color: rgb(var(--color-border) / 0.5);
+  color: rgb(var(--color-text-muted));
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
 /* Dot Badge - with status indicator */
 .tw-badge-dot {
   gap: 0.375rem;

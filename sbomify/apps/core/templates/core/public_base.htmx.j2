@@ -23,16 +23,18 @@
             }
             // Also mark if using system preference for the toggle component
             if(!t || t==='system') html.setAttribute('data-theme-source','system');
-            // Set critical CSS variables immediately to prevent flash
+            // Set critical CSS variables on the html element to prevent flash before
+            // the linked stylesheets resolve. Inline style on <html> already beats
+            // selector-based rules — no !important needed.
             var style = html.style;
             if(isDark) {
-                style.setProperty('--color-surface','30 41 59','important');
-                style.setProperty('--color-surface-elevated','51 65 85','important');
-                style.setProperty('--color-border','51 65 85','important');
+                style.setProperty('--color-surface','30 41 59');
+                style.setProperty('--color-surface-elevated','51 65 85');
+                style.setProperty('--color-border','51 65 85');
             } else {
-                style.setProperty('--color-surface','255 255 255','important');
-                style.setProperty('--color-surface-elevated','255 255 255','important');
-                style.setProperty('--color-border','226 232 240','important');
+                style.setProperty('--color-surface','255 255 255');
+                style.setProperty('--color-surface-elevated','255 255 255');
+                style.setProperty('--color-border','226 232 240');
             }
         })();
     </script>
@@ -191,16 +193,18 @@
                 --gray-500: #64748b;
                 --gray-600: #475569;
                 --white: #ffffff;
-                /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                --color-surface: 255 255 255 !important;
-                --color-surface-elevated: 255 255 255 !important;
-                --color-surface-hover: 241 245 249 !important;
-                --color-border: 226 232 240 !important;
-                --color-border-light: 241 245 249 !important;
-                --color-text: 15 23 42 !important;
-                --color-text-secondary: 51 65 85 !important;
-                --color-text-muted: 100 116 139 !important;
-                --color-background: 248 250 252 !important;
+                /* Tailwind color variables (RGB triplets) — public trust center is light-default;
+                   the inline <style> block already comes after tokens.css in source order,
+                   so no !important is needed to win the cascade. */
+                --color-surface: 255 255 255;
+                --color-surface-elevated: 255 255 255;
+                --color-surface-hover: 241 245 249;
+                --color-border: 226 232 240;
+                --color-border-light: 241 245 249;
+                --color-text: 15 23 42;
+                --color-text-secondary: 51 65 85;
+                --color-text-muted: 100 116 139;
+                --color-background: 248 250 252;
                 color-scheme: light;
             }
 
@@ -229,16 +233,17 @@
                 --gray-500: #cbd5e1;
                 --gray-600: #e2e8f0;
                 --white: #f8fafc;
-                /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                --color-surface: 30 41 59 !important;
-                --color-surface-elevated: 51 65 85 !important;
-                --color-surface-hover: 71 85 105 !important;
-                --color-border: 51 65 85 !important;
-                --color-border-light: 71 85 105 !important;
-                --color-text: 248 250 252 !important;
-                --color-text-secondary: 203 213 225 !important;
-                --color-text-muted: 148 163 184 !important;
-                --color-background: 15 23 42 !important;
+                /* Tailwind color variables — trust center dark uses a slate palette
+                   (intentionally distinct from the app's navy dark; see ADR/brand notes). */
+                --color-surface: 30 41 59;
+                --color-surface-elevated: 51 65 85;
+                --color-surface-hover: 71 85 105;
+                --color-border: 51 65 85;
+                --color-border-light: 71 85 105;
+                --color-text: 248 250 252;
+                --color-text-secondary: 203 213 225;
+                --color-text-muted: 148 163 184;
+                --color-background: 15 23 42;
                 color-scheme: dark;
             }
 
@@ -267,16 +272,16 @@
                 --gray-500: #64748b;
                 --gray-600: #475569;
                 --white: #ffffff;
-                /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                --color-surface: 255 255 255 !important;
-                --color-surface-elevated: 255 255 255 !important;
-                --color-surface-hover: 241 245 249 !important;
-                --color-border: 226 232 240 !important;
-                --color-border-light: 241 245 249 !important;
-                --color-text: 15 23 42 !important;
-                --color-text-secondary: 51 65 85 !important;
-                --color-text-muted: 100 116 139 !important;
-                --color-background: 248 250 252 !important;
+                /* Tailwind color variables — system-light defaults match the canonical light theme. */
+                --color-surface: 255 255 255;
+                --color-surface-elevated: 255 255 255;
+                --color-surface-hover: 241 245 249;
+                --color-border: 226 232 240;
+                --color-border-light: 241 245 249;
+                --color-text: 15 23 42;
+                --color-text-secondary: 51 65 85;
+                --color-text-muted: 100 116 139;
+                --color-background: 248 250 252;
                 color-scheme: light;
             }
 
@@ -306,16 +311,16 @@
                     --gray-500: #cbd5e1;
                     --gray-600: #e2e8f0;
                     --white: #f8fafc;
-                    /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                    --color-surface: 30 41 59 !important;
-                    --color-surface-elevated: 51 65 85 !important;
-                    --color-surface-hover: 71 85 105 !important;
-                    --color-border: 51 65 85 !important;
-                    --color-border-light: 71 85 105 !important;
-                    --color-text: 248 250 252 !important;
-                    --color-text-secondary: 203 213 225 !important;
-                    --color-text-muted: 148 163 184 !important;
-                    --color-background: 15 23 42 !important;
+                    /* Tailwind color variables — slate dark, mirrors html[data-theme="dark"]. */
+                    --color-surface: 30 41 59;
+                    --color-surface-elevated: 51 65 85;
+                    --color-surface-hover: 71 85 105;
+                    --color-border: 51 65 85;
+                    --color-border-light: 71 85 105;
+                    --color-text: 248 250 252;
+                    --color-text-secondary: 203 213 225;
+                    --color-text-muted: 148 163 184;
+                    --color-background: 15 23 42;
                     color-scheme: dark;
                 }
             }
@@ -327,13 +332,13 @@
                =========================================== */
 
             /* Links use accent color */
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item) {
+            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
                 color: var(--accent-color);
                 text-decoration: none;
                 transition: color 0.15s ease;
             }
 
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):hover {
+            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
                 color: var(--accent-color-dark);
             }
 
@@ -631,14 +636,15 @@
             }
 
             .footer-powered a {
-                color: var(--brand-color, #6366f1);
+                color: var(--text-secondary, #475569);
                 text-decoration: none;
                 font-weight: 500;
                 transition: color 0.2s ease;
             }
 
             .footer-powered a:hover {
-                color: color-mix(in srgb, var(--brand-color, #6366f1), #000 15%);
+                color: var(--text-primary, #0f172a);
+                text-decoration: underline;
             }
 
             @media (max-width: 768px) {
@@ -704,7 +710,8 @@
                 display: inline-flex;
                 align-items: center;
                 gap: 0.5rem;
-                padding: 0.375rem 0.75rem;
+                min-height: 2.5rem;
+                padding: 0.5rem 0.875rem;
                 font-size: 0.875rem;
                 font-weight: 500;
                 color: var(--text-primary);
@@ -827,8 +834,8 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 36px;
-                height: 36px;
+                width: 2.5rem;
+                height: 2.5rem;
                 padding: 0;
                 font-size: 1rem;
                 color: var(--text-primary);
@@ -911,222 +918,160 @@
                 color: var(--brand-color);
                 font-size: 0.75rem;
             }
-            </style>
-            {% block extra_css %}{% endblock %}
-            <title>
-                {% block title %}{% endblock %}
-                -
-                {% if brand.name %}
-                    {{ brand.name }}
-                {% else %}
-                    sbomify
-                {% endif %}
-            </title>
-        {% endblock %}
-        {% vite_hmr_client %}
-    </head>
-    <body class="public-page" data-theme="public">
-        <!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
-        {% if request.user.is_authenticated and team and team.key %}
-            <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
-        {% endif %}
-        <!-- Public Page Layout -->
-        {% include "core/components/messages.html.j2" %}
-        <div class="public-page-layout">
-            <!-- Brand Header -->
-            <header class="public-header">
-                <div class="public-header-container">
-                    <div class="header-spacer"></div>
-                    <div class="brand-section">
-                        {% workspace_public_url as trust_center_url %}
-                        {% if trust_center_url %}
-                            <a href="{{ trust_center_url }}"
-                               class="brand-logo-link"
-                               title="Trust Center Home">
-                                {% if brand.brand_image %}
-                                    <img src="{{ brand.brand_image }}"
-                                         alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
-                                         class="brand-logo"
-                                         width="32"
-                                         height="32">
-                                {% else %}
-                                    <img src="{% static 'img/sbomify.svg' %}"
-                                         alt="sbomify Logo"
-                                         class="brand-logo"
-                                         width="32"
-                                         height="32">
-                                {% endif %}
-                            </a>
-                        {% else %}
-                            {% if brand.brand_image %}
-                                <img src="{{ brand.brand_image }}"
-                                     alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo"
-                                     class="brand-logo"
-                                     width="32"
-                                     height="32">
-                            {% else %}
-                                <img src="{% static 'img/sbomify.svg' %}"
-                                     alt="sbomify Logo"
-                                     class="brand-logo"
-                                     width="32"
-                                     height="32">
-                            {% endif %}
-                        {% endif %}
-                    </div>
-                    <div class="header-actions">
-                        {# Theme Toggle #}
-                        <div class="theme-toggle"
-                             x-data="themeToggle()"
-                             @click.outside="open = false"
-                             @keydown.escape.window="open = false">
-                            <button class="theme-toggle-btn"
-                                    type="button"
-                                    @click="open = !open"
-                                    :aria-expanded="open"
-                                    :title="'Theme: ' + currentLabel">
-                                <i :class="currentIcon"></i>
-                            </button>
-                            <div class="theme-toggle-menu"
-                                 x-show="open"
-                                 x-transition:enter="transition ease-out duration-100"
-                                 x-transition:enter-start="opacity-0 transform scale-95"
-                                 x-transition:enter-end="opacity-100 transform scale-100"
-                                 x-transition:leave="transition ease-in duration-75"
-                                 x-transition:leave-start="opacity-100 transform scale-100"
-                                 x-transition:leave-end="opacity-0 transform scale-95"
-                                 x-cloak>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'light' }"
-                                        @click="setTheme('light')">
-                                    <span class="item-content">
-                                        <i class="fas fa-sun"></i>
-                                        <span>Light</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'light'"></i>
-                                </button>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'dark' }"
-                                        @click="setTheme('dark')">
-                                    <span class="item-content">
-                                        <i class="fas fa-moon"></i>
-                                        <span>Dark</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'dark'"></i>
-                                </button>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'system' }"
-                                        @click="setTheme('system')">
-                                    <span class="item-content">
-                                        <i class="fas fa-desktop"></i>
-                                        <span>System</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'system'"></i>
-                                </button>
-                            </div>
-                        </div>
-                        {% if user.is_authenticated %}
-                            {% load teams %}
-                            {% user_workspaces as available_workspaces %}
-                            {% if available_workspaces|length > 1 %}
-                                <div class="workspace-dropdown"
-                                     x-data="{ open: false }"
-                                     @click.outside="open = false"
-                                     @keydown.escape.window="open = false">
-                                    <button class="workspace-dropdown-btn"
-                                            type="button"
-                                            @click="open = !open"
-                                            :aria-expanded="open"
-                                            title="Switch workspace">
-                                        <i class="fas fa-briefcase"></i>
-                                        {% if request.session.current_team %}
-                                            <span class="workspace-name-desktop">{{ request.session.current_team.name|workspace_display }}</span>
-                                            <span class="workspace-name-mobile">Workspace</span>
-                                        {% else %}
-                                            <span>Switch Workspace</span>
-                                        {% endif %}
-                                        <i class="fas fa-chevron-down chevron" :class="{ 'rotated': open }"></i>
-                                    </button>
-                                    <div class="workspace-dropdown-menu"
-                                         x-show="open"
-                                         x-transition:enter="transition ease-out duration-100"
-                                         x-transition:enter-start="opacity-0 transform scale-95"
-                                         x-transition:enter-end="opacity-100 transform scale-100"
-                                         x-transition:leave="transition ease-in duration-75"
-                                         x-transition:leave-start="opacity-100 transform scale-100"
-                                         x-transition:leave-end="opacity-0 transform scale-95"
-                                         x-cloak>
-                                        <div class="workspace-dropdown-header">Switch Workspace</div>
-                                        {% for t_key, t_info in available_workspaces.items %}
-                                            <a class="workspace-dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}"
-                                               href="{% url 'teams:switch_team' t_key %}">
-                                                <span class="item-content">
-                                                    <i class="fas fa-folder"></i>
-                                                    {{ t_info.name|workspace_display }}
-                                                </span>
-                                                {% if request.session.current_team.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
-                                            </a>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            {% endif %}
-                        {% else %}
-                            <a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}"
-                               class="workspace-dropdown-btn"
-                               style="text-decoration: none">
-                                <i class="fas fa-sign-in-alt"></i>
-                                <span>Log In</span>
-                            </a>
-                        {% endif %}
-                    </div>
-                    {% block header_content %}{% endblock %}
-                </div>
-            </header>
-            <!-- Main Content -->
-            <main class="public-main">
-                <div class="public-content-container">
-                    <!-- Breadcrumb Navigation -->
-                    {% block breadcrumb %}{% endblock %}
-                    <!-- Page Content -->
-                    {% block content %}{% endblock %}
-                </div>
-            </main>
-            <!-- Footer -->
-            <footer class="public-footer">
-                <div class="public-footer-container">
-                    <div class="footer-content-wrapper">
-                        <div class="footer-title">
-                            {% if brand.name %}
-                                {{ brand.name }}
-                            {% else %}
-                                sbomify
-                            {% endif %}
-                            Trust Center
-                        </div>
-                        <div class="footer-divider-full"></div>
-                        <div class="footer-bottom-row">
-                            <div class="footer-copyright">
-                                © {% now "Y" %}
-                                {% if brand.name %}
-                                    {{ brand.name }}
-                                {% else %}
-                                    sbomify
-                                {% endif %}
-                            </div>
-                            <div class="footer-powered">
-                                Powered by <a href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by"
-    target="_blank"
-    rel="noopener noreferrer">sbomify</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </footer>
-        </div>
-        {# Theme Toggle Script #}
-        <script>
+</style>
+{% block extra_css %}{% endblock %}
+<title>
+{% block title %}{% endblock %}
+-
+{% if brand.name %}
+{{ brand.name }}
+{% else %}
+sbomify
+{% endif %}
+</title>
+{% endblock %}
+{% vite_hmr_client %}
+</head>
+<body class="public-page" data-theme="public">
+<!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
+{% if request.user.is_authenticated and team and team.key %}
+<div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
+{% endif %}
+<!-- Public Page Layout -->
+{% include "core/components/messages.html.j2" %}
+<div class="public-page-layout">
+<!-- Brand Header -->
+<header class="public-header">
+<div class="public-header-container">
+<div class="header-spacer"></div>
+<div class="brand-section">
+{% workspace_public_url as trust_center_url %}
+{% if trust_center_url %}
+<a href="{{ trust_center_url }}" class="brand-logo-link" title="Trust Center Home">
+{% if brand.brand_image %}
+<img src="{{ brand.brand_image }}" alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo" class="brand-logo" width="32" height="32">
+{% else %}
+<img src="{% static 'img/sbomify.svg' %}" alt="sbomify Logo" class="brand-logo" width="32" height="32">
+{% endif %}
+</a>
+{% else %}
+{% if brand.brand_image %}
+<img src="{{ brand.brand_image }}" alt="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %} Logo" class="brand-logo" width="32" height="32">
+{% else %}
+<img src="{% static 'img/sbomify.svg' %}" alt="sbomify Logo" class="brand-logo" width="32" height="32">
+{% endif %}
+{% endif %}
+</div>
+<div class="header-actions">
+{# Theme Toggle #}
+<div class="theme-toggle" x-data="themeToggle()" @click.outside="open = false" @keydown.escape.window="open = false">
+<button class="theme-toggle-btn" type="button" @click="open = !open" :aria-expanded="open" :title="'Theme: ' + currentLabel">
+<i :class="currentIcon"></i>
+</button>
+<div class="theme-toggle-menu" x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 transform scale-100" x-transition:leave-end="opacity-0 transform scale-95" x-cloak>
+<button type="button" class="theme-toggle-item" :class="{ 'active': theme === 'light' }" @click="setTheme('light')">
+<span class="item-content">
+<i class="fas fa-sun"></i>
+<span>Light</span>
+</span>
+<i class="fas fa-check check-icon" x-show="theme === 'light'"></i>
+</button>
+<button type="button" class="theme-toggle-item" :class="{ 'active': theme === 'dark' }" @click="setTheme('dark')">
+<span class="item-content">
+<i class="fas fa-moon"></i>
+<span>Dark</span>
+</span>
+<i class="fas fa-check check-icon" x-show="theme === 'dark'"></i>
+</button>
+<button type="button" class="theme-toggle-item" :class="{ 'active': theme === 'system' }" @click="setTheme('system')">
+<span class="item-content">
+<i class="fas fa-desktop"></i>
+<span>System</span>
+</span>
+<i class="fas fa-check check-icon" x-show="theme === 'system'"></i>
+</button>
+</div>
+</div>
+{% if user.is_authenticated %}
+{% load teams %}
+{% user_workspaces as available_workspaces %}
+{% if available_workspaces|length > 1 %}
+<div class="workspace-dropdown" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
+<button class="workspace-dropdown-btn" type="button" @click="open = !open" :aria-expanded="open" title="Switch workspace">
+<i class="fas fa-briefcase"></i>
+{% if request.session.current_team %}
+<span class="workspace-name-desktop">{{ request.session.current_team.name|workspace_display }}</span>
+<span class="workspace-name-mobile">Workspace</span>
+{% else %}
+<span>Switch Workspace</span>
+{% endif %}
+<i class="fas fa-chevron-down chevron" :class="{ 'rotated': open }"></i>
+</button>
+<div class="workspace-dropdown-menu" x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 transform scale-95" x-transition:enter-end="opacity-100 transform scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 transform scale-100" x-transition:leave-end="opacity-0 transform scale-95" x-cloak>
+<div class="workspace-dropdown-header">Switch Workspace</div>
+{% for t_key, t_info in available_workspaces.items %}
+<a class="workspace-dropdown-item {% if request.session.current_team.key == t_key %}active{% endif %}" href="{% url 'teams:switch_team' t_key %}">
+<span class="item-content">
+<i class="fas fa-folder"></i>
+{{ t_info.name|workspace_display }}
+</span>
+{% if request.session.current_team.key == t_key %}<i class="fas fa-check check-icon"></i>{% endif %}
+</a>
+{% endfor %}
+</div>
+</div>
+{% endif %}
+{% else %}
+<a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}" class="workspace-dropdown-btn" style="text-decoration: none">
+<i class="fas fa-sign-in-alt"></i>
+<span>Log In</span>
+</a>
+{% endif %}
+</div>
+{% block header_content %}{% endblock %}
+</div>
+</header>
+<!-- Main Content -->
+<main class="public-main">
+<div class="public-content-container">
+<!-- Breadcrumb Navigation -->
+{% block breadcrumb %}{% endblock %}
+<!-- Page Content -->
+{% block content %}{% endblock %}
+</div>
+</main>
+<!-- Footer -->
+<footer class="public-footer">
+<div class="public-footer-container">
+<div class="footer-content-wrapper">
+<div class="footer-title">
+{% if brand.name %}
+{{ brand.name }}
+{% else %}
+sbomify
+{% endif %}
+Trust Center
+</div>
+<div class="footer-divider-full"></div>
+<div class="footer-bottom-row">
+<div class="footer-copyright">
+© {% now "Y" %}
+{% if brand.name %}
+{{ brand.name }}
+{% else %}
+sbomify
+{% endif %}
+</div>
+<div class="footer-powered">
+Powered by <a class="footer-powered-link" href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by" target="_blank" rel="noopener noreferrer">sbomify</a>
+</div>
+</div>
+</div>
+</div>
+</footer>
+</div>
+{# Theme Toggle Script #}
+<script>
             // Helper to apply theme (sets data-theme and CSS variables)
             function applyTheme(isDark) {
                 const html = document.documentElement;
@@ -1192,10 +1137,9 @@
                     }
                 };
             }
-        </script>
-        {% block scripts %}
-        {% endblock %}
-        {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
-        {% htmx_script %}
-    </body>
+</script>
+{% block scripts %}{% endblock %}
+{% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+{% htmx_script %}
+</body>
 </html>

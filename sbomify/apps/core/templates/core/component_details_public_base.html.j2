@@ -25,13 +25,13 @@
             </a>
         {% endif %}
         <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
-            <span class="w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center text-info">
+            <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                 <i class="fas fa-cube"></i>
             </span>
             {{ component.name }}
         </h1>
         <div class="flex flex-wrap gap-2 mb-6">
-            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-warning/10 text-warning flex items-center gap-2">
+            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted flex items-center gap-2">
                 <i class="fas fa-tag"></i>
                 {{ component.component_type_display }}
             </span>
@@ -68,7 +68,7 @@
                             </span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
-                           class="tw-btn-primary text-sm whitespace-nowrap">
+                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">
                             <i class="fas fa-signature mr-1"></i> Sign NDA
                         </a>
                     </div>
@@ -84,7 +84,7 @@
                             <span><strong>NDA Required:</strong> Please sign the NDA to complete your access request.</span>
                         </span>
                         <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
-                           class="tw-btn-primary text-sm whitespace-nowrap">
+                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">
                             <i class="fas fa-signature mr-1"></i> Sign NDA
                         </a>
                     </div>
@@ -94,13 +94,13 @@
                         <span><strong>Access Request Pending:</strong> Your request for access is being reviewed.</span>
                     </div>
                 {% elif access_request_status == 'rejected' %}
-                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-danger/10 border border-danger/30">
                         <span class="flex items-center gap-2 text-text">
-                            <i class="fas fa-times-circle text-warning"></i>
+                            <i class="fas fa-times-circle text-danger"></i>
                             <span><strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.</span>
                         </span>
                         <a href="{% url 'documents:request_access' team.key %}"
-                           class="tw-btn-primary text-sm whitespace-nowrap">Request Access Again</a>
+                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">Request Access Again</a>
                     </div>
                 {% else %}
                     <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
@@ -109,7 +109,7 @@
                             <span><strong>Gated Component:</strong> This component requires approval to download.</span>
                         </span>
                         <a href="{% url 'documents:request_access' team.key %}"
-                           class="tw-btn-primary text-sm whitespace-nowrap">
+                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">
                             <i class="fas fa-key mr-1"></i> Request Access
                         </a>
                     </div>
