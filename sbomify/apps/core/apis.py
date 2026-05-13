@@ -343,12 +343,26 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
     Paginate a Django queryset and return items with pagination metadata.
 
     Args:
-        queryset: Django queryset to paginate
-        page: Page number (1-based)
-        page_size: Number of items per page. Use -1 to get all items without pagination.
+        queryset: Django queryset to paginate. The caller is responsible for
+            applying a deterministic `.order_by(...)` — without it, the
+            paginator produces an `UnorderedObjectListWarning` and adjacent
+            pages may contain overlapping rows under concurrent writes.
+        page: Page number (1-based). Page numbers above ``total_pages``
+            return an empty `items` list with ``has_next=False`` — they do
+            NOT silently fall back to page 1. Clients walking pages should
+            stop when ``items`` is empty (or when ``has_next`` is False).
+        page_size: Number of items per page. Use -1 to get all items without
+            pagination.
 
     Returns:
         tuple: (paginated_items, pagination_meta)
+
+    Note on out-of-range pages: a previous implementation silently re-served
+    page 1 when the requested page was beyond `total_pages`. That meant
+    a naive `while True: GET ?page=N; N += 1` walker would loop forever
+    returning duplicates (see issue #949). The current behaviour treats
+    out-of-range pages as empty, mirroring how every well-behaved REST
+    paginator (DRF, Ninja's built-in, etc.) handles it.
     """
     from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 
@@ -373,21 +387,30 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
 
     try:
         paginated_items = paginator.page(page)
+        items_list = list(paginated_items.object_list)
+        has_previous = paginated_items.has_previous()
+        has_next = paginated_items.has_next()
     except (EmptyPage, PageNotAnInteger):
-        # If page is out of range or invalid, return first page
-        paginated_items = paginator.page(1)
-        page = 1
+        # Out-of-range or invalid page: return an empty slice with
+        # `has_next=False` so naive page-walkers terminate. Do NOT fall
+        # back to page 1 — that caused issue #949.
+        items_list = []
+        # The requested page may legitimately be > total_pages; report
+        # has_previous as True iff at least one item exists in the
+        # collection (so a client that overshoots can step back).
+        has_previous = paginator.count > 0
+        has_next = False
 
     pagination_meta = PaginationMeta(
         total=paginator.count,
         page=page,
         page_size=page_size,
         total_pages=paginator.num_pages,
-        has_previous=paginated_items.has_previous(),
-        has_next=paginated_items.has_next(),
+        has_previous=has_previous,
+        has_next=has_next,
     )
 
-    return paginated_items.object_list, pagination_meta
+    return items_list, pagination_meta
 
 
 def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, ErrorCode | None]:

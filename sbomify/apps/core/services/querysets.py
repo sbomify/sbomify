@@ -15,6 +15,11 @@ def optimize_product_queryset(queryset: QuerySet[Product]) -> QuerySet[Product]:
         "id", "link_type", "title", "url", "description", "created_at", "product_id"
     ).order_by("link_type", "title")
 
+    # Explicit `.order_by("name")` so pagination is deterministic across
+    # requests. `Product.Meta.ordering = ["name"]` is in effect, but adding
+    # `.annotate(...)` resets the implicit Meta ordering in Django's ORM,
+    # which trips Django's `UnorderedObjectListWarning` and (under load) can
+    # mean adjacent pages return overlapping rows.
     return (
         queryset.select_related("team")
         .prefetch_related(
@@ -23,6 +28,7 @@ def optimize_product_queryset(queryset: QuerySet[Product]) -> QuerySet[Product]:
             Prefetch("links", queryset=link_qs),
         )
         .annotate(project_count=Count("projects", distinct=True))
+        .order_by("name")
     )
 
 
@@ -45,7 +51,14 @@ def optimize_project_queryset(queryset: QuerySet[Project]) -> QuerySet[Project]:
 
 
 def optimize_component_queryset(queryset: QuerySet[Component]) -> QuerySet[Component]:
-    return queryset.select_related("team").annotate(
-        sbom_count=Count("sbom", distinct=True),
-        document_count=Count("document", distinct=True),
+    # Explicit ``.order_by("name")`` so paginated component list endpoints are
+    # deterministic. ``Component.Meta.ordering = ["name"]`` would normally
+    # cover this, but ``.annotate(...)`` resets the implicit Meta ordering.
+    return (
+        queryset.select_related("team")
+        .annotate(
+            sbom_count=Count("sbom", distinct=True),
+            document_count=Count("document", distinct=True),
+        )
+        .order_by("name")
     )
