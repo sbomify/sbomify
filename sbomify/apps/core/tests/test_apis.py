@@ -254,7 +254,14 @@ def test_api_pagination_components(sample_access_token, sample_team):  # noqa: F
 
 @pytest.mark.django_db
 def test_api_pagination_invalid_params(sample_access_token, sample_team):  # noqa: F811
-    """Test pagination with invalid parameters."""
+    """Test pagination with invalid / out-of-range parameters.
+
+    Note: prior to issue #949's fix, `?page=999` silently fell back to
+    page 1 (returning duplicates for naive page-walkers). The new
+    contract: out-of-range pages return an empty `items` list with
+    `has_next=False`, so clients can stop walking. See
+    `test_pagination_out_of_range.py` for the full behavioural pin.
+    """
     from sbomify.apps.core.models import Product
 
     client = Client()
@@ -263,7 +270,8 @@ def test_api_pagination_invalid_params(sample_access_token, sample_team):  # noq
     for i in range(5):
         Product.objects.create(name=f"Test Product {i + 1}", team=sample_team)
 
-    # Test with invalid page number (should default to page 1)
+    # Out-of-range page returns empty items with the requested page number
+    # echoed back. has_next must be False so a page-walker terminates.
     response = client.get(
         reverse("api-1:list_products") + "?page=999",
         **get_api_headers(sample_access_token),
@@ -271,9 +279,13 @@ def test_api_pagination_invalid_params(sample_access_token, sample_team):  # noq
 
     assert response.status_code == 200
     data = response.json()
-    assert data["pagination"]["page"] == 1
+    assert data["items"] == [], "Out-of-range page must return empty items (#949)"
+    assert data["pagination"]["page"] == 999
+    assert data["pagination"]["has_next"] is False
+    assert data["pagination"]["total"] == 5
 
-    # Test with invalid page size (should be clamped to valid range)
+    # page_size is still clamped to the valid range (1..100); that part of
+    # the contract is unchanged.
     response = client.get(
         reverse("api-1:list_products") + "?page_size=999",
         **get_api_headers(sample_access_token),
@@ -283,7 +295,7 @@ def test_api_pagination_invalid_params(sample_access_token, sample_team):  # noq
     data = response.json()
     assert data["pagination"]["page_size"] == 100  # Max allowed
 
-    # Test with zero page size (should default to 1)
+    # Zero page size clamped to 1.
     response = client.get(
         reverse("api-1:list_products") + "?page_size=0",
         **get_api_headers(sample_access_token),
