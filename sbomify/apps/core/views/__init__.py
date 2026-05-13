@@ -316,6 +316,8 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
                 return HttpResponse(status=403)
             return error_response(request, HttpResponseForbidden("Not allowed"))
 
+        token_team_key = token.team.key if token.team else ""
+
         try:
             token.delete()
         except Exception as e:
@@ -326,6 +328,18 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
                 return HttpResponse(status=500)
             messages.error(request, "An error occurred while deleting the token")
             return redirect(reverse("core:settings"))
+
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id != "anonymous":
+            capture(
+                distinct_id,
+                "api_token:deleted",
+                {},
+                groups={"workspace": token_team_key} if token_team_key else None,
+                request=request,
+            )
 
         if is_api_request:
             return HttpResponse(status=200)

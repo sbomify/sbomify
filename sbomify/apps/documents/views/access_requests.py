@@ -421,6 +421,18 @@ class AccessRequestView(View):
         # Invalidate cache after transaction commits to avoid long-running transaction
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        ar_distinct_id = get_distinct_id(request)
+        if ar_distinct_id != "anonymous":
+            capture(
+                ar_distinct_id,
+                "document:access_requested",
+                {"requires_nda": requires_nda},
+                groups={"workspace": team_key} if team_key else None,
+                request=request,
+            )
+
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
         if not requires_nda:
@@ -595,6 +607,20 @@ class NDASigningView(View):
 
                 # Reload access request with NDA signature relationship
                 access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
+
+            from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+            nda_distinct_id = get_distinct_id(request)
+            if nda_distinct_id != "anonymous":
+                transaction.on_commit(
+                    lambda: capture(
+                        nda_distinct_id,
+                        "nda:signed",
+                        {},
+                        groups={"workspace": team_key} if team_key else None,
+                        request=request,
+                    )
+                )
 
             # Check if there's a pending invitation for this user (from trust center invite)
             pending_invitation_token = request.session.pop("pending_invitation_token", None)
@@ -1241,6 +1267,18 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Invalidate the approved user's session cache so workspace appears immediately
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
+
+            from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+            approver_distinct_id = get_distinct_id(request)
+            if approver_distinct_id != "anonymous":
+                capture(
+                    approver_distinct_id,
+                    "document:access_approved",
+                    {},
+                    groups={"workspace": team_key} if team_key else None,
+                    request=request,
+                )
 
             # Send email notification to user
             try:

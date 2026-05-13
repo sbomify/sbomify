@@ -588,6 +588,18 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
         assert team.key is not None
         schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
 
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id != "anonymous":
+            capture(
+                distinct_id,
+                "product:created",
+                {"is_public": product.is_public},
+                groups={"workspace": team.key},
+                request=request,
+            )
+
         return 201, _build_item_response(request, product, "product")
 
     except IntegrityError:
@@ -1751,6 +1763,18 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         assert team.key is not None
         schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
+
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id != "anonymous":
+            capture(
+                distinct_id,
+                "component:created",
+                {"component_type": component.component_type or "", "visibility": component.visibility},
+                groups={"workspace": team.key},
+                request=request,
+            )
 
         return 201, _build_item_response(request, component, "component")
 
@@ -3050,6 +3074,18 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 product.team.key,
                 "release_created",
                 {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
+            )
+
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id != "anonymous":
+            capture(
+                distinct_id,
+                "release:created",
+                {"is_prerelease": release.is_prerelease},
+                groups={"workspace": product.team.key} if product.team.key else None,
+                request=request,
             )
 
         return 201, _build_release_response(request, release, include_artifacts=True)
@@ -4514,6 +4550,17 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     result = delete_user_account(user)
 
     if result.ok:
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id != "anonymous":
+            capture(
+                distinct_id,
+                "user:account_deleted",
+                {},
+                request=request,
+            )
+
         return 200, {"success": True, "message": result.value}
     elif result.status_code == 403:
         return 403, {"detail": result.error, "error_code": ErrorCode.FORBIDDEN}

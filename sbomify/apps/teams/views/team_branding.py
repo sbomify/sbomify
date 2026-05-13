@@ -59,4 +59,16 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update branding"))
 
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id != "anonymous":
+            capture(
+                distinct_id,
+                "team:branding_updated",
+                {},
+                groups={"workspace": team_key} if team_key else None,
+                request=request,
+            )
+
         return htmx_success_response("Branding updated successfully", triggers={"refreshTeamBranding": True})

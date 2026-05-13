@@ -57,6 +57,7 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
             visibility = result.get("visibility")
             visibility_text = visibility.capitalize() if visibility else "private"
+            self._capture_toggle(request, item_type, str(visibility) if visibility else "")
             return htmx_success_response(
                 f"{item_type.capitalize()} visibility is now {visibility_text}",
                 content={"visibility": visibility},
@@ -73,7 +74,25 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             if status_code != 200:
                 return htmx_error_response(result.get("detail", f"Failed to update {item_type}"), content={})
 
+            new_visibility = "public" if result.get("is_public") else "private"
+            self._capture_toggle(request, item_type, new_visibility)
             return htmx_success_response(
                 f"{item_type.capitalize()} is now {'public' if result.get('is_public') else 'private'}",
                 content={"is_public": result.get("is_public")},
             )
+
+    @staticmethod
+    def _capture_toggle(request: HttpRequest, item_type: str, new_visibility: str) -> None:
+        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+
+        distinct_id = get_distinct_id(request)
+        if distinct_id == "anonymous":
+            return
+        team_key = (request.session.get("current_team") or {}).get("key", "")
+        capture(
+            distinct_id,
+            "item:visibility_toggled",
+            {"item_type": item_type, "new_visibility": new_visibility},
+            groups={"workspace": team_key} if team_key else None,
+            request=request,
+        )

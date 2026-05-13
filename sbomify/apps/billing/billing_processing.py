@@ -233,6 +233,17 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             notify_team_owners(team, email_notifications.notify_trial_expired)
             logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
+            from sbomify.apps.core.posthog_service import capture
+
+            team_key = team.key or ""
+            distinct_id = team_key or "system"
+            capture(
+                distinct_id,
+                "billing:trial_expired",
+                {},
+                groups={"workspace": team_key} if team_key else None,
+            )
+
         return True
     return False
 
