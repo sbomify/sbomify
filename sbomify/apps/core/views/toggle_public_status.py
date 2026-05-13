@@ -55,12 +55,15 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 log.error(f"Failed to update component {item_id}: {error_detail}, errors: {errors}")
                 return htmx_error_response(error_detail, content={})
 
-            visibility = result.get("visibility")
-            visibility_text = visibility.capitalize() if visibility else "private"
-            self._capture_toggle(request, item_type, str(visibility) if visibility else "")
+            # `visibility` is already the validated lowercase string from request.POST;
+            # avoid re-deriving from `result.get("visibility")` which may be a
+            # ComponentVisibility enum and stringify to "ComponentVisibility.PUBLIC".
+            self._capture_toggle(request, item_type, item_id, visibility)
+            result_visibility = result.get("visibility")
+            visibility_text = result_visibility.capitalize() if result_visibility else "private"
             return htmx_success_response(
                 f"{item_type.capitalize()} visibility is now {visibility_text}",
-                content={"visibility": visibility},
+                content={"visibility": result_visibility},
             )
         else:
             # Products and Projects use is_public
@@ -75,24 +78,20 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 return htmx_error_response(result.get("detail", f"Failed to update {item_type}"), content={})
 
             new_visibility = "public" if result.get("is_public") else "private"
-            self._capture_toggle(request, item_type, new_visibility)
+            self._capture_toggle(request, item_type, item_id, new_visibility)
             return htmx_success_response(
                 f"{item_type.capitalize()} is now {'public' if result.get('is_public') else 'private'}",
                 content={"is_public": result.get("is_public")},
             )
 
     @staticmethod
-    def _capture_toggle(request: HttpRequest, item_type: str, new_visibility: str) -> None:
-        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+    def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, visibility: str) -> None:
+        from sbomify.apps.core.posthog_service import capture_for_request
 
-        distinct_id = get_distinct_id(request)
-        if distinct_id == "anonymous":
-            return
         team_key = (request.session.get("current_team") or {}).get("key", "")
-        capture(
-            distinct_id,
+        capture_for_request(
+            request,
             "item:visibility_toggled",
-            {"item_type": item_type, "new_visibility": new_visibility},
-            groups={"workspace": team_key} if team_key else None,
-            request=request,
+            {"item_type": item_type, "item_id": item_id, "visibility": visibility},
+            team_key=team_key,
         )

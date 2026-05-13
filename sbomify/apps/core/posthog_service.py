@@ -136,6 +136,30 @@ def has_opted_out(request: Any) -> bool:
     return True
 
 
+def capture_for_request(
+    request: Any,
+    event: str,
+    properties: dict[str, Any] | None = None,
+    *,
+    team_key: str | None = None,
+) -> None:
+    """Capture an event from a view, applying the standard guards.
+
+    Short-circuits when PostHog is disabled or the session is anonymous so
+    the cookie/session work in ``get_distinct_id`` is skipped on disabled
+    deployments. Resolves ``groups={"workspace": team_key}`` when ``team_key``
+    is truthy and forwards ``request`` so the cookie-based consent gate in
+    ``capture`` still applies.
+    """
+    if not is_enabled():
+        return
+    distinct_id = get_distinct_id(request)
+    if distinct_id == "anonymous":
+        return
+    groups = {"workspace": team_key} if team_key else None
+    capture(distinct_id, event, properties or {}, groups=groups, request=request)
+
+
 def capture(
     distinct_id: str,
     event: str,

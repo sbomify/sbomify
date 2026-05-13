@@ -272,22 +272,19 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             )
             invitation.save()
 
-            from sbomify.apps.core.posthog_service import capture, get_distinct_id
+            from sbomify.apps.core.posthog_service import capture_for_request
 
-            distinct_id = get_distinct_id(request)
-            if distinct_id != "anonymous":
-                invited_email = invite_user_form.cleaned_data["email"]
-                email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
-                capture(
-                    distinct_id,
-                    "team:member_invited",
-                    {
-                        "role": invite_user_form.cleaned_data["role"],
-                        "invited_email_domain": email_domain,
-                    },
-                    groups={"workspace": team.key} if team.key else None,
-                    request=request,
-                )
+            invited_email = invite_user_form.cleaned_data["email"]
+            email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
+            capture_for_request(
+                request,
+                "team:member_invited",
+                {
+                    "role": invite_user_form.cleaned_data["role"],
+                    "invited_email_domain": email_domain,
+                },
+                team_key=team.key,
+            )
 
             email_context = {
                 "team": team,
@@ -556,17 +553,14 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
 
-    from sbomify.apps.core.posthog_service import capture, get_distinct_id
+    from sbomify.apps.core.posthog_service import capture_for_request
 
-    accepted_distinct_id = get_distinct_id(request)
-    if accepted_distinct_id != "anonymous":
-        capture(
-            accepted_distinct_id,
-            "team:member_invitation_accepted",
-            {"role": invitation.role},
-            groups={"workspace": invitation.team.key} if invitation.team.key else None,
-            request=request,
-        )
+    capture_for_request(
+        request,
+        "team:member_invitation_accepted",
+        {"role": invitation.role},
+        team_key=invitation.team.key,
+    )
 
     invitation.delete()
 

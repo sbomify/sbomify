@@ -80,19 +80,16 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             for c in components
         ]
 
-        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+        from sbomify.apps.core.posthog_service import capture_for_request
 
-        distinct_id = get_distinct_id(request)
-        if distinct_id != "anonymous":
-            team_key = (request.session.get("current_team") or {}).get("key", "")
-            result_count = len(products_data) + len(projects_data) + len(components_data)
-            capture(
-                distinct_id,
-                "search:performed",
-                {"query_length": len(query), "result_count": result_count},
-                groups={"workspace": team_key} if team_key else None,
-                request=request,
-            )
+        team_key = (request.session.get("current_team") or {}).get("key", "")
+        result_count = len(products_data) + len(projects_data) + len(components_data)
+        capture_for_request(
+            request,
+            "search:performed",
+            {"query_length": len(query), "result_count": result_count},
+            team_key=team_key,
+        )
 
         return JsonResponse(
             {

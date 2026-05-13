@@ -233,6 +233,10 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             notify_team_owners(team, email_notifications.notify_trial_expired)
             logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
+            # Signal/background context: no request, so consent is not gated here.
+            # Distinct_id = team_key matches the Tier 1 signal pattern at
+            # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
+            # consistent workspace-level attribution across tiers.
             from sbomify.apps.core.posthog_service import capture
 
             team_key = team.key or ""
@@ -240,7 +244,7 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             capture(
                 distinct_id,
                 "billing:trial_expired",
-                {},
+                {"team_key": team_key},
                 groups={"workspace": team_key} if team_key else None,
             )
 

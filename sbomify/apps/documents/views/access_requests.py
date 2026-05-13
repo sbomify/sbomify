@@ -421,17 +421,16 @@ class AccessRequestView(View):
         # Invalidate cache after transaction commits to avoid long-running transaction
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
-        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+        # AccessRequest is workspace-scoped (no component_id field). Issue #817 listed
+        # `component_id` as a property but the access-request flow is per-workspace.
+        from sbomify.apps.core.posthog_service import capture_for_request
 
-        ar_distinct_id = get_distinct_id(request)
-        if ar_distinct_id != "anonymous":
-            capture(
-                ar_distinct_id,
-                "document:access_requested",
-                {"requires_nda": requires_nda},
-                groups={"workspace": team_key} if team_key else None,
-                request=request,
-            )
+        capture_for_request(
+            request,
+            "document:access_requested",
+            {"requires_nda": requires_nda},
+            team_key=team_key,
+        )
 
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
@@ -608,19 +607,10 @@ class NDASigningView(View):
                 # Reload access request with NDA signature relationship
                 access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
 
-            from sbomify.apps.core.posthog_service import capture, get_distinct_id
+                from sbomify.apps.core.posthog_service import capture_for_request
 
-            nda_distinct_id = get_distinct_id(request)
-            if nda_distinct_id != "anonymous":
-                transaction.on_commit(
-                    lambda: capture(
-                        nda_distinct_id,
-                        "nda:signed",
-                        {},
-                        groups={"workspace": team_key} if team_key else None,
-                        request=request,
-                    )
-                )
+                # Inside the atomic block so transaction.on_commit deferral applies.
+                transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
 
             # Check if there's a pending invitation for this user (from trust center invite)
             pending_invitation_token = request.session.pop("pending_invitation_token", None)
@@ -1268,17 +1258,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
-            from sbomify.apps.core.posthog_service import capture, get_distinct_id
+            from sbomify.apps.core.posthog_service import capture_for_request
 
-            approver_distinct_id = get_distinct_id(request)
-            if approver_distinct_id != "anonymous":
-                capture(
-                    approver_distinct_id,
-                    "document:access_approved",
-                    {},
-                    groups={"workspace": team_key} if team_key else None,
-                    request=request,
-                )
+            capture_for_request(request, "document:access_approved", team_key=team_key)
 
             # Send email notification to user
             try:

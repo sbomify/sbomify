@@ -77,17 +77,14 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         )
         token.save()
 
-        from sbomify.apps.core.posthog_service import capture, get_distinct_id
+        from sbomify.apps.core.posthog_service import capture_for_request
 
-        distinct_id = get_distinct_id(request)
-        if distinct_id != "anonymous":
-            capture(
-                distinct_id,
-                "api_token:created",
-                {},
-                groups={"workspace": team_key} if team_key else None,
-                request=request,
-            )
+        capture_for_request(
+            request,
+            "api_token:created",
+            {"token_name": form.cleaned_data["description"]},
+            team_key=team_key,
+        )
 
         messages.success(request, "New access token created")
 

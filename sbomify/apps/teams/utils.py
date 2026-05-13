@@ -680,17 +680,16 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
 
     membership.delete()
 
-    from sbomify.apps.core.posthog_service import capture, get_distinct_id
+    # Fires for both delete_member() and TeamSettingsView._delete_member()
+    # entry points; tests cover both paths.
+    from sbomify.apps.core.posthog_service import capture_for_request
 
-    removed_distinct_id = get_distinct_id(request)
-    if removed_distinct_id != "anonymous":
-        capture(
-            removed_distinct_id,
-            "team:member_removed",
-            {"role": removed_role, "self_removal": is_self_removal},
-            groups={"workspace": removed_team_key} if removed_team_key else None,
-            request=request,
-        )
+    capture_for_request(
+        request,
+        "team:member_removed",
+        {"role": removed_role, "self_removal": is_self_removal},
+        team_key=removed_team_key,
+    )
 
     # Invalidate the removed user's session cache so workspace disappears immediately
     from django.core.cache import cache

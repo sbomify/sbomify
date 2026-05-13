@@ -69,9 +69,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     from django.contrib.auth import get_user_model
 
     UserModel = get_user_model()
-    invitee = UserModel.objects.create_user(
-        username="invitee", email="invitee@example.com", password="pw"
-    )
+    invitee = UserModel.objects.create_user(username="invitee", email="invitee@example.com", password="pw")
 
     # Pre-existing membership skips the auto-accept signal path.
     other_team = Team.objects.create(name="Other Workspace", billing_plan="business")
@@ -103,9 +101,7 @@ def test_remove_member_captures_team_member_removed(
     from django.contrib.auth import get_user_model
 
     UserModel = get_user_model()
-    other_user = UserModel.objects.create_user(
-        username="other", email="other@example.com", password="pw"
-    )
+    other_user = UserModel.objects.create_user(username="other", email="other@example.com", password="pw")
     membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="admin")
 
     mock_capture = _patch_capture(mocker)
@@ -139,6 +135,8 @@ def test_create_access_token_captures_api_token_created(
 
     assert response.status_code == 200
     assert "api_token:created" in _called_events(mock_capture)
+    call = next(c for c in mock_capture.call_args_list if c.args[1] == "api_token:created")
+    assert call.args[2]["token_name"] == "test-token"
 
 
 @pytest.mark.django_db
@@ -183,14 +181,69 @@ def test_search_captures_search_performed(
 
 
 @pytest.mark.django_db
-def test_capture_skipped_for_anonymous_session(mocker: MockerFixture) -> None:
-    """Anonymous users (no auth, no cookies) should not trigger captures from view-based events."""
+def test_capture_for_request_skips_anonymous_distinct_id(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Even on a view that fires events, capture is skipped when distinct_id is 'anonymous'.
+
+    Targets the anonymous guard inside ``capture_for_request`` directly; just
+    routing through a logged-out client would short-circuit the view via
+    LoginRequiredMixin before the guard is exercised.
+    """
     mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
     mocker.patch("sbomify.apps.core.posthog_service.get_distinct_id", return_value="anonymous")
     mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
 
     client = Client()
-    # Search endpoint requires auth, so it'll redirect — but the capture must not fire.
-    client.get(reverse("core:search") + "?q=acme")
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+    response = client.get(reverse("core:search") + "?q=acme")
 
+    assert response.status_code == 200
     assert mock_capture.call_count == 0
+
+
+@pytest.mark.django_db
+def test_capture_for_request_skips_when_disabled(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """When ``is_enabled()`` returns False, capture_for_request short-circuits early."""
+    mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=False)
+    mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
+
+    client = Client()
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+    response = client.get(reverse("core:search") + "?q=acme")
+
+    assert response.status_code == 200
+    assert mock_capture.call_count == 0
+
+
+@pytest.mark.django_db
+def test_settings_view_member_remove_also_fires_event(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """remove_member_safely is reused by TeamSettingsView; verify that path also captures."""
+    from django.contrib.auth import get_user_model
+
+    UserModel = get_user_model()
+    other_user = UserModel.objects.create_user(username="other2", email="other2@example.com", password="pw")
+    membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="admin")
+
+    mock_capture = _patch_capture(mocker)
+    client = Client()
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+
+    assert team_with_business_plan.key is not None
+    response = client.post(
+        reverse("teams:team_settings", kwargs={"team_key": team_with_business_plan.key}),
+        data={"_method": "DELETE", "member_id": membership.id, "active_tab": "members"},
+    )
+
+    assert response.status_code in (200, 302)
+    assert "team:member_removed" in _called_events(mock_capture)

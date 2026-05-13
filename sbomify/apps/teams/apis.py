@@ -1096,19 +1096,12 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         invalidate_custom_domain_cache(old_domain)
         invalidate_custom_domain_cache(normalized_domain)
 
-        # Only track newly-set domains, not re-saves of the same value
-        if old_domain != normalized_domain:
-            from sbomify.apps.core.posthog_service import capture, get_distinct_id
+        # Only fire on first-time domain set (not domain changes or re-saves),
+        # so the "added" semantics match the event name.
+        if not old_domain:
+            from sbomify.apps.core.posthog_service import capture_for_request
 
-            distinct_id = get_distinct_id(request)
-            if distinct_id != "anonymous":
-                capture(
-                    distinct_id,
-                    "team:custom_domain_added",
-                    {},
-                    groups={"workspace": team_key} if team_key else None,
-                    request=request,
-                )
+            capture_for_request(request, "team:custom_domain_added", team_key=team_key)
 
         return 200, {"domain": team.custom_domain, "validated": team.custom_domain_validated}
 
