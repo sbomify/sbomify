@@ -74,7 +74,7 @@ Contact Information:
 - Phone: {phone}
 - Job Title: {job_title}
 
-Project Details:
+Implementation Details:
 - Primary Use Case: {primary_use_case}
 - Timeline: {timeline}
 

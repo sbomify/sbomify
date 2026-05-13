@@ -1,49 +1,23 @@
 {% if crumbs %}
     <nav aria-label="breadcrumb" class="mb-6">
         <ol class="flex flex-wrap items-center gap-2 bg-surface px-4 py-3 md:px-6 md:py-4 m-0 text-sm border border-border rounded-xl shadow-sm list-none">
-            <!-- Show primary breadcrumb items -->
             {% for crumb in crumbs %}
-                {% if not crumb.secondary and not crumb.multiple_projects %}
-                    <li class="flex items-center {% if crumb.active %}text-text font-semibold{% else %}text-text-muted{% endif %}"
-                        {% if crumb.active %}aria-current="page"{% endif %}
-                        {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
-                        {% if not forloop.first %}<span class="text-text-muted mx-2 font-light">›</span>{% endif %}
-                        {% if crumb.url and not crumb.active %}
-                            <a href="{{ crumb.url }}"
-                               class="flex items-center px-2 py-1 rounded-md text-text-muted hover:text-text hover:bg-background transition-colors font-medium no-underline"
-                               {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
-                                <i class="{{ crumb.icon }} mr-1.5 opacity-80"></i>{{ crumb.name }}
-                            </a>
-                        {% else %}
-                            <span class="flex items-center px-2 py-1">
-                                <i class="{{ crumb.icon }} mr-1.5 opacity-80"></i>{{ crumb.name }}
-                            </span>
-                        {% endif %}
-                    </li>
-                {% endif %}
-            {% endfor %}
-            <!-- Add secondary projects inline at the end -->
-            {% for crumb in crumbs %}
-                {% if crumb.secondary %}
-                    <li class="inline-flex items-center">
-                        <span class="mx-2 text-text-muted font-light">+</span>
-                        <span class="text-sm text-text-muted mr-1 inline-flex items-center">
-                            {% if crumb.url %}
-                                <a href="{{ crumb.url }}"
-                                   class="px-1.5 py-0.5 rounded text-text-muted hover:text-text hover:bg-background transition-colors no-underline"
-                                   title="Also in {{ crumb.name }}">{{ crumb.name }}</a>
-                            {% else %}
-                                {{ crumb.name }}
-                            {% endif %}
+                <li class="flex items-center {% if crumb.active %}text-text font-semibold{% else %}text-text-muted{% endif %}"
+                    {% if crumb.active %}aria-current="page"{% endif %}
+                    {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
+                    {% if not forloop.first %}<span class="text-text-muted mx-2 font-light">›</span>{% endif %}
+                    {% if crumb.url and not crumb.active %}
+                        <a href="{{ crumb.url }}"
+                           class="flex items-center px-2 py-1 rounded-md text-text-muted hover:text-text hover:bg-background transition-colors font-medium no-underline"
+                           {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
+                            <i class="{{ crumb.icon }} mr-1.5 opacity-80"></i>{{ crumb.name }}
+                        </a>
+                    {% else %}
+                        <span class="flex items-center px-2 py-1">
+                            <i class="{{ crumb.icon }} mr-1.5 opacity-80"></i>{{ crumb.name }}
                         </span>
-                    </li>
-                {% elif crumb.multiple_projects %}
-                    <li class="inline-flex items-center">
-                        <span class="mx-2 text-text-muted font-light">+</span>
-                        <span class="text-xs text-text-muted bg-border/30 px-2 py-1 rounded-md cursor-help inline-flex items-center font-medium border border-border"
-                              title="{{ crumb.title }}">{{ crumb.name|cut:"+ "|cut:" other projects" }} more</span>
-                    </li>
-                {% endif %}
+                    {% endif %}
+                </li>
             {% endfor %}
         </ol>
     </nav>

@@ -87,7 +87,7 @@ describe('ComponentsList Component', () => {
   describe('Component Specifics', () => {
     test('should be specific to components only', () => {
       const itemType = 'component'
-      const validItemTypes = ['product', 'project', 'component']
+      const validItemTypes = ['product', 'component']
 
       expect(validItemTypes).toContain(itemType)
       expect(itemType).toBe('component')
@@ -116,8 +116,6 @@ describe('ComponentsList Component', () => {
       const getRelationshipColumn = (type: string): string => {
         switch (type) {
           case 'product':
-            return 'Projects'
-          case 'project':
             return 'Components'
           case 'component':
             return 'SBOMs'

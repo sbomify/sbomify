@@ -107,7 +107,7 @@ def check_staleness(assessment: CRAAssessment) -> ServiceResult[dict[str, Any]]:
     from sbomify.apps.sboms.models import SBOM
 
     latest_sbom_date = (
-        SBOM.objects.filter(component__projects__products__id=assessment.product_id)
+        SBOM.objects.filter(component__products__id=assessment.product_id)
         .aggregate(latest=Max("created_at"))
         .get("latest")
     )

@@ -96,6 +96,19 @@ jobs:
           echo "## Caddyfile Validation Results" >> $GITHUB_STEP_SUMMARY
           echo "Caddyfile syntax is valid and properly formatted." >> $GITHUB_STEP_SUMMARY
 
+      - name: Check migrations are consistent with models
+        env:
+          DJANGO_SETTINGS_MODULE: sbomify.test_settings
+        run: |
+          echo "Checking migrations are in sync with models..."
+          # `makemigrations --check --dry-run` exits non-zero if a Django model
+          # was changed without a corresponding migration. Catches the
+          # "forgot to run makemigrations" class of bug before merge.
+          uv run python manage.py makemigrations --check --dry-run --no-input
+
+          echo "## Migration Consistency" >> $GITHUB_STEP_SUMMARY
+          echo "All models are in sync with migrations." >> $GITHUB_STEP_SUMMARY
+
   tests:
     name: Run Tests
     runs-on: ubuntu-latest

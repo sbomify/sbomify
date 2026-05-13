@@ -170,6 +170,12 @@ CACHES = {
     }
 }
 
+# Disable TEA response caching during tests. LocMemCache lacks
+# ``delete_pattern``, so workspace-scoped cache invalidation is a no-op
+# under tests; switching off the cache keeps API responses fresh and
+# avoids stale-read failures in mutation-then-read scenarios.
+TEA_CACHE_TTL = 0
+
 TESTING = True
 PLAYWRIGHT_DJANGO_HOST = os.environ.get("PLAYWRIGHT_DJANGO_HOST", "host.docker.internal")
 PLAYWRIGHT_CDP_ENDPOINT = os.environ.get("PLAYWRIGHT_CDP_ENDPOINT", "http://localhost:9222")

@@ -103,16 +103,14 @@ class TestDependencyTrackSkippedFinding:
         """Race case: component has product membership but ReleaseArtifact
         hasn't been committed yet (sbomify-action 2-step upload). Scan must
         proceed with empty tags, NOT return a skipped result."""
-        from sbomify.apps.core.models import Component, Product, Project
+        from sbomify.apps.core.models import Component, Product
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
         from sbomify.apps.sboms.models import SBOM
 
         team = sample_team_with_owner_member.team
         component = Component.objects.create(name="race-test", team=team)
         product = Product.objects.create(name="p", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
 
         sbom = SBOM.objects.create(name="race-sbom", component=component, format="cyclonedx")
         # No ReleaseArtifact created — simulates the race window

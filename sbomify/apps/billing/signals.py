@@ -50,7 +50,6 @@ def update_teams_on_plan_change(sender: type[BillingPlan], instance: BillingPlan
     if update_fields:
         limit_fields = {
             "max_products",
-            "max_projects",
             "max_components",
             "max_users",
         }

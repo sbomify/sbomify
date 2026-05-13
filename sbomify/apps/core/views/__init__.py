@@ -52,10 +52,6 @@ from sbomify.apps.core.views.product_releases_private import ProductReleasesPriv
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView as ProductReleasesPublicView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
-from sbomify.apps.core.views.project_details_private import ProjectDetailsPrivateView as ProjectDetailsPrivateView
-from sbomify.apps.core.views.project_details_public import ProjectDetailsPublicView as ProjectDetailsPublicView
-from sbomify.apps.core.views.projects_dashboard import ProjectsDashboardView as ProjectsDashboardView
-from sbomify.apps.core.views.projects_dashboard import ProjectsTableView as ProjectsTableView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
 from sbomify.apps.core.views.release_details_public import ReleaseDetailsPublicView as ReleaseDetailsPublicView
 from sbomify.apps.core.views.releases_dashboard import ReleasesDashboardView as ReleasesDashboardView
@@ -64,11 +60,11 @@ from sbomify.apps.core.views.search import SearchView as SearchView
 from sbomify.apps.core.views.tailwind_test import TailwindTestView as TailwindTestView
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView as WorkspacePublicView
-from sbomify.apps.sboms.utils import get_product_sbom_package, get_project_sbom_package
+from sbomify.apps.sboms.utils import get_product_sbom_package
 
 from ..errors import error_response
 from ..forms import SupportContactForm
-from ..models import Component, Product, Project, User
+from ..models import Component, Product, User
 
 logger = logging.getLogger(__name__)
 
@@ -481,7 +477,7 @@ def keycloak_webhook(request: HttpRequest) -> HttpResponse:
 
 
 # ============================================================================
-# Product/Project/Component Views - Moved from sboms app
+# Product/Component Views - Moved from sboms app
 # ============================================================================
 
 # ============================================================================
@@ -515,8 +511,14 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
 
     with transaction.atomic():
-        # Remove component's existing linkages to projects if any
-        component.projects.clear()
+        # SEMANTICALLY REQUIRED clear (NOT the belt-and-suspenders pattern).
+        # We're about to change ``component.team_id`` to a different team.
+        # If we left the M2M attached, those rows would become cross-tenant
+        # the instant the team flip commits, and the
+        # ``reject_cross_tenant_product_component_links`` signal would
+        # reject any subsequent ``add()`` to this component. The clear MUST
+        # happen before the team change.
+        component.products.clear()
         component.team_id = team_id
         component.save()
 
@@ -529,57 +531,11 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     return redirect("core:components_dashboard")
 
 
-def sbom_download_project(request: HttpRequest, project_id: str) -> HttpResponse:
-    """
-    Download the aggregated SBOM file for all components in a project.
-
-    Query parameters:
-        format: Output format - "cyclonedx" (default) or "spdx"
-        version: Format version - e.g., "1.6", "1.7" for CDX, "2.3" for SPDX
-    """
-    try:
-        project = Project.objects.get(pk=project_id)
-    except Project.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Project not found"))
-
-    if not project.is_public:
-        if not verify_item_access(request, project, ["owner", "admin"]):
-            return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
-
-    # Get format parameters from query string and normalize early
-    output_format = request.GET.get("format", "cyclonedx").lower()
-    version = request.GET.get("version")
-
-    try:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            sbom_path = get_project_sbom_package(
-                project, Path(temp_dir), user=request.user, output_format=output_format, version=version
-            )
-
-            # Determine file extension based on format
-            extension = ".spdx.json" if output_format == "spdx" else ".cdx.json"
-            filename = f"{project.name}{extension}"
-
-            # Read file content into memory before creating response
-            with open(sbom_path, "rb") as f:
-                sbom_content = f.read()
-
-            response = HttpResponse(sbom_content, content_type="application/json")
-            response["Content-Disposition"] = f"attachment; filename={filename}"
-
-            return response
-    except ValueError:
-        # ValueError is raised for unsupported format/version combinations
-        return error_response(request, HttpResponseBadRequest("Invalid format or version specified"))
-    except Exception:
-        # Catch any other exceptions without exposing internal details
-        logger.exception("Error generating project SBOM")
-        return error_response(request, HttpResponseServerError("Error generating project SBOM"))
-
-
 def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse:
-    """
-    Download the aggregated SBOM file for all projects in a product.
+    """Download the aggregated SBOM file for a product.
+
+    Aggregates over the product's components (``Product → Component`` direct
+    M2M; the legacy ``Project`` layer was removed in PR #946).
 
     Query parameters:
         format: Output format - "cyclonedx" (default) or "spdx"

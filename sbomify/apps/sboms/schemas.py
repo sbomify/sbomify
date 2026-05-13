@@ -102,7 +102,6 @@ class DashboardSBOMUploadInfo(Schema):
 
 class DashboardStatsResponse(Schema):
     total_products: int
-    total_projects: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
 
@@ -855,4 +854,4 @@ cdx15.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 cdx16.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 
 
-# Product/Project/Component CRUD schemas moved to core/schemas.py
+# Product/Component CRUD schemas moved to core/schemas.py

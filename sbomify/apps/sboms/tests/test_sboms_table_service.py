@@ -19,7 +19,6 @@ from .fixtures import (  # noqa: F401
     sample_billing_plan,
     sample_component,
     sample_product,
-    sample_project,
     sample_sbom,
     sample_team_with_owner_member,
     sample_user,

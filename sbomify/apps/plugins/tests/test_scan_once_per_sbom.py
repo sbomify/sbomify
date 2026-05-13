@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sbomify.apps.core.models import Component, Product, Project, Release, ReleaseArtifact
+from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
 from sbomify.apps.plugins.models import (
     AssessmentRun,
     AssessmentRunRelease,
@@ -99,9 +99,7 @@ class TestUploadSignalEnqueuesOncePerSbom:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         SBOM.objects.create(name="s", component=component, format="cyclonedx")
 
         # Exactly one call — no category filter, no release_id kwarg
@@ -143,9 +141,7 @@ class TestReleaseAssociationAttachesToExistingRun:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
 
         named_release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
@@ -174,12 +170,10 @@ class TestReleaseAssociationAttachesToExistingRun:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         # sbom_v1 auto-added to latest release by the upload signal
         sbom_v1 = SBOM.objects.create(name="v1", component=component, format="cyclonedx")
-        # component_v2 is NOT in the project, so sbom_v2 won't auto-add to latest
+        # component_v2 is NOT attached to the product, so sbom_v2 won't auto-add to latest
         component_v2 = Component.objects.create(name="c2", team=team)
         sbom_v2 = SBOM.objects.create(name="v2", component=component_v2, format="cyclonedx")
 
@@ -228,9 +222,7 @@ class TestAttachReleaseToRunsTask:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
 
@@ -258,9 +250,7 @@ class TestAttachReleaseToRunsTask:
         team = sample_team_with_owner_member.team
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
 
@@ -276,9 +266,7 @@ class TestAttachReleaseToRunsTask:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
 
@@ -324,9 +312,7 @@ class TestAttachReleaseToRunsTask:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
 
@@ -379,9 +365,7 @@ class TestOrchestratorPopulatesM2MAtCompletion:
         team = sample_team_with_owner_member.team
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
 
         # The SBOM upload auto-creates the 'latest' release and a ReleaseArtifact
@@ -419,9 +403,7 @@ class TestOrchestratorPopulatesM2MAtCompletion:
         team = sample_team_with_owner_member.team
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
         ReleaseArtifact.objects.create(release=release, sbom=sbom)
@@ -460,9 +442,7 @@ class TestCronIteratesUniqueSboms:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
 
         # Use the auto-created latest release (made by update_latest_release_on_sbom_created).
@@ -506,9 +486,7 @@ class TestDependencyTrackPluginScanOnce:
         team = Team.objects.create(name="DT Scan Once Team", key="dt-so", billing_plan="business")
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
 
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sha256_hash="a" * 64)
 
@@ -718,9 +696,7 @@ class TestDetachReleaseFromRunsTask:
 
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
 
         release_to_remove = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
@@ -786,9 +762,7 @@ class TestDetachReleaseFromRunsTask:
         team = sample_team_with_owner_member.team
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
-        project = Project.objects.create(name="proj", team=team)
-        project.products.add(product)
-        project.components.add(component)
+        product.components.add(component)
         sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         release = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
 

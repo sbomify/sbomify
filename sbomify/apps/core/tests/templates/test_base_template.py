@@ -89,5 +89,4 @@ class TestBaseTemplate:
 
         # Test other navigation items present
         assert ">Products</span>" in content
-        assert ">Projects</span>" in content
         assert ">Components</span>" in content

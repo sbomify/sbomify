@@ -275,7 +275,7 @@ def _build_product_release_response(
                     cr_uuid_by_component[component_id] = str(cra.component_release.uuid)
 
         product_components = Component.objects.filter(
-            projects__products=release.product,
+            products=release.product,
             team_id=release.product.team_id,
             visibility=Component.Visibility.PUBLIC,
         ).distinct()

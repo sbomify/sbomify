@@ -32,7 +32,6 @@ def export_team(export_user, db):
             "name": "Community",
             "description": "Free plan",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
             "max_users": 2,
         },

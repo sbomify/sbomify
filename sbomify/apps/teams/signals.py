@@ -52,7 +52,6 @@ def ensure_user_has_team(user):
             team.billing_plan = "business"
             team.billing_plan_limits = {
                 "max_products": business_plan.max_products,
-                "max_projects": business_plan.max_projects,
                 "max_components": business_plan.max_components,
                 "stripe_customer_id": customer.id,
                 "stripe_subscription_id": subscription.id,
@@ -71,7 +70,6 @@ def ensure_user_has_team(user):
                 "trial_end_date": timezone.now() + timezone.timedelta(days=settings.TRIAL_PERIOD_DAYS),
                 "plan_limits": {
                     "max_products": business_plan.max_products,
-                    "max_projects": business_plan.max_projects,
                     "max_components": business_plan.max_components,
                 },
             }
@@ -93,7 +91,6 @@ def ensure_user_has_team(user):
                 team.billing_plan = "community"
                 team.billing_plan_limits = {
                     "max_products": community_plan.max_products,
-                    "max_projects": community_plan.max_projects,
                     "max_components": community_plan.max_components,
                     "subscription_status": "active",
                     "last_updated": timezone.now().isoformat(),

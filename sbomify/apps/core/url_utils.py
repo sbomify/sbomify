@@ -18,7 +18,7 @@ from django.urls import reverse
 from django.utils.text import slugify
 
 if TYPE_CHECKING:
-    from sbomify.apps.core.models import Component, Product, Project, Release
+    from sbomify.apps.core.models import Component, Product, Release
     from sbomify.apps.teams.models import Team
 
 
@@ -232,7 +232,7 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
     On main app domain, paths use IDs and include /public/ prefix.
 
     Args:
-        resource_type: Type of resource (product, project, component, document, workspace, release)
+        resource_type: Type of resource (product, component, document, workspace, release)
         resource_id: ID of the resource (used for main app domain)
         is_custom_domain: Whether the URL is for a custom domain
         **kwargs: Additional parameters:
@@ -263,11 +263,6 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
         if is_custom_domain:
             return f"/product/{slug}/"
         return f"/public/product/{resource_id}/"
-
-    elif resource_type == "project":
-        if is_custom_domain:
-            return f"/project/{slug}/"
-        return f"/public/project/{resource_id}/"
 
     elif resource_type == "component":
         item_type = kwargs.get("item_type")
@@ -362,13 +357,12 @@ def get_back_url_from_referrer(
             return fallback_url
 
         # Check if it's a public page path
-        # On custom domains: /product/*, /component/*, /project/*, /
-        # On main app: /public/product/*, /public/component/*, /public/project/*, /public/workspace/*
+        # On custom domains: /product/*, /component/*, /
+        # On main app: /public/product/*, /public/component/*, /public/workspace/*
         is_public_path = (
             referrer_path.startswith("/public/")
             or referrer_path.startswith("/product/")
             or referrer_path.startswith("/component/")
-            or referrer_path.startswith("/project/")
             or referrer_path == "/"
             or referrer_path == ""
         )
@@ -379,7 +373,6 @@ def get_back_url_from_referrer(
             or referrer_path.startswith("/dashboard/")
             or referrer_path.startswith("/components/")
             or referrer_path.startswith("/products/")
-            or referrer_path.startswith("/projects/")
             or "/settings/" in referrer_path
         )
 
@@ -436,7 +429,6 @@ def is_public_url_path(path: str) -> bool:
     public_prefixes = [
         "/public/workspace/",
         "/public/product/",
-        "/public/project/",
         "/public/component/",
         "/public/document/",
     ]
@@ -582,58 +574,6 @@ def resolve_product_identifier(
                 filters["is_public"] = True
             return Product.objects.get(**filters)
         except Product.DoesNotExist:
-            return None
-
-
-def resolve_project_identifier(
-    request: HttpRequest,
-    identifier: str,
-    require_public: bool = False,
-) -> "Project | None":
-    """
-    Resolve a project by identifier (slug on custom domains, ID otherwise).
-
-    On custom domains, the identifier is treated as a slug and looked up
-    within the custom domain's team. On the main app domain, the identifier
-    is treated as a project ID.
-
-    Args:
-        request: The HTTP request
-        identifier: The project identifier (slug or ID)
-        require_public: If True, only return public projects (for public views)
-
-    Returns:
-        Project instance or None if not found
-    """
-    from sbomify.apps.core.models import Project
-
-    is_custom_domain = getattr(request, "is_custom_domain", False)
-    custom_domain_team = getattr(request, "custom_domain_team", None)
-
-    if is_custom_domain and custom_domain_team:
-        # On custom domain: find by slug within the team
-        slug = slugify(identifier, allow_unicode=True)
-
-        # NOTE: O(n) scan - see resolve_product_identifier for rationale
-        for project in Project.objects.filter(team=custom_domain_team, is_public=True):
-            if slugify(project.name, allow_unicode=True) == slug:
-                return project
-
-        # Fallback: try by ID within the team
-        try:
-            return Project.objects.get(pk=identifier, team=custom_domain_team, is_public=True)
-        except Project.DoesNotExist:
-            pass
-
-        return None
-    else:
-        # On main app: find by ID, optionally filtering for public
-        try:
-            filters: dict[str, Any] = {"pk": identifier}
-            if require_public:
-                filters["is_public"] = True
-            return Project.objects.get(**filters)
-        except Project.DoesNotExist:
             return None
 
 

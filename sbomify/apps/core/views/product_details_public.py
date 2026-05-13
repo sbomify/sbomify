@@ -34,74 +34,47 @@ from sbomify.apps.teams.models import Team
 BARCODE_TYPES = ("gtin_12", "gtin_13", "gtin_14", "gtin_8")
 
 
-def _prepare_public_projects_with_components(product_id: str, is_custom_domain: bool) -> list[Any]:
-    """Prepare project data with components for display on the product page.
+def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[Any]:
+    """Prepare component data for display on the public product page.
 
     Uses batch query for assessment status to avoid N+1 queries.
     """
-    from sbomify.apps.core.models import Project
+    from sbomify.apps.core.models import Component
     from sbomify.apps.core.url_utils import get_public_path
     from sbomify.apps.plugins.public_assessment_utils import (
         get_components_latest_sbom_assessments_batch,
         passing_assessments_to_dict,
     )
 
-    # Get projects for this product with their components
-    projects = (
-        Project.objects.filter(products__id=product_id, is_public=True).prefetch_related("components").order_by("name")
+    components = list(
+        Component.objects.filter(
+            products__id=product_id,
+            visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED),
+        )
+        .order_by("name")
+        .distinct()
     )
 
-    # Collect all public components across all projects for batch query
-    all_components = []
-    project_component_map: dict[str, list[Any]] = {}  # project_id -> list of components
+    assessments_by_component = get_components_latest_sbom_assessments_batch(components)
 
-    for project in projects:
-        # Include both public and gated components (visible to public)
-        from sbomify.apps.sboms.models import Component
-
-        components_for_project = list(
-            project.components.filter(
-                visibility__in=(Component.Visibility.PUBLIC, Component.Visibility.GATED)
-            ).order_by("name")
-        )
-        project_component_map[str(project.id)] = components_for_project
-        all_components.extend(components_for_project)
-
-    # Batch fetch assessment status for all components at once
-    assessments_by_component = get_components_latest_sbom_assessments_batch(all_components)  # type: ignore[arg-type]
-
-    # Build the response structure
-    public_projects = []
-    for project in projects:
-        public_components = []
-        for component in project_component_map.get(str(project.id), []):
-            passing_assessments = passing_assessments_to_dict(assessments_by_component.get(str(component.id), []))
-
-            component_data = {
+    public_components = []
+    for component in components:
+        passing_assessments = passing_assessments_to_dict(assessments_by_component.get(str(component.id), []))
+        public_components.append(
+            {
                 "id": component.id,
                 "name": component.name,
                 "slug": component.slug,
                 "component_type": component.component_type,
                 "component_type_display": component.get_component_type_display(),
                 "passing_assessments": passing_assessments,
+                "public_url": get_public_path(
+                    "component", component.id, is_custom_domain=is_custom_domain, slug=component.slug
+                ),
             }
-            # Build component public URL
-            component_data["public_url"] = get_public_path(
-                "component", component.id, is_custom_domain=is_custom_domain, slug=component.slug
-            )
-            public_components.append(component_data)
+        )
 
-        project_data = {
-            "id": project.id,
-            "name": project.name,
-            "slug": project.slug,
-            "is_public": True,
-            "components": public_components,
-            "component_count": len(public_components),
-        }
-        public_projects.append(project_data)
-
-    return public_projects
+    return public_components
 
 
 def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5) -> list[Any]:
@@ -186,7 +159,7 @@ class ProductDetailsPublicView(View):
                 request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
             )
 
-        has_downloadable_content = SBOM.objects.filter(component__projects__products__id=resolved_id).exists()
+        has_downloadable_content = SBOM.objects.filter(component__products__id=resolved_id).exists()
         team = Team.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
@@ -205,7 +178,7 @@ class ProductDetailsPublicView(View):
         back_url = get_back_url_from_referrer(request, team, workspace_public_url)
 
         # Prepare server-side data for Django templates
-        public_projects = _prepare_public_projects_with_components(resolved_id, is_custom_domain)
+        public_components = _prepare_public_components(resolved_id, is_custom_domain)
         public_releases = _get_public_releases(
             resolved_id, is_custom_domain, product.get("slug") or resolved_id, limit=3
         )
@@ -270,7 +243,7 @@ class ProductDetailsPublicView(View):
             "product": product,
             "product_tei": product_tei,
             # Server-side rendered data
-            "public_projects": public_projects,
+            "public_components": public_components,
             "public_releases": public_releases,
             "product_identifiers": product_identifiers,
             "product_links": product_links,

@@ -451,7 +451,7 @@ class TestBuildExportPackage:
     def test_sbom_packaged_with_annex_vii_reference(
         self, mock_get_content, assessment_with_docs, sample_user, capturing_s3
     ):
-        """End-to-end: a real ``Product → Project → Component → SBOM``
+        """End-to-end: a real ``Product → Component → SBOM``
         chain produces an SBOM file in the ZIP, a manifest entry with
         ``cra_reference`` "Annex VII, §2", and the ``{slug}-{id}.cdx.json``
         naming convention (covers the export_service branch that runs
@@ -460,18 +460,16 @@ class TestBuildExportPackage:
         import io
         import zipfile
 
-        from sbomify.apps.core.models import Component, Project
+        from sbomify.apps.core.models import Component
         from sbomify.apps.sboms.models import SBOM
 
         product = assessment_with_docs.product
         team = assessment_with_docs.team
 
-        # Hang a Component off the Product via a Project. The export
-        # service discovers SBOMs via ``components__projects__products``.
-        project = Project.objects.create(name="CRA Export Project", team=team)
+        # Attach a Component directly to the Product. The export
+        # service discovers SBOMs via ``components__products``.
         component = Component.objects.create(name="Export Test Component", team=team)
-        project.components.add(component)
-        product.projects.add(project)
+        product.components.add(component)
 
         # Give the component an SBOM that the export will find. The
         # export service only wires the SBOM *path* into the ZIP; it

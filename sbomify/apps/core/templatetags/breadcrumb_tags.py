@@ -5,7 +5,7 @@ from typing import Any
 from django import template
 from django.urls import reverse
 
-from sbomify.apps.core.models import Product, Project
+from sbomify.apps.core.models import Product
 
 register = template.Library()
 
@@ -39,8 +39,9 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
     Returns:
         Context dictionary for the breadcrumb template
 
-    Note: Projects no longer have standalone public pages - they are integrated
-    into product pages. Components link back to their parent product.
+    Note: Components attach directly to products under the post-#946
+    ``Product → Component`` model; the legacy Project layer is gone.
+    Components link back to their parent product(s) only.
     """
     crumbs = []
     request = context.get("request")
@@ -107,30 +108,36 @@ def breadcrumb(context: Any, item: Any, item_type: Any) -> Any:
         return {"crumbs": crumbs}
 
     elif item_type == "component":
-        # For components, show the parent product (via project)
-        if isinstance(item, dict):
-            public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
-        else:
-            public_projects = item.projects.filter(is_public=True)
+        component_id = item.get("id") if isinstance(item, dict) else item.id
+        # Limit columns + cap to a small set; the referrer-match loop only
+        # needs `id`, `name`, and `Product.slug`, and there's no value in
+        # materialising every public product attached to a heavily-shared
+        # component.
+        #
+        # `Product.slug` is a `@property` computed from `name` via
+        # `slugify()` (see sboms/models.py), not a deferred DB column —
+        # so `.only("id", "name")` covers `detect_product_from_referrer`'s
+        # access pattern (`product.id`, `product.name`, `product.slug`)
+        # without triggering an N+1.
+        public_products = (
+            Product.objects.filter(components__id=component_id, is_public=True)
+            .order_by("id")
+            .only("id", "name")
+            .distinct()[:25]
+        )
 
-        if public_projects.exists():
-            # Collect ALL public products across all public projects
-            public_products = (
-                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct()
+        if public_products:
+            product = detect_product_from_referrer(public_products)
+            if not product:
+                product = public_products[0]
+
+            crumbs.append(
+                {
+                    "name": product.name,
+                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
+                    "icon": "fas fa-box",
+                }
             )
-
-            if public_products.exists():
-                product = detect_product_from_referrer(public_products)
-                if not product:
-                    product = public_products.first()
-
-                crumbs.append(
-                    {
-                        "name": product.name,
-                        "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
-                        "icon": "fas fa-box",
-                    }
-                )
 
     # For products, only the Trust Center crumb is shown (products are direct children of Trust Center)
     return {"crumbs": crumbs}
@@ -142,24 +149,16 @@ def get_breadcrumb_data(item: Any, item_type: Any) -> Any:
     crumbs = []
 
     if item_type == "component":
-        if isinstance(item, dict):
-            public_projects = Project.objects.filter(component__id=item.get("id"), is_public=True)
-        else:
-            public_projects = item.projects.filter(is_public=True)
-
-        if public_projects.exists():
-            # Collect ALL public products across all public projects
-            public_products = (
-                Product.objects.filter(projects__in=public_projects, is_public=True).order_by("id").distinct()
+        component_id = item.get("id") if isinstance(item, dict) else item.id
+        public_products = Product.objects.filter(components__id=component_id, is_public=True).order_by("id").distinct()
+        # Walrus narrows the type for mypy without an `# type: ignore`.
+        if product := public_products.first():
+            crumbs.append(
+                {
+                    "name": product.name,
+                    "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),
+                    "type": "product",
+                }
             )
-            if public_products.exists():
-                product = public_products.first()
-                crumbs.append(
-                    {
-                        "name": product.name,  # type: ignore[union-attr]
-                        "url": reverse("core:product_details_public", kwargs={"product_id": product.id}),  # type: ignore[union-attr]
-                        "type": "product",
-                    }
-                )
 
     return crumbs

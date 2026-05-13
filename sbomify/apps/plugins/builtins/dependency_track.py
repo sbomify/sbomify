@@ -135,28 +135,20 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 f"Team {team.key} does not have Dependency Track enabled as vulnerability provider."
             )
 
-        # Guard: DT scanning requires product membership. Check via the
-        # Project→Product link (stable at SBOM creation time) rather than
+        # Guard: DT scanning requires product membership. Check via the direct
+        # Product↔Component M2M (stable at SBOM creation time) rather than
         # ReleaseArtifact (subject to race — sbomify-action creates the SBOM
         # and release association in separate API calls, so the ReleaseArtifact
         # may not exist yet when the upload-triggered scan fires).
-        from sbomify.apps.core.models import Project
-
-        has_product = Project.objects.filter(
-            components=sbom.component,
-            team=team,
-            products__isnull=False,
-            products__team=team,
-        ).exists()
+        has_product = sbom.component.products.filter(team=team).exists()
         if not has_product:
             return self._create_skipped_result(
                 finding_id="dependency-track:no-product",
                 title="Skipped — component has no product membership",
                 description=(
                     "Dependency Track scanning requires the component to be linked "
-                    "to a product (via a project in the same team). This component "
-                    "has no product membership, so no release context exists for "
-                    "DT project tags."
+                    "to a product. This component has no product membership, so no "
+                    "release context exists for DT project tags."
                 ),
             )
 

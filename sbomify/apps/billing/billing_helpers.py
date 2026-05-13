@@ -138,14 +138,12 @@ def get_community_plan_limits() -> dict[str, int | None]:
         plan = BillingPlan.objects.get(key=BillingPlan.KEY_COMMUNITY)
         return {
             "max_products": plan.max_products,
-            "max_projects": plan.max_projects,
             "max_components": plan.max_components,
         }
     except BillingPlan.DoesNotExist:
         logger.critical("Community BillingPlan missing — returning unlimited limits")
         return {
             "max_products": None,
-            "max_projects": None,
             "max_components": None,
         }
 
