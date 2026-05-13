@@ -10,7 +10,7 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_product
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.models import Release, ReleaseArtifact
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Release, ReleaseArtifact
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
@@ -80,8 +80,12 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
 def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5) -> list[Any]:
     """Get releases for a public product (releases inherit visibility from their product)."""
     # Use annotations to avoid N+1 queries for artifacts_count and has_sboms
+    # Exclude the synthetic auto-`latest` release — the product page surfaces it
+    # via the "Download Latest Release" CTA, so it shouldn't also occupy a row
+    # in the releases table.
     releases = (
         Release.objects.filter(product_id=product_id)
+        .exclude(name=LATEST_RELEASE_NAME)
         .select_related("product")
         .annotate(
             annotated_artifacts_count=Count("artifacts"),

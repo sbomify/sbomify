@@ -16,23 +16,19 @@
     {% breadcrumb releases 'releases' %}
 {% endblock %}
 {% block content %}
-    <div class="public-item-header">
-        <a href="{% url 'core:product_details_public' product.id %}"
-           class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
-           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-            <i class="fas fa-arrow-left"></i>Back
-        </a>
-        <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
+    <div class="public-item-header flex flex-col gap-3">
+        {# Parent navigation comes from the breadcrumb (`Trust Center > Product`). #}
+        <h1 class="text-3xl font-bold text-text flex items-center gap-4 m-0">
             <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <i class="fas fa-tags"></i>
+                <i class="fas fa-tags" aria-hidden="true"></i>
             </span>
             Releases
         </h1>
-        <p class="text-text-muted text-lg mb-4">All software releases for {{ product.name }}</p>
+        <p class="text-text-muted text-lg m-0">All software releases for {{ product.name }}</p>
         {% if releases %}
-            <div class="flex flex-wrap gap-2 mb-6">
+            <div class="flex flex-wrap gap-2">
                 <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                    <i class="fas fa-tag"></i>
+                    <i class="fas fa-tag" aria-hidden="true"></i>
                     {{ releases|length }} Release{{ releases|length|pluralize }}
                 </span>
             </div>

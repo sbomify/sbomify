@@ -66,6 +66,10 @@ class ReleaseDetailsPublicView(View):
         context = {
             "brand": brand,
             "release": release,
+            # `product` is consumed by the breadcrumb tag so the release page
+            # gets a `Trust Center > Product > (current release)` breadcrumb
+            # consistent with the releases list and component pages.
+            "product": product,
             "workspace_public_url": workspace_public_url,
         }
         add_custom_domain_to_context(request, context, team)

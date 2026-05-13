@@ -96,20 +96,22 @@
                             </button>
                         </th>
                         <th class="hidden lg:table-cell">Releases</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="item in paginatedData" :key="item.sbom.id">
                         <tr class="hover:bg-background/50 transition-colors"
                             x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
-                            <td>
+                            <td class="break-all">
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
+                                {# Mobile: format name only — full "<FORMAT> <version>" pair shown in dedicated columns at md+. #}
                                 <div class="md:hidden mt-1">
                                     <span class="tw-sbom-format text-xs"
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
-                                          x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
+                                          x-text="(item.sbom.format_display || item.sbom.format).toUpperCase()"></span>
                                 </div>
                             </td>
                             <td class="hidden md:table-cell">
@@ -169,7 +171,7 @@
                                     </template>
                                 </td>
                             {% endif %}
-                            <td class="text-text text-sm">
+                            <td class="text-text text-sm whitespace-nowrap">
                                 <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
                             </td>
                             <td class="hidden lg:table-cell">
@@ -188,11 +190,21 @@
                                     <span class="text-text-muted">—</span>
                                 </template>
                             </td>
+                            <td>
+                                <div class="flex items-center justify-center gap-1">
+                                    <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id)"
+                                       title="Download"
+                                       aria-label="Download SBOM"
+                                       class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
+                                        <i class="fas fa-download" aria-hidden="true"></i>
+                                    </a>
+                                </div>
+                            </td>
                         </tr>
                     </template>
                     <template x-if="paginatedData.length === 0 && search">
                         <tr>
-                            <td colspan="{% if is_public_view %}6{% else %}7{% endif %}"
+                            <td colspan="{% if is_public_view %}7{% else %}8{% endif %}"
                                 class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
                                 <p>No BOMs match your search</p>

@@ -21,31 +21,24 @@
 {% endblock %}
 {% block content %}
     <div class="space-y-6">
-        {# Back link #}
-        <div>
-            <a href="{% url 'core:product_details_public' release.product.id %}"
-               class="inline-flex items-center gap-2 text-text-muted hover:text-text no-underline transition-colors"
-               onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to {{ release.product.name }}
-            </a>
-        </div>
+        {# Parent navigation comes from the breadcrumb (`Trust Center > Product`). #}
         {# Page Header #}
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4">
-                <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 {% if release.is_latest %}bg-success/10{% else %}bg-primary/10{% endif %}">
-                    <i class="fas fa-tag text-2xl {% if release.is_latest %}text-success{% else %}text-primary{% endif %}"></i>
+                <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-primary/10">
+                    <i class="fas fa-tag text-2xl text-primary" aria-hidden="true"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                     <h1 class="text-2xl lg:text-3xl font-bold text-text mb-2 flex items-center gap-3 flex-wrap">
                         <span>{{ release.name }}</span>
                         {% if release.is_latest %}
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-success/10 text-success border border-success/30">
-                                <i class="fas fa-check-circle text-[0.625rem]" aria-hidden="true"></i>Latest
+                                <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>Latest
                             </span>
                         {% endif %}
                         {% if release.is_prerelease %}
                             <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-warning/10 text-warning border border-warning/30">
-                                <i class="fas fa-flask text-[0.625rem]" aria-hidden="true"></i>Pre-release
+                                <i class="fas fa-flask text-xs" aria-hidden="true"></i>Pre-release
                             </span>
                         {% endif %}
                     </h1>

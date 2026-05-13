@@ -54,7 +54,8 @@
                                 </span>
                             </button>
                         </th>
-                        <th :aria-sort="sortColumn === 'document_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                        <th class="hidden md:table-cell"
+                            :aria-sort="sortColumn === 'document_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
                                     :class="{ 'sorted-asc': sortColumn === 'document_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'document_type' && sortDirection === 'desc' }"
@@ -98,7 +99,7 @@
                 <tbody>
                     <template x-for="item in paginatedData" :key="item.document.id">
                         <tr class="hover:bg-background/50 transition-colors">
-                            <td>
+                            <td class="break-all">
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% endif %}'.replace('DOC_ID', item.document.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.document.name"></a>
@@ -108,7 +109,7 @@
                                           x-text="item.document.document_type_display || 'Document'"></span>
                                 </div>
                             </td>
-                            <td>
+                            <td class="hidden md:table-cell">
                                 <span class="tw-badge-warning"
                                       x-text="item.document.document_type_display || 'Document'"></span>
                             </td>
@@ -117,7 +118,7 @@
                                       x-text="item.document.version.length > 20 ? item.document.version.slice(0, 20) + '...' : item.document.version"
                                       :title="item.document.version"></span>
                             </td>
-                            <td class="text-text-muted text-sm">
+                            <td class="text-text-muted text-sm whitespace-nowrap">
                                 <span x-text="new Date(item.document.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
                             </td>
                             <td class="hidden lg:table-cell">
