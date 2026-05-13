@@ -23,9 +23,9 @@
             }
             // Also mark if using system preference for the toggle component
             if(!t || t==='system') html.setAttribute('data-theme-source','system');
-            // Set critical CSS variables on the html element to prevent flash before
-            // the linked stylesheets resolve. Inline style on <html> already beats
-            // selector-based rules — no !important needed.
+            // Set critical CSS variables on the root element to prevent flash before
+            // the linked stylesheets resolve. An inline style on the root element
+            // already beats selector-based rules — no !important needed.
             var style = html.style;
             if(isDark) {
                 style.setProperty('--color-surface','30 41 59');
@@ -194,7 +194,7 @@
                 --gray-600: #475569;
                 --white: #ffffff;
                 /* Tailwind color variables (RGB triplets) — public trust center is light-default;
-                   the inline <style> block already comes after tokens.css in source order,
+                   this inline style block already comes after tokens.css in source order,
                    so no !important is needed to win the cascade. */
                 --color-surface: 255 255 255;
                 --color-surface-elevated: 255 255 255;
