@@ -65,7 +65,28 @@ def demote_visibility_for_previously_hidden_components(apps: Any, schema_editor:
     counts at deploy time. The `projects` reverse relation is still
     available on the historical model state because RunPython runs before
     any of the schema ops below.
+
+    SAFE-RESUME GUARD: if this migration previously failed partway through
+    (e.g. the earlier buggy operation order in this file), the
+    ``sboms_projects_components.project_id`` column will already be gone and
+    the JOINs below would raise ``ProgrammingError: column ... does not
+    exist``. RunPython commits independently because this migration is
+    non-atomic, so the demote has already been applied to live data on the
+    prior failed run. Probe for the column and no-op if it's missing.
     """
+    cursor = schema_editor.connection.cursor()
+    cursor.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'sboms_projects_components' AND column_name = 'project_id' "
+        "LIMIT 1"
+    )
+    if cursor.fetchone() is None:
+        logger.info(
+            "migration 0062: skipping visibility demote — sboms_projects_components.project_id "
+            "is already gone, indicating the demote ran on a prior partial-apply attempt"
+        )
+        return
+
     Component = apps.get_model("sboms", "Component")
     PUBLIC = "public"
     GATED = "gated"
@@ -128,49 +149,49 @@ class Migration(migrations.Migration):
             demote_visibility_for_previously_hidden_components,
             migrations.RunPython.noop,
         ),
-        migrations.RemoveField(
-            model_name="product",
-            name="projects",
-        ),
-        migrations.RemoveField(
-            model_name="project",
-            name="products",
-        ),
-        migrations.AlterUniqueTogether(
-            name="project",
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name="project",
-            name="components",
-        ),
-        migrations.RemoveField(
-            model_name="project",
-            name="team",
-        ),
-        migrations.RemoveField(
-            model_name="component",
-            name="projects",
-        ),
-        migrations.RemoveField(
-            model_name="projectcomponent",
-            name="project",
-        ),
-        migrations.AlterUniqueTogether(
-            name="projectcomponent",
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name="projectcomponent",
-            name="component",
-        ),
-        migrations.DeleteModel(
-            name="ProductProject",
-        ),
-        migrations.DeleteModel(
-            name="Project",
-        ),
-        migrations.DeleteModel(
-            name="ProjectComponent",
+        # Idempotent schema rewrite. The legacy Project layer consists of
+        # three tables (``sboms_projects``, ``sboms_products_projects``,
+        # ``sboms_projects_components``) plus a ``team_id`` FK column on
+        # the projects table that gets cascade-dropped with the table.
+        # Dropping them with ``IF EXISTS ... CASCADE`` is safe on:
+        #   - Fresh DBs (all three tables exist; CASCADE handles the FKs
+        #     from the through tables back to ``sboms_projects``).
+        #   - Partially-applied DBs left behind by the earlier buggy
+        #     operation order (some tables/columns already gone — every
+        #     DROP is a no-op when its target is missing).
+        #   - Re-applied DBs (the migration was forcefully marked
+        #     applied — every DROP is a no-op).
+        # ``state_operations`` keeps Django's in-memory model graph in
+        # sync so downstream migrations see Project/ProductProject/
+        # ProjectComponent as gone.
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    "DROP TABLE IF EXISTS sboms_products_projects CASCADE;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+                migrations.RunSQL(
+                    "DROP TABLE IF EXISTS sboms_projects_components CASCADE;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+                migrations.RunSQL(
+                    "DROP TABLE IF EXISTS sboms_projects CASCADE;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.RemoveField(model_name="product", name="projects"),
+                migrations.RemoveField(model_name="project", name="products"),
+                migrations.AlterUniqueTogether(name="project", unique_together=None),
+                migrations.RemoveField(model_name="project", name="components"),
+                migrations.RemoveField(model_name="project", name="team"),
+                migrations.RemoveField(model_name="component", name="projects"),
+                migrations.AlterUniqueTogether(name="projectcomponent", unique_together=None),
+                migrations.RemoveField(model_name="projectcomponent", name="project"),
+                migrations.RemoveField(model_name="projectcomponent", name="component"),
+                migrations.DeleteModel(name="ProductProject"),
+                migrations.DeleteModel(name="Project"),
+                migrations.DeleteModel(name="ProjectComponent"),
+            ],
         ),
     ]
