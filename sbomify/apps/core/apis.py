@@ -347,12 +347,13 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
             applying a deterministic `.order_by(...)` — without it, the
             paginator produces an `UnorderedObjectListWarning` and adjacent
             pages may contain overlapping rows under concurrent writes.
-        page: Page number (1-based). Page numbers above ``total_pages``
-            return an empty `items` list with ``has_next=False`` — they do
-            NOT silently fall back to page 1. Clients walking pages should
-            stop when ``items`` is empty (or when ``has_next`` is False).
+        page: Page number (1-based). Values < 1 are clamped to 1.
+            Page numbers ABOVE ``total_pages`` return an empty `items`
+            list with ``has_next=False`` — they do NOT silently fall back
+            to page 1. Clients walking pages should stop when ``items``
+            is empty (or when ``has_next`` is False).
         page_size: Number of items per page. Use -1 to get all items without
-            pagination.
+            pagination. Other values are clamped to the range [1, 100].
 
     Returns:
         tuple: (paginated_items, pagination_meta)
@@ -361,8 +362,12 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
     page 1 when the requested page was beyond `total_pages`. That meant
     a naive `while True: GET ?page=N; N += 1` walker would loop forever
     returning duplicates (see issue #949). The current behaviour treats
-    out-of-range pages as empty, mirroring how every well-behaved REST
-    paginator (DRF, Ninja's built-in, etc.) handles it.
+    pages > total_pages as empty, mirroring how every well-behaved REST
+    paginator (DRF, Ninja's built-in, etc.) handles it. Note that page < 1
+    is clamped to 1 (not returned as empty), so `PageNotAnInteger` from
+    Django's `Paginator` is effectively unreachable from this code path —
+    the `try/except` below is defense-in-depth for any future caller that
+    bypasses the `max(1, page)` clamp.
     """
     from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 
@@ -391,9 +396,14 @@ def _paginate_queryset(queryset: Any, page: int = 1, page_size: int = 15) -> Any
         has_previous = paginated_items.has_previous()
         has_next = paginated_items.has_next()
     except (EmptyPage, PageNotAnInteger):
-        # Out-of-range or invalid page: return an empty slice with
+        # Out-of-range page (> total_pages): return an empty slice with
         # `has_next=False` so naive page-walkers terminate. Do NOT fall
-        # back to page 1 — that caused issue #949.
+        # back to page 1 — that caused issue #949. Note: page < 1 was
+        # clamped to 1 above so it never reaches this branch — Django's
+        # `PageNotAnInteger` is only raised for `page=NaN` / non-numeric
+        # input, which Django Ninja already rejects at the Query layer.
+        # We keep both exception classes in the `except` tuple as defence
+        # in depth.
         items_list = []
         # The requested page may legitimately be > total_pages; report
         # has_previous as True iff at least one item exists in the
