@@ -16,7 +16,7 @@
                             <div class="barcode-wrapper"
                                  x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                 <svg data-barcode-id="{{ identifier.id }}"
-                                     class="barcode-svg max-w-[150px] h-auto"
+                                     class="barcode-svg"
                                      x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
                                      aria-hidden="true">
                                 </svg>
@@ -55,7 +55,7 @@
                                         <div class="barcode-wrapper inline-block"
                                              x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
                                             <svg data-barcode-id="{{ identifier.id }}"
-                                                 class="barcode-svg max-w-[150px] h-auto"
+                                                 class="barcode-svg"
                                                  x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
                                                  aria-hidden="true">
                                             </svg>

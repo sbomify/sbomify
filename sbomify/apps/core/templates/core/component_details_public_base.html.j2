@@ -29,18 +29,18 @@
         </h1>
         <div class="flex flex-wrap gap-2">
             <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted flex items-center gap-2">
-                <i class="fas fa-tag"></i>
+                <i class="fas fa-tag" aria-hidden="true"></i>
                 {{ component.component_type_display }}
             </span>
             {% if component.is_global %}
                 <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-primary/10 text-primary flex items-center gap-2">
-                    <i class="fas fa-building"></i>
+                    <i class="fas fa-building" aria-hidden="true"></i>
                     Workspace-wide
                 </span>
             {% endif %}
             {% if component.visibility == 'gated' %}
                 <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                    <i class="fas fa-lock"></i>
+                    <i class="fas fa-lock" aria-hidden="true"></i>
                     Gated Access
                 </span>
             {% endif %}

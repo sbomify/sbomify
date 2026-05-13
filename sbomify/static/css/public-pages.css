@@ -3,6 +3,14 @@
  * Uses design tokens and brand variables for consistency
  */
 
+/* Public-page barcode SVG.
+   Centralized here so templates can use the .barcode-svg class without
+   per-call arbitrary max-width utilities (previously max-w-[150px]). */
+.barcode-svg {
+    max-width: 150px;
+    height: auto;
+}
+
 /* ===== HERO ===== */
 .public-hero {
     position: relative;

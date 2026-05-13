@@ -2,20 +2,30 @@
 
 Not a regression test — this saves screenshots to /tmp/ux-review/ so they can
 be inspected manually after the trust-center UI changes in PR #966.
+
+Skipped by default in CI because every test passes regardless of output
+(no asserts). Run locally with `RUN_UX_REVIEW=1 pytest ...` when you want
+fresh screenshots.
 """
 
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page
 
-from sbomify.apps.core.models import Component, Release
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Release
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
 OUT_DIR = Path("/tmp/ux-review")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("RUN_UX_REVIEW"),
+    reason="UX screenshot generator — set RUN_UX_REVIEW=1 to run.",
+)
 
 # Widths to capture: desktop, narrow desktop, tablet, mobile.
 WIDTHS = [1920, 992, 576, 375]
@@ -102,12 +112,34 @@ def trust_center_product(product_factory, component_factory, sbom_factory, docum
         ),
     ])
 
-    Release.objects.bulk_create([
-        Release(product=product, name="v1.0.0", description="Initial GA release", is_latest=False, is_prerelease=False),
-        Release(product=product, name="v1.1.0", description="Maintenance release", is_latest=False, is_prerelease=False),
-        Release(product=product, name="v2.0.0", description="Major update — new dashboard, faster scans", is_latest=True, is_prerelease=False),
-        Release(product=product, name="v2.1.0-beta", description="Beta — preview of release-channel feature", is_latest=False, is_prerelease=True),
-    ])
+    # Versioned releases: is_latest=False. The model reserves is_latest for
+    # the auto-managed `latest` synthetic release; `.create()` (not bulk) so
+    # save-time validations and signals run.
+    for name_, description, is_prerelease in [
+        ("v1.0.0", "Initial GA release", False),
+        ("v1.1.0", "Maintenance release", False),
+        ("v2.0.0", "Major update — new dashboard, faster scans", False),
+        ("v2.1.0-beta", "Beta — preview of release-channel feature", True),
+    ]:
+        Release.objects.create(
+            product=product,
+            name=name_,
+            description=description,
+            is_latest=False,
+            is_prerelease=is_prerelease,
+        )
+
+    # Synthetic auto-managed `latest` release — created the way the
+    # production code does (via the reserved name + is_latest=True). The
+    # public views filter this out of release lists; the UX-review pages
+    # exercise both the filtered list rendering and the synthetic-release
+    # download CTA.
+    Release.objects.create(
+        product=product,
+        name=LATEST_RELEASE_NAME,
+        is_latest=True,
+        is_prerelease=False,
+    )
 
     yield product
 
@@ -148,8 +180,9 @@ class TestUxReviewTrustCenter:
         _full_page_screenshot(authenticated_page, "product_releases_public", width)
 
     def test_release_details_public(self, authenticated_page, trust_center_product, width):
-        latest = trust_center_product.releases.filter(is_latest=True).first()
-        authenticated_page.goto(f"/public/product/{trust_center_product.id}/release/{latest.id}/")
+        # Capture a real versioned release (not the synthetic auto-`latest`).
+        versioned = trust_center_product.releases.exclude(name=LATEST_RELEASE_NAME).filter(is_prerelease=False).first()
+        authenticated_page.goto(f"/public/product/{trust_center_product.id}/release/{versioned.id}/")
         authenticated_page.wait_for_load_state("networkidle")
         _full_page_screenshot(authenticated_page, "release_details_public_latest", width)
 
