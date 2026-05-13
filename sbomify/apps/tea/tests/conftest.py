@@ -6,7 +6,6 @@ from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
     sample_billing_plan,
     sample_component,
     sample_product,
-    sample_project,
     sample_sbom,
 )
 from sbomify.apps.teams.fixtures import sample_team  # noqa: F401
@@ -41,8 +40,10 @@ def tea_conformance_data(sample_sbom):
     Returns (team, product, release, component, sbom).
     """
     component = sample_sbom.component
-    project = component.project
-    product = project.product
+    # sample_component fixture attaches the component to sample_product via
+    # ProductComponent, so we can resolve the product directly off the M2M.
+    product = component.products.first()
+    assert product is not None, "sample_component fixture must attach the component to a product"
 
     team = product.team
     team.tea_enabled = True

@@ -38,7 +38,6 @@ A comprehensive API for managing Software Bill of Materials (SBOM) and document 
 ## Features
 
 - **Product Management**: Create and organize products with identifiers and external links
-- **Project Organization**: Manage projects within products for better structure
 - **Component & Artifact Management**: Handle components, SBOMs, and documents with security analysis
 - **Release Management**: Tag and organize artifacts by product releases with download capabilities
 - **Workspace Collaboration**: Multi-user access with role-based permissions
@@ -91,9 +90,9 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
                 "Components provide logical grouping and access control.",
             },
             {
-                "name": "Products & Projects",
-                "description": "Structure your software inventory with products and projects for better organization "
-                "and release management.",
+                "name": "Products",
+                "description": "Structure your software inventory with products that group components and "
+                "are organised by releases.",
             },
             {
                 "name": "Releases",

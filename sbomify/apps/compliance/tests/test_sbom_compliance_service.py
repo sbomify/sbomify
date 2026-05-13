@@ -10,16 +10,14 @@ from sbomify.apps.compliance.services.sbom_compliance_service import (
     get_bsi_assessment_status,
 )
 from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.sboms.models import SBOM, Component, Product
 
 
 def _create_product_with_component(team, *, component_name: str = "comp-1") -> tuple[Product, Component]:
-    """Helper: create a product with a project and a component linked through it."""
+    """Helper: create a product with a component attached directly via ProductComponent M2M."""
     product = Product.objects.create(name="Test Product", team=team)
-    project = Project.objects.create(name="Test Project", team=team)
-    ProductProject.objects.create(product=product, project=project)
     component = Component.objects.create(name=component_name, team=team)
-    ProjectComponent.objects.create(project=project, component=component)
+    product.components.add(component)
     return product, component
 
 

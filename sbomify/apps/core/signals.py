@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.exceptions import ValidationError
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
@@ -115,31 +116,86 @@ def _update_latest_release_for_document(document_instance: Any) -> Any:
         logger.error("Error updating latest release for Document %s", document_instance.id, exc_info=True)
 
 
-@receiver(m2m_changed, sender="sboms.ProductProject")
-def update_latest_release_on_product_projects_changed(
-    sender: Any, instance: Any, action: Any, pk_set: Any, **kwargs: Any
+# Attribute used on a Component instance to carry the snapshot of affected
+# product IDs from ``pre_clear`` to ``post_clear`` for ``component.products.clear()``.
+# Stored on the instance itself (not a module dict) so it's per-operation and
+# auto-cleaned with the instance — no concurrency races between workers/threads
+# clearing different Component instances, and no leak if ``post_clear`` never fires.
+_PENDING_CLEAR_ATTR = "_sbomify_pending_clear_product_ids"
+
+
+@receiver(
+    m2m_changed,
+    sender="sboms.ProductComponent",
+    dispatch_uid="sbomify.core.signals.update_latest_release_on_product_components_changed",
+)
+def update_latest_release_on_product_components_changed(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
 ) -> Any:
-    """Update the latest release when projects are added to a product."""
-    if action not in ("post_add", "post_remove"):
+    """Refresh latest release artifacts when components are added/removed on a
+    product directly via the new ``ProductComponent`` M2M.
+
+    The M2M is declared on Component as ``products = ManyToManyField(Product,
+    related_name="components")``. Django reports:
+
+    - ``reverse=False`` when the change originates on the forward side
+      (``component.products.add/remove/clear(...)``): ``instance`` is the
+      Component and ``pk_set`` holds the Product PKs (None for ``post_clear``).
+    - ``reverse=True`` when the change originates on the reverse side
+      (``product.components.add/remove/clear(...)``): ``instance`` is the
+      Product and ``pk_set`` holds the Component PKs.
+
+    For ``post_clear`` on the forward side, ``pk_set`` is None and the M2M is
+    already empty, so we snapshot the affected product IDs on ``pre_clear``
+    (where the rows still exist) and consume the snapshot here. Without this,
+    callers like ``component.products.clear()`` (used by ComponentScopeView and
+    the transfer-component flow) would leave their old products with stale
+    ``latest`` releases.
+    """
+    if action not in ("pre_clear", "post_add", "post_remove", "post_clear"):
+        return
+    from sbomify.apps.core.models import Product, Release
+
+    if action == "pre_clear":
+        if not reverse:
+            # Forward-side pre_clear: snapshot products this component is about
+            # to be detached from. Stored on the instance so it's per-operation.
+            setattr(instance, _PENDING_CLEAR_ATTR, list(instance.products.values_list("id", flat=True)))
+        # Reverse-side pre_clear has nothing to snapshot — instance is the
+        # Product whose own ID we already know.
         return
 
-    # Import here to avoid circular imports
-    from sbomify.apps.core.models import Release
+    if reverse:
+        product_ids: list[Any] = [instance.id]
+    elif action == "post_clear":
+        product_ids = getattr(instance, _PENDING_CLEAR_ATTR, []) or []
+        # Drop the snapshot once consumed so a subsequent reload of the same
+        # instance doesn't see stale data.
+        if hasattr(instance, _PENDING_CLEAR_ATTR):
+            delattr(instance, _PENDING_CLEAR_ATTR)
+    else:
+        product_ids = list(pk_set or ())
 
-    try:
-        # Get or create latest release for this product
-        latest_release = Release.get_or_create_latest_release(instance)
+    if not product_ids:
+        return
 
-        # Refresh the artifacts in the latest release
-        latest_release.refresh_latest_artifacts()
-
-        logger.info(
-            "Refreshed latest release %s for product %s after project changes",
-            latest_release.id,
-            instance.id,
-        )
-    except Exception:
-        logger.error("Error updating latest release for product %s", instance.id, exc_info=True)
+    # Single query for all affected products instead of one .get() per id —
+    # bulk add/remove can pass dozens of PKs in pk_set.
+    products_by_id = Product.objects.in_bulk(product_ids)
+    for prod_id in product_ids:
+        product = products_by_id.get(prod_id)
+        if product is None:
+            continue
+        try:
+            latest_release = Release.get_or_create_latest_release(product)
+            latest_release.refresh_latest_artifacts()
+            logger.info(
+                "Refreshed latest release %s for product %s after component changes",
+                latest_release.id,
+                product.id,
+            )
+        except Exception:
+            logger.error("Error refreshing latest release for product %s", prod_id, exc_info=True)
 
 
 @receiver(post_save, sender="core.ReleaseArtifact")
@@ -267,3 +323,67 @@ def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwarg
         pass
     except Exception:
         logger.error("Error cleaning up ComponentRelease for SBOM %s", instance.id, exc_info=True)
+
+
+@receiver(
+    m2m_changed,
+    sender="sboms.ProductComponent",
+    dispatch_uid="sbomify.core.signals.reject_cross_tenant_product_component_links",
+)
+def reject_cross_tenant_product_component_links(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
+) -> Any:
+    """Block any ``ProductComponent`` row that would link a Product and a
+    Component owned by different teams.
+
+    The M2M is declared on Component as
+    ``products = ManyToManyField(Product, related_name="components")``.
+    Django reports:
+
+    - ``reverse=False`` for the forward call site
+      ``component.products.add(...)`` — ``instance`` is the Component and
+      ``pk_set`` holds the Product PKs being attached.
+    - ``reverse=True`` for the reverse call site
+      ``product.components.add(...)`` — ``instance`` is the Product and
+      ``pk_set`` holds the Component PKs being attached.
+
+    NB: ``ProductComponent.objects.create(product=..., component=...)``
+    bypasses ``m2m_changed`` entirely, so the through-model itself also
+    enforces the tenancy invariant via ``ProductComponent.clean()`` /
+    ``full_clean()`` (see ``sboms/models.py``). This receiver is the M2M
+    boundary; ``clean()`` is the through-model boundary.
+    """
+    if action != "pre_add" or not pk_set:
+        return
+
+    # Imported lazily to avoid circular imports during Django app loading.
+    # core/apps.py loads this module from ``ready()``, after every app has
+    # registered, so this is safe; but core/signals -> sboms/models is a
+    # cycle we keep deferred to make module-level testing/import order
+    # robust under reload (Gunicorn prefork, Dramatiq worker init).
+    from sbomify.apps.sboms.models import Component, Product
+
+    pk_list = list(pk_set)
+
+    if reverse:
+        # Reverse call site: product.components.add(*component_pks).
+        product_team_id = instance.team_id
+        team_ids_by_component = dict(Component.objects.filter(pk__in=pk_list).values_list("id", "team_id"))
+        for component_id in pk_list:
+            component_team_id = team_ids_by_component.get(component_id)
+            if component_team_id is not None and component_team_id != product_team_id:
+                raise ValidationError(
+                    f"Cross-tenant ProductComponent rejected: product team={product_team_id}, "
+                    f"component team={component_team_id}"
+                )
+    else:
+        # Forward call site: component.products.add(*product_pks).
+        component_team_id = instance.team_id
+        team_ids_by_product = dict(Product.objects.filter(pk__in=pk_list).values_list("id", "team_id"))
+        for product_id in pk_list:
+            product_team_id = team_ids_by_product.get(product_id)
+            if product_team_id is not None and product_team_id != component_team_id:
+                raise ValidationError(
+                    f"Cross-tenant ProductComponent rejected: component team={component_team_id}, "
+                    f"product team={product_team_id}"
+                )

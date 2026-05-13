@@ -204,7 +204,6 @@ For dangerous actions that require special styling:
 The dangerzone components use Django templates with HTMX/Alpine.js. The following templates are available in `sbomify/apps/core/templates/components/`:
 
 - **Components**: `component_danger_zone.html.j2` (transfer + delete functionality)
-- **Projects**: `project_danger_zone.html.j2` (delete only)
 - **Products**: `product_danger_zone.html.j2` (delete only)
 - **Releases**: `release_danger_zone.html.j2` (delete only)
 - **SBOMs**: `sbom_danger_zone.html.j2` (delete only)

@@ -1,8 +1,7 @@
 {# Create Modals - Alpine.js + Tailwind Implementation #}
 {# Shared modal state - listens for custom events from header #}
-<div x-data="{ productModal: false, projectModal: false, componentModal: false, componentType: 'bom' }"
+<div x-data="{ productModal: false, componentModal: false, componentType: 'bom' }"
      @open-product-modal.window="productModal = true"
-     @open-project-modal.window="projectModal = true"
      @open-component-modal.window="componentModal = true">
     {# New Product Modal #}
     <template x-teleport="body">
@@ -82,81 +81,6 @@
                             <button type="button" class="tw-btn-ghost" @click="productModal = false">Cancel</button>
                             <button type="submit" class="tw-btn-primary">
                                 <i class="fas fa-plus mr-2"></i>Create Product
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </template>
-    {# New Project Modal #}
-    <template x-teleport="body">
-        <div x-show="projectModal"
-             x-cloak
-             class="fixed inset-0 z-[100]"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="newProjectModalLabel"
-             @keydown.escape="projectModal = false">
-            {# Backdrop #}
-            <div x-show="projectModal"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="tw-modal-overlay"
-                 @click="projectModal = false"></div>
-            {# Modal Content #}
-            <div class="tw-modal"
-                 x-show="projectModal"
-                 x-trap.noscroll="projectModal"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop>
-                <div class="tw-modal-content">
-                    <div class="tw-modal-header">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-folder text-primary"></i>
-                            </div>
-                            <h4 id="newProjectModalLabel" class="tw-modal-title">New Project</h4>
-                        </div>
-                        <button type="button"
-                                @click="projectModal = false"
-                                class="tw-modal-close"
-                                aria-label="Close">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <p class="px-6 pt-2 text-sm text-text-muted">
-                        A project groups related components together, such as a microservice or library.
-                    </p>
-                    <form id="newProjectForm"
-                          method="post"
-                          action="{% url 'core:projects_dashboard' %}">
-                        {% csrf_token %}
-                        <div class="tw-modal-body">
-                            <div>
-                                <label class="tw-form-label" for="newProjectName">
-                                    Name <span class="text-danger">*</span>
-                                </label>
-                                <input id="newProjectName"
-                                       name="name"
-                                       type="text"
-                                       class="tw-form-input"
-                                       required>
-                            </div>
-                        </div>
-                        <div class="tw-modal-footer">
-                            <button type="button" class="tw-btn-ghost" @click="projectModal = false">Cancel</button>
-                            <button type="submit" class="tw-btn-primary">
-                                <i class="fas fa-plus mr-2"></i>Create Project
                             </button>
                         </div>
                     </form>
@@ -250,7 +174,7 @@
                                     <span class="text-sm font-medium text-text">Workspace-wide component</span>
                                 </label>
                                 <p class="text-xs text-text-muted mt-1 ml-8">
-                                    Global components live at the workspace level and are not tied to a specific project. Use for documents and attestations.
+                                    Global components live at the workspace level and are not attached to any product. Use for documents and attestations.
                                 </p>
                             </div>
                         </div>

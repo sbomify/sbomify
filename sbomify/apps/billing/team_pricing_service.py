@@ -314,10 +314,6 @@ class TeamPricingService:
                 "label": "Products",
                 "icon": "cube",
             },
-            "max_projects": {
-                "label": "Projects",
-                "icon": "folder",
-            },
             "max_components": {
                 "label": "Components",
                 "icon": "puzzle-piece",

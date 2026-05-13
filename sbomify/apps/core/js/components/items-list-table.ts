@@ -20,7 +20,7 @@ interface PaginationMeta {
 }
 
 interface ItemsListTableParams {
-    itemType: 'products' | 'projects' | 'components';
+    itemType: 'products' | 'components';
     workspaceId?: string;
     initialItems?: ListItem[];
     initialPagination?: PaginationMeta;
@@ -62,20 +62,13 @@ export function registerItemsListTable() {
 
                 // Listen for refresh events based on item type
                 if (window.eventBus && window.EVENTS) {
-                    let eventName: string | undefined;
-                    if (itemType === 'products') {
-                        eventName = window.EVENTS.REFRESH_PRODUCTS;
-                    } else if (itemType === 'projects') {
-                        eventName = window.EVENTS.REFRESH_PROJECTS;
-                    } else if (itemType === 'components') {
-                        eventName = window.EVENTS.REFRESH_COMPONENTS;
-                    }
-                    
-                    if (eventName) {
-                        window.eventBus.on(eventName, () => {
-                            this.loadItems();
-                        });
-                    }
+                    const eventName = itemType === 'products'
+                        ? window.EVENTS.REFRESH_PRODUCTS
+                        : window.EVENTS.REFRESH_COMPONENTS;
+
+                    window.eventBus.on(eventName, () => {
+                        this.loadItems();
+                    });
                 }
 
                 this.$watch('currentPage', () => this.loadItems());
@@ -124,8 +117,6 @@ export function registerItemsListTable() {
                 switch (this.itemType) {
                     case 'products':
                         return 'fas fa-box';
-                    case 'projects':
-                        return 'fas fa-project-diagram';
                     case 'components':
                         return 'fas fa-cube';
                     default:

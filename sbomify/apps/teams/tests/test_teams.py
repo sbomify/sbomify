@@ -52,7 +52,6 @@ def community_plan() -> BillingPlan:
             "name": "Community",
             "description": "Free plan for small teams",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
             "max_users": 1,
             "stripe_product_id": None,
@@ -393,7 +392,6 @@ def test_team_invitation(sample_team_with_owner_member: Member):  # noqa: F811
             "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
-            "max_projects": 100,
             "max_components": 1000,
         },
     )

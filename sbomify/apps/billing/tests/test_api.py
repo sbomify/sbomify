@@ -75,18 +75,13 @@ def test_get_usage(
     team_with_business_plan: Team,  # noqa: F811
 ):
     """Test retrieving team's usage statistics."""
+    from sbomify.apps.sboms.models import Component, ProductComponent
+
     client.force_login(sample_user)
 
-    # Create some test data
     product = team_with_business_plan.product_set.create(name="Test Product")
-    project = product.project_set.create(
-        name="Test Project",
-        team=team_with_business_plan,  # Add the team reference
-    )
-    project.component_set.create(
-        name="Test Component",
-        team=team_with_business_plan,  # Add the team reference
-    )
+    component = Component.objects.create(name="Test Component", team=team_with_business_plan)
+    ProductComponent.objects.create(product=product, component=component)
 
     response = client.get(f"{reverse('api-1:get_usage')}?team_key={team_with_business_plan.key}")
 
@@ -94,7 +89,6 @@ def test_get_usage(
     data = json.loads(response.content)
 
     assert data["products"] == 1
-    assert data["projects"] == 1
     assert data["components"] == 1
 
 
@@ -153,7 +147,6 @@ def test_change_plan_to_community(
     team_with_business_plan.refresh_from_db()
     assert team_with_business_plan.billing_plan == community_plan.key
     assert "max_products" in team_with_business_plan.billing_plan_limits
-    assert "max_projects" in team_with_business_plan.billing_plan_limits
     assert "max_components" in team_with_business_plan.billing_plan_limits
 
 
@@ -286,7 +279,6 @@ def test_change_plan_business_upgrade_passes_allow_promotion_codes(
     )
 
 
-
 @pytest.mark.django_db
 def test_change_plan_to_community_with_active_subscription(
     client: Client,
@@ -364,9 +356,7 @@ def test_changing_to_business_keeps_sboms_private(
 
     # Create private components with SBOMs under enterprise plan
     components = [
-        Component.objects.create(
-            name=f"Enterprise Component {i}", team=team, visibility=Component.Visibility.PRIVATE
-        )
+        Component.objects.create(name=f"Enterprise Component {i}", team=team, visibility=Component.Visibility.PRIVATE)
         for i in range(3)
     ]
 

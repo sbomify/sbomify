@@ -233,7 +233,6 @@ class Command(BaseCommand):
                 team.billing_plan = "business"
                 team.billing_plan_limits = {
                     "max_products": business_plan.max_products,
-                    "max_projects": business_plan.max_projects,
                     "max_components": business_plan.max_components,
                     "stripe_customer_id": customer.id,
                     "stripe_subscription_id": subscription.id,

@@ -34,7 +34,6 @@ class ErrorCode(str, Enum):
     TEAM_NOT_FOUND = "TEAM_NOT_FOUND"
     ITEM_NOT_FOUND = "ITEM_NOT_FOUND"
     PRODUCT_NOT_FOUND = "PRODUCT_NOT_FOUND"
-    PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
     COMPONENT_NOT_FOUND = "COMPONENT_NOT_FOUND"
     RELEASE_NOT_FOUND = "RELEASE_NOT_FOUND"
     COMPONENT_RELEASE_NOT_FOUND = "COMPONENT_RELEASE_NOT_FOUND"
@@ -182,7 +181,7 @@ class ProductLinkBulkUpdateSchema(BaseModel):
     links: list[ProductLinkCreateSchema]
 
 
-# Product/Project/Component schemas moved from sboms
+# Product/Component schemas moved from sboms
 class ProductCreateSchema(BaseModel):
     """Schema for creating a new Product."""
 
@@ -209,7 +208,7 @@ class ProductPatchSchema(BaseModel):
     name: str | None = Field(None, max_length=255, min_length=1)
     description: str | None = Field(None, max_length=1000)
     is_public: bool | None = None
-    project_ids: list[str] | None = None
+    component_ids: list[str] | None = None
 
     # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
     release_date: date | None = None
@@ -226,8 +225,8 @@ class ProductResponseSchema(BaseModel):
     team_id: str
     created_at: datetime
     is_public: bool
-    project_count: int | None = None
-    projects: list["ProjectSummarySchema"] | None = None
+    component_count: int | None = None
+    components: list["ComponentSummarySchema"] | None = None
     identifiers: list[ProductIdentifierSchema] | None = None
     links: list[ProductLinkSchema] | None = None
 
@@ -235,51 +234,6 @@ class ProductResponseSchema(BaseModel):
     release_date: date | None = None
     end_of_support: date | None = None
     end_of_life: date | None = None
-
-
-class ProjectSummarySchema(BaseModel):
-    """Summary schema for projects when included in other responses."""
-
-    id: str
-    name: str
-    is_public: bool
-
-
-class ProjectCreateSchema(BaseModel):
-    """Schema for creating a new Project."""
-
-    name: str = Field(..., max_length=255, min_length=1)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ProjectUpdateSchema(BaseModel):
-    """Schema for updating a Project."""
-
-    name: str = Field(..., max_length=255, min_length=1)
-    is_public: bool
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ProjectPatchSchema(BaseModel):
-    """Schema for partially updating a Project using PATCH."""
-
-    name: str | None = Field(None, max_length=255, min_length=1)
-    is_public: bool | None = None
-    metadata: dict[str, Any] | None = None
-    component_ids: list[str] | None = None
-
-
-class ProjectResponseSchema(BaseModel):
-    """Schema for Project API responses."""
-
-    id: str
-    name: str
-    team_id: str
-    created_at: datetime
-    is_public: bool
-    metadata: dict[str, Any]
-    component_count: int | None = None
-    components: list["ComponentSummarySchema"] | None = None
 
 
 class ComponentSummarySchema(BaseModel):
@@ -362,14 +316,8 @@ class ComponentResponseSchema(BaseModel):
     document_count: int | None = None
 
 
-class ProductProjectLinkSchema(BaseModel):
-    """Schema for linking/unlinking projects to/from products."""
-
-    project_ids: list[str]
-
-
-class ProjectComponentLinkSchema(BaseModel):
-    """Schema for linking/unlinking components to/from projects."""
+class ProductComponentLinkSchema(BaseModel):
+    """Schema for linking/unlinking components to/from products."""
 
     component_ids: list[str]
 
@@ -384,7 +332,6 @@ class DashboardSBOMUploadInfo(BaseModel):
 
 class DashboardStatsResponse(BaseModel):
     total_products: int
-    total_projects: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
 
@@ -400,7 +347,6 @@ class ItemTypes(str, Enum):
     """Types of items in the system."""
 
     component = "component"
-    project = "project"
     product = "product"
 
 
@@ -433,13 +379,6 @@ class PaginatedProductLinksResponse(BaseModel):
     """Paginated response for product links list."""
 
     items: list[ProductLinkSchema]
-    pagination: PaginationMeta
-
-
-class PaginatedProjectsResponse(BaseModel):
-    """Paginated response for projects list."""
-
-    items: list[ProjectResponseSchema]
     pagination: PaginationMeta
 
 

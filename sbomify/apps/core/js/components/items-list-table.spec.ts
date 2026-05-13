@@ -37,7 +37,6 @@ global.window = global.window || ({} as Window & typeof globalThis)
   ; (global.window as WindowWithMocks).eventBus = mockEventBus
   ; (global.window as WindowWithMocks).EVENTS = {
     REFRESH_PRODUCTS: 'refresh_products',
-    REFRESH_PROJECTS: 'refresh_projects',
     REFRESH_COMPONENTS: 'refresh_components',
     ITEM_CREATED: 'item_created',
     ITEM_UPDATED: 'item_updated',
@@ -54,10 +53,10 @@ describe('ItemsListTable Business Logic', () => {
 
   describe('Props Validation', () => {
     test('should validate item type correctly', () => {
-      const validItemTypes = ['product', 'project', 'component']
+      const validItemTypes = ['product', 'component']
 
       validItemTypes.forEach(itemType => {
-        expect(['product', 'project', 'component']).toContain(itemType)
+        expect(['product', 'component']).toContain(itemType)
       })
     })
 
@@ -80,7 +79,6 @@ describe('ItemsListTable Business Logic', () => {
       }
 
       expect(generateTitle('product')).toBe('Products')
-      expect(generateTitle('project')).toBe('Projects')
       expect(generateTitle('component')).toBe('Components')
       expect(generateTitle('product', 'Custom Title')).toBe('Custom Title')
     })
@@ -92,7 +90,6 @@ describe('ItemsListTable Business Logic', () => {
       }
 
       expect(generateApiEndpoint('product')).toBe('/api/v1/products')
-      expect(generateApiEndpoint('project')).toBe('/api/v1/projects')
       expect(generateApiEndpoint('component')).toBe('/api/v1/components')
       expect(generateApiEndpoint('product', '/custom/api')).toBe('/custom/api')
     })
@@ -105,15 +102,15 @@ describe('ItemsListTable Business Logic', () => {
           id: 'prod-1',
           name: 'Product 1',
           is_public: true,
-          projects: [
-            { id: 'proj-1', name: 'Project 1', is_public: true }
+          components: [
+            { id: 'comp-1', name: 'Component 1' }
           ]
         },
         {
           id: 'prod-2',
           name: 'Product 2',
           is_public: false,
-          projects: []
+          components: []
         }
       ]
 
@@ -130,31 +127,6 @@ describe('ItemsListTable Business Logic', () => {
       expect(mockAxios.get).toHaveBeenCalledWith('/api/v1/products')
       expect(response.data).toEqual(mockProducts)
       expect(response.status).toBe(200)
-    })
-
-    test('should load projects successfully', async () => {
-      const mockProjects = [
-        {
-          id: 'proj-1',
-          name: 'Project 1',
-          is_public: true,
-          components: [
-            { id: 'comp-1', name: 'Component 1', is_public: true }
-          ]
-        }
-      ]
-
-      mockAxios.get.mockResolvedValueOnce({
-        data: mockProjects,
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {}
-      })
-
-      const response = await mockAxios.get('/api/v1/projects')
-
-      expect(response.data).toEqual(mockProjects)
     })
 
     test('should load components successfully', async () => {
@@ -223,8 +195,6 @@ describe('ItemsListTable Business Logic', () => {
       const getRelationshipColumnHeader = (itemType: string): string => {
         switch (itemType) {
           case 'product':
-            return 'Projects'
-          case 'project':
             return 'Components'
           case 'component':
             return 'SBOMs'
@@ -233,8 +203,7 @@ describe('ItemsListTable Business Logic', () => {
         }
       }
 
-      expect(getRelationshipColumnHeader('product')).toBe('Projects')
-      expect(getRelationshipColumnHeader('project')).toBe('Components')
+      expect(getRelationshipColumnHeader('product')).toBe('Components')
       expect(getRelationshipColumnHeader('component')).toBe('SBOMs')
       expect(getRelationshipColumnHeader('unknown')).toBe('Related')
     })
@@ -247,7 +216,6 @@ describe('ItemsListTable Business Logic', () => {
       }
 
       expect(getItemDetailUrl('product', 'prod-123')).toBe('/product/prod-123/')
-      expect(getItemDetailUrl('project', 'proj-456')).toBe('/project/proj-456/')
       expect(getItemDetailUrl('component', 'comp-789')).toBe('/component/comp-789/')
     })
   })
@@ -280,9 +248,6 @@ describe('ItemsListTable Business Logic', () => {
             case 'product':
               eventName = window.EVENTS.REFRESH_PRODUCTS
               break
-            case 'project':
-              eventName = window.EVENTS.REFRESH_PROJECTS
-              break
             case 'component':
               eventName = window.EVENTS.REFRESH_COMPONENTS
               break
@@ -297,11 +262,9 @@ describe('ItemsListTable Business Logic', () => {
       }
 
       expect(setupEventListeners('product')).toBe(true)
-      expect(setupEventListeners('project')).toBe(true)
       expect(setupEventListeners('component')).toBe(true)
 
       expect(mockEventBus.on).toHaveBeenCalledWith('refresh_products', expect.any(Function))
-      expect(mockEventBus.on).toHaveBeenCalledWith('refresh_projects', expect.any(Function))
       expect(mockEventBus.on).toHaveBeenCalledWith('refresh_components', expect.any(Function))
     })
 
@@ -364,7 +327,6 @@ describe('ItemsListTable Business Logic', () => {
       }
 
       expect(generateModalTarget('product')).toBe('#addProductModal')
-      expect(generateModalTarget('project')).toBe('#addProjectModal')
       expect(generateModalTarget('component')).toBe('#addComponentModal')
     })
   })
@@ -375,7 +337,7 @@ describe('ItemsListTable Business Logic', () => {
         id: string
         name: string
         is_public: boolean
-        projects: Array<{ id: string; name: string; is_public: boolean }>
+        components: Array<{ id: string; name: string }>
       }
 
       const isValidProduct = (item: unknown): item is Product => {
@@ -384,7 +346,7 @@ describe('ItemsListTable Business Logic', () => {
           typeof product.id === 'string' &&
           typeof product.name === 'string' &&
           typeof product.is_public === 'boolean' &&
-          Array.isArray(product.projects)
+          Array.isArray(product.components)
         )
       }
 
@@ -392,7 +354,7 @@ describe('ItemsListTable Business Logic', () => {
         id: 'prod-1',
         name: 'Product 1',
         is_public: true,
-        projects: []
+        components: []
       }
 
       const invalidProduct = {
@@ -402,34 +364,6 @@ describe('ItemsListTable Business Logic', () => {
 
       expect(isValidProduct(validProduct)).toBe(true)
       expect(isValidProduct(invalidProduct)).toBe(false)
-    })
-
-    test('should validate project data structure', () => {
-      interface Project {
-        id: string
-        name: string
-        is_public: boolean
-        components: Array<{ id: string; name: string; is_public: boolean }>
-      }
-
-      const isValidProject = (item: unknown): item is Project => {
-        const project = item as Project
-        return (
-          typeof project.id === 'string' &&
-          typeof project.name === 'string' &&
-          typeof project.is_public === 'boolean' &&
-          Array.isArray(project.components)
-        )
-      }
-
-      const validProject = {
-        id: 'proj-1',
-        name: 'Project 1',
-        is_public: false,
-        components: [{ id: 'comp-1', name: 'Component 1', is_public: true }]
-      }
-
-      expect(isValidProject(validProject)).toBe(true)
     })
 
     test('should validate component data structure', () => {

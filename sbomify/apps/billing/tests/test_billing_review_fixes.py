@@ -328,19 +328,17 @@ class TestGetCommunityPlanLimits:
         """Returns limits matching the community plan in DB."""
         limits = get_community_plan_limits()
         assert limits["max_products"] == community_plan.max_products
-        assert limits["max_projects"] == community_plan.max_projects
         assert limits["max_components"] == community_plan.max_components
 
     def test_returns_dict_with_expected_keys(self, community_plan):
         limits = get_community_plan_limits()
-        assert set(limits.keys()) == {"max_products", "max_projects", "max_components"}
+        assert set(limits.keys()) == {"max_products", "max_components"}
 
     def test_returns_unlimited_when_plan_missing(self):
         """When community plan doesn't exist, returns unlimited (None) limits."""
         BillingPlan.objects.filter(key="community").delete()
         limits = get_community_plan_limits()
         assert limits["max_products"] is None
-        assert limits["max_projects"] is None
         assert limits["max_components"] is None
 
 
@@ -363,7 +361,6 @@ class TestPriceIdValidationInTrialSetup:
                 "name": "Business",
                 "description": "For growing teams",
                 "max_products": 10,
-                "max_projects": 20,
                 "max_components": 100,
                 "stripe_product_id": "prod_test",
                 "stripe_price_monthly_id": "",  # Empty = no price configured

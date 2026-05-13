@@ -5,7 +5,7 @@
 {% block content %}
     <div class="space-y-8 animate-[fadeInUp_0.4s_ease-out]">
         {# Plan Selection Content #}
-        <div class="max-w-6xl mx-auto" x-cloak x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, projects: {{ project_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
+        <div class="max-w-6xl mx-auto" x-cloak x-data="planSelection({ currentPlan: '{{ team.billing_plan|default:'community' }}', teamKey: '{{ team_key }}', usage: { users: {{ team.members.count }}, products: {{ product_count }}, components: {{ component_count }} }, csrfToken: '{{ csrf_token }}', enterpriseContactUrl: '{% url 'billing:enterprise_contact' %}', currentSubscriptionStatus: '{{ team.billing_plan_limits.subscription_status|default:'' }}', portalUrl:
             {% if team.billing_plan_limits.stripe_customer_id %}
                 '{% url 'billing:create_portal_session' team.key %}'
             {% else %}
@@ -55,7 +55,7 @@
             </section>
             {# Current Usage Section #}
             <section class="mb-8"
-                     x-show="usage.users > 0 || usage.products > 0 || usage.projects > 0 || usage.components > 0">
+                     x-show="usage.users > 0 || usage.products > 0 || usage.components > 0">
                 <div class="tw-settings-card max-w-3xl mx-auto">
                     <div class="px-6 py-4 border-b border-border">
                         <div class="flex items-center gap-3">
@@ -69,7 +69,7 @@
                         </div>
                     </div>
                     <div class="p-6">
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
                                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
                                     <i class="fas fa-users text-primary"></i>
@@ -83,13 +83,6 @@
                                 </div>
                                 <span class="text-2xl font-bold text-text block" x-text="usage.products"></span>
                                 <span class="text-text-muted text-xs">Products</span>
-                            </div>
-                            <div class="bg-background border border-border rounded-xl p-4 text-center">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-folder text-primary"></i>
-                                </div>
-                                <span class="text-2xl font-bold text-text block" x-text="usage.projects"></span>
-                                <span class="text-text-muted text-xs">Projects</span>
                             </div>
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
                                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
@@ -199,7 +192,7 @@
                                     <p class="text-sm text-text-muted">{{ plan.description }}</p>
                                 </div>
                                 {# Plan Limits #}
-                                {% if plan.max_products is not None or plan.max_projects is not None or plan.max_components is not None or plan.max_users is not None or plan.key == 'enterprise' %}
+                                {% if plan.max_products is not None or plan.max_components is not None or plan.max_users is not None or plan.key == 'enterprise' %}
                                     <div class="mb-6 p-4 bg-background rounded-lg">
                                         <h6 class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Plan Limits</h6>
                                         <div class="grid grid-cols-2 gap-3">
@@ -223,17 +216,6 @@
                                                 <div class="flex items-center gap-2">
                                                     <i class="fas fa-cube text-primary text-sm"></i>
                                                     <span class="text-sm text-text">Unlimited Products</span>
-                                                </div>
-                                            {% endif %}
-                                            {% if plan.max_projects is not None %}
-                                                <div class="flex items-center gap-2">
-                                                    <i class="fas fa-folder text-primary text-sm"></i>
-                                                    <span class="text-sm text-text">{{ plan.max_projects }} Projects</span>
-                                                </div>
-                                            {% elif plan.key == 'enterprise' %}
-                                                <div class="flex items-center gap-2">
-                                                    <i class="fas fa-folder text-primary text-sm"></i>
-                                                    <span class="text-sm text-text">Unlimited Projects</span>
                                                 </div>
                                             {% endif %}
                                             {% if plan.max_components is not None %}
@@ -287,7 +269,7 @@
                                             <li class="text-xs font-semibold text-primary uppercase tracking-wider mb-2">Everything in Community, plus:</li>
                                             <li class="flex items-start gap-2 text-sm text-text">
                                                 <i class="fas fa-check text-success mt-0.5"></i>
-                                                <span>Private components/projects/products</span>
+                                                <span>Private components/products</span>
                                             </li>
                                             <li class="flex items-start gap-2 text-sm text-text">
                                                 <i class="fas fa-check text-success mt-0.5"></i>

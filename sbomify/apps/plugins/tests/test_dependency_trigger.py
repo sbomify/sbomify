@@ -43,7 +43,6 @@ def test_team(db) -> Team:
         defaults={
             "name": "Community",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
             "max_users": 2,
         },

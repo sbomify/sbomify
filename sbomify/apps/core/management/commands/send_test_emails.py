@@ -255,7 +255,6 @@ class Command(BaseCommand):
                     "TRIAL_PERIOD_DAYS": 14,
                     "plan_limits": {
                         "max_products": 10,
-                        "max_projects": 25,
                         "max_components": 100,
                     },
                 },

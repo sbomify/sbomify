@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from django.db.models import Count, Prefetch, QuerySet
 
-from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
 
 def optimize_product_queryset(queryset: QuerySet[Product]) -> QuerySet[Product]:
-    project_qs = Project.objects.only("id", "name", "is_public", "team_id").order_by("name")
+    component_qs = Component.objects.only(
+        "id", "name", "visibility", "is_global", "component_type", "team_id"
+    ).order_by("name")
     identifier_qs = ProductIdentifier.objects.only(
         "id", "identifier_type", "value", "created_at", "product_id"
     ).order_by("identifier_type", "value")
@@ -18,29 +20,14 @@ def optimize_product_queryset(queryset: QuerySet[Product]) -> QuerySet[Product]:
     return (
         queryset.select_related("team")
         .prefetch_related(
-            Prefetch("projects", queryset=project_qs),
+            Prefetch("components", queryset=component_qs),
             Prefetch("identifiers", queryset=identifier_qs),
             Prefetch("links", queryset=link_qs),
         )
-        .annotate(project_count=Count("projects", distinct=True))
-    )
-
-
-def optimize_project_queryset(queryset: QuerySet[Project]) -> QuerySet[Project]:
-    component_qs = Component.objects.only(
-        "id",
-        "name",
-        "visibility",
-        "is_global",
-        "component_type",
-        "team_id",
-    ).order_by("name")
-
-    return (
-        queryset.select_related("team")
-        .prefetch_related(Prefetch("components", queryset=component_qs))
         .annotate(component_count=Count("components", distinct=True))
-        .order_by("name")
+        # Stable order so paginated callers (e.g. list_products) don't drop or
+        # duplicate rows across pages when the underlying table order changes.
+        .order_by("name", "id")
     )
 
 

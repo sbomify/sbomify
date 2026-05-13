@@ -46,8 +46,8 @@ For more information, see [sbomify.com](https://sbomify.com).
 ### Organization
 
 - **Components**: Core entities that can contain either SBOMs or documents
-- **Projects**: Group related components together
-- **Products**: Organize multiple projects
+- **Products**: Group related components together (and represent what you sell or distribute)
+- **Releases**: Versioned snapshots of a product's components
 - **Workspaces**: Control access and permissions
 
 ### Transparency Exchange API (TEA)
@@ -148,7 +148,7 @@ The API provides endpoints for managing:
 - **SBOMs**: Upload, retrieve, and manage Software Bill of Materials
 - **Documents**: Upload, retrieve, and manage document artifacts
 - **Components**: Manage components that contain SBOMs or documents
-- **Projects & Products**: Organize and group components
+- **Products**: Organize and group components
 - **Workspaces**: User management and access control
 
 #### Aggregated SBOM Downloads
@@ -575,7 +575,7 @@ python manage.py cleanup_test_sbom_environment --dry-run
 
 These commands will:
 
-1. Create test products, projects, and components
+1. Create test products and components
 2. Load real SBOM data from test files (both SPDX and CycloneDX formats)
 3. Set up proper relationships between all entities
 4. Allow you to clean up test data when needed
@@ -669,7 +669,7 @@ For production deployments, generate a secure signing salt for signed URLs:
 export SIGNED_URL_SALT="$(openssl rand -hex 32)"
 ```
 
-The `SIGNED_URL_SALT` is used to sign download URLs for private components in product/project SBOMs.
+The `SIGNED_URL_SALT` is used to sign download URLs for private components in product SBOMs.
 
 To try a production-like stack:
 

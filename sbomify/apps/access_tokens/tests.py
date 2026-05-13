@@ -296,7 +296,6 @@ def test_scoped_token_create_component(sample_team_with_owner_member):  # noqa: 
         key="test_plan_scoped",
         name="Test Plan",
         max_products=10,
-        max_projects=10,
         max_components=10,
     )
     team.billing_plan = plan.key

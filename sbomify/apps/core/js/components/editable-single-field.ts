@@ -105,9 +105,6 @@ export function registerEditableSingleField() {
                 case 'component':
                     apiUrl = `/api/v1/components/${this.itemId}`;
                     break;
-                case 'project':
-                    apiUrl = `/api/v1/projects/${this.itemId}`;
-                    break;
                 case 'product':
                     apiUrl = `/api/v1/products/${this.itemId}`;
                     break;

@@ -846,13 +846,11 @@ class TestTEAPrivateComponentVisibility:
 
     def test_private_component_not_in_product_release(self, tea_enabled_product, tea_enabled_component):
         """C4: Private components are excluded from product release component refs."""
-        from sbomify.apps.core.models import Component, Project, Release, ReleaseArtifact
+        from sbomify.apps.core.models import Component, Release, ReleaseArtifact
         from sbomify.apps.sboms.models import SBOM
 
-        # Create project linking component to product
-        project = Project.objects.create(team=tea_enabled_product.team, name="Test Project")
-        project.products.add(tea_enabled_product)
-        project.components.add(tea_enabled_component)
+        # Attach component directly to product
+        tea_enabled_product.components.add(tea_enabled_component)
 
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
@@ -1101,10 +1099,14 @@ class TestTEACollectionSignalSuppression:
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)
 
-        # Add an initial SBOM artifact directly (bypassing signals to set up test state)
+        # Add an initial SBOM artifact directly (bypassing signals to set up test state).
+        # The unique constraint on
+        # (component, version, format, qualifiers, bom_type) requires distinct
+        # ``version`` values for the two SBOMs created here.
         sbom1 = SBOM.objects.create(
             component=tea_enabled_component,
             name="SBOM v1",
+            version="1.0.0",
             format="cyclonedx",
             format_version="1.4",
             source="test",
@@ -1116,11 +1118,12 @@ class TestTEACollectionSignalSuppression:
         release.refresh_from_db()
         version_before = release.collection_version
 
-        # Create a replacement SBOM (same format, same component).
+        # Create a replacement SBOM (same format, same component, different version).
         # Signal auto-calls add_artifact_to_latest_release.
         SBOM.objects.create(
             component=tea_enabled_component,
             name="SBOM v2",
+            version="2.0.0",
             format="cyclonedx",
             format_version="1.5",
             source="test",
@@ -1136,31 +1139,23 @@ class TestTEACollectionSignalSuppression:
 
     def test_refresh_latest_artifacts_single_bump(self, tea_enabled_product, tea_enabled_component):
         """Refreshing latest artifacts should bump version once, not per-artifact."""
-        from sbomify.apps.core.models import Project
         from sbomify.apps.sboms.models import SBOM
 
-        # Ensure component is linked to product via a project
-        project = Project.objects.filter(
-            components=tea_enabled_component,
-            products=tea_enabled_product,
-        ).first()
-
-        if not project:
-            project = Project.objects.create(
-                team=tea_enabled_product.team,
-                name="Test Project",
-            )
-            project.products.add(tea_enabled_product)
-            project.components.add(tea_enabled_component)
+        # Ensure component is attached to product via direct ProductComponent M2M
+        if not tea_enabled_product.components.filter(pk=tea_enabled_component.pk).exists():
+            tea_enabled_product.components.add(tea_enabled_component)
 
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)
 
-        # Create 3 SBOMs for the component (different formats)
-        for fmt, ver in [("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]:
+        # Create 3 SBOMs for the component (different formats / format versions).
+        # The unique constraint on (component, version, format, qualifiers, bom_type)
+        # requires distinct ``version`` values for the two cyclonedx SBOMs.
+        for idx, (fmt, ver) in enumerate([("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]):
             SBOM.objects.create(
                 component=tea_enabled_component,
                 name=f"SBOM {fmt} {ver}",
+                version=f"1.{idx}.0",
                 format=fmt,
                 format_version=ver,
                 source="test",

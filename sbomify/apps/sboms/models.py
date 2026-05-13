@@ -69,7 +69,6 @@ class Product(models.Model):
     description = models.TextField(blank=True, help_text="Optional product description")
     created_at = models.DateTimeField(auto_now_add=True)
     is_public = models.BooleanField(default=False)
-    projects = models.ManyToManyField("sboms.Project", through="sboms.ProductProject")
 
     # Lifecycle event fields (aligned with Common Lifecycle Enumeration)
     release_date = models.DateField(blank=True, null=True, help_text="Release date of the product")
@@ -382,58 +381,6 @@ class ProductLink(models.Model):
         super().save(*args, **kwargs)
 
 
-class Project(models.Model):
-    """Legacy Project model for data persistence only."""
-
-    class Meta:
-        db_table = apps.get_app_config("sboms").label + "_projects"
-        unique_together = ("team", "name")
-        ordering = ["name"]
-        indexes = [
-            models.Index(fields=["is_public"]),
-            models.Index(fields=["team", "created_at"]),
-            models.Index(fields=["team", "is_public"]),
-        ]
-
-    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE)
-    name = models.CharField(max_length=255, blank=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_public = models.BooleanField(default=False)
-    metadata = models.JSONField(default=dict)
-    products = models.ManyToManyField(Product, through="sboms.ProductProject")
-    components = models.ManyToManyField("sboms.Component", through="sboms.ProjectComponent")
-
-    def __str__(self) -> str:
-        return f"<{self.id}> {self.name}"
-
-    @property
-    def slug(self) -> str:
-        """Generate a URL-safe slug from the project name.
-
-        Note: Computed property - see Product.slug for rationale.
-
-        Returns:
-            URL-safe slug string derived from the project name.
-        """
-        return slugify(self.name, allow_unicode=True)
-
-
-class ProductProject(models.Model):
-    """Legacy ProductProject through model for data persistence only."""
-
-    class Meta:
-        db_table = apps.get_app_config("sboms").label + "_products_projects"
-        unique_together = ("product", "project")
-
-    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
-
-    def __str__(self) -> str:
-        return f"{self.product_id} - {self.project_id}"
-
-
 class ComponentSupplierContact(models.Model):
     """Contact information for component suppliers."""
 
@@ -618,7 +565,11 @@ class Component(models.Model):
     )
     is_global = models.BooleanField(
         default=False,
-        help_text="Whether the component is available at the workspace level rather than scoped to a project",
+        help_text=(
+            "Workspace-scoped component: not attached to any product. "
+            "Only DOCUMENT components may be global; setting this clears "
+            "any existing product attachments on save."
+        ),
     )
 
     # Native fields for contact information (migrated from JSONField)
@@ -650,7 +601,7 @@ class Component(models.Model):
 
     # Keep the original metadata field for backward compatibility and migration
     metadata = models.JSONField(default=dict, blank=True)
-    projects = models.ManyToManyField(Project, through="sboms.ProjectComponent")
+    products = models.ManyToManyField(Product, through="sboms.ProductComponent", related_name="components")
 
     def __str__(self) -> str:
         return f"{self.name}"
@@ -661,8 +612,6 @@ class Component(models.Model):
         This is called explicitly via full_clean() in forms/serializers.
         Not called automatically in save() to avoid breaking bulk operations and migrations.
         """
-        from django.core.exceptions import ValidationError
-
         super().clean()
 
         # gating_mode can only be set when visibility is gated
@@ -673,6 +622,16 @@ class Component(models.Model):
         if self.gating_mode != self.GatingMode.APPROVAL_PLUS_NDA and self.nda_document_id:
             raise ValidationError(
                 {"nda_document": "nda_document can only be set when gating_mode is approval_plus_nda"}
+            )
+
+        # is_global is only meaningful for DOCUMENT components — BOM components must
+        # attach to at least one product. The API layer enforces this too (see
+        # core/apis.py create/patch handlers), but having it in clean() means any
+        # form/serializer that calls full_clean() catches it without re-implementing
+        # the rule.
+        if self.is_global and self.component_type != self.ComponentType.DOCUMENT:
+            raise ValidationError(
+                {"is_global": "Only document components can be marked as workspace-wide (is_global=True)."}
             )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -688,6 +647,16 @@ class Component(models.Model):
         - Breaking existing tests
 
         Validation should be done explicitly via full_clean() in forms/serializers/APIs.
+
+        FOOT-GUN: ``Component.objects.filter(...).update(is_global=True)`` and
+        ``Component.objects.bulk_update([c], ['is_global'])`` BYPASS this
+        method entirely (this is Django's documented behaviour for the bulk
+        operations listed above). If you flip ``is_global`` via either of
+        those code paths you MUST also call ``component.products.clear()``
+        explicitly, otherwise the workspace-scope invariant breaks
+        silently. There are no such call sites in the codebase today;
+        ``sboms/tests/test_product_component_tenancy.py::test_queryset_update_bypasses_save_invariant``
+        pins the bypass so a future fix is flagged for review.
         """
         # Auto-clear gating_mode if visibility is not gated
         if self.visibility != self.Visibility.GATED:
@@ -700,7 +669,18 @@ class Component(models.Model):
             if self.nda_document_id:
                 self.nda_document = None
 
+        # Track whether is_global flipped to True so we can detach products
+        # AFTER the row is saved (M2M ops need a PK). Previously every
+        # caller (API, view, scope toggle) had to remember to call
+        # `component.products.clear()` themselves — the rule lived in four
+        # places, and the audit found two of them lacked test coverage.
+        # Centralising here means a future writer can't forget.
+        should_clear_products = bool(self.is_global and self.pk)
+
         super().save(*args, **kwargs)
+
+        if should_clear_products:
+            self.products.clear()
 
     @property
     def slug(self) -> str:
@@ -881,19 +861,49 @@ class Component(models.Model):
         return bool(has_access)
 
 
-class ProjectComponent(models.Model):
-    """Legacy ProjectComponent through model for data persistence only."""
+class ProductComponent(models.Model):
+    """Direct Product↔Component link replacing the Product → Project → Component chain."""
 
     class Meta:
-        db_table = apps.get_app_config("sboms").label + "_projects_components"
-        unique_together = ("project", "component")
+        db_table = apps.get_app_config("sboms").label + "_products_components"
+        constraints = [
+            models.UniqueConstraint(fields=["product", "component"], name="sboms_productcomponent_unique"),
+        ]
 
     id = models.CharField(max_length=20, primary_key=True, default=generate_id)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
     component = models.ForeignKey(Component, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self) -> None:
+        """Reject any row that would link a Product and a Component owned by
+        different teams. Complements the ``reject_cross_tenant_product_component_links``
+        ``m2m_changed`` receiver in ``core/signals.py`` — that one fires for
+        ``Component.products.add(...)`` / ``Product.components.add(...)``;
+        this guards direct ``ProductComponent.objects.create(...)`` and
+        ``.save()``.
+        """
+        super().clean()
+        if self.product_id and self.component_id and self.product.team_id != self.component.team_id:
+            raise ValidationError(
+                {
+                    "component": (
+                        f"Cross-tenant ProductComponent rejected: product team="
+                        f"{self.product.team_id}, component team={self.component.team_id}"
+                    )
+                }
+            )
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # Run validation on every persistence path. ``objects.create()`` /
+        # ``.save()`` do not call ``full_clean()`` automatically — without
+        # this override a caller could insert a cross-tenant row directly
+        # (the m2m_changed signal in core/signals.py only covers ``.add()``).
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"{self.project_id} - {self.component_id}"
+        return f"{self.product_id} - {self.component_id}"
 
 
 class SBOM(models.Model):

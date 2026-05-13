@@ -30,7 +30,7 @@ logger = getLogger(__name__)
 PLAN_FEATURES = {
     "community": [
         "Unlimited SBOMs",
-        "Unlimited products & projects",
+        "Unlimited products & components",
         "All data is public",
         "Weekly vulnerability scans",
         "Community support",
@@ -41,7 +41,7 @@ PLAN_FEATURES = {
     ],
     "business": [
         "Everything in Community",
-        "Private components/projects/products",
+        "Private components/products",
         "NTIA Minimum Elements check",
         "Advanced vulnerability scanning (every 12 hours)",
         "Product identifiers (SKUs/barcodes)",
@@ -86,10 +86,6 @@ PLAN_LIMITS = {
     "max_products": {
         "label": "Products",
         "icon": "cube",
-    },
-    "max_projects": {
-        "label": "Projects",
-        "icon": "folder",
     },
     "max_components": {
         "label": "Components",

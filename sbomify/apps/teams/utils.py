@@ -490,7 +490,6 @@ def setup_trial_subscription(user: User, team: Team) -> bool:
                 team.billing_plan = "business"
                 team.billing_plan_limits = {
                     "max_products": business_plan.max_products,
-                    "max_projects": business_plan.max_projects,
                     "max_components": business_plan.max_components,
                     "stripe_customer_id": customer.id,
                     "stripe_subscription_id": subscription.id,
@@ -533,7 +532,6 @@ def _setup_community_plan(team: Team) -> None:
         team.billing_plan = "community"
         team.billing_plan_limits = {
             "max_products": community_plan.max_products,
-            "max_projects": community_plan.max_projects,
             "max_components": community_plan.max_components,
             "subscription_status": "active",
             "last_updated": timezone.now().isoformat(),
