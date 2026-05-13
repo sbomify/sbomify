@@ -152,13 +152,18 @@ class Migration(migrations.Migration):
             model_name="component",
             name="projects",
         ),
-        migrations.RemoveField(
-            model_name="projectcomponent",
-            name="project",
-        ),
+        # Drop the (project, component) unique_together BEFORE removing the
+        # `project` field. Django's _delete_composed_index needs to resolve
+        # each field name to a DB column name, which fails with
+        # FieldDoesNotExist once RemoveField has dropped the field from the
+        # in-memory model state.
         migrations.AlterUniqueTogether(
             name="projectcomponent",
             unique_together=None,
+        ),
+        migrations.RemoveField(
+            model_name="projectcomponent",
+            name="project",
         ),
         migrations.RemoveField(
             model_name="projectcomponent",
