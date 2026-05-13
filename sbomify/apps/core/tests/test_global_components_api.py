@@ -3,7 +3,7 @@ import json
 import pytest
 from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 
 
@@ -36,13 +36,34 @@ def test_create_component_can_be_global(authenticated_api_client, team_with_busi
 
 
 @pytest.mark.django_db
-def test_create_global_sbom_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_create_component_with_sbom_type_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+    """component_type='sbom' was removed — API should reject it with 422."""
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
     payload = {
-        "name": "Global SBOM",
+        "name": "Invalid SBOM Type",
         "component_type": "sbom",
+    }
+
+    response = client.post(
+        reverse("api-1:create_component"),
+        data=json.dumps(payload),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.django_db
+def test_create_global_bom_is_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+    client, access_token = authenticated_api_client
+    headers = get_api_headers(access_token)
+
+    payload = {
+        "name": "Global BOM",
+        "component_type": "bom",
         "is_global": True,
     }
 
@@ -84,14 +105,14 @@ def test_patch_component_scope(authenticated_api_client, team_with_business_plan
 
 
 @pytest.mark.django_db
-def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_patch_global_bom_rejected(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
     component = Component.objects.create(
-        name="SBOM",
+        name="BOM",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -106,7 +127,7 @@ def test_patch_global_sbom_rejected(authenticated_api_client, team_with_business
 
 
 @pytest.mark.django_db
-def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_put_change_type_to_bom_rejected_when_global(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
@@ -120,7 +141,7 @@ def test_put_change_type_to_sbom_rejected_when_global(authenticated_api_client, 
 
     payload = {
         "name": component.name,
-        "component_type": "sbom",
+        "component_type": "bom",
         "is_public": True,
         "is_global": True,
         "metadata": {},
@@ -151,7 +172,7 @@ def test_list_components_returns_scope_flag(authenticated_api_client, team_with_
     scoped_component = Component.objects.create(
         name="Project Scoped",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
         visibility=Component.Visibility.PUBLIC,
     )
@@ -181,9 +202,9 @@ def test_list_components_filter_excludes_global(authenticated_api_client, team_w
         is_global=True,
     )
     scoped = Component.objects.create(
-        name="Scoped SBOM",
+        name="Scoped BOM",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -200,12 +221,12 @@ def test_list_components_filter_excludes_global(authenticated_api_client, team_w
 
 
 @pytest.mark.django_db
-def test_patch_project_rejects_global_components(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_patch_product_rejects_global_components(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
-    project = Project.objects.create(
-        name="Test Project",
+    product = Product.objects.create(
+        name="Test Product",
         team=team_with_business_plan,
     )
     global_component = Component.objects.create(
@@ -216,7 +237,7 @@ def test_patch_project_rejects_global_components(authenticated_api_client, team_
     )
 
     response = client.patch(
-        reverse("api-1:patch_project", kwargs={"project_id": project.id}),
+        reverse("api-1:patch_product", kwargs={"product_id": product.id}),
         data=json.dumps({"component_ids": [global_component.id]}),
         content_type="application/json",
         **headers,
@@ -227,7 +248,6 @@ def test_patch_project_rejects_global_components(authenticated_api_client, team_
     assert "workspace-scoped" in detail.lower()
     assert "Workspace Doc" in detail
 
-    # Verify the component was NOT demoted
     global_component.refresh_from_db()
     assert global_component.is_global is True
 
@@ -246,7 +266,7 @@ def test_list_components_filter_only_global(authenticated_api_client, team_with_
     Component.objects.create(
         name="Scoped Only",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
@@ -277,12 +297,12 @@ def test_list_components_filter_rejects_invalid_value(authenticated_api_client, 
 
 
 @pytest.mark.django_db
-def test_patch_project_rejects_mixed_global_components(authenticated_api_client, team_with_business_plan):  # noqa: F811
+def test_patch_product_rejects_mixed_global_components(authenticated_api_client, team_with_business_plan):  # noqa: F811
     client, access_token = authenticated_api_client
     headers = get_api_headers(access_token)
 
-    project = Project.objects.create(
-        name="Mixed Test Project",
+    product = Product.objects.create(
+        name="Mixed Test Product",
         team=team_with_business_plan,
     )
     global_component = Component.objects.create(
@@ -294,21 +314,19 @@ def test_patch_project_rejects_mixed_global_components(authenticated_api_client,
     scoped_component = Component.objects.create(
         name="Scoped Artifact",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         is_global=False,
     )
 
     response = client.patch(
-        reverse("api-1:patch_project", kwargs={"project_id": project.id}),
+        reverse("api-1:patch_product", kwargs={"product_id": product.id}),
         data=json.dumps({"component_ids": [global_component.id, scoped_component.id]}),
         content_type="application/json",
         **headers,
     )
 
-    # Entire batch is rejected
     assert response.status_code == 400
     assert "Global Artifact" in response.json()["detail"]
 
-    # Neither component should be assigned
-    project.refresh_from_db()
-    assert project.components.count() == 0
+    product.refresh_from_db()
+    assert product.components.count() == 0

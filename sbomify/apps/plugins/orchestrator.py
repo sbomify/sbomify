@@ -20,7 +20,7 @@ from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
-from .sdk.enums import RunReason, RunStatus
+from .sdk.enums import RunReason, RunStatus, ScanMode
 from .utils import compute_config_hash, compute_content_digest
 
 if TYPE_CHECKING:
@@ -90,7 +90,8 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-    ) -> AssessmentRun:
+        release_id: str | None = None,
+    ) -> AssessmentRun | None:
         """Execute a plugin assessment with full lifecycle management.
 
         This method:
@@ -109,20 +110,33 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
+            release_id: Optional ID of the triggering Release. Passed to
+                plugins as an informational hint via ``SBOMContext.release_id``
+                (not persisted on AssessmentRun — releases are tracked via
+                the ``releases`` M2M populated at run completion).
 
         Returns:
-            The AssessmentRun record with results.
+            The AssessmentRun record with results, or None if the SBOM's
+            bom_type is not supported by the plugin (skipped).
 
         Raises:
             PluginOrchestratorError: If the SBOM cannot be fetched or
                 other orchestration errors occur.
         """
-        # Verify SBOM exists before creating the run
-        if not SBOM.objects.filter(id=sbom_id).exists():
+        # Verify SBOM exists and fetch bom_type in a single query (reused later via sbom_id)
+        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type").first()
+        if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
-        # Get plugin metadata
+        # Get plugin metadata and check bom_type compatibility
         metadata = plugin.get_metadata()
+        supported = metadata.supported_bom_types
+        if supported is not None and sbom_instance_check.bom_type not in supported:
+            logger.info(
+                f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: "
+                f"bom_type '{sbom_instance_check.bom_type}' not in supported types {supported}"
+            )
+            return None
         config_hash = compute_config_hash(plugin.config)
 
         # Reuse existing run if provided (for retries), otherwise create new
@@ -143,12 +157,26 @@ class PluginOrchestrator:
                     f"not '{metadata.name}'"
                 )
 
+            # Eager pending rows (created by ``_create_pending_assessment_run``
+            # in the task layer) leave the config hash empty because the
+            # plugin instance hadn't been resolved yet. Fill it in now so
+            # the run carries the same auditable provenance whether it
+            # came through the eager or lazy creation path.
+            if not assessment_run.plugin_config_hash:
+                assessment_run.plugin_config_hash = config_hash
+                assessment_run.save(update_fields=["plugin_config_hash"])
+
             logger.info(
                 f"[PLUGIN] Reusing existing run {assessment_run.id} for SBOM {sbom_id} "
                 f"with plugin {metadata.name} v{metadata.version}"
             )
         else:
-            # Create the AssessmentRun record in PENDING state
+            # Create the AssessmentRun record in PENDING state. Under the
+            # scan-once-per-SBOM model, releases are attached via the M2M
+            # at run completion (see _sync_run_releases), not at creation
+            # time. The ``release_id`` argument threaded through callers
+            # is kept only as an informational hint for plugins via
+            # ``SBOMContext.release_id`` and is not written to a FK here.
             assessment_run = AssessmentRun.objects.create(
                 sbom_id=sbom_id,
                 plugin_name=metadata.name,
@@ -193,6 +221,11 @@ class PluginOrchestrator:
                 sbom_version=sbom_instance.version,
                 component_id=sbom_instance.component_id,
                 team_id=sbom_instance.component.team_id if sbom_instance.component else None,
+                bom_type=sbom_instance.bom_type,
+                release_id=release_id,
+                signature_blob_key=sbom_instance.signature_blob_key,
+                signature_type=sbom_instance.signature_type,
+                provenance_blob_key=sbom_instance.provenance_blob_key,
             )
 
             # Write to temporary file and execute plugin
@@ -226,6 +259,31 @@ class PluginOrchestrator:
                     "completed_at",
                 ]
             )
+
+            # Populate the releases M2M from the CURRENT ReleaseArtifact state.
+            # This is the source-of-truth moment: whichever releases link to this
+            # SBOM at run-completion time are the releases the result covers.
+            # Security plugins have release-scoped results (DT/OSV); compliance
+            # plugins are deterministic on bytes so the M2M is informational for
+            # them but still populated so the UI can show "this compliance scan
+            # applies to: latest, v5.0.0" without a separate query.
+            self._sync_run_releases(assessment_run, sbom_id)
+
+            # Continuous plugins (scan_mode=CONTINUOUS) may maintain release-
+            # scoped downstream state (e.g. DT project version tags). After
+            # the M2M is populated, call sync_release_tags so the plugin can
+            # reconcile against the final canonical release set. One-shot
+            # plugins skip this — they have no long-lived external state.
+            if metadata.scan_mode == ScanMode.CONTINUOUS:
+                try:
+                    plugin.sync_release_tags(sbom_id=sbom_id, run_id=str(assessment_run.id), release=None)
+                except Exception:
+                    logger.warning(
+                        "[PLUGIN] sync_release_tags raised for run %s — M2M is still "
+                        "populated correctly; downstream tags may be stale until next sync",
+                        assessment_run.id,
+                        exc_info=True,
+                    )
 
             logger.info(
                 f"[PLUGIN] Completed run {assessment_run.id} for SBOM {sbom_id} "
@@ -266,6 +324,167 @@ class PluginOrchestrator:
         assessment_run.error_message = error_message
         assessment_run.completed_at = timezone.now()
         assessment_run.save(update_fields=["status", "error_message", "completed_at"])
+
+    def finalize_retry_exhausted(self, run_id: str, error_message: str) -> AssessmentRun | None:
+        """Settle a run that has burnt through every ``RetryLaterError`` slot.
+
+        The orchestrator's ``RetryLaterError`` handler resets the run to
+        ``PENDING`` so the task layer can re-queue it. When the task layer
+        gives up after the configured retry budget, **the run is left
+        dangling in PENDING forever** unless someone finalises it. That
+        breaks downstream consumers in two ways:
+
+        - BSI's ``requires_one_of: attestation`` query filters by
+          ``status=COMPLETED``; a permanently-pending run is invisible
+          to the gate, so BSI keeps reporting "No attestation plugin
+          has been run for this SBOM" even though one was attempted.
+        - The SBOM detail page shows the card stuck on a spinner
+          forever.
+
+        This method synthesises a minimal failing ``AssessmentResult``
+        — one ``error`` finding wrapping the retry-exhausted message —
+        writes it onto the run, and flips status to ``COMPLETED``. The
+        run now appears in the orchestrator's ``_check_one_of`` query
+        and ``_is_passing`` returns ``False`` (``error_count > 0`` is
+        treated identically to ``fail_count > 0``), so the gate
+        correctly reports the plugin in ``failed_plugins``.
+
+        Concurrency: the status flip is performed via a conditional
+        ``UPDATE ... WHERE status IN (pending, running)`` so a worker
+        that races us to legitimate completion can't be clobbered. If
+        the conditional update affects zero rows we return the latest
+        row state without mutating it.
+
+        Idempotent: if the run is already in a terminal state, no-op.
+        Returns the run on success, ``None`` if the run isn't found.
+        """
+        from django.db import transaction
+
+        try:
+            run = AssessmentRun.objects.get(id=run_id)
+        except AssessmentRun.DoesNotExist:
+            logger.warning(f"[PLUGIN] finalize_retry_exhausted: run {run_id} not found")
+            return None
+
+        if run.status not in (RunStatus.PENDING.value, RunStatus.RUNNING.value):
+            # Already terminal — keep what's there.
+            return run
+
+        now = timezone.now()
+        # ``schema_version`` mirrors ``AssessmentResult.to_dict()`` (sdk/results.py)
+        # so retry-exhausted payloads share the same on-disk shape as plugin-emitted
+        # ones — consumers that key off ``result["schema_version"]`` keep working.
+        synthesized_result = {
+            "schema_version": "1.0",
+            "plugin_name": run.plugin_name,
+            "plugin_version": run.plugin_version,
+            "category": run.category,
+            "assessed_at": now.isoformat(),
+            "summary": {
+                "total_findings": 1,
+                "pass_count": 0,  # nosec B105
+                "fail_count": 0,
+                "warning_count": 0,
+                "error_count": 1,
+            },
+            "findings": [
+                {
+                    "id": f"{run.plugin_name}:retry-exhausted",
+                    "title": "Assessment Retry Budget Exhausted",
+                    "description": (
+                        "The plugin reported a transient condition for every retry attempt "
+                        "in the configured budget. The condition may have become permanent "
+                        f"(e.g., the upstream resource never became available). Last error: {error_message}"
+                    ),
+                    "status": "error",
+                    "severity": "high",
+                    "metadata": {"retry_exhausted": True, "last_error": error_message},
+                }
+            ],
+            "metadata": {"retry_exhausted": True},
+        }
+
+        with transaction.atomic():
+            updated = AssessmentRun.objects.filter(
+                id=run_id,
+                status__in=(RunStatus.PENDING.value, RunStatus.RUNNING.value),
+            ).update(
+                status=RunStatus.COMPLETED.value,
+                result=synthesized_result,
+                result_schema_version="1.0",
+                error_message=f"Retry budget exhausted: {error_message}",
+                completed_at=now,
+            )
+            if updated == 0:
+                # Another worker finished the run between the read and the
+                # update. Re-fetch and return the canonical row — never
+                # overwrite legitimate result data.
+                run.refresh_from_db()
+                logger.info(
+                    f"[PLUGIN] finalize_retry_exhausted: run {run_id} was finalised by another path "
+                    f"(status={run.status}); leaving its result in place"
+                )
+                return run
+
+            run.refresh_from_db()
+            # Populate the AssessmentRun↔Release M2M from the current ReleaseArtifact
+            # state so retry-exhausted runs surface against the correct releases —
+            # same contract as a normal completion.
+            self._sync_run_releases(run, str(run.sbom_id))
+
+        logger.info(f"[PLUGIN] finalize_retry_exhausted: marked run {run_id} as COMPLETED with retry-exhausted finding")
+
+        # ``QuerySet.update()`` bypasses Django's ``post_save`` signals, so
+        # the dependent-trigger receiver in ``plugins.signals`` doesn't run
+        # automatically here. Invoke the same helper directly so dependents
+        # (e.g. BSI's attestation gate) refresh after a retry-exhausted
+        # completion the same way they would after a normal completion.
+        try:
+            from .signals import enqueue_dependents_for_completion
+
+            enqueue_dependents_for_completion(run)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                f"[PLUGIN] finalize_retry_exhausted: dependent-trigger cascade failed for run {run_id}",
+                exc_info=True,
+            )
+
+        return run
+
+    def _sync_run_releases(self, assessment_run: AssessmentRun, sbom_id: str) -> None:
+        """Populate AssessmentRun.releases M2M from current ReleaseArtifact state.
+
+        Called at run completion. Reads the set of Release IDs currently linked
+        to this SBOM via ReleaseArtifact, and inserts a row in
+        AssessmentRunRelease for each. Idempotent via unique_together.
+
+        Race note (see user-decided Option A): if a ReleaseArtifact is created
+        while this scan is still running, the completion step picks up the new
+        release naturally because we read the current state here. The
+        release-association signal handler sees an in-progress run and no-ops,
+        relying on this completion step to populate the M2M correctly.
+        """
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        from .models import AssessmentRunRelease
+
+        # Filter to same-team releases only (defense-in-depth against admin-created
+        # cross-team ReleaseArtifact rows that bypass the API-layer team check).
+        sbom_team_id = assessment_run.sbom.component.team_id
+        release_ids = list(
+            ReleaseArtifact.objects.filter(
+                sbom_id=sbom_id,
+                release__product__team_id=sbom_team_id,
+            )
+            .values_list("release_id", flat=True)
+            .distinct()
+        )
+        if not release_ids:
+            return
+        AssessmentRunRelease.objects.bulk_create(
+            [AssessmentRunRelease(assessment_run=assessment_run, release_id=rid) for rid in release_ids],
+            ignore_conflicts=True,
+        )
 
     def _check_dependencies(self, sbom_id: str, plugin_name: str) -> dict[str, Any] | None:
         """Check dependency status for a plugin.
@@ -426,8 +645,18 @@ class PluginOrchestrator:
     def _is_passing(self, run: AssessmentRun) -> bool:
         """Check if an assessment run is passing.
 
-        For security plugins: passing means no vulnerabilities found (by_severity all zero).
-        For compliance/other plugins: passing means no failures and no errors.
+        For security plugins: passing means no vulnerabilities found
+        (``by_severity`` all zero).
+
+        For compliance/attestation/other plugins: passing requires no
+        failures, no errors, AND at least one explicit pass. The
+        ``pass_count > 0`` requirement closes a latent hole where a
+        plugin emitting only warnings (e.g., the previous github-attestation
+        plugin returning a "no VCS info" warning) would silently satisfy
+        a ``requires_one_of`` dependency despite never having verified
+        anything. A run that produced only warnings has nothing positive
+        to assert; treating it as passing would let BSI/FDA/etc. dependency
+        gates pass on no evidence.
 
         Args:
             run: The AssessmentRun to check.
@@ -451,7 +680,16 @@ class PluginOrchestrator:
 
         fail_count: int = summary.get("fail_count", 0)
         error_count: int = summary.get("error_count", 0)
-        return fail_count == 0 and error_count == 0
+        # ``pass_count`` was added to summary payloads at the same time as
+        # this stricter check. Older runs predating that may not carry the
+        # key at all — distinguish "key absent" (legacy schema) from "key
+        # present and zero" (modern run with no positive findings) so we
+        # don't retroactively un-pass historical runs that satisfied the
+        # gate under the old contract.
+        pass_count = summary.get("pass_count")
+        if pass_count is None:
+            return fail_count == 0 and error_count == 0
+        return fail_count == 0 and error_count == 0 and pass_count > 0
 
     def get_plugin_instance(
         self,
@@ -504,7 +742,8 @@ class PluginOrchestrator:
         triggered_by_user: User | None = None,
         triggered_by_token: AccessToken | None = None,
         existing_run_id: str | None = None,
-    ) -> AssessmentRun:
+        release_id: str | None = None,
+    ) -> AssessmentRun | None:
         """Run an assessment by plugin name.
 
         Convenience method that loads the plugin by name and runs the assessment.
@@ -518,9 +757,12 @@ class PluginOrchestrator:
             triggered_by_token: Optional API token used to trigger the run.
             existing_run_id: Optional ID of an existing AssessmentRun to reuse
                 (for retries after RetryLaterError).
+            release_id: Optional ID of the Release this assessment targets.
+                See :py:meth:`run_assessment` for details.
 
         Returns:
-            The AssessmentRun record with results.
+            The AssessmentRun record with results, or None if skipped
+            due to unsupported bom_type.
         """
         plugin = self.get_plugin_instance(plugin_name, config)
         return self.run_assessment(
@@ -530,4 +772,5 @@ class PluginOrchestrator:
             triggered_by_user=triggered_by_user,
             triggered_by_token=triggered_by_token,
             existing_run_id=existing_run_id,
+            release_id=release_id,
         )

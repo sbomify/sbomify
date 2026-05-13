@@ -151,6 +151,36 @@ class TestCycloneDXValidation:
         license_finding = next(f for f in result.findings if f.id == "cisa-2025:license")
         assert license_finding.status == "fail"
 
+    def test_cyclonedx_file_type_component_skipped_from_per_component_checks(self) -> None:
+        """CDX `type: file` components (lockfiles, config files, etc.) are
+        input metadata, not software packages — per-component CISA
+        requirements (producer, version, identifier, hash, licence) do
+        not apply. Parity with BSI / NTIA / FDA. Only Component Name is
+        still checked so a missing name on a file entry is still caught.
+        """
+        sbom_data = self._create_base_cyclonedx_sbom()
+        # Add a bare file-type component alongside the (compliant) software
+        # component. Its absence of supplier / purl / hash / licence /
+        # version MUST NOT cause any failing findings.
+        sbom_data["components"].append({"type": "file", "name": "uv.lock"})
+
+        result = self._assess_sbom(sbom_data)
+
+        # Every per-component element remains "pass" because the file entry
+        # is skipped and the real component still carries all fields.
+        for fid in (
+            "cisa-2025:software-producer",
+            "cisa-2025:component-version",
+            "cisa-2025:software-identifiers",
+            "cisa-2025:component-hash",
+            "cisa-2025:license",
+        ):
+            finding = next(f for f in result.findings if f.id == fid)
+            assert finding.status == "pass", (
+                f"CISA {fid} failed unexpectedly for a file-type component — it should be skipped. "
+                f"Details: {finding.description}"
+            )
+
     def test_cyclonedx_missing_dependencies(self) -> None:
         """Test CycloneDX SBOM missing dependency relationships."""
         sbom_data = self._create_base_cyclonedx_sbom()
@@ -285,6 +315,38 @@ class TestCycloneDXValidation:
         context_finding = next(f for f in result.findings if "generation-context" in f.id)
         assert context_finding.status == "pass"
 
+    def test_cyclonedx_generation_context_internal_namespace(self) -> None:
+        """internal:sbom:generationContext is the taxonomy-compliant fallback
+        for tooling that wants to use a property instead of metadata.lifecycles.
+        """
+        sbom_data = self._create_base_cyclonedx_sbom()
+        del sbom_data["metadata"]["properties"]
+        sbom_data["metadata"]["properties"] = [
+            {"name": "internal:sbom:generationContext", "value": "build"},
+        ]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_cyclonedx_generation_context_legacy_cdx_name_still_accepted(self) -> None:
+        """Legacy cdx:sbom:generationContext (non-taxonomy-sanctioned) remains
+        accepted for backward compatibility with earlier sbomify-action output.
+        """
+        sbom_data = self._create_base_cyclonedx_sbom()
+        # base already uses the legacy name; remove lifecycles to ensure we
+        # exercise the property fallback path and not the primary lifecycles path
+        sbom_data["metadata"].pop("lifecycles", None)
+        sbom_data["metadata"]["properties"] = [
+            {"name": "cdx:sbom:generationContext", "value": "build"},
+        ]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
     def test_cyclonedx_generation_context_lifecycle_phases(self) -> None:
         """Test all valid CycloneDX lifecycle phase values.
 
@@ -375,6 +437,11 @@ class TestSPDXValidation:
             "annotations": [
                 {
                     "annotationType": "OTHER",
+                    # SPDX 2.3 §12 requires spdxElementId; the narrow doc-level
+                    # fallback rejects unanchored annotations when the
+                    # document has no DESCRIBES target. Use the explicit
+                    # SPDXRef-DOCUMENT form here.
+                    "spdxElementId": "SPDXRef-DOCUMENT",
                     "comment": "cisa:generationContext=build",
                     "annotator": "Tool: example-tool",
                     "annotationDate": "2023-01-01T00:00:00Z",
@@ -396,6 +463,36 @@ class TestSPDXValidation:
 
         producer_finding = next(f for f in result.findings if "software-producer" in f.id)
         assert producer_finding.status == "fail"
+
+    def test_spdx_file_pkg_skipped_from_per_component_checks(self) -> None:
+        """SPDX packages whose SPDXID signals a file entry (e.g.
+        `SPDXRef-File-...`) are skipped from the per-component checks
+        other than Component Name, matching BSI's _is_file_pkg pattern.
+        Exercises lockfile-style packages that lack supplier, version,
+        external identifier, checksums, and licence fields.
+        """
+        sbom_data = self._create_base_spdx_sbom()
+        sbom_data["packages"].append(
+            {
+                "SPDXID": "SPDXRef-File-LockFile",
+                "name": "uv.lock",
+            }
+        )
+
+        result = self._assess_sbom(sbom_data)
+
+        for fid in (
+            "cisa-2025:software-producer",
+            "cisa-2025:component-version",
+            "cisa-2025:software-identifiers",
+            "cisa-2025:component-hash",
+            "cisa-2025:license",
+        ):
+            finding = next(f for f in result.findings if f.id == fid)
+            assert finding.status == "pass", (
+                f"CISA {fid} failed unexpectedly for an SPDX file package — it should be skipped. "
+                f"Details: {finding.description}"
+            )
 
     def test_spdx_missing_component_hash(self) -> None:
         """Test SPDX SBOM missing component hash (checksums)."""
@@ -558,6 +655,35 @@ class TestSPDXValidation:
             context_finding = next(f for f in result.findings if "generation-context" in f.id)
             assert context_finding.status == "pass", f"Lifecycle phase '{phase}' should be valid in comment"
 
+    def test_spdx_2_2_version_processed_same_as_2_3(self) -> None:
+        """A compliant SPDX 2.2 SBOM must produce the same pass/fail shape
+        as the same content with spdxVersion: "SPDX-2.3". SPDX 2.2 and 2.3
+        share a compatible core schema — the plugin dispatch already treats
+        them uniformly (schemas.get_spdx_module), but this pins the
+        behaviour end-to-end so a future divergence can't silently drop
+        SPDX 2.2 uploads from the compliance workflow.
+        """
+        baseline = self._create_base_spdx_sbom()
+        baseline_result = self._assess_sbom(baseline)
+
+        spdx22 = self._create_base_spdx_sbom()
+        spdx22["spdxVersion"] = "SPDX-2.2"
+        # SPDX 2.2 additionally requires documentNamespace (dropped in 2.3
+        # but valid when present). Also requires packages to carry the
+        # three licence-fields — the base fixture already satisfies these.
+        spdx22["documentNamespace"] = "https://example.com/sbom/example-package-1.0.0"
+        for pkg in spdx22.get("packages", []):
+            pkg.setdefault("downloadLocation", "NOASSERTION")
+            pkg.setdefault("copyrightText", "NOASSERTION")
+            pkg.setdefault("licenseDeclared", pkg.get("licenseConcluded", "NOASSERTION"))
+
+        spdx22_result = self._assess_sbom(spdx22)
+
+        # Same finding ids + status across the two versions.
+        baseline_map = {f.id: f.status for f in baseline_result.findings}
+        spdx22_map = {f.id: f.status for f in spdx22_result.findings}
+        assert spdx22_map == baseline_map, f"SPDX 2.2 assessment diverged from 2.3: 22={spdx22_map}, 23={baseline_map}"
+
     def _create_base_spdx_sbom(self) -> dict:
         """Create a base compliant SPDX SBOM for testing."""
         return {
@@ -593,12 +719,124 @@ class TestSPDXValidation:
             "annotations": [
                 {
                     "annotationType": "OTHER",
+                    # SPDX 2.3 §12 requires spdxElementId. The doc-level
+                    # fallback now rejects unanchored annotations.
+                    "spdxElementId": "SPDXRef-DOCUMENT",
                     "comment": "cisa:generationContext=build",
                     "annotator": "Tool: example-tool",
                     "annotationDate": "2023-01-01T00:00:00Z",
                 }
             ],
         }
+
+    def test_spdx_generation_context_annotation_targeting_package_does_not_count(self) -> None:
+        """Per SPDX 2.3 §12, a top-level annotation with spdxElementId
+        pointing at a specific package describes that package, not the
+        document. Such an annotation must not satisfy the document-level
+        Generation Context check.
+        """
+        sbom_data = self._create_base_spdx_sbom()
+        # Wipe all other generation-context sources so the only signal is
+        # a package-scoped annotation.
+        sbom_data["creationInfo"].pop("comment", None)
+        sbom_data.pop("comment", None)
+        sbom_data["annotations"] = [
+            {
+                "annotationType": "OTHER",
+                "annotator": "Tool: example-tool",
+                "annotationDate": "2023-01-01T00:00:00Z",
+                "spdxElementId": "SPDXRef-Package",
+                "comment": "cisa:generationContext=build",
+            }
+        ]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "fail", (
+            "Package-scoped annotation must not satisfy document-level generation context"
+        )
+
+    def test_spdx_generation_context_annotation_with_explicit_document_subject_passes(self) -> None:
+        """An annotation with spdxElementId=SPDXRef-DOCUMENT is explicitly
+        document-scoped and satisfies the Generation Context check."""
+        sbom_data = self._create_base_spdx_sbom()
+        sbom_data["creationInfo"].pop("comment", None)
+        sbom_data.pop("comment", None)
+        sbom_data["annotations"] = [
+            {
+                "annotationType": "OTHER",
+                "annotator": "Tool: example-tool",
+                "annotationDate": "2023-01-01T00:00:00Z",
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "comment": "cisa:generationContext=build",
+            }
+        ]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx_unanchored_annotation_without_root_rejected(self) -> None:
+        """When the document has no DESCRIBES target AND the generation-context
+        annotation has an empty spdxElementId, the annotation is unanchored
+        and must be rejected. Prevents a crafted SBOM from inflating the
+        CISA Generation Context check."""
+        sbom_data = self._create_base_spdx_sbom()
+        # Remove DESCRIBES and any documentDescribes.
+        sbom_data.pop("documentDescribes", None)
+        sbom_data["relationships"] = [
+            r for r in sbom_data.get("relationships", []) if r.get("relationshipType") != "DESCRIBES"
+        ]
+        sbom_data["creationInfo"].pop("comment", None)
+        sbom_data.pop("comment", None)
+        sbom_data["annotations"] = [
+            {
+                "annotationType": "OTHER",
+                "annotator": "Tool: x",
+                "annotationDate": "2023-01-01T00:00:00Z",
+                # No spdxElementId -- unanchored.
+                "comment": "cisa:generationContext=build",
+            }
+        ]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "fail", "Unanchored annotation must not satisfy the generation context check"
+
+    def test_spdx_root_via_describes_relationship_fallback(self) -> None:
+        """When documentDescribes is absent, spdx2_root_spdxid falls back to
+        a DESCRIBES relationship with spdxElementId == SPDXRef-DOCUMENT.
+        Verify the annotation subject filter then correctly accepts an
+        annotation scoped to that derived root."""
+        sbom_data = self._create_base_spdx_sbom()
+        sbom_data.pop("documentDescribes", None)
+        # Replace any existing relationships with a pure DESCRIBES.
+        sbom_data["relationships"] = [
+            {
+                "spdxElementId": "SPDXRef-DOCUMENT",
+                "relationshipType": "DESCRIBES",
+                "relatedSpdxElement": "SPDXRef-Package",
+            }
+        ]
+        sbom_data["creationInfo"].pop("comment", None)
+        sbom_data.pop("comment", None)
+        sbom_data["annotations"] = [
+            {
+                "annotationType": "OTHER",
+                "annotator": "Tool: x",
+                "annotationDate": "2023-01-01T00:00:00Z",
+                "spdxElementId": "SPDXRef-Package",
+                "comment": "cisa:generationContext=build",
+            }
+        ]
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
 
     def test_malformed_reference_type_as_list(self) -> None:
         """Regression: referenceType as list should not crash."""
@@ -624,6 +862,56 @@ class TestSPDXValidation:
         }
         result = self._assess_sbom(sbom_data)
         assert result.summary.error_count == 0
+
+    def test_spdx_generation_context_with_null_comment_fields(self) -> None:
+        """SPDX comment fields carrying null / non-string values must not
+        crash the generation-context scan — coerce defensively."""
+        sbom_data = {
+            "spdxVersion": "SPDX-2.3",
+            "comment": None,  # hostile: null comment
+            "creationInfo": {
+                "creators": ["Tool: test"],
+                "created": "2023-01-01T00:00:00Z",
+                "comment": 42,  # hostile: non-string comment
+            },
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Pkg",
+                    "name": "test",
+                    "supplier": "Org: Test",
+                    "versionInfo": "1.0",
+                    "purl": "pkg:pypi/t@1",
+                }
+            ],
+            "annotations": "not-a-list",  # hostile: annotations as string
+        }
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+        ctx_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert ctx_finding.status == "fail"
+
+    def test_cyclonedx_generation_context_with_malformed_metadata(self) -> None:
+        """CDX metadata.lifecycles / metadata.properties with non-list /
+        non-dict shapes must not crash the generation-context scan."""
+        sbom_data = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "metadata": {
+                "lifecycles": "build",  # hostile: string instead of list
+                "properties": [
+                    "not-a-dict",  # hostile: non-dict entry
+                    {"name": "internal:sbom:generationContext", "value": None},  # non-string value
+                ],
+                "timestamp": "2023-01-01T00:00:00Z",
+                "component": {"bom-ref": "root", "type": "application", "name": "app"},
+                "tools": {"components": [{"name": "test-tool"}]},
+            },
+            "components": [],
+        }
+        result = self._assess_sbom(sbom_data)
+        assert result.summary.error_count == 0
+        ctx_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert ctx_finding.status == "fail"
 
     def test_malformed_relationship_type_as_list(self) -> None:
         """Regression: relationshipType as list should not crash."""
@@ -1050,14 +1338,61 @@ class TestSPDX3Validation:
         assert context_finding.status == "fail"
 
     def test_spdx3_generation_context_via_annotation(self) -> None:
-        """Test SPDX 3.0 generation context via Annotation element."""
+        """Test SPDX 3.0 generation context via Annotation element.
+
+        Uses an anchored annotation (subject = SpdxDocument) because the
+        tightened scope filter rejects empty-subject annotations when no
+        rootElement is declared (symmetric to SPDX 2.x DESCRIBES rule).
+        """
         sbom_data = _create_base_spdx3_sbom()
         del sbom_data["@graph"][0]["comment"]
-        # Add Annotation element
+        # Declare an SpdxDocument with a rootElement so the annotation has
+        # a valid BOM subject to point at.
+        sbom_data["@graph"].append(
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+                "rootElement": ["SPDXRef-Package-1"],
+            }
+        )
         sbom_data["@graph"].append(
             {
                 "type": "Annotation",
                 "spdxId": "SPDXRef-Annotation-1",
+                "subject": "SPDXRef-Document",
+                "statement": "cisa:generationContext=build",
+            }
+        )
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx3_anchored_annotation_without_rootelement_still_accepted(self) -> None:
+        """A non-empty annotation subject that matches an SpdxDocument's
+        spdxId is accepted even when the document has no rootElement.
+
+        spdx3_annotation_subject_matches treats document_ids and
+        root_element_ids as equally valid subjects; only empty-subject
+        annotations require a declared rootElement. This pins down the
+        boundary between the two rules.
+        """
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["comment"]
+        # SpdxDocument WITHOUT rootElement — but the annotation points at it
+        # explicitly by spdxId, so the non-empty-subject branch applies.
+        sbom_data["@graph"].append(
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+            }
+        )
+        sbom_data["@graph"].append(
+            {
+                "type": "Annotation",
+                "spdxId": "SPDXRef-Annotation-AnchoredNoRoot",
+                "subject": "SPDXRef-Document",
                 "statement": "cisa:generationContext=build",
             }
         )
@@ -1077,6 +1412,54 @@ class TestSPDX3Validation:
                 "type": "SpdxDocument",
                 "spdxId": "SPDXRef-Document",
                 "comment": "Generated during build phase",
+            }
+        )
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "pass"
+
+    def test_spdx3_annotation_targeting_package_does_not_count(self) -> None:
+        """SPDX 3.x Annotation whose subject is a specific package describes
+        that package — not the SBOM — so it must not satisfy the document-
+        level Generation Context check (parity with the SPDX 2.3 rule)."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["comment"]
+        sbom_data["@graph"].append(
+            {
+                "type": "Annotation",
+                "spdxId": "SPDXRef-Annotation-Pkg",
+                "subject": "SPDXRef-Package-1",
+                "statement": "cisa:generationContext=build",
+            }
+        )
+
+        result = self._assess_sbom(sbom_data)
+
+        context_finding = next(f for f in result.findings if "generation-context" in f.id)
+        assert context_finding.status == "fail", (
+            "Package-scoped SPDX 3.x annotation must not satisfy document-level generation context"
+        )
+
+    def test_spdx3_annotation_subject_is_rootelement_passes(self) -> None:
+        """An Annotation whose subject matches the SpdxDocument's rootElement
+        is treated as document-scoped and satisfies the check."""
+        sbom_data = _create_base_spdx3_sbom()
+        del sbom_data["@graph"][0]["comment"]
+        sbom_data["@graph"].append(
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+                "rootElement": ["SPDXRef-Package-1"],
+            }
+        )
+        sbom_data["@graph"].append(
+            {
+                "type": "Annotation",
+                "spdxId": "SPDXRef-Annotation-Root",
+                "subject": "SPDXRef-Package-1",
+                "statement": "cisa:generationContext=build",
             }
         )
 

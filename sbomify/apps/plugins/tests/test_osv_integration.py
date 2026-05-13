@@ -72,7 +72,7 @@ class TestOSVPluginIntegration:
         return Component.objects.create(
             name="osv-test-component",
             team=team,
-            component_type="sbom",
+            component_type="bom",
         )
 
     @pytest.fixture
@@ -269,7 +269,7 @@ class TestIsRunFailing:
     @pytest.fixture
     def component(self, team: Team) -> Component:
         """Create a test component."""
-        return Component.objects.create(name="failing-test-component", team=team, component_type="sbom")
+        return Component.objects.create(name="failing-test-component", team=team, component_type="bom")
 
     @pytest.fixture
     def sbom(self, component: Component) -> SBOM:
@@ -385,7 +385,7 @@ class TestComputeStatusSummary:
     @pytest.fixture
     def component(self, team: Team) -> Component:
         """Create a test component."""
-        return Component.objects.create(name="summary-test-component", team=team, component_type="sbom")
+        return Component.objects.create(name="summary-test-component", team=team, component_type="bom")
 
     @pytest.fixture
     def sbom(self, component: Component) -> SBOM:

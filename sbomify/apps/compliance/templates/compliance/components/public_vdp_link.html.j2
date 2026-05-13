@@ -1,0 +1,45 @@
+{# VDP link for product trust center page #}
+{# Expects: has_vdp (bool), product (object), preferred_base_url (str), is_custom_domain (bool) #}
+{% if has_vdp %}
+    <div class="public-section">
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-shield-halved text-primary"></i>Vulnerability Disclosure Policy
+                </h4>
+            </div>
+            <div class="p-6">
+                <p class="text-text-muted mb-4">
+                    Learn how to report security vulnerabilities for this product and what to expect from our response process.
+                </p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <a href="{% if preferred_base_url %}{{ preferred_base_url }}{% endif %}{% url 'compliance:product_vdp_public' product_id=product.id %}"
+                       class="tw-btn-primary">
+                        <i class="fas fa-file-shield mr-2"></i>View Full Policy
+                    </a>
+                    {% if is_custom_domain %}
+                        <a href="{% if preferred_base_url %}{{ preferred_base_url }}{% endif %}/.well-known/security.txt"
+                           class="tw-btn-outline-primary"
+                           target="_blank"
+                           rel="noopener">
+                            <i class="fas fa-lock mr-2"></i>security.txt
+                        </a>
+                    {% endif %}
+                </div>
+                {% if preferred_base_url %}
+                    <p class="text-xs text-text-muted mt-3 m-0">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Full VDP available at
+                        <a href="{{ preferred_base_url }}{% url 'compliance:product_vdp_public' product_id=product.id %}"
+                           class="text-primary hover:underline">{{ preferred_base_url }}{% url 'compliance:product_vdp_public' product_id=product.id %}</a>
+                        {% if is_custom_domain %}
+                            · Security contact at
+                            <a href="{{ preferred_base_url }}/.well-known/security.txt"
+                               class="text-primary hover:underline">{{ preferred_base_url }}/.well-known/security.txt</a>
+                        {% endif %}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endif %}

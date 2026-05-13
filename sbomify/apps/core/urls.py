@@ -29,21 +29,15 @@ urlpatterns = [
     # Webhook support for Keycloak can be added here in the future if needed.
     # https://github.com/sbomify/sbomify/issues/69
     path("login/", views.keycloak_login, name="keycloak_login"),
-    # Product/Project/Component URLs - moved from sboms app
+    # Product/Component URLs - moved from sboms app
     # Backward compatibility redirects for URLs that now have trailing slashes
     path("products", RedirectView.as_view(pattern_name="core:products_dashboard", permanent=True)),
-    path("projects", RedirectView.as_view(pattern_name="core:projects_dashboard", permanent=True)),
     path("components", RedirectView.as_view(pattern_name="core:components_dashboard", permanent=True)),
     path("product/<str:product_id>", RedirectView.as_view(pattern_name="core:product_details", permanent=True)),
-    path("project/<str:project_id>", RedirectView.as_view(pattern_name="core:project_details", permanent=True)),
     path("component/<str:component_id>", RedirectView.as_view(pattern_name="core:component_details", permanent=True)),
     path(
         "public/product/<str:product_id>",
         RedirectView.as_view(pattern_name="core:product_details_public", permanent=True),
-    ),
-    path(
-        "public/project/<str:project_id>",
-        RedirectView.as_view(pattern_name="core:project_details_public", permanent=True),
     ),
     path(
         "public/component/<str:component_id>",
@@ -81,18 +75,6 @@ urlpatterns = [
         "public/link/<str:link_id>/",
         views.ProductLinkRedirectView.as_view(),
         name="product_link_redirect",
-    ),
-    path("projects/", views.ProjectsDashboardView.as_view(), name="projects_dashboard"),
-    path("projects/table/", views.ProjectsTableView.as_view(), name="projects_table"),
-    path(
-        "project/<str:project_id>/",
-        views.ProjectDetailsPrivateView.as_view(),
-        name="project_details",
-    ),
-    path(
-        "public/project/<str:project_id>/",
-        views.ProjectDetailsPublicView.as_view(),
-        name="project_details_public",
     ),
     path("components/", views.ComponentsDashboardView.as_view(), name="components_dashboard"),
     path("components/table/", views.ComponentsTableView.as_view(), name="components_table"),
@@ -155,16 +137,11 @@ urlpatterns = [
         name="release_details_public",
     ),
     re_path(
-        r"^toggle-public-status/(?P<item_type>component|product|project)/(?P<item_id>[^/]+)/$",
+        r"^toggle-public-status/(?P<item_type>component|product)/(?P<item_id>[^/]+)/$",
         views.TogglePublicStatusView.as_view(),
         name="toggle_public_status",
     ),
     # Download URLs
-    path(
-        "project/<str:project_id>/sbom/download",
-        views.sbom_download_project,
-        name="sbom_download_project",
-    ),
     path(
         "product/<str:product_id>/sbom/download",
         views.sbom_download_product,

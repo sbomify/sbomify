@@ -105,6 +105,18 @@
                     <span class="text-info-muted">Source:</span>
                     <span class="font-semibold text-info">{{ item.source_display }}</span>
                 </div>
+                {% if item.signature_blob_key %}
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
+                        <i class="fas fa-lock text-success text-xs"></i>
+                        <span class="font-semibold text-success">Signed</span>
+                    </div>
+                {% endif %}
+                {% if item.provenance_blob_key %}
+                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
+                        <i class="fas fa-shield-alt text-info text-xs"></i>
+                        <span class="font-semibold text-info">Provenance</span>
+                    </div>
+                {% endif %}
             {% elif item_type == 'documents' %}
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
                     <i class="fas fa-file text-info text-xs"></i>

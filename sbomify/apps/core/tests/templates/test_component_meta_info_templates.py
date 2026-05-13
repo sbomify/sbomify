@@ -8,15 +8,15 @@ from sbomify.apps.core.models import Component
 @pytest.mark.django_db
 class TestComponentMetaInfoTemplates:
     
-    def test_component_meta_info_wrapper_rendering(self, rf, component_factory, project_factory):
+    def test_component_meta_info_wrapper_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
         request.session = {"current_team": {"key": "test-team"}}
-        project = project_factory("Test Project")
+        product = product_factory("Test Product")
         component = component_factory(
-            "Test Component", 
-            Component.ComponentType.SBOM, 
-            project=project
+            "Test Component",
+            Component.ComponentType.BOM,
+            product=product
         )
         
         context = {
@@ -57,12 +57,12 @@ class TestComponentMetaInfoTemplates:
         assert 'x-text="formatLifecyclePhase(metadata.lifecycle_phase)"' in rendered
         assert 'x-text="author.name"' in rendered
 
-    def test_component_meta_info_editor_rendering(self, rf, component_factory, project_factory):
+    def test_component_meta_info_editor_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
         request.session = {"current_team": {"key": "test-team"}}
-        project = project_factory("Test Project")
-        component = component_factory("Test Component", project=project)
+        product = product_factory("Test Product")
+        component = component_factory("Test Component", product=product)
         
         metadata = {
             "supplier": {"name": "ACME Corp"},
@@ -93,10 +93,10 @@ class TestComponentMetaInfoTemplates:
         # Profile selector dropdown should be present
         assert "Contact Profile" in rendered
 
-    def test_ci_cd_info_rendering(self, component_factory, project_factory):
+    def test_ci_cd_info_rendering(self, component_factory, product_factory):
         # Setup
-        project = project_factory("Test Project")
-        component = component_factory("Test Component", project=project)
+        product = product_factory("Test Product")
+        component = component_factory("Test Component", product=product)
         
         context = {
             "component": component,

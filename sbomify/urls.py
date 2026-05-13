@@ -30,6 +30,7 @@ from sbomify.apps.core.admin import admin_site
 from sbomify.apps.tea.mappers import TEA_API_VERSION
 from sbomify.apps.tea.wellknown import TEAWellKnownView
 from sbomify.apps.teams.urls import domain_check
+from sbomify.apps.teams.views.security_txt import SecurityTxtView
 
 urlpatterns = [
     # Favicon redirect for browsers requesting /favicon.ico at root
@@ -39,6 +40,7 @@ urlpatterns = [
     path("accounts/login/", RedirectView.as_view(url="/login/", permanent=True)),
     path("accounts/", include("allauth.urls")),
     path("enterprise-contact/", PublicEnterpriseContactView.as_view(), name="public_enterprise_contact"),
+    path(".well-known/security.txt", SecurityTxtView.as_view(), name="security_txt_wellknown"),
     path(".well-known/com.sbomify.domain-check", domain_check, name="domain_check"),
     # TEA (Transparency Exchange API) .well-known endpoint for server discovery
     path(".well-known/tea", TEAWellKnownView.as_view(), name="tea_wellknown"),
@@ -55,6 +57,7 @@ urlpatterns = [
     path("billing/", include("sbomify.apps.billing.urls")),
     path("controls/", include("sbomify.apps.controls.urls")),
     path("plugins/", include("sbomify.apps.plugins.urls")),
+    path("compliance/", include("sbomify.apps.compliance.urls")),
     path("", include("sbomify.apps.vulnerability_scanning.urls")),
     path("api/v1/", api.urls, name="api-1"),
     path(r"UuPha8mu/", include("health_check.urls")),  # Random string

@@ -145,7 +145,7 @@ export function registerCiCdInfo() {
             const lines = [
                 'upload-sbom:',
                 '  stage: deploy',
-                '  image: sbomifyhub/sbomify-action'
+                '  image: ghcr.io/sbomify/sbomify-action'
             ];
 
             if (this.sourceType === 'docker') {
@@ -190,7 +190,7 @@ export function registerCiCdInfo() {
                 '  default:',
                 '    - step:',
                 '        name: Upload SBOM',
-                '        image: sbomifyhub/sbomify-action',
+                '        image: ghcr.io/sbomify/sbomify-action',
                 '        services:',
                 '          - docker'
             ];
@@ -276,7 +276,7 @@ export function registerCiCdInfo() {
             // Add the image name (remove trailing backslash from last line)
             const lastLine = dockerLines[dockerLines.length - 1];
             dockerLines[dockerLines.length - 1] = lastLine.replace(/ \\$/, '');
-            dockerLines.push('        sbomifyhub/sbomify-action');
+            dockerLines.push('        ghcr.io/sbomify/sbomify-action');
 
             lines.push(...dockerLines);
 
@@ -343,7 +343,7 @@ export function registerCiCdInfo() {
             // Remove trailing backslash from last line and add image
             const lastLine = lines[lines.length - 1];
             lines[lines.length - 1] = lastLine.replace(/ \\\\$/, '');
-            lines.push('                          sbomifyhub/sbomify-action');
+            lines.push('                          ghcr.io/sbomify/sbomify-action');
 
             lines.push(
                 '                    """',

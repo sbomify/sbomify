@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FindingSchema(BaseModel):
@@ -20,6 +20,25 @@ class FindingSchema(BaseModel):
     aliases: list[str] | None = None
     remediation: str | None = None
     metadata: dict[str, Any] | None = None
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def flatten_alias_dicts(cls, v: Any) -> list[str] | None:
+        """DT stores aliases as [{"cveId": "...", "ghsaId": "..."}] dicts.
+
+        Flatten to list[str] so existing stored results don't crash Pydantic.
+        """
+        if not v:
+            return None
+        if not isinstance(v, list):
+            return [str(v)] if isinstance(v, str) else None
+        flat: list[str] = []
+        for item in v:
+            if isinstance(item, dict):
+                flat.extend(str(val) for val in item.values() if val)
+            elif isinstance(item, str):
+                flat.append(item)
+        return flat if flat else None
 
 
 class AssessmentSummarySchema(BaseModel):
@@ -51,6 +70,20 @@ class AssessmentRunSchema(BaseModel):
 
     id: str
     sbom_id: str
+    release_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Release IDs whose SBOM this run's result covers. Under the scan-once-per-SBOM "
+            "model (sbomify/sbomify#881), one run covers all releases currently linked to "
+            "the SBOM via ReleaseArtifact at scan completion. Empty list for SBOM-level "
+            "runs (e.g. NTIA on a component not yet tied to a product). Populated from "
+            "the AssessmentRun.releases M2M."
+        ),
+    )
+    release_names: list[str] = Field(
+        default_factory=list,
+        description="Human-readable release names corresponding to release_ids (for template rendering).",
+    )
     plugin_name: str
     plugin_version: str
     plugin_display_name: str | None = None
@@ -80,6 +113,14 @@ class AssessmentStatusSummary(BaseModel):
     failing_count: int = 0
     pending_count: int = 0
     in_progress_count: int = 0
+    skipped_count: int = Field(
+        default=0,
+        description=(
+            "Count of runs that completed but were skipped (e.g., Dependency Track "
+            "when the SBOM had no release association). Skipped runs are NOT counted "
+            "in passing_count so they don't inflate 'clean scan' metrics."
+        ),
+    )
 
 
 class SBOMAssessmentsResponse(BaseModel):
@@ -100,4 +141,5 @@ class AssessmentBadgeData(BaseModel):
     passing_count: int
     failing_count: int
     pending_count: int
+    skipped_count: int = 0
     plugins: list[dict[str, Any]] = Field(description="Summary per plugin: name, display_name, status, findings_count")

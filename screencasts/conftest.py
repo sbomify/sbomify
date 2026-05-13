@@ -1,3 +1,5 @@
+import sys
+import time
 from pathlib import Path
 from typing import Any, Generator
 from urllib.parse import urlparse
@@ -7,13 +9,14 @@ from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright, sync_playwright
+from playwright.sync_api import Error as PlaywrightError
 
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
-from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Member, Team
 
 RECORDING_WIDTH = 1280
@@ -63,9 +66,61 @@ def disable_billing(settings) -> None:
     settings.BILLING = False
 
 
+_SCREENSHOT_MIN_PACE_MS = 800
+_SCREENSHOT_INTERVAL_SEC = 3.0
+
+_screenshot_state: dict[str, Any] = {
+    "dir": None,
+    "last_time": 0.0,
+    "counter": 0,
+}
+
+
+def _recording_name(request: pytest.FixtureRequest) -> str:
+    """Filename stem for the recorded artifacts.
+
+    For parametrized tests, produces ``<func>_<param_id>`` so the
+    pytest brackets do not end up in filenames (which trips shell
+    globs and downstream cleanup heuristics).
+    """
+    node = request.node
+    callspec = getattr(node, "callspec", None)
+    if callspec is not None:
+        return f"{node.originalname}_{callspec.id}"
+    return node.name
+
+
+def _maybe_capture_screenshot(page: Page) -> None:
+    out_dir = _screenshot_state["dir"]
+    if out_dir is None:
+        return
+    now = time.monotonic()
+    if now - _screenshot_state["last_time"] < _SCREENSHOT_INTERVAL_SEC:
+        return
+    _screenshot_state["counter"] += 1
+    path = out_dir / f"frame_{_screenshot_state['counter']:03d}.png"
+    try:
+        page.screenshot(path=str(path), full_page=False)
+    except PlaywrightError as exc:
+        print(f"[screencasts] screenshot capture failed: {exc}", file=sys.stderr)
+        return
+    _screenshot_state["last_time"] = now
+
+
 def pace(page: Page, ms: int = 600) -> None:
-    """Pause for a natural beat between actions."""
-    page.wait_for_timeout(ms)
+    """Pause for a natural beat between actions.
+
+    Long pauses (>= 800ms) double as screenshot capture points when at
+    least 3s have passed since the last frame. Screenshot time is counted
+    against the requested pause so the overall delay stays about the same.
+    """
+    remaining_ms = ms
+    if ms >= _SCREENSHOT_MIN_PACE_MS:
+        started = time.monotonic()
+        _maybe_capture_screenshot(page)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        remaining_ms = max(0, ms - elapsed_ms)
+    page.wait_for_timeout(remaining_ms)
 
 
 def hover_and_click(page: Page, locator: Locator, pause_ms: int = 250) -> None:
@@ -96,6 +151,56 @@ def dismiss_toasts(page: Page) -> None:
         }
         document.querySelectorAll('.tw-toast').forEach(el => el.remove());
     }""")
+
+
+def auto_dismiss_toasts(page: Page) -> None:
+    """Continuously drain toast notifications for the lifetime of the page.
+
+    Some recordings cross routes that lazy-load HTMX panels which fail
+    in the screencast environment (no real S3, no Stripe, no
+    notification websocket). The resulting "Failed to load …" toasts
+    have nothing to do with the flow being recorded but pile up in
+    frame and distract the viewer. This helper installs a
+    ``MutationObserver`` on the toast container that drains any new
+    toast as soon as it is appended — observers fire only on actual
+    DOM mutations, so it adds zero polling overhead vs. a
+    ``setInterval(..., 100)`` loop.
+
+    The observer is registered as an ``init_script``, so every
+    document the recording navigates through gets a fresh observer
+    automatically. The observer is bound to the page and is garbage
+    collected with it; no explicit clear is required.
+    """
+    page.add_init_script(
+        """
+        (() => {
+            const drain = (root) => {
+                const container = root.getElementById
+                    ? root.getElementById('toast-container')
+                    : null;
+                if (container) {
+                    const data = window.Alpine?.$data(container);
+                    if (data && Array.isArray(data.toasts)) data.toasts = [];
+                }
+                root.querySelectorAll?.('.tw-toast').forEach((el) => el.remove());
+            };
+            const start = () => {
+                drain(document);
+                const obs = new MutationObserver((muts) => {
+                    for (const m of muts) {
+                        if (m.addedNodes && m.addedNodes.length) {
+                            drain(document);
+                            return;
+                        }
+                    }
+                });
+                obs.observe(document.body, { childList: true, subtree: true });
+            };
+            if (document.body) start();
+            else document.addEventListener('DOMContentLoaded', start, { once: true });
+        })();
+        """
+    )
 
 
 def rewrite_localhost_urls(page: Page) -> None:
@@ -153,14 +258,6 @@ def navigate_to_components(page: Page) -> None:
     pace(page, 1200)
 
 
-def navigate_to_projects(page: Page) -> None:
-    """Click the sidebar Projects link and wait for the page to load."""
-    projects_link = page.get_by_role("link", name="Projects")
-    hover_and_click(page, projects_link)
-    page.wait_for_load_state("networkidle")
-    pace(page, 1200)
-
-
 def navigate_to_products(page: Page) -> None:
     """Click the sidebar Products link and wait for the page to load."""
     products_link = page.get_by_role("link", name="Products")
@@ -173,6 +270,14 @@ def navigate_to_releases(page: Page) -> None:
     """Click the sidebar Releases link and wait for the page to load."""
     releases_link = page.get_by_role("link", name="Releases")
     hover_and_click(page, releases_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
+def navigate_to_plugins(page: Page) -> None:
+    """Click the sidebar Plugins link and wait for the page to load."""
+    plugins_link = page.get_by_role("link", name="Plugins")
+    hover_and_click(page, plugins_link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
 
@@ -227,6 +332,34 @@ def create_global_document_component(page: Page, name: str) -> None:
 
     page.wait_for_load_state("networkidle")
     pace(page, 800)
+
+
+def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
+    """Navigate to Plugins, toggle the given plugin on, and save.
+
+    Shared by the per-plugin FAQ screencasts in plugin_enablement.py.
+    """
+    navigate_to_plugins(page)
+
+    page.locator("#plugin-settings-form").wait_for(state="visible", timeout=15_000)
+    pace(page, 1500)
+
+    # Attribute selector (not #id) because some plugin slugs contain dots
+    # (e.g. bsi-tr03183-v2.1-compliance) which have CSS-special meaning.
+    toggle = page.locator(f"[id='plugin-{plugin_slug}']")
+    toggle.scroll_into_view_if_needed()
+    pace(page, 600)
+    hover_and_click(page, toggle)
+    pace(page, 1200)
+
+    save_btn = page.locator("button[type='submit'][form='plugin-settings-form']")
+    save_btn.scroll_into_view_if_needed()
+    pace(page, 500)
+    hover_and_click(page, save_btn)
+
+    page.wait_for_load_state("networkidle")
+    dismiss_toasts(page)
+    pace(page, 2000)
 
 
 def enable_and_configure_trust_center(page: Page) -> None:
@@ -421,45 +554,27 @@ PIED_PIPER_COMPONENTS = [
     "Data Pipeline Worker",
 ]
 
-PIED_PIPER_PROJECTS = {
-    "Pied Piper Frontend": ["Web Dashboard"],
-    "Pied Piper Backend": ["Compression Core Library", "REST API Service", "Data Pipeline Worker"],
-}
-
 PIED_PIPER_PRODUCT_NAME = "Pied Piper Compression Engine"
 
 
 @pytest.fixture
 def pied_piper_product(deletable_team: Team) -> dict:
-    """Create full Pied Piper hierarchy via ORM (4 components, 2 projects, 1 product).
+    """Create the Pied Piper hierarchy via ORM (4 components attached to 1 product).
 
-    Returns dict with keys: product, projects (dict), components (dict).
+    Returns dict with keys: product, components (dict).
     """
     team = deletable_team
 
-    # Components
-    components = {}
-    for name in PIED_PIPER_COMPONENTS:
-        components[name] = Component.objects.create(team=team, name=name)
+    components = {name: Component.objects.create(team=team, name=name) for name in PIED_PIPER_COMPONENTS}
 
-    # Projects + assign components
-    projects = {}
-    for proj_name, comp_names in PIED_PIPER_PROJECTS.items():
-        project = Project.objects.create(team=team, name=proj_name)
-        for comp_name in comp_names:
-            ProjectComponent.objects.create(project=project, component=components[comp_name])
-        projects[proj_name] = project
-
-    # Product + assign projects
     product = Product.objects.create(
         team=team,
         name=PIED_PIPER_PRODUCT_NAME,
         description="Middle-out compression platform for enterprise data optimization",
     )
-    for project in projects.values():
-        ProductProject.objects.create(product=product, project=project)
+    product.components.set(components.values())
 
-    return {"product": product, "projects": projects, "components": components}
+    return {"product": product, "components": components}
 
 
 @pytest.fixture
@@ -521,7 +636,7 @@ def recording_context(
     context = browser.new_context(
         base_url=browser_base_url,
         viewport={"width": RECORDING_WIDTH, "height": RECORDING_HEIGHT},
-        device_scale_factor=1,
+        device_scale_factor=2,
         record_video_dir=str(OUTPUT_DIR),
         record_video_size={"width": RECORDING_WIDTH, "height": RECORDING_HEIGHT},
     )
@@ -553,7 +668,18 @@ def recording_page(
     # visible while the first real navigation loads.
     page.set_content(SPLASH_HTML, wait_until="commit")
 
-    yield page
+    recording_name = _recording_name(request)
+
+    screenshot_dir = OUTPUT_DIR / "screenshots" / recording_name
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+    _screenshot_state["dir"] = screenshot_dir
+    _screenshot_state["last_time"] = 0.0
+    _screenshot_state["counter"] = 0
+
+    try:
+        yield page
+    finally:
+        _screenshot_state["dir"] = None
 
     # Grab the video handle, close the page (finalizes recording),
     # then save to a meaningful filename.
@@ -561,5 +687,5 @@ def recording_page(
     page.close()
 
     if video:
-        final_path = OUTPUT_DIR / f"{request.node.name}.webm"
+        final_path = OUTPUT_DIR / f"{recording_name}.webm"
         video.save_as(str(final_path))

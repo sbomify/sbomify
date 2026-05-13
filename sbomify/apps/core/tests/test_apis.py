@@ -164,7 +164,7 @@ def test_api_pagination_products(sample_access_token, sample_team):  # noqa: F81
     # Create multiple products to test pagination
     products = []
     for i in range(25):
-        product = Product.objects.create(name=f"Test Product {i+1}", team=sample_team)
+        product = Product.objects.create(name=f"Test Product {i + 1}", team=sample_team)
         products.append(product)
 
     # Test first page with default page size
@@ -227,32 +227,6 @@ def test_api_pagination_products(sample_access_token, sample_team):  # noqa: F81
 
 
 @pytest.mark.django_db
-def test_api_pagination_projects(sample_access_token, sample_team):  # noqa: F811
-    """Test that projects API endpoint supports pagination."""
-    from sbomify.apps.core.models import Project
-
-    client = Client()
-
-    # Create multiple projects to test pagination
-    for i in range(30):
-        Project.objects.create(name=f"Test Project {i+1}", team=sample_team)
-
-    # Test first page
-    response = client.get(
-        reverse("api-1:list_projects"),
-        **get_api_headers(sample_access_token),
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-
-    assert "items" in data
-    assert "pagination" in data
-    assert data["pagination"]["total"] == 30
-    assert len(data["items"]) == 15  # Default page size
-
-
-@pytest.mark.django_db
 def test_api_pagination_components(sample_access_token, sample_team):  # noqa: F811
     """Test that components API endpoint supports pagination."""
     from sbomify.apps.core.models import Component
@@ -261,7 +235,7 @@ def test_api_pagination_components(sample_access_token, sample_team):  # noqa: F
 
     # Create multiple components to test pagination
     for i in range(20):
-        Component.objects.create(name=f"Test Component {i+1}", component_type="sbom", team=sample_team)
+        Component.objects.create(name=f"Test Component {i + 1}", component_type="bom", team=sample_team)
 
     # Test first page
     response = client.get(
@@ -287,7 +261,7 @@ def test_api_pagination_invalid_params(sample_access_token, sample_team):  # noq
 
     # Create a few products
     for i in range(5):
-        Product.objects.create(name=f"Test Product {i+1}", team=sample_team)
+        Product.objects.create(name=f"Test Product {i + 1}", team=sample_team)
 
     # Test with invalid page number (should default to page 1)
     response = client.get(

@@ -1,0 +1,54 @@
+{% comment %}
+    Stale-assessment banner (issue #921).
+
+    Rendered by ``cra_wizard_base.html.j2`` when ``assessment.status ==
+    "stale"``. A stale assessment is one whose product scope screening
+    has flipped CRA out of scope while the assessment row still
+    exists — every mutation API refuses edits with 409 until the
+    operator reconciles. The only reconciliation path surfaced here is
+    re-running the scope screening: flipping CRA back on auto-unstales
+    the assessment. There is intentionally no in-UI delete action
+    (ADR-004 — we never destroy regulated evidence from this surface).
+
+    Expected context:
+      - ``product_id``: the linked product id for the scope-screening link
+{% endcomment %}
+<div role="alert"
+     aria-live="polite"
+     class="mb-4 rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm"
+     data-testid="cra-stale-banner">
+    <div class="flex items-start gap-3 px-4 pt-4">
+        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 shrink-0"
+             aria-hidden="true">
+            <i class="fas fa-triangle-exclamation text-sm text-amber-700 dark:text-amber-300"></i>
+        </div>
+        <div class="flex-1 min-w-0 pt-0.5">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-semibold text-sm text-text">Assessment is out of scope</span>
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-500/70">
+                    Scope changed
+                </span>
+            </div>
+            <p class="text-xs text-text-muted mt-1 m-0 leading-snug">
+                The product's CRA scope screening now says CRA does not apply to this product.
+                This assessment is preserved on disk but cannot be edited or exported until
+                it is reconciled. Re-run the scope screening — flipping CRA back on will
+                auto-restore this assessment to where you left off.
+            </p>
+        </div>
+    </div>
+    <div class="px-4 pt-3 pb-4 flex flex-wrap items-center gap-2">
+        <a href="{% url 'compliance:cra_scope_screening' product_id=product_id %}"
+           class="tw-btn tw-btn-primary tw-btn-sm"
+           data-testid="cra-stale-rescope">
+            <i class="fas fa-arrow-rotate-left mr-1"></i>
+            Re-run scope screening
+        </a>
+        <a href="{% url 'compliance:cra_product_list' %}"
+           class="tw-btn tw-btn-outline tw-btn-sm"
+           data-testid="cra-stale-back">
+            <i class="fas fa-list mr-1"></i>
+            Back to CRA list
+        </a>
+    </div>
+</div>

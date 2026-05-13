@@ -1,6 +1,6 @@
 /**
  * Navbar search functionality
- * Handles search input and displays results for products, projects, and components
+ * Handles search input and displays results for products and components
  */
 
 interface SearchResult {
@@ -13,7 +13,6 @@ interface SearchResult {
 
 interface SearchResponse {
   products: SearchResult[];
-  projects: SearchResult[];
   components: SearchResult[];
 }
 
@@ -35,7 +34,7 @@ function getSearchUrl(query: string): string {
 }
 
 function getItemUrl(type: string, id: string): string {
-  const baseUrl = type === 'product' ? '/product/' : type === 'project' ? '/project/' : '/component/';
+  const baseUrl = type === 'product' ? '/product/' : '/component/';
   return `${baseUrl}${id}/`;
 }
 
@@ -46,7 +45,7 @@ function formatDescription(description: string | undefined, maxLength: number = 
 }
 
 function renderSearchResults(data: SearchResponse, query: string): string {
-  if (!data.products.length && !data.projects.length && !data.components.length) {
+  if (!data.products.length && !data.components.length) {
     return `
       <div class="search-results-empty">
         <p class="text-muted mb-0">No results found for "${escapeHtml(query)}"</p>
@@ -70,31 +69,6 @@ function renderSearchResults(data: SearchResponse, query: string): string {
     data.products.forEach((item) => {
       html += `
         <a href="${getItemUrl('product', item.id)}" class="search-result-item">
-          <div class="search-result-item-content">
-            <div class="search-result-item-name">${escapeHtml(item.name)}</div>
-            ${item.description ? `<div class="search-result-item-description">${escapeHtml(formatDescription(item.description))}</div>` : ''}
-          </div>
-          <i class="fas fa-chevron-right search-result-item-arrow"></i>
-        </a>
-      `;
-    });
-    html += '</div></div>';
-  }
-
-  // Projects section
-  if (data.projects.length > 0) {
-    html += `
-      <div class="search-results-section">
-        <div class="search-results-section-header">
-          <i class="fas fa-folder me-2"></i>
-          <span>Projects</span>
-          <span class="search-results-count">${data.projects.length}</span>
-        </div>
-        <div class="search-results-list">
-    `;
-    data.projects.forEach((item) => {
-      html += `
-        <a href="${getItemUrl('project', item.id)}" class="search-result-item">
           <div class="search-result-item-content">
             <div class="search-result-item-name">${escapeHtml(item.name)}</div>
             ${item.description ? `<div class="search-result-item-description">${escapeHtml(formatDescription(item.description))}</div>` : ''}

@@ -1,0 +1,48 @@
+# Secure Decommissioning Guide
+**Product:** {{ product_name }}
+**Manufacturer:** {{ manufacturer_name }}
+**Date:** {{ date }}
+---
+
+## 1. Purpose
+
+This guide provides instructions for securely decommissioning {{ product_name }} in accordance with CRA Annex I, Part I, Section 13 requirements for secure data deletion.
+
+## 2. Before Decommissioning
+
+- Ensure all critical data has been exported or backed up
+- Revoke any API keys, tokens, or credentials associated with this product
+- Notify relevant stakeholders of the planned decommissioning
+
+## 3. Data Deletion
+
+{% if data_deletion_instructions %}
+{{ data_deletion_instructions }}
+{% else %}
+### Factory Reset
+
+[Describe factory reset procedure]
+
+### Data Wiping
+
+[Describe secure data wiping steps]
+
+### Verification
+
+[Describe how to verify data has been securely deleted]
+{% endif %}
+
+## 4. Secure Disposal
+
+- Remove all network connections before disposal
+- Follow local regulations for electronic waste disposal
+- Consider using certified e-waste recycling services
+
+## 5. Post-Decommissioning
+
+- Deregister the product from any cloud services
+- Remove the product from any monitoring or management systems
+- Update asset inventory records
+
+---
+*This guide addresses CRA Annex I, Part I, Section 13: "enable users to securely and easily remove on a permanent basis all data and settings."*

@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, OperationalError
 from django.db.models import QuerySet
 
@@ -64,14 +64,15 @@ class OnboardingEmailService:
             return False
 
         try:
-            send_mail(
+            email = EmailMultiAlternatives(
                 subject=email_record.subject,
-                message=plain_text_content,
+                body=plain_text_content,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_content,
-                fail_silently=False,
+                to=[user.email],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
             email_record.mark_sent()
             onboarding_status.mark_welcome_email_sent()
             logger.info("Welcome email sent successfully to user %s", user.id)
@@ -79,88 +80,6 @@ class OnboardingEmailService:
         except Exception as e:
             email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
             logger.error("Failed to send welcome email to user %s: %s", user.id, e, exc_info=True)
-            return False
-
-    @staticmethod
-    def send_first_component_sbom_email(user: Any) -> bool:
-        """
-        Send first component & SBOM reminder email.
-
-        This email adapts based on the user's progress:
-        - If no component created: Focus on component creation
-        - If component created but no SBOM: Focus on SBOM upload
-
-        Args:
-            user: User instance
-
-        Returns:
-            True if email was sent successfully, False otherwise
-        """
-        onboarding_status = OnboardingStatus.objects.filter(user=user).first()
-        if not onboarding_status:
-            logger.info("No onboarding status found for user %s", user.id)
-            return False
-
-        needs_component = onboarding_status.should_receive_component_reminder()
-        needs_sbom = onboarding_status.should_receive_sbom_reminder()
-
-        if not needs_component and not needs_sbom:
-            logger.info("First component/SBOM reminder not needed for user %s", user.id)
-            return False
-
-        # Dedup — only skip if successfully sent (allow retry of FAILED records)
-        existing = OnboardingEmail.objects.filter(
-            user=user, email_type=OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM
-        ).first()
-        if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
-            logger.info("First component/SBOM reminder already sent to user %s", user.id)
-            return True
-
-        context = get_email_context(
-            user,
-            has_created_component=onboarding_status.has_created_component,
-            needs_component=needs_component,
-            needs_sbom=needs_sbom,
-        )
-        html_content, plain_text_content = render_email_templates("first_component_sbom", context)
-
-        # Delete FAILED record after render succeeds (so error history is preserved if render fails)
-        if existing and existing.status == OnboardingEmail.EmailStatus.FAILED:
-            existing.delete()
-
-        if needs_component:
-            subject = "Ready to Create Your First Component? - sbomify"
-        else:
-            subject = "Time to Upload Your First SBOM! - sbomify"
-
-        try:
-            email_record = OnboardingEmail.create_email(
-                user=user, email_type=OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM, subject=subject
-            )
-        except IntegrityError:
-            concurrent = OnboardingEmail.objects.filter(
-                user=user, email_type=OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM
-            ).first()
-            if concurrent and concurrent.status == OnboardingEmail.EmailStatus.SENT:
-                return True
-            logger.warning("First component/SBOM email being processed by another worker for user %s", user.id)
-            return False
-
-        try:
-            send_mail(
-                subject=email_record.subject,
-                message=plain_text_content,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_content,
-                fail_silently=False,
-            )
-            email_record.mark_sent()
-            logger.info("First component/SBOM reminder sent successfully to user %s", user.id)
-            return True
-        except Exception as e:
-            email_record.mark_failed(f"SMTP send failure: {type(e).__name__}")
-            logger.error("Failed to send first component/SBOM reminder to user %s: %s", user.id, e, exc_info=True)
             return False
 
     @staticmethod
@@ -209,14 +128,15 @@ class OnboardingEmailService:
             return False
 
         try:
-            send_mail(
+            email = EmailMultiAlternatives(
                 subject=email_record.subject,
-                message=plain_text_content,
+                body=plain_text_content,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                html_message=html_content,
-                fail_silently=False,
+                to=[user.email],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
             email_record.mark_sent()
             logger.info("%s email sent successfully to user %s", email_type, user.id)
             return True
@@ -368,78 +288,3 @@ class OnboardingEmailService:
 
         # Convert IDs to User querysets
         return {email_type: User.objects.filter(id__in=user_ids) for email_type, user_ids in results.items()}
-
-    @staticmethod
-    def get_users_for_first_component_sbom_reminder() -> QuerySet[Any]:
-        """
-        Get workspace owners who should receive first component/SBOM reminders.
-
-        This consolidates both component and SBOM reminder logic:
-        - Component reminder: PRIMARY workspace owners with no components (3+ days after signup)
-        - SBOM reminder: PRIMARY workspace owners with components but no SBOMs (7+ days after component)
-
-        Returns:
-            QuerySet of User objects (workspace owners only)
-        """
-        from django.contrib.auth import get_user_model
-
-        from sbomify.apps.teams.models import Member
-
-        User = get_user_model()
-        eligible_users = []
-
-        # Get all primary workspace owners
-        primary_owners = Member.objects.filter(
-            role="owner",
-            is_default_team=True,  # This is their primary/default workspace
-        ).select_related("user", "team")
-
-        skipped_no_status = 0
-        skipped_errors = 0
-        for member in primary_owners:
-            try:
-                try:
-                    status = OnboardingStatus.objects.get(user=member.user)
-                except OnboardingStatus.DoesNotExist:
-                    skipped_no_status += 1
-                    continue
-
-                # Check if they need component reminder
-                if status.welcome_email_sent and status.should_receive_component_reminder(days_threshold=3):
-                    eligible_users.append(member.user.id)
-                    continue
-
-                # Check if they need SBOM reminder
-                if status.has_created_component and status.should_receive_sbom_reminder(days_threshold=7):
-                    eligible_users.append(member.user.id)
-                    continue
-            except Exception as e:
-                skipped_errors += 1
-                logger.error("Error processing legacy reminder for user %s: %s", member.user.id, e, exc_info=True)
-
-        if skipped_no_status:
-            logger.warning(
-                "Skipped %d primary owners with missing OnboardingStatus during legacy reminder processing",
-                skipped_no_status,
-            )
-        if skipped_errors:
-            logger.error(
-                "Failed to process %d primary owners during legacy reminder processing",
-                skipped_errors,
-            )
-
-        # Filter out users who already received this email or the newer sequence equivalents
-        users_already_sent = set(
-            OnboardingEmail.objects.filter(
-                email_type__in=[
-                    OnboardingEmail.EmailType.FIRST_COMPONENT_SBOM,
-                    OnboardingEmail.EmailType.FIRST_COMPONENT,
-                    OnboardingEmail.EmailType.FIRST_SBOM,
-                ],
-                status=OnboardingEmail.EmailStatus.SENT,
-            ).values_list("user_id", flat=True)
-        )
-
-        eligible_users = [uid for uid in eligible_users if uid not in users_already_sent]
-
-        return User.objects.filter(id__in=eligible_users)

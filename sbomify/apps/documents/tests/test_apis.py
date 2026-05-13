@@ -191,7 +191,7 @@ def test_create_document_wrong_component_type(
     component = Component.objects.create(
         name="Non-Document Component",
         team=sample_team,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
     )
 
     client.force_login(sample_user)

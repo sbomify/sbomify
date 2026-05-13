@@ -1,0 +1,24 @@
+{% extends "core/public_base.htmx.j2" %}
+{% block title %}EU Declaration of Conformity — {{ product.name }}{% endblock %}
+{% block content %}
+    <div class="max-w-4xl mx-auto">
+        <div class="mb-6">
+            <a href="{% if is_custom_domain %}/product/{{ product.slug }}/{% else %}/public/product/{{ product.id }}/{% endif %}"
+               class="text-sm text-primary hover:underline">
+                <i class="fas fa-arrow-left mr-1"></i> Back to {{ product.name }}
+            </a>
+        </div>
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h1 class="text-xl font-bold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-file-signature text-primary"></i>
+                    EU Declaration of Conformity
+                </h1>
+                <p class="text-sm text-text-muted mt-1">{{ product.name }}</p>
+            </div>
+            <div class="p-6 prose prose-sm max-w-none dark:prose-invert prose-headings:text-text prose-p:text-text-secondary prose-strong:text-text prose-a:text-primary prose-li:text-text-secondary prose-code:text-text prose-code:before:content-none prose-code:after:content-none">
+                {{ doc_html }}
+            </div>
+        </div>
+    </div>
+{% endblock %}

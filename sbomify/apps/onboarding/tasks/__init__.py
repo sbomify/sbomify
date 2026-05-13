@@ -51,83 +51,6 @@ def send_welcome_email_task(user_id: int) -> None:
 
 
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
-def send_first_component_sbom_email_task(user_id: int) -> None:
-    """
-    Send first component & SBOM reminder email to a user.
-
-    This email adapts based on user progress:
-    - Component focus if no components created
-    - SBOM focus if components exist but no SBOMs
-
-    Args:
-        user_id: ID of the user to send reminder email to
-    """
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        # User doesn't exist - log warning and exit without retry
-        logger.warning("[TASK_send_first_component_sbom] User with ID %s not found, skipping", user_id)
-        return
-
-    logger.info("[TASK_send_first_component_sbom] Starting for user %s", user_id)
-    record_task_breadcrumb("send_first_component_sbom_email_task", "start", data={"user_id": user_id})
-
-    try:
-        success = OnboardingEmailService.send_first_component_sbom_email(user)
-
-        if success:
-            logger.info("[TASK_send_first_component_sbom] Successfully sent reminder to user %s", user_id)
-            record_task_breadcrumb("send_first_component_sbom_email_task", "sent", data={"user_id": user_id})
-        else:
-            logger.warning("[TASK_send_first_component_sbom] Failed to send reminder to user %s", user_id)
-    except Exception as e:
-        logger.error("[TASK_send_first_component_sbom] Error for user %s: %s", user_id, e)
-        record_task_breadcrumb("send_first_component_sbom_email_task", "error", level="error", data={"error": str(e)})
-        raise
-
-
-@dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=300000)
-def process_first_component_sbom_reminders_batch_task() -> None:
-    """
-    Process first component & SBOM reminders for all eligible users.
-
-    This task finds all users who should receive either component creation
-    or SBOM upload reminders and queues individual email tasks for them.
-    """
-    try:
-        logger.info("[TASK_process_first_component_sbom_reminders] Starting batch processing")
-
-        eligible_users = OnboardingEmailService.get_users_for_first_component_sbom_reminder()
-        user_count = eligible_users.count()
-
-        logger.info("[TASK_process_first_component_sbom_reminders] Found %d eligible users", user_count)
-
-        queued_tasks = 0
-        for user in eligible_users:
-            try:
-                # Queue individual email task
-                send_first_component_sbom_email_task.send(user.id)
-                queued_tasks += 1
-                logger.debug("[TASK_process_first_component_sbom_reminders] Queued task for user %s", user.id)
-            except Exception as e:
-                logger.error(
-                    "[TASK_process_first_component_sbom_reminders] Failed to queue task for user %s: %s",
-                    user.id,
-                    e,
-                )
-
-        logger.info(
-            "[TASK_process_first_component_sbom_reminders] Completed: %d/%d tasks queued",
-            queued_tasks,
-            user_count,
-        )
-
-    except Exception as e:
-        logger.error("[TASK_process_first_component_sbom_reminders] Batch processing error: %s", e)
-        raise
-
-
-@dramatiq.actor(queue_name="onboarding_emails", max_retries=3, time_limit=60000)
 def send_quick_start_email_task(user_id: int) -> None:
     """Send quick start guide email to a user (day 1)."""
     try:
@@ -272,22 +195,19 @@ def process_onboarding_sequence_batch_task() -> None:
 @dramatiq.actor(queue_name="onboarding_emails", max_retries=1, time_limit=600000)
 def process_all_onboarding_reminders_task() -> None:
     """
-    Process all onboarding reminder emails.
+    Process all onboarding reminder emails (the 4-stage drip sequence).
 
-    This is a master task that processes both the legacy first component/SBOM reminders
-    and the new onboarding sequence emails.
-    It's designed to be run on a schedule (e.g., daily via cron or periodic task).
+    Designed to be run on a schedule (e.g., daily via cron or periodic task).
+    Fans out to ``process_onboarding_sequence_batch_task``, which queues
+    quick-start / first-component / first-sbom / collaboration emails for
+    users at the right point in their drip clock. The welcome email is NOT
+    part of this fan-out — it is signal-driven via ``queue_welcome_email``
+    on user creation, not on a daily cron.
     """
     try:
-        logger.info("[TASK_process_all_onboarding_reminders] Starting comprehensive onboarding email processing")
-
-        # Process legacy first component/SBOM reminders
-        process_first_component_sbom_reminders_batch_task.send_with_options(args=(), delay=0)
-
-        # Process new onboarding sequence emails
+        logger.info("[TASK_process_all_onboarding_reminders] Starting onboarding email processing")
         process_onboarding_sequence_batch_task.send_with_options(args=(), delay=0)
-
-        logger.info("[TASK_process_all_onboarding_reminders] Successfully queued all reminder processing tasks")
+        logger.info("[TASK_process_all_onboarding_reminders] Successfully queued sequence processing")
 
     except Exception as e:
         logger.error("[TASK_process_all_onboarding_reminders] Error: %s", e)
@@ -310,19 +230,4 @@ def queue_welcome_email(user: Any) -> str:
     logger.info("Queueing welcome email for user %s", user.id)
     # Delay 10s to ensure team/trial setup completes before email context is built
     result = send_welcome_email_task.send_with_options(args=(user.id,), delay=10000)
-    return result.message_id
-
-
-def queue_first_component_sbom_reminder(user: Any) -> str:
-    """
-    Queue a first component/SBOM reminder email task for a user.
-
-    Args:
-        user: User instance
-
-    Returns:
-        Task message ID
-    """
-    logger.info("Queueing first component/SBOM reminder for user %s", user.id)
-    result = send_first_component_sbom_email_task.send(user.id)
     return result.message_id

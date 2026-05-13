@@ -141,26 +141,29 @@ class PluginsConfig(AppConfig):
             },
         )
 
-        # GitHub Attestation Plugin
+        # SBOM Verification Plugin — unified attestation check covering both
+        # sbomify-stored signatures/provenance AND GitHub-published Sigstore
+        # attestations (formerly the separate ``github-attestation`` plugin).
         _register(
-            "github-attestation",
+            "sbom-verification",
             {
-                "display_name": "GitHub Attestation",
+                "display_name": "SBOM Verification",
                 "description": (
-                    "Verifies SBOM attestations using GitHub's Sigstore integration. "
-                    "Extracts VCS information from the SBOM's externalReferences and runs "
-                    "cosign verify-attestation to verify that the associated artifact has "
-                    "a valid GitHub attestation with SLSA provenance."
+                    "Unified SBOM attestation verification. Recomputes SHA-256 digest, "
+                    "validates Cosign/Sigstore bundle signatures, confirms provenance "
+                    "subject digests match the SBOM hash, and when the SBOM declares a "
+                    "GitHub VCS link, fetches the GitHub-published attestation bundle and "
+                    "verifies it via cosign. Passes when at least one cryptographic source "
+                    "verifies the SBOM."
                 ),
                 "category": "attestation",
-                "version": "1.0.0",
-                "plugin_class_path": ("sbomify.apps.plugins.builtins.github_attestation.GitHubAttestationPlugin"),
+                "version": "2.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.verification.SBOMVerificationPlugin",
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,
                 "default_config": {
                     "certificate_oidc_issuer": "https://token.actions.githubusercontent.com",
-                    "attestation_type": "https://slsa.dev/provenance/v1",
                     "timeout": 60,
                 },
             },

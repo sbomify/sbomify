@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -80,14 +80,14 @@ def send_billing_email(
 
         # Send email
         try:
-            sent = send_mail(
-                subject,
-                plain_message,
-                None,  # Use default from_email
-                [member.user.email],
-                html_message=html_message,
-                fail_silently=False,
+            email = EmailMultiAlternatives(
+                subject=subject,
+                body=plain_message,
+                to=[member.user.email],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(html_message, "text/html")
+            sent = email.send(fail_silently=False)
             if sent:
                 logger.info("Sent %s email to %s", template_name, mask_email(member.user.email))
             else:

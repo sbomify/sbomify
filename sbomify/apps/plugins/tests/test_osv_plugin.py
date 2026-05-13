@@ -392,7 +392,7 @@ class TestOSVPluginAssess:
             # Verify the command used a .spdx.json file
             call_args = mock_run.call_args
             cmd = call_args[0][0]
-            sbom_arg = cmd[cmd.index("--sbom") + 1]
+            sbom_arg = cmd[cmd.index("--lockfile") + 1]
             assert sbom_arg.endswith(".spdx.json")
 
     def test_metadata_includes_format(self) -> None:

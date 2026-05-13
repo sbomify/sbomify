@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
@@ -13,6 +15,8 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductPatchSchema
 from sbomify.apps.tea.mappers import get_product_tei_urn
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+
+logger = logging.getLogger(__name__)
 
 
 class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -43,6 +47,33 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         # Build TEI URN if TEA is enabled with a validated custom domain
         product_tei = get_product_tei_urn(product["id"], product["team_id"])
+
+        # CRA assessment card — use session billing plan to avoid extra Team query
+        cra_assessment = None
+        has_cra_access = False
+        try:
+            from sbomify.apps.compliance.models import CRAAssessment
+            from sbomify.apps.compliance.permissions import check_cra_access
+
+            team_role = current_team.get("role")
+            has_cra_access = team_role in ("owner", "admin") and check_cra_access(billing_plan_key=team_billing_plan)
+
+            if has_cra_access:
+                cra = CRAAssessment.objects.filter(
+                    product_id=product["id"],
+                    team_id=product["team_id"],
+                ).first()
+                if cra:
+                    cra_assessment = {
+                        "id": cra.id,
+                        "status": cra.status,
+                        "completed_steps": cra.completed_steps,
+                        "current_step": cra.current_step,
+                    }
+        except ImportError:
+            logger.warning("Compliance app not available — CRA card disabled")
+        except DatabaseError:
+            logger.exception("Failed to load CRA assessment data for product %s", product_id)
 
         # Fetch product-level controls for all active catalogs
         product_controls_list: list[dict[str, Any]] = []
@@ -80,6 +111,8 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             "core/product_details_private.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
+                "cra_assessment": cra_assessment,
+                "has_cra_access": has_cra_access,
                 "current_team": current_team,
                 "dashboard_summary": dashboard_summary,
                 "is_owner": is_owner,

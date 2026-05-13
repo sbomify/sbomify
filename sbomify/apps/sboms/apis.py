@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -31,7 +32,7 @@ from sbomify.apps.core.utils import (
 from sbomify.apps.sboms.utils import verify_download_token
 from sbomify.apps.teams.models import ContactProfile
 
-from .models import SBOM, Component, Product, Project
+from .models import SBOM, Component, Product
 from .schemas import (
     ComponentMetaData,
     CycloneDXSupportedVersion,
@@ -58,7 +59,18 @@ log = logging.getLogger(__name__)
 SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
-_SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers"
+_SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers_bom_type"
+_VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}
+
+
+def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
+    """Validate bom_type against BomType enum. Returns error response tuple or None if valid."""
+    if bom_type not in _VALID_BOM_TYPES:
+        return 400, {
+            "detail": f"Invalid bom_type '{bom_type}'. Must be one of: {', '.join(sorted(_VALID_BOM_TYPES))}",
+            "error_code": ErrorCode.VALIDATION_ERROR,
+        }
+    return None
 
 
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
@@ -117,7 +129,7 @@ def _broadcast_sbom_uploaded(component: Component, sbom: SBOM) -> None:
     )
 
 
-item_type_map = {"component": Component, "project": Project, "product": Product}
+item_type_map = {"component": Component, "product": Product}
 
 
 def _build_component_metadata_from_native_fields(component: Component) -> ComponentMetaData:
@@ -305,13 +317,13 @@ def _extract_spdx3_primary_package(
 
 def _public_api_item_access_checks(
     request: HttpRequest, item_type: str, item_id: str
-) -> Component | Project | Product | tuple[int, dict[str, str]]:
+) -> Component | Product | tuple[int, dict[str, str]]:
     if item_type not in item_type_map:
         return 400, {"detail": "Invalid item type"}
 
     model_class = item_type_map[item_type]
 
-    rec: Component | Project | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
+    rec: Component | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
 
     if not verify_item_access(request, rec, ["owner", "admin"]):
         return 403, {"detail": "Forbidden"}
@@ -327,18 +339,28 @@ def _public_api_item_access_checks(
 def sbom_upload_cyclonedx(
     request: HttpRequest,
     component_id: str,
+    bom_type: str = "sbom",
 ) -> tuple[int, dict[str, Any]]:
     """
-    Upload CycloneDX format SBOM for a component.
+    Upload CycloneDX format BOM for a component.
 
     Supports multiple CycloneDX versions. The version is detected from the specVersion
-    field in the SBOM data, and the appropriate schema is used for validation.
+    field in the BOM data, and the appropriate schema is used for validation.
+
+    Args:
+        component_id: The component to attach the BOM to.
+        bom_type: BOM type classification (default: "sbom"). Accepted values are
+            defined by ``SBOM.BomType`` (e.g., "sbom", "vex", "cbom", "hbom").
+            Non-"sbom" types are only supported for CycloneDX uploads.
 
     To add support for a new CycloneDX version:
     1. Add the version to CycloneDXSupportedVersion enum in schemas.py
     2. Import the new schema module (e.g., cdx17)
     3. Add it to the module_map in get_cyclonedx_module()
     """
+    if bom_type_error := _validate_bom_type(bom_type):
+        return bom_type_error
+
     try:
         component = Component.objects.filter(id=component_id).first()
         if component is None:
@@ -370,11 +392,15 @@ def sbom_upload_cyclonedx(
         sbom_dict = obj_extract(
             obj_in=payload,
             fields=[
-                ExtractSpec("metadata.component.name", required=True, rename_to="name"),
+                ExtractSpec("metadata.component.name", required=False, default="", rename_to="name"),
                 ExtractSpec("metadata.component.version", required=False, rename_to="version"),
                 ExtractSpec("specVersion", required=True, rename_to="format_version"),
             ],
         )
+
+        # metadata.component is optional in CycloneDX; fall back to the sbomify Component name
+        if not sbom_dict.get("name"):
+            sbom_dict["name"] = component.name
 
         # Version if present is a Version class and needs to be converted to string.
         if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
@@ -387,12 +413,12 @@ def sbom_upload_cyclonedx(
         cdx_purl = _extract_cdx_purl(payload)
         sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
 
-        # Check for duplicate SBOM (same component + version + format + qualifiers)
+        # Check for duplicate (same component + version + format + qualifiers + bom_type)
         if SBOM.objects.filter(
-            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
         ).exists():
             return 409, {
-                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
@@ -406,6 +432,7 @@ def sbom_upload_cyclonedx(
         sbom_dict["source"] = "api"
         sbom_dict["sha256_hash"] = sha256_hash
         sbom_dict["qualifiers"] = sbom_qualifiers
+        sbom_dict["bom_type"] = bom_type
 
         try:
             with transaction.atomic():
@@ -415,19 +442,22 @@ def sbom_upload_cyclonedx(
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
             raise
 
-        # Broadcast to workspace for real-time UI updates
-        _broadcast_sbom_uploaded(component, sbom)
+        # Broadcast to workspace for real-time UI updates (non-critical)
+        try:
+            _broadcast_sbom_uploaded(component, sbom)
+        except Exception:
+            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
         return 201, {"id": sbom.id}
 
     except Exception as e:
-        log.error(f"Error processing CycloneDX SBOM upload: {str(e)}")
+        log.error(f"Error processing CycloneDX BOM upload: {str(e)}")
         return 400, {"detail": "Invalid request"}
 
 
@@ -436,19 +466,33 @@ def sbom_upload_cyclonedx(
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
 )
-def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict[str, Any]]:
+def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "sbom") -> tuple[int, dict[str, Any]]:
     """
     Upload SPDX format SBOM for a component.
 
     Supports multiple SPDX versions. The version is detected from the spdxVersion
     field in the SBOM data, and validated accordingly.
 
+    Args:
+        component_id: The component to attach the SBOM to.
+        bom_type: BOM type classification (default: "sbom"). Only "sbom" is accepted
+            for SPDX uploads; other values are rejected with a 400 error.
+
     To add support for a new SPDX version:
     1. Add the version to SPDXSupportedVersion enum in schemas.py
     2. If needed, add version-specific schema handling in validate_spdx_sbom()
     3. That's it! The API will automatically support the new version.
     """
+    if bom_type_error := _validate_bom_type(bom_type):
+        return bom_type_error
+
     try:
+        if bom_type != "sbom":
+            return 400, {
+                "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported.",
+                "error_code": ErrorCode.VALIDATION_ERROR,
+            }
+
         component = Component.objects.filter(id=component_id).first()
         if component is None:
             return 404, {"detail": "Component not found"}
@@ -476,12 +520,25 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
         # Compute SHA256 hash of the SBOM content
         sha256_hash = hashlib.sha256(request.body).hexdigest()
 
+        # SpdxDocument.name is required in SPDX 2.x (enforced by the version-
+        # specific Pydantic model above) but OPTIONAL in SPDX 3.0.1 per the
+        # Core.SpdxDocument model — `name` has min-cardinality 0. Extract
+        # with required=False so SPDX 3 documents without a SpdxDocument.name
+        # are accepted, and fall back to the sbomify Component name to keep
+        # the stored SBOM identifier non-empty. SPDX 2.x already failed
+        # earlier if name was missing, so this fallback only fires for 3.x.
         sbom_dict = obj_extract(
             obj_in=payload,
             fields=[
-                ExtractSpec("name", required=True),
+                ExtractSpec("name", required=False, default=""),
             ],
         )
+        # Treat non-string and whitespace-only names as missing so the
+        # stored SBOM identifier cannot be persisted as an effectively
+        # empty string. Whitespace-only passes the plain `not ...` check.
+        sbom_name = sbom_dict.get("name")
+        if not isinstance(sbom_name, str) or not sbom_name.strip():
+            sbom_dict["name"] = component.name
 
         sbom_format = "spdx"
         sbom_dict["format"] = sbom_format
@@ -499,12 +556,12 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
         # Extract PURL qualifiers from primary package
         sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
 
-        # Check for duplicate SBOM (same component + version + format + qualifiers)
+        # Check for duplicate (same component + version + format + qualifiers + bom_type)
         if SBOM.objects.filter(
-            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+            component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers, bom_type=bom_type
         ).exists():
             return 409, {
-                "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                 "already exists for this component",
                 "error_code": ErrorCode.DUPLICATE_ARTIFACT,
             }
@@ -515,6 +572,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
         sbom_dict["version"] = sbom_version
         sbom_dict["sbom_filename"] = filename
         sbom_dict["qualifiers"] = sbom_qualifiers
+        sbom_dict["bom_type"] = bom_type
 
         try:
             with transaction.atomic():
@@ -524,14 +582,17 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str) -> tuple[int, dict
             _cleanup_orphaned_s3_object(filename)
             if _is_duplicate_integrity_error(e):
                 return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
             raise
 
-        # Broadcast to workspace for real-time UI updates
-        _broadcast_sbom_uploaded(component, sbom)
+        # Broadcast to workspace for real-time UI updates (non-critical)
+        try:
+            _broadcast_sbom_uploaded(component, sbom)
+        except Exception:
+            log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
         return 201, {"id": sbom.id}
 
@@ -672,7 +733,7 @@ def download_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, An
     no authentication is required. For private SBOMs, user authentication
     and appropriate permissions are required.
 
-    For private SBOMs in product/project SBOMs, signed URLs are used instead
+    For private SBOMs included in aggregated product SBOMs, signed URLs are used instead
     to provide secure, time-limited access without requiring authentication.
     See the `/download/signed` endpoint for signed URL downloads.
     """
@@ -736,7 +797,7 @@ def download_sbom_signed(
 
     This endpoint allows secure, time-limited access to private SBOMs without
     requiring user authentication. It's primarily used when private SBOMs are
-    included in product/project SBOMs as external references.
+    included in aggregated product SBOMs as external references.
 
     **Security Features:**
     - Tokens expire after 7 days
@@ -749,7 +810,7 @@ def download_sbom_signed(
     - `token`: A signed token generated by the system for authorized access
 
     **Token Generation:**
-    Tokens are automatically generated when creating product/project SBOMs that
+    Tokens are automatically generated when creating aggregated product SBOMs that
     contain private SBOM components. They are embedded in the SBOM as external reference URLs.
 
     **Error Responses:**
@@ -821,8 +882,17 @@ def sbom_upload_file(
     request: HttpRequest,
     component_id: str,
     sbom_file: UploadedFile = File(...),  # type: ignore[type-arg]
+    bom_type: str = Query("sbom"),  # type: ignore[type-arg]
 ) -> tuple[int, dict[str, Any]]:
-    """Upload SBOM file (CycloneDX or SPDX format) for a component."""
+    """Upload BOM file (CycloneDX or SPDX format) for a component.
+
+    Args:
+        bom_type: Query parameter (default: "sbom"). Non-SBOM types (e.g., "vex", "cbom")
+            are only supported for CycloneDX uploads; SPDX uploads reject non-"sbom" values.
+    """
+    if bom_type_error := _validate_bom_type(bom_type):
+        return bom_type_error
+
     try:
         import json
 
@@ -862,6 +932,11 @@ def sbom_upload_file(
 
         if "spdxVersion" in sbom_data or is_spdx3(sbom_data):
             # SPDX format (2.x uses spdxVersion, 3.0 spec-compliant uses @context)
+            if bom_type != "sbom":
+                return 400, {
+                    "detail": f"bom_type '{bom_type}' is not supported for SPDX uploads. Only 'sbom' is supported.",
+                    "error_code": ErrorCode.VALIDATION_ERROR,
+                }
             try:
                 payload, spdx_version = validate_spdx_sbom(sbom_data)
             except ValueError as e:
@@ -872,12 +947,23 @@ def sbom_upload_file(
                 spdx_version_str = sbom_data.get("spdxVersion", "unknown")
                 return 400, {"detail": f"Invalid SPDX format for {spdx_version_str}: {str(e)}"}
 
+            # SpdxDocument.name is required in SPDX 2.x but OPTIONAL in
+            # SPDX 3.0.1 per Core.SpdxDocument (min-cardinality 0). Accept
+            # missing name on the SPDX 3 path and fall back to the sbomify
+            # Component name so the stored SBOM identifier stays non-empty.
+            # SPDX 2.x rejects missing name earlier via the Pydantic model.
             sbom_dict = obj_extract(
                 obj_in=payload,
                 fields=[
-                    ExtractSpec("name", required=True),
+                    ExtractSpec("name", required=False, default=""),
                 ],
             )
+            # Treat non-string and whitespace-only names as missing so the
+            # stored SBOM identifier cannot be persisted as an effectively
+            # empty string.
+            sbom_name = sbom_dict.get("name")
+            if not isinstance(sbom_name, str) or not sbom_name.strip():
+                sbom_dict["name"] = component.name
 
             sbom_format = "spdx"
             sbom_dict["format"] = sbom_format
@@ -895,12 +981,16 @@ def sbom_upload_file(
             # Extract PURL qualifiers from primary package
             sbom_qualifiers = extract_purl_qualifiers(primary_package.purl)
 
-            # Check for duplicate SBOM (same component + version + format + qualifiers)
+            # Check for duplicate (same component + version + format + qualifiers + bom_type)
             if SBOM.objects.filter(
-                component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+                component=component,
+                version=sbom_version,
+                format=sbom_format,
+                qualifiers=sbom_qualifiers,
+                bom_type=bom_type,
             ).exists():
                 return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
@@ -911,6 +1001,7 @@ def sbom_upload_file(
             sbom_dict["version"] = sbom_version
             sbom_dict["sbom_filename"] = filename
             sbom_dict["qualifiers"] = sbom_qualifiers
+            sbom_dict["bom_type"] = bom_type
 
             try:
                 with transaction.atomic():
@@ -920,8 +1011,10 @@ def sbom_upload_file(
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
-                        "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                        "already exists for this component",
+                        "detail": (
+                            f"{bom_type.upper()} artifact with version '{sbom_version}'"
+                            f" and format '{sbom_format}' already exists for this component"
+                        ),
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 raise
@@ -946,11 +1039,15 @@ def sbom_upload_file(
             sbom_dict = obj_extract(
                 obj_in=cdx_payload,
                 fields=[
-                    ExtractSpec("metadata.component.name", required=True, rename_to="name"),
+                    ExtractSpec("metadata.component.name", required=False, default="", rename_to="name"),
                     ExtractSpec("metadata.component.version", required=False, rename_to="version"),
                     ExtractSpec("specVersion", required=True, rename_to="format_version"),
                 ],
             )
+
+            # metadata.component is optional in CycloneDX; fall back to the sbomify Component name
+            if not sbom_dict.get("name"):
+                sbom_dict["name"] = component.name
 
             # Version if present is a Version class and needs to be converted to string.
             if "version" in sbom_dict and not isinstance(sbom_dict["version"], str):
@@ -963,12 +1060,16 @@ def sbom_upload_file(
             cdx_purl = _extract_cdx_purl(cdx_payload)
             sbom_qualifiers = extract_purl_qualifiers(cdx_purl) if cdx_purl else {}
 
-            # Check for duplicate SBOM (same component + version + format + qualifiers)
+            # Check for duplicate (same component + version + format + qualifiers + bom_type)
             if SBOM.objects.filter(
-                component=component, version=sbom_version, format=sbom_format, qualifiers=sbom_qualifiers
+                component=component,
+                version=sbom_version,
+                format=sbom_format,
+                qualifiers=sbom_qualifiers,
+                bom_type=bom_type,
             ).exists():
                 return 409, {
-                    "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
+                    "detail": f"{bom_type.upper()} artifact with version '{sbom_version}' and format '{sbom_format}' "
                     "already exists for this component",
                     "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                 }
@@ -982,6 +1083,7 @@ def sbom_upload_file(
             sbom_dict["source"] = "manual_upload"
             sbom_dict["sha256_hash"] = sha256_hash
             sbom_dict["qualifiers"] = sbom_qualifiers
+            sbom_dict["bom_type"] = bom_type
 
             try:
                 with transaction.atomic():
@@ -991,8 +1093,10 @@ def sbom_upload_file(
                 _cleanup_orphaned_s3_object(filename)
                 if _is_duplicate_integrity_error(e):
                     return 409, {
-                        "detail": f"An SBOM with version '{sbom_version}' and format '{sbom_format}' "
-                        "already exists for this component",
+                        "detail": (
+                            f"{bom_type.upper()} artifact with version '{sbom_version}'"
+                            f" and format '{sbom_format}' already exists for this component"
+                        ),
                         "error_code": ErrorCode.DUPLICATE_ARTIFACT,
                     }
                 raise
@@ -1052,3 +1156,270 @@ def delete_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]
         return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
     return 204, None
+
+
+# ============================================================================
+# Signature & Provenance endpoints
+# ============================================================================
+
+_VALID_SIGNATURE_TYPES = {"cosign-bundle", "pgp-detached", "pkcs7"}
+_MAX_SIGNATURE_SIZE = 5 * 1024 * 1024  # 5 MB
+_MAX_PROVENANCE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = False) -> SBOM | tuple[int, dict[str, Any]]:
+    """Look up an SBOM and verify access. Returns SBOM or (status, error_dict).
+
+    For write=True (uploads), requires owner/admin via verify_item_access.
+    For write=False (downloads), uses check_component_access to support public SBOMs.
+    """
+    sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+    if write:
+        if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+            return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+    else:
+        access = check_component_access(request, sbom.component)
+        if not access.has_access:
+            return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+    return sbom
+
+
+def _trigger_verification(sbom_id: str) -> None:
+    """Best-effort trigger of the sbom-verification plugin."""
+    try:
+        from sbomify.apps.plugins.sdk import RunReason
+        from sbomify.apps.plugins.tasks import enqueue_assessment
+
+        enqueue_assessment(sbom_id=sbom_id, plugin_name="sbom-verification", run_reason=RunReason.ON_UPLOAD)
+    except Exception:
+        log.warning("Failed to enqueue sbom-verification for SBOM %s", sbom_id, exc_info=True)
+
+
+def _download_blob(
+    sbom: SBOM, blob_key: str, content_type: str, filename: str
+) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Download a blob from S3 and return as HttpResponse."""
+    try:
+        s3 = S3Client("SBOMS")
+        data = s3.get_sbom_data(blob_key)
+        if data is None:
+            return 404, {"detail": "File not found in storage", "error_code": ErrorCode.NOT_FOUND}
+        response = HttpResponse(data, content_type=content_type)
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+    except Exception as e:
+        log.error("Error retrieving blob %s for SBOM %s: %s", blob_key, sbom.id, e)
+        return 500, {"detail": "Error retrieving file", "error_code": ErrorCode.INTERNAL_ERROR}
+
+
+@router.post(
+    "/sbom/{sbom_id}/signature",
+    response={
+        201: dict,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def upload_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Upload a detached cryptographic signature for an SBOM.
+
+    The signature bytes are sent as the raw request body.
+    A required ``X-Signature-Type`` header indicates the format
+    (``cosign-bundle``, ``pgp-detached``, or ``pkcs7``).
+    """
+    result = _get_sbom_or_error(request, sbom_id, write=True)
+    if not isinstance(result, SBOM):
+        return result
+    sbom = result
+
+    sig_type = request.headers.get("X-Signature-Type", "").strip()
+    if not sig_type:
+        return 400, {"detail": "Missing X-Signature-Type header", "error_code": ErrorCode.BAD_REQUEST}
+    if sig_type not in _VALID_SIGNATURE_TYPES:
+        valid = ", ".join(sorted(_VALID_SIGNATURE_TYPES))
+        return 400, {
+            "detail": f"Invalid signature type '{sig_type}'. Must be one of: {valid}",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    if not sbom.sha256_hash:
+        return 400, {"detail": "SBOM has no sha256 hash; upload the SBOM first", "error_code": ErrorCode.BAD_REQUEST}
+
+    data = request.body
+    if not data:
+        return 400, {"detail": "Empty request body", "error_code": ErrorCode.BAD_REQUEST}
+    if len(data) > _MAX_SIGNATURE_SIZE:
+        return 400, {
+            "detail": f"Signature too large ({len(data)} bytes, max {_MAX_SIGNATURE_SIZE})",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    try:
+        # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
+        s3 = S3Client("SBOMS")
+        blob_key = s3.upload_sbom_signature(str(sbom.id), sbom.sha256_hash, data)
+        # Then lock row and atomically claim the slot
+        with transaction.atomic():
+            locked = SBOM.objects.select_for_update().get(pk=sbom.pk)
+            if locked.signature_blob_key:
+                return 409, {"detail": "Signature already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
+            locked.signature_blob_key = blob_key
+            locked.signature_type = sig_type
+            locked.save(update_fields=["signature_blob_key", "signature_type"])
+    except Exception:
+        log.exception("Failed to upload signature for SBOM %s", sbom.id)
+        return 500, {"detail": "Failed to upload signature", "error_code": ErrorCode.INTERNAL_ERROR}
+
+    _trigger_verification(str(sbom.id))
+    return 201, {"detail": "Signature uploaded", "blob_key": blob_key}
+
+
+@router.get(
+    "/sbom/{sbom_id}/signature",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_auth)
+def download_signature(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Download the detached cryptographic signature for an SBOM."""
+    result = _get_sbom_or_error(request, sbom_id, write=False)
+    if not isinstance(result, SBOM):
+        return result
+    sbom = result
+
+    if not sbom.signature_blob_key:
+        return 404, {"detail": "No signature attached to this SBOM", "error_code": ErrorCode.NOT_FOUND}
+
+    filename = f"{sbom.sha256_hash or sbom.id}.sig"
+    resp = _download_blob(sbom, sbom.signature_blob_key, "application/octet-stream", filename)
+    if isinstance(resp, HttpResponse) and sbom.signature_type:
+        resp["X-Signature-Type"] = sbom.signature_type
+    return resp
+
+
+@router.post(
+    "/sbom/{sbom_id}/provenance",
+    response={
+        201: dict,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+        500: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+)
+def upload_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Upload an in-toto provenance attestation (DSSE envelope or direct Statement) for an SBOM.
+
+    The body must be valid JSON. For DSSE envelopes the base64-decoded payload
+    is inspected; for direct Statements the body itself is inspected.
+    In both cases, the ``subject`` array must contain a digest matching the
+    SBOM's ``sha256_hash``.
+    """
+    result = _get_sbom_or_error(request, sbom_id, write=True)
+    if not isinstance(result, SBOM):
+        return result
+    sbom = result
+
+    if not sbom.sha256_hash:
+        return 400, {"detail": "SBOM has no sha256 hash; upload the SBOM first", "error_code": ErrorCode.BAD_REQUEST}
+
+    raw_body = request.body
+    if len(raw_body) > _MAX_PROVENANCE_SIZE:
+        return 400, {
+            "detail": f"Provenance too large ({len(raw_body)} bytes, max {_MAX_PROVENANCE_SIZE})",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    try:
+        body = json.loads(raw_body)
+    except (json.JSONDecodeError, ValueError):
+        return 400, {"detail": "Invalid JSON", "error_code": ErrorCode.BAD_REQUEST}
+
+    if not isinstance(body, dict):
+        return 400, {"detail": "Provenance must be a JSON object", "error_code": ErrorCode.BAD_REQUEST}
+
+    # Determine whether this is a DSSE envelope or a direct in-toto Statement
+    statement: dict[str, Any] | None = None
+    if "payloadType" in body and "payload" in body:
+        try:
+            payload_bytes = base64.b64decode(body["payload"], validate=True)
+            statement = json.loads(payload_bytes)
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError):
+            return 400, {"detail": "Failed to decode DSSE envelope payload", "error_code": ErrorCode.BAD_REQUEST}
+        if not isinstance(statement, dict):
+            return 400, {"detail": "DSSE payload is not a JSON object", "error_code": ErrorCode.BAD_REQUEST}
+    elif "_type" in body and "subject" in body:
+        statement = body
+    else:
+        return 400, {
+            "detail": (
+                "Provenance must be a DSSE envelope (with payloadType/payload) or a direct Statement (with subject)"
+            ),
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    # Validate subject digest matches SBOM hash
+    subjects = statement.get("subject", [])
+    if not isinstance(subjects, list) or not subjects:
+        return 400, {"detail": "Provenance statement has no subjects", "error_code": ErrorCode.BAD_REQUEST}
+
+    sbom_hash = sbom.sha256_hash
+
+    def _subject_matches(subj: Any) -> bool:
+        if not isinstance(subj, dict):
+            return False
+        digest = subj.get("digest")
+        return isinstance(digest, dict) and digest.get("sha256") == sbom_hash
+
+    if not any(_subject_matches(subj) for subj in subjects):
+        return 400, {
+            "detail": f"No subject sha256 digest matches the SBOM hash ({sbom_hash})",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    try:
+        # Upload to S3 first (outside lock to avoid holding DB lock during I/O)
+        s3 = S3Client("SBOMS")
+        blob_key = s3.upload_sbom_provenance(str(sbom.id), sbom.sha256_hash, raw_body)
+        # Then lock row and atomically claim the slot
+        with transaction.atomic():
+            locked = SBOM.objects.select_for_update().get(pk=sbom.pk)
+            if locked.provenance_blob_key:
+                return 409, {"detail": "Provenance already exists for this SBOM", "error_code": ErrorCode.CONFLICT}
+            locked.provenance_blob_key = blob_key
+            locked.save(update_fields=["provenance_blob_key"])
+    except Exception:
+        log.exception("Failed to upload provenance for SBOM %s", sbom.id)
+        return 500, {"detail": "Failed to upload provenance", "error_code": ErrorCode.INTERNAL_ERROR}
+
+    _trigger_verification(str(sbom.id))
+    return 201, {"detail": "Provenance uploaded", "blob_key": blob_key}
+
+
+@router.get(
+    "/sbom/{sbom_id}/provenance",
+    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,
+)
+@decorate_view(optional_auth)
+def download_provenance(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]] | HttpResponse:
+    """Download the in-toto provenance attestation for an SBOM."""
+    result = _get_sbom_or_error(request, sbom_id, write=False)
+    if not isinstance(result, SBOM):
+        return result
+    sbom = result
+
+    if not sbom.provenance_blob_key:
+        return 404, {"detail": "No provenance attached to this SBOM", "error_code": ErrorCode.NOT_FOUND}
+
+    return _download_blob(
+        sbom, sbom.provenance_blob_key, "application/json", f"{sbom.sha256_hash or sbom.id}.provenance.json"
+    )

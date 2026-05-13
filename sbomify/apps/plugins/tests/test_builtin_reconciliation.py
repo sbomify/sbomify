@@ -70,7 +70,7 @@ class TestBuiltinReconciliation:
             "ntia-minimum-elements-2021",
             "fda-medical-device-2025",
             "bsi-tr03183-v2.1-compliance",
-            "github-attestation",
+            "sbom-verification",
             "osv",
             "dependency-track",
         }

@@ -197,7 +197,7 @@ describe('CI/CD Info Business Logic', () => {
             const lines = [
                 'upload-sbom:',
                 '  stage: deploy',
-                '  image: sbomifyhub/sbomify-action'
+                '  image: ghcr.io/sbomify/sbomify-action'
             ]
 
             if (sourceType === 'docker') {
@@ -243,7 +243,7 @@ describe('CI/CD Info Business Logic', () => {
                 outputFile: true
             })
 
-            expect(yaml).toContain('image: sbomifyhub/sbomify-action')
+            expect(yaml).toContain('image: ghcr.io/sbomify/sbomify-action')
             expect(yaml).toContain(`COMPONENT_ID: '${testComponentId}'`)
             expect(yaml).toContain("LOCK_FILE: 'poetry.lock'")
             expect(yaml).toContain('sbomify-action')
@@ -274,7 +274,7 @@ describe('CI/CD Info Business Logic', () => {
                 '  default:',
                 '    - step:',
                 '        name: Upload SBOM',
-                '        image: sbomifyhub/sbomify-action',
+                '        image: ghcr.io/sbomify/sbomify-action',
                 '        services:',
                 '          - docker'
             ]
@@ -385,7 +385,7 @@ describe('CI/CD Info Business Logic', () => {
 
             const lastLine = dockerLines[dockerLines.length - 1]
             dockerLines[dockerLines.length - 1] = lastLine.replace(/ \\$/, '')
-            dockerLines.push('        sbomifyhub/sbomify-action')
+            dockerLines.push('        ghcr.io/sbomify/sbomify-action')
 
             lines.push(...dockerLines)
 
@@ -414,7 +414,7 @@ describe('CI/CD Info Business Logic', () => {
             expect(yaml).toContain('AUGMENT=true')
             expect(yaml).toContain('ENRICH=true')
             expect(yaml).toContain('OUTPUT_FILE=/code/sbom.cdx.json')
-            expect(yaml).toContain('sbomifyhub/sbomify-action')
+            expect(yaml).toContain('ghcr.io/sbomify/sbomify-action')
             expect(yaml).toContain('displayName: Upload SBOM')
         })
 
@@ -501,7 +501,7 @@ describe('CI/CD Info Business Logic', () => {
 
             const lastLine = lines[lines.length - 1]
             lines[lines.length - 1] = lastLine.replace(/ \\\\$/, '')
-            lines.push('                          sbomifyhub/sbomify-action')
+            lines.push('                          ghcr.io/sbomify/sbomify-action')
 
             lines.push(
                 '                    """',
@@ -533,7 +533,7 @@ describe('CI/CD Info Business Logic', () => {
             expect(jenkinsfile).toContain('AUGMENT=true')
             expect(jenkinsfile).toContain('ENRICH=true')
             expect(jenkinsfile).toContain('OUTPUT_FILE=/code/sbom.cdx.json')
-            expect(jenkinsfile).toContain('sbomifyhub/sbomify-action')
+            expect(jenkinsfile).toContain('ghcr.io/sbomify/sbomify-action')
         })
 
         test('should generate Jenkinsfile with SBOM file source', () => {
@@ -603,7 +603,7 @@ describe('CI/CD Info Business Logic', () => {
             if (config.enrich) cmd.push('  -e ENRICH=true \\\\')
             if (config.outputFile) cmd.push('  -e OUTPUT_FILE=sbom.cdx.json \\\\')
 
-            cmd.push('  sbomifyhub/sbomify-action')
+            cmd.push('  ghcr.io/sbomify/sbomify-action')
 
             return cmd.join('\n')
         }
@@ -618,7 +618,7 @@ describe('CI/CD Info Business Logic', () => {
             expect(cmd).toContain('docker run -it --rm')
             expect(cmd).toContain(`COMPONENT_ID=${testComponentId}`)
             expect(cmd).toContain('poetry.lock:/app/poetry.lock')
-            expect(cmd).toContain('sbomifyhub/sbomify-action')
+            expect(cmd).toContain('ghcr.io/sbomify/sbomify-action')
         })
 
         test('should mount docker socket for docker source', () => {

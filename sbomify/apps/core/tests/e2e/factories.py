@@ -3,11 +3,11 @@ from typing import Optional
 
 import pytest
 
-from sbomify.apps.core.models import Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.utils import generate_id
 from sbomify.apps.documents.models import Document
 from sbomify.apps.plugins.models import AssessmentRun
-from sbomify.apps.sboms.models import SBOM, ComponentAuthor, ComponentLicense
+from sbomify.apps.sboms.models import SBOM, ComponentAuthor, ComponentLicense, ProductComponent
 
 
 @pytest.fixture
@@ -21,27 +21,11 @@ def product_factory(team_with_business_plan):
 
 
 @pytest.fixture
-def project_factory(team_with_business_plan):
-    def _create(
-        name: str = "Project", is_public: bool = True, product: Product | None = None, _id: str | None = None
-    ) -> Project:
-        proj = Project.objects.create(
-            id=_id or generate_id(), name=name, team=team_with_business_plan, is_public=is_public
-        )
-        if product:
-            # Link
-            ProductProject.objects.create(product=product, project=proj)
-        return proj
-
-    return _create
-
-
-@pytest.fixture
 def component_factory(team_with_business_plan):
     def _create(
         name: str = "Component",
-        component_type: str = Component.ComponentType.SBOM,
-        project: Project | None = None,
+        component_type: str = Component.ComponentType.BOM,
+        product: Product | None = None,
         visibility: str | Component.Visibility = Component.Visibility.PRIVATE,
         is_global: bool = False,
         supplier_name: str | None = "Test Supplier",
@@ -57,7 +41,6 @@ def component_factory(team_with_business_plan):
         if not metadata:
             metadata = {}
 
-        # Convert string to enum if needed
         if isinstance(visibility, str):
             visibility = Component.Visibility(visibility)
 
@@ -74,9 +57,8 @@ def component_factory(team_with_business_plan):
             lifecycle_phase=lifecycle_phase,
             metadata=metadata,
         )
-        if project:
-            # Link
-            ProjectComponent.objects.create(project=project, component=comp)
+        if product:
+            ProductComponent.objects.create(product=product, component=comp)
         return comp
 
     return _create

@@ -39,9 +39,6 @@ class BillingPlan(models.Model):
     max_products = models.IntegerField(
         null=True, blank=True, help_text="Maximum number of products allowed. Leave blank for unlimited."
     )
-    max_projects = models.IntegerField(
-        null=True, blank=True, help_text="Maximum number of projects allowed. Leave blank for unlimited."
-    )
     max_components = models.IntegerField(
         null=True, blank=True, help_text="Maximum number of components allowed. Leave blank for unlimited."
     )
@@ -276,7 +273,6 @@ class BillingPlan(models.Model):
         teams_to_update = []
         new_limit_values: dict[str, int | None] = {
             "max_products": self.max_products,
-            "max_projects": self.max_projects,
             "max_components": self.max_components,
             "max_users": self.max_users,
         }
@@ -334,3 +330,11 @@ class BillingPlan(models.Model):
     def has_fda_compliance(self) -> bool:
         """Check if this plan includes FDA Medical Device Cybersecurity compliance checking."""
         return self.key in ["business", "enterprise"]
+
+    # Plan keys eligible for CRA Compliance — single source of truth
+    CRA_ELIGIBLE_PLAN_KEYS: frozenset[str] = frozenset({"business", "enterprise"})
+
+    @property
+    def has_cra_compliance(self) -> bool:
+        """Check if this plan includes CRA Compliance Wizard."""
+        return self.key in self.CRA_ELIGIBLE_PLAN_KEYS

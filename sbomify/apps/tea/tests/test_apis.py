@@ -3,6 +3,7 @@ Integration tests for TEA API endpoints.
 """
 
 import uuid as uuid_module
+from datetime import datetime, timezone
 
 import pytest
 from django.test import Client
@@ -845,13 +846,11 @@ class TestTEAPrivateComponentVisibility:
 
     def test_private_component_not_in_product_release(self, tea_enabled_product, tea_enabled_component):
         """C4: Private components are excluded from product release component refs."""
-        from sbomify.apps.core.models import Component, Project, Release, ReleaseArtifact
+        from sbomify.apps.core.models import Component, Release, ReleaseArtifact
         from sbomify.apps.sboms.models import SBOM
 
-        # Create project linking component to product
-        project = Project.objects.create(team=tea_enabled_product.team, name="Test Project")
-        project.products.add(tea_enabled_product)
-        project.components.add(tea_enabled_component)
+        # Attach component directly to product
+        tea_enabled_product.components.add(tea_enabled_component)
 
         release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
 
@@ -1100,10 +1099,14 @@ class TestTEACollectionSignalSuppression:
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)
 
-        # Add an initial SBOM artifact directly (bypassing signals to set up test state)
+        # Add an initial SBOM artifact directly (bypassing signals to set up test state).
+        # The unique constraint on
+        # (component, version, format, qualifiers, bom_type) requires distinct
+        # ``version`` values for the two SBOMs created here.
         sbom1 = SBOM.objects.create(
             component=tea_enabled_component,
             name="SBOM v1",
+            version="1.0.0",
             format="cyclonedx",
             format_version="1.4",
             source="test",
@@ -1115,11 +1118,12 @@ class TestTEACollectionSignalSuppression:
         release.refresh_from_db()
         version_before = release.collection_version
 
-        # Create a replacement SBOM (same format, same component).
+        # Create a replacement SBOM (same format, same component, different version).
         # Signal auto-calls add_artifact_to_latest_release.
         SBOM.objects.create(
             component=tea_enabled_component,
             name="SBOM v2",
+            version="2.0.0",
             format="cyclonedx",
             format_version="1.5",
             source="test",
@@ -1135,31 +1139,23 @@ class TestTEACollectionSignalSuppression:
 
     def test_refresh_latest_artifacts_single_bump(self, tea_enabled_product, tea_enabled_component):
         """Refreshing latest artifacts should bump version once, not per-artifact."""
-        from sbomify.apps.core.models import Project
         from sbomify.apps.sboms.models import SBOM
 
-        # Ensure component is linked to product via a project
-        project = Project.objects.filter(
-            components=tea_enabled_component,
-            products=tea_enabled_product,
-        ).first()
-
-        if not project:
-            project = Project.objects.create(
-                team=tea_enabled_product.team,
-                name="Test Project",
-            )
-            project.products.add(tea_enabled_product)
-            project.components.add(tea_enabled_component)
+        # Ensure component is attached to product via direct ProductComponent M2M
+        if not tea_enabled_product.components.filter(pk=tea_enabled_component.pk).exists():
+            tea_enabled_product.components.add(tea_enabled_component)
 
         # Use get_or_create to avoid conflict with auto-created latest release
         release = Release.get_or_create_latest_release(tea_enabled_product)
 
-        # Create 3 SBOMs for the component (different formats)
-        for fmt, ver in [("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]:
+        # Create 3 SBOMs for the component (different formats / format versions).
+        # The unique constraint on (component, version, format, qualifiers, bom_type)
+        # requires distinct ``version`` values for the two cyclonedx SBOMs.
+        for idx, (fmt, ver) in enumerate([("cyclonedx", "1.4"), ("spdx", "2.3"), ("cyclonedx", "1.5")]):
             SBOM.objects.create(
                 component=tea_enabled_component,
                 name=f"SBOM {fmt} {ver}",
+                version=f"1.{idx}.0",
                 format=fmt,
                 format_version=ver,
                 source="test",
@@ -1983,4 +1979,157 @@ class TestTEAMalformedUUIDInTEI:
 
         response = client.get(url)
 
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAProductCLE:
+    """Tests for the product CLE TEA endpoint."""
+
+    def test_get_cle_with_events(self, tea_enabled_product):
+        from sbomify.apps.core.services.cle import create_cle_event
+
+        create_cle_event(
+            product=tea_enabled_product,
+            event_type="released",
+            effective=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_enabled_product):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+    def test_get_cle_private_product_returns_404(self, tea_enabled_product):
+        tea_enabled_product.is_public = False
+        tea_enabled_product.save()
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/product/{tea_enabled_product.uuid}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAComponentCLE:
+    """Tests for GET /tea/v0.4.0/component/{uuid}/cle endpoint."""
+
+    def _cle_url(self, component):
+        return f"{TEA_URL_PREFIX}/component/{component.uuid}/cle?workspace_key={component.team.key}"
+
+    def test_get_cle_with_events(self, tea_enabled_component):
+        from sbomify.apps.core.services.cle import create_component_cle_event
+
+        create_component_cle_event(
+            component=tea_enabled_component,
+            event_type="released",
+            effective=datetime(2025, 2, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        response = client.get(self._cle_url(tea_enabled_component))
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+        assert data["events"][0]["type"] == "released"
+
+    def test_get_cle_no_events_returns_404(self, tea_enabled_component):
+        client = Client()
+        response = client.get(self._cle_url(tea_enabled_component))
+        assert response.status_code == 404
+
+    def test_get_cle_private_component_returns_404(self, tea_enabled_component):
+        from sbomify.apps.core.models import Component
+
+        tea_enabled_component.visibility = Component.Visibility.PRIVATE
+        tea_enabled_component.save()
+        client = Client()
+        response = client.get(self._cle_url(tea_enabled_component))
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAProductReleaseCLE:
+    """Tests for GET /tea/v0.4.0/productRelease/{uuid}/cle endpoint."""
+
+    @pytest.fixture
+    def tea_release(self, tea_enabled_product):
+        return Release.objects.create(name="v1.0-tea-cle", product=tea_enabled_product)
+
+    def _cle_url(self, release):
+        return f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/cle?workspace_key={release.product.team.key}"
+
+    def test_get_cle_with_events(self, tea_release):
+        from sbomify.apps.core.services.cle import create_release_cle_event
+
+        create_release_cle_event(
+            release=tea_release,
+            event_type="released",
+            effective=datetime(2025, 3, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        response = client.get(self._cle_url(tea_release))
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_release):
+        client = Client()
+        response = client.get(self._cle_url(tea_release))
+        assert response.status_code == 404
+
+    def test_nonexistent_release_returns_404(self, tea_enabled_product):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productRelease/{NONEXISTENT_UUID}/cle?workspace_key={tea_enabled_product.team.key}"
+        response = client.get(url)
+        assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTEAComponentReleaseCLE:
+    """Tests for GET /tea/v0.4.0/componentRelease/{uuid}/cle endpoint."""
+
+    @pytest.fixture
+    def tea_component_release(self, tea_enabled_component):
+        return ComponentRelease.objects.create(component=tea_enabled_component, version="1.0.0-tea-cle")
+
+    def _cle_url(self, cr, component):
+        return f"{TEA_URL_PREFIX}/componentRelease/{cr.uuid}/cle?workspace_key={component.team.key}"
+
+    def test_get_cle_with_events(self, tea_component_release, tea_enabled_component):
+        from sbomify.apps.core.services.cle import create_component_release_cle_event
+
+        create_component_release_cle_event(
+            component_release=tea_component_release,
+            event_type="released",
+            effective=datetime(2025, 4, 1, tzinfo=timezone.utc),
+            version="1.0.0",
+        )
+        client = Client()
+        response = client.get(self._cle_url(tea_component_release, tea_enabled_component))
+        assert response.status_code == 200
+        data = response.json()
+        assert "events" in data
+        assert len(data["events"]) == 1
+
+    def test_get_cle_no_events_returns_404(self, tea_component_release, tea_enabled_component):
+        client = Client()
+        response = client.get(self._cle_url(tea_component_release, tea_enabled_component))
+        assert response.status_code == 404
+
+    def test_nonexistent_component_release_returns_404(self, tea_enabled_component):
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/componentRelease/{NONEXISTENT_UUID}/cle?workspace_key={tea_enabled_component.team.key}"
+        response = client.get(url)
         assert response.status_code == 404

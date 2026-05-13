@@ -1,0 +1,33 @@
+{# Declaration of Conformity link for the public product page. #}
+{# Expects: has_doc (bool), product (object), preferred_base_url (str) #}
+{% if has_doc %}
+    <div class="public-section">
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-file-signature text-primary"></i>EU Declaration of Conformity
+                </h4>
+            </div>
+            <div class="p-6">
+                <p class="text-text-muted mb-4">
+                    The manufacturer's declaration that this product conforms to the EU Cyber Resilience Act
+                    (Regulation 2024/2847) and the standards listed in Annex V.
+                </p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <a href="{% if preferred_base_url %}{{ preferred_base_url }}{% endif %}{% url 'compliance:product_doc_public' product_id=product.id %}"
+                       class="tw-btn-primary">
+                        <i class="fas fa-file-lines mr-2"></i>View Declaration
+                    </a>
+                </div>
+                {% if preferred_base_url %}
+                    <p class="text-xs text-text-muted mt-3 m-0">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Declaration available at
+                        <a href="{{ preferred_base_url }}{% url 'compliance:product_doc_public' product_id=product.id %}"
+                           class="text-primary hover:underline">{{ preferred_base_url }}{% url 'compliance:product_doc_public' product_id=product.id %}</a>
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endif %}

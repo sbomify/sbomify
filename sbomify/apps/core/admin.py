@@ -27,17 +27,17 @@ from sbomify.apps.sboms.models import SBOM  # SBOM still lives in sboms app
 from sbomify.apps.teams.admin import InvitationAdmin, MemberAdmin, TeamAdmin
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.vulnerability_scanning.admin import (
+    ComponentDependencyTrackMappingAdmin,
     DependencyTrackServerAdmin,
-    ReleaseDependencyTrackMappingAdmin,
     TeamVulnerabilitySettingsAdmin,
 )
 from sbomify.apps.vulnerability_scanning.models import (
+    ComponentDependencyTrackMapping,
     DependencyTrackServer,
-    ReleaseDependencyTrackMapping,
     TeamVulnerabilitySettings,
 )
 
-from .models import Component, Product, Project, User
+from .models import Component, Product, User
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -124,7 +124,6 @@ class DashboardView(admin.AdminSite):
                     "users": User.objects.count(),
                     "teams": Team.objects.count(),
                     "products": Product.objects.count(),
-                    "projects": Project.objects.count(),
                     "components": Component.objects.count(),
                     "sboms": SBOM.objects.count(),
                     "users_per_team": list(
@@ -144,7 +143,6 @@ class DashboardView(admin.AdminSite):
                     "new_teams_30d": Team.objects.filter(created_at__gte=thirty_days_ago).count(),
                     # 30-day metrics for content
                     "products_30d": Product.objects.filter(created_at__gte=thirty_days_ago).count(),
-                    "projects_30d": Project.objects.filter(created_at__gte=thirty_days_ago).count(),
                     "components_30d": Component.objects.filter(created_at__gte=thirty_days_ago).count(),
                     "active_users_7d": User.objects.filter(last_login__gte=seven_days_ago).count(),
                     "active_users_30d": User.objects.filter(last_login__gte=thirty_days_ago).count(),
@@ -185,7 +183,6 @@ class DashboardView(admin.AdminSite):
                     "users": 0,
                     "teams": 0,
                     "products": 0,
-                    "projects": 0,
                     "components": 0,
                     "sboms": 0,
                     "users_per_team": [],
@@ -199,7 +196,6 @@ class DashboardView(admin.AdminSite):
                     "new_teams_30d": 0,
                     # 30-day content metrics
                     "products_30d": 0,
-                    "projects_30d": 0,
                     "components_30d": 0,
                     "active_users_7d": 0,
                     "active_users_30d": 0,
@@ -413,40 +409,6 @@ class CustomUserAdmin(UserAdmin):  # type: ignore[type-arg]
         )
 
 
-class ProjectAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
-    """Admin configuration for Project model."""
-
-    list_display = (
-        "id",
-        "name",
-        "workspace",
-        "is_public",
-        "created_at",
-    )
-
-    list_filter = (
-        "is_public",
-        "team",
-        "created_at",
-    )
-
-    search_fields = (
-        "id",
-        "name",
-        "team__name",
-    )
-
-    readonly_fields = (
-        "id",
-        "created_at",
-    )
-
-    @admin.display(description="Workspace", ordering="team__name")
-    def workspace(self, obj: Any) -> str:
-        """Display the workspace (team) name for the Project."""
-        return obj.team.name if obj.team else "No Team"
-
-
 class ProductAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin configuration for Product model."""
 
@@ -527,7 +489,6 @@ admin_site.register(Team, TeamAdmin)
 admin_site.register(Member, MemberAdmin)
 admin_site.register(Invitation, InvitationAdmin)
 admin_site.register(Product, ProductAdmin)
-admin_site.register(Project, ProjectAdmin)
 admin_site.register(Component, ComponentAdmin)
 admin_site.register(SBOM, SBOMAdmin)
 admin_site.register(Document, DocumentAdmin)
@@ -538,4 +499,4 @@ admin_site.register(BillingPlan, BillingPlanAdmin)
 # Register vulnerability scanning models
 admin_site.register(DependencyTrackServer, DependencyTrackServerAdmin)
 admin_site.register(TeamVulnerabilitySettings, TeamVulnerabilitySettingsAdmin)
-admin_site.register(ReleaseDependencyTrackMapping, ReleaseDependencyTrackMappingAdmin)
+admin_site.register(ComponentDependencyTrackMapping, ComponentDependencyTrackMappingAdmin)

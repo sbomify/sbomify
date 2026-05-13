@@ -1,41 +1,25 @@
 {% extends "core/emails/base.html.j2" %}
 {% block title %}New Access Request{% endblock %}
 {% block content %}
-    <h1>New Access Request</h1>
+    <h1>New access request</h1>
     {# djlint:off #}
-    <p>Dear {% if admin_user.first_name %}{{ admin_user.first_name }}{% else %}administrator{% endif %},</p>
+    <p>Hi {% if admin_user.first_name %}{{ admin_user.first_name }}{% else %}there{% endif %},</p>
     {# djlint:on #}
     <p>
-        A new access request has been submitted for the workspace <strong>{{ team.name }}</strong>.
+        <strong>{{ requester_name }}</strong> ({{ requester_email }}) has requested access
+        to the workspace <strong>{{ team.name }}</strong>.
     </p>
-    <p>
-        <strong>Request Details:</strong>
+    {% if requires_nda %}
+        <p>
+            NDA status:
+            {% if nda_signed %}
+                Signed
+            {% else %}
+                Pending signature
+            {% endif %}
+        </p>
+    {% endif %}
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ review_link }}" class="button">Review Request</a>
     </p>
-    <ul>
-        <li>
-            <strong>Requester:</strong> {{ requester_name }} ({{ requester_email }})
-        </li>
-        <li>
-            <strong>Workspace:</strong> {{ team.name }}
-        </li>
-        <li>
-            <strong>Requested At:</strong> {{ requested_at }}
-        </li>
-        {% if requires_nda %}
-            <li>
-                <strong>NDA Status:</strong>
-                {% if nda_signed %}
-                    Signed
-                {% else %}
-                    Pending signature
-                {% endif %}
-            </li>
-        {% endif %}
-    </ul>
-    <p>Click the button below to review and approve or reject this request.</p>
-    <p>
-        <a href="{{ review_link }}" class="button">Review Access Request</a>
-    </p>
-    <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
-    <p class="text-secondary">{{ review_link }}</p>
 {% endblock %}

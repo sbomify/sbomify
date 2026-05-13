@@ -16,9 +16,10 @@ from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
+from sbomify.apps.core.url_utils import build_custom_domain_url
 from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
-from sbomify.apps.teams.models import Invitation, Member, Team
+from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 from sbomify.apps.teams.queries import get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
@@ -29,7 +30,7 @@ logger = getLogger(__name__)
 PLAN_FEATURES = {
     "community": [
         "Unlimited SBOMs",
-        "Unlimited products & projects",
+        "Unlimited products & components",
         "All data is public",
         "Weekly vulnerability scans",
         "Community support",
@@ -40,7 +41,7 @@ PLAN_FEATURES = {
     ],
     "business": [
         "Everything in Community",
-        "Private components/projects/products",
+        "Private components/products",
         "NTIA Minimum Elements check",
         "Advanced vulnerability scanning (every 12 hours)",
         "Product identifiers (SKUs/barcodes)",
@@ -85,10 +86,6 @@ PLAN_LIMITS = {
     "max_products": {
         "label": "Products",
         "icon": "cube",
-    },
-    "max_projects": {
-        "label": "Projects",
-        "icon": "folder",
     },
     "max_components": {
         "label": "Components",
@@ -251,9 +248,18 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "company_nda_document": company_nda_document,
                 "trust_center_domain": getattr(settings, "TRUST_CENTER_DOMAIN", ""),
                 "trust_center_url": (
-                    f"https://{team_obj.slug}.{settings.TRUST_CENTER_DOMAIN}"
-                    if team_obj and team_obj.slug and getattr(settings, "TRUST_CENTER_DOMAIN", "")
-                    else ""
+                    build_custom_domain_url(team_obj, "/", secure=True).rstrip("/") if team_obj else ""
+                ),
+                "security_txt_config": team_obj.security_txt_config if team_obj else {},
+                "security_txt_contacts": (
+                    ContactProfileContact.objects.filter(
+                        entity__profile__team=team_obj,
+                        entity__profile__is_component_private=False,
+                    )
+                    .order_by("entity__profile__name", "name")
+                    .values("id", "name", "email", "entity__profile__name")
+                    if team_obj and team_obj.is_public
+                    else []
                 ),
                 # Contact Profiles tab
                 "profiles": profiles,
@@ -301,6 +307,9 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         if request.POST.get("tea_action") == "update":
             return self._update_tea_enabled(request, team_key)
+
+        if request.POST.get("security_txt_action") == "update":
+            return self._update_security_txt(request, team_key)
 
         if request.POST.get("slug_action") == "update":
             return self._update_slug(request, team_key)
@@ -635,6 +644,107 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         refresh_current_team_session(request, team)
 
         messages.success(request, f"Transparency Exchange API is now {'enabled' if team.tea_enabled else 'disabled'}.")
+        return self._redirect_with_tab(request, team_key)
+
+    def _update_security_txt(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        user = cast(User, request.user)
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            messages.error(request, "Workspace not found")
+            return self._redirect_with_tab(request, team_key)
+
+        membership = Member.objects.filter(user=user, team=team).first()
+        if not membership or membership.role != "owner":
+            messages.error(request, "Only workspace owners can change security.txt settings")
+            return self._redirect_with_tab(request, team_key)
+
+        from sbomify.apps.teams.services.security_txt import validate_security_txt_url
+
+        config = dict(team.security_txt_config or {})
+        was_enabled = config.get("enabled", False)
+        security_txt_values = request.POST.getlist("security_txt_enabled")
+        config["enabled"] = self._parse_checkbox_value(security_txt_values, default=was_enabled)
+
+        # Short-circuit when disabling — skip field validation so users can always toggle off
+        if not config["enabled"]:
+            team.security_txt_config = config
+            team.save(update_fields=["security_txt_config"])
+            refresh_current_team_session(request, team)
+            messages.success(request, "security.txt is now disabled.")
+            return self._redirect_with_tab(request, team_key)
+
+        # Validate and store selected contact ID (CharField PK, not int)
+        contact_id = request.POST.get("security_txt_contact_id", "").strip()
+        if contact_id:
+            if not ContactProfileContact.objects.filter(
+                id=contact_id, entity__profile__team=team, entity__profile__is_component_private=False
+            ).exists():
+                messages.error(request, "Selected contact does not belong to this workspace")
+                return self._redirect_with_tab(request, team_key)
+        config["contact_id"] = contact_id
+
+        # Validate and store URL fields
+        # Note: validation is intentionally duplicated here and in the service layer
+        # (generate_security_txt) for defense-in-depth — the view rejects bad input early,
+        # and the service re-validates at render time to guard against data that bypasses the view.
+        url_fields = {
+            "policy_url": "security_txt_policy_url",
+            "acknowledgments_url": "security_txt_acknowledgments_url",
+            "hiring_url": "security_txt_hiring_url",
+            "canonical_url": "security_txt_canonical_url",
+        }
+        for config_key, post_key in url_fields.items():
+            value = request.POST.get(post_key, "").strip()
+            if value:
+                error = validate_security_txt_url(value)
+                if error:
+                    messages.error(request, f"Invalid {config_key.replace('_', ' ')}: {error}")
+                    return self._redirect_with_tab(request, team_key)
+            config[config_key] = value
+
+        # Encryption URLs — multiple allowed (stored as JSON list)
+        import json as _json
+
+        encryption_urls_raw = request.POST.get("security_txt_encryption_urls", "[]")
+        try:
+            encryption_urls = _json.loads(encryption_urls_raw)
+            if not isinstance(encryption_urls, list):
+                encryption_urls = []
+        except (ValueError, TypeError):
+            encryption_urls = []
+        for enc_url in encryption_urls:
+            enc_url = str(enc_url).strip()
+            if enc_url:
+                error = validate_security_txt_url(enc_url)
+                if error:
+                    messages.error(request, f"Invalid encryption URL: {error}")
+                    return self._redirect_with_tab(request, team_key)
+        config["encryption_urls"] = [str(u).strip() for u in encryption_urls if str(u).strip()]
+
+        # Preferred languages — use centralized validator
+        from datetime import datetime, timedelta, timezone
+
+        from sbomify.apps.teams.services.security_txt import validate_preferred_languages
+
+        preferred_languages = request.POST.get("security_txt_preferred_languages", "").strip()
+        lang_error = validate_preferred_languages(preferred_languages)
+        if lang_error:
+            messages.error(request, lang_error)
+            return self._redirect_with_tab(request, team_key)
+        config["preferred_languages"] = preferred_languages
+
+        # Refresh Expires on every save per RFC 9116 semantics
+        config["expires"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+
+        team.security_txt_config = config
+        team.save(update_fields=["security_txt_config"])
+
+        refresh_current_team_session(request, team)
+        if config["enabled"] != was_enabled:
+            messages.success(request, f"security.txt is now {'enabled' if config['enabled'] else 'disabled'}.")
+        else:
+            messages.success(request, "security.txt settings saved.")
         return self._redirect_with_tab(request, team_key)
 
     def _update_slug(self, request: HttpRequest, team_key: str) -> HttpResponse:

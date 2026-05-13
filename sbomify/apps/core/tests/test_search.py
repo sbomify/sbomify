@@ -7,7 +7,7 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 
@@ -33,7 +33,6 @@ class TestSearchView:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data["products"] == []
-        assert data["projects"] == []
         assert data["components"] == []
 
     def test_search_short_query_returns_empty_results(
@@ -48,7 +47,6 @@ class TestSearchView:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data["products"] == []
-        assert data["projects"] == []
         assert data["components"] == []
 
     def test_search_products(
@@ -77,23 +75,6 @@ class TestSearchView:
         assert data["products"][0]["name"] == "Test Product"
         assert "test product description" in data["products"][0]["description"].lower()
 
-    def test_search_projects(
-        self, client: Client, sample_team_with_owner_member
-    ):
-        """Test searching for projects."""
-        team = sample_team_with_owner_member.team
-        user = sample_team_with_owner_member.user
-        setup_authenticated_client_session(client, team, user)
-
-        Project.objects.create(name="Test Project", team=team)
-        Project.objects.create(name="Another Project", team=team)
-
-        response = client.get(reverse("core:search"), {"q": "Test"})
-        assert response.status_code == 200
-        data = json.loads(response.content)
-        assert len(data["projects"]) == 1
-        assert data["projects"][0]["name"] == "Test Project"
-
     def test_search_components(
         self, client: Client, sample_team_with_owner_member
     ):
@@ -105,7 +86,7 @@ class TestSearchView:
         Component.objects.create(
             name="Test Component",
             team=team,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
         Component.objects.create(
             name="Another Component",
@@ -118,7 +99,7 @@ class TestSearchView:
         data = json.loads(response.content)
         assert len(data["components"]) == 1
         assert data["components"][0]["name"] == "Test Component"
-        assert data["components"][0]["component_type"] == "sbom"
+        assert data["components"][0]["component_type"] == "bom"
 
     def test_search_respects_team_scope(
         self, client: Client, sample_team_with_owner_member
@@ -236,6 +217,5 @@ class TestSearchView:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data["products"] == []
-        assert data["projects"] == []
         assert data["components"] == []
 

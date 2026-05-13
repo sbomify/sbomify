@@ -87,20 +87,17 @@
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-folder text-primary text-xs"></i>
-                <span class="font-semibold text-text">{{ dashboard_summary.total_projects|default:0 }}</span>
-                <span class="text-text-muted">Projects</span>
-            </div>
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
                 <i class="fas fa-puzzle-piece text-primary text-xs"></i>
                 <span class="font-semibold text-text">{{ dashboard_summary.total_components|default:0 }}</span>
                 <span class="text-text-muted">Components</span>
             </div>
         </div>
-        {# Projects Assignment #}
+        {# Components Assignment #}
         <div>
-            {% include 'core/components/item_assignment_manager.html.j2' with parent_type='product' parent_id=product.id child_type='project' can_edit=product.has_crud_permissions %}
+            {% include 'core/components/item_assignment_manager.html.j2' with parent_type='product' parent_id=product.id child_type='component' can_edit=product.has_crud_permissions %}
         </div>
+        {# CRA Compliance Card #}
+        {% include "compliance/components/cra_product_card.html.j2" %}
         {# Product Identifiers (HTMX lazy load) #}
         <div hx-get="{% url 'core:product_identifiers' product.id %}"
              hx-trigger="load"

@@ -11,7 +11,6 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Count
 from django.http import (
     HttpRequest,
     HttpResponse,
@@ -183,125 +182,6 @@ class PublicEnterpriseContactView(_BaseEnterpriseContactView):
             "user_agent": request.META.get("HTTP_USER_AGENT"),
             "is_public": True,
         }
-
-
-class BillingRedirectView(LoginRequiredMixin, View):
-    """Redirect to Stripe checkout based on selected plan in session."""
-
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        team = get_object_or_404(Team, key=team_key)
-
-        is_owner, error_msg = require_team_owner(team, request.user)
-        if not is_owner:
-            messages.error(request, error_msg)
-            return redirect("core:dashboard")
-
-        selected_plan = request.session.get("selected_plan")
-        if not selected_plan:
-            return redirect("billing:select_plan", team_key=team_key)
-
-        plan_key = selected_plan.get("key")
-        billing_period = selected_plan.get("billing_period", "monthly")
-
-        if not plan_key:
-            messages.error(request, "No plan selected")
-            return redirect("billing:select_plan", team_key=team_key)
-
-        try:
-            plan = BillingPlan.objects.get(key=plan_key)
-        except BillingPlan.DoesNotExist:
-            messages.error(request, "Invalid plan selected")
-            return redirect("billing:select_plan", team_key=team_key)
-
-        if plan.key == BillingPlan.KEY_ENTERPRISE:
-            return redirect("billing:enterprise_contact")
-
-        if billing_period not in ["monthly", "annual"]:
-            messages.error(request, "Invalid billing period")
-            return redirect("billing:select_plan", team_key=team_key)
-
-        price_id = plan.stripe_price_monthly_id if billing_period == "monthly" else plan.stripe_price_annual_id
-        if not price_id:
-            messages.error(request, "Selected billing option is not available. Please try a different plan or period.")
-            return redirect("billing:select_plan", team_key=team_key)
-
-        billing_limits = team.billing_plan_limits or {}
-        customer_id = billing_limits.get("stripe_customer_id")
-
-        user_email: str = getattr(request.user, "email", "") or ""
-        team_name: str = team.name or ""
-        team_key_str: str = team.key or ""
-
-        if not customer_id:
-            try:
-                customer = stripe_client.create_customer(
-                    id=f"c_{team_key_str}",
-                    email=user_email,
-                    name=team_name,
-                    metadata={"team_key": team_key_str},
-                )
-                customer_id = customer.id
-            except StripeError as e:
-                if "already exists" in str(e).lower():
-                    try:
-                        customer = stripe_client.get_customer(f"c_{team_key_str}")
-                        customer_id = customer.id
-                    except StripeError:
-                        customer = stripe_client.create_customer(
-                            email=user_email,
-                            name=team_name,
-                            metadata={"team_key": team_key_str},
-                        )
-                        customer_id = customer.id
-                else:
-                    logger.error("Failed to create customer for team %s: %s", team_key, e)
-                    messages.error(request, "Failed to create billing account. Please try again.")
-                    return redirect("billing:select_plan", team_key=team_key)
-        else:
-            try:
-                stripe_client.get_customer(customer_id)
-            except StripeError:
-                customer = stripe_client.create_customer(
-                    email=user_email,
-                    name=team_name,
-                    metadata={"team_key": team_key_str},
-                )
-                customer_id = customer.id
-
-        if not acquire_checkout_lock(team_key_str):
-            messages.info(request, "A checkout is already in progress. Please wait a moment and try again.")
-            return redirect("billing:select_plan", team_key=team_key)
-
-        try:
-            success_url = (
-                request.build_absolute_uri(reverse("billing:billing_return")) + "?session_id={CHECKOUT_SESSION_ID}"
-            )
-            cancel_url = request.build_absolute_uri(reverse("billing:select_plan", kwargs={"team_key": team_key}))
-
-            session = stripe_client.create_checkout_session(
-                customer_id=customer_id,
-                price_id=price_id,
-                success_url=success_url,
-                cancel_url=cancel_url,
-                metadata={"team_key": team_key_str, "plan_key": plan.key or ""},
-            )
-
-            from sbomify.apps.core.posthog_service import capture
-
-            capture(
-                str(request.user.pk),
-                "billing:checkout_initiated",
-                {"plan": plan.key or "", "billing_period": billing_period},
-                groups={"workspace": team_key_str},
-                request=request,
-            )
-
-            return redirect(session.url)
-        except StripeError as e:
-            release_checkout_lock(team_key_str)
-            logger.error("Failed to create checkout session for team %s: %s", team_key, e)
-            messages.error(request, "Failed to initiate payment. Please try again.")
-            return redirect("billing:select_plan", team_key=team_key)
 
 
 class CreatePortalSessionView(LoginRequiredMixin, View):
@@ -532,7 +412,6 @@ class SelectPlanView(LoginRequiredMixin, View):
                 existing_limits.update(
                     {
                         "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
                         "max_components": plan.max_components,
                     }
                 )
@@ -617,14 +496,13 @@ class SelectPlanView(LoginRequiredMixin, View):
         }
         plans = sorted(plans_list, key=lambda p: order.get(p.key or "", 99))
 
-        stats = Product.objects.filter(team=team).aggregate(
-            product_count=Count("id"),
-            project_count=Count("project", distinct=True),
-            component_count=Count("project__component", distinct=True),
-        )
-        product_count: int = stats["product_count"]
-        project_count: int = stats["project_count"]
-        component_count: int = stats["component_count"]
+        # Count products and components per team. The Project layer was
+        # removed; the corresponding ``BillingPlan.max_projects`` quota
+        # (and its downgrade-guard branch) went with it in migration 0011.
+        from sbomify.apps.sboms.models import Component
+
+        product_count: int = Product.objects.filter(team=team).count()
+        component_count: int = Component.objects.filter(team=team).count()
 
         billing_limits = team.billing_plan_limits or {}
         current_plan_key = team.billing_plan or BillingPlan.KEY_COMMUNITY
@@ -648,12 +526,6 @@ class SelectPlanView(LoginRequiredMixin, View):
                         f"{product_count} products (limit: {plan.max_products})"
                     )
 
-                if plan.max_projects is not None and project_count > plan.max_projects:
-                    plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
-                    plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
-                        f"{project_count} projects (limit: {plan.max_projects})"
-                    )
-
                 if plan.max_components is not None and component_count > plan.max_components:
                     plan.exceeds_downgrade_limits = True  # type: ignore[attr-defined]
                     plan.downgrade_exceeded_resources.append(  # type: ignore[attr-defined]
@@ -668,7 +540,6 @@ class SelectPlanView(LoginRequiredMixin, View):
                 "team_key": team_key,
                 "team": team,
                 "product_count": product_count,
-                "project_count": project_count,
                 "component_count": component_count,
             },
         )
@@ -765,7 +636,6 @@ class BillingReturnView(LoginRequiredMixin, View):
 
                     billing_limits: dict[str, Any] = {
                         "max_products": plan.max_products,
-                        "max_projects": plan.max_projects,
                         "max_components": plan.max_components,
                         "stripe_customer_id": customer.id,
                         "stripe_subscription_id": subscription.id,

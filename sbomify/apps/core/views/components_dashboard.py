@@ -65,7 +65,7 @@ class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
 
     def post(self, request: HttpRequest) -> HttpResponse:
         name = request.POST.get("name", "").strip()
-        component_type = request.POST.get("component_type", "sbom")
+        component_type = request.POST.get("component_type", "bom")
         is_global = request.POST.get("is_global") == "on"
 
         payload = ComponentCreateSchema(

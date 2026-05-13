@@ -10,13 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import asyncio
 import logging
 import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import dj_database_url
+import redis
 import sentry_sdk
 from django.contrib import messages
 from dotenv import find_dotenv, load_dotenv
@@ -25,6 +27,7 @@ from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
+from sbomify.logging_filters import is_benign_shielded_future_error
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -116,6 +119,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django.contrib.sites",
     "django_dramatiq",
+    "dramatiq_crontab",
     "django_extensions",
     "django_vite",
     "django_htmx",
@@ -134,6 +138,7 @@ INSTALLED_APPS = [
     "sbomify.apps.notifications",
     "sbomify.apps.vulnerability_scanning",
     "sbomify.apps.onboarding",
+    "sbomify.apps.compliance",
     "health_check",
     "health_check.db",
     "anymail",
@@ -336,17 +341,60 @@ else:
         "PORT": DATABASE_PORT,
     }
 
+    _db_sslmode = os.environ.get("DATABASE_SSLMODE", "")
+    if _db_sslmode:
+        db_options: dict[str, str] = {"sslmode": _db_sslmode}
+        _db_sslrootcert = os.environ.get("DATABASE_SSLROOTCERT", "")
+        if _db_sslrootcert:
+            db_options["sslrootcert"] = _db_sslrootcert
+        db_config_dict["OPTIONS"] = db_options
+
 
 DATABASES = {"default": db_config_dict}
 
 # Redis Configuration
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost:6379")
-REDIS_BASE_URL = f"redis://{REDIS_HOST}"
+# REDIS_URL is the base connection URL (no database number, no query params):
+#   redis://host:6379              (plain)
+#   redis://:password@host:6379    (with password)
+#   rediss://:password@host:6380   (TLS — note double 's')
+# Database numbers are appended automatically below.
+_redis_parsed = urlparse(os.environ.get("REDIS_URL", "redis://localhost:6379"))
+if _redis_parsed.scheme not in ("redis", "rediss") or not _redis_parsed.netloc:
+    raise ValueError("Invalid REDIS_URL: must start with redis:// or rediss:// and include a host")
 
-# Construct specific URLs for different Redis databases
-REDIS_URL = f"{REDIS_BASE_URL}/0"  # General purpose (database 0)
-REDIS_CACHE_URL = f"{REDIS_BASE_URL}/0"  # Cache uses database 0
-REDIS_WORKER_URL = f"{REDIS_BASE_URL}/1"  # Worker uses database 1 (separate from cache)
+
+def _sanitize_redis_netloc(netloc: str) -> str:
+    """Redact credentials from netloc while preserving host/port and IPv6 brackets."""
+    if "@" not in netloc:
+        return netloc
+    _, hostport = netloc.rsplit("@", 1)
+    return f"****@{hostport}"
+
+
+# Strip database number and query params — we manage DB numbers ourselves.
+if _redis_parsed.path and _redis_parsed.path != "/":
+    logging.warning(
+        "REDIS_URL should not include a database number — stripped it. Use: %s://%s",
+        _redis_parsed.scheme,
+        _sanitize_redis_netloc(_redis_parsed.netloc),
+    )
+# Rebuild as clean base URL (scheme + auth + host:port only)
+REDIS_URL = urlunparse((_redis_parsed.scheme, _redis_parsed.netloc, "", "", "", ""))
+
+REDIS_CACHE_URL = f"{REDIS_URL}/0"  # Cache uses database 0
+REDIS_WORKER_URL = f"{REDIS_URL}/1"  # Worker uses database 1
+REDIS_CHANNELS_URL = f"{REDIS_URL}/2"  # WebSocket channels uses database 2
+
+_redis_is_tls = _redis_parsed.scheme == "rediss"
+
+# Optional custom CA certificate for Redis TLS connections.
+# When unset, redis-py falls back to SSL_CERT_FILE / system trust store.
+REDIS_CA_CERTS = os.environ.get("REDIS_CA_CERTS", "")
+if REDIS_CA_CERTS and not _redis_is_tls:
+    raise ValueError(
+        "REDIS_CA_CERTS is set but REDIS_URL does not use TLS (rediss://). "
+        "Either use rediss:// or remove REDIS_CA_CERTS."
+    )
 
 # Cache Configuration
 CACHES: dict[str, dict[str, Any]]
@@ -359,28 +407,32 @@ if DEBUG:
     }
 else:
     # Use Redis cache in production
+    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    if REDIS_CA_CERTS:
+        _cache_pool_kwargs["ssl_ca_certs"] = REDIS_CA_CERTS
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_CACHE_URL,  # Use cache-specific URL
+            "LOCATION": REDIS_CACHE_URL,
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 "SOCKET_CONNECT_TIMEOUT": 5,
                 "SOCKET_TIMEOUT": 5,
                 "RETRY_ON_TIMEOUT": True,
-                "MAX_CONNECTIONS": 1000,
-                "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+                "CONNECTION_POOL_KWARGS": _cache_pool_kwargs,
             },
         }
     }
 
-# Channel Layers for WebSocket support (uses Redis database 2)
-REDIS_CHANNELS_URL = f"{REDIS_BASE_URL}/2"
+# Channel Layers for WebSocket support
+_channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
+if REDIS_CA_CERTS:
+    _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_CHANNELS_URL],
+            "hosts": [_channels_host],
             # Connection pool and timeout settings for production reliability
             "capacity": 1500,  # Maximum number of messages to store per channel
             "expiry": 60,  # Message expiry time in seconds
@@ -388,9 +440,16 @@ CHANNEL_LAYERS = {
     },
 }
 
+# Pass a pre-built client because Dramatiq's RedisBroker creates a
+# ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
+_dramatiq_redis_options: dict[str, Any] = (
+    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)}
+    if REDIS_CA_CERTS
+    else {"url": REDIS_WORKER_URL}
+)
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
-    "OPTIONS": {"url": REDIS_WORKER_URL},
+    "OPTIONS": _dramatiq_redis_options,
     "MIDDLEWARE": [
         "dramatiq.middleware.Callbacks",
         "dramatiq.middleware.Retries",
@@ -401,8 +460,19 @@ DRAMATIQ_BROKER = {
 
 DRAMATIQ_RESULT_BACKEND = {
     "BACKEND": "dramatiq.results.backends.redis.RedisBackend",
-    "BACKEND_OPTIONS": {"url": REDIS_WORKER_URL},
+    "BACKEND_OPTIONS": _dramatiq_redis_options,
 }
+
+# Single-leader scheduling is enforced by `replicas: 1` on the
+# `sbomify-scheduler` Compose service (and the equivalent in any prod
+# orchestrator). We deliberately do NOT configure DRAMATIQ_CRONTAB.REDIS_URL
+# because upstream `dramatiq-crontab` builds its Redis lock via
+# `redis.Redis.from_url(url)` with no API for `ssl_ca_certs` — that fails
+# SSL handshake against private-CA Redis (rediss:// + REDIS_CA_CERTS), which
+# is how prod is deployed. Without REDIS_URL the package falls back to
+# FakeLock; brief overlap during rolling deploys is safe because every
+# scheduled actor is either idempotent (scans, purges, health checks) or
+# has actor-level dedup (OnboardingEmail unique_together for drip emails).
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -422,6 +492,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+
 # Logging config
 LOGGING = {
     "version": 1,
@@ -429,11 +500,24 @@ LOGGING = {
     "formatters": {
         "default": {"format": "%(asctime)s:%(name)s:%(levelname)s:%(message)s"},
     },
+    "filters": {
+        # Only known-benign exception types are suppressed to preserve observability.
+        "suppress_shielded_future_errors": {
+            "()": "django.utils.log.CallbackFilter",
+            "callback": lambda record: not is_benign_shielded_future_error(record),
+        },
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",
             "formatter": "default",
+        },
+        "console_asyncio": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "default",
+            "filters": ["suppress_shielded_future_errors"],
         },
     },
     "root": {
@@ -456,6 +540,16 @@ LOGGING = {
             "level": os.getenv("LOG_LEVEL", "INFO"),
             "propagate": False,
         },
+        # Surface dramatiq + dramatiq-crontab info logs (heartbeat, scheduler
+        # liveness, actor execution). Without this, info-level logs from
+        # those packages fall through to the WARNING root logger and are
+        # silently dropped, making "did the cron actually fire?" hard to
+        # diagnose from container logs alone.
+        "dramatiq": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "sbomify.performance": {
             "handlers": ["console"],
             "level": "INFO",
@@ -474,6 +568,11 @@ LOGGING = {
         "allauth.socialaccount": {
             "handlers": ["console"],
             "level": "DEBUG",
+            "propagate": False,
+        },
+        "asyncio": {
+            "handlers": ["console_asyncio"],
+            "level": "WARNING",
             "propagate": False,
         },
         # "teams": {
@@ -634,6 +733,12 @@ sentry_sdk.init(
     ],
     traces_sampler=_sentry_traces_sampler,
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+    # CancelledError is expected under ASGI when clients disconnect mid-request.
+    # On Python 3.14+ it's a BaseException that propagates through middleware.
+    # ConnectionClosed (and its ConnectionClosedError/ConnectionClosedOK subclasses)
+    # is expected when WebSocket clients disconnect (keepalive ping timeout, browser
+    # tab closed, network change).
+    ignore_errors=[asyncio.CancelledError, "websockets.exceptions.ConnectionClosed"],
 )
 
 

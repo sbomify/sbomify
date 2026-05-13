@@ -123,6 +123,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             name="ntia-minimum-elements-2021",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(
@@ -247,31 +248,37 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         for i, package in enumerate(packages):
             package_name = package.get("name", f"Package {i + 1}")
 
+            # Skip file-type packages (e.g., lockfiles) — they're input metadata,
+            # not software packages. Detected by SPDXID containing "-File-".
+            spdx_id = str(package.get("SPDXID") or "")
+            is_file_entry = "-File-" in spdx_id
+
             # 1. Supplier name
-            if not package.get("supplier"):
+            if not is_file_entry and not package.get("supplier"):
                 supplier_failures.append(package_name)
 
-            # 2. Component name
+            # 2. Component name (applies to all entries)
             if not package.get("name"):
                 component_name_failures.append(f"Package at index {i}")
 
             # 3. Version
-            if not package.get("versionInfo"):
+            if not is_file_entry and not package.get("versionInfo"):
                 version_failures.append(package_name)
 
             # 4. Unique identifiers (PURL, CPE, SWID via externalRefs)
             # Only accept externalRefs with valid identifier types
-            # Note: checksums are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
-            valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
-            purl = package.get("purl")
-            has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
-                isinstance(ref, dict)
-                and isinstance(ref.get("referenceType"), str)
-                and ref["referenceType"] in valid_identifier_types
-                for ref in (_as_list(package.get("externalRefs")))
-            )
-            if not has_unique_id:
-                unique_id_failures.append(package_name)
+            # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
+            if not is_file_entry:
+                valid_identifier_types = {"purl", "cpe22Type", "cpe23Type", "swid"}
+                purl = package.get("purl")
+                has_unique_id = (isinstance(purl, str) and bool(purl)) or any(
+                    isinstance(ref, dict)
+                    and isinstance(ref.get("referenceType"), str)
+                    and ref["referenceType"] in valid_identifier_types
+                    for ref in (_as_list(package.get("externalRefs")))
+                )
+                if not has_unique_id:
+                    unique_id_failures.append(package_name)
 
         # Create findings for per-package elements
         findings.append(
@@ -505,27 +512,35 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
-            # 1. Supplier name (publisher or supplier.name)
-            supplier_field = component.get("supplier")
-            supplier = component.get("publisher") or (
-                supplier_field.get("name") if isinstance(supplier_field, dict) else None
-            )
-            if not supplier:
-                supplier_failures.append(component_name)
+            # Skip type=file components (e.g., lockfiles) — they're input metadata,
+            # not software packages, so NTIA minimum-element fields (supplier, version,
+            # unique identifiers) don't apply. Component Name is still checked because
+            # even file-type entries should be named.
+            is_file_type = str(component.get("type", "")).lower() == "file"
 
-            # 2. Component name
+            # 1. Supplier name (publisher or supplier.name)
+            if not is_file_type:
+                supplier_field = component.get("supplier")
+                supplier = component.get("publisher") or (
+                    supplier_field.get("name") if isinstance(supplier_field, dict) else None
+                )
+                if not supplier:
+                    supplier_failures.append(component_name)
+
+            # 2. Component name (applies to all component types)
             if not component.get("name"):
                 component_name_failures.append(f"Component at index {i}")
 
             # 3. Version
-            if not component.get("version"):
+            if not is_file_type and not component.get("version"):
                 version_failures.append(component_name)
 
             # 4. Unique identifiers (PURL, CPE, SWID)
             # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
-            has_unique_id = component.get("purl") or component.get("cpe") or component.get("swid")
-            if not has_unique_id:
-                unique_id_failures.append(component_name)
+            if not is_file_type:
+                has_unique_id = component.get("purl") or component.get("cpe") or component.get("swid")
+                if not has_unique_id:
+                    unique_id_failures.append(component_name)
 
         # Create findings for per-component elements
         findings.append(

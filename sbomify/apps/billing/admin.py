@@ -111,11 +111,6 @@ class BillingPlanAdmin(_BillingPlanAdminBase):
         elif obj.key == "enterprise":
             limits.append("Products: Unlimited")
 
-        if obj.max_projects is not None:
-            limits.append(f"Projects: {obj.max_projects}")
-        elif obj.key == "enterprise":
-            limits.append("Projects: Unlimited")
-
         if obj.max_components is not None:
             limits.append(f"Components: {obj.max_components}")
         elif obj.key == "enterprise":
@@ -136,7 +131,6 @@ class BillingPlanAdmin(_BillingPlanAdminBase):
                 "fields": (
                     "max_users",
                     "max_products",
-                    "max_projects",
                     "max_components",
                 ),
                 "description": "Set limits for this plan. Leave blank or set to None for unlimited. "

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from django.db import transaction
+
 from sbomify.apps.controls.models import Control, ControlCatalog
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.logging import getLogger
@@ -30,37 +32,39 @@ def activate_builtin_catalog(team: Team, catalog_name: str) -> ServiceResult[Con
     catalog_path = _DATA_DIR / _BUILTIN_CATALOGS[catalog_name]
     data = json.loads(catalog_path.read_text(encoding="utf-8"))
 
-    catalog, created = ControlCatalog.objects.get_or_create(
-        team=team,
-        name=data["name"],
-        version=data["version"],
-        defaults={"source": ControlCatalog.Source.BUILTIN, "is_active": True},
-    )
+    with transaction.atomic():
+        catalog, created = ControlCatalog.objects.get_or_create(
+            team=team,
+            name=data["name"],
+            version=data["version"],
+            defaults={"source": ControlCatalog.Source.BUILTIN, "is_active": True},
+        )
 
-    if not created:
-        if not catalog.is_active:
-            catalog.is_active = True
-            catalog.save(update_fields=["is_active", "updated_at"])
-        return ServiceResult.success(catalog)
+        if not created:
+            if not catalog.is_active:
+                catalog.is_active = True
+                catalog.save(update_fields=["is_active", "updated_at"])
+            return ServiceResult.success(catalog)
 
-    # Create controls from catalog data in bulk
-    controls_to_create: list[Control] = []
-    sort_order = 0
-    for group in data.get("groups", []):
-        for ctrl in group.get("controls", []):
-            controls_to_create.append(
-                Control(
-                    catalog=catalog,
-                    group=group["name"],
-                    control_id=ctrl["control_id"],
-                    title=ctrl["title"],
-                    description=ctrl.get("description", ""),
-                    sort_order=sort_order,
+        # Create controls from catalog data in bulk
+        controls_to_create: list[Control] = []
+        sort_order = 0
+        for group in data.get("groups", []):
+            for ctrl in group.get("controls", []):
+                controls_to_create.append(
+                    Control(
+                        catalog=catalog,
+                        group=group["name"],
+                        control_id=ctrl["control_id"],
+                        title=ctrl["title"],
+                        description=ctrl.get("description", ""),
+                        sort_order=sort_order,
+                    )
                 )
-            )
-            sort_order += 1
+                sort_order += 1
 
-    Control.objects.bulk_create(controls_to_create)
+        Control.objects.bulk_create(controls_to_create)
+
     logger.info("Activated catalog %s for team %s (%d controls)", catalog.name, team.key, len(controls_to_create))
     return ServiceResult.success(catalog)
 
@@ -103,83 +107,88 @@ def import_oscal_catalog(team: Team, oscal_json: dict[str, Any]) -> ServiceResul
             f"Catalog '{title}' version '{version}' already exists for this workspace", status_code=409
         )
 
-    # Create catalog
-    catalog = ControlCatalog.objects.create(
-        team=team,
-        name=title,
-        version=version,
-        source=ControlCatalog.Source.CUSTOM,
-        is_active=True,
-    )
-
-    # Parse controls from OSCAL groups
-    controls_to_create: list[Control] = []
-    sort_order = 0
-
-    for group in groups:
-        if not isinstance(group, dict):
-            continue
-        group_title = str(group.get("title") or group.get("id") or f"Group {sort_order}")
-
-        for ctrl in group.get("controls", []):
-            if not isinstance(ctrl, dict):
-                continue
-
-            # OSCAL control ID from id field or props label
-            control_id = ctrl.get("id", "")
-            if not control_id:
-                continue
-
-            ctrl_title = str(ctrl.get("title") or control_id)
-
-            # Extract description from parts[].prose where name="statement"
-            description = ""
-            for part in ctrl.get("parts", []):
-                if isinstance(part, dict) and part.get("name") == "statement":
-                    description = part.get("prose", "")
-                    break
-
-            controls_to_create.append(
-                Control(
-                    catalog=catalog,
-                    group=group_title,
-                    control_id=control_id,
-                    title=ctrl_title,
-                    description=description,
-                    sort_order=sort_order,
-                )
+    # Create catalog and controls atomically
+    try:
+        with transaction.atomic():
+            catalog = ControlCatalog.objects.create(
+                team=team,
+                name=title,
+                version=version,
+                source=ControlCatalog.Source.CUSTOM,
+                is_active=True,
             )
-            sort_order += 1
 
-            # Also import sub-controls (enhancements)
-            for sub_ctrl in ctrl.get("controls", []):
-                if not isinstance(sub_ctrl, dict):
+            # Parse controls from OSCAL groups
+            controls_to_create: list[Control] = []
+            sort_order = 0
+
+            for group in groups:
+                if not isinstance(group, dict):
                     continue
-                sub_id = sub_ctrl.get("id", "")
-                if not sub_id:
-                    continue
-                sub_description = ""
-                for part in sub_ctrl.get("parts", []):
-                    if isinstance(part, dict) and part.get("name") == "statement":
-                        sub_description = part.get("prose", "")
-                        break
-                controls_to_create.append(
-                    Control(
-                        catalog=catalog,
-                        group=group_title,
-                        control_id=sub_id,
-                        title=str(sub_ctrl.get("title") or sub_id),
-                        description=sub_description,
-                        sort_order=sort_order,
+                group_title = str(group.get("title") or group.get("id") or f"Group {sort_order}")
+
+                for ctrl in group.get("controls", []):
+                    if not isinstance(ctrl, dict):
+                        continue
+
+                    # OSCAL control ID from id field or props label
+                    control_id = ctrl.get("id", "")
+                    if not control_id:
+                        continue
+
+                    ctrl_title = str(ctrl.get("title") or control_id)
+
+                    # Extract description from parts[].prose where name="statement"
+                    description = ""
+                    for part in ctrl.get("parts", []):
+                        if isinstance(part, dict) and part.get("name") == "statement":
+                            description = part.get("prose", "")
+                            break
+
+                    controls_to_create.append(
+                        Control(
+                            catalog=catalog,
+                            group=group_title,
+                            control_id=control_id,
+                            title=ctrl_title,
+                            description=description,
+                            sort_order=sort_order,
+                        )
                     )
-                )
-                sort_order += 1
+                    sort_order += 1
 
-    if not controls_to_create:
-        catalog.delete()
-        return ServiceResult.failure("No controls found in the OSCAL catalog", status_code=400)
+                    # Also import sub-controls (enhancements)
+                    for sub_ctrl in ctrl.get("controls", []):
+                        if not isinstance(sub_ctrl, dict):
+                            continue
+                        sub_id = sub_ctrl.get("id", "")
+                        if not sub_id:
+                            continue
+                        sub_description = ""
+                        for part in sub_ctrl.get("parts", []):
+                            if isinstance(part, dict) and part.get("name") == "statement":
+                                sub_description = part.get("prose", "")
+                                break
+                        controls_to_create.append(
+                            Control(
+                                catalog=catalog,
+                                group=group_title,
+                                control_id=sub_id,
+                                title=str(sub_ctrl.get("title") or sub_id),
+                                description=sub_description,
+                                sort_order=sort_order,
+                            )
+                        )
+                        sort_order += 1
 
-    Control.objects.bulk_create(controls_to_create)
+            if not controls_to_create:
+                # Raise to trigger transaction rollback, undoing catalog creation
+                raise ValueError("No controls found in the OSCAL catalog")
+
+            Control.objects.bulk_create(controls_to_create)
+    except ValueError as exc:
+        return ServiceResult.failure(str(exc), status_code=400)
+
     logger.info(
         "Imported OSCAL catalog '%s' v%s for team %s (%d controls)",
         title,

@@ -19,9 +19,12 @@ x-common-env: &common-env
   DATABASE_NAME: ${DATABASE_NAME:-sbomify}
   DATABASE_PASSWORD: ${DATABASE_PASSWORD:-sbomify}
   DATABASE_PORT: ${DATABASE_PORT:-5432}
+  DATABASE_SSLMODE: ${DATABASE_SSLMODE:-}
+  DATABASE_SSLROOTCERT: ${DATABASE_SSLROOTCERT:-}
   DATABASE_USER: ${DATABASE_USER:-sbomify}
   DOCKER_DATABASE_HOST: ${DOCKER_DATABASE_HOST:-sbomify-db}
-  REDIS_HOST: ${REDIS_HOST:-sbomify-redis:6379}
+  REDIS_CA_CERTS: ${REDIS_CA_CERTS:-}
+  REDIS_URL: ${REDIS_URL:-redis://sbomify-redis:6379}
   SECRET_KEY: ${SECRET_KEY:-"django-insecure-your-development-secret-key-here-CHANGE-ME!"}
   SIGNED_URL_SALT: ${SIGNED_URL_SALT:-django-insecure-signed-url-salt-CHANGE-ME!}
   TRUST_CENTER_DOMAIN: ${TRUST_CENTER_DOMAIN:-}
@@ -62,7 +65,7 @@ services:
       retries: 5
 
   sbomify-backend:
-    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -93,7 +96,7 @@ services:
         condition: service_completed_successfully
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/UuPha8mu/"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/UuPha8mu/', timeout=4).close()"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -107,6 +110,7 @@ services:
       - "${BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
     environment:
       LOG_LEVEL: ${CADDY_LOG_LEVEL:-INFO}
       CADDY_ADMIN: ${CADDY_ADMIN:-off}
@@ -123,7 +127,7 @@ services:
     stop_grace_period: 10s
 
   sbomify-migrations:
-    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -133,13 +137,13 @@ services:
     environment:
       <<: *common-env
       BILLING: ${BILLING:-False}
-    command: /code/bin/release.sh
+    command: ["python", "/code/bin/release.py"]
     depends_on:
       sbomify-db:
         condition: service_healthy
 
   sbomify-worker:
-    image: ${SBOMIFY_IMAGE:-sbomifyhub/sbomify}:${SBOMIFY_TAG:-latest}
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
     build:
       context: ${BUILD_CONTEXT:-.}
       target: ${BUILD_TARGET:-python-app-prod}
@@ -153,8 +157,7 @@ services:
       BILLING: ${BILLING:-False}
     command:
       [
-        "uv",
-        "run",
+        "python",
         "manage.py",
         "rundramatiq",
         "-p",
@@ -167,8 +170,47 @@ services:
         condition: service_healthy
       sbomify-db:
         condition: service_healthy
+      sbomify-migrations:
+        condition: service_completed_successfully
     stop_grace_period: 30s
+
+  sbomify-scheduler:
+    image: ${SBOMIFY_IMAGE:-ghcr.io/sbomify/sbomify}:${SBOMIFY_TAG:-latest}
+    build:
+      context: ${BUILD_CONTEXT:-.}
+      target: ${BUILD_TARGET:-python-app-prod}
+      args:
+        BUILD_ENV: ${BUILD_ENV:-production}
+    pull_policy: ${SBOMIFY_PULL_POLICY:-always}
+    restart: ${SBOMIFY_RESTART_POLICY:-always}
+    # Replicas pinned to 1: dramatiq-crontab uses a Redis lock so any extra
+    # instance exits with "Another scheduler is already running."
+    deploy:
+      replicas: 1
+    environment:
+      <<: *common-env
+      BILLING: ${BILLING:-False}
+    command: ["python", "manage.py", "crontab"]
+    depends_on:
+      sbomify-redis:
+        condition: service_healthy
+      sbomify-db:
+        condition: service_healthy
+      sbomify-migrations:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+
+  ca-cert:
+    image: alpine:3.21
+    profiles:
+      - pki
+    volumes:
+      - ${CA_CERT_PATH:-/dev/null}:/src/root_ca.crt:ro
+      - ca_certs:/certs
+    command: ["sh", "-c", "cp /src/root_ca.crt /certs/private-ca.crt && chmod 644 /certs/private-ca.crt"]
 
 volumes:
   sbomify_postgres_data:
   sbomify_redis_data:
+  ca_certs:
+  caddy_data:

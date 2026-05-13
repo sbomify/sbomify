@@ -1,13 +1,10 @@
-Dear {% if user.first_name %}{{ user.first_name }}{% else %}user{% endif %},
+Hi {% if user.first_name %}{{ user.first_name }}{% else %}there{% endif %},
 
-Your request for access to gated components in the workspace {{ team.name }} has been approved.
+Your request for access to the workspace {{ team.name }} has been approved. You can now view gated documents and SBOMs in the Trust Center.
 
-You can now access gated documents and SBOMs in this workspace. Use the link below to log in and view the Trust Center:
+View Trust Center: {{ login_link }}
 
-{{ login_link }}
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

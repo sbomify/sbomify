@@ -1,8 +1,9 @@
 """Record the trust center setup screencast.
 
 Drives: Dashboard → Settings → Trust Center tab → enable trust center →
-upload a Company NDA → configure custom domain → navigate to Components →
-create a component → demonstrate public / private / gated visibility.
+enable security.txt → upload a Company NDA → configure custom domain →
+navigate to Components → create a component → demonstrate public /
+private / gated visibility.
 """
 
 import tempfile
@@ -51,7 +52,25 @@ def trust_center_setup(recording_page: Page) -> None:
     rewrite_localhost_urls(page)
     pace(page, 2000)
 
-    # ── 3. Upload Company NDA ─────────────────────────────────────────────
+    # ── 3. Enable security.txt (RFC 9116) ─────────────────────────────────
+    security_toggle = page.locator("#security-txt-toggle")
+    security_toggle.wait_for(state="visible", timeout=10_000)
+    security_toggle.scroll_into_view_if_needed()
+    pace(page, 800)
+    hover_and_click(page, security_toggle)
+    pace(page, 1000)
+
+    security_save_btn = page.locator("form:has(#security-txt-toggle) button[type='submit']")
+    security_save_btn.scroll_into_view_if_needed()
+    pace(page, 400)
+    hover_and_click(page, security_save_btn)
+
+    page.wait_for_load_state("networkidle")
+    dismiss_toasts(page)
+    rewrite_localhost_urls(page)
+    pace(page, 1500)
+
+    # ── 4. Upload Company NDA ─────────────────────────────────────────────
     nda_label = page.locator("label[for='company_nda_file']")
     nda_label.scroll_into_view_if_needed()
     pace(page, 800)
@@ -75,7 +94,7 @@ def trust_center_setup(recording_page: Page) -> None:
 
     pdf_path.unlink(missing_ok=True)
 
-    # ── 4. Configure custom domain ────────────────────────────────────────
+    # ── 5. Configure custom domain ────────────────────────────────────────
     # The custom domain section loads via HTMX after the page reload
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
@@ -87,7 +106,7 @@ def trust_center_setup(recording_page: Page) -> None:
     type_text(domain_input, "trust.piedpiper.com")
     pace(page, 800)
 
-    # ── 5. Save domain ────────────────────────────────────────────────────
+    # ── 6. Save domain ────────────────────────────────────────────────────
     save_btn = page.locator("button:has-text('Save Domain')")
     save_btn.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, save_btn)
@@ -97,7 +116,7 @@ def trust_center_setup(recording_page: Page) -> None:
     rewrite_localhost_urls(page)
     pace(page, 2000)
 
-    # ── 6. Create a component to demonstrate visibility ───────────────────
+    # ── 7. Create a component to demonstrate visibility ───────────────────
     navigate_to_components(page)
 
     page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
@@ -127,7 +146,7 @@ def trust_center_setup(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
-    # ── 7. Demonstrate visibility options ─────────────────────────────────
+    # ── 8. Demonstrate visibility options ─────────────────────────────────
     # Dismiss any lingering toasts so the dropdown is fully visible
     dismiss_toasts(page)
 

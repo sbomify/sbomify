@@ -27,7 +27,6 @@ def test_team(db) -> Team:
         defaults={
             "name": "Community",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
             "max_users": 2,
         },
@@ -52,12 +51,12 @@ def sample_component(test_team: Team) -> Component:
 
 
 @pytest.fixture
-def sample_component_sbom(test_team: Team) -> Component:
-    """Create a sample component with component_type='sbom' for testing."""
+def sample_component_bom(test_team: Team) -> Component:
+    """Create a sample component with component_type='bom' for testing."""
     component = Component.objects.create(
         team=test_team,
         name="Test Component",
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
     )
     yield component
     component.delete()
@@ -79,15 +78,15 @@ def sample_sbom(sample_component: Component) -> SBOM:
 
 
 @pytest.fixture
-def sample_sbom_for_sbom_component(sample_component_sbom: Component) -> SBOM:
-    """Create a sample SBOM for a component with component_type='sbom' for testing."""
+def sample_sbom_for_bom_component(sample_component_bom: Component) -> SBOM:
+    """Create a sample SBOM for a component with component_type='bom' for testing."""
     sbom = SBOM.objects.create(
         name="test-sbom",
         version="1.0.0",
         format="cyclonedx",
         format_version="1.5",
         sbom_filename="test.json",
-        component=sample_component_sbom,
+        component=sample_component_bom,
     )
     yield sbom
     sbom.delete()
@@ -105,7 +104,7 @@ class TestRegisteredPlugin:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
         )
 
         assert plugin.name == "checksum"
@@ -337,19 +336,15 @@ class TestTeamPluginSettingsSignal:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
         )
         yield plugin
         plugin.delete()
 
-    def test_signal_dispatches_background_task_when_plugins_enabled(
-        self, test_team: Team, registered_plugin
-    ) -> None:
+    def test_signal_dispatches_background_task_when_plugins_enabled(self, test_team: Team, registered_plugin) -> None:
         """Test that signal dispatches background task when plugins are enabled."""
-        with patch(
-            "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-        ) as mock_task:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=["checksum"],
@@ -361,13 +356,9 @@ class TestTeamPluginSettingsSignal:
             assert call_kwargs["team_id"] == str(test_team.id)
             assert call_kwargs["enabled_plugins"] == ["checksum"]
 
-    def test_signal_does_not_dispatch_when_no_plugins_enabled(
-        self, test_team: Team
-    ) -> None:
+    def test_signal_does_not_dispatch_when_no_plugins_enabled(self, test_team: Team) -> None:
         """Test that signal doesn't dispatch task when no plugins are enabled."""
-        with patch(
-            "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-        ) as mock_task:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=[],
@@ -391,9 +382,7 @@ class TestTeamPluginSettingsSignal:
         """Test that the signal handles errors gracefully."""
         with patch("sbomify.apps.plugins.signals.logger") as mock_logger:
             # Simulate an error by making the task dispatch fail
-            with patch(
-                "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-            ) as mock_task:
+            with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
                 mock_task.send.side_effect = Exception("Task dispatch failed")
                 TeamPluginSettings.objects.create(
                     team=test_team,
@@ -406,9 +395,7 @@ class TestTeamPluginSettingsSignal:
     def test_signal_passes_plugin_configs_to_task(self, test_team: Team, registered_plugin) -> None:
         """Test that signal passes plugin configs to the background task."""
         plugin_configs = {"checksum": {"option": "value"}}
-        with patch(
-            "sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task"
-        ) as mock_task:
+        with patch("sbomify.apps.plugins.signals.enqueue_assessments_for_existing_sboms_task") as mock_task:
             TeamPluginSettings.objects.create(
                 team=test_team,
                 enabled_plugins=["checksum"],
@@ -432,14 +419,14 @@ class TestBulkEnqueueTask:
             description="Computes SBOM checksum",
             category=AssessmentCategory.COMPLIANCE.value,
             version="1.0.0",
-            plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+            plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
             is_enabled=True,
         )
         yield plugin
         plugin.delete()
 
     def test_task_only_processes_recent_sboms(
-        self, test_team: Team, sample_component_sbom: Component, registered_plugin
+        self, test_team: Team, sample_component_bom: Component, registered_plugin
     ) -> None:
         """Test that the task only processes SBOMs within the cutoff period."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -451,17 +438,17 @@ class TestBulkEnqueueTask:
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="recent.json",
-            component=sample_component_sbom,
+            component=sample_component_bom,
         )
 
         # Create an old SBOM (outside cutoff) by manipulating created_at
         old_sbom = SBOM.objects.create(
             name="old-sbom",
-            version="1.0.0",
+            version="0.9.0",
             format="cyclonedx",
             format_version="1.5",
             sbom_filename="old.json",
-            component=sample_component_sbom,
+            component=sample_component_bom,
         )
         # Set created_at to 48 hours ago (outside 24-hour cutoff).
         # This direct update intentionally bypasses model save/auto_now logic for test setup.
@@ -488,14 +475,14 @@ class TestBulkEnqueueTask:
         old_sbom.delete()
 
     def test_task_skips_sboms_with_existing_runs(
-        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task skips SBOMs that already have assessment runs."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
 
         # Create an existing assessment run
         AssessmentRun.objects.create(
-            sbom=sample_sbom_for_sbom_component,
+            sbom=sample_sbom_for_bom_component,
             plugin_name="checksum",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,
@@ -531,9 +518,7 @@ class TestBulkEnqueueTask:
         assert result["sboms_found"] == 0
         assert result["assessments_enqueued"] == 0
 
-    def test_task_handles_no_sboms_gracefully(
-        self, test_team: Team, registered_plugin
-    ) -> None:
+    def test_task_handles_no_sboms_gracefully(self, test_team: Team, registered_plugin) -> None:
         """Test that task handles teams with no recent SBOMs gracefully."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
 
@@ -548,7 +533,7 @@ class TestBulkEnqueueTask:
             assert not mock_enqueue.called
 
     def test_task_enqueues_for_multiple_plugins(
-        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task enqueues assessments for multiple enabled plugins."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -578,7 +563,7 @@ class TestBulkEnqueueTask:
         ntia_plugin.delete()
 
     def test_task_only_enqueues_for_plugins_without_existing_runs(
-        self, test_team: Team, sample_sbom_for_sbom_component, registered_plugin
+        self, test_team: Team, sample_sbom_for_bom_component, registered_plugin
     ) -> None:
         """Test that task only enqueues for plugins that don't have existing runs."""
         from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
@@ -595,7 +580,7 @@ class TestBulkEnqueueTask:
 
         # Create existing run for ntia but not for checksum
         AssessmentRun.objects.create(
-            sbom=sample_sbom_for_sbom_component,
+            sbom=sample_sbom_for_bom_component,
             plugin_name="ntia",
             plugin_version="1.0.0",
             plugin_config_hash="x" * 64,

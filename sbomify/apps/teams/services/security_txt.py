@@ -1,0 +1,164 @@
+"""RFC 9116 security.txt generation service.
+
+Generates a security.txt file from a team's security contact and configuration.
+Spec: https://www.rfc-editor.org/rfc/rfc9116
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sbomify.apps.teams.models import Team
+
+# Max length for URL fields (RFC 9116 recommends fields < 2048 chars)
+MAX_FIELD_LENGTH = 2048
+
+# Preferred-Languages constraints (RFC 5646 language tags)
+MAX_PREFERRED_LANGUAGES_LENGTH = 200
+PREFERRED_LANGUAGES_PATTERN = r"[a-zA-Z0-9, \-]+"
+
+
+def validate_preferred_languages(value: str) -> str | None:
+    """Validate preferred_languages. Returns error message or None if valid."""
+    if not value:
+        return None
+    if len(value) > MAX_PREFERRED_LANGUAGES_LENGTH:
+        return f"Preferred languages exceed the maximum length of {MAX_PREFERRED_LANGUAGES_LENGTH} characters"
+    if not re.fullmatch(PREFERRED_LANGUAGES_PATTERN, value):
+        return "Preferred languages: only letters, digits, commas, spaces, and hyphens allowed"
+    return None
+
+
+def _sanitize_value(value: str) -> str:
+    """Strip control characters (newlines, carriage returns, null bytes) to prevent field injection."""
+    return re.sub(r"[\r\n\x00]", "", value).strip()
+
+
+def _get_security_contact_email(team: Team, config: dict[str, Any]) -> str | None:
+    """Find the security contact email.
+
+    If a specific contact_id is set in config, use that contact.
+    Falls back to the security contact on the default profile if the
+    configured contact no longer exists.
+    """
+    from sbomify.apps.teams.models import ContactProfileContact
+
+    contact_id = config.get("contact_id", "")
+    if contact_id:
+        email = (
+            ContactProfileContact.objects.filter(
+                id=contact_id,
+                entity__profile__team=team,
+                entity__profile__is_component_private=False,
+            )
+            .values_list("email", flat=True)
+            .first()
+        )
+        if email:
+            return email
+        # Configured contact no longer exists — fall through to default
+
+    return (
+        ContactProfileContact.objects.filter(
+            entity__profile__team=team,
+            entity__profile__is_default=True,
+            entity__profile__is_component_private=False,
+            is_security_contact=True,
+        )
+        .values_list("email", flat=True)
+        .first()
+    )
+
+
+def validate_security_txt_url(url: str) -> str | None:
+    """Validate a URL for security.txt. Returns error message or None if valid."""
+    from urllib.parse import urlparse
+
+    if not url:
+        return None
+    if len(url) > MAX_FIELD_LENGTH:
+        return f"URL exceeds maximum length of {MAX_FIELD_LENGTH} characters"
+    if re.search(r"[\x00-\x1f\x7f\s]", url):
+        return "URL contains invalid characters (whitespace or control characters)"
+    parsed = urlparse(url)
+    if parsed.scheme not in ("https", "http"):
+        return "URL must use https:// or http:// scheme"
+    if not parsed.netloc:
+        return "URL must include a hostname"
+    return None
+
+
+def generate_security_txt(team: Team) -> str:
+    """Generate RFC 9116 security.txt content for a team.
+
+    Returns empty string if security.txt is disabled or no security contact
+    is configured. All values are sanitized to prevent newline/field injection.
+
+    Args:
+        team: The Team instance to generate security.txt for.
+
+    Returns:
+        The security.txt file content as a string, or empty string.
+    """
+    config: dict[str, Any] = team.security_txt_config or {}
+
+    if not config.get("enabled", False):
+        return ""
+
+    email = _get_security_contact_email(team, config)
+    if not email:
+        return ""
+
+    lines: list[str] = []
+
+    # Required: Contact (mailto URI) — sanitize email to prevent injection
+    lines.append(f"Contact: mailto:{_sanitize_value(email)}")
+
+    # Optional URL fields — validated first (reject invalid), then sanitized for output
+    url_fields = [
+        ("Policy", "policy_url"),
+        ("Acknowledgments", "acknowledgments_url"),
+        ("Canonical", "canonical_url"),
+        ("Hiring", "hiring_url"),
+    ]
+    for field_name, config_key in url_fields:
+        raw_value = str(config.get(config_key, "")).strip()
+        if raw_value and validate_security_txt_url(raw_value) is None:
+            value = _sanitize_value(raw_value)
+            if value:
+                lines.append(f"{field_name}: {value}")
+
+    # Encryption: multiple URLs supported (RFC 9116 allows repeated Encryption fields)
+    if "encryption_urls" in config and isinstance(config["encryption_urls"], list):
+        for raw_url in config["encryption_urls"]:
+            raw_url = str(raw_url).strip()
+            if raw_url and validate_security_txt_url(raw_url) is None:
+                value = _sanitize_value(raw_url)
+                if value:
+                    lines.append(f"Encryption: {value}")
+    # Backward compat: single encryption_url (legacy configs)
+    elif encryption_url := str(config.get("encryption_url", "")).strip():
+        if validate_security_txt_url(encryption_url) is None:
+            lines.append(f"Encryption: {_sanitize_value(encryption_url)}")
+
+    # Optional non-URL fields — reuse centralized validation
+    if preferred_languages := _sanitize_value(str(config.get("preferred_languages", ""))):
+        if validate_preferred_languages(preferred_languages) is None:
+            lines.append(f"Preferred-Languages: {preferred_languages}")
+
+    # Required: Expires — use stored value if valid and not past, else generate fresh
+    expires_str = str(config.get("expires", ""))
+    try:
+        expires_dt = datetime.fromisoformat(expires_str) if expires_str else None
+        if expires_dt and expires_dt.tzinfo is None:
+            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        expires_dt = None
+    if not expires_dt or expires_dt <= datetime.now(timezone.utc):
+        expires_str = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+    lines.append(f"Expires: {_sanitize_value(expires_str)}")
+
+    return "\n".join(lines) + "\n"

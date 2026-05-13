@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.cache import cache
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import IntegrityError, transaction
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
@@ -205,15 +205,18 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
                     "base_url": get_base_url(),
                 }
 
-                send_mail(
-                    subject=f"New Access Request - {team.name}",
-                    message=render_to_string("documents/emails/access_request_notification.txt", email_context),
+                email = EmailMultiAlternatives(
+                    subject=f"New access request for {team.name}",
+                    body=render_to_string("documents/emails/access_request_notification.txt", email_context),
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[admin_member.user.email],
-                    html_message=render_to_string(
-                        "documents/emails/access_request_notification.html.j2", email_context
-                    ),
+                    to=[admin_member.user.email],
+                    reply_to=["hello@sbomify.com"],
                 )
+                email.attach_alternative(
+                    render_to_string("documents/emails/access_request_notification.html.j2", email_context),
+                    "text/html",
+                )
+                email.send()
             except Exception as e:
                 logger.error(f"Failed to send access request notification to {admin_member.user.email}: {e}")
 
@@ -1006,13 +1009,17 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 "user": user,
                 "base_url": get_base_url(),
             }
-            send_mail(
-                subject=f"Invitation to access {team.name}'s Trust Center",
+            trust_email = EmailMultiAlternatives(
+                subject=f"You're invited to the {team.name} Trust Center",
+                body=render_to_string("teams/emails/trust_center_invite_email.txt", email_context),
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                message=render_to_string("teams/emails/trust_center_invite_email.txt", email_context),
-                html_message=render_to_string("teams/emails/trust_center_invite_email.html.j2", email_context),
+                to=[email],
+                reply_to=["hello@sbomify.com"],
             )
+            trust_email.attach_alternative(
+                render_to_string("teams/emails/trust_center_invite_email.html.j2", email_context), "text/html"
+            )
+            trust_email.send()
 
             messages.success(request, f"Invitation sent to {email}")
 
@@ -1261,14 +1268,15 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     raise
 
                 # Send email
-                result = send_mail(
-                    subject=f"Access Approved - {team.name}",
-                    message=plain_message,
+                approval_email = EmailMultiAlternatives(
+                    subject=f"Access approved for {team.name}",
+                    body=plain_message,
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[access_request.user.email],
-                    html_message=html_message,
-                    fail_silently=False,  # Don't fail silently so we can catch errors
+                    to=[access_request.user.email],
+                    reply_to=["hello@sbomify.com"],
                 )
+                approval_email.attach_alternative(html_message, "text/html")
+                result = approval_email.send(fail_silently=False)
                 logger.info(f"Access approval email sent to {access_request.user.email}, result: {result}")
             except Exception as e:
                 logger.error(f"Failed to send access approval email to {access_request.user.email}: {e}", exc_info=True)
@@ -1288,13 +1296,17 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "base_url": get_base_url(),
                 }
 
-                send_mail(
-                    subject=f"Access Request Rejected - {team.name}",
-                    message=render_to_string("documents/emails/access_rejected.txt", email_context),
+                rejection_email = EmailMultiAlternatives(
+                    subject=f"Access request update for {team.name}",
+                    body=render_to_string("documents/emails/access_rejected.txt", email_context),
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[access_request.user.email],
-                    html_message=render_to_string("documents/emails/access_rejected.html.j2", email_context),
+                    to=[access_request.user.email],
+                    reply_to=["hello@sbomify.com"],
                 )
+                rejection_email.attach_alternative(
+                    render_to_string("documents/emails/access_rejected.html.j2", email_context), "text/html"
+                )
+                rejection_email.send()
             except Exception as e:
                 logger.error(f"Failed to send access rejection email to {access_request.user.email}: {e}")
 
@@ -1313,13 +1325,17 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "base_url": get_base_url(),
                 }
 
-                send_mail(
-                    subject=f"Access Revoked - {team.name}",
-                    message=render_to_string("documents/emails/access_revoked.txt", email_context),
+                revocation_email = EmailMultiAlternatives(
+                    subject=f"Access update for {team.name}",
+                    body=render_to_string("documents/emails/access_revoked.txt", email_context),
                     from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[access_request.user.email],
-                    html_message=render_to_string("documents/emails/access_revoked.html.j2", email_context),
+                    to=[access_request.user.email],
+                    reply_to=["hello@sbomify.com"],
                 )
+                revocation_email.attach_alternative(
+                    render_to_string("documents/emails/access_revoked.html.j2", email_context), "text/html"
+                )
+                revocation_email.send()
             except Exception as e:
                 logger.error(f"Failed to send access revocation email to {access_request.user.email}: {e}")
 

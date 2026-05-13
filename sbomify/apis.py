@@ -38,7 +38,6 @@ A comprehensive API for managing Software Bill of Materials (SBOM) and document 
 ## Features
 
 - **Product Management**: Create and organize products with identifiers and external links
-- **Project Organization**: Manage projects within products for better structure
 - **Component & Artifact Management**: Handle components, SBOMs, and documents with security analysis
 - **Release Management**: Tag and organize artifacts by product releases with download capabilities
 - **Workspace Collaboration**: Multi-user access with role-based permissions
@@ -91,9 +90,9 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
                 "Components provide logical grouping and access control.",
             },
             {
-                "name": "Products & Projects",
-                "description": "Structure your software inventory with products and projects for better organization "
-                "and release management.",
+                "name": "Products",
+                "description": "Structure your software inventory with products that group components and "
+                "are organised by releases.",
             },
             {
                 "name": "Releases",
@@ -144,10 +143,12 @@ api.add_router("/documents", "sbomify.apps.documents.apis.router")
 api.add_router("/", "sbomify.apps.documents.access_apis.router")
 api.add_router("/workspaces", "sbomify.apps.teams.apis.router")
 api.add_router("/", "sbomify.apps.core.apis.router")
+api.add_router("/", "sbomify.apps.core.cle_apis.router")
 api.add_router("/billing", "sbomify.apps.billing.apis.router")
 api.add_router("/notifications", "sbomify.apps.notifications.apis.router")
 api.add_router("/vulnerability-scanning", "sbomify.apps.vulnerability_scanning.apis.router")
 api.add_router("/licensing", "sbomify.apps.licensing.api.router")
 api.add_router("/plugins", "sbomify.apps.plugins.apis.router")
+api.add_router("/compliance", "sbomify.apps.compliance.apis.router")
 api.add_router("/controls", "sbomify.apps.controls.apis.router")
 api.add_router("/internal", "sbomify.apps.teams.apis.internal_router")

@@ -4,8 +4,8 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Product, Project, Release
-from sbomify.apps.sboms.models import ProductIdentifier, ProductLink, ProductProject
+from sbomify.apps.core.models import Product, Release
+from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 from sbomify.apps.teams.models import Team
 
 
@@ -30,43 +30,6 @@ def test_product_details_public_renders(public_team, public_product):
 
     assert response.status_code == 200
     assert "Test Product" in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_product_details_hides_projects_badge_when_empty(public_team, public_product):
-    """Projects badge should be hidden when no public projects exist."""
-    client = Client()
-    url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
-    response = client.get(url)
-
-    assert response.status_code == 200
-    content = response.content.decode()
-
-    # No project badge should be shown
-    assert "project" not in content.lower() or "Product Projects" not in content
-
-
-@pytest.mark.django_db
-def test_product_details_shows_public_projects_only(public_team, public_product):
-    """Only public projects should be shown in product details."""
-    client = Client()
-
-    # Create a public project
-    public_project = Project.objects.create(name="Public Project", team=public_team, is_public=True)
-    ProductProject.objects.create(product=public_product, project=public_project)
-
-    # Create a private project
-    private_project = Project.objects.create(name="Private Project", team=public_team, is_public=False)
-    ProductProject.objects.create(product=public_product, project=private_project)
-
-    url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
-    response = client.get(url)
-
-    assert response.status_code == 200
-    content = response.content.decode()
-
-    assert public_project.name in content
-    assert "Private Project" not in content
 
 
 @pytest.mark.django_db

@@ -38,6 +38,22 @@ Key differences from NTIA 2021:
     - Software Producer replaces Supplier Name
     - Software Identifiers requires at least one (not optional)
     - Stricter timestamp validation (ISO 8601 enforced)
+
+Generation Context recognition:
+    - CycloneDX: metadata.lifecycles[].phase is the authoritative path
+      (see https://cyclonedx.org/guides/sbom/lifecycle_phases/).
+      A property fallback in metadata.properties is also accepted.
+      The sanctioned fallback property name is 'internal:sbom:generationContext'
+      (under the taxonomy-registered 'internal' namespace). The legacy
+      'cdx:sbom:generationContext' name is still accepted for backward
+      compatibility, but it is not part of the CycloneDX property
+      taxonomy; new data should use one of the sanctioned paths.
+    - SPDX 2.3: recognised via creationInfo.comment, the top-level
+      DocumentComment, or an OTHER annotation describing the document.
+      Per SPDX 2.3 §12, a top-level annotation with spdxElementId pointing
+      at a specific package describes that package — not the SBOM — so
+      such annotations do NOT satisfy the document-level Generation
+      Context check.
 """
 
 import json
@@ -50,6 +66,13 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
     is_spdx3,
+)
+from sbomify.apps.plugins.builtins._spdx_shared import (
+    iter_spdx3_elements,
+    spdx2_annotation_targets_document,
+    spdx2_root_spdxid,
+    spdx3_annotation_subject_matches,
+    spdx3_document_subjects,
 )
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -171,6 +194,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             name="cisa-minimum-elements-2025",
             version=self.VERSION,
             category=AssessmentCategory.COMPLIANCE,
+            supported_bom_types=["sbom"],
         )
 
     def assess(
@@ -294,17 +318,27 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         hash_failures: list[str] = []
         license_failures: list[str] = []
 
+        # Packages whose SPDXID signals they are file entries (not software
+        # packages) are skipped from per-component checks other than Name.
+        # Parity with BSI's _is_file_pkg helper and with the CDX file-type
+        # skip above.
+        def _is_file_pkg(p: dict[str, Any]) -> bool:
+            return "-File-" in str(p.get("SPDXID") or "")
+
         # Check each package for required elements
         for i, package in enumerate(packages):
             package_name = package.get("name", f"Package {i + 1}")
 
+            # 3. Component name — applies to every entry including file pkgs.
+            if not package.get("name"):
+                component_name_failures.append(f"Package at index {i}")
+
+            if _is_file_pkg(package):
+                continue
+
             # 2. Software Producer (was Supplier Name)
             if not package.get("supplier"):
                 producer_failures.append(package_name)
-
-            # 3. Component name
-            if not package.get("name"):
-                component_name_failures.append(f"Package at index {i}")
 
             # 4. Component Version
             if not package.get("versionInfo"):
@@ -479,7 +513,8 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         Checks (per https://sbomify.com/compliance/schema-crosswalk/):
         - creationInfo.comment (CreatorComment)
         - document-level comment (DocumentComment)
-        - document-level annotations with cisa:generationContext
+        - document-level annotations with cisa:generationContext (scoped
+          to the document/DESCRIBES root via spdxElementId)
 
         Args:
             data: Full SPDX document dictionary.
@@ -487,28 +522,53 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         Returns:
             True if valid generation context found.
         """
-        # Check CreatorComment (creationInfo.comment)
-        # See: https://sbomify.com/compliance/schema-crosswalk/
-        creator_comment = data.get("creationInfo", {}).get("comment", "").lower()
-        if any(ctx in creator_comment for ctx in GENERATION_CONTEXT_VALUES):
-            return True
+        # Check CreatorComment (creationInfo.comment). Malformed SBOMs can
+        # emit null / non-string comment fields, so coerce defensively before
+        # calling .lower() — otherwise a crafted SBOM would crash the whole
+        # assessment instead of producing a clean "fail" finding.
+        creation_info = data.get("creationInfo") or {}
+        if isinstance(creation_info, dict):
+            creator_comment_raw = creation_info.get("comment", "")
+            if isinstance(creator_comment_raw, str):
+                creator_comment = creator_comment_raw.lower()
+                if any(ctx in creator_comment for ctx in GENERATION_CONTEXT_VALUES):
+                    return True
 
         # Check DocumentComment (document-level comment)
-        # See: https://sbomify.com/compliance/schema-crosswalk/
-        document_comment = data.get("comment", "").lower()
-        if any(ctx in document_comment for ctx in GENERATION_CONTEXT_VALUES):
-            return True
+        document_comment_raw = data.get("comment", "")
+        if isinstance(document_comment_raw, str):
+            document_comment = document_comment_raw.lower()
+            if any(ctx in document_comment for ctx in GENERATION_CONTEXT_VALUES):
+                return True
 
-        # Check document-level annotations for explicit cisa:generationContext
-        for annotation in data.get("annotations", []):
-            if annotation.get("annotationType") == "OTHER":
-                comment = annotation.get("comment", "")
-                if "cisa:generationContext=" in comment:
-                    for part in comment.split():
-                        if part.startswith("cisa:generationContext="):
-                            context = part.split("=", 1)[1].lower().strip()
-                            if context in GENERATION_CONTEXT_VALUES:
-                                return True
+        # Document-level annotations with explicit cisa:generationContext.
+        # Per SPDX 2.3 §12, only consider annotations whose spdxElementId
+        # points at the document or its DESCRIBES target — annotations
+        # targeting specific packages describe those packages, not the BOM.
+        root_spdxid = spdx2_root_spdxid(data)
+        annotations = data.get("annotations")
+        if not isinstance(annotations, list):
+            logger.debug(
+                "SPDX 2.x annotations has unexpected type %s; skipping generation-context scan",
+                type(annotations).__name__,
+            )
+            return False
+        for annotation in annotations:
+            if not isinstance(annotation, dict):
+                continue
+            if annotation.get("annotationType") != "OTHER":
+                continue
+            if not spdx2_annotation_targets_document(annotation, root_spdxid):
+                continue
+            comment = annotation.get("comment", "")
+            if not isinstance(comment, str):
+                continue
+            if "cisa:generationContext=" in comment:
+                for part in comment.split():
+                    if part.startswith("cisa:generationContext="):
+                        context = part.split("=", 1)[1].lower().strip()
+                        if context in GENERATION_CONTEXT_VALUES:
+                            return True
 
         return False
 
@@ -702,7 +762,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         Checks:
         - SpdxDocument comment field
         - CreationInfo comment field
-        - Annotation elements in @graph
+        - Annotation elements whose subject is the SpdxDocument or one of
+          its rootElements (package-scoped annotations describe those
+          packages, not the SBOM; see SPDX 3.0.1 §9 Annotation)
 
         Args:
             data: Full SPDX 3.0 document dictionary.
@@ -710,26 +772,41 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         Returns:
             True if valid generation context found.
         """
-        elements = data.get("@graph", data.get("elements", []))
+        # Shared helper returns (doc_ids, root_ids) separately so the
+        # annotation-scope filter can treat empty-subject annotations as
+        # document-scoped ONLY when at least one rootElement has been
+        # declared — mirroring the SPDX 2.x DESCRIBES-target requirement.
+        doc_ids, root_ids = spdx3_document_subjects(data)
 
-        for element in elements:
+        for element in iter_spdx3_elements(data):
             elem_type = element.get("type", element.get("@type", ""))
+            if not isinstance(elem_type, str):
+                continue
 
             # Check SpdxDocument comment
             if "SpdxDocument" in elem_type:
-                comment = element.get("comment", "").lower()
-                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
-                    return True
+                comment_raw = element.get("comment", "")
+                if isinstance(comment_raw, str):
+                    comment = comment_raw.lower()
+                    if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                        return True
 
             # Check CreationInfo comment
             if "CreationInfo" in elem_type:
-                comment = element.get("comment", "").lower()
-                if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
-                    return True
+                comment_raw = element.get("comment", "")
+                if isinstance(comment_raw, str):
+                    comment = comment_raw.lower()
+                    if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
+                        return True
 
-            # Check Annotation elements
+            # Check Annotation elements via the shared subject filter.
             if "Annotation" in elem_type:
-                comment = element.get("statement", element.get("comment", "")).lower()
+                if not spdx3_annotation_subject_matches(element, doc_ids, root_ids):
+                    continue
+                raw_comment = element.get("statement", element.get("comment", ""))
+                if not isinstance(raw_comment, str):
+                    continue
+                comment = raw_comment.lower()
                 if any(ctx in comment for ctx in GENERATION_CONTEXT_VALUES):
                     return True
                 # Check for explicit cisa:generationContext
@@ -776,6 +853,21 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
+            # Skip type=file components (lockfiles, config files, etc.) —
+            # they're input metadata, not software packages. The per-component
+            # CISA fields (producer, version, identifier, hash, licence) apply
+            # to software components only. Parity with the BSI, NTIA, and
+            # FDA plugins. Component Name is still checked because a missing
+            # name on a file entry is still a data-quality issue.
+            is_file_type = str(component.get("type", "")).lower() == "file"
+
+            # 3. Component name (applies to all component types)
+            if not component.get("name"):
+                component_name_failures.append(f"Component at index {i}")
+
+            if is_file_type:
+                continue
+
             # 2. Software Producer (publisher or supplier.name)
             supplier_field = component.get("supplier")
             supplier = component.get("publisher") or (
@@ -783,10 +875,6 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             )
             if not supplier:
                 producer_failures.append(component_name)
-
-            # 3. Component name
-            if not component.get("name"):
-                component_name_failures.append(f"Component at index {i}")
 
             # 4. Component Version
             if not component.get("version"):
@@ -929,9 +1017,13 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
                 status="pass" if has_generation_context else "fail",
                 details=None if has_generation_context else "No generation context found in metadata",
                 remediation=(
-                    "Add metadata.lifecycles[].phase (preferred) with value: design, pre-build, "
-                    "build, post-build, operations, discovery, or decommission. Alternatively, "
-                    "add property 'cdx:sbom:generationContext' in metadata.properties."
+                    "Add metadata.lifecycles[].phase (preferred, CycloneDX-sanctioned) "
+                    "with value: design, pre-build, build, post-build, operations, "
+                    "discovery, or decommission. Alternatively, add property "
+                    "'internal:sbom:generationContext' in metadata.properties. Note: "
+                    "the legacy 'cdx:sbom:generationContext' name is still recognised "
+                    "for backward compatibility but is deprecated — unofficial names "
+                    "must not be used under the cdx: namespace."
                 ),
             )
         )
@@ -960,34 +1052,60 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             return any(comp.get("name") for comp in components)
         return False
 
+    # Sanctioned property name under the "internal" taxonomy namespace
+    # (reserved for private/custom properties). Used as a fallback to
+    # metadata.lifecycles[].phase when that field isn't populated.
+    _GENERATION_CONTEXT_PROP = "internal:sbom:generationContext"
+    # Deprecated name under the reserved cdx: namespace. Kept for backward
+    # compatibility with SBOMs emitted by earlier sbomify-action versions;
+    # new data should use metadata.lifecycles[].phase or the internal: name.
+    # Per the CycloneDX property taxonomy, unofficial names MUST NOT be used
+    # under the cdx: namespace. See:
+    # https://cyclonedx.github.io/cyclonedx-property-taxonomy/cdx.html
+    _LEGACY_GENERATION_CONTEXT_PROP = "cdx:sbom:generationContext"
+
     def _cyclonedx_has_generation_context(self, metadata: dict[str, Any]) -> bool:
-        """Check if CycloneDX metadata has generation context property.
+        """Check if CycloneDX metadata has generation context information.
 
-        Checks both (per https://sbomify.com/compliance/schema-crosswalk/):
-        - metadata.lifecycles[].phase (preferred)
-        - metadata.properties[] with name "cdx:sbom:generationContext"
+        Primary source (CycloneDX-sanctioned):
+            - metadata.lifecycles[].phase
 
-        Args:
-            metadata: CycloneDX metadata dictionary.
-
-        Returns:
-            True if valid generation context property found.
+        Fallbacks (metadata.properties[] with name equal to):
+            - internal:sbom:generationContext (taxonomy-compliant namespace)
+            - cdx:sbom:generationContext (deprecated; kept for backward compat)
         """
-        # Check metadata.lifecycles[].phase (preferred per schema crosswalk)
-        # CycloneDX 1.5+ supports lifecycle phases: design, pre-build, build,
-        # post-build, operations, discovery, decommission
-        # See: https://sbomify.com/compliance/schema-crosswalk/
-        lifecycles = metadata.get("lifecycles", [])
-        for lifecycle in lifecycles:
-            phase = lifecycle.get("phase", "").lower().strip()
-            if phase in GENERATION_CONTEXT_VALUES:
-                return True
+        # Primary: metadata.lifecycles[].phase per CycloneDX spec
+        # (https://cyclonedx.org/guides/sbom/lifecycle_phases/)
+        lifecycles = metadata.get("lifecycles") or []
+        if isinstance(lifecycles, list):
+            for lifecycle in lifecycles:
+                if not isinstance(lifecycle, dict):
+                    continue
+                phase_raw = lifecycle.get("phase", "")
+                if not isinstance(phase_raw, str):
+                    continue
+                phase = phase_raw.lower().strip()
+                if phase in GENERATION_CONTEXT_VALUES:
+                    return True
 
-        # Check metadata.properties[] for custom generation context property
-        properties = metadata.get("properties", [])
+        # Fallback properties
+        properties = metadata.get("properties") or []
+        if not isinstance(properties, list):
+            logger.debug(
+                "CycloneDX metadata.properties has unexpected type %s; "
+                "skipping property-based generation-context fallback",
+                type(properties).__name__,
+            )
+            return False
+        accepted_names = (self._GENERATION_CONTEXT_PROP, self._LEGACY_GENERATION_CONTEXT_PROP)
         for prop in properties:
-            if prop.get("name") == "cdx:sbom:generationContext":
-                value = prop.get("value", "").lower().strip()
+            if not isinstance(prop, dict):
+                continue
+            if prop.get("name") in accepted_names:
+                value_raw = prop.get("value", "")
+                if not isinstance(value_raw, str):
+                    continue
+                value = value_raw.lower().strip()
                 if value in GENERATION_CONTEXT_VALUES:
                     return True
 

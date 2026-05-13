@@ -210,6 +210,13 @@ class Team(models.Model):
         default=False,
         help_text="Enable Transparency Exchange API (TEA) for this workspace",
     )
+    security_txt_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="RFC 9116 security.txt configuration. Keys: enabled (bool), expires (ISO 8601), "
+        "contact_id (str), policy_url (str), encryption_urls (list[str]), encryption_url (str, legacy), "
+        "acknowledgments_url (str), canonical_url (str), hiring_url (str), preferred_languages (str)",
+    )
     members: models.ManyToManyField[User, Any] = models.ManyToManyField(settings.AUTH_USER_MODEL, through="Member")
 
     def __str__(self) -> str:

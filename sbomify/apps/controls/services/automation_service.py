@@ -26,7 +26,12 @@ PLUGIN_CONTROL_MAP: dict[str, list[str]] = {
     "osv": ["CC6.8", "CC7.1", "CC7.2", "CC7.3"],
     "dependency-track": ["CC6.8", "CC7.1", "CC7.2"],
     "checksum": ["CC6.6", "CC6.7"],
-    "github-attestation": ["CC8.1"],
+    # ``sbom-verification`` is the unified attestation plugin (formerly the
+    # separate ``github-attestation`` plugin). It satisfies CC8.1 (Change
+    # Management) by cryptographically verifying the SBOM artifact via any
+    # of: cosign-bundle signature, SLSA provenance subject digest, or
+    # GitHub-published Sigstore attestation.
+    "sbom-verification": ["CC8.1"],
     "bsi-tr03183-v2.1-compliance": ["CC2.1", "CC5.1", "CC5.2"],
     "cra-compliance-2024": ["CC5.1", "CC5.2", "CC5.3"],
 }
@@ -40,8 +45,11 @@ def get_automation_mappings() -> dict[str, list[str]]:
 def _is_passing(run: AssessmentRun) -> bool:
     """Determine whether an assessment run's result is passing.
 
-    For security plugins: passing means no vulnerabilities found.
-    For compliance/other plugins: passing means no failures and no errors.
+    Mirrors ``PluginOrchestrator._is_passing`` — kept in sync because both
+    feed downstream consumers (control-status promotion here, dependency
+    gates in the orchestrator). For non-security plugins, "passing"
+    requires at least one explicit pass finding so a warnings-only run
+    cannot promote a control to ``compliant`` on no positive evidence.
     """
     if not run.result or not isinstance(run.result, dict):
         return False
@@ -59,7 +67,13 @@ def _is_passing(run: AssessmentRun) -> bool:
 
     fail_count: int = summary.get("fail_count", 0)
     error_count: int = summary.get("error_count", 0)
-    return fail_count == 0 and error_count == 0
+    # Legacy summaries (from before pass_count was tracked) won't have
+    # the key. Treat absent-key as the old contract so historical runs
+    # don't retroactively flip from "promote control" to "don't promote".
+    pass_count = summary.get("pass_count")
+    if pass_count is None:
+        return fail_count == 0 and error_count == 0
+    return fail_count == 0 and error_count == 0 and pass_count > 0
 
 
 def auto_update_from_assessment(team: Team, plugin_name: str, passed: bool) -> ServiceResult[int]:

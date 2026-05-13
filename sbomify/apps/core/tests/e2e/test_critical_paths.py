@@ -16,7 +16,7 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
@@ -78,7 +78,7 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
@@ -118,7 +118,6 @@ class TestCriticalPaths:
             name="Community",
             description="Free plan",
             max_products=1,
-            max_projects=1,
             max_components=5,
         )
 
@@ -147,7 +146,7 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
         )
         team.billing_plan = "e2e_plan"
         team.save()
@@ -194,7 +193,7 @@ class TestCriticalPaths:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10, max_projects=10
+            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
         )
         team.billing_plan = "e2e_plan"
         team.save()

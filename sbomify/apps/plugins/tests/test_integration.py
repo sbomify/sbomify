@@ -28,7 +28,6 @@ def test_team(db) -> Team:
         defaults={
             "name": "Business",
             "max_products": 10,
-            "max_projects": 10,
             "max_components": 100,
             "max_users": 10,
         },
@@ -93,7 +92,7 @@ def registered_checksum_plugin(db):
         description="Computes SHA256 checksum of SBOM content",
         category=AssessmentCategory.COMPLIANCE.value,
         version="1.0.0",
-        plugin_class_path="sbomify.apps.plugins.builtins.ChecksumPlugin",
+        plugin_class_path="sbomify.apps.plugins.builtins.checksum.ChecksumPlugin",
         is_enabled=True,
     )
     yield plugin

@@ -1,44 +1,38 @@
 {% extends "core/emails/base.html.j2" %}
-{% block title %}Your Quick Start Guide - sbomify{% endblock %}
+{% block title %}Your quick start guide - sbomify{% endblock %}
 {% block content %}
     <h1>Your quick start guide, {{ user.first_name|default:user.username }}!</h1>
-    <p>Ready to get the most out of sbomify? Here's a quick walkthrough of how everything fits together.</p>
-    <h2>How sbomify Organizes Your Software</h2>
-    <p>sbomify uses a simple three-level hierarchy:</p>
-    <div class="highlight-box">
-        <h3>Products → Projects → Components</h3>
-        <p>
-            <strong>Products</strong> are your main software offerings (e.g., "Online Store")
-        </p>
-        <p>
-            <strong>Projects</strong> are the parts of a product (e.g., "Backend API", "Mobile App")
-        </p>
-        <p>
-            <strong>Components</strong> are the individual pieces you track — each gets an SBOM
-        </p>
-    </div>
-    <h2>Get Started in 3 Steps</h2>
+    <p>Getting started with sbomify is easy. Here's how to get your first SBOM up and running:</p>
+    <h2>3 Simple Steps</h2>
     <ul class="feature-list">
         <li>
-            <strong>Create a product</strong> — give it a name that matches your software
+            <strong>Create a product</strong> for your software (e.g., "My Web App")
         </li>
         <li>
-            <strong>Add a project</strong> — organize the parts of your product
+            <strong>Add a component</strong> for each piece you want to track
         </li>
         <li>
-            <strong>Create a component and upload an SBOM</strong> — use our
+            <strong>Upload an SBOM</strong> using our
             <a href="https://github.com/sbomify/sbomify-action" target="_blank">GitHub Action</a>
-            to generate SBOMs automatically
+            or upload one manually
         </li>
     </ul>
+    <p>
+        Once your SBOM is uploaded, head over to Plugins to enable vulnerability
+        scanning and compliance checks.
+    </p>
     <p style="text-align: center; margin: 32px 0;">
         <a href="{{ app_base_url }}/dashboard" class="button">Go to Dashboard</a>
     </p>
     <div class="highlight-box">
         <h3>Pro Tip</h3>
         <p>
-            Our GitHub Action can generate and upload SBOMs automatically with every push or release.
-            Set it up once and your SBOMs stay current without any manual work.
+            Our GitHub Action generates and uploads SBOMs automatically with every push
+            or release. Set it up once and your SBOMs stay current without any manual work.
         </p>
     </div>
+    <p>
+        Want to learn more? Check out our <a href="https://sbomify.com/faq">FAQ</a>.
+        Got questions? Just reply to this email.
+    </p>
 {% endblock %}

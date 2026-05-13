@@ -19,7 +19,6 @@ from .fixtures import (  # noqa: F401
     sample_billing_plan,
     sample_component,
     sample_product,
-    sample_project,
     sample_sbom,
     sample_team_with_owner_member,
     sample_user,
@@ -126,17 +125,71 @@ class TestBuildSbomsTableContext:
         assert sorted_sboms[1]["sbom"]["id"] == 3  # Older alpha second
         assert sorted_sboms[2]["sbom"]["name"] == "zebra"
 
-    @patch("sbomify.apps.plugins.apis.get_sbom_assessment_badge")
     @patch("sbomify.apps.sboms.services.sboms_table.list_component_sboms")
     @patch("sbomify.apps.sboms.services.sboms_table.get_component")
-    def test_enriches_with_assessments(
+    def test_passes_through_assessments_from_inner_api(
         self,
         mock_get_component,
         mock_list_sboms,
-        mock_assessment_badge,
         mock_request,
     ):
-        """Each SBOM item has 'assessments' key."""
+        """``assessments`` is populated by ``list_component_sboms`` directly.
+
+        The badge enrichment loop was removed in the N+1 refactor — the
+        inner API now returns everything the table renders, so this test
+        verifies the context layer preserves the inner payload verbatim
+        rather than re-fetching it.
+        """
+        from datetime import datetime, timezone
+
+        mock_get_component.return_value = (
+            200,
+            {"id": "comp123", "has_crud_permissions": True},
+        )
+        assessments_payload = {
+            "sbom_id": "1",
+            "overall_status": "all_pass",
+            "total_assessments": 1,
+            "passing_count": 1,
+            "failing_count": 0,
+            "pending_count": 0,
+            "skipped_count": 0,
+            "plugins": [
+                {"name": "ntia-minimum-elements-2021", "display_name": "NTIA", "status": "pass", "findings_count": 7}
+            ],
+        }
+        mock_list_sboms.return_value = (
+            200,
+            {
+                "items": [
+                    {
+                        "sbom": {
+                            "id": 1,
+                            "name": "test",
+                            "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+                        },
+                        "assessments": assessments_payload,
+                    }
+                ]
+            },
+        )
+
+        result = build_sboms_table_context(mock_request, "comp123", is_public_view=True)
+
+        assert result.ok is True
+        assert result.value["sboms"][0]["assessments"] == assessments_payload
+
+    @patch("sbomify.apps.sboms.services.sboms_table.list_component_sboms")
+    @patch("sbomify.apps.sboms.services.sboms_table.get_component")
+    def test_missing_inner_assessments_is_passed_through(
+        self,
+        mock_get_component,
+        mock_list_sboms,
+        mock_request,
+    ):
+        """If the inner API didn't include ``assessments`` (e.g. legacy
+        cached payload), the context layer must not invent one — it
+        passes the item through unchanged rather than re-fetching."""
         from datetime import datetime, timezone
 
         mock_get_component.return_value = (
@@ -157,51 +210,12 @@ class TestBuildSbomsTableContext:
                 ]
             },
         )
-        mock_assessment_badge.return_value = MagicMock(model_dump=lambda: {"status": "pass", "count": 5})
 
         result = build_sboms_table_context(mock_request, "comp123", is_public_view=True)
 
         assert result.ok is True
-        assert "assessments" in result.value["sboms"][0]
-        assert result.value["sboms"][0]["assessments"]["status"] == "pass"
-
-    @patch("sbomify.apps.plugins.apis.get_sbom_assessment_badge")
-    @patch("sbomify.apps.sboms.services.sboms_table.list_component_sboms")
-    @patch("sbomify.apps.sboms.services.sboms_table.get_component")
-    def test_assessment_exception_returns_none(
-        self,
-        mock_get_component,
-        mock_list_sboms,
-        mock_assessment_badge,
-        mock_request,
-    ):
-        """Exception in get_sbom_assessment_badge yields None for assessments."""
-        from datetime import datetime, timezone
-
-        mock_get_component.return_value = (
-            200,
-            {"id": "comp123", "has_crud_permissions": True},
-        )
-        mock_list_sboms.return_value = (
-            200,
-            {
-                "items": [
-                    {
-                        "sbom": {
-                            "id": 1,
-                            "name": "test",
-                            "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-                        }
-                    }
-                ]
-            },
-        )
-        mock_assessment_badge.side_effect = Exception("API Error")
-
-        result = build_sboms_table_context(mock_request, "comp123", is_public_view=True)
-
-        assert result.ok is True
-        assert result.value["sboms"][0]["assessments"] is None
+        # No surreptitious extra DB / HTTP fetch — whatever the API gave us is what the template gets.
+        assert result.value["sboms"][0].get("assessments") is None
 
     @patch("sbomify.apps.sboms.services.sboms_table.list_component_sboms")
     @patch("sbomify.apps.sboms.services.sboms_table.get_component")

@@ -58,7 +58,7 @@ def public_component(team_with_business_plan):
     return Component.objects.create(
         name="Public Component",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -69,7 +69,7 @@ def private_component(team_with_business_plan):
     return Component.objects.create(
         name="Private Component",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PRIVATE,
     )
 
@@ -80,7 +80,7 @@ def gated_component(team_with_business_plan):
     return Component.objects.create(
         name="Gated Component",
         team=team_with_business_plan,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.GATED,
     )
 

@@ -3,9 +3,15 @@ fly.toml
 *.sqlite3
 .venv/
 .env
-poetry.toml
 localstack-volume/
 test_env
 sboms/tests/test_data/osv-scanner.toml
 **/__snapshots__/
 **/__diffs__/
+node_modules/
+.mypy_cache/
+.claude/
+screencasts/
+.ruff_cache/
+.pytest_cache/
+**/__pycache__/

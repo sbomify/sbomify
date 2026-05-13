@@ -1,15 +1,10 @@
-Dear {{ user_name }},
+Hi {{ user_name }},
 
-Your trial period for {{ team_name }} has expired.
-
-To continue using all features and maintain uninterrupted access to your account, please upgrade to a paid plan.
+Your trial for {{ team_name }} has ended. Upgrade to a paid plan to continue using all features.
 
 Upgrade now: {{ upgrade_url }}
 
-If you have any questions or need assistance, please contact our support team.
-
-Regards,
+Cheers,
 The sbomify Team
 
-─────────────────────────────
-Need help? Visit {{ base_url }}/support/contact/
+Questions? We're here to help: {{ base_url }}/support/contact/

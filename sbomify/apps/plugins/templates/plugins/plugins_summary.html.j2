@@ -1,0 +1,32 @@
+{% if plugin_stats %}
+    <div class="flex items-center flex-wrap gap-x-6 gap-y-2 text-sm">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-puzzle-piece text-primary"></i>
+            <span class="font-semibold text-text">{{ plugin_stats.total }}</span>
+            <span class="text-text-muted">available</span>
+        </div>
+        <div class="w-px h-4 bg-border"></div>
+        <div class="flex items-center gap-2">
+            <i class="fas fa-check-circle text-success"></i>
+            <span class="font-semibold text-text">{{ plugin_stats.enabled }}</span>
+            <span class="text-text-muted">enabled</span>
+        </div>
+        <div class="w-px h-4 bg-border"></div>
+        {% for category, count in plugin_stats.categories.items %}
+            <div class="flex items-center gap-2">
+                {% if category == "security" %}
+                    <i class="fas fa-shield-alt text-info"></i>
+                {% elif category == "compliance" %}
+                    <i class="fas fa-clipboard-check text-info"></i>
+                {% elif category == "attestation" %}
+                    <i class="fas fa-certificate text-info"></i>
+                {% else %}
+                    <i class="fas fa-plug text-info"></i>
+                {% endif %}
+                <span class="font-semibold text-text">{{ count }}</span>
+                <span class="text-text-muted capitalize">{{ category }}</span>
+            </div>
+            {% if not forloop.last %}<div class="w-px h-4 bg-border"></div>{% endif %}
+        {% endfor %}
+    </div>
+{% endif %}

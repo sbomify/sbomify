@@ -1,0 +1,41 @@
+{# CRA Wizard Step Progress Bar #}
+{# Expects: step (int), step_names (dict), completed_steps (list), assessment_id (str) #}
+<nav aria-label="Wizard progress" class="mb-8">
+    <ol class="flex items-center w-full">
+        {% for step_num, step_label in step_names.items %}
+            <li class="flex items-center {% if not forloop.last %}flex-1{% endif %}">
+                {# djlint:off H025 #}
+                {% if step_num in completed_steps and step_num != step %}
+                    <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step_num %}"
+                       class="flex items-center gap-2 group">
+                    {% elif step_num == step %}
+                        <span class="flex items-center gap-2">
+                        {% else %}
+                            <span class="flex items-center gap-2">
+                            {% endif %}
+                            {# Step circle #}
+                            <span class="flex items-center justify-center w-8 h-8 rounded-full border-2 shrink-0 transition-colors {% if step_num == step %} border-primary bg-primary text-white {% elif step_num in completed_steps %} border-green-500 bg-green-500 text-white {% else %} border-border bg-surface text-text-muted {% endif %} ">
+                                {% if step_num in completed_steps and step_num != step %}
+                                    <i class="fas fa-check text-xs"></i>
+                                {% else %}
+                                    <span class="text-sm font-medium">{{ step_num }}</span>
+                                {% endif %}
+                            </span>
+                            {# Step label (hidden on mobile) #}
+                            <span class="hidden sm:inline text-sm {% if step_num == step %}text-text font-medium{% elif step_num in completed_steps %}text-green-600 dark:text-green-400{% else %}text-text-muted{% endif %}">
+                                {{ step_label }}
+                            </span>
+                            {% if step_num in completed_steps and step_num != step %}
+                            </a>
+                        {% else %}
+                        </span>
+                    {% endif %}
+                    {# djlint:on H025 #}
+                    {# Connector line #}
+                    {% if not forloop.last %}
+                        <div class="flex-1 h-0.5 mx-3 {% if step_num in completed_steps %}bg-green-500{% else %}bg-border{% endif %}"></div>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ol>
+    </nav>

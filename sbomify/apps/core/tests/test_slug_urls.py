@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 import pytest
 from django.core.cache import cache
 
-from sbomify.apps.core.models import Component, Product, Project, Release
+from sbomify.apps.core.models import Component, Product, Release
 from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
@@ -57,23 +57,11 @@ def product_with_slug(db, custom_domain_team):
 
 
 @pytest.fixture
-def project_with_slug(db, custom_domain_team, product_with_slug):
-    """Create a public project with a predictable slug."""
-    project = Project.objects.create(
-        name="My Test Project",  # slug will be "my-test-project"
-        team=custom_domain_team,
-        is_public=True,
-    )
-    project.products.add(product_with_slug)
-    return project
-
-
-@pytest.fixture
 def component_with_slug(db, custom_domain_team):
     """Create a public component with a predictable slug."""
     component = Component.objects.create(
         name="My Test Component",  # slug will be "my-test-component"
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         team=custom_domain_team,
         visibility=Component.Visibility.PUBLIC,
         is_global=True,
@@ -99,9 +87,6 @@ class TestSlugGeneration:
         """Test that product slug is generated correctly."""
         assert product_with_slug.slug == "my-test-product"
 
-    def test_project_slug(self, project_with_slug):
-        """Test that project slug is generated correctly."""
-        assert project_with_slug.slug == "my-test-project"
 
     def test_component_slug(self, component_with_slug):
         """Test that component slug is generated correctly."""
@@ -143,15 +128,6 @@ class TestSlugRoutingOnCustomDomain:
         assert response.status_code == 200
         assert product_with_slug.name.encode() in response.content
 
-    def test_project_by_slug_redirects_to_product(self, client, project_with_slug):
-        """Test that /project/{slug}/ redirects to product page on custom domain."""
-        response = client.get(
-            f"/project/{project_with_slug.slug}/",
-            HTTP_HOST="trust.example.com"
-        )
-        # Projects now redirect to their parent product page
-        assert response.status_code == 302
-        assert "/product/" in response.url
 
     def test_component_by_slug(self, client, component_with_slug):
         """Test that /component/{slug}/ works on custom domain."""
@@ -214,12 +190,6 @@ class TestSlugRoutingOnMainDomain:
         assert parsed.netloc == "trust.example.com"
         assert f"/product/{product_with_slug.slug}/" in response.url
 
-    def test_project_by_id_on_main_domain_redirects_to_product(self, client, project_with_slug):
-        """Test that /public/project/{id}/ redirects to parent product."""
-        response = client.get(f"/public/project/{project_with_slug.id}/")
-        # Projects now redirect to their parent product page
-        assert response.status_code == 302
-        assert "/product/" in response.url
 
     def test_component_by_id_on_main_domain(self, client, component_with_slug):
         """Test that /public/component/{id}/ redirects to custom domain."""

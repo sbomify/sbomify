@@ -357,6 +357,43 @@ class TestSBOMLevelValidation:
         assert finding is not None
         assert finding.status == "fail"
 
+    def test_sbom_creator_from_authors_email_passes(self):
+        """SBOM creator found via metadata.authors[].email should pass."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["metadata"]["manufacturer"] = {"name": "No Contact"}
+        sbom["metadata"]["authors"] = [{"name": "Dev", "email": "dev@example.com"}]
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:sbom-creator")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_sbom_creator_from_supplier_url_passes(self):
+        """SBOM creator found via metadata.supplier.url should pass."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["metadata"]["manufacturer"] = {"name": "No Contact"}
+        sbom["metadata"]["supplier"] = {
+            "name": "Supplier Corp",
+            "url": ["https://supplier.example.com"],
+        }
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:sbom-creator")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_sbom_creator_no_email_no_url_anywhere_fails(self):
+        """No email or URL in manufacturer, supplier, or authors should fail."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["metadata"]["manufacturer"] = {"name": "No Contact"}
+        sbom["metadata"]["supplier"] = {"name": "No URL"}
+        sbom["metadata"]["authors"] = [{"name": "No Email"}]
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:sbom-creator")
+        assert finding is not None
+        assert finding.status == "fail"
+
     def test_timestamp_valid_passes(self):
         """Valid ISO-8601 timestamp should pass."""
         sbom = create_base_cyclonedx_sbom()
@@ -723,6 +760,338 @@ class TestUniqueIdentifiersValidation:
         assert finding.status == "warning"
 
 
+class TestAdditionalDataFields:
+    """Tests for BSI §5.2.3 / §5.2.4 additional-data-fields (MUST if exists)."""
+
+    # --- SBOM-URI (§5.2.3) ---
+
+    def test_cyclonedx_sbom_uri_pass_with_serialnumber(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["serialNumber"] = "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_cyclonedx_sbom_uri_warns_without_serialnumber(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom.pop("serialNumber", None)
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_cyclonedx_sbom_uri_warns_on_non_urn_serialnumber(self):
+        """Per CDX schema, serialNumber MUST be ``urn:uuid:<uuid>``. Arbitrary
+        strings must not be treated as a valid SBOM URI."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["serialNumber"] = "not-a-urn-uuid"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    # --- Source code URI (§5.2.4) ---
+
+    def test_cyclonedx_source_code_uri_pass_via_vcs_ref(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["externalReferences"] = [
+            {"type": "vcs", "url": "https://github.com/example/example-component"}
+        ]
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_cyclonedx_source_code_uri_warns_without_ref(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0].pop("externalReferences", None)
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    # --- URI of deployable form (§5.2.4) ---
+
+    def test_cyclonedx_deployable_uri_pass_via_distribution_ref(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["externalReferences"] = [
+            {"type": "distribution", "url": "https://example.com/example-component.whl"}
+        ]
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_cyclonedx_deployable_uri_warns_without_distribution_ref(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0].pop("externalReferences", None)
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    # --- Original licences (§5.2.4) ---
+
+    def test_cyclonedx_original_licences_pass_via_declared_acknowledgement(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["licenses"] = [{"expression": "MIT", "acknowledgement": "declared"}]
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_cyclonedx_original_licences_pass_via_bsi_property(self):
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["properties"].append({"name": "bsi:component:effectiveLicence", "value": "MIT"})
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_cyclonedx_original_licences_warns_when_only_concluded(self):
+        sbom = create_base_cyclonedx_sbom()
+        # Base fixture only has acknowledgement="concluded" (effective licence).
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_cyclonedx_original_licences_pass_via_associatedLicences_bsi_property(self):
+        """BSI taxonomy legacy property bsi:component:associatedLicences is
+        also accepted as an original-licence signal, alongside the newer
+        bsi:component:effectiveLicence."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"][0]["properties"].append({"name": "bsi:component:associatedLicences", "value": "MIT"})
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    # --- SPDX 3.x BSI §5.2.3 / §5.2.4 paths --------------------------------
+
+    def test_spdx3_sbom_uri_pass_when_spdxdocument_has_id(self):
+        sbom = create_base_spdx3_sbom()
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx3_sbom_uri_warns_when_no_spdxdocument_present(self):
+        sbom = create_base_spdx3_sbom()
+        # Remove the SpdxDocument element entirely.
+        sbom["@graph"] = [e for e in sbom["@graph"] if e.get("type") != "SpdxDocument"]
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx3_source_code_uri_pass_via_software_sourceInfo(self):
+        sbom = create_base_spdx3_sbom()
+        for element in sbom["@graph"]:
+            if element.get("type") == "software_Package":
+                element["software_sourceInfo"] = "https://example.com/source"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx3_source_code_uri_pass_via_external_identifier(self):
+        sbom = create_base_spdx3_sbom()
+        for element in sbom["@graph"]:
+            if element.get("type") == "software_Package":
+                element.setdefault("externalIdentifiers", []).append(
+                    {
+                        "externalIdentifierType": "vcs",
+                        "identifier": "https://github.com/example/repo",
+                    }
+                )
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx3_source_code_uri_warns_when_absent(self):
+        sbom = create_base_spdx3_sbom()
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx3_deployable_uri_pass_via_software_downloadLocation(self):
+        sbom = create_base_spdx3_sbom()
+        for element in sbom["@graph"]:
+            if element.get("type") == "software_Package":
+                element["software_downloadLocation"] = "https://example.com/pkg.whl"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx3_deployable_uri_warns_when_absent(self):
+        sbom = create_base_spdx3_sbom()
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx3_original_licences_pass_via_hasDeclaredLicense(self):
+        sbom = create_base_spdx3_sbom()
+        sbom["@graph"].append(
+            {
+                "type": "Relationship",
+                "spdxId": "SPDXRef-Rel-Declared",
+                "from": "SPDXRef-Package-1",
+                "relationshipType": "hasDeclaredLicense",
+                "to": ["SPDXRef-License-1"],
+            }
+        )
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx3_original_licences_warns_when_only_concluded(self):
+        sbom = create_base_spdx3_sbom()
+        # Base fixture has hasConcludedLicense but no hasDeclaredLicense.
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    # --- SPDX 2.x BSI §5.2.3 / §5.2.4 paths --------------------------------
+
+    def test_spdx2_sbom_uri_pass_via_documentNamespace(self):
+        sbom = create_base_spdx2_sbom()
+        sbom["documentNamespace"] = "https://example.com/docs/abc-1.0"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx_2_2_assessed_same_as_2_3(self):
+        """An SPDX 2.2 document must produce the same finding IDs + statuses
+        as the same content under spdxVersion: "SPDX-2.3". The BSI plugin
+        dispatches both through the shared SPDX 2.x code path; pin the
+        behaviour so a future schema tightening on 2.2 doesn't silently
+        drop compliance signals from uploads that use that version.
+        """
+        sbom_23 = create_base_spdx2_sbom()
+        sbom_23["documentNamespace"] = "https://example.com/docs/same-base"
+        result_23 = assess_sbom(sbom_23)
+
+        sbom_22 = create_base_spdx2_sbom()
+        sbom_22["spdxVersion"] = "SPDX-2.2"
+        sbom_22["documentNamespace"] = "https://example.com/docs/same-base"
+        # SPDX 2.2 requires packages to carry the three licence fields
+        # (kept optional in 2.3). Populate them so the document validates
+        # against the 2.2-specific schema.
+        for pkg in sbom_22["packages"]:
+            pkg.setdefault("downloadLocation", "NOASSERTION")
+            pkg.setdefault("copyrightText", "NOASSERTION")
+            pkg.setdefault("licenseConcluded", "NOASSERTION")
+            pkg.setdefault("licenseDeclared", "NOASSERTION")
+        result_22 = assess_sbom(sbom_22)
+
+        findings_23 = {f.id: f.status for f in result_23.findings}
+        findings_22 = {f.id: f.status for f in result_22.findings}
+        assert findings_22 == findings_23, f"SPDX 2.2 vs 2.3 diverged: 22={findings_22}, 23={findings_23}"
+
+    def test_spdx2_sbom_uri_warns_without_documentNamespace(self):
+        sbom = create_base_spdx2_sbom()
+        sbom.pop("documentNamespace", None)
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:sbom-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx2_source_code_uri_pass_via_sourceInfo(self):
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["sourceInfo"] = "https://github.com/example/repo"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx2_source_code_uri_pass_via_externalRefs_vcs(self):
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0].setdefault("externalRefs", []).append(
+            {
+                "referenceCategory": "SOURCE_CODE",
+                "referenceType": "vcs",
+                "referenceLocator": "git+https://github.com/example/repo",
+            }
+        )
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx2_source_code_uri_warns_when_absent(self):
+        sbom = create_base_spdx2_sbom()
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:source-code-uri")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx2_deployable_uri_pass_via_downloadLocation(self):
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["downloadLocation"] = "https://pypi.org/simple/example/"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx2_deployable_uri_rejects_noassertion_placeholder(self):
+        """NOASSERTION / NONE placeholders do not count as a deployable URI."""
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["downloadLocation"] = "NOASSERTION"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx2_deployable_uri_rejects_none_placeholder(self):
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["downloadLocation"] = "NONE"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:uri-deployable-form")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx2_original_licences_pass_via_licenseDeclared(self):
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["licenseDeclared"] = "MIT"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "pass"
+
+    def test_spdx2_original_licences_rejects_noassertion(self):
+        """licenseDeclared = NOASSERTION does not count as an original licence."""
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["licenseDeclared"] = "NOASSERTION"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "warning"
+
+    def test_spdx2_original_licences_rejects_none(self):
+        """licenseDeclared = NONE does not count as an original licence.
+
+        Per SPDX 2.3 Clause 7, NONE means "no license information whatsoever",
+        which is distinct from NOASSERTION (no determination made). BSI §5.2.4
+        requires the original licence to be provided when it exists — both
+        placeholders signal the absence of useful data and must be rejected.
+        """
+        sbom = create_base_spdx2_sbom()
+        sbom["packages"][0]["licenseDeclared"] = "NONE"
+        result = assess_sbom(sbom)
+        finding = get_finding(result, "bsi-tr03183:original-licences")
+        assert finding is not None
+        assert finding.status == "warning"
+
+
 class TestVulnerabilityCheck:
     """Tests for vulnerability exclusion check (BSI §3.1)."""
 
@@ -782,7 +1151,7 @@ class TestAttestationCheck:
         dependency_status = {
             "requires_one_of": {
                 "satisfied": True,
-                "passing_plugins": ["github-attestation"],
+                "passing_plugins": ["sbom-verification"],
                 "failed_plugins": [],
             }
         }
@@ -791,7 +1160,7 @@ class TestAttestationCheck:
         finding = get_finding(result, "bsi-tr03183:attestation-check")
         assert finding is not None
         assert finding.status == "pass"
-        assert "github-attestation" in finding.description
+        assert "sbom-verification" in finding.description
 
     def test_attestation_check_with_failed_plugin_fails(self):
         """Attestation check with only failed attestation plugins should fail."""
@@ -800,7 +1169,7 @@ class TestAttestationCheck:
             "requires_one_of": {
                 "satisfied": False,
                 "passing_plugins": [],
-                "failed_plugins": ["github-attestation"],
+                "failed_plugins": ["sbom-verification"],
             }
         }
         result = assess_sbom(sbom, dependency_status=dependency_status)
@@ -809,7 +1178,7 @@ class TestAttestationCheck:
         assert finding is not None
         assert finding.status == "fail"
         assert "did not pass" in finding.description
-        assert "github-attestation" in finding.description
+        assert "sbom-verification" in finding.description
 
     def test_attestation_check_no_plugins_run_fails(self):
         """Attestation check with no attestation plugins run should fail."""
@@ -845,7 +1214,7 @@ class TestAttestationCheck:
         dependency_status = {
             "requires_one_of": {
                 "satisfied": True,
-                "passing_plugins": ["github-attestation", "sigstore-attestation"],
+                "passing_plugins": ["sbom-verification", "sigstore-attestation"],
                 "failed_plugins": [],
             }
         }
@@ -854,7 +1223,7 @@ class TestAttestationCheck:
         finding = get_finding(result, "bsi-tr03183:attestation-check")
         assert finding is not None
         assert finding.status == "pass"
-        assert "github-attestation" in finding.description
+        assert "sbom-verification" in finding.description
         assert "sigstore-attestation" in finding.description
 
     def test_attestation_check_mixed_passing_and_failing(self):
@@ -863,7 +1232,7 @@ class TestAttestationCheck:
         dependency_status = {
             "requires_one_of": {
                 "satisfied": True,
-                "passing_plugins": ["github-attestation"],
+                "passing_plugins": ["sbom-verification"],
                 "failed_plugins": ["other-attestation"],
             }
         }
@@ -872,7 +1241,7 @@ class TestAttestationCheck:
         finding = get_finding(result, "bsi-tr03183:attestation-check")
         assert finding is not None
         assert finding.status == "pass"
-        assert "github-attestation" in finding.description
+        assert "sbom-verification" in finding.description
 
     def test_attestation_check_with_requires_all_ignored(self):
         """Attestation check only uses requires_one_of, ignores requires_all."""
@@ -881,7 +1250,7 @@ class TestAttestationCheck:
         dependency_status = {
             "requires_one_of": {
                 "satisfied": True,
-                "passing_plugins": ["github-attestation"],
+                "passing_plugins": ["sbom-verification"],
                 "failed_plugins": [],
             },
             "requires_all": {
@@ -1141,3 +1510,198 @@ class TestMalformedInputHandling:
         }
         result = assess_sbom(sbom)
         assert result.summary.error_count == 0
+
+
+class TestFormatFailureDetails:
+    """Tests for BSI plugin _format_failure_details truncation."""
+
+    def test_small_list_shows_all(self):
+        plugin = BSICompliancePlugin({})
+        result = plugin._format_failure_details(["a", "b", "c"])
+        assert result == "Missing for: a, b, c"
+
+    def test_exactly_max_shown_shows_all(self):
+        plugin = BSICompliancePlugin({})
+        result = plugin._format_failure_details(["a", "b", "c", "d", "e"])
+        assert result == "Missing for: a, b, c, d, e"
+
+    def test_large_list_truncated_with_count(self):
+        plugin = BSICompliancePlugin({})
+        packages = [f"pkg{i}" for i in range(200)]
+        result = plugin._format_failure_details(packages)
+        assert result.startswith("Missing for:")
+        assert "pkg0" in result
+        assert "pkg4" in result
+        assert "pkg5" not in result
+        assert "(200 total; 195 more)" in result
+
+    def test_custom_max_shown(self):
+        plugin = BSICompliancePlugin({})
+        result = plugin._format_failure_details(["a", "b", "c", "d"], max_shown=2)
+        assert result == "Missing for: a, b (4 total; 2 more)"
+
+
+class TestFileTypeComponentSkipped:
+    """BSI must skip type=file / File-entry components across per-component checks.
+
+    BSI TR-03183-2 §5.2.2 applies to software components. Generators like syft
+    emit scan-input artifacts (e.g. lockfiles) as type=file in CycloneDX or with
+    "-File-" in the SPDXID in SPDX, which lack version/creator/licence/properties
+    by design. These entries should not contribute to failure counts.
+    """
+
+    def test_cyclonedx_file_type_skipped_across_all_component_checks(self):
+        """A type=file component without any BSI fields should not cause failures."""
+        sbom = create_base_cyclonedx_sbom()
+        # Add a bare file-type component alongside the valid library component.
+        sbom["components"].append(
+            {
+                "name": "uv.lock",
+                "type": "file",
+                "hashes": [{"alg": "SHA-256", "content": "def456" * 20}],
+            }
+        )
+        result = assess_sbom(sbom)
+
+        # All per-component BSI checks should still pass because the only
+        # non-compliant entry is a file-type component that must be skipped.
+        for finding_id in (
+            "bsi-tr03183:component-version",
+            "bsi-tr03183:component-creator",
+            "bsi-tr03183:filename",
+            "bsi-tr03183:distribution-licences",
+            "bsi-tr03183:hash-value",
+            "bsi-tr03183:executable-property",
+            "bsi-tr03183:archive-property",
+            "bsi-tr03183:structured-property",
+        ):
+            finding = get_finding(result, finding_id)
+            assert finding is not None, f"{finding_id} missing from result"
+            assert finding.status == "pass", f"{finding_id} should pass but got {finding.status}: {finding.description}"
+
+    def test_cyclonedx_file_type_component_name_still_validated(self):
+        """Component Name is universal — file-type entries without a name still fail."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"].append({"type": "file"})
+        result = assess_sbom(sbom)
+
+        finding = get_finding(result, "bsi-tr03183:component-name")
+        assert finding is not None
+        assert finding.status == "fail", "nameless file-type entry should still fail name check"
+
+    def test_spdx2_file_entry_skipped_in_version_and_creator_checks(self):
+        """SPDX 2.x File-entries (SPDXID contains -File-) must be skipped for
+        the component-version and component-creator checks when versionInfo and
+        supplier data are not applicable to file inputs."""
+        sbom = {
+            "spdxVersion": "SPDX-2.3",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": "test",
+            "dataLicense": "CC0-1.0",
+            "documentNamespace": "https://example.com/test",
+            "creationInfo": {
+                "created": "2024-01-15T12:00:00Z",
+                "creators": ["Tool: test", "Organization: Example Corp (sbom@example.com)"],
+            },
+            "packages": [
+                {
+                    "SPDXID": "SPDXRef-Package-django",
+                    "name": "django",
+                    "versionInfo": "5.2.3",
+                    "supplier": "Organization: Django",
+                    "downloadLocation": "NOASSERTION",
+                },
+                {
+                    # No versionInfo, no supplier — File entry should be skipped
+                    "SPDXID": "SPDXRef-DocumentRoot-File-uv.lock",
+                    "name": "uv.lock",
+                    "downloadLocation": "NOASSERTION",
+                    "filesAnalyzed": False,
+                },
+            ],
+            "relationships": [
+                {
+                    "spdxElementId": "SPDXRef-DOCUMENT",
+                    "relationshipType": "DESCRIBES",
+                    "relatedSpdxElement": "SPDXRef-Package-django",
+                },
+                {
+                    "spdxElementId": "SPDXRef-Package-django",
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": "SPDXRef-Package-django",
+                },
+            ],
+        }
+        result = assess_sbom(sbom)
+
+        version = get_finding(result, "bsi-tr03183:component-version")
+        creator = get_finding(result, "bsi-tr03183:component-creator")
+        assert version is not None and version.status == "pass", (
+            f"File entry without versionInfo should be skipped: {version.description if version else None}"
+        )
+        assert creator is not None and creator.status == "pass", (
+            f"File entry without supplier should be skipped: {creator.description if creator else None}"
+        )
+
+    def test_library_with_missing_fields_still_fails_alongside_file_type(self):
+        """Regression guard: the skip must only apply to type=file.
+
+        If a real library component is missing version/creator/filename etc and
+        a file-type entry coexists, the library failures must still surface — we
+        must not accidentally widen the skip.
+        """
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"].append(
+            {
+                "name": "broken-lib",
+                "type": "library",
+                "purl": "pkg:pypi/broken-lib@unknown",
+                # No version, no manufacturer, no filename, no licence, no hashes
+            }
+        )
+        sbom["components"].append({"name": "uv.lock", "type": "file"})
+        result = assess_sbom(sbom)
+
+        for finding_id in (
+            "bsi-tr03183:component-version",
+            "bsi-tr03183:component-creator",
+        ):
+            finding = get_finding(result, finding_id)
+            assert finding is not None, f"{finding_id} missing"
+            assert finding.status == "fail", (
+                f"{finding_id} must fail for library missing the field (got {finding.status})"
+            )
+            assert "broken-lib" in (finding.description or ""), (
+                f"{finding_id} description should mention broken-lib: {finding.description}"
+            )
+            assert "uv.lock" not in (finding.description or ""), (
+                f"{finding_id} description must NOT mention file-type uv.lock: {finding.description}"
+            )
+
+    def test_cyclonedx_multiple_file_type_components_all_skipped(self):
+        """All file-type components should be skipped, not just the first one."""
+        sbom = create_base_cyclonedx_sbom()
+        sbom["components"].extend(
+            [
+                {"name": "uv.lock", "type": "file"},
+                {"name": "poetry.lock", "type": "FILE"},  # case-insensitive
+                {"name": "package-lock.json", "type": "File"},
+            ]
+        )
+        result = assess_sbom(sbom)
+
+        for finding_id in (
+            "bsi-tr03183:component-version",
+            "bsi-tr03183:component-creator",
+            "bsi-tr03183:filename",
+            "bsi-tr03183:distribution-licences",
+            "bsi-tr03183:hash-value",
+            "bsi-tr03183:executable-property",
+            "bsi-tr03183:archive-property",
+            "bsi-tr03183:structured-property",
+        ):
+            finding = get_finding(result, finding_id)
+            assert finding is not None, f"{finding_id} missing"
+            assert finding.status == "pass", (
+                f"{finding_id} should pass with 3 file-type entries (got {finding.status}): {finding.description}"
+            )

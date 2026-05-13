@@ -24,7 +24,6 @@ def test_team(db) -> Team:
         defaults={
             "name": "Business",
             "max_products": 10,
-            "max_projects": 10,
             "max_components": 100,
             "max_users": 10,
         },
@@ -42,7 +41,6 @@ def enterprise_team(db) -> Team:
         defaults={
             "name": "Enterprise",
             "max_products": 100,
-            "max_projects": 100,
             "max_components": 1000,
             "max_users": 100,
         },
@@ -484,7 +482,7 @@ class TestDTPluginConfigIntegration:
 
         try:
             plugin = DependencyTrackPlugin(config={"dt_server_id": str(server.id)})
-            team = type("Team", (), {"id": 1, "key": "test"})()
+            team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
             selected = plugin._select_dt_server(team)
             assert selected.id == server.id
@@ -497,7 +495,7 @@ class TestDTPluginConfigIntegration:
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
         plugin = DependencyTrackPlugin(config={})
-        team = type("Team", (), {"id": 1, "key": "test"})()
+        team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
         with patch(
             "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService.select_dependency_track_server"
@@ -514,7 +512,7 @@ class TestDTPluginConfigIntegration:
         from sbomify.apps.plugins.builtins.dependency_track import DependencyTrackPlugin
 
         plugin = DependencyTrackPlugin(config={"dt_server_id": str(uuid.uuid4())})
-        team = type("Team", (), {"id": 1, "key": "test"})()
+        team = type("Team", (), {"id": 1, "key": "test", "billing_plan": "business"})()
 
         with patch(
             "sbomify.apps.vulnerability_scanning.services.VulnerabilityScanningService.select_dependency_track_server"
@@ -563,7 +561,6 @@ class TestHourlyDTScanTaskPluginSettings:
             defaults={
                 "name": "Business",
                 "max_products": 10,
-                "max_projects": 10,
                 "max_components": 100,
                 "max_users": 10,
             },
@@ -623,7 +620,7 @@ class TestHourlyDTScanTaskPluginSettings:
         component = Component.objects.create(
             team=business_team,
             name="DT Test Component",
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
         sbom = SBOM.objects.create(
             name="dt-test-sbom",

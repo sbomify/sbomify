@@ -44,8 +44,6 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
         "core_custom_domain:workspace_public": "workspace",
         "core:product_details_public": "product",
         "core_custom_domain:product_details_public": "product",
-        "core:project_details_public": "project",
-        "core_custom_domain:project_details_public": "project",
         "core:component_details_public": "component",
         "core_custom_domain:component_details_public": "component",
         "core:product_releases_public": "product_releases",
@@ -68,13 +66,6 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
             if product_id or product_slug:
                 return get_public_path(
                     "product", product_id or "", is_custom_domain=True, slug=product_slug or product_id
-                )
-        elif resource_type == "project":
-            project_id = kwargs.get("project_id")
-            project_slug = kwargs.get("project_slug") or slug
-            if project_id or project_slug:
-                return get_public_path(
-                    "project", project_id or "", is_custom_domain=True, slug=project_slug or project_id
                 )
         elif resource_type == "component":
             component_id = kwargs.get("component_id")
@@ -263,7 +254,7 @@ def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
 @register.simple_tag(takes_context=True)
 def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any, team: Any = None) -> Any:
     """
-    Generate the full absolute URL for a public resource (product, project, component).
+    Generate the full absolute URL for a public resource (product, component).
 
     This is used for "Copy Public URL" functionality on resource detail pages.
     Considers custom domains when available.
@@ -276,7 +267,7 @@ def resource_public_absolute_url(context: Any, resource_type: Any, resource: Any
         {% resource_public_absolute_url 'component' component as public_url %}
 
     Args:
-        resource_type: One of 'product', 'project', 'component'
+        resource_type: One of 'product', 'component'
         resource: The resource object with id, slug, and team attributes
         team: Optional team object (will be fetched from resource if not provided)
     """

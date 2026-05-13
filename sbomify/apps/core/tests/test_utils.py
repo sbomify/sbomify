@@ -109,3 +109,106 @@ def test_get_client_ip_simplified():
     # 2. X-Real-IP missing, fallback to REMOTE_ADDR
     request.META = {"REMOTE_ADDR": "10.0.0.1"}
     assert get_client_ip(request) == "10.0.0.1"
+
+
+@pytest.mark.django_db
+class TestAddArtifactToReleaseCrossTeamCheck:
+    """Regression tests for the defense-in-depth cross-team check in add_artifact_to_release.
+
+    The primary check lives in the API layer; these tests verify the utility layer
+    also enforces the constraint so internal callers cannot bypass it.
+    """
+
+    def test_rejects_cross_team_sbom(self, sample_team_with_owner_member):
+        from sbomify.apps.core.domain.exceptions import PermissionDeniedError
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.core.utils import add_artifact_to_release
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.teams.models import Team
+
+        team_a = sample_team_with_owner_member.team
+        team_b = Team.objects.create(name="cross-team-sbom-other")
+
+        component_b = Component.objects.create(name="comp-cross-sbom", team=team_b)
+        sbom_b = SBOM.objects.create(
+            name="sbom-cross",
+            component=component_b,
+            format="cyclonedx",
+            format_version="1.4",
+        )
+
+        product_a = Product.objects.create(name="product-cross-sbom", team=team_a)
+        release_a = Release.objects.create(product=product_a, name="v1.0.0")
+
+        with pytest.raises(PermissionDeniedError, match="SBOM component team does not match release product team"):
+            add_artifact_to_release(release_a, sbom=sbom_b)
+
+    def test_rejects_cross_team_document(self, sample_team_with_owner_member):
+        from sbomify.apps.core.domain.exceptions import PermissionDeniedError
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.core.utils import add_artifact_to_release
+        from sbomify.apps.documents.models import Document
+        from sbomify.apps.teams.models import Team
+
+        team_a = sample_team_with_owner_member.team
+        team_b = Team.objects.create(name="cross-team-doc-other")
+
+        component_b = Component.objects.create(
+            name="comp-cross-doc",
+            team=team_b,
+            component_type=Component.ComponentType.DOCUMENT,
+        )
+        doc_b = Document.objects.create(
+            name="doc-cross",
+            component=component_b,
+            document_type="specification",
+        )
+
+        product_a = Product.objects.create(name="product-cross-doc", team=team_a)
+        release_a = Release.objects.create(product=product_a, name="v1.0.0")
+
+        with pytest.raises(PermissionDeniedError, match="Document component team does not match release product team"):
+            add_artifact_to_release(release_a, document=doc_b)
+
+    def test_same_team_sbom_succeeds(self, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.core.utils import add_artifact_to_release
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(name="comp-same-team", team=team)
+        sbom = SBOM.objects.create(
+            name="sbom-same-team",
+            component=component,
+            format="cyclonedx",
+            format_version="1.4",
+        )
+        product = Product.objects.create(name="product-same-team", team=team)
+        release = Release.objects.create(product=product, name="v1.0.0")
+
+        result = add_artifact_to_release(release, sbom=sbom)
+        assert result["created"] is True
+        assert result["replaced"] is False
+
+    def test_same_team_document_succeeds(self, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Component, Product, Release
+        from sbomify.apps.core.utils import add_artifact_to_release
+        from sbomify.apps.documents.models import Document
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(
+            name="comp-doc-same-team",
+            team=team,
+            component_type=Component.ComponentType.DOCUMENT,
+        )
+        doc = Document.objects.create(
+            name="doc-same-team",
+            component=component,
+            document_type="specification",
+        )
+        product = Product.objects.create(name="product-doc-same-team", team=team)
+        release = Release.objects.create(product=product, name="v1.0.0")
+
+        result = add_artifact_to_release(release, document=doc)
+        assert result["created"] is True
+        assert result["replaced"] is False

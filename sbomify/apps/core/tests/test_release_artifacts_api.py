@@ -37,7 +37,7 @@ class TestReleaseArtifactsAPI(TestCase):
         self.component = Component.objects.create(
             team=self.team,
             name="test-component",
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.PUBLIC,
         )
 

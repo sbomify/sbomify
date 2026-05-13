@@ -1,0 +1,127 @@
+{
+  "format_version": "1.0",
+  "description": "Reference map of standards that contribute evidence for CRA (Regulation (EU) 2024/2847) compliance. The CRA's own harmonised standards are not yet published; the EN 18031 series (published in OJ L_202500138, 28 Jan 2025) currently carries the presumption of conformity for the Radio Equipment Directive and ENISA explicitly maps its requirements onto CRA Annex I Part I (2)(a)-(m). BSI TR-03183-2 is the de-facto reference for the CRA Annex I Part II(1) SBOM format requirement. CEN/CENELEC is drafting CRA-specific harmonised standards (ETSI EN 304 626 etc.) which will be added here as they are published.",
+  "applies_when_status": "evaluated — `document_generation_service._evaluate_applies_when` walks the rule tree against facts extracted from the assessment (see `_assessment_facts`). Supported combinators: `any_of`, `all_of`, and equality predicates over one or more keys at the same level (implicit AND across keys), with arbitrary nesting. Unknown predicate keys fail closed (never match), so a typo in this file cannot silently open up an unintended claim. Mixed-shape rules (a combinator plus sibling equality keys) are rejected so authors must nest predicates explicitly. Draft standards (id contains `draft`) are additionally filtered out regardless of rule evaluation — they never reach the DoC until OJ-listed and the `draft` token is dropped from their id.",
+  "last_reviewed": "2026-04-21",
+  "sources": [
+    {
+      "title": "Regulation (EU) 2024/2847 — Cyber Resilience Act",
+      "url": "https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng",
+      "in_force_from": "2024-12-10",
+      "applicable_from": "2027-12-11",
+      "article_14_reporting_from": "2026-09-11"
+    },
+    {
+      "title": "Commission Implementing Decision (EU) 2025/138 — harmonised standards for RED cybersecurity",
+      "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=OJ:L_202500138",
+      "published": "2025-01-28"
+    },
+    {
+      "title": "ENISA / JRC — Cyber Resilience Act Requirements Standards Mapping",
+      "url": "https://www.enisa.europa.eu/publications/cyber-resilience-act-requirements-standards-mapping"
+    },
+    {
+      "title": "EC — CRA standardisation status",
+      "url": "https://digital-strategy.ec.europa.eu/en/policies/cra-standardisation"
+    }
+  ],
+  "standards": [
+    {
+      "id": "cra",
+      "citation": "Regulation (EU) 2024/2847 — Cyber Resilience Act",
+      "url": "https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng",
+      "scope": "Regulation itself. Included on every DoC so the regulation being declared against is explicit.",
+      "harmonised": false,
+      "always_applicable": true,
+      "cra_requirements_covered": []
+    },
+    {
+      "id": "bsi-tr-03183-2",
+      "citation": "BSI TR-03183-2 v2.1.0 — Cyber Resilience Requirements, Part 2: SBOM",
+      "url": "https://www.bsi.bund.de/SharedDocs/Downloads/EN/BSI/Publications/TechGuidelines/TR03183/BSI-TR-03183-2_v2_1_0.html",
+      "scope": "SBOM format + mandatory / optional fields. sbomify produces SBOMs that are validated against this TR by the built-in BSI plugin; its findings are reused as Annex I Part II(1) evidence.",
+      "harmonised": false,
+      "always_applicable": true,
+      "cra_requirements_covered": [
+        {"cra_reference": "Annex I, Part II, §1", "summary": "SBOM covering top-level dependencies in a commonly used machine-readable format."}
+      ]
+    },
+    {
+      "id": "en-18031-1-2024",
+      "citation": "EN 18031-1:2024 — Common security requirements for radio equipment — Part 1: Internet-connected radio equipment",
+      "url": "https://standards.iteh.ai/catalog/standards/cen/4f1e2768-e1a6-4541-a2b6-465e1c682627/en-18031-1-2024",
+      "scope": "RED Article 3(3)(d). Eleven requirement groups covering access control, authentication, secure storage, secure communications, resilience, network monitoring, traffic control, confidentiality of cryptographic keys, general device capabilities, cryptography, and secure updates. ENISA maps these groups onto CRA Annex I Part I (2)(a)-(m). Status: harmonised standard published in OJ L_202500138 (with restrictions on clauses 6.2.5.1 and 6.2.5.2 regarding default passwords).",
+      "harmonised": true,
+      "applies_when": {
+        "any_of": [
+          {"product_category": "radio_equipment"},
+          {"operator_opt_in": true}
+        ]
+      },
+      "cra_requirements_covered": [
+        {"cra_reference": "Annex I, Part I, §2(a)",  "clause": "EN 18031-1 §6.1 Access Control",                   "summary": "Protection against unauthorised access via access-control mechanisms."},
+        {"cra_reference": "Annex I, Part I, §2(b)",  "clause": "EN 18031-1 §6.2 Authentication",                  "summary": "Authentication, identity and access management."},
+        {"cra_reference": "Annex I, Part I, §2(c)",  "clause": "EN 18031-1 §6.3 Secure Update",                   "summary": "Security updates, including automatic updates where appropriate."},
+        {"cra_reference": "Annex I, Part I, §2(d)",  "clause": "EN 18031-1 §6.4 Secure Storage",                  "summary": "Confidentiality of stored personal, operational and other data."},
+        {"cra_reference": "Annex I, Part I, §2(e)",  "clause": "EN 18031-1 §6.5 Secure Communications",           "summary": "Integrity of stored, transmitted or otherwise processed data."},
+        {"cra_reference": "Annex I, Part I, §2(f)",  "clause": "EN 18031-1 §6.6 Resilience",                      "summary": "Availability of essential and basic functions even after a security incident."},
+        {"cra_reference": "Annex I, Part I, §2(g)",  "clause": "EN 18031-1 §6.7 Network Monitoring",              "summary": "Monitoring of relevant internal activities including security-relevant events."},
+        {"cra_reference": "Annex I, Part I, §2(h)",  "clause": "EN 18031-1 §6.8 Traffic Control",                 "summary": "Minimisation of the product's own negative impact on the availability of services of other devices or networks."},
+        {"cra_reference": "Annex I, Part I, §2(i)",  "clause": "EN 18031-1 §6.9 Confidentiality of Cryptographic Keys", "summary": "Protection of cryptographic material."},
+        {"cra_reference": "Annex I, Part I, §2(j)",  "clause": "EN 18031-1 §6.10 General Device Capabilities",    "summary": "Secure-by-default configuration, ability to reset to factory defaults."},
+        {"cra_reference": "Annex I, Part I, §2(k)",  "clause": "EN 18031-1 §6.11 Cryptography",                   "summary": "Use of up-to-date cryptographic algorithms."}
+      ],
+      "restrictions": [
+        "Clauses 6.2.5.1 and 6.2.5.2 (default passwords): manufacturers that allow the user not to set any password cannot claim presumption of conformity for the corresponding RED / CRA authentication requirement. See OJ L_202500138 Annex.",
+        "Stricter requirements apply to toys intended for children and to products handling financial value (covered by EN 18031-3)."
+      ]
+    },
+    {
+      "id": "en-18031-2-2024",
+      "citation": "EN 18031-2:2024 — Common security requirements for radio equipment — Part 2: Privacy and traffic data",
+      "url": "https://standards.iteh.ai/catalog/standards/cen/e2f3a3a7-3a0c-4b20-bd0a-1d6b2a7b1b64/en-18031-2-2024",
+      "scope": "RED Article 3(3)(e) — privacy and protection of personal data.",
+      "harmonised": true,
+      "applies_when": {
+        "all_of": [
+          {"product_category": "radio_equipment"},
+          {"processes_personal_data": true}
+        ]
+      },
+      "cra_requirements_covered": [
+        {"cra_reference": "Annex I, Part I, §2(l)", "clause": "EN 18031-2 (whole)", "summary": "Processing of personal data limited to what is necessary for the intended use (data minimisation)."}
+      ],
+      "restrictions": [
+        "Clauses 6.2.5.1 and 6.2.5.2 (default passwords): manufacturers that allow the user not to set any password cannot claim presumption of conformity for the corresponding RED / CRA authentication requirement. See OJ L_202500138 Annex — the restriction applies to EN 18031-1, -2, and -3 equally."
+      ]
+    },
+    {
+      "id": "en-18031-3-2024",
+      "citation": "EN 18031-3:2024 — Common security requirements for radio equipment — Part 3: Financial transactions",
+      "url": "https://standards.iteh.ai/catalog/standards/cen/a32a8f0f-3fef-4a7f-bc5f-db3a0ccdbf38/en-18031-3-2024",
+      "scope": "RED Article 3(3)(f) — protection from fraud for radio equipment handling virtual currency or monetary value.",
+      "harmonised": true,
+      "applies_when": {
+        "all_of": [
+          {"product_category": "radio_equipment"},
+          {"handles_financial_value": true}
+        ]
+      },
+      "cra_requirements_covered": [
+        {"cra_reference": "Annex I, Part I, §2(m)", "clause": "EN 18031-3 (whole)", "summary": "Protection from fraud for products handling monetary value or virtual currency."}
+      ],
+      "restrictions": [
+        "Clauses 6.2.5.1 and 6.2.5.2 (default passwords): manufacturers that allow the user not to set any password cannot claim presumption of conformity for the corresponding RED / CRA authentication requirement. See OJ L_202500138 Annex — the restriction applies to EN 18031-1, -2, and -3 equally."
+      ]
+    },
+    {
+      "id": "etsi-en-304-626-draft",
+      "citation": "ETSI EN 304 626 (draft, Dec 2025) — Cyber Security; CRA; Operating Systems",
+      "url": "https://docbox.etsi.org/CYBER/EUSR/Open/EN-304-626_V0.1.0_2025-12-23_Operating-Systems_Mature-draft.pdf",
+      "scope": "Draft CRA-specific harmonised standard covering general-purpose operating systems. Not yet published in OJ — tracked here for forward-compatibility; will be promoted to harmonised=true once OJ listed.",
+      "harmonised": false,
+      "applies_when": {"product_category": "operating_system"},
+      "cra_requirements_covered": []
+    }
+  ]
+}

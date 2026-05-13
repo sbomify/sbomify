@@ -1,6 +1,8 @@
-# Fixtures for team related test cases
+# Fixtures for SBOM/BOM-related test cases
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Generator
 from uuid import uuid4
 
@@ -14,8 +16,16 @@ from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import Member
 
-from ..models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from ..models import SBOM, Component, Product, ProductComponent
 from ..schemas import SPDXSchema
+
+FIXTURES_DIR = Path(__file__).parent / "fixture_data"
+
+
+def load_sample_cyclonedx_vex() -> dict[str, Any]:
+    """Load the sample CycloneDX VEX fixture."""
+    return json.loads((FIXTURES_DIR / "sample_cyclonedx_vex.json").read_text(encoding="utf-8"))
+
 
 # =============================================================================
 # SPDX Test Data Builder
@@ -676,7 +686,6 @@ def sample_billing_plan() -> Generator[BillingPlan, Any, None]:
         name="Test Plan",
         description="Test Plan Description",
         max_products=10,
-        max_projects=10,
         max_components=10,
     )
 
@@ -704,45 +713,26 @@ def sample_product(
 
 
 @pytest.fixture
-def sample_project(
-    sample_product: Product,  # noqa: F811
-) -> Generator[Project, Any, None]:
-    with transaction.atomic():
-        project = Project(product=sample_product, name="test project", team_id=sample_product.team_id)
-        project.save()
-
-        product_project = ProductProject(product=sample_product, project=project)
-        product_project.save()
-
-    yield project
-
-    with transaction.atomic():
-        product_project.delete()
-        project.delete()
-
-
-@pytest.fixture
 def sample_component(
-    sample_project: Project,  # noqa: F811
+    sample_product: Product,  # noqa: F811
 ) -> Generator[Component, Any, None]:
     with transaction.atomic():
-        component = Component(project=sample_project, name="test component", team_id=sample_project.team_id)
+        component = Component(name="test component", team_id=sample_product.team_id)
         component.save()
 
-        project_component = ProjectComponent(project=sample_project, component=component)
-        project_component.save()
+        product_component = ProductComponent(product=sample_product, component=component)
+        product_component.save()
 
     yield component
 
     with transaction.atomic():
-        project_component.delete()
+        product_component.delete()
         component.delete()
 
 
 @pytest.fixture
 def sample_sbom(
     sample_team_with_owner_member: Member,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
 ) -> Generator[SBOM, Any, None]:
 

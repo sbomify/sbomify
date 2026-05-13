@@ -5,19 +5,17 @@ from django.http import HttpRequest, HttpResponse
 
 from sbomify.apps.billing.billing_processing import check_billing_limits
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.sboms.models import Component, Product, Project, ProductProject, ProjectComponent
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import Team
 
 from .fixtures import (  # noqa: F401
-    sample_user,
-    community_plan,
     business_plan,
+    community_plan,
     enterprise_plan,
-    test_product,
-    multiple_products,
-    test_project,
-    multiple_projects,
     multiple_components,
+    multiple_products,
+    sample_user,
+    test_product,
 )
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 
@@ -28,16 +26,12 @@ def test_billing_plan_str_representation(business_plan: BillingPlan):
     assert str(business_plan) == "Business (business)"
 
 
-
-
-
 @pytest.mark.django_db
 def test_product_creation_within_limit(team_with_business_plan: Team, business_plan: BillingPlan):
     """Test product creation within plan limits."""
     team_with_business_plan.billing_plan = business_plan.key
     team_with_business_plan.save()
 
-    # Mock request with team session
     request = HttpRequest()
     request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
@@ -57,11 +51,9 @@ def test_product_creation_over_limit(team_with_business_plan: Team, community_pl
     team_with_business_plan.billing_plan = community_plan.key
     team_with_business_plan.save()
 
-    # Create max allowed products
     for i in range(community_plan.max_products):
         Product.objects.create(team=team_with_business_plan, name=f"Product {i}")
 
-    # Mock request
     request = HttpRequest()
     request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
@@ -79,24 +71,19 @@ def test_product_creation_over_limit(team_with_business_plan: Team, community_pl
 def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, enterprise_plan: BillingPlan):
     """Test unlimited component creation with enterprise plan."""
     team_with_business_plan.billing_plan = enterprise_plan.key
-    # Clear any scheduled downgrade settings that might interfere
     billing_limits = team_with_business_plan.billing_plan_limits or {}
     billing_limits["cancel_at_period_end"] = False
     billing_limits["scheduled_downgrade_plan"] = None
-    # Clear Stripe IDs to avoid API calls — both must be cleared together to satisfy the
-    # Team.valid_billing_relationship constraint defined in sbomify.apps.teams.models
     billing_limits.pop("stripe_subscription_id", None)
     billing_limits.pop("stripe_customer_id", None)
     billing_limits.update({
         "max_products": None,
-        "max_projects": None,
         "max_components": None,
         "subscription_status": "active",
     })
     team_with_business_plan.billing_plan_limits = billing_limits
     team_with_business_plan.save()
 
-    # Create 1000 components
     for i in range(1000):
         Component.objects.create(team=team_with_business_plan, name=f"Component {i}")
 
@@ -114,8 +101,8 @@ def test_component_creation_enterprise_unlimited(team_with_business_plan: Team, 
 
 
 @pytest.mark.django_db
-def test_project_creation_no_plan(team_with_business_plan: Team):
-    """Test project creation with no billing plan."""
+def test_component_creation_no_plan(team_with_business_plan: Team):
+    """Test component creation with no billing plan."""
     team_with_business_plan.billing_plan = None
     team_with_business_plan.save()
 
@@ -123,7 +110,7 @@ def test_project_creation_no_plan(team_with_business_plan: Team):
     request.method = "POST"
     request.session = {"current_team": {"key": team_with_business_plan.key}}
 
-    @check_billing_limits("project")
+    @check_billing_limits("component")
     def dummy_view(request):
         return HttpResponse("Success")
 

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.test import Client
 
-from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from sbomify.apps.documents.models import Document
@@ -39,7 +39,7 @@ class TestSignedURLs:
             name="Public Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         # Create private component
@@ -47,7 +47,7 @@ class TestSignedURLs:
             name="Private Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         # Create public document component
@@ -304,7 +304,7 @@ class TestSignedURLs:
 
 @pytest.mark.django_db
 class TestSignedURLIntegration:
-    """Integration tests for signed URLs in product/project SBOMs."""
+    """Integration tests for signed URLs in product SBOMs."""
 
     @pytest.fixture(autouse=True)
     def setup_test_data(self, team_with_business_plan, sample_user):  # noqa: F811
@@ -313,19 +313,18 @@ class TestSignedURLIntegration:
         self.team = team_with_business_plan
         self.client = Client()
 
-        # Create components
         self.public_component = Component.objects.create(
             name="Public Component",
             team=self.team,
             visibility=Component.Visibility.PUBLIC,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         self.private_component = Component.objects.create(
             name="Private Component",
             team=self.team,
             visibility=Component.Visibility.PRIVATE,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
         )
 
         self.public_document_component = Component.objects.create(
@@ -342,7 +341,6 @@ class TestSignedURLIntegration:
             component_type=Component.ComponentType.DOCUMENT,
         )
 
-        # Create SBOMs
         self.public_sbom = SBOM.objects.create(
             name="Public SBOM",
             component=self.public_component,
@@ -359,7 +357,6 @@ class TestSignedURLIntegration:
             sbom_filename="private_sbom.json",
         )
 
-        # Create documents
         self.public_document = Document.objects.create(
             name="Public Document",
             component=self.public_document_component,
@@ -376,53 +373,14 @@ class TestSignedURLIntegration:
             content_type="application/pdf",
         )
 
-        # Create project and product
-        self.project = Project.objects.create(name="Test Project", team=self.team, is_public=False)
-
         self.product = Product.objects.create(name="Test Product", team=self.team, is_public=False)
-
-        # Link components to project
-        self.project.components.add(self.public_component)
-        self.project.components.add(self.private_component)
-        self.project.components.add(self.public_document_component)
-        self.project.components.add(self.private_document_component)
-
-        # Link project to product
-        self.product.projects.add(self.project)
-
-    def test_project_sbom_contains_signed_urls(self):
-        """Test that project SBOMs contain signed URLs for private components."""
-        # Mock S3 client to return sample SBOM data
-        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
-            mock_s3_instance = MagicMock()
-            mock_s3_instance.get_sbom_data.return_value = b"""{
-                "bomFormat": "CycloneDX",
-                "specVersion": "1.6",
-                "metadata": {
-                    "component": {
-                        "name": "Test Component",
-                        "type": "library",
-                        "version": "1.0.0"
-                    }
-                }
-            }"""
-            mock_s3_client.return_value = mock_s3_instance
-
-            # Login user
-            self.client.force_login(self.user)
-
-            # Request project SBOM
-            url = f"/api/v1/projects/{self.project.id}/download"
-            response = self.client.get(url)
-
-            assert response.status_code == 200
-
-            # Check that the response contains SBOM data
-            assert "application/json" in response.get("Content-Type", "")
+        self.product.components.add(self.public_component)
+        self.product.components.add(self.private_component)
+        self.product.components.add(self.public_document_component)
+        self.product.components.add(self.private_document_component)
 
     def test_product_sbom_contains_signed_urls(self):
         """Test that product SBOMs contain signed URLs for private components."""
-        # Mock S3 client to return sample SBOM data
         with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
             mock_s3_instance = MagicMock()
             mock_s3_instance.get_sbom_data.return_value = b"""{
@@ -438,24 +396,13 @@ class TestSignedURLIntegration:
             }"""
             mock_s3_client.return_value = mock_s3_instance
 
-            # Login user
             self.client.force_login(self.user)
 
-            # Request product SBOM
             url = f"/api/v1/products/{self.product.id}/download"
             response = self.client.get(url)
 
             assert response.status_code == 200
-
-            # Check that the response contains SBOM data
             assert "application/json" in response.get("Content-Type", "")
-
-    def test_unauthenticated_access_to_private_project_sbom(self):
-        """Test that unauthenticated users can't access private project SBOMs."""
-        url = f"/api/v1/projects/{self.project.id}/download"
-        response = self.client.get(url)
-
-        assert response.status_code == 403
 
     def test_unauthenticated_access_to_private_product_sbom(self):
         """Test that unauthenticated users can't access private product SBOMs."""

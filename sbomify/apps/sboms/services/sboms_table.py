@@ -34,19 +34,13 @@ def build_sboms_table_context(
         ),
     )
 
-    # Enrich each SBOM with full assessment data for badge display
-    from sbomify.apps.plugins.apis import get_sbom_assessment_badge
-
-    for item in sbom_items:
-        sbom_id = item.get("sbom", {}).get("id")
-        if sbom_id:
-            try:
-                badge_data = get_sbom_assessment_badge(request, sbom_id)
-                item["assessments"] = badge_data.model_dump()
-            except Exception:
-                item["assessments"] = None
-        else:
-            item["assessments"] = None
+    # ``assessments`` is already populated by ``list_component_sboms`` from a
+    # single batched query (including ``skipped_count``), so no per-SBOM
+    # enrichment loop is needed here. The earlier
+    # ``get_sbom_assessment_badge``-per-row loop reissued the same latest-runs
+    # subquery and display-name lookup that the batched API path had already
+    # done — ~3 extra queries per row on top of the inner N+1 — and was the
+    # dominant slow path on the component detail page.
 
     context = {
         "component_id": component_id,

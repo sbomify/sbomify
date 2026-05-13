@@ -74,8 +74,6 @@ class TeamAdminForm(_TeamFormBase):
                 # Set plan limits
                 if plan.max_products is not None:
                     billing_plan_limits["max_products"] = plan.max_products
-                if plan.max_projects is not None:
-                    billing_plan_limits["max_projects"] = plan.max_projects
                 if plan.max_components is not None:
                     billing_plan_limits["max_components"] = plan.max_components
 
@@ -128,6 +126,7 @@ class TeamAdmin(_TeamAdminBase):
         "key",
         "billing_plan",
         "custom_domain",
+        "onboarding_goal",
     )
 
     readonly_fields = (
@@ -138,6 +137,7 @@ class TeamAdmin(_TeamAdminBase):
         "custom_domain_status_display",
         "branding_info",
         "billing_plan_limits",
+        "onboarding_goal",
     )
 
     fieldsets = (
@@ -151,6 +151,15 @@ class TeamAdmin(_TeamAdminBase):
                     "is_public",
                     "created_at",
                 )
+            },
+        ),
+        (
+            "Onboarding",
+            {
+                "fields": ("onboarding_goal",),
+                "description": (
+                    'Free-text answer to the wizard\'s "What are you trying to accomplish?" prompt. Read-only.'
+                ),
             },
         ),
         (

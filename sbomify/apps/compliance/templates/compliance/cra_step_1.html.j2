@@ -1,0 +1,367 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep1()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {{ step_urls|json_script:"step-urls" }}
+        {# Step content #}
+        <div class="space-y-6">
+            {# Product Info (read-only) #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-box text-primary"></i>
+                        Product Information
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <span class="tw-form-label">Product Name</span>
+                            <p class="text-text font-medium mt-1" x-text="product.name || '—'"></p>
+                        </div>
+                        <div>
+                            <span class="tw-form-label">Product ID</span>
+                            <p class="text-text-muted text-sm font-mono mt-1"
+                               x-text="product.id || '—'"></p>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <span class="tw-form-label">Description</span>
+                            <p class="text-text-muted text-sm mt-1"
+                               x-text="product.description || 'No description provided'"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# Manufacturer — Annex V item 2 guard #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-industry text-primary"></i>
+                        Manufacturer
+                        <span x-show="manufacturerIsPlaceholder"
+                              class="tw-badge-danger text-xs ml-2"
+                              data-testid="mfr-placeholder-badge">Not configured</span>
+                    </h2>
+                    <a href="{% url 'teams:contact_profiles_list' team_key=team.key %}"
+                       class="text-sm text-primary hover:underline"
+                       data-testid="mfr-settings-link">
+                        <i class="fas fa-up-right-from-square mr-1"></i>
+                        Edit in team settings
+                    </a>
+                </div>
+                <div class="p-6 space-y-4">
+                    {# Placeholder banner — Annex V item 2; uses the shared tw-alert-danger component. #}
+                    <div x-show="manufacturerIsPlaceholder"
+                         data-testid="mfr-placeholder-banner"
+                         role="alert"
+                         class="tw-alert tw-alert-danger">
+                        <i class="fas fa-triangle-exclamation tw-alert-icon"></i>
+                        <div class="tw-alert-content">
+                            <p class="tw-alert-title">Annex V item 2 requires a legal manufacturer name</p>
+                            <p class="opacity-80">
+                                The current value looks like a placeholder — the DoC will render
+                                <code class="text-xs">[Manufacturer Name — not configured]</code>
+                                and the bundle manifest will carry
+                                <code class="text-xs">is_placeholder: true</code>.
+                                Configure a real manufacturer entity in team settings before exporting.
+                            </p>
+                        </div>
+                    </div>
+                    <div x-show="manufacturer" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <span class="tw-form-label">Legal Name</span>
+                            <p class="text-text font-medium mt-1"
+                               data-testid="mfr-name"
+                               x-text="manufacturer?.name || '—'"></p>
+                        </div>
+                        <div>
+                            <span class="tw-form-label">Email</span>
+                            <p class="text-text-muted text-sm mt-1"
+                               x-text="manufacturer?.email || '—'"></p>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <span class="tw-form-label">Address</span>
+                            <p class="text-text-muted text-sm mt-1"
+                               x-text="manufacturer?.address || '—'"></p>
+                        </div>
+                    </div>
+                    <div x-show="!manufacturer" class="text-sm text-text-muted italic">
+                        No manufacturer entity configured for this workspace yet.
+                    </div>
+                </div>
+            </div>
+            {# CRA Classification #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-layer-group text-primary"></i>
+                        CRA Classification
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Select the product category that determines the conformity assessment procedure
+                    </p>
+                </div>
+                <div class="p-6 space-y-6">
+                    {# Category cards #}
+                    <div>
+                        <label class="tw-form-label mb-3 block">Product Category</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <template x-for="cat in [ {value: 'default', label: 'Default', desc: 'Standard digital products', icon: 'fa-shield'}, {value: 'class_i', label: 'Class I', desc: 'Important products (e.g., password managers, VPNs)', icon: 'fa-shield-halved'}, {value: 'class_ii', label: 'Class II', desc: 'Critical products (e.g., firewalls, HSMs)', icon: 'fa-shield-virus'}, {value: 'critical', label: 'Critical', desc: 'Highly critical infrastructure components', icon: 'fa-shield-heart'} ]"
+                                      :key="cat.value">
+                                <button type="button"
+                                        @click="category = cat.value"
+                                        :class="category === cat.value ? 'border-primary bg-primary/5 ring-2 ring-primary shadow-sm' : 'border-border hover:border-primary/50 hover:shadow-sm'"
+                                        class="p-4 rounded-xl border-2 text-left transition-all cursor-pointer">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <i class="fas text-sm"
+                                           :class="cat.icon + (category === cat.value ? ' text-primary' : ' text-text-muted')"></i>
+                                        <span class="font-semibold text-text" x-text="cat.label"></span>
+                                    </div>
+                                    <span class="block text-xs text-text-muted leading-relaxed"
+                                          x-text="cat.desc"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    {# Open Source Steward toggle #}
+                    <div class="flex items-center gap-3 px-4 py-3 bg-surface-hover rounded-lg">
+                        <input type="checkbox"
+                               x-model="isOpenSourceSteward"
+                               id="oss-steward"
+                               class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                        <label for="oss-steward" class="text-text cursor-pointer select-none">
+                            This product is maintained by an Open Source Steward
+                        </label>
+                    </div>
+                    {# Conformity Assessment Procedure (CRA Art 32) #}
+                    <div class="px-4 py-3 bg-surface-hover rounded-lg space-y-3">
+                        <span class="tw-form-label text-xs uppercase tracking-wider">Conformity Assessment Procedure</span>
+                        <p class="text-xs text-text-muted">
+                            Select the conformity assessment procedure for this product category
+                            (<a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng"
+   target="_blank"
+   rel="noopener noreferrer"
+   class="text-primary hover:underline">CRA Art 32</a>)
+                        </p>
+                        <div class="space-y-2">
+                            <template x-for="proc in availableProcedures" :key="proc.value">
+                                <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-surface transition-colors">
+                                    <input type="radio"
+                                           name="conformity_procedure"
+                                           :value="proc.value"
+                                           x-model="conformityAssessmentProcedure"
+                                           class="w-4 h-4 text-primary focus:ring-primary border-border">
+                                    <div>
+                                        <span class="text-text font-medium text-sm" x-text="proc.label"></span>
+                                        <span x-show="proc.note"
+                                              class="block text-xs text-text-muted"
+                                              x-text="proc.note"></span>
+                                    </div>
+                                </label>
+                            </template>
+                        </div>
+                        {# Harmonised standard confirmation for Class I + Module A (CRA Art 32(2)) #}
+                        <div x-show="category === 'class_i' && conformityAssessmentProcedure === 'module_a'"
+                             x-cloak
+                             role="status"
+                             aria-live="polite"
+                             class="mt-2 rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm">
+                            {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-shield-halved" title="Harmonised standard required" pill_label="CRA Art 32(2)" pill_href=cra_oj_url description="Class I products may only use Module A (self-assessment) when a harmonised standard covering all relevant requirements has been applied." %}
+                            <label class="flex items-start gap-3 px-4 pt-3 pb-4 cursor-pointer">
+                                <input type="checkbox"
+                                       x-model="harmonisedStandardApplied"
+                                       class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                                <span class="text-sm text-text">I confirm a harmonised standard has been applied to this product.</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# Harmonised Standards Applicability (EN 18031 opt-in — issue #905) #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-broadcast-tower text-primary"></i>
+                        Harmonised Standards Applicability
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Optional. Tick the boxes that apply to claim presumption of conformity under the
+                        EN 18031 harmonised standards on the Declaration of Conformity.
+                    </p>
+                </div>
+                <div class="p-6 space-y-3">
+                    <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer">
+                        <input type="checkbox"
+                               x-model="isRadioEquipment"
+                               class="mt-0.5 w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                        <span class="flex-1">
+                            <span class="text-text font-medium block">Radio equipment under the RED</span>
+                            <span class="text-xs text-text-muted">Triggers EN 18031-1 (RED Article 3(3)(d)) — access control, authentication, secure update, cryptography.</span>
+                        </span>
+                    </label>
+                    <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer"
+                           :class="!isRadioEquipment ? 'opacity-50 cursor-not-allowed' : ''">
+                        <input type="checkbox"
+                               x-model="processesPersonalData"
+                               :disabled="!isRadioEquipment"
+                               class="mt-0.5 w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed">
+                        <span class="flex-1">
+                            <span class="text-text font-medium block">Processes personal data</span>
+                            <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)) — data minimisation, GDPR alignment. Requires RED.</span>
+                        </span>
+                    </label>
+                    <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer"
+                           :class="!isRadioEquipment ? 'opacity-50 cursor-not-allowed' : ''">
+                        <input type="checkbox"
+                               x-model="handlesFinancialValue"
+                               :disabled="!isRadioEquipment"
+                               class="mt-0.5 w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed">
+                        <span class="flex-1">
+                            <span class="text-text font-medium block">Handles monetary value or virtual currency</span>
+                            <span class="text-xs text-text-muted">Triggers EN 18031-3 (RED Article 3(3)(f)) — protection from fraud. Requires RED.</span>
+                        </span>
+                    </label>
+                    <div x-show="isRadioEquipment" x-cloak class="tw-alert tw-alert-info">
+                        <i class="fas fa-circle-info tw-alert-icon"></i>
+                        <div class="tw-alert-content">
+                            <p class="opacity-80 m-0">
+                                The DoC will carry the OJ L_202500138 restriction notes — review them before export. Products that allow the user not to set any password cannot claim presumption of conformity for EN 18031-1, EN 18031-2, and EN 18031-3 in respect of clauses 6.2.5.1 and 6.2.5.2.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {# EU Market Selection #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-earth-europe text-primary"></i>
+                        Target EU Markets
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">Select the EU member states where this product will be placed on the market</p>
+                </div>
+                <div class="p-6 space-y-4">
+                    {# Select all toggle #}
+                    <div class="flex items-center gap-3 pb-3 border-b border-border">
+                        <input type="checkbox"
+                               id="all-markets"
+                               :checked="allMarketsSelected"
+                               @click="toggleAllMarkets()"
+                               class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                        <label for="all-markets"
+                               class="text-text font-medium cursor-pointer select-none">All EU markets</label>
+                        <span class="text-xs text-text-muted ml-auto"
+                              x-text="euMarkets.length + ' of 27 selected'"></span>
+                    </div>
+                    {# Country grid #}
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2">
+                        <template x-for="code in euCountries" :key="code">
+                            <label class="flex items-center gap-2 cursor-pointer text-sm py-1 select-none">
+                                <input type="checkbox"
+                                       :checked="isMarketSelected(code)"
+                                       @change="toggleMarket(code)"
+                                       class="w-4 h-4 shrink-0 rounded border-border text-primary focus:ring-primary">
+                                <span class="text-text" x-text="euCountryNames[code]"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            {# Support Period & Intended Use in a 2-column layout #}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {# Support Period #}
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-calendar-check text-primary"></i>
+                            Support Period
+                        </h2>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="tw-form-label" for="support-period-end">End Date</label>
+                            <p class="text-xs text-text-muted mb-2">
+                                Date when active security support ends for this product.
+                                CRA Art 13(8) requires a minimum of 5 years.
+                            </p>
+                            <input type="date"
+                                   id="support-period-end"
+                                   x-model="supportPeriodEnd"
+                                   class="tw-form-input max-w-xs">
+                        </div>
+                        {# Warning when support period < 5 years (CRA Art 13(8), FAQ 4.5.2) #}
+                        <div x-show="supportPeriodShort"
+                             x-cloak
+                             role="status"
+                             aria-live="polite"
+                             class="rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm">
+                            {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-clock-rotate-left" title="Support period below 5-year minimum" pill_label="CRA Art 13(8)" pill_href=cra_oj_url description="CRA Art 13(8) requires at least 5 years unless the product's expected use time is shorter (e.g., pandemic contact tracing apps, time-limited subscription software)." %}
+                            <div class="px-4 pt-3 pb-4">
+                                <label class="tw-form-label" for="support-short-justification">Justification (required)</label>
+                                <textarea id="support-short-justification"
+                                          x-model="supportPeriodShortJustification"
+                                          rows="3"
+                                          class="tw-form-input w-full text-sm focus:border-amber-500 focus:ring-amber-500"
+                                          placeholder="Explain why the expected product lifetime is less than 5 years..."></textarea>
+                                <div class="mt-1.5 flex items-center justify-between gap-3 text-[11px]">
+                                    <span x-show="!supportPeriodShortJustification?.trim()"
+                                          class="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
+                                        <i class="fas fa-exclamation-circle"></i>
+                                        A non-empty justification is required.
+                                    </span>
+                                    <span x-show="supportPeriodShortJustification?.trim()"
+                                          x-cloak
+                                          class="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                                        <i class="fas fa-circle-check"></i>
+                                        Saved on next update
+                                    </span>
+                                    <span class="text-text-muted tabular-nums"
+                                          x-text="`${(supportPeriodShortJustification || '').length} chars`"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {# Intended Use #}
+                <div class="tw-card">
+                    <div class="px-6 py-4 border-b border-border">
+                        <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-bullseye text-primary"></i>
+                            Intended Use
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <label class="tw-form-label" for="intended-use">Description</label>
+                        <p class="text-xs text-text-muted mb-2">How the product is intended to be used by end users</p>
+                        <textarea id="intended-use"
+                                  x-model="intendedUse"
+                                  rows="4"
+                                  class="tw-form-input w-full"
+                                  placeholder="e.g., Enterprise web application for managing supply chain security..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {# Footer navigation #}
+        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+            {% if step > 1 %}
+                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                   class="tw-btn-secondary">
+                    <i class="fas fa-arrow-left mr-2"></i> Back
+                </a>
+            {% else %}
+                <div>{# spacer #}</div>
+            {% endif %}
+            <button type="button"
+                    @click="save()"
+                    :disabled="!canContinue || isSaving"
+                    :title="manufacturerIsPlaceholder ? 'Configure a real manufacturer entity in team settings before continuing (Annex V item 2).' : ''"
+                    data-testid="step-1-save-continue"
+                    class="tw-btn-primary">
+                <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+            </button>
+        </div>
+    </div>
+{% endblock step_wrapper %}

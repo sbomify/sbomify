@@ -29,7 +29,7 @@ if command -v cosign &> /dev/null; then
 
     # Try attestation verification with timeout
     if timeout 30 cosign verify-attestation \
-        --type https://slsa.dev/provenance/v1 \
+        --type slsaprovenance1 \
         --certificate-identity-regexp "^https://github.com/sbomify/sbomify/.*" \
         --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
         "${SBOMIFY_IMAGE}@${DIGEST}" > /dev/null 2>&1; then

@@ -112,7 +112,7 @@ class TestNDAReSigning:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -138,7 +138,7 @@ class TestNDAReSigning:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -201,7 +201,7 @@ class TestNDAReSigning:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 
@@ -230,7 +230,7 @@ class TestNDAReSigning:
         gated_component = Component.objects.create(
             name="Gated Component",
             team=team_with_business_plan,
-            component_type=Component.ComponentType.SBOM,
+            component_type=Component.ComponentType.BOM,
             visibility=Component.Visibility.GATED,
         )
 

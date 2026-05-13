@@ -61,6 +61,7 @@ class OSVPlugin(AssessmentPlugin):
             name="osv",
             version=self.VERSION,
             category=AssessmentCategory.SECURITY,
+            supported_bom_types=["sbom"],
         )
 
     def assess(
@@ -291,7 +292,7 @@ class OSVPlugin(AssessmentPlugin):
             scanner_path,
             "scan",
             "source",
-            "--sbom",
+            "--lockfile",
             str(absolute_path),
             "--format",
             "json",

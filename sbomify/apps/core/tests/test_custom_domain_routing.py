@@ -8,7 +8,7 @@ and that the middleware properly detects and attaches workspace context.
 import pytest
 from django.core.cache import cache
 
-from sbomify.apps.core.models import Component, Product, Project
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.teams.models import Team
 
 pytestmark = pytest.mark.django_db
@@ -56,23 +56,11 @@ def product_with_custom_domain(db, custom_domain_team):
 
 
 @pytest.fixture
-def project_with_custom_domain(db, custom_domain_team, product_with_custom_domain):
-    """Create a public project for a team with custom domain."""
-    project = Project.objects.create(
-        name="Test Project",
-        team=custom_domain_team,
-        is_public=True,
-    )
-    project.products.add(product_with_custom_domain)
-    return project
-
-
-@pytest.fixture
 def component_with_custom_domain(db, custom_domain_team):
     """Create a public component for a team with custom domain."""
     component = Component.objects.create(
         name="Test Component",
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         team=custom_domain_team,
         visibility=Component.Visibility.PUBLIC,
         is_global=True,
@@ -116,43 +104,22 @@ class TestCustomDomainRouting:
     def test_product_detail_clean_url(self, client, product_with_custom_domain):
         """Test that /product/{id}/ works on custom domain."""
         product_id = product_with_custom_domain.id
-        response = client.get(
-            f"/product/{product_id}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{product_id}/", HTTP_HOST="trust.example.com")
 
         assert response.status_code == 200
         assert product_with_custom_domain.name.encode() in response.content
 
-    def test_project_detail_redirects_to_product(self, client, project_with_custom_domain):
-        """Test that /project/{id}/ redirects to product page on custom domain."""
-        project_id = project_with_custom_domain.id
-        response = client.get(
-            f"/project/{project_id}/",
-            HTTP_HOST="trust.example.com"
-        )
-
-        # Projects now redirect to their parent product page
-        assert response.status_code == 302
-        assert "/product/" in response.url
-
     def test_component_detail_clean_url(self, client, component_with_custom_domain):
         """Test that /component/{id}/ works on custom domain."""
         component_id = component_with_custom_domain.id
-        response = client.get(
-            f"/component/{component_id}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/component/{component_id}/", HTTP_HOST="trust.example.com")
 
         assert response.status_code == 200
 
     def test_public_urls_redirect_to_clean_urls_on_custom_domain(self, client, product_with_custom_domain):
         """Test that /public/* URLs redirect to clean URLs on custom domain."""
         product_id = product_with_custom_domain.id
-        response = client.get(
-            f"/public/product/{product_id}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/public/product/{product_id}/", HTTP_HOST="trust.example.com")
 
         # Should redirect to clean URL format
         assert response.status_code == 302
@@ -173,10 +140,7 @@ class TestCustomDomainRouting:
         )
 
         # Try to access other team's product on custom domain
-        response = client.get(
-            f"/product/{other_product.id}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{other_product.id}/", HTTP_HOST="trust.example.com")
 
         # Should return 404 since product doesn't belong to this workspace
         assert response.status_code == 404
@@ -208,10 +172,7 @@ class TestCustomDomainSecurity:
             is_public=False,  # Not public
         )
 
-        response = client.get(
-            f"/product/{private_product.id}/",
-            HTTP_HOST="trust.example.com"
-        )
+        response = client.get(f"/product/{private_product.id}/", HTTP_HOST="trust.example.com")
 
         # Should be forbidden or not found
         assert response.status_code in [403, 404]

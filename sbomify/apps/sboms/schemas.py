@@ -86,6 +86,10 @@ class SBOMResponseSchema(BaseModel):
     component_name: str
     source_display: str
     sha256_hash: str | None = None
+    bom_type: str
+    signature_blob_key: str | None = None
+    signature_type: str | None = None
+    provenance_blob_key: str | None = None
 
 
 class DashboardSBOMUploadInfo(Schema):
@@ -93,11 +97,11 @@ class DashboardSBOMUploadInfo(Schema):
     sbom_name: str
     sbom_version: str | None = None
     created_at: datetime
+    bom_type: str
 
 
 class DashboardStatsResponse(Schema):
     total_products: int
-    total_projects: int
     total_components: int
     latest_uploads: list[DashboardSBOMUploadInfo]
 
@@ -850,4 +854,4 @@ cdx15.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 cdx16.OrganizationalContact.model_config = ConfigDict(extra="ignore")
 
 
-# Product/Project/Component CRUD schemas moved to core/schemas.py
+# Product/Component CRUD schemas moved to core/schemas.py

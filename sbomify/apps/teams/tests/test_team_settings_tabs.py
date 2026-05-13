@@ -52,7 +52,6 @@ def test_delete_invitation_redirects_to_members_tab(sample_team_with_owner_membe
             "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
-            "max_projects": 100,
             "max_components": 1000,
         },
     )
@@ -117,7 +116,6 @@ def test_delete_member_redirects_to_active_tab(sample_team_with_owner_member: Me
             "description": "Business Plan Description",
             "max_users": 10,
             "max_products": 100,
-            "max_projects": 100,
             "max_components": 1000,
         },
     )

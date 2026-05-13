@@ -1,7 +1,7 @@
 """Utility functions for computing public assessment status.
 
 This module provides functions to aggregate assessment results for public display,
-showing only passing assessments at component, project, and product levels.
+showing only passing assessments at component and product levels.
 
 Key principle: Only show assessments that PASS. Never show failures on public pages.
 """
@@ -16,7 +16,7 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
 
 if TYPE_CHECKING:
-    from sbomify.apps.core.models import Component, Product, Project
+    from sbomify.apps.core.models import Component, Product
 
 
 @dataclass
@@ -40,27 +40,15 @@ class ComponentAssessmentStatus:
 
 
 @dataclass
-class ProjectAssessmentStatus:
-    """Aggregated assessment status for a project."""
-
-    project_id: str
-    project_name: str
-    all_pass: bool  # True if all components pass all assessments
-    has_assessments: bool
-    passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL components
-    component_statuses: list[ComponentAssessmentStatus]
-
-
-@dataclass
 class ProductAssessmentStatus:
     """Aggregated assessment status for a product."""
 
     product_id: str
     product_name: str
-    all_pass: bool  # True if all projects (and their components) pass all assessments
+    all_pass: bool  # True if all components pass all assessments
     has_assessments: bool
-    passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL projects/components
-    project_statuses: list[ProjectAssessmentStatus]
+    passing_assessments: list[PassingAssessment]  # Assessments that pass for ALL components
+    component_statuses: list[ComponentAssessmentStatus]
 
 
 def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
@@ -70,26 +58,70 @@ def _get_plugin_display_names() -> dict[str, tuple[str, str]]:
 
 
 def _get_latest_assessment_runs_for_sbom(sbom_id: str) -> list[AssessmentRun]:
-    """Get the latest assessment run for each plugin for an SBOM."""
-    # Get the latest run per plugin
-    latest_run_ids = (
+    """Get the latest assessment run per plugin for an SBOM.
+
+    Scan-once-per-SBOM model (sbomify/sbomify#881): one run per plugin,
+    regardless of how many releases the SBOM is linked to. The per-release
+    breakdown lives on ``AssessmentRun.releases`` M2M and is surfaced in the
+    UI as badges on the single plugin card.
+
+    Uses Subquery/OuterRef to fetch only the newest row per plugin_name
+    (no DISTINCT ON — portable to SQLite). Prefetches ``releases`` so the
+    card template can render the release badges without N+1 lookups.
+    """
+    latest_ids = list(
         AssessmentRun.objects.filter(sbom_id=sbom_id)
         .values("plugin_name")
         .annotate(
             latest_id=Subquery(
-                AssessmentRun.objects.filter(sbom_id=sbom_id, plugin_name=OuterRef("plugin_name"))
+                AssessmentRun.objects.filter(
+                    sbom_id=sbom_id,
+                    plugin_name=OuterRef("plugin_name"),
+                )
                 .order_by("-created_at")
                 .values("id")[:1]
             )
         )
         .values_list("latest_id", flat=True)
     )
-    return list(AssessmentRun.objects.filter(id__in=latest_run_ids))
+    latest_ids = [pk for pk in latest_ids if pk is not None]
+    if not latest_ids:
+        return []
+    return sorted(
+        AssessmentRun.objects.filter(id__in=latest_ids).prefetch_related("releases"),
+        key=lambda r: r.plugin_name,
+    )
+
+
+def _is_run_skipped(run: AssessmentRun) -> bool:
+    """Check if an assessment run was skipped by the plugin (not actually scanned).
+
+    Release-per-pair plugins like Dependency Track return a skipped result
+    (``result.metadata.skipped = True``) when their preconditions aren't
+    met — for example, a cron-triggered DT scan on an SBOM with no release
+    association. Skipped runs complete without error and without findings,
+    but they shouldn't be counted as "passing" because the plugin never
+    actually scanned anything.
+    """
+    if not run.result or not isinstance(run.result, dict):
+        return False
+    metadata = run.result.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return bool(metadata.get("skipped"))
 
 
 def _is_run_passing(run: AssessmentRun) -> bool:
-    """Check if an assessment run is passing (completed with no failures)."""
+    """Check if an assessment run is passing (completed and actually scanned clean).
+
+    Skipped runs are NOT passing — the plugin never executed its scan, so
+    "no findings" carries no signal. They're excluded from public "all
+    clean" aggregations to avoid showing a green badge for an SBOM whose
+    DT scan was skipped (e.g., no release association).
+    """
     if run.status != RunStatus.COMPLETED.value:
+        return False
+    if _is_run_skipped(run):
         return False
 
     result = run.result or {}
@@ -183,31 +215,31 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     )
 
 
-def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus:
-    """Get aggregated assessment status for a project.
+def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus:
+    """Get aggregated assessment status for a product.
 
-    A project passes an assessment if ALL its components pass that assessment.
-    Only public components are considered for public display.
+    A product passes an assessment if ALL its public components pass that assessment.
+    Visibility includes both PUBLIC and GATED so this matches the listing surface
+    used by ``workspace_public`` and ``product_details_public``.
     """
     from sbomify.apps.core.models import Component
 
-    # Get public components in this project
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
     components = Component.objects.filter(
-        projects=project,
-        visibility=Component.Visibility.PUBLIC,
+        products=product,
+        visibility__in=public_visibilities,
     ).distinct()
 
     if not components.exists():
-        return ProjectAssessmentStatus(
-            project_id=str(project.id),
-            project_name=project.name,
+        return ProductAssessmentStatus(
+            product_id=str(product.id),
+            product_name=product.name,
             all_pass=False,
             has_assessments=False,
             passing_assessments=[],
             component_statuses=[],
         )
 
-    # Get status for each component
     component_statuses = []
     component_passing: list[set[str]] = []
 
@@ -217,7 +249,6 @@ def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus
         if status.has_assessments:
             component_passing.append({p.plugin_name for p in status.passing_assessments})
 
-    # Find assessments that pass for ALL components
     if not component_passing:
         common_passing: set[str] = set()
     else:
@@ -225,73 +256,6 @@ def get_project_assessment_status(project: "Project") -> ProjectAssessmentStatus
 
     has_assessments = any(cs.has_assessments for cs in component_statuses)
 
-    # Get display info for common passing assessments
-    plugin_info = _get_plugin_display_names()
-    passing_assessments = []
-    for plugin_name in sorted(common_passing):
-        display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
-        passing_assessments.append(
-            PassingAssessment(
-                plugin_name=plugin_name,
-                plugin_display_name=display_name,
-                category=category,
-            )
-        )
-
-    all_pass = len(common_passing) > 0 if has_assessments else False
-
-    return ProjectAssessmentStatus(
-        project_id=str(project.id),
-        project_name=project.name,
-        all_pass=all_pass,
-        has_assessments=has_assessments,
-        passing_assessments=passing_assessments,
-        component_statuses=component_statuses,
-    )
-
-
-def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus:
-    """Get aggregated assessment status for a product.
-
-    A product passes an assessment if ALL its public projects (and their components) pass.
-    """
-    from sbomify.apps.core.models import Project
-
-    # Get public projects in this product
-    projects = Project.objects.filter(
-        products=product,
-        is_public=True,
-    ).distinct()
-
-    if not projects.exists():
-        return ProductAssessmentStatus(
-            product_id=str(product.id),
-            product_name=product.name,
-            all_pass=False,
-            has_assessments=False,
-            passing_assessments=[],
-            project_statuses=[],
-        )
-
-    # Get status for each project
-    project_statuses = []
-    project_passing: list[set[str]] = []
-
-    for project in projects:
-        status = get_project_assessment_status(project)
-        project_statuses.append(status)
-        if status.has_assessments:
-            project_passing.append({p.plugin_name for p in status.passing_assessments})
-
-    # Find assessments that pass for ALL projects
-    if not project_passing:
-        common_passing: set[str] = set()
-    else:
-        common_passing = set.intersection(*project_passing) if project_passing else set()
-
-    has_assessments = any(ps.has_assessments for ps in project_statuses)
-
-    # Get display info for common passing assessments
     plugin_info = _get_plugin_display_names()
     passing_assessments = []
     for plugin_name in sorted(common_passing):
@@ -312,7 +276,7 @@ def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus
         all_pass=all_pass,
         has_assessments=has_assessments,
         passing_assessments=passing_assessments,
-        project_statuses=project_statuses,
+        component_statuses=component_statuses,
     )
 
 
@@ -364,18 +328,18 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
     """Get assessment status based on ONLY the latest SBOM per component in a product.
 
     A product passes an assessment if the latest SBOM of every public component
-    in the product passes that assessment.
+    in the product passes that assessment. Visibility includes both PUBLIC and
+    GATED so this matches the listing surface (workspace_public + product_details).
 
     This differs from get_product_assessment_status which checks ALL SBOMs.
     """
     from sbomify.apps.core.models import Component
 
-    # Get all public components in this product (via projects)
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
     components = (
         Component.objects.filter(
-            projects__products=product,
-            projects__is_public=True,
-            visibility=Component.Visibility.PUBLIC,
+            products=product,
+            visibility__in=public_visibilities,
         )
         .distinct()
         .order_by("name")
@@ -388,7 +352,7 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
             all_pass=False,
             has_assessments=False,
             passing_assessments=[],
-            project_statuses=[],  # Not populated for latest-SBOM mode
+            component_statuses=[],
         )
 
     # Get latest SBOM assessment status for each component
@@ -425,15 +389,13 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
 
     all_pass = len(common_passing) > 0 if has_any_assessments else False
 
-    # project_statuses left empty intentionally - this function focuses on
-    # component-level aggregation via latest SBOMs, not project hierarchy
     return ProductAssessmentStatus(
         product_id=str(product.id),
         product_name=product.name,
         all_pass=all_pass,
         has_assessments=has_any_assessments,
         passing_assessments=passing_assessments,
-        project_statuses=[],
+        component_statuses=[],
     )
 
 
@@ -448,31 +410,33 @@ def get_products_latest_sbom_assessments_batch(
     Returns a dict mapping product_id -> list of PassingAssessment.
     """
     from sbomify.apps.core.models import Component
-    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.sboms.models import SBOM, ProductComponent
 
     if not products:
         return {}
 
-    product_ids = [p.id for p in products]
+    public_product_ids = [p.id for p in products if getattr(p, "is_public", False)]
 
-    # Step 1: Get all public components for all products (single query)
-    components = (
-        Component.objects.filter(
-            projects__products__id__in=product_ids,
-            projects__is_public=True,
-            visibility=Component.Visibility.PUBLIC,
-        )
-        .distinct()
-        .select_related("team")
-    )
-
-    # Build mapping: component_id -> list of product_ids it belongs to
+    # Build mapping: component_id -> set of product_ids the component belongs to
+    # (filtered to public products in the requested set). Walk the through table
+    # directly so we don't materialise a Component list and avoid a redundant
+    # DISTINCT-on-Component query.
+    # Match the listing semantics in workspace_public + product_details_public:
+    # both PUBLIC and GATED components are publicly visible. Filtering only on
+    # PUBLIC here would leave gated components without passing-assessment badges
+    # even though the listing surface includes them.
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
     component_to_products: dict[str, set[str]] = {}
-    for component in components:
-        component_products = component.projects.filter(is_public=True, products__id__in=product_ids).values_list(
-            "products__id", flat=True
-        )
-        component_to_products[str(component.id)] = set(str(pid) for pid in component_products if pid)
+    if public_product_ids:
+        for component_id, product_id in (
+            ProductComponent.objects.filter(
+                product_id__in=public_product_ids,
+                component__visibility__in=public_visibilities,
+            )
+            .values_list("component_id", "product_id")
+            .iterator(chunk_size=1000)
+        ):
+            component_to_products.setdefault(str(component_id), set()).add(str(product_id))
 
     if not component_to_products:
         return {str(p.id): [] for p in products}
@@ -504,8 +468,6 @@ def get_products_latest_sbom_assessments_batch(
         return {str(p.id): [] for p in products}
 
     # Step 3: Get all assessment runs for these SBOMs (batch query)
-    from django.db.models import OuterRef, Subquery
-
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
         .values("sbom_id", "plugin_name")
@@ -598,7 +560,7 @@ def get_components_latest_sbom_assessments_batch(
     """Get latest SBOM assessments for multiple components in a single batch.
 
     This is an optimized version of get_component_latest_sbom_assessment_status
-    for use when processing multiple components (e.g., product project listing).
+    for use when processing multiple components (e.g., product component listing).
 
     Returns a dict mapping component_id -> list of PassingAssessment.
     """
@@ -635,6 +597,8 @@ def get_components_latest_sbom_assessments_batch(
     sbom_ids = list(sbom_to_component.keys())
 
     # Step 2: Get all assessment runs for these SBOMs (batch query)
+    from django.db.models import OuterRef, Subquery
+
     latest_run_ids = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
         .values("sbom_id", "plugin_name")

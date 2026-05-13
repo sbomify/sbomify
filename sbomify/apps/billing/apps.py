@@ -10,5 +10,7 @@ class BillingConfig(AppConfig):
     verbose_name = "Billing"
 
     def ready(self) -> None:
-        # Import signals and tasks to register them with Django and Dramatiq
-        from . import signals, tasks  # noqa: F401
+        # Import signals, tasks, and cron to register them with Django and Dramatiq.
+        # Without importing cron here the `daily_stale_trial_check` actor is
+        # never registered with the dramatiq worker.
+        from . import cron, signals, tasks  # noqa: F401

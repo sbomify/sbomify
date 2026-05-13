@@ -46,6 +46,28 @@ class RunStatus(str, Enum):
     """Assessment encountered an error."""
 
 
+class ScanMode(str, Enum):
+    """Declares whether a plugin completes in a single pass or polls externally.
+
+    One-shot plugins (e.g., NTIA, checksum, OSV) run ``assess()`` once and
+    return a final ``AssessmentResult`` immediately.
+
+    Continuous plugins (e.g., Dependency Track, SBOM Verification's GitHub
+    attestation lookup) upload data or call an external service, then raise
+    ``RetryLaterError`` to poll for results over multiple retries. The
+    framework uses this annotation to call ``sync_release_tags()`` after
+    M2M population so the plugin can reconcile downstream state (e.g., DT
+    project version tags). One-shot plugins have no downstream state to
+    reconcile, so the hook is skipped.
+    """
+
+    ONE_SHOT = "one_shot"
+    """Plugin completes assessment in a single pass — no polling or retries."""
+
+    CONTINUOUS = "continuous"
+    """Plugin polls an external system and raises RetryLaterError until done."""
+
+
 class RunReason(str, Enum):
     """Reason why an assessment run was triggered.
 
@@ -66,3 +88,15 @@ class RunReason(str, Enum):
 
     PLUGIN_UPDATE = "plugin_update"
     """Triggered because the plugin version was updated."""
+
+    ON_RELEASE_ASSOCIATION = "on_release_association"
+    """Triggered because the SBOM was associated with a release via ReleaseArtifact."""
+
+    DEPENDENCY_CHANGED = "dependency_changed"
+    """Triggered because an upstream plugin this run depends on completed
+    AFTER this run's previous evaluation. Fires when a dependent plugin's
+    earlier verdict was based on incomplete dependency-check data — e.g.
+    BSI evaluated ``requires_one_of: attestation`` while
+    sbom-verification was still in its ATTESTATION_DELAY_MS window. The
+    completion-trigger signal handler re-enqueues the dependent so its
+    verdict reflects the now-completed upstream run."""

@@ -15,7 +15,7 @@ from django.views import View
 
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.core.models import User
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     ContactEntity,
@@ -297,7 +297,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     "name": plan.name,
                     "description": plan.description or "",
                     "max_products": plan.max_products,
-                    "max_projects": plan.max_projects,
                     "max_components": plan.max_components,
                     "monthly_price": float(pricing.get("monthly_price") or 0),
                     "annual_price": float(pricing.get("annual_price") or 0),
@@ -336,7 +335,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             company_name = form.cleaned_data["company_name"]
 
             # Skip billing limit checks during onboarding. The wizard creates at
-            # most one product/project/component via get_or_create and should never
+            # most one product/component pair via get_or_create and should never
             # be blocked — otherwise teams with pre-existing assets at the limit
             # get stuck in an infinite onboarding loop.
 
@@ -421,9 +420,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         product, _ = Product.objects.get_or_create(
                             name=company_name, team=team, defaults={"is_public": is_public}
                         )
-                    project, _ = Project.objects.get_or_create(
-                        name="Main Project", team=team, defaults={"is_public": is_public}
-                    )
 
                     component_metadata = create_default_component_metadata(
                         user=request.user, team_id=team.id, custom_metadata=None
@@ -433,7 +429,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         name="Main Component",
                         team=team,
                         defaults={
-                            "component_type": Component.ComponentType.SBOM,
+                            "component_type": Component.ComponentType.BOM,
                             "metadata": component_metadata,
                             "visibility": Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE,
                         },
@@ -447,8 +443,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         )
                         component.save()
 
-                    product.projects.add(project)
-                    project.components.add(component)
+                    product.components.add(component)
 
                     team.name = format_workspace_name(company_name)
                     team.has_completed_wizard = True

@@ -1,0 +1,276 @@
+{% extends "core/dashboard_base.html.j2" %}
+{% block title %}CRA Scope Screening — {{ product.name }} — sbomify{% endblock %}
+{% block sidebar_content %}
+    {# Keep the Compliance section visible in the sidebar even before an assessment exists. #}
+    <div x-show="!sidebarCollapsed"
+         x-cloak
+         class="px-3 py-4 border-t border-border">
+        <h3 class="px-4 text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">Compliance</h3>
+        <a href="{% url 'compliance:cra_product_list' %}"
+           class="flex items-center gap-3 px-4 h-9 rounded-xl text-sm text-text transition-all duration-200 sidebar-link-hover">
+            <i class="fas fa-shield-halved text-sm"></i>
+            <span>CRA Wizard</span>
+        </a>
+    </div>
+{% endblock sidebar_content %}
+{% block dashboard_content %}
+    <div x-data="craScopeScreening()">
+        {{ screening_data|json_script:"screening-data" }}
+        {# Server-resolved POST target so JS doesn't need window.location.href. #}
+        {{ screening_urls|json_script:"screening-urls" }}
+        <div class="space-y-6">
+            {# Page header — matches the Products dashboard shell. #}
+            <div class="flex items-center gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-scale-balanced"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h1 class="text-2xl font-bold text-text m-0">CRA Scope Screening</h1>
+                        <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-surface-hover text-text-muted border border-border">
+                            FAQ §1
+                        </span>
+                    </div>
+                    <p class="text-text-muted text-sm mt-1 m-0">
+                        Determine whether
+                        <strong class="text-text">{{ product.name }}</strong>
+                        falls within
+                        <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-primary hover:underline">Regulation (EU) 2024/2847</a>
+                        (Cyber Resilience Act).
+                    </p>
+                </div>
+            </div>
+            {# Questions — pill sits inline with the title; legal-basis is a footnote under the description. #}
+            <div class="space-y-3">
+                {# Question 1 — Data connection (INCLUSION) #}
+                <div class="tw-card"
+                     :class="hasDataConnection ? '' : 'ring-1 ring-warning/40'">
+                    <label class="flex items-start gap-3 cursor-pointer p-4">
+                        <input type="checkbox"
+                               x-model="hasDataConnection"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-semibold text-text leading-tight">Product has a data connection</span>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-success/15 text-success border border-success/30">
+                                    Scope inclusion
+                                </span>
+                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_3"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
+                                    <i class="fas fa-book text-[10px]"></i>
+                                    CRA Art 3(1-2), FAQ 1.1/1.3
+                                </a>
+                            </div>
+                            <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
+                                Direct or indirect, logical or physical, to a device or network.
+                            </p>
+                            <p x-show="!hasDataConnection"
+                               x-cloak
+                               class="text-sm text-warning mt-2 font-medium flex items-center gap-1.5 m-0">
+                                <i class="fas fa-arrow-right text-xs"></i>
+                                Without a data connection the product is outside CRA scope.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+                {# Question 2 — Own use (EXCLUSION) #}
+                <div class="tw-card" :class="isOwnUseOnly ? 'ring-1 ring-warning/40' : ''">
+                    <label class="flex items-start gap-3 cursor-pointer p-4">
+                        <input type="checkbox"
+                               x-model="isOwnUseOnly"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-semibold text-text leading-tight">Manufactured exclusively for own use</span>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-danger/15 text-danger border border-danger/30">
+                                    Scope exclusion
+                                </span>
+                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
+                                    <i class="fas fa-book text-[10px]"></i>
+                                    CRA Art 2(1), Recital 15, FAQ 1.5
+                                </a>
+                            </div>
+                            <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
+                                The product is not placed on the EU market — it's manufactured and consumed in-house only.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+                {# Question 3 — Testing version (INFORMATIONAL) #}
+                <div class="tw-card">
+                    <label class="flex items-start gap-3 cursor-pointer p-4">
+                        <input type="checkbox"
+                               x-model="isTestingVersion"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-semibold text-text leading-tight">Testing or pre-release version</span>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-surface-hover text-text-muted border border-border">
+                                    Informational
+                                </span>
+                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_21"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
+                                    <i class="fas fa-book text-[10px]"></i>
+                                    CRA Art 21(1), FAQ 1.6
+                                </a>
+                            </div>
+                            <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
+                                Made available for limited testing with a visible non-compliance indicator.
+                                Testing versions stay in scope, but the wizard relaxes several requirements.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+                {# Question 4 — Other legislation (EXCLUSION) #}
+                <div class="tw-card"
+                     :class="isCoveredByOtherLegislation ? 'ring-1 ring-warning/40' : ''">
+                    <label class="flex items-start gap-3 cursor-pointer p-4">
+                        <input type="checkbox"
+                               x-model="isCoveredByOtherLegislation"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-semibold text-text leading-tight">Covered by exempted EU legislation</span>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-danger/15 text-danger border border-danger/30">
+                                    Scope exclusion
+                                </span>
+                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
+                                    <i class="fas fa-book text-[10px]"></i>
+                                    CRA Art 2(3-5), FAQ 1.9
+                                </a>
+                            </div>
+                            <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
+                                Medical devices (Reg 2017/745, 2017/746), motor vehicles (Reg 2019/2144),
+                                civil aviation (Reg 2018/1139), or marine equipment (Dir 2014/90).
+                            </p>
+                        </div>
+                    </label>
+                    <div x-show="isCoveredByOtherLegislation"
+                         x-cloak
+                         class="px-4 pb-4 pl-[2.5rem]">
+                        <label class="tw-form-label text-xs" for="exempted-legislation">Which legislation?</label>
+                        <input type="text"
+                               id="exempted-legislation"
+                               x-model="exemptedLegislationName"
+                               class="tw-form-input w-full text-sm"
+                               placeholder="e.g., Regulation (EU) 2017/745 — Medical Devices">
+                    </div>
+                </div>
+                {# Question 5 — Dual-use (INFORMATIONAL) #}
+                <div class="tw-card">
+                    <label class="flex items-start gap-3 cursor-pointer p-4">
+                        <input type="checkbox"
+                               x-model="isDualUse"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-sm font-semibold text-text leading-tight">Dual-use (civilian + defence)</span>
+                                <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-surface-hover text-text-muted border border-border">
+                                    Informational
+                                </span>
+                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
+                                    <i class="fas fa-book text-[10px]"></i>
+                                    CRA Art 2(2), FAQ 1.8
+                                </a>
+                            </div>
+                            <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
+                                Dual-use products with civilian and defence applications stay in CRA scope
+                                whenever they're commercially available.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+            {# Notes — optional supporting context for the scope determination. #}
+            <div class="tw-card">
+                <div class="p-5">
+                    <label class="flex items-center gap-2 mb-1" for="screening-notes">
+                        <i class="fas fa-note-sticky text-text-muted text-xs"></i>
+                        <span class="text-sm font-semibold text-text">Supporting notes</span>
+                        <span class="text-xs text-text-muted font-normal">(optional)</span>
+                    </label>
+                    <p class="text-xs text-text-muted mb-3 m-0">
+                        Context, references, or reasoning that a future reviewer will need to understand this determination.
+                    </p>
+                    <textarea id="screening-notes"
+                              x-model="screeningNotes"
+                              rows="3"
+                              class="tw-form-input w-full"
+                              placeholder="E.g. reviewed against the vendor's exempted-legislation claim on 2026-04-23; see compliance ticket CRA-123."></textarea>
+                </div>
+            </div>
+            {# Result + actions — verdict + CTA as one unit at the bottom. #}
+            <div class="space-y-4">
+                <div x-show="craApplies"
+                     class="tw-card border-success/40 bg-success/5 dark:bg-success/10">
+                    <div class="p-5 flex items-start gap-4">
+                        <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-success/15 text-success shrink-0">
+                            <i class="fas fa-circle-check text-xl"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-base font-semibold text-text m-0">CRA applies to this product</h3>
+                            <p class="text-sm text-text-muted mt-1 m-0">
+                                Save this screening to unlock the five-step compliance wizard.
+                                Your answers are stored as audit evidence for the Declaration of Conformity.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div x-show="!craApplies"
+                     x-cloak
+                     class="tw-card border-warning/40 bg-warning/5 dark:bg-warning/10">
+                    <div class="p-5 flex items-start gap-4">
+                        <div class="flex items-center justify-center w-11 h-11 rounded-xl bg-warning/15 text-warning shrink-0">
+                            <i class="fas fa-circle-exclamation text-xl"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="text-base font-semibold text-text m-0">CRA does not apply to this product</h3>
+                            <p class="text-sm text-text-muted mt-1 m-0" x-text="scopeExclusion"></p>
+                            <p class="text-xs text-text-muted mt-2 m-0">
+                                You can still save this screening for audit purposes. The wizard stays locked
+                                until the answers change.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <a href="{% url 'compliance:cra_product_list' %}"
+                       class="tw-btn-secondary">
+                        <i class="fas fa-chevron-left mr-1 text-xs"></i>
+                        Back to CRA overview
+                    </a>
+                    <button type="button"
+                            @click="submit()"
+                            :disabled="isSaving"
+                            class="tw-btn-primary inline-flex items-center gap-2">
+                        <span x-show="!isSaving"
+                              x-text="craApplies ? 'Save & Continue to Wizard' : 'Save Screening'"></span>
+                        <span x-show="!isSaving && craApplies" x-cloak>
+                            <i class="fas fa-arrow-right text-xs"></i>
+                        </span>
+                        <span x-show="isSaving" x-cloak class="inline-flex items-center gap-2">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Saving...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock dashboard_content %}

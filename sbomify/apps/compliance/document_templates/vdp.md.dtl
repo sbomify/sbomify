@@ -1,0 +1,64 @@
+# Vulnerability Disclosure Policy
+**Product:** {{ product_name }}
+**Manufacturer:** {{ manufacturer_name }}
+**Version:** {{ version }}
+**Date:** {{ date }}
+---
+
+## 1. Introduction
+
+{{ manufacturer_name }} is committed to the security of {{ product_name }} and welcomes reports from security researchers and the general public to help improve our security posture. This policy describes how to report vulnerabilities and what to expect from us.
+
+## 2. Scope
+
+This vulnerability disclosure policy applies to {{ product_name }}{% if product_description %} ({{ product_description }}){% endif %}.
+
+{% if vdp_url %}
+**Full VDP available at:** {{ vdp_url }}
+{% endif %}
+
+## 3. How to Report a Vulnerability
+
+{% if security_contact_email %}
+**Email:** {{ security_contact_email }}
+{% endif %}
+{% if security_contact_url %}
+**Web Form:** {{ security_contact_url }}
+{% endif %}
+
+When reporting, please include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact assessment
+- Any suggested remediation
+
+## 4. Response Timeline
+
+{% if acknowledgment_timeline_days %}
+- **Acknowledgment:** Within {{ acknowledgment_timeline_days }} days of receipt
+{% else %}
+- **Acknowledgment:** [To be determined]
+{% endif %}
+- **Status Update:** Within 14 days of acknowledgment
+- **Resolution Target:** Within 90 days of validated report
+
+## 5. Safe Harbor
+
+{{ manufacturer_name }} will not take legal action against individuals who:
+- Make a good faith effort to comply with this policy
+- Report vulnerabilities without exploiting them beyond what is necessary to confirm the vulnerability
+- Do not violate privacy, destroy data, or disrupt services
+
+## 6. Coordinated Disclosure
+
+We ask reporters to:
+- Allow reasonable time for remediation before public disclosure
+- Coordinate disclosure timing with us
+- Avoid accessing or modifying data beyond what is necessary
+
+## 7. Recognition
+
+We acknowledge security researchers who report valid vulnerabilities in accordance with this policy.
+
+---
+*This policy aligns with CRA Annex I, Part II, Sections 5-6 requirements for coordinated vulnerability disclosure.*

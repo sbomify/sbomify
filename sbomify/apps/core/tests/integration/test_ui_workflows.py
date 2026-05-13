@@ -27,11 +27,7 @@ class TestUIWorkflows:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="stats_plan",
-            name="Stats Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="stats_plan", name="Stats Plan", max_components=10, max_products=10
         )
         team.billing_plan = "stats_plan"
         team.save()
@@ -49,9 +45,7 @@ class TestUIWorkflows:
         assert response.status_code == 200
         data = response.json()
 
-        # Verify expected stats structure from new endpoint
         assert "total_components" in data
-        assert "total_projects" in data
         assert "total_products" in data
         assert "latest_uploads" in data
         assert isinstance(data["latest_uploads"], list)
@@ -65,31 +59,25 @@ class TestUIWorkflows:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="ui_workflow_plan",
-            name="UI Workflow Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10
         )
         team.billing_plan = "ui_workflow_plan"
         team.save()
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # Test API-based component creation
         response = client.post(
             reverse("api-1:create_component"),
-            data=json.dumps({
-                "name": "Test Component",
-            }),
-            content_type="application/json"
+            data=json.dumps(
+                {
+                    "name": "Test Component",
+                }
+            ),
+            content_type="application/json",
         )
 
         # Should return JSON success response
@@ -99,6 +87,7 @@ class TestUIWorkflows:
 
         # Verify component was created
         from sbomify.apps.sboms.models import Component
+
         component = Component.objects.get(id=component_data["id"])
         assert component.name == "Test Component"
 
@@ -106,7 +95,7 @@ class TestUIWorkflows:
         response = client.get(
             reverse("api-1:get_component_metadata", kwargs={"component_id": component.id}),
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-            HTTP_ACCEPT="application/json"
+            HTTP_ACCEPT="application/json",
         )
 
         # Should return JSON response for AJAX request
@@ -120,22 +109,14 @@ class TestUIWorkflows:
 
         # Setup billing plan
         BillingPlan.objects.create(
-            key="ui_workflow_plan",
-            name="UI Workflow Plan",
-            max_components=10,
-            max_products=10,
-            max_projects=10
+            key="ui_workflow_plan", name="UI Workflow Plan", max_components=10, max_products=10
         )
         team.billing_plan = "ui_workflow_plan"
         team.save()
 
         # Set current team in session
         session = client.session
-        session["current_team"] = {
-            "id": team.id,
-            "key": team.key,
-            "role": "owner"
-        }
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
         # First, verify we can access the components dashboard
@@ -149,13 +130,16 @@ class TestUIWorkflows:
 
         # Test API-based component creation
         import json
+
         component_name = "Test Component 123"
         response = client.post(
             reverse("api-1:create_component"),
-            data=json.dumps({
-                "name": component_name,
-            }),
-            content_type="application/json"
+            data=json.dumps(
+                {
+                    "name": component_name,
+                }
+            ),
+            content_type="application/json",
         )
 
         # Verify API response
@@ -165,6 +149,7 @@ class TestUIWorkflows:
 
         # Verify the component was created
         from sbomify.apps.sboms.models import Component
+
         component = Component.objects.get(id=component_data["id"])
         assert component.name == component_name
 

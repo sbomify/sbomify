@@ -5,7 +5,7 @@ describe('planSelection', () => {
     const mockData = {
         currentPlan: 'community',
         teamKey: 'test-team',
-        usage: { users: 1, products: 5, projects: 5, components: 50 },
+        usage: { users: 1, products: 5, components: 50 },
         csrfToken: 'token',
         enterpriseContactUrl: '/contact',
     };

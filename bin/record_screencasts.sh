@@ -40,7 +40,15 @@ ensure_services() {
     compose up -d --build
     SERVICES_STARTED=true
     echo "Waiting for services to be healthy..."
-    compose exec tests bash -c "until pg_isready -h 172.25.0.10 -U sbomify_test -q 2>/dev/null; do sleep 1; done"
+    compose exec tests python -c "
+import socket, time
+while True:
+    try:
+        s = socket.create_connection(('172.25.0.10', 5432), timeout=2)
+        s.close(); break
+    except OSError:
+        time.sleep(1)
+"
 }
 
 ensure_ffmpeg() {
@@ -62,13 +70,13 @@ run_screencast() {
 }
 
 clean_temp_videos() {
-    # Playwright generates random-named .webm files alongside our named ones.
-    # Keep only files whose names match a screencast script.
+    # Playwright writes temp files named as 32-char hex hashes before the
+    # fixture renames them to the test-name filename.  Drop only those.
     for webm in "$OUTPUT_DIR"/*.webm; do
         [ -f "$webm" ] || continue
         local name
         name=$(basename "$webm" .webm)
-        if [ ! -f "$SCREENCASTS_DIR/${name}.py" ]; then
+        if [[ "$name" =~ ^[a-f0-9]{32}$ ]]; then
             rm -f "$webm"
         fi
     done

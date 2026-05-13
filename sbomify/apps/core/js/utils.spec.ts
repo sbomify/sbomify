@@ -493,7 +493,6 @@ describe('Utils', () => {
         test('should have all required event names', () => {
             const EVENTS = {
                 REFRESH_PRODUCTS: 'refresh_products',
-                REFRESH_PROJECTS: 'refresh_projects',
                 REFRESH_COMPONENTS: 'refresh_components',
                 ITEM_CREATED: 'item_created',
                 ITEM_UPDATED: 'item_updated',
@@ -501,7 +500,6 @@ describe('Utils', () => {
             }
 
             expect(EVENTS.REFRESH_PRODUCTS).toBe('refresh_products')
-            expect(EVENTS.REFRESH_PROJECTS).toBe('refresh_projects')
             expect(EVENTS.REFRESH_COMPONENTS).toBe('refresh_components')
             expect(EVENTS.ITEM_CREATED).toBe('item_created')
             expect(EVENTS.ITEM_UPDATED).toBe('item_updated')

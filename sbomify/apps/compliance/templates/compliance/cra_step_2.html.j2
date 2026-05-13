@@ -1,0 +1,278 @@
+{% extends "compliance/cra_wizard_base.html.j2" %}
+{% block step_wrapper %}
+    <div x-data="craStep2()">
+        {{ step_data_json|json_script:"step-data" }}
+        {{ assessment_meta|json_script:"assessment-meta" }}
+        {{ step_urls|json_script:"step-urls" }}
+        {# Step content #}
+        <div class="space-y-6">
+            {# SBOM Compliance Summary Card #}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-file-shield text-primary"></i>
+                        SBOM Compliance Summary
+                    </h2>
+                    <p class="text-sm text-text-muted mt-1">
+                        Overview of SBOM coverage and BSI TR-03183 compliance across product components
+                    </p>
+                </div>
+                <div class="p-6">
+                    <template x-if="totalComponents === 0">
+                        <div class="text-center py-6">
+                            <i class="fas fa-cube text-4xl text-text-muted mb-3"></i>
+                            <p class="text-text-muted">No components found. Add components to this product first.</p>
+                        </div>
+                    </template>
+                    <template x-if="totalComponents > 0">
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div class="text-center p-4 bg-surface-hover rounded-lg">
+                                    <span class="block text-2xl font-bold text-text" x-text="totalComponents"></span>
+                                    <span class="text-sm text-text-muted">Total Components</span>
+                                </div>
+                                <div class="text-center p-4 bg-surface-hover rounded-lg">
+                                    <span class="block text-2xl font-bold text-text"
+                                          x-text="componentsWithSbom"></span>
+                                    <span class="text-sm text-text-muted">With SBOMs</span>
+                                </div>
+                                <div class="text-center p-4 bg-surface-hover rounded-lg">
+                                    <span class="block text-2xl font-bold"
+                                          :class="componentsWithSbom === totalComponents ? 'text-success' : 'text-warning'"
+                                          x-text="totalComponents > 0 ? Math.round(componentsWithSbom / totalComponents * 100) + '%' : '—'"></span>
+                                    <span class="text-sm text-text-muted">Coverage</span>
+                                </div>
+                            </div>
+                            {# Info banner when coverage is incomplete #}
+                            <template x-if="componentsWithSbom < totalComponents">
+                                <div class="tw-alert tw-alert-warning">
+                                    <i class="fas fa-triangle-exclamation mt-0.5 shrink-0 text-base"></i>
+                                    <div class="text-sm">
+                                        <p class="font-semibold">
+                                            <span x-text="totalComponents - componentsWithSbom"></span> component(s) missing SBOMs
+                                        </p>
+                                        <p class="mt-0.5 opacity-80">
+                                            Upload SBOMs for all components to achieve full CRA compliance. Components without SBOMs cannot be assessed for BSI TR-03183 conformance.
+                                        </p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            {# Components Table #}
+            <template x-if="totalComponents > 0">
+                <div>
+                    <div class="tw-card">
+                        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+                            <div>
+                                <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                                    <i class="fas fa-puzzle-piece text-primary"></i>
+                                    Components
+                                </h2>
+                                <p class="text-sm text-text-muted mt-1">Individual component SBOM status and BSI compliance results</p>
+                            </div>
+                            <input type="text"
+                                   x-model="search"
+                                   placeholder="Search components..."
+                                   aria-label="Search components"
+                                   class="tw-form-input max-w-xs text-sm">
+                        </div>
+                        <div class="tw-data-table-container">
+                            <table class="tw-table">
+                                <thead>
+                                    <tr>
+                                        <th>Component</th>
+                                        <th>SBOM</th>
+                                        <th>BSI Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="comp in filteredComponents" :key="comp.component_id">
+                                        <tr>
+                                            <td>
+                                                <a :href="comp.component_url"
+                                                   class="text-primary hover:underline"
+                                                   x-text="comp.component_name"></a>
+                                            </td>
+                                            <td>
+                                                <span x-show="comp.has_sbom" class="tw-badge-success">Yes</span>
+                                                <span x-show="!comp.has_sbom" class="tw-badge-danger">No</span>
+                                            </td>
+                                            <td>
+                                                <div class="flex items-center gap-2">
+                                                    {# Issue #907: pass/fail badge uses unwaived-aware predicate so a component whose only failing checks are waived tooling limitations shows Pass. Panel-expand gating uses the raw predicate below so operators can still audit waived findings. #}
+                                                    <template x-if="comp.bsi_status === 'completed' && !hasUnwaivedFailures(comp)">
+                                                        <span class="tw-badge-success">Pass</span>
+                                                    </template>
+                                                    <template x-if="comp.bsi_status === 'completed' && hasUnwaivedFailures(comp)">
+                                                        <span class="tw-badge-danger">Fail</span>
+                                                    </template>
+                                                    <template x-if="comp.bsi_status === 'pending'">
+                                                        <span class="tw-badge-warning">Pending</span>
+                                                    </template>
+                                                    <template x-if="!comp.bsi_status">
+                                                        <span class="tw-badge-secondary">N/A</span>
+                                                    </template>
+                                                    {# Expand the fixes panel whenever there's ANY failing check — waived or not — so operators can review the justifications and audit the waivers, even when the pass/fail badge shows green. #}
+                                                    <template x-if="hasFailingChecks(comp)">
+                                                        <button type="button"
+                                                                @click="toggleFixes(comp.component_id)"
+                                                                class="text-xs text-primary hover:underline cursor-pointer"
+                                                                :aria-expanded="isFixesExpanded(comp.component_id)"
+                                                                :aria-controls="'fixes-' + comp.component_id">
+                                                            <span x-show="!isFixesExpanded(comp.component_id)"
+                                                                  x-text="hasUnwaivedFailures(comp) ? 'How to Fix' : 'Review Waivers'"></span>
+                                                            <span x-show="isFixesExpanded(comp.component_id)">Hide</span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <template x-if="filteredComponents.length === 0 && search">
+                                        <tr>
+                                            <td colspan="3" class="text-center text-text-muted py-6">No components match your search.</td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {# Fix guidance — separate card below the Components card #}
+                    <template x-for="comp in filteredComponents" :key="'fix-' + comp.component_id">
+                        <template x-if="hasFailingChecks(comp) && isFixesExpanded(comp.component_id)">
+                            <div class="tw-card mt-4" :id="'fixes-' + comp.component_id">
+                                <div class="px-6 py-4 border-b border-border">
+                                    <h4 class="text-sm font-semibold text-text flex items-center gap-2 m-0">
+                                        <i class="fas fa-wrench text-warning"></i>
+                                        BSI TR-03183-2 Fixes for <span x-text="comp.component_name" class="text-primary"></span>
+                                    </h4>
+                                </div>
+                                <div class="p-5">
+                                    <div class="space-y-3">
+                                        <template x-for="check in comp.bsi_assessment?.failing_checks || []"
+                                                  :key="check.id">
+                                            <div class="rounded-lg border border-border/50 overflow-hidden"
+                                                 :class="check.waived ? 'opacity-70' : ''">
+                                                <div class="px-4 py-3 flex items-start gap-3">
+                                                    <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                                                         :class="check.waived ? 'bg-amber-500/10' : 'bg-danger/10'">
+                                                        <i class="fas text-xs"
+                                                           :class="check.waived ? 'fa-file-signature text-amber-600' : 'fa-xmark text-danger'"></i>
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <p class="text-sm font-medium text-text m-0 flex items-center gap-2">
+                                                            <span x-text="check.title"></span>
+                                                            {# issue #907: remediation_type badge — operators understand what to do at a glance rather than reading the remediation prose. Kept as single-line {# #} so it parses in both Django and Jinja2 engines. #}
+                                                            <template x-if="check.remediation_type === 'tooling_limitation'">
+                                                                <span class="tw-badge-warning text-[10px] font-normal px-1.5 py-0.5"
+                                                                      data-testid="step-2-tooling-limitation-badge">
+                                                                    Tooling limitation
+                                                                </span>
+                                                            </template>
+                                                            <template x-if="check.remediation_type === 'operator_action'">
+                                                                <span class="tw-badge-info text-[10px] font-normal px-1.5 py-0.5"
+                                                                      data-testid="step-2-operator-action-badge">
+                                                                    Operator action
+                                                                </span>
+                                                            </template>
+                                                            <template x-if="check.waived">
+                                                                <span class="tw-badge-success text-[10px] font-normal px-1.5 py-0.5"
+                                                                      data-testid="step-2-waived-badge">Waived</span>
+                                                            </template>
+                                                        </p>
+                                                        <p class="text-xs text-text-muted mt-1 m-0" x-data="{ expanded: false }">
+                                                            <template x-if="check.description && check.description.length > 120">
+                                                                <span>
+                                                                    <span x-show="!expanded"
+                                                                          x-text="check.description.substring(0, 120) + '...'"></span>
+                                                                    <span x-show="expanded" x-text="check.description"></span>
+                                                                    <button type="button"
+                                                                            @click="expanded = !expanded"
+                                                                            class="text-primary hover:underline ml-1"
+                                                                            :aria-expanded="expanded"
+                                                                            x-text="expanded ? 'less' : 'more'">
+                                                                    </button>
+                                                                </span>
+                                                            </template>
+                                                            <template x-if="!check.description || check.description.length <= 120">
+                                                                <span x-text="check.description"></span>
+                                                            </template>
+                                                        </p>
+                                                        <template x-if="check.waived && check.justification">
+                                                            <p class="text-xs text-amber-700 dark:text-amber-400 mt-2 m-0"
+                                                               data-testid="step-2-waiver-justification">
+                                                                <i class="fas fa-quote-left text-[8px] mr-1"></i>
+                                                                <span x-text="check.justification"></span>
+                                                            </p>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                                {# Issue #907: human_summary is the plain-English one-liner explaining WHY this fails in practice (e.g. syft doesn't emit X for apt packages). Rendered first so operators see it before digging into the BSI-plugin's schema-oriented remediation. Kept single-line. #}
+                                                <template x-if="check.human_summary">
+                                                    <div class="px-4 py-2.5 bg-info/5 border-t border-border/30 flex items-start gap-2"
+                                                         data-testid="step-2-human-summary">
+                                                        <i class="fas fa-circle-info text-info text-xs mt-0.5 flex-shrink-0"></i>
+                                                        <p class="text-xs text-text m-0 flex-1" x-text="check.human_summary"></p>
+                                                    </div>
+                                                </template>
+                                                <template x-if="check.remediation">
+                                                    <div class="px-4 py-2.5 bg-primary/5 border-t border-border/30 flex items-start gap-2">
+                                                        <i class="fas fa-lightbulb text-primary text-xs mt-0.5 flex-shrink-0"></i>
+                                                        <div class="flex-1 min-w-0">
+                                                            <p class="text-xs text-text m-0" x-text="check.remediation"></p>
+                                                            <template x-if="check.guidance_url">
+                                                                <a :href="check.guidance_url"
+                                                                   target="_blank"
+                                                                   rel="noopener noreferrer"
+                                                                   class="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-1">
+                                                                    <i class="fas fa-book text-[10px]"></i>
+                                                                    <span x-text="check.remediation_type === 'tooling_limitation' ? 'See sbomify-action enrichment guide' : 'See docs'"></span>
+                                                                </a>
+                                                            </template>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </template>
+                </div>
+            </template>
+            {# Team link #}
+            <div class="text-center">
+                {% if current_team and current_team.key %}
+                    <a href="{% url 'teams:team_settings' team_key=current_team.key %}#members"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="text-primary hover:underline text-sm">
+                        <i class="fas fa-users mr-1"></i> Manage team members in Team Settings
+                    </a>
+                {% endif %}
+            </div>
+            {# Footer navigation #}
+            <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+                {% if step > 1 %}
+                    <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+                       class="tw-btn-secondary">
+                        <i class="fas fa-arrow-left mr-2"></i> Back
+                    </a>
+                {% else %}
+                    <div>{# spacer #}</div>
+                {% endif %}
+                <button type="button"
+                        @click="markComplete()"
+                        :disabled="isSaving"
+                        class="tw-btn-primary">
+                    <span x-show="!isSaving">Continue <i class="fas fa-arrow-right ml-2"></i></span>
+                    <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock step_wrapper %}

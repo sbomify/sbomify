@@ -15,12 +15,11 @@ from sbomify.apps.core.tests.shared_fixtures import get_api_headers
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import ContactProfile, Member
 
-from ..models import SBOM, Component, Product, Project
+from ..models import SBOM, Component, Product
 from .fixtures import (  # noqa: F401
     create_spdx3_test_sbom,
     sample_access_token,
     sample_component,
-    sample_project,
     sample_sbom,
     spdx3_sbom_basic,
 )
@@ -30,49 +29,30 @@ from .test_views import setup_test_session
 @pytest.mark.django_db
 def test_sbom_api_is_public(
     sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
 ):
     client = Client()
 
-    # Use core API endpoints instead of removed public_status endpoints
     component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_sbom.component.id})
-    project_uri = reverse("api-1:patch_project", kwargs={"project_id": sample_project.id})
     product_uri = reverse("api-1:patch_product", kwargs={"product_id": sample_product.id})
 
     component_get_uri = reverse("api-1:get_component", kwargs={"component_id": sample_sbom.component.id})
-    project_get_uri = reverse("api-1:get_project", kwargs={"project_id": sample_project.id})
     product_get_uri = reverse("api-1:get_product", kwargs={"product_id": sample_product.id})
 
-    # Set up session with team access
     setup_test_session(client, sample_product.team, sample_product.team.members.first())
 
-    # Make the component public
     response = client.patch(component_uri, json.dumps({"visibility": "public"}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["visibility"] == "public"
 
-    # Verify component is public
     response = client.get(component_get_uri, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["visibility"] == "public"
 
-    # Make the project public
-    response = client.patch(project_uri, json.dumps({"is_public": True}), content_type="application/json")
-    assert response.status_code == 200
-    assert response.json()["is_public"] is True
-
-    # Verify project is public
-    response = client.get(project_get_uri, content_type="application/json")
-    assert response.status_code == 200
-    assert response.json()["is_public"] is True
-
-    # Make the product public
     response = client.patch(product_uri, json.dumps({"is_public": True}), content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
-    # Verify product is public
     response = client.get(product_get_uri, content_type="application/json")
     assert response.status_code == 200
     assert response.json()["is_public"] is True
@@ -299,6 +279,173 @@ def test_sbom_upload_api_cyclonedx_invalid_json(
     assert response.status_code == 400
     # Django Ninja returns "Cannot parse request body" for invalid JSON before our function runs
     assert "Invalid JSON" in response.json()["detail"] or "Cannot parse request body" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_cyclonedx_without_metadata_component(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """CycloneDX SBOMs without metadata.component should succeed, falling back to component name."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "timestamp": "2026-04-19T00:00:00+00:00",
+            "tools": {"components": [{"type": "application", "name": "cyclonedx-py", "version": "7.3.0"}]},
+        },
+        "components": [
+            {"type": "library", "name": "some-lib", "version": "1.0.0", "bom-ref": "some-lib@1.0.0"},
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "cyclonedx"
+    assert sbom.format_version == "1.6"
+    assert sbom.name == sample_component.name
+    assert sbom.version == ""
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_spdx3_without_spdxdocument_name(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """SPDX 3.0.1 SBOMs without SpdxDocument.name should succeed, falling back
+    to the sbomify Component name. SpdxDocument.name is OPTIONAL in SPDX 3.0.1
+    per Core.SpdxDocument (min-cardinality 0) — the previous behaviour silently
+    stored an empty-string SBOM name. Symmetric to the CDX metadata.component
+    fallback so both format-3 specs behave the same way on optional fields.
+    """
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    sbom_data = {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
+            {
+                "type": "CreationInfo",
+                "@id": "_:creationInfo",
+                "specVersion": "3.0.1",
+                "created": "2026-04-19T00:00:00Z",
+                "createdBy": ["SPDXRef-Creator"],
+            },
+            {
+                "type": "Organization",
+                "spdxId": "SPDXRef-Creator",
+                "name": "Test Creator",
+            },
+            # SpdxDocument deliberately without `name` — spec-legal per 3.0.1.
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+                "rootElement": ["SPDXRef-Package-Primary"],
+            },
+            {
+                "type": "software_Package",
+                "spdxId": "SPDXRef-Package-Primary",
+                "name": "primary-pkg",
+                "software_packageVersion": "1.0.0",
+                "externalIdentifiers": [
+                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/primary-pkg@1.0.0"},
+                ],
+            },
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201, response.content
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "spdx"
+    assert sbom.format_version == "3.0.1"
+    # Fallback kicked in because SpdxDocument had no `name`.
+    assert sbom.name == sample_component.name
+
+
+@pytest.mark.django_db
+def test_sbom_upload_api_spdx3_with_spdxdocument_name_is_preserved(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """Backward-compat guard: SPDX 3.0.1 SBOMs that DO carry a SpdxDocument.name
+    must still use it; the fallback only fires when the name is absent."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    SBOM.objects.all().delete()
+
+    explicit_doc_name = "explicit-doc-name"
+    sbom_data = {
+        "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+        "@graph": [
+            {
+                "type": "CreationInfo",
+                "@id": "_:creationInfo",
+                "specVersion": "3.0.1",
+                "created": "2026-04-19T00:00:00Z",
+                "createdBy": ["SPDXRef-Creator"],
+            },
+            {"type": "Organization", "spdxId": "SPDXRef-Creator", "name": "Test Creator"},
+            {
+                "type": "SpdxDocument",
+                "spdxId": "SPDXRef-Document",
+                "name": explicit_doc_name,
+                "rootElement": ["SPDXRef-Package-Primary"],
+            },
+            {
+                "type": "software_Package",
+                "spdxId": "SPDXRef-Package-Primary",
+                "name": "primary-pkg",
+                "software_packageVersion": "1.0.0",
+                "externalIdentifiers": [
+                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/primary-pkg@1.0.0"},
+                ],
+            },
+        ],
+    }
+
+    client = Client()
+    url = reverse("api-1:sbom_upload_spdx", kwargs={"component_id": sample_component.id})
+    response = client.post(
+        url,
+        data=json.dumps(sbom_data),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 201, response.content
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.name == explicit_doc_name
+    assert sbom.name != sample_component.name
 
 
 @pytest.mark.django_db
@@ -1924,7 +2071,6 @@ def test_get_dashboard_summary_authenticated_no_data(
     assert response.status_code == 200
     data = response.json()
     assert data["total_products"] == 0
-    assert data["total_projects"] == 0
     assert data["total_components"] == 0
     assert data["latest_uploads"] == []
 
@@ -1934,14 +2080,12 @@ def test_get_dashboard_summary_authenticated_with_data(
     sample_user: Member,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
     sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
     sample_sbom: SBOM,  # noqa: F811
     client: Client,
     sample_team_with_owner_member,  # noqa: F811
 ):
     """Test that an authenticated user with data gets the correct summary."""
-    # Ensure sample_sbom is associated with sample_component, which is part of the user's team
     sample_component.team = sample_team_with_owner_member.team
     sample_component.save()
     sample_sbom.component = sample_component
@@ -1949,19 +2093,15 @@ def test_get_dashboard_summary_authenticated_with_data(
     sample_sbom.version = "1.0"
     sample_sbom.save()
 
-    # Create a second SBOM for the same component to test ordering and limit
     SBOM.objects.create(
         name="Test SBOM 2",
         version="2.0",
         component=sample_component,
-        format="cyclonedx",  # ensure other fields are present
+        format="cyclonedx",
         sbom_filename="test2.json",
         source="test",
     )
-    # Create another product, project, component under the same team
-    # (assuming fixtures create them under some default or no team initially)
     Product.objects.create(name="Product 2", team=sample_team_with_owner_member.team)
-    Project.objects.create(name="Project 2", team=sample_team_with_owner_member.team)
     Component.objects.create(name="Component 2", team=sample_team_with_owner_member.team)
 
     url = reverse("api-1:get_dashboard_summary")
@@ -1974,7 +2114,6 @@ def test_get_dashboard_summary_authenticated_with_data(
     data = response.json()
 
     assert data["total_products"] == Product.objects.filter(team=sample_team_with_owner_member.team).count()
-    assert data["total_projects"] == Project.objects.filter(team=sample_team_with_owner_member.team).count()
     assert data["total_components"] == Component.objects.filter(team=sample_team_with_owner_member.team).count()
 
     assert len(data["latest_uploads"]) <= 5  # API returns max 5
@@ -2709,6 +2848,51 @@ def test_sbom_upload_file_cyclonedx(
 
 
 @pytest.mark.django_db
+def test_sbom_upload_file_cyclonedx_without_metadata_component(
+    sample_user,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """File upload of CycloneDX without metadata.component should succeed."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    sbom_data = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "metadata": {
+                "timestamp": "2026-04-19T00:00:00+00:00",
+                "tools": {"components": [{"type": "application", "name": "cyclonedx-py", "version": "7.3.0"}]},
+            },
+            "components": [
+                {"type": "library", "name": "some-lib", "version": "1.0.0", "bom-ref": "some-lib@1.0.0"},
+            ],
+        }
+    ).encode()
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    sbom_file = SimpleUploadedFile("sbom.json", sbom_data, content_type="application/json")
+
+    client = Client()
+    client.force_login(sample_user)
+
+    url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
+    response = client.post(url, data={"sbom_file": sbom_file}, format="multipart")
+
+    assert response.status_code == 201
+    sbom = SBOM.objects.get(id=response.json()["id"])
+    assert sbom.format == "cyclonedx"
+    assert sbom.source == "manual_upload"
+    assert sbom.name == sample_component.name
+    assert sbom.version == ""
+    assert SBOM.objects.count() == 1
+
+
+@pytest.mark.django_db
 def test_sbom_upload_file_spdx(
     sample_user,  # noqa: F811
     sample_component: Component,  # noqa: F811
@@ -2886,36 +3070,22 @@ def test_get_dashboard_summary_with_product_filter(
     client: Client,
 ):
     """Test that product filtering works correctly in dashboard summary."""
-    from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+    from sbomify.apps.sboms.models import SBOM, Component, Product, ProductComponent
 
     team = sample_team_with_owner_member.team
 
-    # Create test data
-    # Product 1 with 2 projects and 3 components
     product1 = Product.objects.create(name="Product 1", team=team)
-    project1a = Project.objects.create(name="Project 1A", team=team)
-    project1b = Project.objects.create(name="Project 1B", team=team)
     component1a = Component.objects.create(name="Component 1A", team=team)
     component1b = Component.objects.create(name="Component 1B", team=team)
     component1c = Component.objects.create(name="Component 1C", team=team)
+    ProductComponent.objects.create(product=product1, component=component1a)
+    ProductComponent.objects.create(product=product1, component=component1b)
+    ProductComponent.objects.create(product=product1, component=component1c)
 
-    # Link product to projects
-    ProductProject.objects.create(product=product1, project=project1a)
-    ProductProject.objects.create(product=product1, project=project1b)
-
-    # Link projects to components
-    ProjectComponent.objects.create(project=project1a, component=component1a)
-    ProjectComponent.objects.create(project=project1a, component=component1b)
-    ProjectComponent.objects.create(project=project1b, component=component1c)
-
-    # Product 2 with 1 project and 1 component (should be excluded from filtered results)
     product2 = Product.objects.create(name="Product 2", team=team)
-    project2 = Project.objects.create(name="Project 2", team=team)
     component2 = Component.objects.create(name="Component 2", team=team)
-    ProductProject.objects.create(product=product2, project=project2)
-    ProjectComponent.objects.create(project=project2, component=component2)
+    ProductComponent.objects.create(product=product2, component=component2)
 
-    # Create an SBOM for one of the components in product1
     SBOM.objects.create(
         name="Test SBOM",
         version="1.0",
@@ -2934,82 +3104,25 @@ def test_get_dashboard_summary_with_product_filter(
     assert response.status_code == 200
     data = response.json()
 
-    # Should show projects and components within product1 only
-    assert data["total_products"] == 1  # Just the queried product
-    assert data["total_projects"] == 2  # project1a, project1b
-    assert data["total_components"] == 3  # component1a, component1b, component1c
-    assert len(data["latest_uploads"]) == 1  # Only SBOM from product1
-
-
-@pytest.mark.django_db
-def test_get_dashboard_summary_with_project_filter(
-    sample_user: Member,  # noqa: F811
-    sample_access_token: AccessToken,  # noqa: F811
-    sample_team_with_owner_member,  # noqa: F811
-    client: Client,
-):
-    """Test that project filtering works correctly in dashboard summary."""
-    from sbomify.apps.sboms.models import SBOM, Component, Project, ProjectComponent
-
-    team = sample_team_with_owner_member.team
-
-    # Create test data
-    project1 = Project.objects.create(name="Project 1", team=team)
-    project2 = Project.objects.create(name="Project 2", team=team)
-
-    # Project 1 has 2 components
-    component1a = Component.objects.create(name="Component 1A", team=team)
-    component1b = Component.objects.create(name="Component 1B", team=team)
-    ProjectComponent.objects.create(project=project1, component=component1a)
-    ProjectComponent.objects.create(project=project1, component=component1b)
-
-    # Project 2 has 1 component (should be excluded from filtered results)
-    component2 = Component.objects.create(name="Component 2", team=team)
-    ProjectComponent.objects.create(project=project2, component=component2)
-
-    # Create an SBOM for one of the components in project1
-    SBOM.objects.create(
-        name="Test SBOM",
-        version="1.0",
-        component=component1a,
-        format="cyclonedx",
-        sbom_filename="test.json",
-        source="test",
-    )
-
-    url = reverse("api-1:get_dashboard_summary")
-    response = client.get(
-        f"{url}?project_id={project1.id}",
-        content_type="application/json",
-        **get_api_headers(sample_access_token),
-    )
-    assert response.status_code == 200
-    data = response.json()
-
-    # Should show components within project1 only
-    assert data["total_products"] == 0  # Products not filtered when viewing project
-    assert data["total_projects"] == 1  # Just the queried project
-    assert data["total_components"] == 2  # component1a, component1b
-    assert len(data["latest_uploads"]) == 1  # Only SBOM from project1
+    assert data["total_products"] == 1
+    assert data["total_components"] == 3
+    assert len(data["latest_uploads"]) == 1
 
 
 @pytest.mark.django_db
 def test_patch_public_status_billing_plan_restrictions(
     sample_product: Product,  # noqa: F811
-    sample_project: Project,  # noqa: F811
     sample_component: Component,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
     """Test that billing plan restrictions are enforced for public status toggling."""
     client = Client()
 
-    # Create billing plans
     community_plan = BillingPlan.objects.create(
         key="community",
         name="Community",
         description="Free plan",
         max_products=1,
-        max_projects=1,
         max_components=5,
     )
 
@@ -3018,26 +3131,21 @@ def test_patch_public_status_billing_plan_restrictions(
         name="Business",
         description="Business plan for medium teams",
         max_products=5,
-        max_projects=10,
         max_components=200,
     )
 
-    # Set up authentication and session
     team = sample_product.team
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
     setup_test_session(client, team, team.members.first())
 
-    # Test URLs for all item types
     component_uri = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
-    project_uri = reverse("api-1:patch_project", kwargs={"project_id": sample_project.id})
     product_uri = reverse("api-1:patch_product", kwargs={"product_id": sample_product.id})
 
-    # Test 1: Community plan users cannot make items private
+    # Community: cannot make items private
     team.billing_plan = community_plan.key
     team.save()
 
-    # First, make all items public so we can test making them private
-    for uri in [component_uri, project_uri, product_uri]:
+    for uri in [component_uri, product_uri]:
         client.patch(
             uri,
             json.dumps({"is_public": True}),
@@ -3045,7 +3153,6 @@ def test_patch_public_status_billing_plan_restrictions(
             **get_api_headers(sample_access_token),
         )
 
-    # Try to make component private - should fail
     response = client.patch(
         component_uri,
         json.dumps({"is_public": False}),
@@ -3055,17 +3162,6 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
 
-    # Try to make project private - should fail
-    response = client.patch(
-        project_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json",
-        **get_api_headers(sample_access_token),
-    )
-    assert response.status_code == 403
-    assert "Community plan users cannot make items private" in response.json()["detail"]
-
-    # Try to make product private - should fail
     response = client.patch(
         product_uri,
         json.dumps({"is_public": False}),
@@ -3075,7 +3171,6 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 403
     assert "Community plan users cannot make items private" in response.json()["detail"]
 
-    # Test 2: Community plan users can make items public (should succeed)
     response = client.patch(
         component_uri,
         json.dumps({"visibility": "public"}),
@@ -3085,12 +3180,10 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 200
     assert response.json()["visibility"] == "public"
 
-    # Test 3: Business plan users can make items private
+    # Business: can make items private
     team.billing_plan = business_plan.key
     team.save()
 
-    # Need to handle hierarchy constraints: make product private first, then project, then component
-    # Product can be made private independently
     response = client.patch(
         product_uri,
         json.dumps({"is_public": False}),
@@ -3100,17 +3193,6 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 200, f"Failed for product: {response.content}"
     assert response.json()["is_public"] is False
 
-    # Project can be made private independently
-    response = client.patch(
-        project_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json",
-        **get_api_headers(sample_access_token),
-    )
-    assert response.status_code == 200, f"Failed for project: {response.content}"
-    assert response.json()["is_public"] is False
-
-    # Now component can be made private since project is private
     response = client.patch(
         component_uri,
         json.dumps({"visibility": "private"}),
@@ -3120,7 +3202,6 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 200, f"Failed for component: {response.content}"
     assert response.json()["visibility"] == "private"
 
-    # Test making them public again (reverse order)
     response = client.patch(
         component_uri,
         json.dumps({"visibility": "public"}),
@@ -3131,15 +3212,6 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.json()["visibility"] == "public"
 
     response = client.patch(
-        project_uri,
-        json.dumps({"is_public": True}),
-        content_type="application/json",
-        **get_api_headers(sample_access_token),
-    )
-    assert response.status_code == 200
-    assert response.json()["is_public"] is True
-
-    response = client.patch(
         product_uri,
         json.dumps({"is_public": True}),
         content_type="application/json",
@@ -3148,15 +3220,12 @@ def test_patch_public_status_billing_plan_restrictions(
     assert response.status_code == 200
     assert response.json()["is_public"] is True
 
-    # Test 4: Workspaces without billing plan cannot make items private
+    # No plan: cannot make items private
     team.billing_plan = None
     team.save()
     product = Product.objects.get(pk=sample_product.id)
-    project = Project.objects.get(pk=sample_project.id)
     component = Component.objects.get(pk=sample_component.id)
 
-    # Need to handle hierarchy constraints: make product private first, then project, then component
-    # Product cannot be made private
     response = client.patch(
         product_uri,
         json.dumps({"is_public": False}),
@@ -3168,19 +3237,6 @@ def test_patch_public_status_billing_plan_restrictions(
     product.refresh_from_db()
     assert product.is_public is True
 
-    # Project cannot be made private
-    response = client.patch(
-        project_uri,
-        json.dumps({"is_public": False}),
-        content_type="application/json",
-        **get_api_headers(sample_access_token),
-    )
-    assert response.status_code == 403
-    assert "cannot make items private" in response.json()["detail"]
-    project.refresh_from_db()
-    assert project.is_public is True
-
-    # Component cannot be made private
     response = client.patch(
         component_uri,
         json.dumps({"visibility": "private"}),
@@ -3206,7 +3262,6 @@ def test_patch_public_status_enterprise_plan_unrestricted(
         name="Enterprise",
         description="Enterprise plan",
         max_products=None,
-        max_projects=None,
         max_components=None,
     )
 
@@ -3256,11 +3311,11 @@ def test_download_sbom_public_success(
     mocker: MockerFixture,  # noqa: F811
 ):
     """Test successful public SBOM download without authentication."""
-    # Create a public SBOM component
+    # Create a public BOM component
     public_component = Component.objects.create(
         name="Public SBOM Component",
         team=sample_team_with_owner_member.team,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -3296,7 +3351,7 @@ def test_download_sbom_public_by_uuid(
     public_component = Component.objects.create(
         name="Public SBOM Component",
         team=sample_team_with_owner_member.team,
-        component_type=Component.ComponentType.SBOM,
+        component_type=Component.ComponentType.BOM,
         visibility=Component.Visibility.PUBLIC,
     )
 
@@ -3374,9 +3429,7 @@ def test_download_sbom_not_found_by_uuid(
     client: Client,
 ):
     """Test downloading SBOM with valid UUID format that doesn't exist."""
-    response = client.get(
-        reverse("api-1:download_sbom", kwargs={"sbom_id": "00000000-0000-0000-0000-000000000000"})
-    )
+    response = client.get(reverse("api-1:download_sbom", kwargs={"sbom_id": "00000000-0000-0000-0000-000000000000"}))
 
     assert response.status_code == 404
     data = response.json()

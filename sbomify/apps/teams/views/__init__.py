@@ -12,7 +12,7 @@ if typing.TYPE_CHECKING:
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -278,13 +278,17 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 "user": request.user,
                 "base_url": get_base_url(),
             }
-            send_mail(
-                subject=f"Invitation to join {team.name} at sbomify",
+            email = EmailMultiAlternatives(
+                subject=f"You're invited to join {team.name} on sbomify",
+                body=render_to_string("teams/emails/team_invite_email.txt", email_context),
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[invite_user_form.cleaned_data["email"]],
-                message=render_to_string("teams/emails/team_invite_email.txt", email_context),
-                html_message=render_to_string("teams/emails/team_invite_email.html.j2", email_context),
+                to=[invite_user_form.cleaned_data["email"]],
+                reply_to=["hello@sbomify.com"],
             )
+            email.attach_alternative(
+                render_to_string("teams/emails/team_invite_email.html.j2", email_context), "text/html"
+            )
+            email.send()
 
             messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")
 

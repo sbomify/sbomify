@@ -39,7 +39,16 @@
 
             .logo img {
                 height: 40px;
-                max-width: 200px;
+                width: auto;
+                max-width: 221px;
+            }
+
+            .logo .logo-light {
+                display: inline !important;
+            }
+
+            .logo .logo-dark {
+                display: none !important;
             }
 
             .tagline {
@@ -192,30 +201,46 @@
                     margin: 16px 0;
                 }
             }
+
+            @media (prefers-color-scheme: dark) {
+                .logo .logo-light {
+                    display: none !important;
+                }
+
+                .logo .logo-dark {
+                    display: inline !important;
+                }
+            }
         </style>
     </head>
     <body>
         <div class="email-container">
             <div class="header">
                 <div class="logo">
-                    <img src="{{ base_url }}/static/img/logo.svg"
+                    <img src="{{ base_url }}/static/img/sbomify-black.svg"
                          alt="sbomify"
                          height="40"
-                         width="150">
+                         width="221"
+                         class="logo-light">
+                    <img src="{{ base_url }}/static/img/sbomify-white.svg"
+                         alt="sbomify"
+                         height="40"
+                         width="221"
+                         class="logo-dark">
                 </div>
                 <div class="tagline">The Security Artifact Hub</div>
             </div>
             {% block content %}{% endblock %}
             {% block signoff %}
                 <p>
-                    Regards,
+                    Cheers,
                     <br>
                     <strong>The sbomify Team</strong>
                 </p>
             {% endblock %}
             <div class="footer">
                 <p>
-                    Need help? <a href="{{ base_url }}/support/contact/">Contact support</a>
+                    Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
                 </p>
                 {% now "Y" as this_year %}
                 <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
