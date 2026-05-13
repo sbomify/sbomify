@@ -36,7 +36,6 @@ def team_with_stale_trial(sample_user: AbstractBaseUser) -> Generator[Team, None
             "is_trial": True,
             "trial_end": trial_end,
             "max_products": 5,
-            "max_projects": 10,
             "max_components": 200,
         },
     )

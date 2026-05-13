@@ -64,35 +64,32 @@ class TestGetPlanLimits:
     """Tests for TeamPricingService.get_plan_limits()"""
 
     def test_returns_correct_icons(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
-        """Verify icons are 'cube', 'folder', 'puzzle-piece' for Tailwind."""
+        """Verify icons match the Tailwind set after Project removal."""
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
         icons = {item["label"]: item["icon"] for item in limits}
         assert icons.get("Products") == "cube"
-        assert icons.get("Projects") == "folder"
         assert icons.get("Components") == "puzzle-piece"
 
     def test_with_billing_plan_obj(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test passing BillingPlan object directly."""
         limits = pricing_service.get_plan_limits(team_with_business_plan, business_plan)
 
-        assert len(limits) == 3
+        assert len(limits) == 2
         labels = [item["label"] for item in limits]
         assert "Products" in labels
-        assert "Projects" in labels
         assert "Components" in labels
 
     def test_fetches_billing_plan_if_not_provided(self, pricing_service, team_with_business_plan, business_plan):  # noqa: F811
         """Test auto-fetch BillingPlan from DB when not provided."""
         limits = pricing_service.get_plan_limits(team_with_business_plan)
-        assert len(limits) == 3
+        assert len(limits) == 2
 
     def test_unlimited_display(self, pricing_service, team_with_business_plan, enterprise_plan):  # noqa: F811
         """Test -1 or None shows 'Unlimited'."""
         team_with_business_plan.billing_plan = "enterprise"
         team_with_business_plan.billing_plan_limits = {
             "max_products": -1,
-            "max_projects": None,
             "max_components": -1,
         }
         team_with_business_plan.save()
@@ -114,7 +111,6 @@ class TestGetPlanLimits:
         team_with_business_plan.billing_plan_limits = {
             **team_with_business_plan.billing_plan_limits,
             "max_products": 50,
-            "max_projects": 100,
             "max_components": 500,
         }
         team_with_business_plan.save()
@@ -123,7 +119,6 @@ class TestGetPlanLimits:
 
         values = {item["label"]: item["value"] for item in limits}
         assert values.get("Products") == "50"
-        assert values.get("Projects") == "100"
         assert values.get("Components") == "500"
 
     def test_fallback_when_no_billing_plan(self, pricing_service, team_with_business_plan):  # noqa: F811
@@ -131,7 +126,6 @@ class TestGetPlanLimits:
         team_with_business_plan.billing_plan = "nonexistent_plan"
         team_with_business_plan.billing_plan_limits = {
             "max_products": 25,
-            "max_projects": 50,
             "max_components": 200,
         }
         team_with_business_plan.save()
@@ -140,7 +134,6 @@ class TestGetPlanLimits:
 
         values = {item["label"]: item["value"] for item in limits}
         assert values.get("Products") == "25"
-        assert values.get("Projects") == "50"
         assert values.get("Components") == "200"
 
 

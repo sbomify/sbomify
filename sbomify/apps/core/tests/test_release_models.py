@@ -22,21 +22,12 @@ from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
 
 @pytest.fixture
 def sample_component(sample_product: Product):  # noqa: F811
-    """Create a sample component for testing."""
-    from sbomify.apps.sboms.models import Project
+    """Create a sample component for testing.
 
-    # Create a project for the component
-    project = Project.objects.create(name="test project release", team=sample_product.team)
-
-    # Create the component with the project
+    Component is attached directly to the sample product via the ProductComponent M2M.
+    """
     component = Component.objects.create(name="test component", team=sample_product.team)
-
-    # Link project to component
-    component.projects.add(project)
-
-    # Link project to product
-    sample_product.projects.add(project)
-
+    sample_product.components.add(component)
     return component
 
 
@@ -196,12 +187,9 @@ def test_get_artifacts_method(
     sample_document: Document,  # noqa: F811
 ):
     """Test the get_artifacts method returns both SBOMs and Documents."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up artifacts
     sample_sbom.component = sample_component
@@ -230,12 +218,9 @@ def test_get_sboms_method(
     sample_document: Document,  # noqa: F811
 ):
     """Test the get_sboms method returns only SBOMs."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up artifacts
     sample_sbom.component = sample_component
@@ -263,12 +248,9 @@ def test_get_documents_method(
     sample_document: Document,  # noqa: F811
 ):
     """Test the get_documents method returns only Documents."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up artifacts
     sample_sbom.component = sample_component
@@ -295,12 +277,9 @@ def test_add_sbom_method(
     sample_sbom: SBOM,  # noqa: F811
 ):
     """Test the add_sbom method."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up SBOM
     sample_sbom.component = sample_component
@@ -322,12 +301,9 @@ def test_add_document_method(
     sample_document: Document,  # noqa: F811
 ):
     """Test the add_document method."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up document
     sample_document.component = sample_component
@@ -349,12 +325,9 @@ def test_remove_sbom_method(
     sample_sbom: SBOM,  # noqa: F811
 ):
     """Test the remove_sbom method."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up SBOM
     sample_sbom.component = sample_component
@@ -377,12 +350,9 @@ def test_remove_document_method(
     sample_document: Document,  # noqa: F811
 ):
     """Test the remove_document method."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up document
     sample_document.component = sample_component
@@ -410,12 +380,9 @@ def test_release_artifact_unique_constraint(
     sample_sbom: SBOM,  # noqa: F811
 ):
     """Test that release artifacts have unique constraints."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up SBOM
     sample_sbom.component = sample_component
@@ -450,12 +417,9 @@ def test_release_artifact_validation_both_set(
     sample_document: Document,  # noqa: F811
 ):
     """Test that ReleaseArtifact validation fails when both sbom and document are set."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Set up artifacts
     sample_sbom.component = sample_component
@@ -476,12 +440,9 @@ def test_release_artifact_duplicate_format_validation(
     sample_component: Component,  # noqa: F811
 ):
     """Test that duplicate SBOM formats from same component are handled properly at the API level."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Create two SBOMs with same format for same component (different versions to satisfy uniqueness)
     sbom1 = SBOM.objects.create(
@@ -525,12 +486,9 @@ def test_sbom_creation_updates_latest_release(
     sample_component: Component,  # noqa: F811
 ):
     """Test that creating an SBOM updates the latest release."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Get the existing latest release that was created by signals
     existing_release = Release.objects.get(product=sample_product, is_latest=True)
@@ -554,12 +512,9 @@ def test_document_creation_updates_latest_release(
     sample_component: Component,  # noqa: F811
 ):
     """Test that creating a Document updates the latest release."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
     # Get the existing latest release that was created by signals
     existing_release = Release.objects.get(product=sample_product, is_latest=True)
@@ -581,14 +536,11 @@ def test_latest_release_auto_management_integration(
     sample_component: Component,  # noqa: F811
 ):
     """Test full integration of latest release auto-management."""
-    # Set up component relationship
+    # Set up component relationship — fixture already attaches component to product
     sample_component.team = sample_product.team
     sample_component.save()
-    # Get the project from the component (there should be one from our fixture)
-    component_project = sample_component.projects.first()
-    sample_product.projects.add(component_project)
 
-    # Verify latest release was auto-created when project was added to product
+    # Verify latest release was auto-created when component was added to product
     latest_release = Release.objects.get(product=sample_product, is_latest=True)
     assert latest_release.name == "latest"
 
@@ -709,3 +661,48 @@ def test_component_get_latest_artifacts_by_type(
     assert len(latest_artifacts["documents"]) == 1
     assert sbom in latest_artifacts["sboms"].values()
     assert document in latest_artifacts["documents"].values()
+
+
+# =============================================================================
+# Signal: pre_clear / post_clear on ProductComponent
+# =============================================================================
+
+
+@pytest.mark.django_db
+def test_component_products_clear_refreshes_previous_products_latest_releases(
+    sample_user,  # noqa: F811
+):
+    """Regression test for the pre_clear snapshot path in
+    ``update_latest_release_on_product_components_changed``.
+
+    When ``component.products.clear()`` fires (forward side, ``reverse=False``),
+    Django's m2m_changed delivers ``pk_set=None`` because the rows are already
+    gone by ``post_clear``. The signal handler snapshots affected product IDs
+    on ``pre_clear`` (stored on the instance) and consumes them in
+    ``post_clear`` to fan out ``Release.refresh_latest_artifacts()``.
+
+    Without this path, ComponentScopeView (which clears products when flipping
+    a component to workspace-scoped) would leave the previous products with
+    stale ``latest`` releases.
+    """
+    from sbomify.apps.teams.models import Team
+
+    team = Team.objects.create(name="signal-test-team")
+    component = Component.objects.create(name="snapshot-comp", team=team, component_type=Component.ComponentType.BOM)
+    p_a = Product.objects.create(name="P-A", team=team)
+    p_b = Product.objects.create(name="P-B", team=team)
+    component.products.add(p_a, p_b)
+
+    with patch("sbomify.apps.core.models.Release.refresh_latest_artifacts") as refresh:
+        component.products.clear()
+
+        # The signal should have fanned out a refresh for each previously-
+        # attached product. The exact call count is one per product (latest
+        # release reused via get_or_create_latest_release).
+        assert refresh.call_count >= 2, (
+            f"Expected ≥2 refresh calls (one per previously-attached product), got {refresh.call_count}"
+        )
+
+    # The pre_clear snapshot must have been consumed (deleted) so a stale
+    # value can't survive a subsequent reload of the same instance.
+    assert not hasattr(component, "_sbomify_pending_clear_product_ids")

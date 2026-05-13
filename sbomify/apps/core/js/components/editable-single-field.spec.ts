@@ -21,7 +21,6 @@ mock.module('../utils', () => ({
 describe('EditableSingleField Business Logic', () => {
   const mockComponentId = 'test-component-123'
   const mockTeamId = 'team-456'
-  const mockProjectId = 'project-789'
   const mockProductId = 'product-012'
 
   const createMockResponse = <T>(data: T, status = 200): MockAxiosResponse<T> => ({
@@ -54,19 +53,6 @@ describe('EditableSingleField Business Logic', () => {
     it('should make correct API call to rename team', async () => {
       const newName = 'New Team Name'
       const apiUrl = `/api/v1/workspaces/${mockTeamId}`
-      const data = { name: newName }
-
-      mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
-
-      await mockAxios.patch(apiUrl, data)
-
-      expect(mockAxios.patch).toHaveBeenCalledWith(apiUrl, data)
-      expect(mockAxios.patch).toHaveBeenCalledTimes(1)
-    })
-
-    it('should make correct API call to rename project', async () => {
-      const newName = 'New Project Name'
-      const apiUrl = `/api/v1/projects/${mockProjectId}`
       const data = { name: newName }
 
       mockAxios.patch.mockResolvedValueOnce(createMockResponse({}, 204))
@@ -188,7 +174,6 @@ describe('EditableSingleField Business Logic', () => {
       const testCases = [
         { itemType: 'component', itemId: mockComponentId, expected: `/api/v1/components/${mockComponentId}` },
         { itemType: 'workspace', itemId: mockTeamId, expected: `/api/v1/workspaces/${mockTeamId}` },
-        { itemType: 'project', itemId: mockProjectId, expected: `/api/v1/projects/${mockProjectId}` },
         { itemType: 'product', itemId: mockProductId, expected: `/api/v1/products/${mockProductId}` }
       ]
 
@@ -200,9 +185,6 @@ describe('EditableSingleField Business Logic', () => {
             break;
           case 'component':
             apiUrl = `/api/v1/components/${itemId}`;
-            break;
-          case 'project':
-            apiUrl = `/api/v1/projects/${itemId}`;
             break;
           case 'product':
             apiUrl = `/api/v1/products/${itemId}`;

@@ -43,7 +43,6 @@ def get_plans(request: HttpRequest) -> tuple[int, Any]:
                 "name": plan.name,
                 "description": plan.description,
                 "max_products": plan.max_products,
-                "max_projects": plan.max_projects,
                 "max_components": plan.max_components,
             }
         )
@@ -55,7 +54,7 @@ def get_plans(request: HttpRequest) -> tuple[int, Any]:
 def get_usage(request: HttpRequest) -> tuple[int, Any]:
     """Get current team's usage statistics.
 
-    Note: Usage data (product/project/component counts) is not sensitive billing data.
+    Note: Usage data (product/component counts) is not sensitive billing data.
     Any team member can view usage stats — the membership check below is sufficient.
     Owner-level access is not required here (unlike billing mutations).
     """
@@ -73,7 +72,6 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
 
         return 200, UsageSchema(
             products=counts["products"],
-            projects=counts["projects"],
             components=counts["components"],
             current_plan=team.billing_plan if team.billing_plan else None,
         )

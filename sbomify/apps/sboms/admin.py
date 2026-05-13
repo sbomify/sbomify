@@ -54,5 +54,5 @@ class SBOMAdmin(_SBOMAdminBase):
         return obj.component.team.name if obj.component and obj.component.team else "No Team"
 
 
-# Product, Project, Component admin moved to core app
+# Product, Component admin moved to core app
 admin.site.register(SBOM, SBOMAdmin)

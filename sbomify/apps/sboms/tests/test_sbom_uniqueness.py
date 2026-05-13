@@ -20,7 +20,7 @@ from pytest_mock import MockerFixture
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.core.tests.shared_fixtures import get_api_headers
-from sbomify.apps.sboms.models import SBOM, Component, Project
+from sbomify.apps.sboms.models import SBOM, Component, Product
 
 
 class TestSBOMUniquenessConstraintCycloneDX:
@@ -447,7 +447,7 @@ class TestSBOMUniquenessConstraintCrossFormat:
     def test_different_components_same_version_succeeds(
         self,
         sample_access_token: AccessToken,
-        sample_project: Project,
+        sample_product: Product,
         mocker: MockerFixture,
     ) -> None:
         """Test that same version can be uploaded to different components."""
@@ -459,11 +459,11 @@ class TestSBOMUniquenessConstraintCrossFormat:
         # Create two components
         component1 = Component.objects.create(
             name="component-1",
-            team_id=sample_project.team_id,
+            team_id=sample_product.team_id,
         )
         component2 = Component.objects.create(
             name="component-2",
-            team_id=sample_project.team_id,
+            team_id=sample_product.team_id,
         )
 
         sbom_data = {

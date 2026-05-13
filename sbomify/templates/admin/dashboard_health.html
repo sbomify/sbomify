@@ -1,5 +1,5 @@
 {% extends "admin/dashboard_base.html" %}
-{% block breadcrumb_trail %} › Product Health{% endblock %}
+{% block breadcrumb_trail %}› Product Health{% endblock %}
 {% block dashboard_content %}
     <!-- Product Health Metrics Summary -->
     <div class="metrics-summary">
@@ -24,7 +24,6 @@
             <div class="subtitle">{{ stats.compliance_documents }} compliance</div>
         </div>
     </div>
-
     <div class="charts-grid">
         <!-- Workspace Visibility -->
         <div class="stats-card">
@@ -34,7 +33,6 @@
                 <canvas id="visibilityChart" class="chart-canvas hidden"></canvas>
             </div>
         </div>
-
         <!-- Custom Domains -->
         <div class="stats-card">
             <h3>Custom Domains Status</h3>
@@ -43,7 +41,6 @@
                 <canvas id="domainsChart" class="chart-canvas hidden"></canvas>
             </div>
         </div>
-
         <!-- Content Overview -->
         <div class="stats-card">
             <h3>Content Overview</h3>
@@ -52,7 +49,6 @@
                 <canvas id="componentsChart" class="chart-canvas hidden"></canvas>
             </div>
         </div>
-
         <!-- Document Types -->
         <div class="stats-card">
             <h3>Document Types</h3>
@@ -61,7 +57,6 @@
                 <canvas id="documentTypesChart" class="chart-canvas hidden"></canvas>
             </div>
         </div>
-
         <!-- Data Summary Table -->
         <div class="stats-card wide">
             <h3>Platform Data Summary</h3>
@@ -78,11 +73,6 @@
                         <td>Products</td>
                         <td>{{ stats.products }}</td>
                         <td>+{{ stats.products_30d }}</td>
-                    </tr>
-                    <tr>
-                        <td>Projects</td>
-                        <td>{{ stats.projects }}</td>
-                        <td>+{{ stats.projects_30d }}</td>
                     </tr>
                     <tr>
                         <td>Components</td>
@@ -108,7 +98,6 @@
             </table>
         </div>
     </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             function showChart(canvasId) {
@@ -172,11 +161,11 @@
                 new Chart(document.getElementById('componentsChart'), {
                     type: 'bar',
                     data: {
-                        labels: ['Products', 'Projects', 'Components', 'SBOMs', 'Documents'],
+                        labels: ['Products', 'Components', 'SBOMs', 'Documents'],
                         datasets: [{
                             label: 'Count',
-                            data: [{{ stats.products }}, {{ stats.projects }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.documents }}],
-                            backgroundColor: ['#3b7ddd', '#17a2b8', '#6f42c1', '#1cbb8c', '#fcb92c'],
+                            data: [{{ stats.products }}, {{ stats.components }}, {{ stats.sboms }}, {{ stats.documents }}],
+                            backgroundColor: ['#3b7ddd', '#6f42c1', '#1cbb8c', '#fcb92c'],
                             borderRadius: 4
                         }]
                     },
@@ -224,4 +213,3 @@
         });
     </script>
 {% endblock %}
-

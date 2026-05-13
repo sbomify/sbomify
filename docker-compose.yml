@@ -170,6 +170,8 @@ services:
         condition: service_healthy
       sbomify-db:
         condition: service_healthy
+      sbomify-migrations:
+        condition: service_completed_successfully
     stop_grace_period: 30s
 
   sbomify-scheduler:
@@ -194,6 +196,8 @@ services:
         condition: service_healthy
       sbomify-db:
         condition: service_healthy
+      sbomify-migrations:
+        condition: service_completed_successfully
     stop_grace_period: 30s
 
   ca-cert:

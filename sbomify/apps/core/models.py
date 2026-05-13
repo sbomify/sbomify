@@ -20,15 +20,6 @@ from sbomify.apps.sboms.models import (
 from sbomify.apps.sboms.models import (
     Product as SbomProduct,
 )
-from sbomify.apps.sboms.models import (
-    ProductProject as SbomProductProject,
-)
-from sbomify.apps.sboms.models import (
-    Project as SbomProject,
-)
-from sbomify.apps.sboms.models import (
-    ProjectComponent as SbomProjectComponent,
-)
 
 # Context-var flag to suppress collection versioning signals during bulk operations.
 # Uses contextvars (not threading.local) for safety in both sync and async contexts.
@@ -69,14 +60,6 @@ class User(AbstractUser):
 
 class Product(SbomProduct):
     """Proxy model for sboms.Product - moved to core app for better organization."""
-
-    class Meta:
-        proxy = True
-        app_label = "core"
-
-
-class Project(SbomProject):
-    """Proxy model for sboms.Project - moved to core app for better organization."""
 
     class Meta:
         proxy = True
@@ -205,30 +188,15 @@ class Component(SbomComponent):
             raise ValueError("artifact_type must be either 'sbom' or 'document'")
 
     def get_products(self) -> QuerySet[Product]:
-        """Get all products that contain this component through projects.
+        """Get all products that contain this component.
 
         Returns:
             QuerySet of Product objects that contain this component.
         """
-        # Components are related to products through projects
-        # Component -> Projects -> Products
-        return Product.objects.filter(projects__components=self).order_by("id").distinct()
-
-
-class ProductProject(SbomProductProject):
-    """Proxy model for sboms.ProductProject - moved to core app for better organization."""
-
-    class Meta:
-        proxy = True
-        app_label = "core"
-
-
-class ProjectComponent(SbomProjectComponent):
-    """Proxy model for sboms.ProjectComponent - moved to core app for better organization."""
-
-    class Meta:
-        proxy = True
-        app_label = "core"
+        # Query through the core.Product proxy explicitly — the reverse
+        # `self.products` accessor is declared on sboms.Component and would
+        # return sboms.Product instances.
+        return Product.objects.filter(components=self).order_by("id").distinct()
 
 
 # New Release models
@@ -388,8 +356,11 @@ class Release(models.Model):
             # Clear existing artifacts
             self.artifacts.all().delete()
 
-            # Get all components that belong to this product (via projects)
-            components = Component.objects.filter(projects__products=self.product).order_by("id").distinct()
+            # Get all components that belong to this product. Query via the
+            # core.Component proxy (rather than self.product.components, which
+            # returns sboms.Component) so methods like
+            # get_latest_sboms_by_format remain accessible.
+            components = Component.objects.filter(products=self.product).order_by("id").distinct()
 
             for component in components:
                 # Add latest artifacts from each component

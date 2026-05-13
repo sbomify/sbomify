@@ -223,7 +223,6 @@ export const eventBus = new EventEmitter();
 // Event constants
 export const EVENTS = {
   REFRESH_PRODUCTS: 'refresh_products',
-  REFRESH_PROJECTS: 'refresh_projects',
   REFRESH_COMPONENTS: 'refresh_components',
   ITEM_CREATED: 'item_created',
   ITEM_UPDATED: 'item_updated',

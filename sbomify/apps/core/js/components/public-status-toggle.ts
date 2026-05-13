@@ -42,7 +42,7 @@ export function registerPublicStatusToggle() {
 
         const response = JSON.parse(event.detail.xhr.response)
 
-        // Components use visibility, products/projects use is_public
+        // Components use visibility; products use is_public
         if (this.itemType === 'component') {
           if (!('visibility' in response)) {
             this.isPublic = !this.isPublic

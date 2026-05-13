@@ -11,12 +11,11 @@ describe('ItemAssignmentManager Business Logic', () => {
 
   describe('Props Parsing and Validation', () => {
     test('should parse parent type correctly', () => {
-      const parseParentType = (type: string): 'project' | 'product' | 'component' => {
-        const validTypes = ['project', 'product', 'component']
-        return validTypes.includes(type) ? type as 'project' | 'product' | 'component' : 'component'
+      const parseParentType = (type: string): 'product' | 'component' => {
+        const validTypes = ['product', 'component']
+        return validTypes.includes(type) ? type as 'product' | 'component' : 'component'
       }
 
-      expect(parseParentType('project')).toBe('project')
       expect(parseParentType('product')).toBe('product')
       expect(parseParentType('component')).toBe('component')
       expect(parseParentType('invalid')).toBe('component') // Default fallback
@@ -51,15 +50,13 @@ describe('ItemAssignmentManager Business Logic', () => {
     test('should map parent types to child item types correctly', () => {
       const getChildItemType = (parentType: string): string => {
         const mapping: Record<string, string> = {
-          'project': 'components',
-          'product': 'projects',
+          'product': 'components',
           'component': 'sboms'
         }
         return mapping[parentType] || 'items'
       }
 
-      expect(getChildItemType('project')).toBe('components')
-      expect(getChildItemType('product')).toBe('projects')
+      expect(getChildItemType('product')).toBe('components')
       expect(getChildItemType('component')).toBe('sboms')
       expect(getChildItemType('unknown')).toBe('items')
     })
@@ -67,20 +64,15 @@ describe('ItemAssignmentManager Business Logic', () => {
     test('should generate correct labels based on parent type', () => {
       const getItemLabels = (parentType: string) => {
         const labels: Record<string, { singular: string; plural: string }> = {
-          'project': { singular: 'Component', plural: 'Components' },
-          'product': { singular: 'Project', plural: 'Projects' },
+          'product': { singular: 'Component', plural: 'Components' },
           'component': { singular: 'SBOM', plural: 'SBOMs' }
         }
         return labels[parentType] || { singular: 'Item', plural: 'Items' }
       }
 
-      const projectLabels = getItemLabels('project')
-      expect(projectLabels.singular).toBe('Component')
-      expect(projectLabels.plural).toBe('Components')
-
       const productLabels = getItemLabels('product')
-      expect(productLabels.singular).toBe('Project')
-      expect(productLabels.plural).toBe('Projects')
+      expect(productLabels.singular).toBe('Component')
+      expect(productLabels.plural).toBe('Components')
     })
   })
 
@@ -96,11 +88,11 @@ describe('ItemAssignmentManager Business Logic', () => {
         }
       }
 
-      const urls = generateApiUrls('project', 'proj-123')
-      expect(urls.assigned).toBe('/api/project/proj-123/assigned')
-      expect(urls.available).toBe('/api/project/proj-123/available')
-      expect(urls.assign).toBe('/api/project/proj-123/assign')
-      expect(urls.unassign).toBe('/api/project/proj-123/unassign')
+      const urls = generateApiUrls('product', 'prod-123')
+      expect(urls.assigned).toBe('/api/product/prod-123/assigned')
+      expect(urls.available).toBe('/api/product/prod-123/available')
+      expect(urls.assign).toBe('/api/product/prod-123/assign')
+      expect(urls.unassign).toBe('/api/product/prod-123/unassign')
     })
   })
 

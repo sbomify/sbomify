@@ -14,7 +14,6 @@ def get_unlimited_plan_limits() -> dict[str, int | str | None]:
     """Get unlimited plan limits for when billing is disabled."""
     return {
         "max_products": None,
-        "max_projects": None,
         "max_components": None,
         "subscription_status": "active",
     }

@@ -38,7 +38,6 @@ def community_plan():
             "name": "Community",
             "description": "Free plan",
             "max_products": 1,
-            "max_projects": 1,
             "max_components": 5,
         },
     )
@@ -53,7 +52,6 @@ def business_plan():
             "name": "Business",
             "description": "For growing teams",
             "max_products": 10,
-            "max_projects": 20,
             "max_components": 100,
             "stripe_product_id": "prod_test",
             "stripe_price_monthly_id": "price_monthly_test",
@@ -98,7 +96,6 @@ def new_user(community_plan):
         has_selected_billing_plan=False,
         billing_plan_limits={
             "max_products": community_plan.max_products,
-            "max_projects": community_plan.max_projects,
             "max_components": community_plan.max_components,
             "subscription_status": "active",
         },

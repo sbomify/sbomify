@@ -82,7 +82,7 @@ def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple
 
 
 def _list_public_products(team: Team) -> list[dict[str, Any]]:
-    """List public products that have at least one public project.
+    """List public products that have at least one publicly-visible component.
 
     Includes passing assessments based on the latest SBOM of each component.
     Uses batch query to avoid N+1 database queries.
@@ -92,10 +92,18 @@ def _list_public_products(team: Team) -> list[dict[str, Any]]:
         passing_assessments_to_dict,
     )
 
+    public_visibilities = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+
     products = list(
         Product.objects.filter(team=team, is_public=True)
-        .annotate(public_project_count=Count("projects", filter=Q(projects__is_public=True), distinct=True))
-        .filter(public_project_count__gt=0)  # Only show products with public projects
+        .annotate(
+            public_component_count=Count(
+                "components",
+                filter=Q(components__visibility__in=public_visibilities),
+                distinct=True,
+            )
+        )
+        .filter(public_component_count__gt=0)  # Only show products with public components
         .order_by("name")
     )
 
@@ -112,7 +120,7 @@ def _list_public_products(team: Team) -> list[dict[str, Any]]:
                 "name": product.name,
                 "slug": product.slug,
                 "description": product.description,
-                "project_count": product.public_project_count,
+                "component_count": product.public_component_count,
                 "passing_assessments": passing_assessments,
             }
         )

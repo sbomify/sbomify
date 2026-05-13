@@ -6,7 +6,7 @@
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
     <div class="space-y-6">
-        {# Page Header - matches product/project page pattern #}
+        {# Page Header - matches product page pattern #}
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4">
                 <div class="tw-avatar tw-avatar-lg">
@@ -58,12 +58,12 @@
             </div>
             <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
                 <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
-                    <i class="fas fa-{% if component.is_global %}building{% else %}project-diagram{% endif %} text-xs"></i>
+                    <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
                     <span>
                         {% if component.is_global %}
                             Workspace-wide
                         {% else %}
-                            Project-scoped
+                            Product-scoped
                         {% endif %}
                     </span>
                 </span>

@@ -5,7 +5,7 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
-from sbomify.apps.sboms.models import Component, Product, Project
+from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.models import Team
 
 
@@ -41,28 +41,19 @@ class Command(BaseCommand):
         """Clean up test data for a specific workspace"""
         self.stdout.write(f"\nCleaning up test data for workspace: {team.name}")
 
-        # Get counts before deletion
         components = Component.objects.filter(team=team, name__startswith="test-component-")
-        projects = Project.objects.filter(team=team, name__startswith="test-project")
         products = Product.objects.filter(team=team, name__startswith="test-product")
 
         if dry_run:
             self.stdout.write("Would delete:")
             self.stdout.write(f"  - {components.count()} test components")
-            self.stdout.write(f"  - {projects.count()} test projects")
             self.stdout.write(f"  - {products.count()} test products")
             return
 
         with transaction.atomic():
-            # Delete all SBOMs for test components (this will cascade delete the SBOMs)
             deleted_components = components.delete()
             self.stdout.write(self.style.SUCCESS(f"Deleted {deleted_components[0]} test components"))
 
-            # Delete all test projects
-            deleted_projects = projects.delete()
-            self.stdout.write(self.style.SUCCESS(f"Deleted {deleted_projects[0]} test projects"))
-
-            # Delete all test products
             deleted_products = products.delete()
             self.stdout.write(self.style.SUCCESS(f"Deleted {deleted_products[0]} test products"))
 

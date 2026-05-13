@@ -57,7 +57,7 @@ def on_sbom_save(sender: type, instance: Any, created: bool, **kwargs: Any) -> N
         return
     try:
         assessments = CRAAssessment.objects.filter(
-            product__projects__components__id=instance.component_id,
+            product__components__id=instance.component_id,
         ).distinct()
         _mark_stale_for_assessments(assessments, "sbom")
     except Exception:

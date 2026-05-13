@@ -40,7 +40,7 @@ describe('PlanCard Component', () => {
         description: 'Perfect for growing businesses',
         features: [
           { key: 'products', label: 'Unlimited Products' },
-          { key: 'projects', label: '500 Projects' }
+          { key: 'components', label: '500 Components' }
         ],
         isCurrentPlan: true,
         buttonText: 'Current Plan',
@@ -66,7 +66,7 @@ describe('PlanCard Component', () => {
     test('should handle feature list properly', () => {
       const features = [
         { key: 'products', label: 'Unlimited Products', included: true },
-        { key: 'projects', label: '500 Projects', included: true },
+        { key: 'components', label: '500 Components', included: true },
         { key: 'support', label: '24/7 Support', included: false }
       ]
 
@@ -256,7 +256,7 @@ describe('PlanCard Component', () => {
         description: 'Perfect for individual developers',
         features: [
           { key: 'products', label: '5 Products' },
-          { key: 'projects', label: '10 Projects' },
+          { key: 'components', label: '10 Components' },
           { key: 'support', label: 'Community Support' }
         ],
         isCurrentPlan: false,
@@ -278,7 +278,7 @@ describe('PlanCard Component', () => {
         description: 'For growing teams and businesses',
         features: [
           { key: 'products', label: 'Unlimited Products' },
-          { key: 'projects', label: '500 Projects' },
+          { key: 'components', label: '500 Components' },
           { key: 'support', label: 'Priority Support' },
           { key: 'integrations', label: 'Advanced Integrations' }
         ],
@@ -323,7 +323,7 @@ describe('PlanCard Component', () => {
         planName: 'Starter',
         price: 49,
         isCurrentPlan: false,
-        warningMessage: 'Cannot downgrade: You have 25 projects, but this plan only allows 20',
+        warningMessage: 'Cannot downgrade: You have 25 components, but this plan only allows 20',
         buttonDisabled: true
       }
 

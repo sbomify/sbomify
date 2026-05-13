@@ -323,7 +323,7 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
     latest_sbom_subquery = SBOM.objects.filter(component=OuterRef("pk")).order_by("-created_at").values("pk")[:1]
 
     components = list(
-        Component.objects.filter(projects__products=product)
+        Component.objects.filter(products=product)
         .order_by("name")
         .distinct()
         .annotate(latest_sbom_id=Subquery(latest_sbom_subquery))

@@ -27,18 +27,23 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return HttpResponseForbidden("Only owners and admins can change scope")
 
         target_scope = request.POST.get("target_scope")
-        if target_scope not in ["workspace", "project"]:
+        if target_scope not in ("workspace", "product"):
             return HttpResponseBadRequest("Invalid scope selection")
 
         is_global = target_scope == "workspace"
         component.is_global = is_global
         if is_global:
-            component.projects.clear()
+            # Belt-and-suspenders detach: ``Component.save()`` ALSO detaches
+            # products when ``is_global=True`` (see sboms/models.py). The
+            # explicit clear here keeps the pre-save state consistent for any
+            # form/admin path that introspects the relationship between this
+            # field-flip and the persist call.
+            component.products.clear()
         component.save()
 
         if is_global:
             messages.success(request, "Component is now workspace-wide and visible on the Trust Center.")
         else:
-            messages.success(request, "Component is now project-scoped.")
+            messages.success(request, "Component is now product-scoped.")
 
         return redirect("core:component_details", component_id=component.id)

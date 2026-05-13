@@ -105,7 +105,7 @@ class EnterpriseContactForm(forms.Form):
         label="Primary Use Case",
     )
 
-    # Project Details
+    # Implementation Details
     timeline = forms.CharField(
         max_length=100,
         required=False,

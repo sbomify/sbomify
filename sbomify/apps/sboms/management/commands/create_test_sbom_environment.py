@@ -13,12 +13,12 @@ from django.http import HttpRequest
 
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
-from sbomify.apps.sboms.models import SBOM, Component, Product, ProductProject, Project, ProjectComponent
+from sbomify.apps.sboms.models import SBOM, Component, Product, ProductComponent
 from sbomify.apps.teams.models import Team
 
 
 class Command(BaseCommand):
-    help = "Creates a test environment with products, projects, components and SBOM data"
+    help = "Creates a test environment with products, components and SBOM data"
 
     def __init__(self) -> None:
         super().__init__()
@@ -65,15 +65,9 @@ class Command(BaseCommand):
         """Clean up existing test data for the workspace"""
         self.stdout.write(f"Cleaning up existing test data for workspace {team.key}...")
 
-        # Get all test products for this workspace
         test_products = Product.objects.filter(team=team, name__startswith="test-product")
         self.stdout.write(f"Found {test_products.count()} test products to delete")
 
-        # Get all test projects for this workspace
-        test_projects = Project.objects.filter(team=team, name__startswith="test-project")
-        self.stdout.write(f"Found {test_projects.count()} test projects to delete")
-
-        # Get all test components for this workspace
         test_components = Component.objects.filter(team=team, name__startswith="test-component-")
         self.stdout.write(f"Found {test_components.count()} test components to delete")
 
@@ -106,10 +100,6 @@ class Command(BaseCommand):
             test_components.delete()
             self.stdout.write("Deleted test components from database")
 
-        if test_projects.exists():
-            test_projects.delete()
-            self.stdout.write("Deleted test projects from database")
-
         if test_products.exists():
             test_products.delete()
             self.stdout.write("Deleted test products from database")
@@ -123,16 +113,6 @@ class Command(BaseCommand):
         # Create test product
         product = Product.objects.create(team=team, name="test-product", is_public=True)
         self.stdout.write(self.style.SUCCESS(f"Created product: {product.name}"))
-
-        # Create test project
-        project = Project.objects.create(
-            team=team, name="test-project", is_public=True, metadata={"description": "Test project for SBOM testing"}
-        )
-        self.stdout.write(self.style.SUCCESS(f"Created project: {project.name}"))
-
-        # Link project to product
-        ProductProject.objects.create(product=product, project=project)
-        self.stdout.write(self.style.SUCCESS("Linked project to product"))
 
         # Group SBOM files by source
         sbom_groups = {
@@ -154,9 +134,9 @@ class Command(BaseCommand):
             )
             self.stdout.write(self.style.SUCCESS(f"Created component: {component.name}"))
 
-            # Link component to project
-            ProjectComponent.objects.create(project=project, component=component)
-            self.stdout.write(self.style.SUCCESS(f"Linked component {component.name} to project"))
+            # Link component to product
+            ProductComponent.objects.create(product=product, component=component)
+            self.stdout.write(self.style.SUCCESS(f"Linked component {component.name} to product"))
 
             # Create SBOMs for this component
             for sbom_file in sbom_files:
