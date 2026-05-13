@@ -257,9 +257,13 @@ def test_get_contact_profile_not_found(
 
     response = client.get(f"/api/v1/workspaces/{team.key}/contact-profiles/nonexistent-id", **headers)
     assert response.status_code == 404
+    # `errors: None` is part of the schema since #952 — it's serialized
+    # as `null` rather than omitted because django-ninja doesn't apply
+    # exclude_none by default.
     assert response.json() == {
         "detail": "Contact profile not found",
         "error_code": None,
+        "errors": None,
     }
 
 
