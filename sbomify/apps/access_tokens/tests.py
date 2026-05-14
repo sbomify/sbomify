@@ -401,3 +401,41 @@ def test_optional_token_auth_non_bearer_header_runs_anonymously():
 
     assert calls == ["ran"]
     assert result is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Bearer",  # no separator, no token
+        "Bearer ",  # trailing space, empty token
+        "Bearer    ",  # whitespace-only token
+    ],
+)
+def test_optional_token_auth_malformed_bearer_returns_401(header):
+    """`Bearer` with no token (any whitespace variant) is unauthorized, not anonymous."""
+    from django.http import JsonResponse
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=header)
+
+    response = view(request)
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 401
+    assert calls == []  # handler must not run
+
+
+@pytest.mark.django_db
+def test_optional_token_auth_multiple_spaces_extracts_token(sample_user):  # noqa: F811
+    """`Bearer    <token>` (extra whitespace) must still authenticate the real token."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"Bearer    {token_str}")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result == sample_user.id

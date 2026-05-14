@@ -33,10 +33,10 @@ def _reject_invalid_bearer(func: Callable[..., Any]) -> Callable[..., Any]:
     """Allow anonymous access, but reject a presented-but-invalid bearer token with 401."""
 
     def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-            if not PersonalAccessTokenAuth().authenticate(request, token):
+        scheme, _, raw_token = request.headers.get("Authorization", "").partition(" ")
+        if scheme == "Bearer":
+            token = raw_token.strip()
+            if not token or not PersonalAccessTokenAuth().authenticate(request, token):
                 return JsonResponse({"detail": "Unauthorized"}, status=401)
         return func(request, *args, **kwargs)
 
