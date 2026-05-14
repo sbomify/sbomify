@@ -16,27 +16,24 @@ from sbomify.apps.core.models import Component, Product
 class TestListEndpointPermissions:
     """Test that all list endpoints properly handle public vs private access."""
 
-    def test_list_products_public_access(self, sample_team, sample_user):  # noqa: F811
-        """Test that public products can be listed without authentication."""
+    def test_list_products_requires_auth(self, sample_team, sample_user):  # noqa: F811
+        """Listing products requires authentication — no anonymous enumeration of public items."""
         Product.objects.create(name="Public Product", team=sample_team, is_public=True)
         Product.objects.create(name="Private Product", team=sample_team, is_public=False)
 
         client = Client()
         url = reverse("api-1:list_products")
 
+        # No Authorization header → 401
         response = client.get(url)
-        assert response.status_code == 200
+        assert response.status_code == 401
 
-        data = response.json()
-        assert "items" in data
-        assert "pagination" in data
+        # Garbage bearer token → 401 (not silently downgraded to anonymous)
+        response = client.get(url, HTTP_AUTHORIZATION="Bearer not-a-real-token")
+        assert response.status_code == 401
 
-        product_names = [item["name"] for item in data["items"]]
-        assert "Public Product" in product_names
-        assert "Private Product" not in product_names
-
-    def test_list_components_public_access(self, sample_team, sample_product):  # noqa: F811
-        """Test that public components can be listed without authentication."""
+    def test_list_components_requires_auth(self, sample_team, sample_product):  # noqa: F811
+        """Listing components requires authentication — no anonymous enumeration of public items."""
         public_component = Component.objects.create(
             name="Public Component",
             team=sample_team,
@@ -54,16 +51,13 @@ class TestListEndpointPermissions:
         client = Client()
         url = reverse("api-1:list_components")
 
+        # No Authorization header → 401
         response = client.get(url)
-        assert response.status_code == 200
+        assert response.status_code == 401
 
-        data = response.json()
-        assert "items" in data
-        assert "pagination" in data
-
-        component_names = [item["name"] for item in data["items"]]
-        assert "Public Component" in component_names
-        assert "Private Component" not in component_names
+        # Garbage bearer token → 401 (not silently downgraded to anonymous)
+        response = client.get(url, HTTP_AUTHORIZATION="Bearer not-a-real-token")
+        assert response.status_code == 401
 
     def test_list_endpoints_authenticated_access(self, authenticated_api_client, sample_team, sample_product):  # noqa: F811
         """Test that authenticated users see their team's items."""
@@ -112,6 +106,21 @@ class TestGetEndpointPermissions:
         data = response.json()
         assert data["name"] == "Public Component"
         assert data["visibility"] == "public"
+
+    def test_get_component_invalid_bearer_rejected(self, sample_team, sample_product):  # noqa: F811
+        """A public-by-id endpoint must 401 a bad bearer instead of downgrading to anonymous."""
+        public_component = Component.objects.create(
+            name="Public Component",
+            team=sample_team,
+            visibility=Component.Visibility.PUBLIC,
+        )
+        sample_product.components.add(public_component)
+
+        client = Client()
+        url = reverse("api-1:get_component", kwargs={"component_id": public_component.id})
+
+        response = client.get(url, HTTP_AUTHORIZATION="Bearer not-a-real-token")
+        assert response.status_code == 401
 
     def test_get_component_private_access_denied(self, sample_team, sample_product):  # noqa: F811
         """Test that private components cannot be accessed without authentication."""
@@ -235,7 +244,7 @@ class TestPermissionConsistencyPatterns:
             assert expected_message in data["detail"], f"Endpoint {endpoint} has inconsistent error message"
 
     def test_authentication_decorator_consistency(self, sample_team):  # noqa: F811
-        """Test that endpoints that should allow public access all use the same authentication pattern."""
+        """Public per-id endpoints stay reachable without auth; list endpoints don't (enumeration ban)."""
         client = Client()
 
         public_product = Product.objects.create(name="Public Product", team=sample_team, is_public=True)
@@ -249,14 +258,21 @@ class TestPermissionConsistencyPatterns:
         public_endpoints = [
             reverse("api-1:get_product", kwargs={"product_id": public_product.id}),
             reverse("api-1:get_component", kwargs={"component_id": public_component.id}),
-            reverse("api-1:list_products"),
-            reverse("api-1:list_components"),
             reverse("api-1:list_product_identifiers", kwargs={"product_id": public_product.id}),
             reverse("api-1:list_product_links", kwargs={"product_id": public_product.id}),
         ]
 
         for endpoint in public_endpoints:
             response = client.get(endpoint)
-            assert response.status_code != 403, (
-                f"Endpoint {endpoint} incorrectly requires authentication for public items"
+            # Tight equality (rather than `!= 403`) so a regression to 401 or any
+            # other non-success status is caught instead of silently passing.
+            assert response.status_code == 200, (
+                f"Endpoint {endpoint} must remain reachable without auth for public items "
+                f"(got {response.status_code})"
+            )
+
+        for endpoint in (reverse("api-1:list_products"), reverse("api-1:list_components")):
+            response = client.get(endpoint)
+            assert response.status_code == 401, (
+                f"Endpoint {endpoint} must require authentication — no anonymous enumeration"
             )

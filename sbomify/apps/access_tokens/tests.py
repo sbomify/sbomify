@@ -12,7 +12,7 @@ from sbomify.apps.core.utils import number_to_random_token, verify_item_access
 from sbomify.apps.teams.fixtures import sample_team, sample_team_with_owner_member  # noqa: F401
 from sbomify.apps.teams.models import Member, Team
 
-from .auth import PersonalAccessTokenAuth
+from .auth import PersonalAccessTokenAuth, optional_token_auth
 from .models import AccessToken
 from .utils import (
     create_personal_access_token,
@@ -320,3 +320,156 @@ def test_scoped_token_create_component(sample_team_with_owner_member):  # noqa: 
     data = response.json()
     assert data["name"] == "Scoped Token Component"
     assert data["team_id"] == str(team.id)
+
+
+# -- optional_token_auth decorator contract -----------------------------------
+#
+# The decorator wraps view handlers that allow anonymous access. The contract:
+# no Authorization header → anonymous (handler runs); valid bearer → handler
+# runs with request.user set; invalid bearer → 401 (handler must not run).
+# Anything else lets clients use the endpoint as an auth probe and silently
+# downgrades bad credentials to anonymous (issue: presented-but-invalid token
+# was indistinguishable from no token at all).
+
+
+def _make_dummy_view():
+    calls: list[str] = []
+
+    @optional_token_auth
+    def view(request):
+        calls.append("ran")
+        user = getattr(request, "user", None)
+        return getattr(user, "id", None)
+
+    return view, calls
+
+
+@pytest.mark.django_db
+def test_optional_token_auth_no_header_runs_anonymously():
+    """No Authorization header: handler runs, no user set on request."""
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result is None
+
+
+@pytest.mark.django_db
+def test_optional_token_auth_invalid_bearer_returns_401():
+    """A presented-but-invalid bearer must 401 — never silently downgrade to anonymous.
+
+    The decorator wraps `Operation.run` outside ninja's exception handler, so the
+    contract is "return a 401 HttpResponse," not "raise an exception."
+    """
+    from django.http import JsonResponse
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION="Bearer not-a-real-token")
+
+    response = view(request)
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 401
+    assert json.loads(response.content) == {"detail": "Unauthorized"}
+    assert calls == []  # handler must not run
+
+
+@pytest.mark.django_db
+def test_optional_token_auth_valid_bearer_authenticates(sample_user):  # noqa: F811
+    """A valid bearer authenticates the request and the handler runs as that user."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"Bearer {token_str}")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result == sample_user.id
+
+
+@pytest.mark.django_db
+def test_optional_token_auth_non_bearer_header_runs_anonymously():
+    """Non-Bearer schemes are ignored (treated as anonymous), not 401'd."""
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION="Basic dXNlcjpwYXNz")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Bearer",  # no separator, no token
+        "Bearer ",  # trailing space, empty token
+        "Bearer    ",  # whitespace-only token
+    ],
+)
+def test_optional_token_auth_malformed_bearer_returns_401(header):
+    """`Bearer` with no token (any whitespace variant) is unauthorized, not anonymous."""
+    from django.http import JsonResponse
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=header)
+
+    response = view(request)
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 401
+    assert calls == []  # handler must not run
+
+
+@pytest.mark.django_db
+def test_optional_token_auth_multiple_spaces_extracts_token(sample_user):  # noqa: F811
+    """`Bearer    <token>` (extra whitespace) must still authenticate the real token."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"Bearer    {token_str}")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result == sample_user.id
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scheme", ["bearer", "BEARER", "BeArEr"])
+def test_optional_token_auth_scheme_is_case_insensitive_for_invalid_token(scheme):
+    """RFC 7235: auth scheme is case-insensitive. A bad token under any casing must 401,
+    or the 'invalid token silently downgrades to anonymous' bug returns via lowercasing.
+    """
+    from django.http import JsonResponse
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"{scheme} not-a-real-token")
+
+    response = view(request)
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 401
+    assert calls == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scheme", ["bearer", "BEARER", "BeArEr"])
+def test_optional_token_auth_scheme_case_insensitive_for_valid_token(sample_user, scheme):  # noqa: F811
+    """A valid token must authenticate regardless of scheme casing."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"{scheme} {token_str}")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result == sample_user.id

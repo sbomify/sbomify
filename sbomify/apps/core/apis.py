@@ -644,25 +644,22 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
 @router.get(
     "/products",
     response={200: PaginatedProductsResponse, 403: ErrorResponse},
-    auth=None,
 )
-@decorate_view(optional_token_auth)
 def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Query(15)) -> Any:  # type: ignore[type-arg]
-    """List all products - public products for unauthenticated users, team products for authenticated users."""
+    """List products for the authenticated user's workspace."""
     try:
-        is_internal_member = _is_internal_member(request)
-        # For authenticated non-guest users, show their team's products
-        if is_internal_member:
-            team_id = _get_user_team_id(request)
-            if not team_id:
-                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+        if _is_guest_member(request):
+            return 403, {
+                "detail": "Guest members can only access public pages",
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
-            products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
-            has_crud_permissions = _get_team_crud_permission(request, team_id)
-        else:
-            # For unauthenticated or guest users, show only public products
-            products_queryset = optimize_product_queryset(Product.objects.filter(is_public=True))
-            has_crud_permissions = False
+        team_id = _get_user_team_id(request)
+        if not team_id:
+            return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+
+        products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
+        has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         # Apply pagination
         paginated_products, pagination_meta = _paginate_queryset(products_queryset, page, page_size)
@@ -1532,35 +1529,28 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
 @router.get(
     "/components",
     response={200: PaginatedComponentsResponse, 400: ErrorResponse, 403: ErrorResponse},
-    auth=None,
     tags=["Components"],
 )
-@decorate_view(optional_token_auth)
 def list_components(
     request: HttpRequest,
     page: int = Query(1),  # type: ignore[type-arg]
     page_size: int = Query(15),  # type: ignore[type-arg]
     is_global: str | None = Query(None),  # type: ignore[type-arg]
 ) -> Any:
-    """List all components - public components for unauthenticated users, team components for authenticated users."""
+    """List components for the authenticated user's workspace."""
     try:
-        is_internal_member = _is_internal_member(request)
-        # For authenticated non-guest users, show their team's components
-        if is_internal_member:
-            team_id = _get_user_team_id(request)
-            if not team_id:
-                return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+        if _is_guest_member(request):
+            return 403, {
+                "detail": "Guest members can only access public pages",
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
-            # Include ALL components for internal members (public, private, and gated)
-            # No visibility filter - internal members see all components in their team
-            components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
-            has_crud_permissions = _get_team_crud_permission(request, team_id)
-        else:
-            # For unauthenticated or guest users, show only public components
-            components_queryset = optimize_component_queryset(
-                Component.objects.filter(visibility=Component.Visibility.PUBLIC)
-            )
-            has_crud_permissions = False
+        team_id = _get_user_team_id(request)
+        if not team_id:
+            return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
+
+        components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
+        has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
             normalized = is_global.lower()

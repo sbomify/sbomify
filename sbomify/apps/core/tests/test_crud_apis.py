@@ -396,10 +396,9 @@ def test_delete_component_success(
 
 @pytest.mark.django_db
 def test_crud_operations_require_authentication():
-    """Test that create operations require authentication, but list operations allow public access."""
+    """Test that create AND list operations require authentication (no anonymous enumeration)."""
     client = Client()
 
-    # Create operations should require authentication
     create_urls = [
         reverse("api-1:create_product"),
         reverse("api-1:create_component"),
@@ -409,18 +408,18 @@ def test_crud_operations_require_authentication():
         response = client.post(url, json.dumps({"name": "test"}), content_type="application/json")
         assert response.status_code in [401, 403]  # Unauthorized or Forbidden
 
-    # List operations should allow public access (return 200 with empty items for no public items)
     list_urls = [
         reverse("api-1:list_products"),
         reverse("api-1:list_components"),
     ]
 
     for url in list_urls:
+        # No header → 401
         response = client.get(url)
-        assert response.status_code == 200  # Public access allowed
-        data = response.json()
-        assert "items" in data
-        assert "pagination" in data
+        assert response.status_code == 401, f"{url} must require authentication"
+        # Invalid bearer token must not be silently downgraded to anonymous
+        response = client.get(url, HTTP_AUTHORIZATION="Bearer not-a-real-token")
+        assert response.status_code == 401, f"{url} must reject invalid bearer tokens"
 
 
 @pytest.mark.django_db
