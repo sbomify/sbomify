@@ -2,6 +2,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta name="description" content="sbomify platform notification">
         <meta name="keywords"
               content="sbomify, sbom, software bill of materials, security">
@@ -12,53 +13,42 @@
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                 line-height: 1.6;
-                color: #333;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
+                color: #333333;
+                margin: 0;
+                padding: 0;
+                background-color: #f8fafc;
+            }
+
+            .email-wrapper {
                 background-color: #f8fafc;
             }
 
             .email-container {
                 background-color: #ffffff;
-                border-radius: 8px;
+            }
+
+            .email-body {
                 padding: 40px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
 
-            .header {
+            .logo-cell {
+                background-color: #0f172a;
+                padding: 24px;
                 text-align: center;
-                margin-bottom: 32px;
-                padding-bottom: 24px;
-                border-bottom: 1px solid #e2e8f0;
             }
 
-            .logo {
-                margin-bottom: 8px;
-            }
-
-            .logo img {
-                height: 40px;
-                width: auto;
-                max-width: 221px;
-            }
-
-            .logo .logo-light {
-                display: inline !important;
-            }
-
-            .logo .logo-dark {
-                display: none !important;
-            }
-
-            .tagline {
-                color: #64748b;
+            .tagline-cell {
+                background-color: #0f172a;
+                padding: 0 24px 20px 24px;
+                text-align: center;
+                color: #cbd5e1;
                 font-size: 14px;
             }
 
             h1 {
                 color: #1e293b;
                 font-size: 24px;
+                margin-top: 0;
                 margin-bottom: 16px;
                 font-weight: 600;
             }
@@ -66,8 +56,8 @@
             h2 {
                 color: #4059d0;
                 font-size: 20px;
-                margin-bottom: 16px;
                 margin-top: 32px;
+                margin-bottom: 16px;
             }
 
             h3 {
@@ -78,42 +68,36 @@
             }
 
             p {
-                margin: 16px 0;
+                margin-top: 16px;
+                margin-bottom: 16px;
                 color: #475569;
             }
 
             ul {
-                margin: 16px 0;
+                margin-top: 16px;
+                margin-bottom: 16px;
                 padding-left: 24px;
                 color: #475569;
             }
 
             li {
-                margin: 8px 0;
+                margin-top: 8px;
+                margin-bottom: 8px;
             }
 
-            .button {
+            a.button {
                 display: inline-block;
                 padding: 12px 24px;
                 background-color: #4059d0;
-                color: white !important;
-                text-decoration: none;
-                border-radius: 6px;
-                margin: 16px 0;
+                color: #ffffff;
+                margin-top: 16px;
+                margin-bottom: 16px;
                 font-weight: 500;
                 text-align: center;
             }
 
-            .button:hover {
-                background-color: #334ba6;
-            }
-
             .button-secondary {
                 background-color: #64748b;
-            }
-
-            .button-secondary:hover {
-                background-color: #475569;
             }
 
             .text-secondary {
@@ -125,47 +109,45 @@
                 background-color: #f1f5f9;
                 border-left: 4px solid #4059d0;
                 padding: 16px;
-                margin: 24px 0;
-                border-radius: 0 4px 4px 0;
+                margin-top: 24px;
+                margin-bottom: 24px;
             }
 
             .feature-list {
                 list-style: none;
-                padding: 0;
+                padding-left: 0;
             }
 
             .feature-list li {
-                padding: 8px 0;
-                position: relative;
-                padding-left: 24px;
+                padding-top: 8px;
+                padding-bottom: 8px;
             }
 
-            .feature-list li:before {
-                content: "✓";
+            .feature-list li .check {
                 color: #10b981;
                 font-weight: bold;
-                position: absolute;
-                left: 0;
+                margin-right: 8px;
             }
 
             .user-info {
                 background-color: #fef3c7;
-                border: 1px solid #f59e0b;
-                border-radius: 4px;
+                border-top: 1px solid #f59e0b;
+                border-right: 1px solid #f59e0b;
+                border-bottom: 1px solid #f59e0b;
+                border-left: 1px solid #f59e0b;
                 padding: 12px;
-                margin: 16px 0;
+                margin-top: 16px;
+                margin-bottom: 16px;
                 font-size: 14px;
             }
 
             a {
                 color: #4059d0;
-                text-decoration: none;
             }
 
             .footer {
-                margin-top: 40px;
-                padding-top: 24px;
-                border-top: 1px solid #e2e8f0;
+                background-color: #f1f5f9;
+                padding: 24px 40px;
                 text-align: center;
                 color: #64748b;
                 font-size: 14px;
@@ -173,7 +155,6 @@
 
             .footer a {
                 color: #4059d0;
-                text-decoration: none;
             }
 
             .unsubscribe {
@@ -182,69 +163,76 @@
                 color: #94a3b8;
             }
 
-            @media only screen and (max-width: 600px) {
-                body {
-                    padding: 10px;
-                }
+            /* Narrow-viewport (phone) tweaks. Padding for responsive
+               elements is defined in the `<style>` block (not inline) so
+               the media query overrides win on class-selector specificity
+               alone — no `!important` needed. Clients that strip
+               `<style>` will lose padding here, but those same clients
+               don't process @media either, so the responsive layer is
+               unaffected. */
+            .email-wrapper-cell {
+                padding: 20px;
+            }
 
+            @media only screen and (max-width: 620px) {
                 .email-container {
-                    padding: 20px;
+                    width: 100%;
+                    max-width: 100%;
                 }
 
-                h1 {
-                    font-size: 20px;
+                .email-wrapper-cell {
+                    padding: 12px;
                 }
 
-                .button {
-                    display: block;
-                    text-align: center;
-                    margin: 16px 0;
+                .email-body {
+                    padding: 24px;
+                }
+
+                .footer {
+                    padding: 20px 24px;
                 }
             }
-
-            @media (prefers-color-scheme: dark) {
-                .logo .logo-light {
-                    display: none !important;
-                }
-
-                .logo .logo-dark {
-                    display: inline !important;
-                }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="email-container">
-            <div class="header">
-                <div class="logo">
-                    <img src="{{ base_url }}/static/img/sbomify-black.svg"
-                         alt="sbomify"
-                         height="40"
-                         width="221"
-                         class="logo-light">
-                    <img src="{{ base_url }}/static/img/sbomify-white.svg"
-                         alt="sbomify"
-                         height="40"
-                         width="221"
-                         class="logo-dark">
-                </div>
-                <div class="tagline">The Security Artifact Hub</div>
-            </div>
-            {% block content %}{% endblock %}
-            {% block signoff %}
-                <p>
-                    Cheers,
-                    <br>
-                    <strong>The sbomify Team</strong>
-                </p>
-            {% endblock %}
-            <div class="footer">
-                <p>
-                    Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
-                </p>
-                {% now "Y" as this_year %}
-                <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
-            </div>
-        </div>
-    </body>
+</style>
+</head>
+<body>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f8fafc" class="email-wrapper">
+<tr>
+<td align="center" class="email-wrapper-cell">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" class="email-container">
+<tr>
+<td align="center" bgcolor="#0f172a" style="background-color: #0f172a; padding: 24px; color: #ffffff" class="logo-cell">
+<img src="{{ base_url }}/static/img/sbomify-white.svg" alt="sbomify" height="40" width="221" border="0" style="color: #ffffff; font-weight: 600; font-size: 20px">
+</td>
+</tr>
+<tr>
+<td align="center" bgcolor="#0f172a" style="background-color: #0f172a; color: #cbd5e1; padding: 0 24px 20px 24px; font-size: 14px" class="tagline-cell">
+The Security Artifact Hub
+</td>
+</tr>
+<tr>
+<td class="email-body">
+{% block content %}{% endblock %}
+{% block signoff %}
+<p>
+Cheers,
+<br>
+<strong>The sbomify Team</strong>
+</p>
+{% endblock %}
+</td>
+</tr>
+<tr>
+<td bgcolor="#f1f5f9" align="center" style="background-color: #f1f5f9; text-align: center; color: #64748b; font-size: 14px" class="footer">
+<p>
+Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
+</p>
+{% now "Y" as this_year %}
+<p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
 </html>

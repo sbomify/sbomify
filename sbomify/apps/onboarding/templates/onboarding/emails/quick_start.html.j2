@@ -4,14 +4,17 @@
     <h1>Your quick start guide, {{ user.first_name|default:user.username }}!</h1>
     <p>Getting started with sbomify is easy. Here's how to get your first SBOM up and running:</p>
     <h2>3 Simple Steps</h2>
-    <ul class="feature-list">
+    <ul class="feature-list" style="list-style: none; padding-left: 0;">
         <li>
+            <span class="check" aria-hidden="true">✓</span>
             <strong>Create a product</strong> for your software (e.g., "My Web App")
         </li>
         <li>
+            <span class="check" aria-hidden="true">✓</span>
             <strong>Add a component</strong> for each piece you want to track
         </li>
         <li>
+            <span class="check" aria-hidden="true">✓</span>
             <strong>Upload an SBOM</strong> using our
             <a href="https://github.com/sbomify/sbomify-action" target="_blank">GitHub Action</a>
             or upload one manually
