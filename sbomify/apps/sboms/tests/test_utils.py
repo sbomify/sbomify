@@ -1242,22 +1242,35 @@ class TestSbomWasGeneratedBySbomifyAction:
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
 
     @pytest.mark.parametrize(
-        "payload",
+        "fmt,payload",
         [
-            ["not", "a", "dict"],  # top-level list instead of object
-            {"metadata": "not-a-dict"},  # scalar metadata
-            {"metadata": {"tools": "not-a-list-or-dict"}},  # scalar tools
-            {"metadata": {"tools": [None, 1, "x"]}},  # malformed legacy tools entries
-            {"metadata": {"tools": {"components": [None, 1, "x"], "services": None}}},  # malformed modern shape
-            {"creationInfo": {"creators": [123, None]}},  # non-string SPDX creators
-            {"creationInfo": "not-a-dict"},
+            # CycloneDX guards — these must actually flow through
+            # _cyclonedx_metadata_has_sbomify_action, not the SPDX branch.
+            ("cyclonedx", ["not", "a", "dict"]),  # top-level list instead of object
+            ("cyclonedx", {"metadata": "not-a-dict"}),  # scalar metadata
+            ("cyclonedx", {"metadata": {"tools": "not-a-list-or-dict"}}),  # scalar tools
+            ("cyclonedx", {"metadata": {"tools": [None, 1, "x"]}}),  # malformed legacy entries
+            (
+                "cyclonedx",
+                {"metadata": {"tools": {"components": [None, 1, "x"], "services": None}}},
+            ),  # malformed modern shape
+            # SPDX guards — must flow through _spdx_metadata_has_sbomify_action.
+            ("spdx", ["not", "a", "dict"]),
+            ("spdx", {"creationInfo": "not-a-dict"}),
+            ("spdx", {"creationInfo": {"creators": "not-a-list"}}),
+            ("spdx", {"creationInfo": {"creators": [123, None]}}),  # non-string creators
         ],
     )
-    def test_malformed_shapes_fail_safe(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, payload):  # noqa: F811
+    def test_malformed_shapes_fail_safe(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, fmt, payload):  # noqa: F811
         """A valid-JSON-but-wrong-shape blob must not raise out of the
-        detector — Step 2 status rendering relies on this falling safe."""
+        detector — Step 2 status rendering relies on this falling safe.
+        Each case sets ``sample_sbom.format`` so the matching parser is
+        the one actually exercised (round-5 Copilot caught that without
+        this the CycloneDX guards never ran in the test)."""
         from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
 
+        sample_sbom.format = fmt
+        sample_sbom.save(update_fields=["format"])
         _mock_sbom_content(mocker, payload)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
