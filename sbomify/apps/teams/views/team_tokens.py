@@ -79,10 +79,12 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         from sbomify.apps.core.posthog_service import capture_for_request
 
+        # Token description is arbitrary user input and may contain PII
+        # (customer names, copied secrets). The event fire itself is the
+        # signal we need; no description-derived properties are sent.
         capture_for_request(
             request,
             "api_token:created",
-            {"token_name": form.cleaned_data["description"]},
             team_key=team_key,
         )
 

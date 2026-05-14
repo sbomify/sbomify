@@ -72,6 +72,17 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
         accepted.append(
             {"team_key": invitation.team.key, "invitation_id": invitation.id, "invitation_token": str(invitation.token)}
         )
+
+        if request is not None:
+            from sbomify.apps.core.posthog_service import capture_for_request
+
+            capture_for_request(
+                request,
+                "team:member_invitation_accepted",
+                {"role": invitation.role},
+                team_key=invitation.team.key,
+            )
+
         invitation.delete()
 
     if request is not None and accepted:

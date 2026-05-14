@@ -3,9 +3,10 @@
 Each test verifies that the relevant view/flow invokes
 ``sbomify.apps.core.posthog_service.capture`` with the expected event name.
 
-Patch target rationale: each capture site does an inline
-``from sbomify.apps.core.posthog_service import capture`` so the patch is
-applied to the source module attribute.
+Patch target rationale: most capture sites use the ``capture_for_request``
+helper, which in turn calls the module-level ``capture``. Patching
+``capture`` therefore intercepts both helper-based and direct call sites
+without needing per-site patching.
 """
 
 from __future__ import annotations
@@ -60,11 +61,10 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     team_with_business_plan: Team,
     sample_user: Any,
 ) -> None:
-    """The explicit accept_invite view fires the event.
+    """The explicit accept_invite view fires the event for existing users.
 
-    Invitee must already have a workspace; otherwise the user_logged_in signal
-    auto-accepts pending invitations before the view runs (and our capture is
-    in the view, not the signal).
+    Invitee has a pre-existing workspace so the user_logged_in auto-accept
+    signal short-circuits; the capture under test is the view-level one.
     """
     from django.contrib.auth import get_user_model
 
@@ -90,6 +90,40 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     assert response.status_code == 302, f"Unexpected status {response.status_code}: {response.content!r}"
     assert Member.objects.filter(team=team_with_business_plan, user=invitee).exists()
     assert "team:member_invitation_accepted" in _called_events(mock_capture)
+
+
+@pytest.mark.django_db
+def test_auto_accept_invitation_captures_team_member_invitation_accepted(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+) -> None:
+    """The user_logged_in auto-accept path fires the event for new-user invitations.
+
+    Invite-only signups land via this path: a fresh user (no memberships)
+    logs in and the signal handler auto-accepts every pending invitation.
+    Without a capture here the most common invitation-acceptance flow would
+    never be measured.
+    """
+    from django.contrib.auth import get_user_model
+
+    UserModel = get_user_model()
+    invitee = UserModel.objects.create_user(username="newcomer", email="newcomer@example.com", password="pw")
+    assert not Member.objects.filter(user=invitee).exists()
+
+    Invitation.objects.create(
+        team=team_with_business_plan,
+        email=invitee.email,
+        role="guest",
+    )
+
+    mock_capture = _patch_capture(mocker)
+    client = Client()
+    client.force_login(invitee)
+
+    assert Member.objects.filter(team=team_with_business_plan, user=invitee).exists()
+    assert "team:member_invitation_accepted" in _called_events(mock_capture)
+    call = next(c for c in mock_capture.call_args_list if c.args[1] == "team:member_invitation_accepted")
+    assert call.args[2]["role"] == "guest"
 
 
 @pytest.mark.django_db
@@ -136,7 +170,8 @@ def test_create_access_token_captures_api_token_created(
     assert response.status_code == 200
     assert "api_token:created" in _called_events(mock_capture)
     call = next(c for c in mock_capture.call_args_list if c.args[1] == "api_token:created")
-    assert call.args[2]["token_name"] == "test-token"
+    # Token description is treated as PII and never forwarded to PostHog.
+    assert "token_name" not in (call.args[2] or {})
 
 
 @pytest.mark.django_db
@@ -220,6 +255,44 @@ def test_capture_for_request_skips_when_disabled(
 
     assert response.status_code == 200
     assert mock_capture.call_count == 0
+
+
+@pytest.mark.django_db
+def test_handle_trial_period_emits_trial_expired_only_once(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+) -> None:
+    """billing:trial_expired must fire exactly once per team, even on redelivered webhooks.
+
+    Stripe can deliver multiple ``customer.subscription.updated`` events that
+    still report ``status=trialing`` after we have already downgraded a team
+    locally; we rely on a persistent marker in ``billing_plan_limits`` so the
+    transition-only side effects do not run twice.
+    """
+    import datetime
+    from unittest.mock import MagicMock
+
+    from django.utils import timezone
+
+    from sbomify.apps.billing.billing_processing import handle_trial_period
+
+    mock_capture = _patch_capture(mocker)
+    # The downgrade calls notify_team_owners → email_notifications.notify_trial_expired;
+    # patch them out so the test does not depend on SMTP fixtures.
+    mocker.patch("sbomify.apps.billing.billing_processing.email_notifications")
+    mocker.patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility")
+
+    subscription = MagicMock()
+    subscription.status = "trialing"
+    subscription.trial_end = int((timezone.now() - datetime.timedelta(days=1)).timestamp())
+
+    assert handle_trial_period(subscription, team_with_business_plan) is True
+    assert handle_trial_period(subscription, team_with_business_plan) is True
+
+    trial_expired_calls = [c for c in mock_capture.call_args_list if c.args[1] == "billing:trial_expired"]
+    assert len(trial_expired_calls) == 1, (
+        f"Expected billing:trial_expired to fire exactly once, got {len(trial_expired_calls)} calls"
+    )
 
 
 @pytest.mark.django_db

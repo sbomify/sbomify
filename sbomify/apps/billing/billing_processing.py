@@ -222,29 +222,39 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
+                # Stripe may redeliver `status=trialing` webhooks after we have
+                # already downgraded a team locally. A persistent marker in
+                # billing_plan_limits is the only state that survives the
+                # `_update_billing_from_subscription` rewrites on every webhook,
+                # so use it to make the transition idempotent.
+                already_emitted = bool(billing_limits.get("trial_expired_emitted_at"))
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
                 billing_limits.update(get_community_plan_limits())
+                if not already_emitted:
+                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
                 team.billing_plan_limits = billing_limits
                 team.save()
-            handle_community_downgrade_visibility(team)
-            notify_team_owners(team, email_notifications.notify_trial_expired)
-            logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
-            # Signal/background context: no request, so consent is not gated here.
-            # Distinct_id = team_key matches the Tier 1 signal pattern at
-            # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
-            # consistent workspace-level attribution across tiers.
-            from sbomify.apps.core.posthog_service import capture
+            if not already_emitted:
+                handle_community_downgrade_visibility(team)
+                notify_team_owners(team, email_notifications.notify_trial_expired)
+                logger.info("Trial expired — downgraded team %s to community plan", team.key)
 
-            team_key = team.key or ""
-            distinct_id = team_key or "system"
-            capture(
-                distinct_id,
-                "billing:trial_expired",
-                {"team_key": team_key},
-                groups={"workspace": team_key} if team_key else None,
-            )
+                # Signal/background context: no request, so consent is not gated here.
+                # Distinct_id = team_key matches the Tier 1 signal pattern at
+                # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
+                # consistent workspace-level attribution across tiers.
+                from sbomify.apps.core.posthog_service import capture
+
+                team_key = team.key or ""
+                distinct_id = team_key or "system"
+                capture(
+                    distinct_id,
+                    "billing:trial_expired",
+                    {"team_key": team_key},
+                    groups={"workspace": team_key} if team_key else None,
+                )
 
         return True
     return False
