@@ -1086,6 +1086,33 @@ class TestSbomWasGeneratedBySbomifyAction:
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
 
+    @pytest.mark.parametrize(
+        "creator",
+        [
+            "Tool: sbomify-action-1.2.3",  # plain semver, hyphen-joined name
+            "Tool: sbomify action-1.2.3",  # legacy space-joined name
+            "Tool: sbomify-action-1.2.3-rc1",  # pre-release suffix adds a hyphen
+            "Tool: sbomify-action-2.0.0-alpha.1+build.7",  # SemVer pre-release + build
+            "Tool: sbomify action-0.9.0-beta",  # legacy name + pre-release
+        ],
+    )
+    def test_spdx_versioned_creator_matches(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, creator):  # noqa: F811
+        """The SPDX creator format is ``Tool: <name>-<version>``. Version
+        strings in the wild can include further hyphens (``-rc1``, ``-alpha.1``);
+        a single trailing-segment strip would miss them. Issue #902 round 4:
+        the detector must iteratively peel hyphen-separated segments to find
+        the bare tool name."""
+        from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
+
+        sample_sbom.format = "spdx"
+        sample_sbom.save(update_fields=["format"])
+        _mock_sbom_content(
+            mocker,
+            {"spdxVersion": "SPDX-2.3", "creationInfo": {"creators": [creator]}},
+        )
+
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
+
     def test_spdx_creators_without_sbomify_action(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
         from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
 

@@ -190,6 +190,29 @@ def _cyclonedx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     return False
 
 
+def _spdx_creator_names_sbomify_action(creator: str) -> bool:
+    """Return True iff a ``creationInfo.creators`` entry names sbomify-action.
+
+    SPDX 2.x tools are emitted as ``Tool: <name>-<version>`` (see
+    sbomify-action's ``augmentation.py`` — ``f"{name}-{version}"``).
+    Versions in the wild include hyphenated pre-release suffixes
+    (``1.2.3-rc1``, ``2.0.0-alpha+build.7``), so a single ``rsplit("-", 1)``
+    only peels one segment and misses those. Iteratively strip
+    hyphen-separated tail segments instead — every candidate prefix is
+    checked, so we match whether the version is hyphen-free or carries
+    multiple hyphen-separated parts.
+    """
+    if not creator.lower().startswith("tool:"):
+        return False
+    candidate = creator.split(":", 1)[1].strip()
+    while True:
+        if _matches_sbomify_action_name(candidate):
+            return True
+        if "-" not in candidate:
+            return False
+        candidate = candidate.rsplit("-", 1)[0]
+
+
 def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     """Detect sbomify-action in a parsed SPDX 2.x SBOM via
     ``creationInfo.creators[]`` entries of the form
@@ -206,14 +229,7 @@ def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     if not isinstance(creators, list):
         return False
     for creator in creators:
-        if not isinstance(creator, str):
-            continue
-        if not creator.lower().startswith("tool:"):
-            continue
-        tool_name = creator.split(":", 1)[1].strip()
-        # Strip trailing "-<version>" so "sbomify-action-1.2.3" matches.
-        bare = tool_name.rsplit("-", 1)[0] if "-" in tool_name else tool_name
-        if _matches_sbomify_action_name(bare) or _matches_sbomify_action_name(tool_name):
+        if isinstance(creator, str) and _spdx_creator_names_sbomify_action(creator):
             return True
     return False
 
