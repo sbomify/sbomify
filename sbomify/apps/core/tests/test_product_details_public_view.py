@@ -4,7 +4,7 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.models import Product, Release
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Product, Release
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 from sbomify.apps.teams.models import Team
 
@@ -385,6 +385,75 @@ def test_product_details_shows_releases(public_team, public_product):
 
     assert "v1.0.0" in content
     assert "v0.9.0-beta" in content
+
+
+@pytest.mark.django_db
+def test_product_details_hides_synthetic_latest_release(public_team, public_product):
+    """The synthetic auto-managed `latest` release must not appear in the releases table.
+
+    Two real releases must render normally — the synthetic `latest` (with
+    is_latest=True and the reserved name) is hidden so trust-center visitors
+    don't see two rows competing for the "Latest" badge. The
+    `Download Latest Release` CTA still surfaces the latest artifacts.
+    """
+    client = Client()
+
+    Release.objects.create(name="v1.0.0", product=public_product)
+    Release.objects.create(name="v0.9.0-beta", product=public_product, is_prerelease=True)
+    # Synthetic auto-managed latest — the reserved name + is_latest=True
+    # is what `_ensure_latest_release_exists` would create on demand.
+    Release.objects.create(
+        name=LATEST_RELEASE_NAME,
+        product=public_product,
+        is_latest=True,
+        description="Automatically updated release containing the latest artifacts from all components",
+    )
+
+    url = reverse("core:product_details_public", kwargs={"product_id": public_product.id})
+    response = client.get(url)
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Versioned rows are present
+    assert "v1.0.0" in content
+    assert "v0.9.0-beta" in content
+    # Synthetic latest's description is the easiest fingerprint to test against
+    # (the literal name `latest` shows up too often elsewhere on the page).
+    assert "Automatically updated release containing the latest artifacts" not in content
+
+
+@pytest.mark.django_db
+def test_releases_public_view_hides_synthetic_latest_release(public_team, public_product):
+    """The dedicated /releases/ page must also exclude the synthetic auto-`latest`.
+
+    `ProductReleasesPublicView` filters items returned from `list_all_releases`
+    so the synthetic release never shows in the list. This is separate from the
+    embedded list on the product details page (covered above) — they share intent
+    but go through different view code paths.
+    """
+    client = Client()
+
+    Release.objects.create(name="v3.0.0", product=public_product)
+    Release.objects.create(name="v2.5.0-rc1", product=public_product, is_prerelease=True)
+    Release.objects.create(
+        name=LATEST_RELEASE_NAME,
+        product=public_product,
+        is_latest=True,
+        description="Automatically updated release containing the latest artifacts from all components",
+    )
+
+    url = reverse("core:product_releases_public", kwargs={"product_id": public_product.id})
+    response = client.get(url)
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Real versioned rows still render
+    assert "v3.0.0" in content
+    assert "v2.5.0-rc1" in content
+    # Synthetic-latest row is filtered out
+    assert "Automatically updated release containing the latest artifacts" not in content
 
 
 @pytest.mark.django_db

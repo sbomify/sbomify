@@ -1,0 +1,28 @@
+{% comment %}
+Shared header for public trust-center section cards.
+Use inside a .tw-card. Always rendered (icon + title); optional subtitle and trailing slot.
+
+Usage:
+  {% include 'core/components/public_section_header.html.j2' with title='Releases' icon='fa-tags' %}
+  {% include 'core/components/public_section_header.html.j2' with title='Resources & Links' icon='fa-link' subtitle='...' %}
+
+Parameters:
+  - title (required): heading text
+  - icon (required): FontAwesome class fragment, e.g. 'fa-link' (rendered as 'fas fa-link')
+  - icon_set (optional): override icon family, defaults to 'fas'
+  - subtitle (optional): smaller muted description under the heading
+  - trailing (optional): extra content rendered right-aligned in the header row.
+    Auto-escaped by default. Callers passing HTML must explicitly mark it safe
+    at the call site (e.g. with `trailing=some_html|safe`) so this partial
+    cannot accidentally render untrusted content unescaped.
+{% endcomment %}
+<div class="px-6 py-4 border-b border-border flex items-start justify-between gap-3">
+    <div class="min-w-0">
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="{{ icon_set|default:'fas' }} {{ icon }} text-primary"
+               aria-hidden="true"></i>{{ title }}
+        </h4>
+        {% if subtitle %}<p class="text-sm text-text-muted mt-1 mb-0">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if trailing %}<div class="flex items-center gap-2 flex-shrink-0">{{ trailing }}</div>{% endif %}
+</div>

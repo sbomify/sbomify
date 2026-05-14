@@ -1,48 +1,62 @@
-{# Public Product Links - server-rendered #}
+{# Public Product Links — server-rendered #}
 {% load static %}
 {% load utils %}
 {% if product_links %}
     <div class="public-section">
         <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-link text-primary"></i>Resources & Links
-                </h4>
+            {% include 'core/components/public_section_header.html.j2' with title='Resources & Links' icon='fa-link' %}
+            {# Mobile (<md): stacked rows so URL link isn't pushed off-screen. #}
+            <div class="md:hidden divide-y divide-border/40">
+                {% for link in product_links %}
+                    <div class="px-6 py-4 flex flex-col gap-2">
+                        <span class="self-start px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">
+                            {{ link.link_type_display }}
+                        </span>
+                        <div class="text-text font-semibold break-words">{{ link.title }}</div>
+                        {% if link.description %}<p class="text-text-muted text-xs m-0">{{ link.description }}</p>{% endif %}
+                        <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-primary hover:underline inline-flex items-center gap-1 self-start min-h-10 py-2">
+                            Visit Link
+                            <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                {% endfor %}
             </div>
-            <div class="p-6">
-                <div class="overflow-x-auto">
-                    <table class="tw-table w-full text-sm">
-                        <thead>
-                            <tr class="bg-border/30">
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">Title</th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted">URL</th>
+            {# md+: full table. #}
+            <div class="hidden md:block p-6">
+                <table class="tw-table w-full text-sm">
+                    <thead>
+                        <tr class="bg-border/30">
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Title</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">URL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for link in product_links %}
+                            <tr class="hover:bg-border/10">
+                                <td class="py-3 px-4 align-middle">
+                                    <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">{{ link.link_type_display }}</span>
+                                </td>
+                                <td class="py-3 px-4 align-middle">
+                                    <div class="text-text font-semibold">{{ link.title }}</div>
+                                    {% if link.description %}<p class="text-text-muted text-xs mt-1 mb-0">{{ link.description }}</p>{% endif %}
+                                </td>
+                                <td class="py-3 px-4 align-middle">
+                                    <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="text-primary hover:underline inline-flex items-center gap-1">
+                                        Visit Link
+                                        <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                                    </a>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {% for link in product_links %}
-                                <tr class="hover:bg-border/10">
-                                    <td class="py-3 px-4">
-                                        <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">{{ link.link_type_display }}</span>
-                                    </td>
-                                    <td class="py-3 px-4">
-                                        <strong class="text-text">{{ link.title }}</strong>
-                                        {% if link.description %}<div class="text-text-muted text-xs mt-1">{{ link.description }}</div>{% endif %}
-                                    </td>
-                                    <td class="py-3 px-4">
-                                        <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
-                                           target="_blank"
-                                           rel="noopener noreferrer"
-                                           class="text-primary hover:underline inline-flex items-center gap-1">
-                                            Visit Link
-                                            <i class="fas fa-external-link-alt text-xs"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>

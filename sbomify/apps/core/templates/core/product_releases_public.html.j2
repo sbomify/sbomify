@@ -16,23 +16,19 @@
     {% breadcrumb releases 'releases' %}
 {% endblock %}
 {% block content %}
-    <div class="public-item-header">
-        <a href="{% url 'core:product_details_public' product.id %}"
-           class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
-           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-            <i class="fas fa-arrow-left"></i>Back
-        </a>
-        <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
+    <div class="public-item-header flex flex-col gap-3">
+        {# Parent navigation comes from the breadcrumb (`Trust Center > Product`). #}
+        <h1 class="text-3xl font-bold text-text flex items-center gap-4 m-0">
             <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <i class="fas fa-tags"></i>
+                <i class="fas fa-tags" aria-hidden="true"></i>
             </span>
             Releases
         </h1>
-        <p class="text-text-muted text-lg mb-4">All software releases for {{ product.name }}</p>
+        <p class="text-text-muted text-lg m-0">All software releases for {{ product.name }}</p>
         {% if releases %}
-            <div class="flex flex-wrap gap-2 mb-6">
+            <div class="flex flex-wrap gap-2">
                 <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                    <i class="fas fa-tag"></i>
+                    <i class="fas fa-tag" aria-hidden="true"></i>
                     {{ releases|length }} Release{{ releases|length|pluralize }}
                 </span>
             </div>
@@ -41,20 +37,13 @@
     {% if releases %}
         <div class="public-section">
             <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-history text-primary"></i>Release History
-                    </h4>
-                    <p class="text-sm text-text-muted mt-1 mb-0">Browse all releases and their artifacts</p>
-                </div>
-                <div>
+                <div class="divide-y divide-border/50">
                     {% for release in releases %}
                         <a href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}"
-                           class="flex items-center gap-4 px-6 py-4 hover:bg-border/10 transition-colors no-underline group"
-                           {% if not forloop.last %}style="border-bottom: 1px solid color-mix(in srgb, rgb(var(--color-border)) 50%, transparent)"{% endif %}>
+                           class="flex items-center gap-4 px-6 py-4 hover:bg-border/10 transition-colors no-underline group">
                             {# Release Icon #}
                             <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 {% if release.is_latest %}bg-success/10 text-success{% elif release.is_prerelease %}bg-warning/10 text-warning{% else %}bg-primary/10 text-primary{% endif %}">
-                                <i class="fas fa-tag"></i>
+                                <i class="fas fa-tag" aria-hidden="true"></i>
                             </div>
                             {# Release Info #}
                             <div class="flex-1 min-w-0">
@@ -72,7 +61,7 @@
                                 </div>
                                 <div class="flex items-center gap-4 mt-1">
                                     <span class="text-xs text-text-muted flex items-center gap-1">
-                                        <i class="far fa-clock"></i>
+                                        <i class="far fa-clock" aria-hidden="true"></i>
                                         {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                                     </span>
                                     {% if release.description %}
@@ -81,7 +70,8 @@
                                 </div>
                             </div>
                             {# Arrow #}
-                            <i class="fas fa-chevron-right text-text-muted text-sm group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0"></i>
+                            <i class="fas fa-chevron-right text-text-muted text-sm group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0"
+                               aria-hidden="true"></i>
                         </a>
                     {% endfor %}
                 </div>
@@ -91,7 +81,8 @@
         <div class="public-section">
             <div class="tw-card">
                 <div class="p-6 text-center py-12">
-                    <i class="fas fa-tags text-5xl text-text-muted mb-4 block"></i>
+                    <i class="fas fa-tags text-5xl text-text-muted mb-4 block"
+                       aria-hidden="true"></i>
                     <p class="text-text-muted mb-0">No releases available for this product yet.</p>
                 </div>
             </div>

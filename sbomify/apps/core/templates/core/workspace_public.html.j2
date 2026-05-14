@@ -13,16 +13,15 @@
 {% endblock %}
 {% block content %}
     <!-- Hero Section -->
-    <div class="bg-surface rounded-xl p-8 mb-6 shadow-md relative overflow-hidden">
-        <div class="absolute -top-1/2 -right-[30%] w-[600px] h-[600px] bg-[radial-gradient(circle,rgba(var(--brand-color-rgb,var(--brand-primary-rgb)),0.08)_0%,transparent_70%)] pointer-events-none">
-        </div>
-        <div class="relative z-[1]">
-            <div class="uppercase tracking-[0.15em] text-xs font-bold text-primary mb-4 inline-flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-lg">
-                <span class="w-1.5 h-1.5 bg-primary rounded-full"></span>
+    <div class="public-hero bg-surface rounded-xl p-8 mb-6 shadow-md relative overflow-hidden">
+        <div class="public-hero-glow" aria-hidden="true"></div>
+        <div class="public-hero-content">
+            <div class="public-eyebrow">
+                <span class="public-eyebrow-dot" aria-hidden="true"></span>
                 TRUST CENTER
             </div>
-            <h1 class="text-2xl font-bold text-text mb-2">{{ workspace.name }} Trust Center</h1>
-            <p class="text-lg text-text-muted leading-relaxed mb-6 max-w-[800px]">
+            <h1 class="text-3xl font-bold text-text mb-2">{{ workspace.name }}</h1>
+            <p class="text-lg text-text-muted leading-relaxed mb-6 max-w-3xl">
                 {% if brand.trust_center_description %}
                     {{ brand.trust_center_description }}
                 {% else %}
@@ -30,39 +29,75 @@
                 {% endif %}
             </p>
             <div class="flex gap-3 flex-wrap">
-                {% if products %}
-                    <div class="bg-border/30 border border-border text-text rounded-xl px-4 py-3 inline-flex items-center gap-3 font-semibold shadow-sm hover:bg-border/50 hover:-translate-y-0.5 hover:shadow-md transition-all">
-                        <span class="w-8 h-8 flex items-center justify-center bg-primary/10 rounded-lg text-primary">
-                            <i class="fas fa-cube"></i>
+                {% if global_components %}
+                    <div class="public-hero-stat">
+                        <span class="public-hero-stat-icon">
+                            <i class="fas fa-award" aria-hidden="true"></i>
                         </span>
-                        <span class="font-bold text-primary">{{ products|length }}</span>
-                        <span class="text-text-muted font-medium">Product{{ products|length|pluralize }}</span>
+                        <span class="public-hero-stat-value">{{ global_components|length }}</span>
+                        <span class="public-hero-stat-label">Compliance Artifact{{ global_components|length|pluralize }}</span>
                     </div>
                 {% endif %}
-                {% if global_components %}
-                    <div class="bg-border/30 border border-border text-text rounded-xl px-4 py-3 inline-flex items-center gap-3 font-semibold shadow-sm hover:bg-border/50 hover:-translate-y-0.5 hover:shadow-md transition-all">
-                        <span class="w-8 h-8 flex items-center justify-center bg-primary/10 rounded-lg text-primary">
-                            <i class="fas fa-award"></i>
+                {% if products %}
+                    <div class="public-hero-stat">
+                        <span class="public-hero-stat-icon">
+                            <i class="fas fa-cube" aria-hidden="true"></i>
                         </span>
-                        <span class="font-bold text-primary">{{ global_components|length }}</span>
-                        <span class="text-text-muted font-medium">Compliance Artifact{{ global_components|length|pluralize }}</span>
+                        <span class="public-hero-stat-value">{{ products|length }}</span>
+                        <span class="public-hero-stat-label">Product{{ products|length|pluralize }}</span>
                     </div>
                 {% endif %}
             </div>
         </div>
     </div>
+    {% if global_components %}
+        <!-- Organization Compliance Artifacts Section -->
+        <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
+            <div class="mb-6 pb-4 border-b border-border">
+                <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
+                    <i class="fas fa-award text-primary" aria-hidden="true"></i>Organization Compliance Artifacts
+                </h2>
+                <p class="text-sm text-text-muted m-0">
+                    Organization-wide compliance documents, certifications, and security attestations
+                </p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for component in global_components %}
+                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
+                        <div class="flex justify-between items-start mb-3 gap-2">
+                            <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
+                            <span class="tw-chip-neutral whitespace-nowrap">{{ component.component_type_display }}</span>
+                        </div>
+                        <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">
+                            Organization-level compliance artifact available across the entire organization.
+                        </p>
+                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
+                                <i class="fas fa-building" aria-hidden="true"></i>
+                                Organization-Wide
+                            </span>
+                            <a class="tw-btn-primary text-sm min-h-10 py-2 px-3 inline-flex items-center"
+                               href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
+                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
     {% if products %}
         <!-- Products Section -->
         <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
             <div class="mb-6 pb-4 border-b border-border">
                 <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
-                    <i class="fas fa-cube text-primary"></i>Products
+                    <i class="fas fa-cube text-primary" aria-hidden="true"></i>Products
                 </h2>
                 <p class="text-sm text-text-muted m-0">Explore our products and their software bill of materials (SBOMs)</p>
             </div>
             {% if is_workspace_admin and not has_vulnerability_plugin %}
                 <div class="tw-alert tw-alert-info mb-6">
-                    <i class="fas fa-shield-halved tw-alert-icon"></i>
+                    <i class="fas fa-shield-halved tw-alert-icon" aria-hidden="true"></i>
                     <div class="tw-alert-content">
                         <p class="text-sm m-0">
                             Enable vulnerability scanning to show security status on your products.
@@ -77,63 +112,22 @@
                     <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
                         <div class="flex justify-between items-start mb-3 gap-2">
                             <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ product.name }}</h3>
-                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-border/50 text-text-muted">{{ product.component_count }} Component{{ product.component_count|pluralize }}</span>
+                            <span class="tw-chip-neutral whitespace-nowrap">{{ product.component_count }} Component{{ product.component_count|pluralize }}</span>
                         </div>
                         {% if product.description %}
                             <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">{{ product.description }}</p>
                         {% endif %}
                         <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
-                            <div class="flex items-center gap-2">
-                                <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-warning/15 text-warning flex items-center gap-1">
-                                    <i class="fas fa-tag"></i>Product
-                                </span>
+                            <div class="flex items-center gap-1 flex-wrap">
                                 {% if product.passing_assessments %}
-                                    <div class="flex items-center gap-1">
-                                        {% for assessment in product.passing_assessments %}
-                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
-                                        {% endfor %}
-                                    </div>
+                                    {% for assessment in product.passing_assessments %}
+                                        {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                    {% endfor %}
                                 {% endif %}
                             </div>
-                            <a class="tw-btn-primary text-sm py-1.5 px-3"
+                            <a class="tw-btn-primary text-sm min-h-10 py-2 px-3 inline-flex items-center"
                                href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
-                                View Details <i class="fas fa-arrow-right ml-1"></i>
-                            </a>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-    {% endif %}
-    {% if global_components %}
-        <!-- Workspace Artifacts Section -->
-        <div class="bg-surface rounded-xl p-8 shadow-md">
-            <div class="mb-6 pb-4 border-b border-border">
-                <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
-                    <i class="fas fa-award text-primary"></i>Organization Compliance Artifacts
-                </h2>
-                <p class="text-sm text-text-muted m-0">
-                    Organization-wide compliance documents, certifications, and security attestations
-                </p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {% for component in global_components %}
-                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
-                        <div class="flex justify-between items-start mb-3 gap-2">
-                            <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
-                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-warning/15 text-warning">{{ component.component_type_display }}</span>
-                        </div>
-                        <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">
-                            Organization-level compliance artifact available across the entire organization.
-                        </p>
-                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
-                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
-                                <i class="fas fa-building"></i>
-                                Organization-Wide
-                            </span>
-                            <a class="tw-btn-primary text-sm py-1.5 px-3"
-                               href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
-                                View Details <i class="fas fa-arrow-right ml-1"></i>
+                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
                             </a>
                         </div>
                     </div>

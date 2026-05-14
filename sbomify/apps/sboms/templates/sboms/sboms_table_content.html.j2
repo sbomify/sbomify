@@ -96,20 +96,27 @@
                             </button>
                         </th>
                         <th class="hidden lg:table-cell">Releases</th>
+                        <th class="text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="item in paginatedData" :key="item.sbom.id">
                         <tr class="hover:bg-background/50 transition-colors"
                             x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
-                            <td>
+                            <td class="break-all">
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
-                                <div class="md:hidden mt-1">
-                                    <span class="tw-sbom-format text-xs"
+                                {# Mobile fallback for the columns hidden under md: format pill (with format_version)
+                                   plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
+                                   is narrow, so the table doesn't horizontally scroll. #}
+                                <div class="md:hidden mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                                    <span class="tw-sbom-format"
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
                                           x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
+                                    <span class="text-text-muted font-mono"
+                                          x-text="'v' + (item.sbom.version.length > 16 ? item.sbom.version.slice(0, 16) + '…' : item.sbom.version)"
+                                          :title="item.sbom.version"></span>
                                 </div>
                             </td>
                             <td class="hidden md:table-cell">
@@ -169,7 +176,7 @@
                                     </template>
                                 </td>
                             {% endif %}
-                            <td class="text-text text-sm">
+                            <td class="text-text text-sm whitespace-nowrap">
                                 <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
                             </td>
                             <td class="hidden lg:table-cell">
@@ -188,11 +195,24 @@
                                     <span class="text-text-muted">—</span>
                                 </template>
                             </td>
+                            <td>
+                                <div class="flex items-center justify-center gap-1">
+                                    {# `from_public=true` flag tells SbomDownloadView to render the friendly
+                                       gated-access page instead of a generic 403 when a public visitor hits a
+                                       gated SBOM. Internal downloads omit the flag. #}
+                                    <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id){% if is_public_view %} + '?from_public=true'{% endif %}"
+                                       title="Download"
+                                       aria-label="Download SBOM"
+                                       class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
+                                        <i class="fas fa-download" aria-hidden="true"></i>
+                                    </a>
+                                </div>
+                            </td>
                         </tr>
                     </template>
                     <template x-if="paginatedData.length === 0 && search">
                         <tr>
-                            <td colspan="{% if is_public_view %}6{% else %}7{% endif %}"
+                            <td colspan="{% if is_public_view %}7{% else %}8{% endif %}"
                                 class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
                                 <p>No BOMs match your search</p>
