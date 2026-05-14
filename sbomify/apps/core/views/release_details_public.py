@@ -67,8 +67,9 @@ class ReleaseDetailsPublicView(View):
             "brand": brand,
             "release": release,
             # `product` is consumed by the breadcrumb tag so the release page
-            # gets a `Trust Center > Product > (current release)` breadcrumb
-            # consistent with the releases list and component pages.
+            # gets a `Trust Center > Product` breadcrumb consistent with the
+            # releases list and component pages. The current release isn't
+            # added as a crumb — the page H1 already conveys it.
             "product": product,
             "workspace_public_url": workspace_public_url,
         }

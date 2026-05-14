@@ -1,7 +1,7 @@
 """Generates full-page screenshots for the trust-center public views.
 
-Not a regression test — this saves screenshots to /tmp/ux-review/ so they can
-be inspected manually after the trust-center UI changes in PR #966.
+Not a regression test — this saves screenshots to /tmp/ux-review/ so they
+can be inspected manually when reviewing changes to the public pages.
 
 Skipped by default in CI because every test passes regardless of output
 (no asserts). Run locally with `RUN_UX_REVIEW=1 pytest ...` when you want

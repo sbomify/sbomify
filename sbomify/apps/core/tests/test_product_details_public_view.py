@@ -424,6 +424,39 @@ def test_product_details_hides_synthetic_latest_release(public_team, public_prod
 
 
 @pytest.mark.django_db
+def test_releases_public_view_hides_synthetic_latest_release(public_team, public_product):
+    """The dedicated /releases/ page must also exclude the synthetic auto-`latest`.
+
+    `ProductReleasesPublicView` filters items returned from `list_all_releases`
+    so the synthetic release never shows in the list. This is separate from the
+    embedded list on the product details page (covered above) — they share intent
+    but go through different view code paths.
+    """
+    client = Client()
+
+    Release.objects.create(name="v3.0.0", product=public_product)
+    Release.objects.create(name="v2.5.0-rc1", product=public_product, is_prerelease=True)
+    Release.objects.create(
+        name=LATEST_RELEASE_NAME,
+        product=public_product,
+        is_latest=True,
+        description="Automatically updated release containing the latest artifacts from all components",
+    )
+
+    url = reverse("core:product_releases_public", kwargs={"product_id": public_product.id})
+    response = client.get(url)
+
+    assert response.status_code == 200
+    content = response.content.decode()
+
+    # Real versioned rows still render
+    assert "v3.0.0" in content
+    assert "v2.5.0-rc1" in content
+    # Synthetic-latest row is filtered out
+    assert "Automatically updated release containing the latest artifacts" not in content
+
+
+@pytest.mark.django_db
 class TestProductLinkRedirectView:
     """Tests for the ProductLinkRedirectView."""
 

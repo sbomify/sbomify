@@ -1137,17 +1137,21 @@
         <script>
             // Helper to apply theme (sets data-theme and CSS variables)
             function applyTheme(isDark) {
+                // Inline styles on the root element already win the cascade
+                // against the theme selector rules in the inline <style> block,
+                // matching the no-!important pattern set up in the page-load
+                // theme-flash script above.
                 const html = document.documentElement;
                 const style = html.style;
                 html.setAttribute('data-theme', isDark ? 'dark' : 'light');
                 if (isDark) {
-                    style.setProperty('--color-surface', '30 41 59', 'important');
-                    style.setProperty('--color-surface-elevated', '51 65 85', 'important');
-                    style.setProperty('--color-border', '51 65 85', 'important');
+                    style.setProperty('--color-surface', '30 41 59');
+                    style.setProperty('--color-surface-elevated', '51 65 85');
+                    style.setProperty('--color-border', '51 65 85');
                 } else {
-                    style.setProperty('--color-surface', '255 255 255', 'important');
-                    style.setProperty('--color-surface-elevated', '255 255 255', 'important');
-                    style.setProperty('--color-border', '226 232 240', 'important');
+                    style.setProperty('--color-surface', '255 255 255');
+                    style.setProperty('--color-surface-elevated', '255 255 255');
+                    style.setProperty('--color-border', '226 232 240');
                 }
             }
 
@@ -1200,10 +1204,10 @@
                     }
                 };
             }
-        </script>
-        {% block scripts %}
-        {% endblock %}
-        {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
-        {% htmx_script %}
-    </body>
+</script>
+{% block scripts %}
+{% endblock %}
+{% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+{% htmx_script %}
+</body>
 </html>
