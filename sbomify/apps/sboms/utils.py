@@ -228,18 +228,38 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
     SBOMs that would be detected once storage recovers. Returning ``False``
     on error is the fail-safe choice — a missed detection only means an
     unnecessary nudge to use the action, not data corruption.
+
+    Cache hits/misses are treated as best-effort: django-redis without
+    ``IGNORE_EXCEPTIONS`` raises on Redis outage, so ``cache.get`` and
+    ``cache.set`` are wrapped to fall back to "miss / no-op". A Redis
+    outage on Step 2 must not break the wizard before the S3 fail-safe
+    even gets a chance to run.
     """
     from django.core.cache import cache
 
     cache_key = f"sbom:sbomify_action_check:{sbom.pk}"
-    cached = cache.get(cache_key)
+
+    def _cache_get() -> Any:
+        try:
+            return cache.get(cache_key)
+        except Exception:
+            log.debug("sbomify-action cache.get failed for SBOM %s", sbom.pk, exc_info=True)
+            return None
+
+    def _cache_set(value: bool, ttl: int) -> None:
+        try:
+            cache.set(cache_key, value, ttl)
+        except Exception:
+            log.debug("sbomify-action cache.set failed for SBOM %s", sbom.pk, exc_info=True)
+
+    cached = _cache_get()
     if cached is not None:
         return bool(cached)
 
     if not sbom.sbom_filename:
         # Definitive: an SBOM row without a stored blob will never name
         # sbomify-action, so keep the long TTL.
-        cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+        _cache_set(False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
         return False
 
     try:
@@ -249,7 +269,7 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
         if not sbom_bytes:
             # Treat empty / missing as transient — the row points at a blob
             # we couldn't read, so we should retry sooner than a day.
-            cache.set(cache_key, False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
+            _cache_set(False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
             return False
         sbom_data = json.loads(sbom_bytes.decode("utf-8"))
         fmt = (sbom.format or "").lower()
@@ -264,10 +284,10 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
         log.debug("sbomify-action detection failed for SBOM %s", sbom.pk, exc_info=True)
         # Transient: S3 / decode failures are not durable facts about the
         # SBOM. Cache only briefly so the next page load retries.
-        cache.set(cache_key, False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
+        _cache_set(False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
         return False
 
-    cache.set(cache_key, result, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+    _cache_set(result, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
     return result
 
 

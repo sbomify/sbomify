@@ -1180,6 +1180,40 @@ class TestSbomWasGeneratedBySbomifyAction:
         ttl_used = cache_set.call_args.args[2]
         assert ttl_used == _SBOMIFY_ACTION_CHECK_CACHE_TTL
 
+    def test_cache_get_failure_treated_as_miss(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
+        """django-redis without IGNORE_EXCEPTIONS raises on Redis outage.
+        cache.get() failure must NOT propagate — Step 2 must keep rendering."""
+        from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
+
+        sample_sbom.format = "cyclonedx"
+        sample_sbom.save(update_fields=["format"])
+        mocker.patch("django.core.cache.cache.get", side_effect=ConnectionError("Redis down"))
+        mocker.patch("django.core.cache.cache.set", side_effect=ConnectionError("Redis down"))
+        _mock_sbom_content(
+            mocker,
+            {"specVersion": "1.6", "metadata": {"tools": [{"name": "sbomify-action"}]}},
+        )
+
+        # Without the wrapper this would raise ConnectionError out into the
+        # wizard render; with it, the S3 path still runs and returns True.
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
+
+    def test_cache_set_failure_does_not_propagate(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
+        """If cache.set raises (Redis dropped between get and set), the
+        computed result must still be returned to the caller."""
+        from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
+
+        sample_sbom.format = "cyclonedx"
+        sample_sbom.save(update_fields=["format"])
+        mocker.patch("django.core.cache.cache.get", return_value=None)
+        mocker.patch("django.core.cache.cache.set", side_effect=ConnectionError("Redis down"))
+        _mock_sbom_content(
+            mocker,
+            {"specVersion": "1.6", "metadata": {"tools": [{"name": "trivy"}]}},
+        )
+
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
+
     @pytest.mark.parametrize(
         "payload",
         [
