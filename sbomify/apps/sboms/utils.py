@@ -134,6 +134,110 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
     return sbom_instance, sbom_data
 
 
+# SBOMs are immutable (ADR-004) so caching this detection result is safe.
+_SBOMIFY_ACTION_CHECK_CACHE_TTL = 24 * 3600
+
+
+def _matches_sbomify_action_name(name: object) -> bool:
+    """True for ``sbomify-action`` / ``sbomify action`` (the augmentation.py
+    constant ships with a hyphen in newer releases and a space in older ones).
+    Comparison is case-insensitive and whitespace/hyphen-collapsed so a future
+    rename of the action keeps detection working.
+    """
+    if not isinstance(name, str):
+        return False
+    return name.replace(" ", "").replace("-", "").strip().lower() == "sbomifyaction"
+
+
+def _cyclonedx_metadata_has_sbomify_action(sbom_data: dict[str, Any]) -> bool:
+    """Detect sbomify-action in a parsed CycloneDX SBOM.
+
+    Supports both formats sbomify-action emits (see github-action repo
+    ``sbomify_action/augmentation.py``):
+
+    - CycloneDX 1.5+: ``metadata.tools.components[]`` and
+      ``metadata.tools.services[]`` (entry with ``name`` matching the
+      sbomify-action constant).
+    - CycloneDX 1.4 legacy: ``metadata.tools[]`` array of
+      ``{name, vendor, ...}`` dicts.
+    """
+    metadata = sbom_data.get("metadata") or {}
+    tools = metadata.get("tools")
+    if isinstance(tools, list):
+        return any(_matches_sbomify_action_name((t or {}).get("name")) for t in tools)
+    if isinstance(tools, dict):
+        for collection_key in ("components", "services"):
+            for entry in tools.get(collection_key) or []:
+                if _matches_sbomify_action_name((entry or {}).get("name")):
+                    return True
+    return False
+
+
+def _spdx_metadata_has_sbomify_action(sbom_data: dict[str, Any]) -> bool:
+    """Detect sbomify-action in a parsed SPDX 2.x SBOM via
+    ``creationInfo.creators[]`` entries of the form
+    ``"Tool: sbomify-action-<version>"``.
+    """
+    creators = (sbom_data.get("creationInfo") or {}).get("creators") or []
+    for creator in creators:
+        if not isinstance(creator, str):
+            continue
+        if not creator.lower().startswith("tool:"):
+            continue
+        tool_name = creator.split(":", 1)[1].strip()
+        # Strip trailing "-<version>" so "sbomify-action-1.2.3" matches.
+        bare = tool_name.rsplit("-", 1)[0] if "-" in tool_name else tool_name
+        if _matches_sbomify_action_name(bare) or _matches_sbomify_action_name(tool_name):
+            return True
+    return False
+
+
+def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
+    """True iff the SBOM's stored content names sbomify-action as a generator.
+
+    Reads the SBOM JSON from S3 once and caches the result for
+    ``_SBOMIFY_ACTION_CHECK_CACHE_TTL`` seconds. Returns ``False`` for any
+    parse / fetch error so the caller (the CRA wizard CTA gate) is fail-safe
+    — a missed detection only means an unnecessary nudge to use the action,
+    not data corruption.
+    """
+    from django.core.cache import cache
+
+    cache_key = f"sbom:sbomify_action_check:{sbom.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return bool(cached)
+
+    if not sbom.sbom_filename:
+        cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+        return False
+
+    try:
+        from sbomify.apps.core.object_store import S3Client
+
+        sbom_bytes = S3Client(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
+        if not sbom_bytes:
+            cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+            return False
+        sbom_data = json.loads(sbom_bytes.decode("utf-8"))
+    except Exception:
+        log.debug("sbomify-action detection failed for SBOM %s", sbom.pk, exc_info=True)
+        cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+        return False
+
+    fmt = (sbom.format or "").lower()
+    if fmt == "spdx":
+        result = _spdx_metadata_has_sbomify_action(sbom_data)
+    else:
+        # Default to CycloneDX detection — covers ``cyclonedx`` and any
+        # future variant (sbom.format defaults to "spdx" but most uploads
+        # are CycloneDX in practice).
+        result = _cyclonedx_metadata_has_sbomify_action(sbom_data)
+
+    cache.set(cache_key, result, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+    return result
+
+
 def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
     """
     Fetch SBOM instance and raw bytes data for services that need bytes.

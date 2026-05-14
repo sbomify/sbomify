@@ -291,6 +291,46 @@ class TestFailingCheckEnrichment:
 
 
 @pytest.mark.django_db
+class TestSbomifyActionFlag:
+    """Issue #902: the bsi_assessment dict must surface a
+    ``was_generated_by_sbomify_action`` flag so the wizard can hide the
+    "See sbomify-action enrichment guide" CTA when the SBOM already came
+    from that tool."""
+
+    def test_flag_true_when_sbom_is_from_sbomify_action(self, mocker, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        product, component = _create_product_with_component(team)
+        sbom = _create_sbom(component)
+        _create_assessment_run(sbom)
+
+        mocker.patch(
+            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
+            return_value=True,
+        )
+
+        result = get_bsi_assessment_status(product)
+
+        assert result.ok
+        assert result.value["components"][0]["bsi_assessment"]["was_generated_by_sbomify_action"] is True
+
+    def test_flag_false_when_sbom_not_from_sbomify_action(self, mocker, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        product, component = _create_product_with_component(team)
+        sbom = _create_sbom(component)
+        _create_assessment_run(sbom)
+
+        mocker.patch(
+            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
+            return_value=False,
+        )
+
+        result = get_bsi_assessment_status(product)
+
+        assert result.ok
+        assert result.value["components"][0]["bsi_assessment"]["was_generated_by_sbomify_action"] is False
+
+
+@pytest.mark.django_db
 class TestFormatCompliance:
     """Tests for SBOM format version compliance checking."""
 
