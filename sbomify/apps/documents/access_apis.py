@@ -266,10 +266,13 @@ def create_access_request(
                         access_request = AccessRequest.objects.get(team=team, user=user)
                     except AccessRequest.DoesNotExist:
                         # Extremely rare: row was deleted between IntegrityError and get()
-                        # Retry get_or_create one more time
-                        access_request, _ = AccessRequest.objects.get_or_create(
+                        # Retry get_or_create one more time. If this retry actually
+                        # creates the row, propagate that as a state transition so the
+                        # analytics event below still fires for this request.
+                        access_request, retry_created = AccessRequest.objects.get_or_create(
                             team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
                         )
+                        request_state_changed = retry_created
 
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))

@@ -365,6 +365,7 @@ class AccessRequestView(View):
             return redirect("core:workspace_public", workspace_key=team_key)
 
         # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
+        request_state_changed = False
         with transaction.atomic():
             # Use select_for_update to prevent race conditions
             existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
@@ -389,6 +390,7 @@ class AccessRequestView(View):
                     existing_request.notes = ""
                     existing_request.save()
                     access_request = existing_request
+                    request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
                     # Request already exists and is pending
                     access_request = existing_request
@@ -403,6 +405,7 @@ class AccessRequestView(View):
                         user=user,
                         defaults={"status": AccessRequest.Status.PENDING},
                     )
+                    request_state_changed = created
                     if not created:
                         # Another request was created concurrently, refresh from DB
                         access_request.refresh_from_db()
@@ -414,23 +417,28 @@ class AccessRequestView(View):
                     except AccessRequest.DoesNotExist:
                         # Extremely rare: row was deleted between IntegrityError and get()
                         # Retry get_or_create one more time
-                        access_request, _ = AccessRequest.objects.get_or_create(
+                        access_request, retry_created = AccessRequest.objects.get_or_create(
                             team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
                         )
+                        request_state_changed = retry_created
 
         # Invalidate cache after transaction commits to avoid long-running transaction
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
 
         # AccessRequest is workspace-scoped (no component_id field). Issue #817 listed
         # `component_id` as a property but the access-request flow is per-workspace.
-        from sbomify.apps.core.posthog_service import capture_for_request
+        # Only fire on a state transition (new request or revoked/rejected → pending
+        # re-request) so duplicate submissions for an already-pending or approved
+        # request do not inflate the funnel.
+        if request_state_changed:
+            from sbomify.apps.core.posthog_service import capture_for_request
 
-        capture_for_request(
-            request,
-            "document:access_requested",
-            {"requires_nda": requires_nda},
-            team_key=team_key,
-        )
+            capture_for_request(
+                request,
+                "document:access_requested",
+                {"requires_nda": requires_nda},
+                team_key=team_key,
+            )
 
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
@@ -667,6 +675,13 @@ class NDASigningView(View):
                                     # Inviter user not found, continue without setting decided_by
                                     pass
                             access_request.save()
+
+                            # The trust-center invitation flow auto-approves the access
+                            # request without going through the admin queue, so mirror the
+                            # queue-action capture here to keep the approval funnel complete.
+                            transaction.on_commit(
+                                lambda: capture_for_request(request, "document:access_approved", team_key=team_key)
+                            )
 
                             # Invalidate cache after transaction commits
                             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))

@@ -536,12 +536,14 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         },
     )
     # If AccessRequest already exists, approve it if still pending
+    access_request_approved_here = created
     if not created and access_request.status == AccessRequest.Status.PENDING:
         access_request.status = AccessRequest.Status.APPROVED
         access_request.decided_at = timezone.now()
         if not access_request.decided_by and inviter:
             access_request.decided_by = inviter
         access_request.save()
+        access_request_approved_here = True
 
     # Invalidate cache to refresh the access requests list
     from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
@@ -561,6 +563,17 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         {"role": invitation.role},
         team_key=invitation.team.key,
     )
+
+    # Trust-center invitations auto-approve a document AccessRequest as part of the
+    # acceptance flow. The dashboard queue's approval capture does not cover this
+    # path, so emit it here whenever this branch actually drove a pending→approved
+    # transition (or freshly created an approved request).
+    if access_request_approved_here:
+        capture_for_request(
+            request,
+            "document:access_approved",
+            team_key=invitation.team.key,
+        )
 
     invitation.delete()
 

@@ -227,10 +227,21 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # billing_plan_limits is the only state that survives the
                 # `_update_billing_from_subscription` rewrites on every webhook,
                 # so use it to make the transition idempotent.
+                #
+                # Reserve the marker under the SAME lock that decides
+                # ``already_emitted``: two concurrent webhooks both holding this
+                # row lock in turn must not both see "not emitted" and both run
+                # the side effects. The trade-off is that if a side effect below
+                # raises, no later webhook will retry it (the marker is already
+                # set); Stripe's webhook-level idempotency already blocks
+                # same-event redeliveries, so the failure mode here is rare and
+                # preferable to duplicate emails / events on the happy path.
                 already_emitted = bool(billing_limits.get("trial_expired_emitted_at"))
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
                 billing_limits.update(get_community_plan_limits())
+                if not already_emitted:
+                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
                 team.billing_plan_limits = billing_limits
                 team.save()
 
@@ -253,17 +264,6 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                     {"team_key": team_key},
                     groups={"workspace": team_key} if team_key else None,
                 )
-
-                # Persist the marker only after the transition-only side effects
-                # have completed. If any of them raises, a subsequent webhook
-                # carrying `status=trialing` will still find an empty marker and
-                # re-attempt them rather than skipping permanently.
-                with transaction.atomic():
-                    team = Team.objects.select_for_update().get(pk=team.pk)
-                    billing_limits = (team.billing_plan_limits or {}).copy()
-                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
-                    team.billing_plan_limits = billing_limits
-                    team.save()
 
         return True
     return False
