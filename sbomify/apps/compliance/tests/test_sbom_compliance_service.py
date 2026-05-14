@@ -297,11 +297,31 @@ class TestSbomifyActionFlag:
     "See sbomify-action enrichment guide" CTA when the SBOM already came
     from that tool."""
 
+    def _seed_tooling_limitation_run(self, sbom: SBOM) -> AssessmentRun:
+        """A failing run with a tooling_limitation check — the only scenario
+        where the CRA wizard needs to know whether the SBOM came from
+        sbomify-action (issue #902 round 1)."""
+        run = _create_assessment_run(sbom, pass_count=0, fail_count=1)
+        run.result = {
+            "summary": {"pass_count": 0, "fail_count": 1, "warning_count": 0},
+            "findings": [
+                {
+                    "id": "bsi-tr03183:executable-property",
+                    "status": "fail",
+                    "title": "Executable Property",
+                    "description": "Missing isExecutable property.",
+                    "remediation": "Annotate components.",
+                }
+            ],
+        }
+        run.save(update_fields=["result"])
+        return run
+
     def test_flag_true_when_sbom_is_from_sbomify_action(self, mocker, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team
         product, component = _create_product_with_component(team)
         sbom = _create_sbom(component)
-        _create_assessment_run(sbom)
+        self._seed_tooling_limitation_run(sbom)
 
         mocker.patch(
             "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
@@ -317,7 +337,7 @@ class TestSbomifyActionFlag:
         team = sample_team_with_owner_member.team
         product, component = _create_product_with_component(team)
         sbom = _create_sbom(component)
-        _create_assessment_run(sbom)
+        self._seed_tooling_limitation_run(sbom)
 
         mocker.patch(
             "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",

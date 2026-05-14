@@ -279,8 +279,6 @@ def _build_bsi_assessment_dict(run: AssessmentRun, sbom: SBOM | None = None) -> 
     summary = result.get("summary", {})
     raw_findings = result.get("findings", [])
 
-    was_generated_by_sbomify_action_flag = bool(sbom and sbom_was_generated_by_sbomify_action(sbom))
-
     # Extract failing findings with fix guidance + CRA-compliance
     # classification (issue #907). ``remediation_type`` tells the
     # wizard whether this is an operator action or a known tooling
@@ -309,6 +307,16 @@ def _build_bsi_assessment_dict(run: AssessmentRun, sbom: SBOM | None = None) -> 
                     "human_summary": human_summary,
                 }
             )
+
+    # Issue #902: only fetch + parse the SBOM blob from S3 when at least one
+    # failing check is a tooling_limitation. The flag exists solely to gate
+    # the "See sbomify-action enrichment guide" CTA on those findings, so
+    # passing assessments and assessments whose failures are all
+    # operator_action skip the S3 round-trip entirely.
+    has_tooling_limitation_failure = any(c["remediation_type"] == "tooling_limitation" for c in failing_checks)
+    was_generated_by_sbomify_action_flag = bool(
+        sbom and has_tooling_limitation_failure and sbom_was_generated_by_sbomify_action(sbom)
+    )
 
     return {
         "status": run.status,

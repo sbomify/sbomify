@@ -149,7 +149,7 @@ def _matches_sbomify_action_name(name: object) -> bool:
     return name.replace(" ", "").replace("-", "").strip().lower() == "sbomifyaction"
 
 
-def _cyclonedx_metadata_has_sbomify_action(sbom_data: dict[str, Any]) -> bool:
+def _cyclonedx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     """Detect sbomify-action in a parsed CycloneDX SBOM.
 
     Supports both formats sbomify-action emits (see github-action repo
@@ -160,25 +160,47 @@ def _cyclonedx_metadata_has_sbomify_action(sbom_data: dict[str, Any]) -> bool:
       sbomify-action constant).
     - CycloneDX 1.4 legacy: ``metadata.tools[]`` array of
       ``{name, vendor, ...}`` dicts.
+
+    Each layer guards against unexpected JSON shapes — a malformed SBOM
+    (top-level list, non-dict metadata, scalar/None entries inside the
+    tools collections) returns ``False`` instead of raising
+    ``AttributeError`` from a ``.get`` on a non-dict, since this runs
+    on every Step 2 render and must never break the wizard.
     """
-    metadata = sbom_data.get("metadata") or {}
+    if not isinstance(sbom_data, dict):
+        return False
+    metadata = sbom_data.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
     tools = metadata.get("tools")
     if isinstance(tools, list):
-        return any(_matches_sbomify_action_name((t or {}).get("name")) for t in tools)
+        return any(isinstance(t, dict) and _matches_sbomify_action_name(t.get("name")) for t in tools)
     if isinstance(tools, dict):
         for collection_key in ("components", "services"):
-            for entry in tools.get(collection_key) or []:
-                if _matches_sbomify_action_name((entry or {}).get("name")):
+            collection = tools.get(collection_key)
+            if not isinstance(collection, list):
+                continue
+            for entry in collection:
+                if isinstance(entry, dict) and _matches_sbomify_action_name(entry.get("name")):
                     return True
     return False
 
 
-def _spdx_metadata_has_sbomify_action(sbom_data: dict[str, Any]) -> bool:
+def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     """Detect sbomify-action in a parsed SPDX 2.x SBOM via
     ``creationInfo.creators[]`` entries of the form
     ``"Tool: sbomify-action-<version>"``.
+
+    Same fail-safe shape guards as the CycloneDX detector.
     """
-    creators = (sbom_data.get("creationInfo") or {}).get("creators") or []
+    if not isinstance(sbom_data, dict):
+        return False
+    creation_info = sbom_data.get("creationInfo")
+    if not isinstance(creation_info, dict):
+        return False
+    creators = creation_info.get("creators")
+    if not isinstance(creators, list):
+        return False
     for creator in creators:
         if not isinstance(creator, str):
             continue
@@ -220,19 +242,18 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
             cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
             return False
         sbom_data = json.loads(sbom_bytes.decode("utf-8"))
+        fmt = (sbom.format or "").lower()
+        if fmt == "spdx":
+            result = _spdx_metadata_has_sbomify_action(sbom_data)
+        else:
+            # Default to CycloneDX detection — covers ``cyclonedx`` and any
+            # future variant (sbom.format defaults to "spdx" but most uploads
+            # are CycloneDX in practice).
+            result = _cyclonedx_metadata_has_sbomify_action(sbom_data)
     except Exception:
         log.debug("sbomify-action detection failed for SBOM %s", sbom.pk, exc_info=True)
         cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
         return False
-
-    fmt = (sbom.format or "").lower()
-    if fmt == "spdx":
-        result = _spdx_metadata_has_sbomify_action(sbom_data)
-    else:
-        # Default to CycloneDX detection — covers ``cyclonedx`` and any
-        # future variant (sbom.format defaults to "spdx" but most uploads
-        # are CycloneDX in practice).
-        result = _cyclonedx_metadata_has_sbomify_action(sbom_data)
 
     cache.set(cache_key, result, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
     return result
