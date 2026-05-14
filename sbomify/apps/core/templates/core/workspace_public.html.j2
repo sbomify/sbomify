@@ -32,7 +32,7 @@
                 {% if global_components %}
                     <div class="public-hero-stat">
                         <span class="public-hero-stat-icon">
-                            <i class="fas fa-award"></i>
+                            <i class="fas fa-award" aria-hidden="true"></i>
                         </span>
                         <span class="public-hero-stat-value">{{ global_components|length }}</span>
                         <span class="public-hero-stat-label">Compliance Artifact{{ global_components|length|pluralize }}</span>
@@ -41,7 +41,7 @@
                 {% if products %}
                     <div class="public-hero-stat">
                         <span class="public-hero-stat-icon">
-                            <i class="fas fa-cube"></i>
+                            <i class="fas fa-cube" aria-hidden="true"></i>
                         </span>
                         <span class="public-hero-stat-value">{{ products|length }}</span>
                         <span class="public-hero-stat-label">Product{{ products|length|pluralize }}</span>
@@ -55,7 +55,7 @@
         <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
             <div class="mb-6 pb-4 border-b border-border">
                 <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
-                    <i class="fas fa-award text-primary"></i>Organization Compliance Artifacts
+                    <i class="fas fa-award text-primary" aria-hidden="true"></i>Organization Compliance Artifacts
                 </h2>
                 <p class="text-sm text-text-muted m-0">
                     Organization-wide compliance documents, certifications, and security attestations
@@ -73,12 +73,12 @@
                         </p>
                         <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
                             <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
-                                <i class="fas fa-building"></i>
+                                <i class="fas fa-building" aria-hidden="true"></i>
                                 Organization-Wide
                             </span>
                             <a class="tw-btn-primary text-sm min-h-10 py-2 px-3 inline-flex items-center"
                                href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
-                                View Details <i class="fas fa-arrow-right ml-1"></i>
+                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
                             </a>
                         </div>
                     </div>
@@ -91,13 +91,13 @@
         <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
             <div class="mb-6 pb-4 border-b border-border">
                 <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
-                    <i class="fas fa-cube text-primary"></i>Products
+                    <i class="fas fa-cube text-primary" aria-hidden="true"></i>Products
                 </h2>
                 <p class="text-sm text-text-muted m-0">Explore our products and their software bill of materials (SBOMs)</p>
             </div>
             {% if is_workspace_admin and not has_vulnerability_plugin %}
                 <div class="tw-alert tw-alert-info mb-6">
-                    <i class="fas fa-shield-halved tw-alert-icon"></i>
+                    <i class="fas fa-shield-halved tw-alert-icon" aria-hidden="true"></i>
                     <div class="tw-alert-content">
                         <p class="text-sm m-0">
                             Enable vulnerability scanning to show security status on your products.
@@ -127,7 +127,7 @@
                             </div>
                             <a class="tw-btn-primary text-sm min-h-10 py-2 px-3 inline-flex items-center"
                                href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
-                                View Details <i class="fas fa-arrow-right ml-1"></i>
+                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
                             </a>
                         </div>
                     </div>

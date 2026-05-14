@@ -107,11 +107,16 @@
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
-                                {# Mobile: format name only — full "<FORMAT> <version>" pair shown in dedicated columns at md+. #}
-                                <div class="md:hidden mt-1">
-                                    <span class="tw-sbom-format text-xs"
+                                {# Mobile fallback for the columns hidden under md: format pill (with format_version)
+                                   plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
+                                   is narrow, so the table doesn't horizontally scroll. #}
+                                <div class="md:hidden mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                                    <span class="tw-sbom-format"
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
-                                          x-text="(item.sbom.format_display || item.sbom.format).toUpperCase()"></span>
+                                          x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
+                                    <span class="text-text-muted font-mono"
+                                          x-text="'v' + (item.sbom.version.length > 16 ? item.sbom.version.slice(0, 16) + '…' : item.sbom.version)"
+                                          :title="item.sbom.version"></span>
                                 </div>
                             </td>
                             <td class="hidden md:table-cell">
