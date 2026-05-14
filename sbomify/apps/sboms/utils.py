@@ -134,8 +134,12 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
     return sbom_instance, sbom_data
 
 
-# SBOMs are immutable (ADR-004) so caching this detection result is safe.
+# SBOMs are immutable (ADR-004) so caching a definitive answer (the SBOM
+# was parsed and either does or doesn't name sbomify-action) is safe for a
+# day. Transient read failures use a much shorter negative TTL so a brief
+# S3 / decode outage doesn't lock the wrong answer in for a full day.
 _SBOMIFY_ACTION_CHECK_CACHE_TTL = 24 * 3600
+_SBOMIFY_ACTION_NEGATIVE_CACHE_TTL = 60
 
 
 def _matches_sbomify_action_name(name: object) -> bool:
@@ -217,11 +221,13 @@ def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
 def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
     """True iff the SBOM's stored content names sbomify-action as a generator.
 
-    Reads the SBOM JSON from S3 once and caches the result for
-    ``_SBOMIFY_ACTION_CHECK_CACHE_TTL`` seconds. Returns ``False`` for any
-    parse / fetch error so the caller (the CRA wizard CTA gate) is fail-safe
-    — a missed detection only means an unnecessary nudge to use the action,
-    not data corruption.
+    Reads the SBOM JSON from S3 once and caches a definitive answer for
+    ``_SBOMIFY_ACTION_CHECK_CACHE_TTL`` seconds. A transient fetch / decode
+    failure caches ``False`` only for ``_SBOMIFY_ACTION_NEGATIVE_CACHE_TTL``
+    so a brief S3 outage doesn't keep the CTA on for the rest of the day for
+    SBOMs that would be detected once storage recovers. Returning ``False``
+    on error is the fail-safe choice — a missed detection only means an
+    unnecessary nudge to use the action, not data corruption.
     """
     from django.core.cache import cache
 
@@ -231,6 +237,8 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
         return bool(cached)
 
     if not sbom.sbom_filename:
+        # Definitive: an SBOM row without a stored blob will never name
+        # sbomify-action, so keep the long TTL.
         cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
         return False
 
@@ -239,7 +247,9 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
 
         sbom_bytes = S3Client(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
         if not sbom_bytes:
-            cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+            # Treat empty / missing as transient — the row points at a blob
+            # we couldn't read, so we should retry sooner than a day.
+            cache.set(cache_key, False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
             return False
         sbom_data = json.loads(sbom_bytes.decode("utf-8"))
         fmt = (sbom.format or "").lower()
@@ -252,7 +262,9 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
             result = _cyclonedx_metadata_has_sbomify_action(sbom_data)
     except Exception:
         log.debug("sbomify-action detection failed for SBOM %s", sbom.pk, exc_info=True)
-        cache.set(cache_key, False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+        # Transient: S3 / decode failures are not durable facts about the
+        # SBOM. Cache only briefly so the next page load retries.
+        cache.set(cache_key, False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
         return False
 
     cache.set(cache_key, result, _SBOMIFY_ACTION_CHECK_CACHE_TTL)

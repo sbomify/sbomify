@@ -1132,6 +1132,54 @@ class TestSbomWasGeneratedBySbomifyAction:
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
         assert mock_client.get_sbom_data.call_count == 1
 
+    def test_transient_fetch_failure_uses_short_negative_ttl(
+        self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache
+    ):  # noqa: F811
+        """A failed S3 read must NOT be cached for the full 24h positive
+        TTL; otherwise a brief storage hiccup keeps the CTA on for the rest
+        of the day for SBOMs that would be detected once storage recovers."""
+        from sbomify.apps.sboms.utils import (
+            _SBOMIFY_ACTION_CHECK_CACHE_TTL,
+            _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL,
+            sbom_was_generated_by_sbomify_action,
+        )
+
+        cache_set = mocker.patch("django.core.cache.cache.set")
+        mocker.patch("django.core.cache.cache.get", return_value=None)
+        mock_client = mocker.MagicMock()
+        mock_client.get_sbom_data.side_effect = RuntimeError("S3 down")
+        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
+
+        assert cache_set.called, "result must still be cached, just briefly"
+        ttl_used = cache_set.call_args.args[2]
+        assert ttl_used == _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL
+        assert ttl_used < _SBOMIFY_ACTION_CHECK_CACHE_TTL
+
+    def test_definitive_result_uses_long_positive_ttl(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
+        """A successfully parsed SBOM is immutable; the answer should stick
+        for the full 24h."""
+        from sbomify.apps.sboms.utils import (
+            _SBOMIFY_ACTION_CHECK_CACHE_TTL,
+            sbom_was_generated_by_sbomify_action,
+        )
+
+        sample_sbom.format = "cyclonedx"
+        sample_sbom.save(update_fields=["format"])
+        _mock_sbom_content(
+            mocker,
+            {"specVersion": "1.6", "metadata": {"tools": [{"name": "sbomify-action"}]}},
+        )
+        cache_set = mocker.patch("django.core.cache.cache.set")
+        mocker.patch("django.core.cache.cache.get", return_value=None)
+
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
+
+        assert cache_set.called
+        ttl_used = cache_set.call_args.args[2]
+        assert ttl_used == _SBOMIFY_ACTION_CHECK_CACHE_TTL
+
     @pytest.mark.parametrize(
         "payload",
         [
