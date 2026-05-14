@@ -664,6 +664,7 @@ class NDASigningView(View):
                             invitation.delete()
 
                             # Auto-approve the access request since user has been invited and is now a member
+                            was_pending = access_request.status == AccessRequest.Status.PENDING
                             access_request.status = AccessRequest.Status.APPROVED
                             access_request.decided_at = timezone.now()
                             # Set decided_by to the inviter if available, otherwise leave as None
@@ -676,12 +677,16 @@ class NDASigningView(View):
                                     pass
                             access_request.save()
 
-                            # The trust-center invitation flow auto-approves the access
-                            # request without going through the admin queue, so mirror the
-                            # queue-action capture here to keep the approval funnel complete.
-                            transaction.on_commit(
-                                lambda: capture_for_request(request, "document:access_approved", team_key=team_key)
-                            )
+                            # Only emit document:access_approved when this is genuinely a
+                            # trust-center invitation (signalled by the `invitation_inviter:`
+                            # cache key set in documents/views/access_requests.py at invite
+                            # send time). Regular workspace invites with a company NDA also
+                            # reach this branch and approve a freshly-created plumbing
+                            # AccessRequest; counting them would inflate the funnel.
+                            if was_pending and inviter_id:
+                                transaction.on_commit(
+                                    lambda: capture_for_request(request, "document:access_approved", team_key=team_key)
+                                )
 
                             # Invalidate cache after transaction commits
                             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))

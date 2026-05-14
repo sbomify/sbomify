@@ -535,8 +535,12 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             "decided_at": timezone.now(),
         },
     )
-    # If AccessRequest already exists, approve it if still pending
-    access_request_approved_here = created
+    # Only count this as a document-access approval when there was a real
+    # pending request to approve. Regular workspace invitations also reach
+    # this branch and create a bookkeeping AccessRequest with status=APPROVED
+    # straight from `defaults=`; treating that as an approval would inflate
+    # the trust-center funnel with team-membership signups.
+    access_request_approved_here = False
     if not created and access_request.status == AccessRequest.Status.PENDING:
         access_request.status = AccessRequest.Status.APPROVED
         access_request.decided_at = timezone.now()
