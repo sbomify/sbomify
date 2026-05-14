@@ -191,7 +191,13 @@ def _cyclonedx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     return False
 
 
-_SPDX_VERSION_SUFFIX_START = re.compile(r"^v?\d")
+# SemVer-ish version: ``v?MAJOR.MINOR[.PATCH...][-prerelease][+build]``.
+# The ``(\.\d+)+`` is what distinguishes a real version (``1.2.3``,
+# ``v0.10``) from a fragment that just happens to start with ``v`` and a
+# digit (``v2-wrapper``). Without that, ``Tool: sbomify-action-v2-wrapper-1.0.0``
+# would split at ``-v2-`` and the left half would canonicalise to
+# ``sbomify-action``, hiding the CTA for a different generator.
+_SPDX_VERSION_SUFFIX = re.compile(r"^v?\d+(\.\d+)+([-+][\w.+-]*)?$")
 
 
 def _spdx_creator_names_sbomify_action(creator: str) -> bool:
@@ -202,14 +208,14 @@ def _spdx_creator_names_sbomify_action(creator: str) -> bool:
     Versions in the wild include hyphenated pre-release suffixes
     (``1.2.3-rc1``, ``2.0.0-alpha.1+build.7``).
 
-    Naive iterative hyphen-stripping over-matches: ``Tool:
-    sbomify-action-wrapper-1.0.0`` would eventually peel down to
-    ``sbomify-action`` and report True even though the generator was a
-    different tool. So instead of blind stripping, locate the
-    ``-<version>`` boundary by finding the leftmost hyphen whose
-    right-hand side actually looks like a version (digit, or ``v``
-    followed by a digit). Everything to the left of that hyphen is the
-    tool name and must match exactly; anything else is a different tool.
+    Locate the ``-<version>`` boundary by scanning hyphens from the right
+    and accepting the first one whose right-hand side matches an
+    end-anchored SemVer-ish pattern. ``rightmost`` keeps as much of the
+    string in the name as possible — that way ``sbomify-action-v2-wrapper-1.0.0``
+    splits at the trailing ``-1.0.0`` and rejects with the name
+    ``sbomify-action-v2-wrapper`` rather than the inner ``-v2-`` boundary.
+    The pattern requires at least ``MAJOR.MINOR`` (so a single ``v2``
+    fragment doesn't qualify as a version on its own).
     Tool entries without a version part match against the whole string.
     """
     if not creator.lower().startswith("tool:"):
@@ -218,14 +224,13 @@ def _spdx_creator_names_sbomify_action(creator: str) -> bool:
     # No version segment: the entire payload IS the name.
     if _matches_sbomify_action_name(tool_name):
         return True
-    # Scan for the first hyphen whose right-hand side starts version-like.
-    # That's the canonical ``<name>-<version>`` split, regardless of how
-    # many further hyphens the version part itself contains.
-    for i, ch in enumerate(tool_name):
-        if ch != "-":
+    # Right-to-left scan: prefer splitting off as little as possible,
+    # i.e. only accept the version that runs to the end of the string.
+    for i in range(len(tool_name) - 1, -1, -1):
+        if tool_name[i] != "-":
             continue
         suffix = tool_name[i + 1 :]
-        if _SPDX_VERSION_SUFFIX_START.match(suffix):
+        if _SPDX_VERSION_SUFFIX.match(suffix):
             return _matches_sbomify_action_name(tool_name[:i])
     return False
 

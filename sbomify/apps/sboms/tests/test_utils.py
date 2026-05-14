@@ -1097,11 +1097,12 @@ class TestSbomWasGeneratedBySbomifyAction:
         ],
     )
     def test_spdx_versioned_creator_matches(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, creator):  # noqa: F811
-        """The SPDX creator format is ``Tool: <name>-<version>``. Version
-        strings in the wild can include further hyphens (``-rc1``, ``-alpha.1``);
-        a single trailing-segment strip would miss them. Issue #902 round 4:
-        the detector must iteratively peel hyphen-separated segments to find
-        the bare tool name."""
+        """The SPDX creator format is ``Tool: <name>-<version>``. The
+        version part can itself contain hyphens (``-rc1``, ``-alpha.1``)
+        and ``+build`` metadata. The detector identifies the version
+        suffix by an end-anchored SemVer-ish pattern starting from the
+        rightmost hyphen, so the bare tool name is recovered exactly
+        regardless of how many hyphens the version contains."""
         from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
 
         sample_sbom.format = "spdx"
@@ -1282,15 +1283,23 @@ class TestSbomWasGeneratedBySbomifyAction:
             "sbomify-action-wrapper-1.0.0",  # different tool name + version
             "sbomify-action-extras-2.3.4-rc1",  # different tool name + SemVer pre-release
             "not-sbomify-action-1.0.0",  # prefix-like string that contains "sbomify-action"
+            # A version-like fragment inside the tool name (``v2``) must not
+            # split the name early. Without the SemVer-ish MAJOR.MINOR
+            # requirement on the version suffix,
+            # ``sbomify-action-v2-wrapper-1.0.0`` would split at ``-v2-`` and
+            # false-positive as sbomify-action.
+            "sbomify-action-v2-wrapper-1.0.0",
+            "sbomify-action-v3-fork-2.0.0-rc1",
         ],
     )
     def test_spdx_does_not_over_match_similar_names(
         self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, tool_name
     ):  # noqa: F811
         """A tool whose name only contains ``sbomify-action`` as a substring
-        must not be reported as sbomify-action. Iterative hyphen-stripping
-        would peel past ``-wrapper`` and reach ``sbomify-action``; the
-        version-aware split keeps name matching exact."""
+        must not be reported as sbomify-action. The version-aware split
+        anchors on a real ``MAJOR.MINOR`` suffix scanned from the right,
+        so wrapper/fork names that embed ``v2`` or similar fragments stay
+        attached to the name rather than getting peeled off."""
         from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
 
         sample_sbom.format = "spdx"

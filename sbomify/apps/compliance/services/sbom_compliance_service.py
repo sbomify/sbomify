@@ -6,6 +6,8 @@ and evaluate overall SBOM compliance gates.
 
 from __future__ import annotations
 
+from typing import Iterable
+
 from django.db.models import Prefetch
 from packaging.version import Version
 
@@ -248,6 +250,42 @@ def is_waivable_bsi_finding(finding_id: object) -> bool:
     return _BSI_REMEDIATION_TYPE.get(finding_id) == "tooling_limitation"
 
 
+def _prefetch_sbomify_action_flags(sboms: Iterable[SBOM]) -> None:
+    """Warm the per-SBOM sbomify-action detection cache concurrently.
+
+    Only SBOMs whose latest BSI run has at least one tooling_limitation
+    failing check need the flag (per ``_build_bsi_assessment_dict``); the
+    rest skip the S3 fetch anyway. Looking up the cache here in a thread
+    pool turns the otherwise serial per-component S3 reads into one
+    bounded burst, so the wall-clock cost of a cold-cache Step 2 render
+    is roughly the slowest single fetch rather than N times that.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    sboms_needing_lookup: list[SBOM] = []
+    for sbom in sboms:
+        runs = getattr(sbom, "prefetched_bsi_runs", None) or []
+        if not runs:
+            continue
+        findings = (runs[0].result or {}).get("findings") or []
+        if any(
+            isinstance(f, dict)
+            and f.get("status") == "fail"
+            and _classify_bsi_finding(f.get("id", ""))[0] == "tooling_limitation"
+            for f in findings
+        ):
+            sboms_needing_lookup.append(sbom)
+
+    if not sboms_needing_lookup:
+        return
+
+    # max_workers caps the burst so a product with thousands of components
+    # cannot exhaust the S3 client's connection pool.
+    max_workers = min(10, len(sboms_needing_lookup))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        list(executor.map(sbom_was_generated_by_sbomify_action, sboms_needing_lookup))
+
+
 def _is_format_compliant(sbom_format: str | None, format_version: str | None) -> bool:
     """Check whether the SBOM format version meets BSI TR-03183-2 requirements.
 
@@ -360,6 +398,13 @@ def get_bsi_assessment_status(product: Product) -> ServiceResult[dict[str, objec
             )
         )
         sboms_by_id = {s.pk: s for s in sbom_qs}
+
+    # Warm the sbomify-action detection cache concurrently for every SBOM
+    # that has at least one tooling_limitation failing check. Without this
+    # batched prefetch, each per-component call to _build_bsi_assessment_dict
+    # would do its own serial S3 fetch on a cold cache, turning Step 2
+    # rendering into O(N) sequential round trips for large products.
+    _prefetch_sbomify_action_flags(sboms_by_id.values())
 
     component_results: list[dict[str, object]] = []
     components_with_sbom = 0
