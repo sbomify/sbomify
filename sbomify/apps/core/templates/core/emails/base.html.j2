@@ -163,99 +163,76 @@
                 color: #94a3b8;
             }
 
-            /* Narrow-viewport (phone) tweaks. Email clients honour @media
-               rules even when other CSS gets stripped, so this keeps the
-               layout from overflowing on ~320–480px screens. */
+            /* Narrow-viewport (phone) tweaks. Padding for responsive
+               elements is defined in the `<style>` block (not inline) so
+               the media query overrides win on class-selector specificity
+               alone — no `!important` needed. Clients that strip
+               `<style>` will lose padding here, but those same clients
+               don't process @media either, so the responsive layer is
+               unaffected. */
+            .email-wrapper-cell {
+                padding: 20px;
+            }
+
             @media only screen and (max-width: 620px) {
                 .email-container {
-                    width: 100% !important;
-                    max-width: 100% !important;
+                    width: 100%;
+                    max-width: 100%;
+                }
+
+                .email-wrapper-cell {
+                    padding: 12px;
                 }
 
                 .email-body {
-                    padding: 24px !important;
+                    padding: 24px;
                 }
 
                 .footer {
-                    padding: 20px 24px !important;
+                    padding: 20px 24px;
                 }
             }
-        </style>
-    </head>
-    <body>
-        <table role="presentation"
-               cellpadding="0"
-               cellspacing="0"
-               border="0"
-               width="100%"
-               bgcolor="#f8fafc"
-               class="email-wrapper">
-            <tr>
-                <td align="center" style="padding: 20px;">
-                    <table role="presentation"
-                           cellpadding="0"
-                           cellspacing="0"
-                           border="0"
-                           width="600"
-                           bgcolor="#ffffff"
-                           class="email-container">
-                        <tr>
-                            <td align="center"
-                                bgcolor="#0f172a"
-                                style="background-color: #0f172a;
-                                       padding: 24px;
-                                       color: #ffffff"
-                                class="logo-cell">
-                                <img src="{{ base_url }}/static/img/sbomify-white.svg"
-                                     alt="sbomify"
-                                     height="40"
-                                     width="221"
-                                     border="0"
-                                     style="color: #ffffff;
-                                            font-weight: 600;
-                                            font-size: 20px">
-                            </td>
-                        </tr>
-                        <tr>
-                            <td align="center"
-                                bgcolor="#0f172a"
-                                style="background-color: #0f172a;
-                                       color: #cbd5e1;
-                                       padding: 0 24px 20px 24px;
-                                       font-size: 14px"
-                                class="tagline-cell">The Security Artifact Hub</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 40px;" class="email-body">
-                                {% block content %}{% endblock %}
-                                {% block signoff %}
-                                    <p>
-                                        Cheers,
-                                        <br>
-                                        <strong>The sbomify Team</strong>
-                                    </p>
-                                {% endblock %}
-                            </td>
-                        </tr>
-                        <tr>
-                            <td bgcolor="#f1f5f9"
-                                align="center"
-                                style="background-color: #f1f5f9;
-                                       padding: 24px 40px;
-                                       text-align: center;
-                                       color: #64748b;
-                                       font-size: 14px"
-                                class="footer">
-                                <p>
-                                    Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
-                                </p>
-                                {% now "Y" as this_year %}
-                                <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
-        </table>
-    </body>
+</style>
+</head>
+<body>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#f8fafc" class="email-wrapper">
+<tr>
+<td align="center" class="email-wrapper-cell">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#ffffff" class="email-container">
+<tr>
+<td align="center" bgcolor="#0f172a" style="background-color: #0f172a; padding: 24px; color: #ffffff" class="logo-cell">
+<img src="{{ base_url }}/static/img/sbomify-white.svg" alt="sbomify" height="40" width="221" border="0" style="color: #ffffff; font-weight: 600; font-size: 20px">
+</td>
+</tr>
+<tr>
+<td align="center" bgcolor="#0f172a" style="background-color: #0f172a; color: #cbd5e1; padding: 0 24px 20px 24px; font-size: 14px" class="tagline-cell">
+The Security Artifact Hub
+</td>
+</tr>
+<tr>
+<td class="email-body">
+{% block content %}{% endblock %}
+{% block signoff %}
+<p>
+Cheers,
+<br>
+<strong>The sbomify Team</strong>
+</p>
+{% endblock %}
+</td>
+</tr>
+<tr>
+<td bgcolor="#f1f5f9" align="center" style="background-color: #f1f5f9; text-align: center; color: #64748b; font-size: 14px" class="footer">
+<p>
+Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in touch</a>
+</p>
+{% now "Y" as this_year %}
+<p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
 </html>
