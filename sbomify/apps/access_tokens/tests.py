@@ -439,3 +439,37 @@ def test_optional_token_auth_multiple_spaces_extracts_token(sample_user):  # noq
 
     assert calls == ["ran"]
     assert result == sample_user.id
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scheme", ["bearer", "BEARER", "BeArEr"])
+def test_optional_token_auth_scheme_is_case_insensitive_for_invalid_token(scheme):
+    """RFC 7235: auth scheme is case-insensitive. A bad token under any casing must 401,
+    or the 'invalid token silently downgrades to anonymous' bug returns via lowercasing.
+    """
+    from django.http import JsonResponse
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"{scheme} not-a-real-token")
+
+    response = view(request)
+
+    assert isinstance(response, JsonResponse)
+    assert response.status_code == 401
+    assert calls == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scheme", ["bearer", "BEARER", "BeArEr"])
+def test_optional_token_auth_scheme_case_insensitive_for_valid_token(sample_user, scheme):  # noqa: F811
+    """A valid token must authenticate regardless of scheme casing."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+
+    view, calls = _make_dummy_view()
+    request = RequestFactory().get("/", HTTP_AUTHORIZATION=f"{scheme} {token_str}")
+
+    result = view(request)
+
+    assert calls == ["ran"]
+    assert result == sample_user.id

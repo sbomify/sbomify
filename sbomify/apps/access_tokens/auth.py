@@ -34,7 +34,9 @@ def _reject_invalid_bearer(func: Callable[..., Any]) -> Callable[..., Any]:
 
     def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
         scheme, _, raw_token = request.headers.get("Authorization", "").partition(" ")
-        if scheme == "Bearer":
+        # RFC 7235: auth scheme is case-insensitive. Treat `bearer`, `BEARER`, etc.
+        # as Bearer so that a bad-token request can't bypass the 401 by lowercasing.
+        if scheme.casefold() == "bearer":
             token = raw_token.strip()
             if not token or not PersonalAccessTokenAuth().authenticate(request, token):
                 return JsonResponse({"detail": "Unauthorized"}, status=401)
