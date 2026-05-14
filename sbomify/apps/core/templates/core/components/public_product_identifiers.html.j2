@@ -1,9 +1,11 @@
-{# Public Product Identifiers — server-rendered
+{% comment %}
+Public Product Identifiers — server-rendered.
 
-   Single responsive layout: each identifier is one row that flows
-   vertically under md and as a 3-column grid at md+. There's only one
-   <svg data-barcode-id="..."> per identifier, so renderBarcode runs
-   exactly once and the document.querySelector lookup is unambiguous. #}
+Single responsive layout: each identifier is one row that flows
+vertically under md and as a 3-column grid at md+. There's only one
+<svg data-barcode-id="..."> per identifier, so renderBarcode runs
+exactly once and the document.querySelector lookup is unambiguous.
+{% endcomment %}
 {% load static %}
 {% if product_identifiers %}
     <div class="public-section" x-data="productIdentifiersBarcodes()">
