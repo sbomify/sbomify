@@ -219,33 +219,44 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             logger.info("Trial ending notification sent")
 
         if days_remaining <= 0:
+            # Two-marker state machine over the transition-only side effects.
+            #
+            # - ``trial_expired_claimed_at`` is reserved under the row lock and
+            #   serves as the race gate: two concurrent expired-trial webhooks
+            #   cannot both see "not claimed" and both fire emails / visibility
+            #   shifts / PostHog events.
+            # - ``trial_expired_emitted_at`` is written only after every side
+            #   effect succeeded. If any of them raised, the claim stays open
+            #   without a completion marker, so a later webhook past the stale
+            #   threshold can retake the claim and finish the work rather than
+            #   skipping permanently (the "set marker before side effects"
+            #   shape would).
+            stale_seconds = getattr(settings, "TRIAL_EXPIRED_CLAIM_STALE_SECONDS", 600)
+            now = timezone.now()
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
-                # Stripe may redeliver `status=trialing` webhooks after we have
-                # already downgraded a team locally. A persistent marker in
-                # billing_plan_limits is the only state that survives the
-                # `_update_billing_from_subscription` rewrites on every webhook,
-                # so use it to make the transition idempotent.
-                #
-                # Reserve the marker under the SAME lock that decides
-                # ``already_emitted``: two concurrent webhooks both holding this
-                # row lock in turn must not both see "not emitted" and both run
-                # the side effects. The trade-off is that if a side effect below
-                # raises, no later webhook will retry it (the marker is already
-                # set); Stripe's webhook-level idempotency already blocks
-                # same-event redeliveries, so the failure mode here is rare and
-                # preferable to duplicate emails / events on the happy path.
                 already_emitted = bool(billing_limits.get("trial_expired_emitted_at"))
+                should_run_side_effects = False
+                if not already_emitted:
+                    claimed_at = billing_limits.get("trial_expired_claimed_at")
+                    claim_is_fresh = False
+                    if claimed_at:
+                        try:
+                            claim_dt = datetime.datetime.fromisoformat(claimed_at)
+                            claim_is_fresh = (now - claim_dt).total_seconds() < stale_seconds
+                        except (TypeError, ValueError):
+                            claim_is_fresh = False
+                    should_run_side_effects = not claim_is_fresh
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
                 billing_limits.update(get_community_plan_limits())
-                if not already_emitted:
-                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
+                if should_run_side_effects:
+                    billing_limits["trial_expired_claimed_at"] = now.isoformat()
                 team.billing_plan_limits = billing_limits
                 team.save()
 
-            if not already_emitted:
+            if should_run_side_effects:
                 handle_community_downgrade_visibility(team)
                 notify_team_owners(team, email_notifications.notify_trial_expired)
                 logger.info("Trial expired — downgraded team %s to community plan", team.key)
@@ -264,6 +275,17 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                     {"team_key": team_key},
                     groups={"workspace": team_key} if team_key else None,
                 )
+
+                # Mark completion only now: a later webhook that does reach this
+                # function will see ``trial_expired_emitted_at`` and short-circuit
+                # at the top of this block, so the side effects above run exactly
+                # once across all retries for the happy path.
+                with transaction.atomic():
+                    team = Team.objects.select_for_update().get(pk=team.pk)
+                    billing_limits = (team.billing_plan_limits or {}).copy()
+                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
+                    team.billing_plan_limits = billing_limits
+                    team.save()
 
         return True
     return False
