@@ -296,6 +296,80 @@ def test_handle_trial_period_emits_trial_expired_only_once(
 
 
 @pytest.mark.django_db
+def test_custom_domain_first_time_set_captures_event(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """team:custom_domain_added fires when a workspace gets its first custom domain."""
+    assert team_with_business_plan.custom_domain in (None, "")
+
+    mock_capture = _patch_capture(mocker)
+    client = Client()
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+
+    assert team_with_business_plan.key is not None
+    response = client.put(
+        f"/api/v1/workspaces/{team_with_business_plan.key}/domain",
+        data='{"domain": "app.example.com"}',
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    assert "team:custom_domain_added" in _called_events(mock_capture)
+
+
+@pytest.mark.django_db
+def test_custom_domain_resave_same_value_does_not_capture(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Re-saving an existing domain (no change) must not fire team:custom_domain_added."""
+    team_with_business_plan.custom_domain = "existing.example.com"
+    team_with_business_plan.save(update_fields=["custom_domain"])
+
+    mock_capture = _patch_capture(mocker)
+    client = Client()
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+
+    assert team_with_business_plan.key is not None
+    response = client.put(
+        f"/api/v1/workspaces/{team_with_business_plan.key}/domain",
+        data='{"domain": "existing.example.com"}',
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    assert "team:custom_domain_added" not in _called_events(mock_capture)
+
+
+@pytest.mark.django_db
+def test_custom_domain_change_to_different_value_does_not_capture(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Switching from one custom domain to another is not a first-time set; event must not fire."""
+    team_with_business_plan.custom_domain = "old.example.com"
+    team_with_business_plan.save(update_fields=["custom_domain"])
+
+    mock_capture = _patch_capture(mocker)
+    client = Client()
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+
+    assert team_with_business_plan.key is not None
+    response = client.put(
+        f"/api/v1/workspaces/{team_with_business_plan.key}/domain",
+        data='{"domain": "new.example.com"}',
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    assert "team:custom_domain_added" not in _called_events(mock_capture)
+
+
+@pytest.mark.django_db
 def test_settings_view_member_remove_also_fires_event(
     mocker: MockerFixture,
     team_with_business_plan: Team,
