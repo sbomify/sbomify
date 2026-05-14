@@ -16,31 +16,25 @@
     {% breadcrumb product 'product' %}
 {% endblock %}
 {% block content %}
-    <div class="public-item-header">
-        {% if back_url or fallback_url %}
-            <a href="{{ fallback_url|default:back_url }}"
-               class="inline-flex items-center gap-2 text-text-muted hover:text-text mb-4 no-underline"
-               onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back
-            </a>
-        {% endif %}
-        <h1 class="text-3xl font-bold text-text flex items-center gap-4 mb-3">
+    <div class="public-item-header flex flex-col gap-3">
+        {# Back navigation comes from the breadcrumb (`Trust Center`) — no redundant Back link. #}
+        <h1 class="text-3xl font-bold text-text flex items-center gap-4 m-0">
             <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <i class="fas fa-box"></i>
+                <i class="fas fa-box" aria-hidden="true"></i>
             </span>
             {{ product.name }}
         </h1>
-        {% if product.description %}<p class="text-text-muted text-lg mb-4">{{ product.description }}</p>{% endif %}
+        {% if product.description %}<p class="text-text-muted text-lg m-0">{{ product.description }}</p>{% endif %}
         {% if product_tei %}
-            <div class="flex items-center gap-2 text-sm text-text-muted mb-2">
+            <div class="flex items-center gap-2 text-sm text-text-muted">
                 {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
             </div>
         {% endif %}
         {% if public_components or passing_assessments %}
-            <div class="flex flex-wrap gap-2 mb-6">
+            <div class="flex flex-wrap gap-2">
                 {% if public_components %}
                     <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                        <i class="fas fa-puzzle-piece"></i>
+                        <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
                         {{ public_components|length }} Component{{ public_components|length|pluralize }}
                     </span>
                 {% endif %}
@@ -50,12 +44,52 @@
             </div>
         {% endif %}
     </div>
+    {% if has_downloadable_content %}
+        <div class="public-section">
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-download text-primary" aria-hidden="true"></i>Download Latest Release
+                    </h4>
+                </div>
+                <div class="p-6">
+                    <p class="text-text-muted mb-4">Combined SBOM from the latest release, containing all artifacts for this product.</p>
+                    <div class="flex gap-3 flex-wrap">
+                        <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                           href="{% url 'core:sbom_download_product' product.id %}"
+                           title="Download combined SBOM as CycloneDX">
+                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                 alt=""
+                                 class="h-5 w-auto"
+                                 height="20"
+                                 width="20"
+                                 aria-hidden="true">
+                            <span>CycloneDX</span>
+                            <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                        </a>
+                        <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                           href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
+                           title="Download combined SBOM as SPDX">
+                            <img src="{% static 'img/spdx-logo.svg' %}"
+                                 alt=""
+                                 class="h-5 w-auto"
+                                 height="20"
+                                 width="20"
+                                 aria-hidden="true">
+                            <span>SPDX</span>
+                            <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    {% include 'core/components/public_releases_list.html.j2' %}
     {% include 'core/components/public_product_identifiers.html.j2' %}
     {% include 'core/components/public_product_links.html.j2' %}
     {% include 'core/components/public_product_lifecycle.html.j2' %}
     {% include 'compliance/components/public_vdp_link.html.j2' %}
     {% include 'compliance/components/public_doc_link.html.j2' %}
-    {% include 'core/components/public_releases_list.html.j2' %}
     {% if public_components %}
         <div class="public-section">
             <div class="tw-card">
@@ -82,44 +116,6 @@
                         </li>
                     {% endfor %}
                 </ul>
-            </div>
-        </div>
-    {% endif %}
-    {% if has_downloadable_content %}
-        <div class="public-section">
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-download text-primary"></i>Download Latest Release
-                    </h4>
-                </div>
-                <div class="p-6 text-center">
-                    <p class="text-text-muted mb-4">
-                        Download the combined SBOM from the latest release containing all artifacts for this product
-                    </p>
-                    <div class="flex justify-center gap-3 flex-wrap">
-                        <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                           href="{% url 'core:sbom_download_product' product.id %}"
-                           title="Download as CycloneDX">
-                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt="CycloneDX"
-                                 class="h-[18px] w-auto"
-                                 height="18"
-                                 width="18">
-                            <i class="fas fa-download text-primary" aria-hidden="true"></i>
-                        </a>
-                        <a class="inline-flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                           href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
-                           title="Download as SPDX">
-                            <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt="SPDX"
-                                 class="h-[18px] w-auto"
-                                 height="18"
-                                 width="18">
-                            <i class="fas fa-download text-primary" aria-hidden="true"></i>
-                        </a>
-                    </div>
-                </div>
             </div>
         </div>
     {% endif %}

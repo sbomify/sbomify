@@ -77,90 +77,7 @@
     padding: 2rem 1.5rem;
 }
 
-.public-footer {
-    background: linear-gradient(180deg, rgb(var(--color-surface)) 0%, rgb(var(--color-background)) 100%);
-    border-top: 1px solid rgb(var(--color-border));
-    padding: 1.5rem 0;
-    margin-top: 2rem;
-}
-
-.public-footer-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 1.5rem;
-}
-
-.footer-content-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-}
-
-
-.footer-bottom {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-    padding-top: 0;
-}
-
-.footer-powered {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8125rem;
-    color: rgb(var(--color-text-muted));
-}
-
-.footer-powered a {
-    color: #6366f1;
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 0.2s ease;
-}
-
-.footer-powered a:hover {
-    color: rgb(var(--color-primary));
-}
-
-.footer-separator {
-    color: rgb(var(--color-gray-300));
-}
-
-.footer-meta {
-    font-size: 0.8125rem;
-    color: rgb(var(--color-text-muted));
-}
-
-/* Legacy footer classes for backward compatibility */
-.footer-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
-.footer-branding {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--text-muted);
-    font-size: 0.875rem;
-}
-
-.footer-powered-by a {
-    color: var(--accent-color);
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s ease;
-}
-
-.footer-powered-by a:hover {
-    color: var(--accent-color-dark);
-}
+/* Footer rules are owned by the inline <style> block in core/public_base.htmx.j2. */
 
 @media (max-width: 768px) {
     .public-header {
@@ -213,16 +130,6 @@
         right: 1rem !important;
         width: auto !important;
         max-width: calc(100% - 2rem);
-    }
-
-    .footer-bottom {
-        flex-direction: column;
-        text-align: center;
-    }
-
-    .footer-content {
-        flex-direction: column;
-        text-align: center;
     }
 }
 

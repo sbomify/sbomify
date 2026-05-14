@@ -1,11 +1,7 @@
 {% if product.release_date or product.end_of_support or product.end_of_life %}
     <div class="public-section">
         <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-clock text-primary"></i>Lifecycle
-                </h4>
-            </div>
+            {% include 'core/components/public_section_header.html.j2' with title='Lifecycle' icon='fa-clock' %}
             <div class="p-6">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {% if product.release_date %}

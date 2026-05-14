@@ -4,11 +4,7 @@
     <div class="public-section"
          x-data="{ artifacts: [], search: '', typeFilter: '', sortColumn: 'name', sortDirection: 'asc', init() { this.artifacts = JSON.parse(document.getElementById('public-artifacts-data').textContent); }, get filteredArtifacts() { let items = this.artifacts; if (this.typeFilter) { items = items.filter(a => a.artifact_type === this.typeFilter); } if (this.search) { const q = this.search.toLowerCase(); items = items.filter(a => (a.artifact_name || '').toLowerCase().includes(q) || (a.component_name || '').toLowerCase().includes(q) || (a.sbom_format || '').toLowerCase().includes(q) || (a.document_type || '').toLowerCase().includes(q) ); } return this.sortItems(items); }, sortItems(items) { const col = this.sortColumn; const dir = this.sortDirection === 'asc' ? 1 : -1; return [...items].sort((a, b) => { let valA, valB; switch (col) { case 'type': valA = a.artifact_type || ''; valB = b.artifact_type || ''; break; case 'name': valA = (a.artifact_name || '').toLowerCase(); valB = (b.artifact_name || '').toLowerCase(); break; case 'component': valA = (a.component_name || '').toLowerCase(); valB = (b.component_name || '').toLowerCase(); break; case 'format': valA = (a.sbom_format || a.document_type || '').toLowerCase(); valB = (b.sbom_format || b.document_type || '').toLowerCase(); break; case 'version': valA = (a.sbom_version || a.document_version || '').toLowerCase(); valB = (b.sbom_version || b.document_version || '').toLowerCase(); break; case 'created': valA = a.created_at || ''; valB = b.created_at || ''; break; default: valA = ''; valB = ''; } if (valA < valB) return -1 * dir; if (valA > valB) return 1 * dir; return 0; }); }, sort(col) { if (this.sortColumn === col) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = col; this.sortDirection = 'asc'; } }, formatDate(dateStr) { return window.sbomifyFormatDate(dateStr, { fallback: '—' }); }, getFormatDisplay(artifact) { if (artifact.artifact_type === 'sbom' && artifact.sbom_format) { const fmt = artifact.sbom_format.toLowerCase().includes('cyclonedx') ? 'CYCLONEDX' : 'SPDX'; return fmt + (artifact.sbom_format_version ? ' ' + artifact.sbom_format_version : ''); } if (artifact.artifact_type === 'document' && artifact.document_type) { return artifact.document_type.toUpperCase(); } return '—'; }, getFormatClass(artifact) { if (artifact.artifact_type === 'sbom' && artifact.sbom_format) { return artifact.sbom_format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format tw-sbom-format-cyclonedx' : 'tw-sbom-format tw-sbom-format-spdx'; } return ''; }, isDocument(artifact) { return artifact.artifact_type === 'document'; }, getVersion(artifact) { return artifact.sbom_version || artifact.document_version || ''; } }">
         <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-puzzle-piece text-primary"></i>Artifacts in this Release
-                </h4>
-            </div>
+            {% include 'core/components/public_section_header.html.j2' with title='Artifacts in this Release' icon='fa-puzzle-piece' %}
             <div class="p-0">
                 {# Search and Filter #}
                 <div class="px-6 py-4 border-b border-border grid grid-cols-1 sm:grid-cols-12 gap-3">
@@ -58,7 +54,7 @@
                                         <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
                                     </button>
                                 </th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                <th class="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell"
                                     :aria-sort="sortColumn === 'component' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                     <button type="button"
                                             class="tw-table-sortable"
@@ -68,7 +64,7 @@
                                         <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
                                     </button>
                                 </th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                <th class="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell"
                                     :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                     <button type="button"
                                             class="tw-table-sortable"
@@ -78,7 +74,7 @@
                                         <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
                                     </button>
                                 </th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                <th class="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell"
                                     :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                     <button type="button"
                                             class="tw-table-sortable"
@@ -88,7 +84,7 @@
                                         <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
                                     </button>
                                 </th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted"
+                                <th class="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell"
                                     :aria-sort="sortColumn === 'created' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                     <button type="button"
                                             class="tw-table-sortable"
@@ -112,26 +108,42 @@
                                     <td class="py-3 px-4">
                                         <span class="font-medium text-text"
                                               x-text="artifact.artifact_name || 'Unnamed artifact'"></span>
+                                        {# Mobile-only meta — duplicates the columns hidden under md / lg
+                                           (Component + Format under md, Version + Created under lg). #}
+                                        <div class="md:hidden mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-muted">
+                                            <span x-show="artifact.component_name" x-text="artifact.component_name"></span>
+                                            <span x-show="artifact.sbom_format || artifact.document_type"
+                                                  class="text-text-muted"
+                                                  x-text="getFormatDisplay(artifact)"></span>
+                                            <span x-show="getVersion(artifact)" x-text="'v' + getVersion(artifact)"></span>
+                                            <span x-show="artifact.created_at" x-text="formatDate(artifact.created_at)"></span>
+                                        </div>
+                                        {# Tablet-only meta — Component + Format show in their own columns at md+,
+                                           but Version + Created stay hidden until lg. #}
+                                        <div class="hidden md:flex lg:hidden mt-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-text-muted">
+                                            <span x-show="getVersion(artifact)" x-text="'v' + getVersion(artifact)"></span>
+                                            <span x-show="artifact.created_at" x-text="formatDate(artifact.created_at)"></span>
+                                        </div>
                                     </td>
-                                    <td class="py-3 px-4 text-text" x-text="artifact.component_name || '—'"></td>
-                                    <td class="py-3 px-4">
+                                    <td class="py-3 px-4 text-text hidden md:table-cell"
+                                        x-text="artifact.component_name || '—'"></td>
+                                    <td class="py-3 px-4 hidden md:table-cell">
                                         <span x-show="artifact.artifact_type === 'sbom' && artifact.sbom_format"
                                               :class="getFormatClass(artifact)"
                                               x-text="getFormatDisplay(artifact)"></span>
                                         <span x-show="isDocument(artifact) && artifact.document_type"
-                                              class="tw-sbom-format text-text-muted bg-border/20 border"
-                                              style="border-color: color-mix(in srgb, rgb(var(--color-border)) 60%, transparent)"
+                                              class="tw-sbom-format text-text-muted bg-border/20 border border-border/60"
                                               x-text="getFormatDisplay(artifact)"></span>
                                         <span x-show="!artifact.sbom_format && !artifact.document_type"
                                               class="text-text-muted">—</span>
                                     </td>
-                                    <td class="py-3 px-4">
+                                    <td class="py-3 px-4 hidden lg:table-cell">
                                         <span x-show="getVersion(artifact)"
                                               class="text-text"
                                               x-text="getVersion(artifact)"></span>
                                         <span x-show="!getVersion(artifact)" class="text-text-muted">—</span>
                                     </td>
-                                    <td class="py-3 px-4 text-text-muted text-sm"
+                                    <td class="py-3 px-4 text-text-muted text-sm hidden lg:table-cell"
                                         x-text="formatDate(artifact.created_at)"></td>
                                 </tr>
                             </template>
@@ -154,11 +166,7 @@
 {% else %}
     <div class="public-section">
         <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-puzzle-piece text-primary"></i>Artifacts in this Release
-                </h4>
-            </div>
+            {% include 'core/components/public_section_header.html.j2' with title='Artifacts in this Release' icon='fa-puzzle-piece' %}
             <div class="p-6 text-center">
                 <i class="fas fa-puzzle-piece text-4xl text-text-muted opacity-50 mb-4"></i>
                 <h5 class="font-semibold text-text mb-2">No artifacts in this release</h5>

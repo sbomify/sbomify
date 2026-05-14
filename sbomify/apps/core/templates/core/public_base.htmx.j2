@@ -23,16 +23,18 @@
             }
             // Also mark if using system preference for the toggle component
             if(!t || t==='system') html.setAttribute('data-theme-source','system');
-            // Set critical CSS variables immediately to prevent flash
+            // Set critical CSS variables on the root element to prevent flash before
+            // the linked stylesheets resolve. An inline style on the root element
+            // already beats selector-based rules — no !important needed.
             var style = html.style;
             if(isDark) {
-                style.setProperty('--color-surface','30 41 59','important');
-                style.setProperty('--color-surface-elevated','51 65 85','important');
-                style.setProperty('--color-border','51 65 85','important');
+                style.setProperty('--color-surface','30 41 59');
+                style.setProperty('--color-surface-elevated','51 65 85');
+                style.setProperty('--color-border','51 65 85');
             } else {
-                style.setProperty('--color-surface','255 255 255','important');
-                style.setProperty('--color-surface-elevated','255 255 255','important');
-                style.setProperty('--color-border','226 232 240','important');
+                style.setProperty('--color-surface','255 255 255');
+                style.setProperty('--color-surface-elevated','255 255 255');
+                style.setProperty('--color-border','226 232 240');
             }
         })();
     </script>
@@ -191,16 +193,18 @@
                 --gray-500: #64748b;
                 --gray-600: #475569;
                 --white: #ffffff;
-                /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                --color-surface: 255 255 255 !important;
-                --color-surface-elevated: 255 255 255 !important;
-                --color-surface-hover: 241 245 249 !important;
-                --color-border: 226 232 240 !important;
-                --color-border-light: 241 245 249 !important;
-                --color-text: 15 23 42 !important;
-                --color-text-secondary: 51 65 85 !important;
-                --color-text-muted: 100 116 139 !important;
-                --color-background: 248 250 252 !important;
+                /* Tailwind color variables (RGB triplets) — public trust center is light-default;
+                   this inline style block already comes after tokens.css in source order,
+                   so no !important is needed to win the cascade. */
+                --color-surface: 255 255 255;
+                --color-surface-elevated: 255 255 255;
+                --color-surface-hover: 241 245 249;
+                --color-border: 226 232 240;
+                --color-border-light: 241 245 249;
+                --color-text: 15 23 42;
+                --color-text-secondary: 51 65 85;
+                --color-text-muted: 100 116 139;
+                --color-background: 248 250 252;
                 color-scheme: light;
             }
 
@@ -229,16 +233,17 @@
                 --gray-500: #cbd5e1;
                 --gray-600: #e2e8f0;
                 --white: #f8fafc;
-                /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                --color-surface: 30 41 59 !important;
-                --color-surface-elevated: 51 65 85 !important;
-                --color-surface-hover: 71 85 105 !important;
-                --color-border: 51 65 85 !important;
-                --color-border-light: 71 85 105 !important;
-                --color-text: 248 250 252 !important;
-                --color-text-secondary: 203 213 225 !important;
-                --color-text-muted: 148 163 184 !important;
-                --color-background: 15 23 42 !important;
+                /* Tailwind color variables — trust center dark uses a slate palette
+                   (intentionally distinct from the app's navy dark; see ADR/brand notes). */
+                --color-surface: 30 41 59;
+                --color-surface-elevated: 51 65 85;
+                --color-surface-hover: 71 85 105;
+                --color-border: 51 65 85;
+                --color-border-light: 71 85 105;
+                --color-text: 248 250 252;
+                --color-text-secondary: 203 213 225;
+                --color-text-muted: 148 163 184;
+                --color-background: 15 23 42;
                 color-scheme: dark;
             }
 
@@ -267,16 +272,16 @@
                 --gray-500: #64748b;
                 --gray-600: #475569;
                 --white: #ffffff;
-                /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                --color-surface: 255 255 255 !important;
-                --color-surface-elevated: 255 255 255 !important;
-                --color-surface-hover: 241 245 249 !important;
-                --color-border: 226 232 240 !important;
-                --color-border-light: 241 245 249 !important;
-                --color-text: 15 23 42 !important;
-                --color-text-secondary: 51 65 85 !important;
-                --color-text-muted: 100 116 139 !important;
-                --color-background: 248 250 252 !important;
+                /* Tailwind color variables — system-light defaults match the canonical light theme. */
+                --color-surface: 255 255 255;
+                --color-surface-elevated: 255 255 255;
+                --color-surface-hover: 241 245 249;
+                --color-border: 226 232 240;
+                --color-border-light: 241 245 249;
+                --color-text: 15 23 42;
+                --color-text-secondary: 51 65 85;
+                --color-text-muted: 100 116 139;
+                --color-background: 248 250 252;
                 color-scheme: light;
             }
 
@@ -306,16 +311,16 @@
                     --gray-500: #cbd5e1;
                     --gray-600: #e2e8f0;
                     --white: #f8fafc;
-                    /* Tailwind color variables (RGB triplets) - !important to override Tailwind defaults */
-                    --color-surface: 30 41 59 !important;
-                    --color-surface-elevated: 51 65 85 !important;
-                    --color-surface-hover: 71 85 105 !important;
-                    --color-border: 51 65 85 !important;
-                    --color-border-light: 71 85 105 !important;
-                    --color-text: 248 250 252 !important;
-                    --color-text-secondary: 203 213 225 !important;
-                    --color-text-muted: 148 163 184 !important;
-                    --color-background: 15 23 42 !important;
+                    /* Tailwind color variables — slate dark, mirrors html[data-theme="dark"]. */
+                    --color-surface: 30 41 59;
+                    --color-surface-elevated: 51 65 85;
+                    --color-surface-hover: 71 85 105;
+                    --color-border: 51 65 85;
+                    --color-border-light: 71 85 105;
+                    --color-text: 248 250 252;
+                    --color-text-secondary: 203 213 225;
+                    --color-text-muted: 148 163 184;
+                    --color-background: 15 23 42;
                     color-scheme: dark;
                 }
             }
@@ -327,13 +332,13 @@
                =========================================== */
 
             /* Links use accent color */
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item) {
+            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
                 color: var(--accent-color);
                 text-decoration: none;
                 transition: color 0.15s ease;
             }
 
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):hover {
+            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
                 color: var(--accent-color-dark);
             }
 
@@ -631,14 +636,15 @@
             }
 
             .footer-powered a {
-                color: var(--brand-color, #6366f1);
+                color: var(--text-secondary, #475569);
                 text-decoration: none;
                 font-weight: 500;
                 transition: color 0.2s ease;
             }
 
             .footer-powered a:hover {
-                color: color-mix(in srgb, var(--brand-color, #6366f1), #000 15%);
+                color: var(--text-primary, #0f172a);
+                text-decoration: underline;
             }
 
             @media (max-width: 768px) {
@@ -704,7 +710,8 @@
                 display: inline-flex;
                 align-items: center;
                 gap: 0.5rem;
-                padding: 0.375rem 0.75rem;
+                min-height: 2.5rem;
+                padding: 0.5rem 0.875rem;
                 font-size: 0.875rem;
                 font-weight: 500;
                 color: var(--text-primary);
@@ -827,8 +834,8 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 36px;
-                height: 36px;
+                width: 2.5rem;
+                height: 2.5rem;
                 padding: 0;
                 font-size: 1rem;
                 color: var(--text-primary);
@@ -1116,7 +1123,8 @@
                                 {% endif %}
                             </div>
                             <div class="footer-powered">
-                                Powered by <a href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by"
+                                Powered by <a class="footer-powered-link"
+    href="https://sbomify.com?utm_source=sbomify&utm_medium=trust_center&utm_campaign=powered_by"
     target="_blank"
     rel="noopener noreferrer">sbomify</a>
                             </div>
@@ -1129,17 +1137,21 @@
         <script>
             // Helper to apply theme (sets data-theme and CSS variables)
             function applyTheme(isDark) {
+                // Inline styles on the root element already win the cascade
+                // against the theme selector rules in the inline <style> block,
+                // matching the no-!important pattern set up in the page-load
+                // theme-flash script above.
                 const html = document.documentElement;
                 const style = html.style;
                 html.setAttribute('data-theme', isDark ? 'dark' : 'light');
                 if (isDark) {
-                    style.setProperty('--color-surface', '30 41 59', 'important');
-                    style.setProperty('--color-surface-elevated', '51 65 85', 'important');
-                    style.setProperty('--color-border', '51 65 85', 'important');
+                    style.setProperty('--color-surface', '30 41 59');
+                    style.setProperty('--color-surface-elevated', '51 65 85');
+                    style.setProperty('--color-border', '51 65 85');
                 } else {
-                    style.setProperty('--color-surface', '255 255 255', 'important');
-                    style.setProperty('--color-surface-elevated', '255 255 255', 'important');
-                    style.setProperty('--color-border', '226 232 240', 'important');
+                    style.setProperty('--color-surface', '255 255 255');
+                    style.setProperty('--color-surface-elevated', '255 255 255');
+                    style.setProperty('--color-border', '226 232 240');
                 }
             }
 
@@ -1192,10 +1204,10 @@
                     }
                 };
             }
-        </script>
-        {% block scripts %}
-        {% endblock %}
-        {% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
-        {% htmx_script %}
-    </body>
+</script>
+{% block scripts %}
+{% endblock %}
+{% vite_asset 'sbomify/apps/core/js/htmx-bundle.ts' %}
+{% htmx_script %}
+</body>
 </html>

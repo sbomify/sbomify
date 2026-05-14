@@ -6,6 +6,7 @@ from django.views import View
 
 from sbomify.apps.core.apis import get_product, list_all_releases
 from sbomify.apps.core.errors import error_response
+from sbomify.apps.core.models import LATEST_RELEASE_NAME
 from sbomify.apps.core.url_utils import (
     add_custom_domain_to_context,
     build_custom_domain_url,
@@ -55,9 +56,14 @@ class ProductReleasesPublicView(View):
         # Get workspace public URL for breadcrumbs
         workspace_public_url = get_workspace_public_url(request, team)
 
+        # Hide the synthetic auto-`latest` release from the public list.
+        # It serves as a stable download URL but is surfaced via the
+        # "Download Latest Release" CTA on the product page, not here.
+        items = [r for r in (releases.get("items") or []) if r.get("name") != LATEST_RELEASE_NAME]
+
         context = {
             "product": product,
-            "releases": releases.get("items"),
+            "releases": items,
             "brand": brand,
             "workspace_public_url": workspace_public_url,
         }
