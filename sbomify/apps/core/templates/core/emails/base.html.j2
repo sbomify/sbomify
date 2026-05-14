@@ -162,6 +162,24 @@
                 font-size: 12px;
                 color: #94a3b8;
             }
+
+            /* Narrow-viewport (phone) tweaks. Email clients honour @media
+               rules even when other CSS gets stripped, so this keeps the
+               layout from overflowing on ~320–480px screens. */
+            @media only screen and (max-width: 620px) {
+                .email-container {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                }
+
+                .email-body {
+                    padding: 24px !important;
+                }
+
+                .footer {
+                    padding: 20px 24px !important;
+                }
+            }
         </style>
     </head>
     <body>
@@ -185,13 +203,17 @@
                             <td align="center"
                                 bgcolor="#0f172a"
                                 style="background-color: #0f172a;
-                                       padding: 24px"
+                                       padding: 24px;
+                                       color: #ffffff"
                                 class="logo-cell">
                                 <img src="{{ base_url }}/static/img/sbomify-white.svg"
                                      alt="sbomify"
                                      height="40"
                                      width="221"
-                                     border="0">
+                                     border="0"
+                                     style="color: #ffffff;
+                                            font-weight: 600;
+                                            font-size: 20px">
                             </td>
                         </tr>
                         <tr>
