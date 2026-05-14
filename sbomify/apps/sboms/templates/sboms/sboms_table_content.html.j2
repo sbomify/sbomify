@@ -197,7 +197,10 @@
                             </td>
                             <td>
                                 <div class="flex items-center justify-center gap-1">
-                                    <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id)"
+                                    {# `from_public=true` flag tells SbomDownloadView to render the friendly
+                                       gated-access page instead of a generic 403 when a public visitor hits a
+                                       gated SBOM. Internal downloads omit the flag. #}
+                                    <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id){% if is_public_view %} + '?from_public=true'{% endif %}"
                                        title="Download"
                                        aria-label="Download SBOM"
                                        class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
