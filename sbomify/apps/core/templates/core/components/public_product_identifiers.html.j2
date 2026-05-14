@@ -1,83 +1,57 @@
-{# Public Product Identifiers — server-rendered #}
+{# Public Product Identifiers — server-rendered
+
+   Single responsive layout: each identifier is one row that flows
+   vertically under md and as a 3-column grid at md+. There's only one
+   <svg data-barcode-id="..."> per identifier, so renderBarcode runs
+   exactly once and the document.querySelector lookup is unambiguous. #}
 {% load static %}
 {% if product_identifiers %}
     <div class="public-section" x-data="productIdentifiersBarcodes()">
         <div class="tw-card">
             {% include 'core/components/public_section_header.html.j2' with title='Product Identifiers' icon='fa-fingerprint' %}
-            {# Mobile (<md): stacked cards. Long codes wrap; barcode renders inline below. #}
-            <div class="md:hidden divide-y divide-border/40">
+            {# Column headers — md+ only; mobile cards label inline. #}
+            <div class="hidden md:grid md:grid-cols-[8rem_1fr_10rem] gap-4 px-6 py-3 bg-border/30 text-xs font-medium text-text-muted uppercase tracking-wide">
+                <div>Type</div>
+                <div>Value</div>
+                <div class="text-center">Barcode</div>
+            </div>
+            <div class="divide-y divide-border/40">
                 {% for identifier in product_identifiers %}
-                    <div class="px-6 py-4 flex flex-col gap-2">
-                        <span class="self-start px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">
-                            {{ identifier.identifier_type_display }}
-                        </span>
-                        <code class="text-primary bg-primary/5 px-2 py-1 rounded text-sm break-all">{{ identifier.value }}</code>
-                        {% if identifier.identifier_type in barcode_types %}
-                            <div class="barcode-wrapper"
-                                 x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
-                                <svg data-barcode-id="{{ identifier.id }}"
-                                     class="barcode-svg"
-                                     x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                     aria-hidden="true">
-                                </svg>
-                                <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                      class="text-text-muted text-xs">
-                                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                    <div class="px-6 py-4 flex flex-col gap-2 md:grid md:grid-cols-[8rem_1fr_10rem] md:items-center md:gap-4 md:py-3 hover:bg-border/10">
+                        <div>
+                            <span class="inline-flex px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">
+                                {{ identifier.identifier_type_display }}
+                            </span>
+                        </div>
+                        <div class="min-w-0">
+                            <code class="text-primary bg-primary/5 px-2 py-0.5 rounded text-sm break-all">{{ identifier.value }}</code>
+                        </div>
+                        <div class="md:text-center">
+                            {% if identifier.identifier_type in barcode_types %}
+                                <div class="barcode-wrapper inline-block"
+                                     x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
+                                    <svg data-barcode-id="{{ identifier.id }}"
+                                         class="barcode-svg"
+                                         x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                                         aria-hidden="true">
+                                    </svg>
+                                    <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
+                                          class="text-text-muted text-xs">
+                                        <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                                    </span>
+                                    <span x-show="barcodeErrors['{{ identifier.id }}']"
+                                          class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-border/50 text-text-muted">
+                                        <i class="fas fa-info-circle" aria-hidden="true"></i>Not Applicable
+                                    </span>
+                                </div>
+                            {% else %}
+                                <span class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-border/50 text-text-muted">
+                                    <i class="fas fa-info-circle" aria-hidden="true"></i>Not Applicable
                                 </span>
-                            </div>
-                        {% endif %}
+                            {% endif %}
+                        </div>
                     </div>
                 {% endfor %}
-            </div>
-            {# md+: full table. #}
-            <div class="hidden md:block p-6">
-                <table class="tw-table w-full text-sm">
-                    <thead>
-                        <tr class="bg-border/30">
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Value</th>
-                            <th class="text-center py-3 px-4 font-medium text-text-muted">Barcode</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for identifier in product_identifiers %}
-                            <tr class="hover:bg-border/10">
-                                <td class="py-3 px-4 align-middle">
-                                    <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">
-                                        {{ identifier.identifier_type_display }}
-                                    </span>
-                                </td>
-                                <td class="py-3 px-4 align-middle">
-                                    <code class="text-primary bg-primary/5 px-2 py-0.5 rounded break-all">{{ identifier.value }}</code>
-                                </td>
-                                <td class="py-3 px-4 align-middle text-center">
-                                    {% if identifier.identifier_type in barcode_types %}
-                                        <div class="barcode-wrapper inline-block"
-                                             x-init="renderBarcode('{{ identifier.id }}', '{{ identifier.value|escapejs }}', '{{ identifier.identifier_type }}')">
-                                            <svg data-barcode-id="{{ identifier.id }}"
-                                                 class="barcode-svg"
-                                                 x-show="barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                                 aria-hidden="true">
-                                            </svg>
-                                            <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
-                                                  class="text-text-muted">
-                                                <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-                                            </span>
-                                            <span x-show="barcodeErrors['{{ identifier.id }}']"
-                                                  class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-border/50 text-text-muted">
-                                                <i class="fas fa-info-circle" aria-hidden="true"></i>Not Applicable
-                                            </span>
-                                        </div>
-                                    {% else %}
-                                        <span class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-border/50 text-text-muted">
-                                            <i class="fas fa-info-circle" aria-hidden="true"></i>Not Applicable
-                                        </span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>

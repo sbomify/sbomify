@@ -2231,14 +2231,13 @@ html.no-transitions * {
   border-bottom: none;
 }
 
-/* Tighter table cell padding on small screens so 3-column tables
-   (Name + Created + Actions) fit in 375px viewports without a horizontal
-   scrollbar. The desktop padding (1rem) eats ~96px of horizontal space
-   across three columns — too much when the viewport is barely 320px wide
-   after card chrome. */
+/* Tighter table cell padding on small screens for public trust-center
+   pages only, so 3-column tables (Name + Created + Actions) fit in
+   375px viewports without a horizontal scrollbar. Scoped to .public-page
+   so the app-wide tw-table padding stays unchanged on internal pages. */
 @media (max-width: 640px) {
-  .tw-table th,
-  .tw-table td {
+  .public-page .tw-table th,
+  .public-page .tw-table td {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
   }

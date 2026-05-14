@@ -20,7 +20,6 @@ from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
 OUT_DIR = Path("/tmp/ux-review")
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 pytestmark = pytest.mark.skipif(
     not os.environ.get("RUN_UX_REVIEW"),
@@ -32,6 +31,9 @@ WIDTHS = [1920, 992, 576, 375]
 
 
 def _full_page_screenshot(page: Page, label: str, width: int) -> Path:
+    # Defer dir creation to first call so the module is import-time
+    # side-effect free (pytest still imports the module during collection).
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     page.set_viewport_size({"width": width, "height": 1080})
     page.wait_for_timeout(600)
     page.set_viewport_size({"width": width, "height": page.evaluate("document.body.parentNode.scrollHeight")})
