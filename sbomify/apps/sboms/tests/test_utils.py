@@ -1264,9 +1264,9 @@ class TestSbomWasGeneratedBySbomifyAction:
     def test_malformed_shapes_fail_safe(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, fmt, payload):  # noqa: F811
         """A valid-JSON-but-wrong-shape blob must not raise out of the
         detector — Step 2 status rendering relies on this falling safe.
-        Each case sets ``sample_sbom.format`` so the matching parser is
-        the one actually exercised (round-5 Copilot caught that without
-        this the CycloneDX guards never ran in the test)."""
+        Each parametrised case sets ``sample_sbom.format`` so the malformed
+        shape flows through the parser it is meant to exercise rather than
+        being short-circuited by the wrong-format branch."""
         from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
 
         sample_sbom.format = fmt
@@ -1275,105 +1275,29 @@ class TestSbomWasGeneratedBySbomifyAction:
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
 
+    @pytest.mark.parametrize(
+        "tool_name",
+        [
+            "sbomify-action-wrapper",  # different tool name; no version
+            "sbomify-action-wrapper-1.0.0",  # different tool name + version
+            "sbomify-action-extras-2.3.4-rc1",  # different tool name + SemVer pre-release
+            "not-sbomify-action-1.0.0",  # prefix-like string that contains "sbomify-action"
+        ],
+    )
+    def test_spdx_does_not_over_match_similar_names(
+        self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache, tool_name
+    ):  # noqa: F811
+        """A tool whose name only contains ``sbomify-action`` as a substring
+        must not be reported as sbomify-action. Iterative hyphen-stripping
+        would peel past ``-wrapper`` and reach ``sbomify-action``; the
+        version-aware split keeps name matching exact."""
+        from sbomify.apps.sboms.utils import sbom_was_generated_by_sbomify_action
 
-@pytest.mark.django_db
-class TestCraStep2SkipsS3WhenNoToolingLimitation:
-    """Issue #902 round-1: don't pay an S3 round-trip when there's no
-    tooling-limitation CTA for the flag to gate. Passing assessments and
-    failing assessments with only operator_action findings must not call
-    ``sbom_was_generated_by_sbomify_action``."""
-
-    def test_passing_run_skips_detection(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
-        from sbomify.apps.compliance.services.sbom_compliance_service import (
-            BSI_PLUGIN_NAME,
-            _build_bsi_assessment_dict,
-        )
-        from sbomify.apps.plugins.models import AssessmentRun
-
-        spy = mocker.patch(
-            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
-            return_value=True,
-        )
-        run = AssessmentRun.objects.create(
-            sbom=sample_sbom,
-            plugin_name=BSI_PLUGIN_NAME,
-            plugin_version="1.0.0",
-            plugin_config_hash="abc",
-            category="compliance",
-            run_reason="on_upload",
-            status="completed",
-            result={"summary": {"pass_count": 5, "fail_count": 0}, "findings": []},
+        sample_sbom.format = "spdx"
+        sample_sbom.save(update_fields=["format"])
+        _mock_sbom_content(
+            mocker,
+            {"spdxVersion": "SPDX-2.3", "creationInfo": {"creators": [f"Tool: {tool_name}"]}},
         )
 
-        dict_ = _build_bsi_assessment_dict(run, sbom=sample_sbom)
-
-        assert dict_["was_generated_by_sbomify_action"] is False
-        spy.assert_not_called()
-
-    def test_operator_action_only_skips_detection(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
-        """Failing checks that are all operator_action have no tooling-limitation
-        CTA to gate, so the flag stays False without an S3 fetch."""
-        from sbomify.apps.compliance.services.sbom_compliance_service import (
-            BSI_PLUGIN_NAME,
-            _build_bsi_assessment_dict,
-        )
-        from sbomify.apps.plugins.models import AssessmentRun
-
-        spy = mocker.patch(
-            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
-            return_value=True,
-        )
-        run = AssessmentRun.objects.create(
-            sbom=sample_sbom,
-            plugin_name=BSI_PLUGIN_NAME,
-            plugin_version="1.0.0",
-            plugin_config_hash="abc",
-            category="compliance",
-            run_reason="on_upload",
-            status="completed",
-            result={
-                "summary": {"pass_count": 0, "fail_count": 1},
-                "findings": [{"id": "bsi-tr03183:component-name", "status": "fail", "title": "Component Name"}],
-            },
-        )
-
-        dict_ = _build_bsi_assessment_dict(run, sbom=sample_sbom)
-
-        assert dict_["was_generated_by_sbomify_action"] is False
-        spy.assert_not_called()
-
-    def test_tooling_limitation_triggers_detection(self, mocker, sample_sbom: SBOM, clear_sbomify_action_cache):  # noqa: F811
-        from sbomify.apps.compliance.services.sbom_compliance_service import (
-            BSI_PLUGIN_NAME,
-            _build_bsi_assessment_dict,
-        )
-        from sbomify.apps.plugins.models import AssessmentRun
-
-        spy = mocker.patch(
-            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
-            return_value=True,
-        )
-        run = AssessmentRun.objects.create(
-            sbom=sample_sbom,
-            plugin_name=BSI_PLUGIN_NAME,
-            plugin_version="1.0.0",
-            plugin_config_hash="abc",
-            category="compliance",
-            run_reason="on_upload",
-            status="completed",
-            result={
-                "summary": {"pass_count": 0, "fail_count": 1},
-                "findings": [
-                    {
-                        "id": "bsi-tr03183:executable-property",
-                        "status": "fail",
-                        "title": "Executable Property",
-                    }
-                ],
-            },
-        )
-
-        dict_ = _build_bsi_assessment_dict(run, sbom=sample_sbom)
-
-        assert dict_["was_generated_by_sbomify_action"] is True
-        spy.assert_called_once_with(sample_sbom)
+        assert sbom_was_generated_by_sbomify_action(sample_sbom) is False

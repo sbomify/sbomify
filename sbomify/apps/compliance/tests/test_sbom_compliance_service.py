@@ -351,6 +351,94 @@ class TestSbomifyActionFlag:
 
 
 @pytest.mark.django_db
+class TestSbomifyActionDetectionIsLazy:
+    """Don't pay an S3 round-trip when there's no tooling-limitation CTA
+    for the flag to gate. Passing assessments and failing assessments with
+    only operator_action findings must not call
+    ``sbom_was_generated_by_sbomify_action``."""
+
+    def _make_run(self, sbom: SBOM, *, findings: list[dict] | None) -> AssessmentRun:
+        return AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name=BSI_PLUGIN_NAME,
+            plugin_version="1.0.0",
+            plugin_config_hash="abc",
+            category="compliance",
+            run_reason="on_upload",
+            status="completed",
+            result={
+                "summary": {"pass_count": 5 if not findings else 0, "fail_count": len(findings or [])},
+                "findings": findings or [],
+            },
+        )
+
+    def test_passing_run_skips_detection(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.compliance.services.sbom_compliance_service import _build_bsi_assessment_dict
+
+        team = sample_team_with_owner_member.team
+        _, component = _create_product_with_component(team)
+        sbom = _create_sbom(component)
+        spy = mocker.patch(
+            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
+            return_value=True,
+        )
+        run = self._make_run(sbom, findings=None)
+
+        dict_ = _build_bsi_assessment_dict(run, sbom=sbom)
+
+        assert dict_["was_generated_by_sbomify_action"] is False
+        spy.assert_not_called()
+
+    def test_operator_action_only_skips_detection(self, mocker, sample_team_with_owner_member):
+        """Failing checks that are all operator_action have no tooling-limitation
+        CTA to gate, so the flag stays False without an S3 fetch."""
+        from sbomify.apps.compliance.services.sbom_compliance_service import _build_bsi_assessment_dict
+
+        team = sample_team_with_owner_member.team
+        _, component = _create_product_with_component(team)
+        sbom = _create_sbom(component)
+        spy = mocker.patch(
+            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
+            return_value=True,
+        )
+        run = self._make_run(
+            sbom,
+            findings=[{"id": "bsi-tr03183:component-name", "status": "fail", "title": "Component Name"}],
+        )
+
+        dict_ = _build_bsi_assessment_dict(run, sbom=sbom)
+
+        assert dict_["was_generated_by_sbomify_action"] is False
+        spy.assert_not_called()
+
+    def test_tooling_limitation_triggers_detection(self, mocker, sample_team_with_owner_member):
+        from sbomify.apps.compliance.services.sbom_compliance_service import _build_bsi_assessment_dict
+
+        team = sample_team_with_owner_member.team
+        _, component = _create_product_with_component(team)
+        sbom = _create_sbom(component)
+        spy = mocker.patch(
+            "sbomify.apps.compliance.services.sbom_compliance_service.sbom_was_generated_by_sbomify_action",
+            return_value=True,
+        )
+        run = self._make_run(
+            sbom,
+            findings=[
+                {
+                    "id": "bsi-tr03183:executable-property",
+                    "status": "fail",
+                    "title": "Executable Property",
+                }
+            ],
+        )
+
+        dict_ = _build_bsi_assessment_dict(run, sbom=sbom)
+
+        assert dict_["was_generated_by_sbomify_action"] is True
+        spy.assert_called_once_with(sbom)
+
+
+@pytest.mark.django_db
 class TestFormatCompliance:
     """Tests for SBOM format version compliance checking."""
 

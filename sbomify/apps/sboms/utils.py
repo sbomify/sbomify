@@ -4,6 +4,7 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+import re
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -190,27 +191,43 @@ def _cyclonedx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
     return False
 
 
+_SPDX_VERSION_SUFFIX_START = re.compile(r"^v?\d")
+
+
 def _spdx_creator_names_sbomify_action(creator: str) -> bool:
     """Return True iff a ``creationInfo.creators`` entry names sbomify-action.
 
     SPDX 2.x tools are emitted as ``Tool: <name>-<version>`` (see
     sbomify-action's ``augmentation.py`` — ``f"{name}-{version}"``).
     Versions in the wild include hyphenated pre-release suffixes
-    (``1.2.3-rc1``, ``2.0.0-alpha+build.7``), so a single ``rsplit("-", 1)``
-    only peels one segment and misses those. Iteratively strip
-    hyphen-separated tail segments instead — every candidate prefix is
-    checked, so we match whether the version is hyphen-free or carries
-    multiple hyphen-separated parts.
+    (``1.2.3-rc1``, ``2.0.0-alpha.1+build.7``).
+
+    Naive iterative hyphen-stripping over-matches: ``Tool:
+    sbomify-action-wrapper-1.0.0`` would eventually peel down to
+    ``sbomify-action`` and report True even though the generator was a
+    different tool. So instead of blind stripping, locate the
+    ``-<version>`` boundary by finding the leftmost hyphen whose
+    right-hand side actually looks like a version (digit, or ``v``
+    followed by a digit). Everything to the left of that hyphen is the
+    tool name and must match exactly; anything else is a different tool.
+    Tool entries without a version part match against the whole string.
     """
     if not creator.lower().startswith("tool:"):
         return False
-    candidate = creator.split(":", 1)[1].strip()
-    while True:
-        if _matches_sbomify_action_name(candidate):
-            return True
-        if "-" not in candidate:
-            return False
-        candidate = candidate.rsplit("-", 1)[0]
+    tool_name = creator.split(":", 1)[1].strip()
+    # No version segment: the entire payload IS the name.
+    if _matches_sbomify_action_name(tool_name):
+        return True
+    # Scan for the first hyphen whose right-hand side starts version-like.
+    # That's the canonical ``<name>-<version>`` split, regardless of how
+    # many further hyphens the version part itself contains.
+    for i, ch in enumerate(tool_name):
+        if ch != "-":
+            continue
+        suffix = tool_name[i + 1 :]
+        if _SPDX_VERSION_SUFFIX_START.match(suffix):
+            return _matches_sbomify_action_name(tool_name[:i])
+    return False
 
 
 def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
