@@ -535,13 +535,21 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
             "decided_at": timezone.now(),
         },
     )
-    # Only count this as a document-access approval when there was a real
-    # pending request to approve. Regular workspace invitations also reach
-    # this branch and create a bookkeeping AccessRequest with status=APPROVED
-    # straight from `defaults=`; treating that as an approval would inflate
-    # the trust-center funnel with team-membership signups.
+    # Count this as a document-access approval only when it actually came
+    # from a trust-center invitation flow. Two valid trust-center cases:
+    #   (1) An existing user had an AccessRequest pre-staged as PENDING by
+    #       documents/views/access_requests.py at invite-send time; the
+    #       acceptance here transitions it to APPROVED.
+    #   (2) A brand-new user had no AccessRequest pre-staged (their user
+    #       row didn't exist yet at invite-send time), so this branch is
+    #       both the create and the approval. The `inviter` (from the
+    #       `invitation_inviter:` cache key set only by the trust-center
+    #       flow) discriminates this case from regular workspace invites,
+    #       which also reach this branch but should not be counted.
     access_request_approved_here = False
-    if not created and access_request.status == AccessRequest.Status.PENDING:
+    if created and inviter is not None:
+        access_request_approved_here = True
+    elif not created and access_request.status == AccessRequest.Status.PENDING:
         access_request.status = AccessRequest.Status.APPROVED
         access_request.decided_at = timezone.now()
         if not access_request.decided_by and inviter:
