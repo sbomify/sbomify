@@ -639,6 +639,20 @@ class NDASigningView(View):
                             update_user_teams_session(request, current_user)
                             switch_active_workspace(request, team, invitation.role)
 
+                            # NDA-gated invitations bypass both accept_invite and the
+                            # login auto-accept signal; without this capture the
+                            # collaboration funnel undercounts invited users who had
+                            # to sign an NDA before joining.
+                            invitation_role = invitation.role
+                            transaction.on_commit(
+                                lambda: capture_for_request(
+                                    request,
+                                    "team:member_invitation_accepted",
+                                    {"role": invitation_role},
+                                    team_key=team_key,
+                                )
+                            )
+
                             invitation.delete()
 
                             # Auto-approve the access request since user has been invited and is now a member

@@ -259,6 +259,15 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
 
+    from sbomify.apps.core.posthog_service import capture_for_request
+
+    capture_for_request(
+        request,
+        "team:member_invitation_accepted",
+        {"role": role},
+        team_key=team.key,
+    )
+
     return redirect("core:dashboard")
 
 

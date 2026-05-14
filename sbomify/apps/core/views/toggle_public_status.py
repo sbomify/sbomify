@@ -84,13 +84,13 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             )
 
     @staticmethod
-    def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, visibility: str) -> None:
+    def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, new_visibility: str) -> None:
         from sbomify.apps.core.posthog_service import capture_for_request
 
         team_key = (request.session.get("current_team") or {}).get("key", "")
         capture_for_request(
             request,
             "item:visibility_toggled",
-            {"item_type": item_type, "item_id": item_id, "visibility": visibility},
+            {"item_type": item_type, "item_id": item_id, "new_visibility": new_visibility},
             team_key=team_key,
         )

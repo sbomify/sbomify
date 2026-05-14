@@ -217,6 +217,7 @@ def create_access_request(
             return 400, {"detail": "Access request already pending"}
 
         # Create or update access request with proper race condition handling
+        request_state_changed = False
         with transaction.atomic():
             # Use select_for_update to prevent race conditions
             existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
@@ -239,6 +240,7 @@ def create_access_request(
                     existing_request.notes = ""
                     existing_request.save()
                     access_request = existing_request
+                    request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
                     # Request already exists and is pending
                     access_request = existing_request
@@ -253,6 +255,7 @@ def create_access_request(
                         user=user,
                         defaults={"status": AccessRequest.Status.PENDING},
                     )
+                    request_state_changed = created
                     if not created:
                         # Another request was created concurrently, refresh from DB
                         access_request.refresh_from_db()
@@ -270,6 +273,22 @@ def create_access_request(
 
             # Invalidate cache after transaction commits
             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+
+            # Mirror the document:access_requested event from the HTML view path so
+            # API-created requests show up in the same funnel. Only fire on a state
+            # transition (new request or revoked/rejected → pending re-request), not
+            # when a duplicate API call returns an already-pending or approved record.
+            if request_state_changed:
+                from sbomify.apps.core.posthog_service import capture_for_request
+
+                transaction.on_commit(
+                    lambda: capture_for_request(
+                        request,
+                        "document:access_requested",
+                        {"requires_nda": requires_nda},
+                        team_key=team_key,
+                    )
+                )
 
             # Only send notification if NDA is not required (request is complete)
             # If NDA is required, notification will be sent after NDA is signed

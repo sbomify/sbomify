@@ -231,8 +231,6 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
                 billing_limits.update(get_community_plan_limits())
-                if not already_emitted:
-                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
                 team.billing_plan_limits = billing_limits
                 team.save()
 
@@ -255,6 +253,17 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                     {"team_key": team_key},
                     groups={"workspace": team_key} if team_key else None,
                 )
+
+                # Persist the marker only after the transition-only side effects
+                # have completed. If any of them raises, a subsequent webhook
+                # carrying `status=trialing` will still find an empty marker and
+                # re-attempt them rather than skipping permanently.
+                with transaction.atomic():
+                    team = Team.objects.select_for_update().get(pk=team.pk)
+                    billing_limits = (team.billing_plan_limits or {}).copy()
+                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
+                    team.billing_plan_limits = billing_limits
+                    team.save()
 
         return True
     return False
