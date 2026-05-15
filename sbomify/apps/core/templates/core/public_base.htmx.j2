@@ -45,7 +45,7 @@
             <meta name="viewport"
                   content="width=device-width, initial-scale=1, shrink-to-fit=no">
             <meta name="color-scheme" content="light dark">
-            <!-- SEO Meta Tags -->
+            {# SEO Meta Tags #}
             <meta name="description"
                   content="{% block meta_description %}{% if brand.name %}{{ brand.name }} Trust Center - Browse security artifacts, SBOMs, and compliance documents{% else %}sbomify - Your Security Artifact Hub{% endif %}{% endblock %}">
             <meta name="keywords"
@@ -54,9 +54,9 @@
                   content="{% if brand.name %}{{ brand.name }}{% else %}sbomify{% endif %}">
             <meta name="robots"
                   content="{% block meta_robots %}index, follow{% endblock %}">
-            <!-- Canonical URL -->
+            {# Canonical URL #}
             <link rel="canonical" href="{{ request.build_absolute_uri }}">
-            <!-- Favicon -->
+            {# Favicon #}
             <link rel="apple-touch-icon"
                   sizes="180x180"
                   href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/apple-touch-icon.png' %}{% endif %}">
@@ -72,14 +72,14 @@
                   type="image/svg+xml"
                   href="{% if brand.brand_icon_url %}{{ brand.brand_icon_url }}{% else %}{% static 'img/favicons/favicon.svg' %}{% endif %}">
             <link rel="manifest" href="{% static 'dist/manifest.webmanifest' %}">
-            <!-- Schema.org metadata -->
+            {# Schema.org metadata #}
             {% schema_org_metadata %}
-            <!-- Social media image: always use absolute URL for social crawlers -->
+            {# Social media image: always use absolute URL for social crawlers #}
             {# Build the absolute fallback URL for the default social image #}
             {% static 'img/sbomify-social.png' as default_social_image %}
             {% with absolute_fallback=request.scheme|add:"://"|add:request.get_host|add:default_social_image %}
                 {% with brand_name=brand.name|default:"sbomify" %}
-                    <!-- Open Graph / Facebook -->
+                    {# Open Graph / Facebook #}
                     <meta property="og:type" content="website">
                     <meta property="og:url" content="{{ request.build_absolute_uri }}">
                     <meta property="og:title"
@@ -96,7 +96,7 @@
                         <meta property="og:image:type" content="image/png">
                     {% endif %}
                     <meta property="og:image:alt" content="{{ brand_name }} Logo">
-                    <!-- Twitter -->
+                    {# Twitter #}
                     <meta property="twitter:card" content="summary_large_image">
                     <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
                     <meta property="twitter:title"
@@ -108,11 +108,11 @@
                     <meta property="twitter:image:alt" content="{{ brand_name }} Logo">
                 {% endwith %}
             {% endwith %}
-            <!-- Fonts -->
+            {# Fonts #}
             <link rel="preconnect" href="https://fonts.gstatic.com">
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
                   rel="stylesheet">
-            <!-- CSS -->
+            {# CSS #}
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
             <link href="{% static 'css/tokens.css' %}" rel="stylesheet">
             <link href="{% static 'css/base.css' %}" rel="stylesheet">
@@ -129,7 +129,7 @@
             <link href="{% static 'css/public-pages.css' %}" rel="stylesheet">
             <link rel="stylesheet"
                   href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}">
-            <!-- Custom CSS Variables for Branding -->
+            {# Custom CSS Variables for Branding #}
             <style>
             :root {
                 /* Brand Colors - Primary for headers/navigation, Accent for buttons/links */
@@ -559,7 +559,9 @@
             /* Modern Footer */
             .public-footer {
                 background: linear-gradient(180deg, var(--bg-secondary, #ffffff) 0%, var(--bg-tertiary, #f8fafc) 100%);
-                border-top: 1px solid var(--border-color-light, #f0f0f0);
+                /* The brand-color ::before bar below already provides the visual
+                   separation between page content and footer; a hard border-top
+                   line would stack a second hairline beneath the gradient bar. */
                 margin-top: auto;
                 position: relative;
                 overflow: hidden;
@@ -933,14 +935,14 @@
         {% vite_hmr_client %}
     </head>
     <body class="public-page" data-theme="public">
-        <!-- WebSocket connection for authenticated users (enables real-time access request status updates) -->
+        {# WebSocket connection for authenticated users (enables real-time access request status updates) #}
         {% if request.user.is_authenticated and team and team.key %}
             <div x-data x-init="$store.ws.connect('{{ team.key }}')" class="tw:hidden"></div>
         {% endif %}
-        <!-- Public Page Layout -->
+        {# Public Page Layout #}
         {% include "core/components/messages.html.j2" %}
         <div class="public-page-layout">
-            <!-- Brand Header -->
+            {# Brand Header #}
             <header class="public-header">
                 <div class="public-header-container">
                     <div class="header-spacer"></div>
@@ -1091,16 +1093,16 @@
                     {% block header_content %}{% endblock %}
                 </div>
             </header>
-            <!-- Main Content -->
+            {# Main Content #}
             <main class="public-main">
                 <div class="public-content-container">
-                    <!-- Breadcrumb Navigation -->
+                    {# Breadcrumb Navigation #}
                     {% block breadcrumb %}{% endblock %}
-                    <!-- Page Content -->
+                    {# Page Content #}
                     {% block content %}{% endblock %}
                 </div>
             </main>
-            <!-- Footer -->
+            {# Footer #}
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
