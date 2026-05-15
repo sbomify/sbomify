@@ -165,7 +165,7 @@
                                                     <div class="flex-1 min-w-0">
                                                         <p class="text-sm font-medium text-text m-0 flex items-center gap-2">
                                                             <span x-text="check.title"></span>
-                                                            {# issue #907: remediation_type badge — operators understand what to do at a glance rather than reading the remediation prose. Kept as single-line {# #} so it parses in both Django and Jinja2 engines. #}
+                                                            {# issue #907: remediation_type badge — operators understand what to do at a glance rather than reading the remediation prose. Kept on a single line so it parses cleanly in both Django and Jinja2 engines. #}
                                                             <template x-if="check.remediation_type === 'tooling_limitation'">
                                                                 <span class="tw-badge-warning text-[10px] font-normal px-1.5 py-0.5"
                                                                       data-testid="step-2-tooling-limitation-badge">
