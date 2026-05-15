@@ -556,12 +556,17 @@
                 padding: 2rem 1.5rem;
             }
 
-            /* Modern Footer */
+            {% comment %}
+            Modern Footer — the brand-color ::before bar below already
+            provides the visual separation between page content and the
+            footer, so a hard ``border-top: 1px solid ...`` here would
+            stack a second hairline directly beneath the gradient bar.
+            (Note kept as a Django template comment rather than a CSS
+            comment so it is stripped at render time and never ships
+            to anonymous trust-center visitors.)
+{% endcomment %}
             .public-footer {
                 background: linear-gradient(180deg, var(--bg-secondary, #ffffff) 0%, var(--bg-tertiary, #f8fafc) 100%);
-                /* The brand-color ::before bar below already provides the visual
-                   separation between page content and footer; a hard border-top
-                   line would stack a second hairline beneath the gradient bar. */
                 margin-top: auto;
                 position: relative;
                 overflow: hidden;
