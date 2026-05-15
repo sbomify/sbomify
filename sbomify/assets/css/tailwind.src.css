@@ -506,6 +506,32 @@ html.no-transitions * {
 .border-border\/40 { border-color: rgb(var(--color-border) / 0.4); }
 .border-border\/50 { border-color: rgb(var(--color-border) / 0.5); }
 
+/* --- divide-border opacity variants ---
+   ``divide-y divide-border/40`` and friends rely on Tailwind's ``divide-y``
+   to set ``border-top-width: 1px`` on every ``:not(:first-child)`` and on
+   ``divide-border/N`` to colour it. In this project Tailwind v4 does NOT
+   emit the divide-y width rule (preflight resets ``border: 0px solid``
+   for every element via ``*``), so without these fallbacks the dividers
+   either disappear (no width) or render at ``currentColor`` (default
+   border colour = body text colour, full-opacity black-on-white). Set
+   both width and colour here so ``divide-border/N`` alone produces the
+   intended soft hairline between siblings. */
+.divide-border\/30 > :not([hidden]) ~ :not([hidden]) {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-color: rgb(var(--color-border) / 0.3);
+}
+.divide-border\/40 > :not([hidden]) ~ :not([hidden]) {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-color: rgb(var(--color-border) / 0.4);
+}
+.divide-border\/50 > :not([hidden]) ~ :not([hidden]) {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-color: rgb(var(--color-border) / 0.5);
+}
+
 /* --- border-primary opacity variants --- */
 .border-primary\/10 { border-color: rgb(var(--color-primary) / 0.1); }
 .border-primary\/15 { border-color: rgb(var(--color-primary) / 0.15); }
