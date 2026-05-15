@@ -506,6 +506,30 @@ html.no-transitions * {
 .border-border\/40 { border-color: rgb(var(--color-border) / 0.4); }
 .border-border\/50 { border-color: rgb(var(--color-border) / 0.5); }
 
+/* --- divide-border opacity variants ---
+   Tailwind v4 opacity modifiers can't be applied to raw-RGB CSS vars,
+   so without these explicit rules ``divide-border/N`` would have no
+   colour at all and the divider falls back to ``currentColor`` (body
+   text = near-black) wherever Tailwind sets a divide width. Colour
+   BOTH ``border-top`` and ``border-bottom`` on every direct child so
+   whichever side ``divide-y``/``divide-y-2``/``divide-y-reverse`` ends
+   up sizing, the colour is correct. The selector is wrapped in
+   ``:where()`` to keep these helpers at zero specificity, so an
+   explicit ``divide-y-*`` width utility on the same element still
+   wins in the cascade. */
+:where(.divide-border\/30) > * {
+  border-top-color: rgb(var(--color-border) / 0.3);
+  border-bottom-color: rgb(var(--color-border) / 0.3);
+}
+:where(.divide-border\/40) > * {
+  border-top-color: rgb(var(--color-border) / 0.4);
+  border-bottom-color: rgb(var(--color-border) / 0.4);
+}
+:where(.divide-border\/50) > * {
+  border-top-color: rgb(var(--color-border) / 0.5);
+  border-bottom-color: rgb(var(--color-border) / 0.5);
+}
+
 /* --- border-primary opacity variants --- */
 .border-primary\/10 { border-color: rgb(var(--color-primary) / 0.1); }
 .border-primary\/15 { border-color: rgb(var(--color-primary) / 0.15); }

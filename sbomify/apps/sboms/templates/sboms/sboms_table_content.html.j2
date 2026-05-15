@@ -107,9 +107,11 @@
                                 <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
-                                {# Mobile fallback for the columns hidden under md: format pill (with format_version)
-                                   plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
-                                   is narrow, so the table doesn't horizontally scroll. #}
+                                {% comment %}
+                                Mobile fallback for the columns hidden under md: format pill (with format_version)
+                                plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
+                                is narrow, so the table doesn't horizontally scroll.
+                                {% endcomment %}
                                 <div class="md:hidden mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                                     <span class="tw-sbom-format"
                                           :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
@@ -197,9 +199,11 @@
                             </td>
                             <td>
                                 <div class="flex items-center justify-center gap-1">
-                                    {# `from_public=true` flag tells SbomDownloadView to render the friendly
-                                       gated-access page instead of a generic 403 when a public visitor hits a
-                                       gated SBOM. Internal downloads omit the flag. #}
+                                    {% comment %}
+                                    `from_public=true` flag tells SbomDownloadView to render the friendly
+                                    gated-access page instead of a generic 403 when a public visitor hits a
+                                    gated SBOM. Internal downloads omit the flag.
+                                    {% endcomment %}
                                     <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id){% if is_public_view %} + '?from_public=true'{% endif %}"
                                        title="Download"
                                        aria-label="Download SBOM"

@@ -12,7 +12,7 @@
     {{ workspace.name }} Trust Center: browse public products, releases, and organization-wide compliance artifacts.
 {% endblock %}
 {% block content %}
-    <!-- Hero Section -->
+    {# Hero Section #}
     <div class="public-hero bg-surface rounded-xl p-8 mb-6 shadow-md relative overflow-hidden">
         <div class="public-hero-glow" aria-hidden="true"></div>
         <div class="public-hero-content">
@@ -51,7 +51,7 @@
         </div>
     </div>
     {% if global_components %}
-        <!-- Organization Compliance Artifacts Section -->
+        {# Organization Compliance Artifacts Section #}
         <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
             <div class="mb-6 pb-4 border-b border-border">
                 <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
@@ -71,7 +71,7 @@
                         <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">
                             Organization-level compliance artifact available across the entire organization.
                         </p>
-                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
+                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border/40">
                             <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
                                 <i class="fas fa-building" aria-hidden="true"></i>
                                 Organization-Wide
@@ -87,7 +87,7 @@
         </div>
     {% endif %}
     {% if products %}
-        <!-- Products Section -->
+        {# Products Section #}
         <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
             <div class="mb-6 pb-4 border-b border-border">
                 <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
@@ -117,7 +117,7 @@
                         {% if product.description %}
                             <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">{{ product.description }}</p>
                         {% endif %}
-                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
+                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border/40">
                             <div class="flex items-center gap-1 flex-wrap">
                                 {% if product.passing_assessments %}
                                     {% for assessment in product.passing_assessments %}
