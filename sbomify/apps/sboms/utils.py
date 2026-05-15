@@ -4,6 +4,7 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+import re
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -132,6 +133,200 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
 
     log.debug(f"SBOM {sbom_instance.sbom_filename} successfully fetched and parsed as JSON")
     return sbom_instance, sbom_data
+
+
+# SBOMs are immutable (ADR-004) so caching a definitive answer (the SBOM
+# was parsed and either does or doesn't name sbomify-action) is safe for a
+# day. Transient read failures use a much shorter negative TTL so a brief
+# S3 / decode outage doesn't lock the wrong answer in for a full day.
+_SBOMIFY_ACTION_CHECK_CACHE_TTL = 24 * 3600
+_SBOMIFY_ACTION_NEGATIVE_CACHE_TTL = 60
+
+
+def _matches_sbomify_action_name(name: object) -> bool:
+    """True for ``sbomify-action`` / ``sbomify action`` (the augmentation.py
+    constant ships with a hyphen in newer releases and a space in older ones).
+    Comparison is case-insensitive and whitespace/hyphen-collapsed so a future
+    rename of the action keeps detection working.
+    """
+    if not isinstance(name, str):
+        return False
+    return name.replace(" ", "").replace("-", "").strip().lower() == "sbomifyaction"
+
+
+def _cyclonedx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
+    """Detect sbomify-action in a parsed CycloneDX SBOM.
+
+    Supports both formats sbomify-action emits (see github-action repo
+    ``sbomify_action/augmentation.py``):
+
+    - CycloneDX 1.5+: ``metadata.tools.components[]`` and
+      ``metadata.tools.services[]`` (entry with ``name`` matching the
+      sbomify-action constant).
+    - CycloneDX 1.4 legacy: ``metadata.tools[]`` array of
+      ``{name, vendor, ...}`` dicts.
+
+    Each layer guards against unexpected JSON shapes — a malformed SBOM
+    (top-level list, non-dict metadata, scalar/None entries inside the
+    tools collections) returns ``False`` instead of raising
+    ``AttributeError`` from a ``.get`` on a non-dict, since this runs
+    on every Step 2 render and must never break the wizard.
+    """
+    if not isinstance(sbom_data, dict):
+        return False
+    metadata = sbom_data.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    tools = metadata.get("tools")
+    if isinstance(tools, list):
+        return any(isinstance(t, dict) and _matches_sbomify_action_name(t.get("name")) for t in tools)
+    if isinstance(tools, dict):
+        for collection_key in ("components", "services"):
+            collection = tools.get(collection_key)
+            if not isinstance(collection, list):
+                continue
+            for entry in collection:
+                if isinstance(entry, dict) and _matches_sbomify_action_name(entry.get("name")):
+                    return True
+    return False
+
+
+# SemVer-ish version: ``v?MAJOR.MINOR[.PATCH...][-prerelease][+build]``.
+# The ``(\.\d+)+`` is what distinguishes a real version (``1.2.3``,
+# ``v0.10``) from a fragment that just happens to start with ``v`` and a
+# digit (``v2-wrapper``). Without that, ``Tool: sbomify-action-v2-wrapper-1.0.0``
+# would split at ``-v2-`` and the left half would canonicalise to
+# ``sbomify-action``, hiding the CTA for a different generator.
+_SPDX_VERSION_SUFFIX = re.compile(r"^v?\d+(\.\d+)+([-+][\w.+-]*)?$")
+
+
+def _spdx_creator_names_sbomify_action(creator: str) -> bool:
+    """Return True iff a ``creationInfo.creators`` entry names sbomify-action.
+
+    SPDX 2.x tools are emitted as ``Tool: <name>-<version>`` (see
+    sbomify-action's ``augmentation.py`` — ``f"{name}-{version}"``).
+    Versions in the wild include hyphenated pre-release suffixes
+    (``1.2.3-rc1``, ``2.0.0-alpha.1+build.7``).
+
+    Locate the ``-<version>`` boundary by scanning hyphens from the right
+    and accepting the first one whose right-hand side matches an
+    end-anchored SemVer-ish pattern. ``rightmost`` keeps as much of the
+    string in the name as possible — that way ``sbomify-action-v2-wrapper-1.0.0``
+    splits at the trailing ``-1.0.0`` and rejects with the name
+    ``sbomify-action-v2-wrapper`` rather than the inner ``-v2-`` boundary.
+    The pattern requires at least ``MAJOR.MINOR`` (so a single ``v2``
+    fragment doesn't qualify as a version on its own).
+    Tool entries without a version part match against the whole string.
+    """
+    if not creator.lower().startswith("tool:"):
+        return False
+    tool_name = creator.split(":", 1)[1].strip()
+    # No version segment: the entire payload IS the name.
+    if _matches_sbomify_action_name(tool_name):
+        return True
+    # Right-to-left scan: prefer splitting off as little as possible,
+    # i.e. only accept the version that runs to the end of the string.
+    for i in range(len(tool_name) - 1, -1, -1):
+        if tool_name[i] != "-":
+            continue
+        suffix = tool_name[i + 1 :]
+        if _SPDX_VERSION_SUFFIX.match(suffix):
+            return _matches_sbomify_action_name(tool_name[:i])
+    return False
+
+
+def _spdx_metadata_has_sbomify_action(sbom_data: Any) -> bool:
+    """Detect sbomify-action in a parsed SPDX 2.x SBOM via
+    ``creationInfo.creators[]`` entries of the form
+    ``"Tool: sbomify-action-<version>"``.
+
+    Same fail-safe shape guards as the CycloneDX detector.
+    """
+    if not isinstance(sbom_data, dict):
+        return False
+    creation_info = sbom_data.get("creationInfo")
+    if not isinstance(creation_info, dict):
+        return False
+    creators = creation_info.get("creators")
+    if not isinstance(creators, list):
+        return False
+    for creator in creators:
+        if isinstance(creator, str) and _spdx_creator_names_sbomify_action(creator):
+            return True
+    return False
+
+
+def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
+    """True iff the SBOM's stored content names sbomify-action as a generator.
+
+    Reads the SBOM JSON from S3 once and caches a definitive answer for
+    ``_SBOMIFY_ACTION_CHECK_CACHE_TTL`` seconds. A transient fetch / decode
+    failure caches ``False`` only for ``_SBOMIFY_ACTION_NEGATIVE_CACHE_TTL``
+    so a brief S3 outage doesn't keep the CTA on for the rest of the day for
+    SBOMs that would be detected once storage recovers. Returning ``False``
+    on error is the fail-safe choice — a missed detection only means an
+    unnecessary nudge to use the action, not data corruption.
+
+    Cache hits/misses are treated as best-effort: django-redis without
+    ``IGNORE_EXCEPTIONS`` raises on Redis outage, so ``cache.get`` and
+    ``cache.set`` are wrapped to fall back to "miss / no-op". A Redis
+    outage on Step 2 must not break the wizard before the S3 fail-safe
+    even gets a chance to run.
+    """
+    from django.core.cache import cache
+
+    cache_key = f"sbom:sbomify_action_check:{sbom.pk}"
+
+    def _cache_get() -> Any:
+        try:
+            return cache.get(cache_key)
+        except Exception:
+            log.debug("sbomify-action cache.get failed for SBOM %s", sbom.pk, exc_info=True)
+            return None
+
+    def _cache_set(value: bool, ttl: int) -> None:
+        try:
+            cache.set(cache_key, value, ttl)
+        except Exception:
+            log.debug("sbomify-action cache.set failed for SBOM %s", sbom.pk, exc_info=True)
+
+    cached = _cache_get()
+    if cached is not None:
+        return bool(cached)
+
+    if not sbom.sbom_filename:
+        # Definitive: an SBOM row without a stored blob will never name
+        # sbomify-action, so keep the long TTL.
+        _cache_set(False, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+        return False
+
+    try:
+        from sbomify.apps.core.object_store import S3Client
+
+        sbom_bytes = S3Client(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
+        if not sbom_bytes:
+            # Treat empty / missing as transient — the row points at a blob
+            # we couldn't read, so we should retry sooner than a day.
+            _cache_set(False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
+            return False
+        sbom_data = json.loads(sbom_bytes.decode("utf-8"))
+        fmt = (sbom.format or "").lower()
+        if fmt == "spdx":
+            result = _spdx_metadata_has_sbomify_action(sbom_data)
+        else:
+            # Default to CycloneDX detection — covers ``cyclonedx`` and any
+            # future variant (sbom.format defaults to "spdx" but most uploads
+            # are CycloneDX in practice).
+            result = _cyclonedx_metadata_has_sbomify_action(sbom_data)
+    except Exception:
+        log.debug("sbomify-action detection failed for SBOM %s", sbom.pk, exc_info=True)
+        # Transient: S3 / decode failures are not durable facts about the
+        # SBOM. Cache only briefly so the next page load retries.
+        _cache_set(False, _SBOMIFY_ACTION_NEGATIVE_CACHE_TTL)
+        return False
+
+    _cache_set(result, _SBOMIFY_ACTION_CHECK_CACHE_TTL)
+    return result
 
 
 def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
