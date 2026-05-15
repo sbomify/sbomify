@@ -5,7 +5,7 @@ create a new release → fill details → navigate to the new release →
 add artifacts via the Add Artifact modal.
 
 Prerequisite: uses the pied_piper_with_sboms ORM fixture which creates the full
-Pied Piper hierarchy (product, projects, components) with CycloneDX SBOMs.
+Pied Piper hierarchy (product with components) with CycloneDX SBOMs.
 The SBOM creation signal auto-creates a "latest" Release on the product.
 """
 
