@@ -75,9 +75,8 @@ _BSI_REMEDIATION_TYPE: dict[str, str] = {
     "bsi-tr03183:attestation-check": "operator_action",
 }
 
-# Default BSI TR-03183-2 guidance URL. Overridable per-finding below
-# when a more specific anchor on the same page is appropriate.
-_SBOMIFY_ACTION_ENRICHMENT_URL = "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4"
+# Default guidance URL for BSI findings without a more specific override.
+_SBOMIFY_ACTION_ENRICHMENT_URL = "https://sbomify.com/compliance/"
 
 _BSI_GUIDANCE_URL_OVERRIDES: dict[str, str] = {
     "bsi-tr03183:sbom-format": "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4",
