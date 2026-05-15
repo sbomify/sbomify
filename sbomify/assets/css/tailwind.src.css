@@ -507,29 +507,41 @@ html.no-transitions * {
 .border-border\/50 { border-color: rgb(var(--color-border) / 0.5); }
 
 /* --- divide-border opacity variants ---
-   ``divide-y divide-border/40`` and friends rely on Tailwind's ``divide-y``
-   to set ``border-top-width: 1px`` on every ``:not(:first-child)`` and on
-   ``divide-border/N`` to colour it. In this project Tailwind v4 does NOT
-   emit the divide-y width rule (preflight resets ``border: 0px solid``
-   for every element via ``*``), so without these fallbacks the dividers
-   either disappear (no width) or render at ``currentColor`` (default
-   border colour = body text colour, full-opacity black-on-white). Set
-   both width and colour here so ``divide-border/N`` alone produces the
-   intended soft hairline between siblings. */
+   ``divide-y divide-border/40`` and friends rely on Tailwind to set both
+   the divide widths AND colours. In this project the v4 build emits the
+   bottom-width rule on ``> :not(:last-child)`` but leaves the colour
+   unset, so the colour falls back to ``currentColor`` (body text =
+   near-black). The previous version of these fallbacks only coloured
+   the ``border-top`` of ``:not(:first-child)`` children, which left
+   row 0's bottom border at currentColor — a single hard hairline
+   between the first and second row while the rest of the dividers
+   rendered softly. Colour BOTH border-top and border-bottom on every
+   direct child so whichever side Tailwind chooses to size, the colour
+   is correct. Also set the top width as a width-fallback in case the
+   ``divide-y`` width rule isn't emitted at all. */
+.divide-border\/30 > * {
+  border-top-color: rgb(var(--color-border) / 0.3);
+  border-bottom-color: rgb(var(--color-border) / 0.3);
+}
 .divide-border\/30 > :not([hidden]) ~ :not([hidden]) {
   border-top-width: 1px;
   border-top-style: solid;
-  border-color: rgb(var(--color-border) / 0.3);
+}
+.divide-border\/40 > * {
+  border-top-color: rgb(var(--color-border) / 0.4);
+  border-bottom-color: rgb(var(--color-border) / 0.4);
 }
 .divide-border\/40 > :not([hidden]) ~ :not([hidden]) {
   border-top-width: 1px;
   border-top-style: solid;
-  border-color: rgb(var(--color-border) / 0.4);
+}
+.divide-border\/50 > * {
+  border-top-color: rgb(var(--color-border) / 0.5);
+  border-bottom-color: rgb(var(--color-border) / 0.5);
 }
 .divide-border\/50 > :not([hidden]) ~ :not([hidden]) {
   border-top-width: 1px;
   border-top-style: solid;
-  border-color: rgb(var(--color-border) / 0.5);
 }
 
 /* --- border-primary opacity variants --- */
