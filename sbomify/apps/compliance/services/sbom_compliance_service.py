@@ -75,16 +75,13 @@ _BSI_REMEDIATION_TYPE: dict[str, str] = {
     "bsi-tr03183:attestation-check": "operator_action",
 }
 
-# Single source of truth for the sbomify-action enrichment docs so
-# every guidance link points at the same page. Overridable per-
-# finding via ``_BSI_GUIDANCE_URL_OVERRIDES`` below.
-_SBOMIFY_ACTION_ENRICHMENT_URL = "https://sbomify.com/docs/sbomify-action/enrichment"
+# Default BSI TR-03183-2 guidance URL. Overridable per-finding below
+# when a more specific anchor on the same page is appropriate.
+_SBOMIFY_ACTION_ENRICHMENT_URL = "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4"
 
-# Per-finding doc links when the default URL isn't the right target
-# (e.g. CycloneDX / SPDX schema reference for format issues).
 _BSI_GUIDANCE_URL_OVERRIDES: dict[str, str] = {
-    "bsi-tr03183:sbom-format": "https://sbomify.com/docs/sbom-format",
-    "bsi-tr03183:attestation-check": "https://sbomify.com/docs/attestations",
+    "bsi-tr03183:sbom-format": "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4",
+    "bsi-tr03183:attestation-check": "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4",
 }
 
 # Plain-English "why is this failing and what do I do about it" sentence
