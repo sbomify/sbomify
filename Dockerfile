@@ -9,6 +9,10 @@ ARG COSIGN_VERSION=v3.0.6
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
 ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970f2d4316ffe1f42abcb0413282b555bf7ce9b0774a7c79
+# Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by digest
+# so the .so files copied into the distroless prod image stay reproducible.
+# To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:0cff4df29a6597173dc8b813787318150141eb96ac783dc3ff4f5ff52c49a1e2
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -303,7 +307,8 @@ RUN mkdir -p /code/staticfiles && \
 # Fonts (font-liberation + fontconfig) are required because WeasyPrint
 # asks fontconfig for fallbacks at render time; without a font, text
 # glyphs render as boxes instead of the chosen Helvetica/Arial fallback.
-FROM cgr.dev/chainguard/wolfi-base:latest AS weasyprint-libs
+ARG CHAINGUARD_WOLFI_BASE_IMAGE
+FROM ${CHAINGUARD_WOLFI_BASE_IMAGE} AS weasyprint-libs
 # font-liberation is a metric-compatible drop-in for Arial / Helvetica /
 # Times New Roman / Courier (the families the print CSS targets) at
 # ~3 MB. font-noto's full multi-script set is ~470 MB — needlessly
