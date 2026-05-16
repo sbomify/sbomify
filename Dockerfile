@@ -335,10 +335,17 @@ RUN apk add --no-cache \
 #
 # Font selection: Liberation Sans is the metric-compatible Arial / Helvetica
 # substitute (the families the body CSS asks for) — fontconfig resolves the
-# CSS request to it. Liberation Mono Regular is the lone monospace weight
-# because the print CSS doesn't bold or italicize <code>; fontconfig synths
-# bold / italic on the rare nested case. LiberationSerif and LiberationMono
-# Bold / Italic / BoldItalic are unused.
+# CSS request to it. The 4 weights shipped were picked by auditing the actual
+# HTML the markdown renderer produces against every CRA document kind:
+#   - <strong> tags: present in all 4 docs (3-19 each) → ship Sans Bold.
+#   - <em> tags: present in all 4 docs (1-18 each) → ship Sans Italic.
+#   - <strong><em> nested: 0 across all docs → SansBoldItalic skipped;
+#     fontconfig synthesizes acceptable bold-italic from Italic / Bold if a
+#     future template introduces ***foo***.
+#   - <code> tags: present only in the DoC (10 each), never bolded or
+#     italicized → ship LiberationMono-Regular only.
+# LiberationSerif is unused; LiberationMono Bold / Italic / BoldItalic are
+# unused; SansBoldItalic is unused.
 # fontconfig setup (/etc/fonts + /usr/share/fontconfig) ships verbatim
 # because the per-family conf snippets are small (~370 KB combined) and
 # trimming them would require auditing every snippet.
@@ -356,7 +363,9 @@ RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
         libpcre2-8.so* libpng16.so* libz.so* \
         libblkid.so* libmount.so* libselinux.so* \
         /staged/usr/lib/ && \
-    cp -a /usr/share/fonts/font-liberation/LiberationSans-*.ttf \
+    cp -a /usr/share/fonts/font-liberation/LiberationSans-Regular.ttf \
+          /usr/share/fonts/font-liberation/LiberationSans-Bold.ttf \
+          /usr/share/fonts/font-liberation/LiberationSans-Italic.ttf \
           /usr/share/fonts/font-liberation/LiberationMono-Regular.ttf \
           /staged/usr/share/fonts/font-liberation/ && \
     cp -a /usr/share/fontconfig/. /staged/usr/share/fontconfig/ && \
