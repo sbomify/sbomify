@@ -289,6 +289,36 @@ RUN mkdir -p /code/staticfiles && \
     mkdir -p /staged-dirs/var/lib/dramatiq-prometheus /staged-dirs/tmp/.cache && \
     chown -R 65532:65532 /staged-dirs/var /staged-dirs/tmp
 
+### Stage 7b: Stage WeasyPrint runtime libraries from Wolfi
+# WeasyPrint dlopen()s Pango / HarfBuzz / OpenJPEG / libjpeg / FreeType /
+# fontconfig / glib at write_pdf() time, NOT at import time. The Chainguard
+# distroless prod image (Stage 7) does not ship these libs, so PDF rendering
+# fails at runtime with "PDF rendering is unavailable" even though the
+# WeasyPrint Python package itself imports cleanly. We install the libs in
+# a Wolfi-based builder stage and COPY them into the distroless image.
+#
+# Wolfi-base shares the same glibc as cgr.dev/chainguard/python (both are
+# built on Wolfi-glibc), so .so files copied across stages are ABI-safe —
+# unlike copying libs from a Debian builder, which would risk glibc skew.
+# Fonts (font-liberation + fontconfig) are required because WeasyPrint
+# asks fontconfig for fallbacks at render time; without a font, text
+# glyphs render as boxes instead of the chosen Helvetica/Arial fallback.
+FROM cgr.dev/chainguard/wolfi-base:latest AS weasyprint-libs
+# font-liberation is a metric-compatible drop-in for Arial / Helvetica /
+# Times New Roman / Courier (the families the print CSS targets) at
+# ~3 MB. font-noto's full multi-script set is ~470 MB — needlessly
+# bloats the prod image since the DoC is Latin / Latin-extended /
+# Cyrillic / Greek only and Liberation covers all four.
+RUN apk add --no-cache \
+        pango \
+        harfbuzz \
+        openjpeg \
+        libjpeg-turbo \
+        fontconfig \
+        freetype \
+        glib \
+        font-liberation
+
 ### Stage 7: Python Application for Production (python-app-prod)
 # Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.
 # This reduces CVEs significantly and shrinks the image by ~50%.
@@ -329,6 +359,15 @@ COPY --from=collectstatic /code /code
 # Copy the osv-scanner and cosign binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
+
+# Copy WeasyPrint's runtime libraries and font setup from the Wolfi stage.
+# /usr/lib carries pango/harfbuzz/openjpeg/jpeg/freetype/fontconfig/glib .so
+# files. /etc/fonts + /usr/share/fontconfig + /usr/share/fonts carry the
+# font config tree and Liberation fonts WeasyPrint queries via fontconfig.
+COPY --from=weasyprint-libs /usr/lib/ /usr/lib/
+COPY --from=weasyprint-libs /etc/fonts/ /etc/fonts/
+COPY --from=weasyprint-libs /usr/share/fontconfig/ /usr/share/fontconfig/
+COPY --from=weasyprint-libs /usr/share/fonts/ /usr/share/fonts/
 
 # Copy pre-created runtime directories with nonroot ownership (UID 65532)
 COPY --from=collectstatic /staged-dirs/var/lib/dramatiq-prometheus /var/lib/dramatiq-prometheus
