@@ -324,6 +324,44 @@ RUN apk add --no-cache \
         glib \
         font-liberation
 
+# Stage just the .so files WeasyPrint actually dlopen()s plus their transitive
+# deps (verified with ld-linux --list against libpango / libpangoft2 / libharfbuzz
+# / libfreetype / libfontconfig / libopenjp2 / libjpeg) and the Liberation Sans
+# weights + Liberation Mono Regular the print CSS targets. Copying these
+# specific files instead of /usr/lib + /usr/share/fonts wholesale shrinks the
+# runtime payload from ~46 MB to ~18 MB. libc / libm / libffi / ld-linux are
+# already in the prod image — re-copying them would risk a glibc skew, so
+# they're intentionally omitted.
+#
+# Font selection: Liberation Sans is the metric-compatible Arial / Helvetica
+# substitute (the families the body CSS asks for) — fontconfig resolves the
+# CSS request to it. Liberation Mono Regular is the lone monospace weight
+# because the print CSS doesn't bold or italicize <code>; fontconfig synths
+# bold / italic on the rare nested case. LiberationSerif and LiberationMono
+# Bold / Italic / BoldItalic are unused.
+# fontconfig setup (/etc/fonts + /usr/share/fontconfig) ships verbatim
+# because the per-family conf snippets are small (~370 KB combined) and
+# trimming them would require auditing every snippet.
+RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
+             /staged/usr/share/fontconfig /staged/etc/fonts && \
+    cd /usr/lib && cp -a \
+        libpango-1.0.so* libpangoft2-1.0.so* \
+        libharfbuzz.so* \
+        libfreetype.so* \
+        libfontconfig.so* \
+        libopenjp2.so* libjpeg.so* \
+        libbrotlicommon.so* libbrotlidec.so* \
+        libbz2.so* libexpat.so* libfribidi.so* libgraphite2.so* \
+        libgio-2.0.so* libglib-2.0.so* libgmodule-2.0.so* libgobject-2.0.so* \
+        libpcre2-8.so* libpng16.so* libz.so* \
+        libblkid.so* libmount.so* libselinux.so* \
+        /staged/usr/lib/ && \
+    cp -a /usr/share/fonts/font-liberation/LiberationSans-*.ttf \
+          /usr/share/fonts/font-liberation/LiberationMono-Regular.ttf \
+          /staged/usr/share/fonts/font-liberation/ && \
+    cp -a /usr/share/fontconfig/. /staged/usr/share/fontconfig/ && \
+    cp -a /etc/fonts/. /staged/etc/fonts/
+
 ### Stage 7: Python Application for Production (python-app-prod)
 # Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.
 # This reduces CVEs significantly and shrinks the image by ~50%.
@@ -365,14 +403,9 @@ COPY --from=collectstatic /code /code
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
 
-# Copy WeasyPrint's runtime libraries and font setup from the Wolfi stage.
-# /usr/lib carries pango/harfbuzz/openjpeg/jpeg/freetype/fontconfig/glib .so
-# files. /etc/fonts + /usr/share/fontconfig + /usr/share/fonts carry the
-# font config tree and Liberation fonts WeasyPrint queries via fontconfig.
-COPY --from=weasyprint-libs /usr/lib/ /usr/lib/
-COPY --from=weasyprint-libs /etc/fonts/ /etc/fonts/
-COPY --from=weasyprint-libs /usr/share/fontconfig/ /usr/share/fontconfig/
-COPY --from=weasyprint-libs /usr/share/fonts/ /usr/share/fonts/
+# Copy the slimmed /staged tree (pre-filtered to WeasyPrint's actual .so
+# closure plus the Liberation Sans / Mono fonts the print CSS references).
+COPY --from=weasyprint-libs /staged/ /
 
 # Copy pre-created runtime directories with nonroot ownership (UID 65532)
 COPY --from=collectstatic /staged-dirs/var/lib/dramatiq-prometheus /var/lib/dramatiq-prometheus
