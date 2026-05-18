@@ -78,14 +78,16 @@ _BSI_REMEDIATION_TYPE: dict[str, str] = {
 # Default guidance URL for BSI findings without a more specific override.
 _BSI_DEFAULT_GUIDANCE_URL = "https://sbomify.com/compliance/"
 
-# Anchored BSI TR-03183-2 page used by per-finding overrides. Pulled into a
-# constant so the override dict has a single source of truth and can be
-# swapped to a per-finding URL when more specific pages ship.
-_BSI_TR03183_FORMAT_REQUIREMENTS_URL = "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4"
+# BSI TR-03183-2 guidance page. The ``#format-requirements-4`` anchor is the
+# best landing for ``sbom-format`` and is acceptable for ``attestation-check``
+# (the BSI page is the standard reference for both; no separate attestation
+# anchor exists yet). Swap individual overrides to per-finding constants once
+# more specific pages (e.g. ``/compliance/attestations/``) ship.
+_BSI_TR03183_GUIDANCE_URL = "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4"
 
 _BSI_GUIDANCE_URL_OVERRIDES: dict[str, str] = {
-    "bsi-tr03183:sbom-format": _BSI_TR03183_FORMAT_REQUIREMENTS_URL,
-    "bsi-tr03183:attestation-check": _BSI_TR03183_FORMAT_REQUIREMENTS_URL,
+    "bsi-tr03183:sbom-format": _BSI_TR03183_GUIDANCE_URL,
+    "bsi-tr03183:attestation-check": _BSI_TR03183_GUIDANCE_URL,
 }
 
 # Plain-English "why is this failing and what do I do about it" sentence

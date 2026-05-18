@@ -242,7 +242,7 @@ class TestClassifyBsiFinding:
         TR-03183-2 page rather than the generic /compliance/ index."""
         from sbomify.apps.compliance.services.sbom_compliance_service import (
             _BSI_DEFAULT_GUIDANCE_URL,
-            _BSI_TR03183_FORMAT_REQUIREMENTS_URL,
+            _BSI_TR03183_GUIDANCE_URL,
             _classify_bsi_finding,
         )
 
@@ -250,8 +250,8 @@ class TestClassifyBsiFinding:
         _, url_format, _ = _classify_bsi_finding("bsi-tr03183:sbom-format")
         _, url_attest, _ = _classify_bsi_finding("bsi-tr03183:attestation-check")
         assert url_default == _BSI_DEFAULT_GUIDANCE_URL
-        assert url_format == _BSI_TR03183_FORMAT_REQUIREMENTS_URL
-        assert url_attest == _BSI_TR03183_FORMAT_REQUIREMENTS_URL
+        assert url_format == _BSI_TR03183_GUIDANCE_URL
+        assert url_attest == _BSI_TR03183_GUIDANCE_URL
         assert url_format != url_default
         assert url_attest != url_default
 
