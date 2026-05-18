@@ -98,4 +98,33 @@ describe('Theme Manager', () => {
             expect(STORAGE_KEY).toBe('sbomify-theme')
         })
     })
+
+    describe('initThemeManager public-page short-circuit', () => {
+        // public_base.htmx.j2 owns its own theme system keyed on
+        // ``data-theme="dark"|"light"`` (with its own ``public-theme``
+        // localStorage key). When that attribute is already present on
+        // <html> by the time main.ts runs ``initThemeManager``, the
+        // auth-app theme manager must early-return so it doesn't clobber
+        // the public theme (which would force a stale
+        // ``sbomify-theme`` value over the live ``public-theme`` and
+        // flip e.g. table-header backgrounds to the wrong variant set).
+        const initThemeManagerGuard = (rootHasDataTheme: boolean): { ran: boolean; reason: string } => {
+            if (rootHasDataTheme) {
+                return { ran: false, reason: 'short-circuit: public page owns theming via data-theme' }
+            }
+            return { ran: true, reason: 'auth page: applied stored theme + exposed window.themeManager' }
+        }
+
+        test('returns without applying anything when data-theme is preset', () => {
+            const result = initThemeManagerGuard(true)
+            expect(result.ran).toBe(false)
+            expect(result.reason).toContain('short-circuit')
+        })
+
+        test('runs normally on auth pages with no data-theme attribute', () => {
+            const result = initThemeManagerGuard(false)
+            expect(result.ran).toBe(true)
+            expect(result.reason).toContain('auth page')
+        })
+    })
 })

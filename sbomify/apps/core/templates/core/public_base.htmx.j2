@@ -257,19 +257,6 @@
                 color-scheme: dark;
             }
 
-            /* Format logos (CycloneDX / SPDX) are dark-on-light by design.
-               Render them white when the trust-center is in dark mode so
-               they don't disappear against the slate surface. This handles
-               the manual toggle case where `data-theme="dark"` is set but
-               the `.dark` class isn't (theme-manager.ts uses a different
-               state machine on auth pages). The `dark:brightness-0
-               dark:invert` Tailwind utilities on the <img> tags cover the
-               OS-level prefers-color-scheme: dark case. */
-            html[data-theme="dark"] img[src*="cyclonedx-logo"],
-            html[data-theme="dark"] img[src*="spdx-logo"] {
-                filter: brightness(0) invert(1);
-            }
-
             /* System theme - light preference */
             html:not([data-theme]) {
                 --text-primary: #0f172a;
