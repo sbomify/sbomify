@@ -99,9 +99,15 @@ function craDocSignature() {
         this.image = data.image || '';
         this.signedAt = data.signed_at;
         this.isSigned = data.is_signed;
-        // Restore the strokes so the pad reflects the prior save.
+        // Restore the strokes so the pad reflects the prior save. The
+        // ratio must match the one ``_fitCanvas`` applied via
+        // ``ctx.scale(ratio, ratio)``; passing ``ratio: 1`` against a
+        // context that's already scaled by ``devicePixelRatio`` makes
+        // signature_pad draw the saved PNG at 2× on retina screens,
+        // producing the "zoomed in" reload bug.
         if (data.image && this.pad) {
-          this.pad.fromDataURL(data.image, { ratio: 1 });
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          this.pad.fromDataURL(data.image, { ratio });
         }
       } catch {
         // Network blip — leave the form empty, operator can still sign.
