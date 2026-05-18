@@ -238,7 +238,7 @@ class TestClassifyBsiFinding:
         assert "Unclassified" in human_summary
 
     def test_attestation_check_gets_overridden_guidance_url(self):
-        """Overrides point operator-action fixes at the anchored BSI
+        """Overrides point operator-action fixes to the anchored BSI
         TR-03183-2 page rather than the generic /compliance/ index."""
         from sbomify.apps.compliance.services.sbom_compliance_service import (
             _BSI_DEFAULT_GUIDANCE_URL,

@@ -201,11 +201,11 @@ def _classify_bsi_finding(finding_id: object) -> tuple[str, str, str]:
     finding in the scan. Coerce to the fail-closed default instead.
 
     Unknown or non-string finding ids fall back to ``operator_action``
-    + the enrichment URL + a generic summary — the conservative
-    default keeps the wizard gate strict when the BSI plugin gains a
-    new check that this classifier hasn't been updated for yet, or
-    when upstream emits a malformed id that the ``_build_bsi_assessment_dict``
-    coercion didn't catch.
+    + ``_BSI_DEFAULT_GUIDANCE_URL`` + a generic summary — the
+    conservative default keeps the wizard gate strict when the BSI
+    plugin gains a new check that this classifier hasn't been updated
+    for yet, or when upstream emits a malformed id that the
+    ``_build_bsi_assessment_dict`` coercion didn't catch.
 
     The ``human_summary`` is a one-line operator-facing sentence
     (issue #907) explaining in plain English why this check fails
