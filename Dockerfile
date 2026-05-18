@@ -335,8 +335,10 @@ RUN apk add --no-cache \
 #
 # Font selection: Liberation Sans is the metric-compatible Arial / Helvetica
 # substitute (the families the body CSS asks for) — fontconfig resolves the
-# CSS request to it. The 4 weights shipped were picked by auditing the actual
+# CSS request to it. The 4 .ttf files shipped (LiberationSans Regular + Bold
+# + Italic, plus LiberationMono Regular) were picked by auditing the actual
 # HTML the markdown renderer produces against every CRA document kind:
+#   - body text: present everywhere → ship Sans Regular.
 #   - <strong> tags: present in all 4 docs (3-19 each) → ship Sans Bold.
 #   - <em> tags: present in all 4 docs (1-18 each) → ship Sans Italic.
 #   - <strong><em> nested: 0 across all docs → SansBoldItalic skipped;
@@ -344,8 +346,8 @@ RUN apk add --no-cache \
 #     future template introduces ***foo***.
 #   - <code> tags: present only in the DoC (10 each), never bolded or
 #     italicized → ship LiberationMono-Regular only.
-# LiberationSerif is unused; LiberationMono Bold / Italic / BoldItalic are
-# unused; SansBoldItalic is unused.
+# Skipped weights: LiberationSans-BoldItalic, all 4 LiberationSerif weights,
+# and LiberationMono Bold / Italic / BoldItalic.
 # fontconfig setup (/etc/fonts + /usr/share/fontconfig) ships verbatim
 # because the per-family conf snippets are small (~370 KB combined) and
 # trimming them would require auditing every snippet.
