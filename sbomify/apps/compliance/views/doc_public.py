@@ -31,7 +31,11 @@ from django.utils.safestring import mark_safe
 from django.views import View
 
 from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument
-from sbomify.apps.compliance.views._public_helpers import fetch_doc_from_s3, markdown_to_html
+from sbomify.apps.compliance.views._public_helpers import (
+    fetch_doc_from_s3,
+    markdown_to_html,
+    remove_signature_place_for_public,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,15 @@ class ProductDoCPublicView(View):
         content = fetch_doc_from_s3(doc)
         if not content:
             return HttpResponseNotFound("No Declaration of Conformity for this product")
+
+        # Strip Annex V Section 8 "Place" before rendering: the trust
+        # center is public, so the city / country where the operator
+        # signed shouldn't be broadcast. Dropping the bullet entirely
+        # (rather than rendering "[redacted]") keeps the public DoC
+        # focused on data we DO want to surface. The auditor-facing
+        # PDF + the bundle export keep the original markdown from S3
+        # unchanged, so Annex V Section 8 compliance is preserved.
+        content = remove_signature_place_for_public(content)
 
         # Safe: markdown_to_html escapes all input via html.escape() before adding markup.
         doc_html = mark_safe(markdown_to_html(content))  # nosec B703 B308  # noqa: S308

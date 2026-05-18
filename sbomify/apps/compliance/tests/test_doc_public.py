@@ -185,6 +185,39 @@ class TestProductDoCPublicView:
 
         assert response.status_code == 404
 
+    def test_signature_place_is_removed_in_public_render(self, public_product):
+        """Annex V Section 8 Place leaks the operator's signing
+        location. The auditor-facing PDF + bundle export keep the value
+        for compliance, but the public trust-center page drops the
+        bullet entirely (placeholder text would be noise)."""
+        assessment = _make_assessment(public_product, status=CRAAssessment.WizardStatus.COMPLETE)
+        _attach_doc(assessment)
+
+        markdown_with_place = (
+            "## Signed for and on behalf of the manufacturer\n"
+            "\n"
+            "- **Place:** Old Town, Wonderland\n"
+            "- **Date:** 2026-05-18\n"
+            "- **Name:** Jane Doe\n"
+            "- **Function:** Test Officer\n"
+        )
+
+        with _stub_s3_get_document(content=markdown_with_place):
+            response = Client().get(reverse("compliance:product_doc_public", kwargs={"product_id": public_product.id}))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        # The Place bullet is dropped entirely — no label, no value, no
+        # placeholder text.
+        assert "Place" not in body
+        assert "Old Town" not in body
+        assert "Wonderland" not in body
+        # Other Annex V Section 8 fields stay intact so the page is
+        # still recognisable as a Declaration of Conformity.
+        assert "Jane Doe" in body
+        assert "Test Officer" in body
+        assert "2026-05-18" in body
+
 
 class TestInlineMarkupEdgeCases:
     """Regression tests for ``inline_markup`` glitches surfaced by the DoC.
