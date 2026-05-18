@@ -9,6 +9,15 @@ ARG COSIGN_VERSION=v3.0.6
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
 ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970f2d4316ffe1f42abcb0413282b555bf7ce9b0774a7c79
+# Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
+# digest so the builder image itself is reproducible. The actual .so
+# versions still come from `apk add` against the live Wolfi repo at build
+# time — Wolfi ships no repo-snapshot mechanism, but its package updates
+# are ABI-stable security patches, so the copied libraries stay binary-
+# compatible across rebuilds. Bump the digest below when you want to pick
+# up newer patches.
+# To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:0cff4df29a6597173dc8b813787318150141eb96ac783dc3ff4f5ff52c49a1e2
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
@@ -289,6 +298,86 @@ RUN mkdir -p /code/staticfiles && \
     mkdir -p /staged-dirs/var/lib/dramatiq-prometheus /staged-dirs/tmp/.cache && \
     chown -R 65532:65532 /staged-dirs/var /staged-dirs/tmp
 
+### Stage 7b: Stage WeasyPrint runtime libraries from Wolfi
+# WeasyPrint dlopen()s Pango / HarfBuzz / OpenJPEG / libjpeg / FreeType /
+# fontconfig / glib at write_pdf() time, NOT at import time. The Chainguard
+# distroless prod image (Stage 7) does not ship these libs, so PDF rendering
+# fails at runtime with "PDF rendering is unavailable" even though the
+# WeasyPrint Python package itself imports cleanly. We install the libs in
+# a Wolfi-based builder stage and COPY them into the distroless image.
+#
+# Wolfi-base shares the same glibc as cgr.dev/chainguard/python (both are
+# built on Wolfi-glibc), so .so files copied across stages are ABI-safe —
+# unlike copying libs from a Debian builder, which would risk glibc skew.
+# Fonts (font-liberation + fontconfig) are required because WeasyPrint
+# asks fontconfig for fallbacks at render time; without a font, text
+# glyphs render as boxes instead of the chosen Helvetica/Arial fallback.
+ARG CHAINGUARD_WOLFI_BASE_IMAGE
+FROM ${CHAINGUARD_WOLFI_BASE_IMAGE} AS weasyprint-libs
+# font-liberation is a metric-compatible drop-in for Arial / Helvetica /
+# Times New Roman / Courier (the families the print CSS targets) at
+# ~3 MB. font-noto's full multi-script set is ~470 MB — needlessly
+# bloats the prod image since the DoC is Latin / Latin-extended /
+# Cyrillic / Greek only and Liberation covers all four.
+RUN apk add --no-cache \
+        pango \
+        harfbuzz \
+        openjpeg \
+        libjpeg-turbo \
+        fontconfig \
+        freetype \
+        glib \
+        font-liberation
+
+# Stage just the .so files WeasyPrint actually dlopen()s plus their transitive
+# deps (verified with ld-linux --list against libpango / libpangoft2 / libharfbuzz
+# / libfreetype / libfontconfig / libopenjp2 / libjpeg) and the Liberation Sans
+# weights + Liberation Mono Regular the print CSS targets. Copying these
+# specific files instead of /usr/lib + /usr/share/fonts wholesale shrinks the
+# runtime payload from ~46 MB to ~18 MB. libc / libm / libffi / ld-linux are
+# already in the prod image — re-copying them would risk a glibc skew, so
+# they're intentionally omitted.
+#
+# Font selection: Liberation Sans is the metric-compatible Arial / Helvetica
+# substitute (the families the body CSS asks for) — fontconfig resolves the
+# CSS request to it. The 4 .ttf files shipped (LiberationSans Regular + Bold
+# + Italic, plus LiberationMono Regular) were picked by auditing the actual
+# HTML the markdown renderer produces against every CRA document kind:
+#   - body text: present everywhere → ship Sans Regular.
+#   - <strong> tags: present in all 4 docs (3-19 each) → ship Sans Bold.
+#   - <em> tags: present in all 4 docs (1-18 each) → ship Sans Italic.
+#   - <strong><em> nested: 0 across all docs → SansBoldItalic skipped;
+#     fontconfig synthesizes acceptable bold-italic from Italic / Bold if a
+#     future template introduces ***foo***.
+#   - <code> tags: present only in the DoC (10 each), never bolded or
+#     italicized → ship LiberationMono-Regular only.
+# Skipped weights: LiberationSans-BoldItalic, all 4 LiberationSerif weights,
+# and LiberationMono Bold / Italic / BoldItalic.
+# fontconfig setup (/etc/fonts + /usr/share/fontconfig) ships verbatim
+# because the per-family conf snippets are small (~370 KB combined) and
+# trimming them would require auditing every snippet.
+RUN mkdir -p /staged/usr/lib /staged/usr/share/fonts/font-liberation \
+             /staged/usr/share/fontconfig /staged/etc/fonts && \
+    cd /usr/lib && cp -a \
+        libpango-1.0.so* libpangoft2-1.0.so* \
+        libharfbuzz.so* \
+        libfreetype.so* \
+        libfontconfig.so* \
+        libopenjp2.so* libjpeg.so* \
+        libbrotlicommon.so* libbrotlidec.so* \
+        libbz2.so* libexpat.so* libfribidi.so* libgraphite2.so* \
+        libgio-2.0.so* libglib-2.0.so* libgmodule-2.0.so* libgobject-2.0.so* \
+        libpcre2-8.so* libpng16.so* libz.so* \
+        libblkid.so* libmount.so* libselinux.so* \
+        /staged/usr/lib/ && \
+    cp -a /usr/share/fonts/font-liberation/LiberationSans-Regular.ttf \
+          /usr/share/fonts/font-liberation/LiberationSans-Bold.ttf \
+          /usr/share/fonts/font-liberation/LiberationSans-Italic.ttf \
+          /usr/share/fonts/font-liberation/LiberationMono-Regular.ttf \
+          /staged/usr/share/fonts/font-liberation/ && \
+    cp -a /usr/share/fontconfig/. /staged/usr/share/fontconfig/ && \
+    cp -a /etc/fonts/. /staged/etc/fonts/
+
 ### Stage 7: Python Application for Production (python-app-prod)
 # Uses Chainguard distroless Python — no shell, no apt, no pip, no uv at runtime.
 # This reduces CVEs significantly and shrinks the image by ~50%.
@@ -329,6 +418,10 @@ COPY --from=collectstatic /code /code
 # Copy the osv-scanner and cosign binaries from the binary-downloader stage
 COPY --from=binary-downloader /usr/local/bin/osv-scanner /usr/local/bin/osv-scanner
 COPY --from=binary-downloader /usr/local/bin/cosign /usr/local/bin/cosign
+
+# Copy the slimmed /staged tree (pre-filtered to WeasyPrint's actual .so
+# closure plus the Liberation Sans / Mono fonts the print CSS references).
+COPY --from=weasyprint-libs /staged/ /
 
 # Copy pre-created runtime directories with nonroot ownership (UID 65532)
 COPY --from=collectstatic /staged-dirs/var/lib/dramatiq-prometheus /var/lib/dramatiq-prometheus
