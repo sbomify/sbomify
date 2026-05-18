@@ -254,11 +254,12 @@
                `dark:` variant fires. Trust-center pages drive theme via
                `data-theme="dark"` (their own state machine), so the variant
                doesn't pick this up. Apply the dark-code background by hand
-               so the `<code>` text stays readable on the public DoC + VDP
-               pages until the variant unification lands. */
+               using the same dark-theme CSS variables defined just above
+               (re-use ``--color-surface-elevated`` and ``--color-text`` so
+               future palette tweaks flow through to <code> automatically). */
             html[data-theme="dark"] .prose code {
-                background-color: rgb(51 65 85);
-                color: rgb(248 250 252);
+                background-color: rgb(var(--color-surface-elevated));
+                color: rgb(var(--color-text));
             }
 
             /* System theme - light preference */

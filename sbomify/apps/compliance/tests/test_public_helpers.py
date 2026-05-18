@@ -91,3 +91,14 @@ class TestRemoveSignaturePlaceForPublic:
         assert out.count("**Date:**") == 1
         assert out.count("**Name:**") == 1
         assert out.count("**Place:**") == 0
+
+    def test_removes_place_when_it_is_the_last_line_without_trailing_newline(self):
+        """Edge case: if the S3 markdown is trimmed (or the DoC template
+        ever changes so Place sits at end-of-file), the bullet must
+        still be stripped — otherwise the sensitive value leaks just
+        because the doc happened to not end with ``\\n``."""
+        markdown = "- **Date:** 2026-05-18\n- **Place:** Paris, France"  # no trailing newline
+        out = remove_signature_place_for_public(markdown)
+        assert "Place" not in out
+        assert "Paris" not in out
+        assert "- **Date:** 2026-05-18" in out

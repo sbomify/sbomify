@@ -208,13 +208,16 @@ def get_document_content(product: Any, document_kind: str, *, fresh_only: bool =
     return fetch_doc_from_s3(doc)
 
 
-# Matches the entire ``- **Place:** …\n`` bullet so we can drop it
-# from the public render. The PDF and bundle export hold the original
-# markdown — only the public trust-center view fetches it through this
-# helper. CRA Annex V Section 8 still requires Place to be present in
-# the authoritative DoC; the auditor / notified body sees the
-# unredacted value via the export ZIP.
-_DOC_PLACE_LINE_RE = re.compile(r"^- \*\*Place:\*\* .+\n", re.MULTILINE)
+# Matches the entire ``- **Place:** …`` bullet so we can drop it from
+# the public render. The trailing newline is optional so a Place bullet
+# at end-of-file (e.g. an S3 blob that was trimmed before storage) is
+# still removed; otherwise the sensitive value would leak whenever it
+# happens to be the final line. The PDF and bundle export hold the
+# original markdown — only the public trust-center view fetches it
+# through this helper. CRA Annex V Section 8 still requires Place to be
+# present in the authoritative DoC; the auditor / notified body sees
+# the unredacted value via the export ZIP.
+_DOC_PLACE_LINE_RE = re.compile(r"^- \*\*Place:\*\* .+(?:\n|$)", re.MULTILINE)
 
 
 def remove_signature_place_for_public(markdown: str) -> str:
