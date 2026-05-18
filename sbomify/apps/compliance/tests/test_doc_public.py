@@ -185,6 +185,37 @@ class TestProductDoCPublicView:
 
         assert response.status_code == 404
 
+    def test_signature_place_is_redacted_in_public_render(self, public_product):
+        """Annex V Section 8 Place leaks the operator's signing
+        location. The auditor-facing PDF + bundle export keep the value
+        for compliance, but the public trust-center page must mask it."""
+        assessment = _make_assessment(public_product, status=CRAAssessment.WizardStatus.COMPLETE)
+        _attach_doc(assessment)
+
+        markdown_with_place = (
+            "## Signed for and on behalf of the manufacturer\n"
+            "\n"
+            "- **Place:** Naberezhnye Chelny, Russian Federation\n"
+            "- **Date:** 2026-05-18\n"
+            "- **Name:** Renat Galimov\n"
+            "- **Function:** CTO\n"
+        )
+
+        with _stub_s3_get_document(content=markdown_with_place):
+            response = Client().get(reverse("compliance:product_doc_public", kwargs={"product_id": public_product.id}))
+
+        assert response.status_code == 200
+        body = response.content.decode("utf-8")
+        # Place value is gone, the redaction placeholder is present.
+        assert "Naberezhnye Chelny" not in body
+        assert "Russian Federation" not in body
+        assert "Redacted" in body
+        # Other Annex V Section 8 fields stay intact so the page is
+        # still recognisable as a Declaration of Conformity.
+        assert "Renat Galimov" in body
+        assert "CTO" in body
+        assert "2026-05-18" in body
+
 
 class TestInlineMarkupEdgeCases:
     """Regression tests for ``inline_markup`` glitches surfaced by the DoC.

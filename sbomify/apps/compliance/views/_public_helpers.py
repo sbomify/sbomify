@@ -208,6 +208,27 @@ def get_document_content(product: Any, document_kind: str, *, fresh_only: bool =
     return fetch_doc_from_s3(doc)
 
 
+# Matches the ``- **Place:** …`` bullet on its own line in the DoC
+# markdown so we can blank out the value for public renders. The PDF and
+# bundle export hold the original markdown — only the public trust-center
+# view fetches it through this redaction. CRA Annex V Section 8 still
+# requires Place to be present in the authoritative DoC; the auditor /
+# notified body sees the unredacted value via the export ZIP.
+_DOC_PLACE_LINE_RE = re.compile(r"^- \*\*Place:\*\* .+$", re.MULTILINE)
+
+
+def redact_signature_place_for_public(markdown: str) -> str:
+    """Mask the signing location in the DoC markdown for public display.
+
+    The stored markdown is the regulator-facing source of truth and is
+    not modified. This helper rewrites the rendered output before it
+    reaches the public trust center page so the city / country where
+    the operator signed isn't broadcast to anyone who hits the
+    ``/public/...`` DoC URL.
+    """
+    return _DOC_PLACE_LINE_RE.sub("- **Place:** _Redacted_", markdown)
+
+
 def fetch_doc_from_s3(doc: CRAGeneratedDocument) -> str | None:
     """Fetch document content from S3 and return as string."""
     try:
