@@ -247,6 +247,20 @@
                 color-scheme: dark;
             }
 
+            /* Tailwind's `prose` typography plugin gives inline `<code>` a
+               light slate background that turns into white-on-near-white in
+               dark mode. The `dark:prose-invert` class on doc_public /
+               vdp_public templates fixes this — but only when Tailwind's
+               `dark:` variant fires. Trust-center pages drive theme via
+               `data-theme="dark"` (their own state machine), so the variant
+               doesn't pick this up. Apply the dark-code background by hand
+               so the `<code>` text stays readable on the public DoC + VDP
+               pages until the variant unification lands. */
+            html[data-theme="dark"] .prose code {
+                background-color: rgb(51 65 85);
+                color: rgb(248 250 252);
+            }
+
             /* System theme - light preference */
             html:not([data-theme]) {
                 --text-primary: #0f172a;
