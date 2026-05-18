@@ -185,10 +185,11 @@ class TestProductDoCPublicView:
 
         assert response.status_code == 404
 
-    def test_signature_place_is_redacted_in_public_render(self, public_product):
+    def test_signature_place_is_removed_in_public_render(self, public_product):
         """Annex V Section 8 Place leaks the operator's signing
         location. The auditor-facing PDF + bundle export keep the value
-        for compliance, but the public trust-center page must mask it."""
+        for compliance, but the public trust-center page drops the
+        bullet entirely (placeholder text would be noise)."""
         assessment = _make_assessment(public_product, status=CRAAssessment.WizardStatus.COMPLETE)
         _attach_doc(assessment)
 
@@ -206,10 +207,11 @@ class TestProductDoCPublicView:
 
         assert response.status_code == 200
         body = response.content.decode("utf-8")
-        # Place value is gone, the redaction placeholder is present.
+        # The Place bullet is dropped entirely — no label, no value, no
+        # placeholder text.
+        assert "Place" not in body
         assert "Naberezhnye Chelny" not in body
         assert "Russian Federation" not in body
-        assert "Redacted" in body
         # Other Annex V Section 8 fields stay intact so the page is
         # still recognisable as a Declaration of Conformity.
         assert "Renat Galimov" in body

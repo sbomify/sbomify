@@ -34,7 +34,7 @@ from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument
 from sbomify.apps.compliance.views._public_helpers import (
     fetch_doc_from_s3,
     markdown_to_html,
-    redact_signature_place_for_public,
+    remove_signature_place_for_public,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,11 +81,14 @@ class ProductDoCPublicView(View):
         if not content:
             return HttpResponseNotFound("No Declaration of Conformity for this product")
 
-        # Mask Annex V Section 8 "Place" before rendering: the trust
+        # Strip Annex V Section 8 "Place" before rendering: the trust
         # center is public, so the city / country where the operator
-        # signed shouldn't be broadcast. The auditor-facing PDF + the
-        # bundle export keep the original markdown from S3 unchanged.
-        content = redact_signature_place_for_public(content)
+        # signed shouldn't be broadcast. Dropping the bullet entirely
+        # (rather than rendering "[redacted]") keeps the public DoC
+        # focused on data we DO want to surface. The auditor-facing
+        # PDF + the bundle export keep the original markdown from S3
+        # unchanged, so Annex V Section 8 compliance is preserved.
+        content = remove_signature_place_for_public(content)
 
         # Safe: markdown_to_html escapes all input via html.escape() before adding markup.
         doc_html = mark_safe(markdown_to_html(content))  # nosec B703 B308  # noqa: S308
