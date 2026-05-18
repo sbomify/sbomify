@@ -196,10 +196,10 @@ class TestProductDoCPublicView:
         markdown_with_place = (
             "## Signed for and on behalf of the manufacturer\n"
             "\n"
-            "- **Place:** Naberezhnye Chelny, Russian Federation\n"
+            "- **Place:** Old Town, Wonderland\n"
             "- **Date:** 2026-05-18\n"
-            "- **Name:** Renat Galimov\n"
-            "- **Function:** CTO\n"
+            "- **Name:** Jane Doe\n"
+            "- **Function:** Test Officer\n"
         )
 
         with _stub_s3_get_document(content=markdown_with_place):
@@ -210,12 +210,12 @@ class TestProductDoCPublicView:
         # The Place bullet is dropped entirely — no label, no value, no
         # placeholder text.
         assert "Place" not in body
-        assert "Naberezhnye Chelny" not in body
-        assert "Russian Federation" not in body
+        assert "Old Town" not in body
+        assert "Wonderland" not in body
         # Other Annex V Section 8 fields stay intact so the page is
         # still recognisable as a Declaration of Conformity.
-        assert "Renat Galimov" in body
-        assert "CTO" in body
+        assert "Jane Doe" in body
+        assert "Test Officer" in body
         assert "2026-05-18" in body
 
 

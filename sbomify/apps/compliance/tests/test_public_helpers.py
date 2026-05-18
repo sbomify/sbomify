@@ -16,30 +16,30 @@ class TestRemoveSignaturePlaceForPublic:
         markdown = (
             "## Signed for and on behalf of the manufacturer\n"
             "\n"
-            "- **Place:** Berlin, Germany\n"
+            "- **Place:** Old Town, Wonderland\n"
             "- **Date:** 2026-05-18\n"
         )
         out = remove_signature_place_for_public(markdown)
         assert "Place" not in out
-        assert "Berlin" not in out
-        assert "Germany" not in out
+        assert "Old Town" not in out
+        assert "Wonderland" not in out
         # The rest of the section is untouched.
         assert "- **Date:** 2026-05-18" in out
         assert "Signed for and on behalf of the manufacturer" in out
 
     def test_keeps_other_signature_fields_intact(self):
         markdown = (
-            "- **Place:** Tokyo, Japan\n"
+            "- **Place:** Foo City, Wonderland\n"
             "- **Date:** 2026-05-18\n"
-            "- **Name:** Renat Galimov\n"
-            "- **Function:** CTO\n"
+            "- **Name:** Jane Doe\n"
+            "- **Function:** Test Officer\n"
         )
         out = remove_signature_place_for_public(markdown)
-        assert "Tokyo" not in out
+        assert "Foo City" not in out
         assert "Place" not in out
         assert "- **Date:** 2026-05-18" in out
-        assert "- **Name:** Renat Galimov" in out
-        assert "- **Function:** CTO" in out
+        assert "- **Name:** Jane Doe" in out
+        assert "- **Function:** Test Officer" in out
 
     def test_idempotent_when_place_already_absent(self):
         already = "- **Date:** 2026-05-18\n- **Name:** Test\n"
@@ -66,14 +66,16 @@ class TestRemoveSignaturePlaceForPublic:
         assert remove_signature_place_for_public(markdown) == markdown
 
     def test_handles_unicode_place_value(self):
+        # Multi-byte (German umlaut + accent) + emoji exercise the unicode
+        # path; all values are fictional placeholders.
         markdown = (
-            "- **Place:** Naberezhnye Chelny, Russian Federation 🇷🇺\n"
+            "- **Place:** Übung Café, Atlantis 🏝️\n"
             "- **Date:** 2026-05-18\n"
         )
         out = remove_signature_place_for_public(markdown)
-        assert "Naberezhnye Chelny" not in out
-        assert "Russian Federation" not in out
-        assert "🇷🇺" not in out
+        assert "Übung Café" not in out
+        assert "Atlantis" not in out
+        assert "🏝️" not in out
         assert "Place" not in out
         # Adjacent bullet kept intact.
         assert "- **Date:** 2026-05-18" in out
@@ -82,7 +84,7 @@ class TestRemoveSignaturePlaceForPublic:
         markdown = (
             "## Signed for and on behalf of the manufacturer\n"
             "\n"
-            "- **Place:** Berlin, Germany\n"
+            "- **Place:** Old Town, Wonderland\n"
             "- **Date:** 2026-05-18\n"
             "- **Name:** Test User\n"
         )
@@ -97,8 +99,9 @@ class TestRemoveSignaturePlaceForPublic:
         ever changes so Place sits at end-of-file), the bullet must
         still be stripped — otherwise the sensitive value leaks just
         because the doc happened to not end with ``\\n``."""
-        markdown = "- **Date:** 2026-05-18\n- **Place:** Paris, France"  # no trailing newline
+        # No trailing newline.
+        markdown = "- **Date:** 2026-05-18\n- **Place:** Foo City, Wonderland"
         out = remove_signature_place_for_public(markdown)
         assert "Place" not in out
-        assert "Paris" not in out
+        assert "Foo City" not in out
         assert "- **Date:** 2026-05-18" in out
