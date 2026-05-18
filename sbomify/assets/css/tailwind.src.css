@@ -9,6 +9,18 @@
 @source "../../templates/**/*.{html,html.j2,j2}";
 
 /* ============================================
+   Dark mode variant (class-based)
+   ============================================
+   Tailwind v4 ignores the v3-era ``darkMode: 'class'`` in
+   ``tailwind.config.js`` — the CSS-first variant below is the way to
+   make ``dark:*`` utilities fire from the ``.dark`` class added by
+   ``theme-manager.ts`` (and the inline FOUC script in
+   ``base.html.j2``). Without it, Tailwind defaults to
+   ``prefers-color-scheme: dark``, which means UI-toggled dark mode
+   on a light-OS browser wouldn't trigger ``dark:*`` rules. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================
    Theme Configuration
    Based on sbomify Brand Guidelines v1.0
    ============================================ */
