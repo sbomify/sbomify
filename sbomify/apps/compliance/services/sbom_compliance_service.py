@@ -76,11 +76,16 @@ _BSI_REMEDIATION_TYPE: dict[str, str] = {
 }
 
 # Default guidance URL for BSI findings without a more specific override.
-_SBOMIFY_ACTION_ENRICHMENT_URL = "https://sbomify.com/compliance/"
+_BSI_DEFAULT_GUIDANCE_URL = "https://sbomify.com/compliance/"
+
+# Anchored BSI TR-03183-2 page used by per-finding overrides. Pulled into a
+# constant so the override dict has a single source of truth and can be
+# swapped to a per-finding URL when more specific pages ship.
+_BSI_TR03183_FORMAT_REQUIREMENTS_URL = "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4"
 
 _BSI_GUIDANCE_URL_OVERRIDES: dict[str, str] = {
-    "bsi-tr03183:sbom-format": "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4",
-    "bsi-tr03183:attestation-check": "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4",
+    "bsi-tr03183:sbom-format": _BSI_TR03183_FORMAT_REQUIREMENTS_URL,
+    "bsi-tr03183:attestation-check": _BSI_TR03183_FORMAT_REQUIREMENTS_URL,
 }
 
 # Plain-English "why is this failing and what do I do about it" sentence
@@ -210,9 +215,9 @@ def _classify_bsi_finding(finding_id: object) -> tuple[str, str, str]:
     the remediation from the BSI plugin's schema-oriented text.
     """
     if not isinstance(finding_id, str):
-        return "operator_action", _SBOMIFY_ACTION_ENRICHMENT_URL, _UNKNOWN_FINDING_SUMMARY
+        return "operator_action", _BSI_DEFAULT_GUIDANCE_URL, _UNKNOWN_FINDING_SUMMARY
     remediation_type = _BSI_REMEDIATION_TYPE.get(finding_id, "operator_action")
-    guidance_url = _BSI_GUIDANCE_URL_OVERRIDES.get(finding_id, _SBOMIFY_ACTION_ENRICHMENT_URL)
+    guidance_url = _BSI_GUIDANCE_URL_OVERRIDES.get(finding_id, _BSI_DEFAULT_GUIDANCE_URL)
     human_summary = _BSI_HUMAN_SUMMARY.get(finding_id, _UNKNOWN_FINDING_SUMMARY)
     return remediation_type, guidance_url, human_summary
 
