@@ -78,16 +78,19 @@ _BSI_REMEDIATION_TYPE: dict[str, str] = {
     "bsi-tr03183:attestation-check": "operator_action",
 }
 
-# Single source of truth for the sbomify-action enrichment docs so
-# every guidance link points at the same page. Overridable per-
-# finding via ``_BSI_GUIDANCE_URL_OVERRIDES`` below.
-_SBOMIFY_ACTION_ENRICHMENT_URL = "https://sbomify.com/docs/sbomify-action/enrichment"
+# Default guidance URL for BSI findings without a more specific override.
+_BSI_DEFAULT_GUIDANCE_URL = "https://sbomify.com/compliance/"
 
-# Per-finding doc links when the default URL isn't the right target
-# (e.g. CycloneDX / SPDX schema reference for format issues).
+# BSI TR-03183-2 guidance page. The ``#format-requirements-4`` anchor is the
+# best landing for ``sbom-format`` and is acceptable for ``attestation-check``
+# (the BSI page is the standard reference for both; no separate attestation
+# anchor exists yet). Swap individual overrides to per-finding constants once
+# more specific pages (e.g. ``/compliance/attestations/``) ship.
+_BSI_TR03183_GUIDANCE_URL = "https://sbomify.com/compliance/bsi-tr-03183/#format-requirements-4"
+
 _BSI_GUIDANCE_URL_OVERRIDES: dict[str, str] = {
-    "bsi-tr03183:sbom-format": "https://sbomify.com/docs/sbom-format",
-    "bsi-tr03183:attestation-check": "https://sbomify.com/docs/attestations",
+    "bsi-tr03183:sbom-format": _BSI_TR03183_GUIDANCE_URL,
+    "bsi-tr03183:attestation-check": _BSI_TR03183_GUIDANCE_URL,
 }
 
 # Plain-English "why is this failing and what do I do about it" sentence
@@ -203,11 +206,11 @@ def _classify_bsi_finding(finding_id: object) -> tuple[str, str, str]:
     finding in the scan. Coerce to the fail-closed default instead.
 
     Unknown or non-string finding ids fall back to ``operator_action``
-    + the enrichment URL + a generic summary — the conservative
-    default keeps the wizard gate strict when the BSI plugin gains a
-    new check that this classifier hasn't been updated for yet, or
-    when upstream emits a malformed id that the ``_build_bsi_assessment_dict``
-    coercion didn't catch.
+    + ``_BSI_DEFAULT_GUIDANCE_URL`` + a generic summary — the
+    conservative default keeps the wizard gate strict when the BSI
+    plugin gains a new check that this classifier hasn't been updated
+    for yet, or when upstream emits a malformed id that the
+    ``_build_bsi_assessment_dict`` coercion didn't catch.
 
     The ``human_summary`` is a one-line operator-facing sentence
     (issue #907) explaining in plain English why this check fails
@@ -217,9 +220,9 @@ def _classify_bsi_finding(finding_id: object) -> tuple[str, str, str]:
     the remediation from the BSI plugin's schema-oriented text.
     """
     if not isinstance(finding_id, str):
-        return "operator_action", _SBOMIFY_ACTION_ENRICHMENT_URL, _UNKNOWN_FINDING_SUMMARY
+        return "operator_action", _BSI_DEFAULT_GUIDANCE_URL, _UNKNOWN_FINDING_SUMMARY
     remediation_type = _BSI_REMEDIATION_TYPE.get(finding_id, "operator_action")
-    guidance_url = _BSI_GUIDANCE_URL_OVERRIDES.get(finding_id, _SBOMIFY_ACTION_ENRICHMENT_URL)
+    guidance_url = _BSI_GUIDANCE_URL_OVERRIDES.get(finding_id, _BSI_DEFAULT_GUIDANCE_URL)
     human_summary = _BSI_HUMAN_SUMMARY.get(finding_id, _UNKNOWN_FINDING_SUMMARY)
     return remediation_type, guidance_url, human_summary
 

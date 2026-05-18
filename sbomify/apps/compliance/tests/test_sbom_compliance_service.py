@@ -238,16 +238,22 @@ class TestClassifyBsiFinding:
         assert "Unclassified" in human_summary
 
     def test_attestation_check_gets_overridden_guidance_url(self):
-        """Overrides point operator-action fixes at dedicated docs
-        rather than the generic sbomify-action enrichment page."""
-        from sbomify.apps.compliance.services.sbom_compliance_service import _classify_bsi_finding
+        """Overrides point operator-action fixes to the anchored BSI
+        TR-03183-2 page rather than the generic /compliance/ index."""
+        from sbomify.apps.compliance.services.sbom_compliance_service import (
+            _BSI_DEFAULT_GUIDANCE_URL,
+            _BSI_TR03183_GUIDANCE_URL,
+            _classify_bsi_finding,
+        )
 
         _, url_default, _ = _classify_bsi_finding("bsi-tr03183:sbom-creator")
         _, url_format, _ = _classify_bsi_finding("bsi-tr03183:sbom-format")
         _, url_attest, _ = _classify_bsi_finding("bsi-tr03183:attestation-check")
-        assert "enrichment" in url_default
-        assert "sbom-format" in url_format
-        assert "attestations" in url_attest
+        assert url_default == _BSI_DEFAULT_GUIDANCE_URL
+        assert url_format == _BSI_TR03183_GUIDANCE_URL
+        assert url_attest == _BSI_TR03183_GUIDANCE_URL
+        assert url_format != url_default
+        assert url_attest != url_default
 
 
 @pytest.mark.django_db
