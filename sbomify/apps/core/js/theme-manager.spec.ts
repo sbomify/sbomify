@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'bun:test'
+import { describe, test, expect, mock } from 'bun:test'
 
 describe('Theme Manager', () => {
 
@@ -99,32 +99,94 @@ describe('Theme Manager', () => {
         })
     })
 
-    describe('initThemeManager public-page short-circuit', () => {
-        // public_base.htmx.j2 owns its own theme system keyed on
-        // ``data-theme="dark"|"light"`` (with its own ``public-theme``
-        // localStorage key). When that attribute is already present on
-        // <html> by the time main.ts runs ``initThemeManager``, the
-        // auth-app theme manager must early-return so it doesn't clobber
-        // the public theme (which would force a stale
-        // ``sbomify-theme`` value over the live ``public-theme`` and
-        // flip e.g. table-header backgrounds to the wrong variant set).
-        const initThemeManagerGuard = (rootHasDataTheme: boolean): { ran: boolean; reason: string } => {
-            if (rootHasDataTheme) {
-                return { ran: false, reason: 'short-circuit: public page owns theming via data-theme' }
-            }
-            return { ran: true, reason: 'auth page: applied stored theme + exposed window.themeManager' }
+    describe('initThemeManager public-page short-circuit (real module)', () => {
+        // Exercises the production initThemeManager() with mocked
+        // ``document``/``localStorage``/``window`` so the guard is
+        // covered against accidental removal. public_base.htmx.j2 owns
+        // theming on trust-center pages via ``data-theme``; the auth-app
+        // theme manager must early-return there so it doesn't clobber
+        // the public theme.
+
+        type ClassList = { add: ReturnType<typeof mock>; remove: ReturnType<typeof mock> }
+        type FakeHtml = {
+            hasAttribute: ReturnType<typeof mock>
+            classList: ClassList
+            style: { colorScheme: string }
+            attrs: Record<string, string>
+        }
+        type FakeWindow = {
+            matchMedia: ReturnType<typeof mock>
+            themeManager?: unknown
         }
 
-        test('returns without applying anything when data-theme is preset', () => {
-            const result = initThemeManagerGuard(true)
-            expect(result.ran).toBe(false)
-            expect(result.reason).toContain('short-circuit')
+        const makeFakeHtml = (attrs: Record<string, string> = {}): FakeHtml => ({
+            hasAttribute: mock((name: string) => name in attrs),
+            classList: { add: mock(() => {}), remove: mock(() => {}) },
+            style: { colorScheme: '' },
+            attrs,
         })
 
-        test('runs normally on auth pages with no data-theme attribute', () => {
-            const result = initThemeManagerGuard(false)
-            expect(result.ran).toBe(true)
-            expect(result.reason).toContain('auth page')
+        const installMocks = (fakeHtml: FakeHtml, storage: Record<string, string> = {}): FakeWindow => {
+            const fakeWindow: FakeWindow = {
+                matchMedia: mock(() => ({
+                    matches: false,
+                    addEventListener: () => {},
+                })),
+            }
+            ;(globalThis as unknown as { document: { documentElement: FakeHtml } }).document = {
+                documentElement: fakeHtml,
+            }
+            ;(globalThis as unknown as { window: FakeWindow }).window = fakeWindow
+            ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
+                getItem: mock((k: string) => storage[k] ?? null),
+                setItem: mock((k: string, v: string) => {
+                    storage[k] = v
+                }),
+                removeItem: mock((k: string) => {
+                    delete storage[k]
+                }),
+                clear: mock(() => {}),
+                key: mock(() => null),
+                length: 0,
+            } as unknown as Storage
+            // requestAnimationFrame is used by applyTheme() after the
+            // class is added; we don't need the rAF body to run, just to
+            // not crash. A no-op satisfies that.
+            ;(globalThis as unknown as { requestAnimationFrame: (cb: () => void) => number }).requestAnimationFrame = (() =>
+                0) as () => number
+            return fakeWindow
+        }
+
+        const loadFreshInitThemeManager = async (): Promise<() => void> => {
+            // Force a fresh import so module-level globals re-bind to the
+            // freshly installed ``window``/``document`` mocks.
+            const path = './theme-manager'
+            const mod = (await import(`${path}?cache=${Math.random()}`)) as { initThemeManager: () => void }
+            return mod.initThemeManager
+        }
+
+        test('short-circuits when <html data-theme="dark"> is preset (public page)', async () => {
+            const fakeHtml = makeFakeHtml({ 'data-theme': 'dark' })
+            const fakeWindow = installMocks(fakeHtml, { 'sbomify-theme': 'light' })
+            const initThemeManager = await loadFreshInitThemeManager()
+
+            initThemeManager()
+
+            expect(fakeHtml.hasAttribute).toHaveBeenCalledWith('data-theme')
+            expect(fakeHtml.classList.add).not.toHaveBeenCalled()
+            expect(fakeHtml.classList.remove).not.toHaveBeenCalled()
+            expect(fakeWindow.themeManager).toBeUndefined()
+        })
+
+        test('runs normally on auth pages (no data-theme attribute)', async () => {
+            const fakeHtml = makeFakeHtml({})
+            const fakeWindow = installMocks(fakeHtml, { 'sbomify-theme': 'dark' })
+            const initThemeManager = await loadFreshInitThemeManager()
+
+            initThemeManager()
+
+            expect(fakeHtml.classList.add).toHaveBeenCalled()
+            expect(fakeWindow.themeManager).toBeDefined()
         })
     })
 })
