@@ -67,6 +67,18 @@ function setTheme(theme: Theme): void {
 }
 
 function initThemeManager(): void {
+  // Public trust-center pages run their own theme system (see
+  // ``public_base.htmx.j2``) keyed on ``data-theme="dark"|"light"`` and
+  // its own ``public-theme`` localStorage key. If that attribute is
+  // already on the root element when we boot, the auth-app theme
+  // manager must not override it — otherwise the public page applies
+  // whatever ``sbomify-theme`` the user last picked in the auth app
+  // (typically light) and the trust-center renders with the wrong
+  // Tailwind variable set.
+  if (document.documentElement.hasAttribute('data-theme')) {
+    return;
+  }
+
   // Apply stored theme immediately, skip transitions to prevent FOUC
   const storedTheme = getStoredTheme();
   applyTheme(storedTheme, true);

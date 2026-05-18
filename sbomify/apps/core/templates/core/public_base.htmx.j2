@@ -18,8 +18,18 @@
             // This ensures CSS rules apply immediately without relying on @media queries
             if(isDark) {
                 html.setAttribute('data-theme','dark');
+                // tailwind.src.css uses :root as the dark default and
+                // :root.light as the light override — remove .light so the
+                // dark Tailwind variables apply. Also add .dark so the
+                // @custom-variant dark in tailwind.src.css fires for
+                // `dark:*` utilities used by other public templates
+                // (e.g. `dark:prose-invert` in doc/vdp/early-warning).
+                html.classList.remove('light');
+                html.classList.add('dark');
             } else {
                 html.setAttribute('data-theme','light');
+                html.classList.add('light');
+                html.classList.remove('dark');
             }
             // Also mark if using system preference for the toggle component
             if(!t || t==='system') html.setAttribute('data-theme-source','system');
@@ -1151,6 +1161,12 @@
                 const html = document.documentElement;
                 const style = html.style;
                 html.setAttribute('data-theme', isDark ? 'dark' : 'light');
+                // Mirror via .light/.dark class so the :root.light overrides
+                // in tailwind.src.css fire correctly AND so the class-based
+                // `dark:*` Tailwind variant (defined via @custom-variant in
+                // tailwind.src.css) picks up the public dark theme too.
+                html.classList.toggle('light', !isDark);
+                html.classList.toggle('dark', isDark);
                 if (isDark) {
                     style.setProperty('--color-surface', '30 41 59');
                     style.setProperty('--color-surface-elevated', '51 65 85');

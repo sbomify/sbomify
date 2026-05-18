@@ -59,24 +59,20 @@
                            href="{% url 'core:sbom_download_product' product.id %}"
                            title="Download combined SBOM as CycloneDX">
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt=""
-                                 class="h-5 w-auto"
+                                 alt="CycloneDX"
+                                 class="h-5 w-auto dark:brightness-0 dark:invert"
                                  height="20"
-                                 width="20"
-                                 aria-hidden="true">
-                            <span>CycloneDX</span>
+                                 width="20">
                             <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
                         </a>
                         <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
                            href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
                            title="Download combined SBOM as SPDX">
                             <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt=""
-                                 class="h-5 w-auto"
+                                 alt="SPDX"
+                                 class="h-5 w-auto dark:brightness-0 dark:invert"
                                  height="20"
-                                 width="20"
-                                 aria-hidden="true">
-                            <span>SPDX</span>
+                                 width="20">
                             <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
                         </a>
                     </div>
