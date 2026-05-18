@@ -9,8 +9,13 @@ ARG COSIGN_VERSION=v3.0.6
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
 ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970f2d4316ffe1f42abcb0413282b555bf7ce9b0774a7c79
-# Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by digest
-# so the .so files copied into the distroless prod image stay reproducible.
+# Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
+# digest so the builder image itself is reproducible. The actual .so
+# versions still come from `apk add` against the live Wolfi repo at build
+# time — Wolfi ships no repo-snapshot mechanism, but its package updates
+# are ABI-stable security patches, so the copied libraries stay binary-
+# compatible across rebuilds. Bump the digest below when you want to pick
+# up newer patches.
 # To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
 ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:0cff4df29a6597173dc8b813787318150141eb96ac783dc3ff4f5ff52c49a1e2
 
