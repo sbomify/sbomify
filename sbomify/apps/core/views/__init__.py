@@ -333,7 +333,10 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
             messages.error(request, "An error occurred while deleting the token")
             return redirect(reverse("core:settings"))
 
-        capture_for_request(request, "api_token:deleted", team_key=token_team_key)
+        # Deferred via ``on_commit`` so the event only ships if the
+        # delete actually committed (matters under ATOMIC_REQUESTS or any
+        # wrapping atomic block).
+        transaction.on_commit(lambda: capture_for_request(request, "api_token:deleted", team_key=token_team_key))
 
         if is_api_request:
             return HttpResponse(status=200)

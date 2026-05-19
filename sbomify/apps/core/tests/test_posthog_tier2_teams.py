@@ -265,7 +265,7 @@ def test_create_access_token_captures_api_token_created(
     assert "token_name" not in (call.args[2] or {})
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_delete_access_token_captures_api_token_deleted(
     mocker: MockerFixture,
     team_with_business_plan: Team,

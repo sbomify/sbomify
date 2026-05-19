@@ -43,8 +43,13 @@ depends on its scope:
   attributes activity to the workspace rather than the individual
   user.
 * ``"user"`` — for genuinely user-scoped events that don't belong to a
-  workspace (``user:account_deleted``, ``user:signed_up`` before the
-  user has a workspace). ``distinct_id`` is the user PK.
+  workspace (``user:account_deleted`` after the user has soft-deleted,
+  ``billing:enterprise_contact_submitted`` from a visitor with no
+  workspace). ``distinct_id`` is the user PK or session-derived.
+  Note: ``user:signed_up`` is intentionally ``"workspace"`` — by the
+  time the signal fires we already have the default workspace key
+  (the post_save handler creates one), and attributing the signup to
+  the workspace keeps the funnel consistent with the rest of Tier 2.
 * ``"system"`` — for events fired from background context with no
   workspace (rare). ``distinct_id`` is the literal string ``"system"``.
 """

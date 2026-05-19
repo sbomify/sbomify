@@ -595,11 +595,21 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
         assert team.key is not None
         schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
 
-        capture_for_request(
-            request,
-            "product:created",
-            {"product_id": str(product.id), "is_public": product.is_public},
-            team_key=team.key,
+        # Deferred via ``on_commit`` for the same reason as
+        # ``schedule_broadcast`` above: if the create transaction rolls
+        # back (or the view runs inside an outer atomic that rolls
+        # back), no ghost ``product:created`` event ships for a product
+        # that was never persisted.
+        captured_team_key = team.key
+        captured_product_id = str(product.id)
+        captured_is_public = product.is_public
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "product:created",
+                {"product_id": captured_product_id, "is_public": captured_is_public},
+                team_key=captured_team_key,
+            )
         )
 
         return 201, _build_item_response(request, product, "product")
@@ -1493,16 +1503,23 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         # ``component.visibility`` is a ``ComponentVisibility`` enum; PostHog's
         # JSON serializer doesn't handle Django enums, so ship the ``.value``
         # string. ``getattr`` fallback keeps this defensive against the field
-        # ever becoming a plain string.
-        capture_for_request(
-            request,
-            "component:created",
-            {
-                "component_id": str(component.id),
-                "component_type": component.component_type or "",
-                "visibility": getattr(component.visibility, "value", component.visibility),
-            },
-            team_key=team.key,
+        # ever becoming a plain string. Deferred via ``on_commit`` so the
+        # event only ships if the create transaction commits.
+        captured_team_key = team.key
+        captured_component_id = str(component.id)
+        captured_component_type = component.component_type or ""
+        captured_visibility = getattr(component.visibility, "value", component.visibility)
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "component:created",
+                {
+                    "component_id": captured_component_id,
+                    "component_type": captured_component_type,
+                    "visibility": captured_visibility,
+                },
+                team_key=captured_team_key,
+            )
         )
 
         return 201, _build_item_response(request, component, "component")
@@ -2724,11 +2741,23 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
             )
 
-        capture_for_request(
-            request,
-            "release:created",
-            {"release_id": str(release.id), "product_id": str(product.id), "is_prerelease": release.is_prerelease},
-            team_key=product.team.key,
+        # Deferred via ``on_commit`` so the event only ships if the
+        # release-create transaction commits.
+        captured_team_key = product.team.key
+        captured_release_id = str(release.id)
+        captured_product_id = str(product.id)
+        captured_is_prerelease = release.is_prerelease
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "release:created",
+                {
+                    "release_id": captured_release_id,
+                    "product_id": captured_product_id,
+                    "is_prerelease": captured_is_prerelease,
+                },
+                team_key=captured_team_key,
+            )
         )
 
         return 201, _build_release_response(request, release, include_artifacts=True)
