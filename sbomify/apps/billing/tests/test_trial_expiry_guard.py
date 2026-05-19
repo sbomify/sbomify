@@ -51,6 +51,20 @@ class TestShouldClaim:
         limits = {guard.CLAIMED_MARKER: 12345}
         assert guard.should_claim(limits, _now()) is True
 
+    def test_naive_claim_against_aware_now_returns_true(self) -> None:
+        """Aware/naive datetime mismatch is a corrupt claim, not a crash.
+
+        A timestamp written before the codebase fully adopted aware
+        datetimes could be missing tzinfo. ``now - naive_dt`` would
+        raise TypeError; we treat that as a retake instead of letting
+        the guard deadlock forever on a single bad row.
+        """
+        guard = TrialExpiryEmissionGuard()
+        naive_iso = datetime.datetime(2026, 5, 19, 12, 0, 0).isoformat()  # no tzinfo
+        limits = {guard.CLAIMED_MARKER: naive_iso}
+        # _now() returns an aware datetime — subtraction would normally raise
+        assert guard.should_claim(limits, _now()) is True
+
     def test_emitted_wins_over_fresh_claim(self) -> None:
         """If both markers are set, the emitted marker dominates — work is done."""
         guard = TrialExpiryEmissionGuard()

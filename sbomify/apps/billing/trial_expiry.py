@@ -76,6 +76,14 @@ class TrialExpiryEmissionGuard:
         no fresh claim exists. A corrupt or unparseable claim marker is
         treated as no claim (retake), since the alternative is a
         permanent stall on a single bad write.
+
+        Also treats an aware/naive-datetime mismatch as a corrupt marker:
+        if the persisted ``claimed_at`` is missing a timezone (e.g. an
+        old write from before the codebase fully adopted aware
+        timestamps) and ``now`` is aware, the subtraction raises
+        ``TypeError`` — we treat that as a corrupt claim rather than
+        propagating the error, so a single bad write can't deadlock the
+        guard for a team.
         """
         if billing_limits.get(self.EMITTED_MARKER):
             return False
@@ -86,7 +94,13 @@ class TrialExpiryEmissionGuard:
             claim_dt = datetime.datetime.fromisoformat(claimed_at)
         except (TypeError, ValueError):
             return True
-        return (now - claim_dt).total_seconds() >= self.stale_seconds
+        try:
+            elapsed = (now - claim_dt).total_seconds()
+        except TypeError:
+            # Aware/naive mismatch — treat as corrupt and let a fresh
+            # claim overwrite it.
+            return True
+        return elapsed >= self.stale_seconds
 
     def stamp_claim(self, billing_limits: dict[str, Any], now: datetime.datetime) -> None:
         """Mutate ``billing_limits`` in place to record this caller's claim."""

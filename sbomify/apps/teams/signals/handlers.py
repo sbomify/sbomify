@@ -168,17 +168,19 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
     if update_fields is not None and "role" not in set(update_fields):
         return
 
+    # Pop the snapshot unconditionally before any branch — this is what
+    # makes "subsequent saves start clean" actually true. If we only
+    # cleared on the fire path, a no-op save (role unchanged) would
+    # leave the attribute behind and a later legitimate change could
+    # observe stale state.
     old_role = getattr(instance, _OLD_ROLE_ATTR, None)
-    if old_role is None or old_role == instance.role:
-        return
-
-    # Clear the snapshot now that we've consumed it. Without this, the
-    # attribute would survive on the instance and could be mis-read by a
-    # later save that legitimately changes another field.
     try:
         delattr(instance, _OLD_ROLE_ATTR)
     except AttributeError:
         pass
+
+    if old_role is None or old_role == instance.role:
+        return
 
     from sbomify.apps.core.posthog_service import capture
 
