@@ -402,3 +402,84 @@ def test_settings_view_member_remove_also_fires_event(
 
     assert response.status_code in (200, 302)
     assert "team:member_removed" in _called_events(mock_capture)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_role_change_captures_team_role_changed(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Saving an existing Member with a new role fires ``team:role_changed``."""
+    from django.contrib.auth import get_user_model
+
+    UserModel = get_user_model()
+    other_user = UserModel.objects.create_user(username="role_target", email="role@example.com", password="pw")
+    membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="guest")
+
+    mock_capture = _patch_capture(mocker)
+
+    membership.role = "admin"
+    membership.save()
+
+    role_calls = [c for c in mock_capture.call_args_list if c.args[1] == "team:role_changed"]
+    assert len(role_calls) == 1, f"Expected exactly one team:role_changed event, got {len(role_calls)}"
+    props = role_calls[0].args[2]
+    assert props["from_role"] == "guest"
+    assert props["to_role"] == "admin"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_role_change_no_op_save_does_not_capture(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Re-saving a Member without changing role must not fire ``team:role_changed``."""
+    from django.contrib.auth import get_user_model
+
+    UserModel = get_user_model()
+    other_user = UserModel.objects.create_user(username="noop_role", email="noop@example.com", password="pw")
+    membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="admin")
+
+    mock_capture = _patch_capture(mocker)
+
+    membership.save()
+
+    assert "team:role_changed" not in _called_events(mock_capture)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reject_access_request_captures_document_access_denied(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Rejecting a pending AccessRequest in the queue view fires ``document:access_denied``."""
+    from django.contrib.auth import get_user_model
+
+    from sbomify.apps.documents.access_models import AccessRequest
+
+    UserModel = get_user_model()
+    requester = UserModel.objects.create_user(username="rejected_user", email="rejected@example.com", password="pw")
+    access_request = AccessRequest.objects.create(
+        team=team_with_business_plan, user=requester, status=AccessRequest.Status.PENDING
+    )
+
+    mock_capture = _patch_capture(mocker)
+    # The reject path sends an email — patch the renderer so the test doesn't
+    # depend on template files or SMTP fixtures.
+    mocker.patch("sbomify.apps.documents.views.access_requests.render_to_string", return_value="<html />")
+    mocker.patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+
+    client = Client()
+    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
+
+    assert team_with_business_plan.key is not None
+    response = client.post(
+        reverse("documents:access_request_queue", kwargs={"team_key": team_with_business_plan.key}),
+        data={"action": "reject", "request_id": str(access_request.id)},
+    )
+
+    assert response.status_code in (200, 302)
+    assert "document:access_denied" in _called_events(mock_capture)

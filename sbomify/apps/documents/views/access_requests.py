@@ -1345,6 +1345,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
         elif action == "reject":
+            # Mirror the approve branch above: defer via ``on_commit`` so the
+            # event only ships if the reject transaction committed.
+            transaction.on_commit(lambda: capture_for_request(request, "document:access_denied", team_key=team_key))
+
             # Send email notification to user
             try:
                 email_context = {

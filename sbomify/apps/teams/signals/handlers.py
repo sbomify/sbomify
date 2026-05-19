@@ -11,7 +11,8 @@ if typing.TYPE_CHECKING:
 
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth.signals import user_logged_in
-from django.db.models.signals import post_delete, post_save
+from django.db import transaction
+from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -104,6 +105,54 @@ def _invalidate_pending_invites_cache(email: str | None) -> None:
         return
 
     cache.delete(f"pending_invitations:{sanitized_email}")
+
+
+# Pre-save snapshot of Member.role so the post_save handler can detect a
+# transition. Keyed by Member pk; entries are popped by the post_save handler
+# so the dict stays bounded and free of cross-request bleed.
+_member_role_snapshots: dict[int, str] = {}
+
+
+@receiver(pre_save, sender=Member)
+def snapshot_member_role_for_change_detection(sender: type, instance: Member, **kwargs: Any) -> None:
+    if instance.pk:
+        try:
+            previous = Member.objects.only("role").get(pk=instance.pk)
+            _member_role_snapshots[instance.pk] = previous.role
+        except Member.DoesNotExist:
+            pass
+
+
+@receiver(post_save, sender=Member)
+def capture_role_change(sender: type, instance: Member, created: bool, **kwargs: Any) -> None:
+    """Emit ``team:role_changed`` when an existing membership's role transitions.
+
+    Skips: creations (covered by ``team:member_invited`` / invitation-accepted
+    flows), no-op saves where role is unchanged, and any path where the
+    pre_save snapshot didn't run (e.g. raw SQL update).
+    """
+    if created:
+        _member_role_snapshots.pop(instance.pk, None)
+        return
+
+    old_role = _member_role_snapshots.pop(instance.pk, None)
+    if old_role is None or old_role == instance.role:
+        return
+
+    from sbomify.apps.core.posthog_service import capture
+
+    workspace_key = instance.team.key or ""
+    distinct_id = workspace_key or "system"
+    captured_old_role = old_role
+    captured_new_role = instance.role
+    transaction.on_commit(
+        lambda: capture(
+            distinct_id,
+            "team:role_changed",
+            {"from_role": captured_old_role, "to_role": captured_new_role},
+            groups={"workspace": workspace_key} if workspace_key else None,
+        )
+    )
 
 
 @receiver(post_save, sender=Invitation)
