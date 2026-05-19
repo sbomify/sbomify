@@ -430,14 +430,18 @@ class AccessRequestView(View):
         # Only fire on a state transition (new request or revoked/rejected → pending
         # re-request) so duplicate submissions for an already-pending or approved
         # request do not inflate the funnel.
+        # Deferred via ``on_commit`` to mirror the cache-invalidate above so the
+        # event only ships if the create/update transaction committed.
         if request_state_changed:
             from sbomify.apps.core.posthog_service import capture_for_request
 
-            capture_for_request(
-                request,
-                "document:access_requested",
-                {"requires_nda": requires_nda},
-                team_key=team_key,
+            transaction.on_commit(
+                lambda: capture_for_request(
+                    request,
+                    "document:access_requested",
+                    {"requires_nda": requires_nda},
+                    team_key=team_key,
+                )
             )
 
         # Only send notification if NDA is not required (request is complete)
@@ -1294,7 +1298,11 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
             from sbomify.apps.core.posthog_service import capture_for_request
 
-            capture_for_request(request, "document:access_approved", team_key=team_key)
+            # Mirror the cache-invalidate above: defer via ``on_commit`` so
+            # the event only ships if the approval transaction commits. In
+            # autocommit mode (current prod) this fires immediately; if the
+            # view ever runs under ``ATOMIC_REQUESTS`` it stays correct.
+            transaction.on_commit(lambda: capture_for_request(request, "document:access_approved", team_key=team_key))
 
             # Send email notification to user
             try:

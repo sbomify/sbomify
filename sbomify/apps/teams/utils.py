@@ -679,14 +679,18 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     membership.delete()
 
     # Fires for both delete_member() and TeamSettingsView._delete_member()
-    # entry points; tests cover both paths.
+    # entry points; tests cover both paths. Deferred via ``on_commit`` so a
+    # rollback after the delete() doesn't leave us with a ghost event for a
+    # membership that still exists.
     from sbomify.apps.core.posthog_service import capture_for_request
 
-    capture_for_request(
-        request,
-        "team:member_removed",
-        {"role": removed_role, "self_removal": is_self_removal},
-        team_key=removed_team_key,
+    transaction.on_commit(
+        lambda: capture_for_request(
+            request,
+            "team:member_removed",
+            {"role": removed_role, "self_removal": is_self_removal},
+            team_key=removed_team_key,
+        )
     )
 
     # Invalidate the removed user's session cache so workspace disappears immediately

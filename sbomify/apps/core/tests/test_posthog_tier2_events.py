@@ -126,7 +126,7 @@ def test_auto_accept_invitation_captures_team_member_invitation_accepted(
     assert call.args[2]["role"] == "guest"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_remove_member_captures_team_member_removed(
     mocker: MockerFixture,
     team_with_business_plan: Team,
@@ -151,7 +151,7 @@ def test_remove_member_captures_team_member_removed(
     assert call.args[2]["self_removal"] is False
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_create_access_token_captures_api_token_created(
     mocker: MockerFixture,
     team_with_business_plan: Team,
@@ -377,7 +377,7 @@ def test_custom_domain_change_to_different_value_does_not_capture(
     assert "team:custom_domain_added" not in _called_events(mock_capture)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_settings_view_member_remove_also_fires_event(
     mocker: MockerFixture,
     team_with_business_plan: Team,
