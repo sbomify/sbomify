@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.views import View
 
@@ -92,9 +93,13 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     @staticmethod
     def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, new_visibility: str) -> None:
         team_key = (request.session.get("current_team") or {}).get("key", "")
-        capture_for_request(
-            request,
-            "item:visibility_toggled",
-            {"item_type": item_type, "item_id": item_id, "new_visibility": new_visibility},
-            team_key=team_key,
+        # Deferred via ``on_commit`` so a rollback in the surrounding
+        # ``patch_*`` flow doesn't ship a ghost visibility toggle event.
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "item:visibility_toggled",
+                {"item_type": item_type, "item_id": item_id, "new_visibility": new_visibility},
+                team_key=team_key,
+            )
         )

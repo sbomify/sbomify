@@ -1101,9 +1101,11 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         invalidate_custom_domain_cache(normalized_domain)
 
         # Only fire on first-time domain set (not domain changes or re-saves),
-        # so the "added" semantics match the event name.
+        # so the "added" semantics match the event name. Deferred via
+        # ``on_commit`` so a rollback in the surrounding flow doesn't
+        # ship a ghost event for a domain that wasn't actually persisted.
         if is_first_time_set:
-            capture_for_request(request, "team:custom_domain_added", team_key=team_key)
+            transaction.on_commit(lambda: capture_for_request(request, "team:custom_domain_added", team_key=team_key))
 
         return 200, {"domain": normalized_domain, "validated": False}
 

@@ -76,11 +76,17 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
         )
 
         if request is not None:
-            capture_for_request(
-                request,
-                "team:member_invitation_accepted",
-                {"role": invitation.role},
-                team_key=invitation.team.key,
+            # Capture into locals BEFORE invitation.delete() below; the
+            # deferred ``on_commit`` lambda reads these by closure.
+            captured_role = invitation.role
+            captured_team_key = invitation.team.key
+            transaction.on_commit(
+                lambda: capture_for_request(
+                    request,
+                    "team:member_invitation_accepted",
+                    {"role": captured_role},
+                    team_key=captured_team_key,
+                )
             )
 
         invitation.delete()

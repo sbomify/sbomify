@@ -260,11 +260,14 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
 
-    capture_for_request(
-        request,
-        "team:member_invitation_accepted",
-        {"role": role},
-        team_key=team.key,
+    captured_team_key = team.key
+    transaction.on_commit(
+        lambda: capture_for_request(
+            request,
+            "team:member_invitation_accepted",
+            {"role": role},
+            team_key=captured_team_key,
+        )
     )
 
     return redirect("core:dashboard")

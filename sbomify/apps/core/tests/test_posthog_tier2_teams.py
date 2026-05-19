@@ -20,7 +20,7 @@ from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_s
 from sbomify.apps.teams.models import Invitation, Member, Team
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_invite_member_captures_team_member_invited(
     mocker: MockerFixture,
     team_with_business_plan: Team,
@@ -44,7 +44,7 @@ def test_invite_member_captures_team_member_invited(
     assert_workspace_attribution(mock_capture, "team:member_invited", team_with_business_plan.key)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_accept_invite_captures_team_member_invitation_accepted(
     mocker: MockerFixture,
     team_with_business_plan: Team,
@@ -81,7 +81,7 @@ def test_accept_invite_captures_team_member_invitation_accepted(
     assert "team:member_invitation_accepted" in called_events(mock_capture)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_auto_accept_invitation_captures_team_member_invitation_accepted(
     mocker: MockerFixture,
     team_with_business_plan: Team,
@@ -327,7 +327,7 @@ def test_delete_access_token_captures_api_token_deleted(
     assert "api_token:deleted" in called_events(mock_capture)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_custom_domain_first_time_set_captures_event(
     mocker: MockerFixture,
     team_with_business_plan: Team,

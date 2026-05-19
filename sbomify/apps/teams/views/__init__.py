@@ -13,6 +13,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.mail import EmailMultiAlternatives
+from django.db import transaction
 from django.http import (
     HttpResponse,
     HttpResponseForbidden,
@@ -303,14 +304,18 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             # for the funnel metric.
             invited_email = invite_user_form.cleaned_data["email"]
             email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
-            capture_for_request(
-                request,
-                "team:member_invited",
-                {
-                    "role": invite_user_form.cleaned_data["role"],
-                    "invited_email_domain": email_domain,
-                },
-                team_key=team.key,
+            captured_role = invite_user_form.cleaned_data["role"]
+            captured_team_key = team.key
+            transaction.on_commit(
+                lambda: capture_for_request(
+                    request,
+                    "team:member_invited",
+                    {
+                        "role": captured_role,
+                        "invited_email_domain": email_domain,
+                    },
+                    team_key=captured_team_key,
+                )
             )
 
             messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")
@@ -576,11 +581,18 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
 
-    capture_for_request(
-        request,
-        "team:member_invitation_accepted",
-        {"role": invitation.role},
-        team_key=invitation.team.key,
+    # Capture invitation fields into locals BEFORE the delete() below;
+    # the deferred ``on_commit`` lambdas reference these by closure and
+    # ``invitation`` becomes invalid after deletion.
+    captured_role = invitation.role
+    captured_team_key = invitation.team.key
+    transaction.on_commit(
+        lambda: capture_for_request(
+            request,
+            "team:member_invitation_accepted",
+            {"role": captured_role},
+            team_key=captured_team_key,
+        )
     )
 
     # Trust-center invitations auto-approve a document AccessRequest as part of the
@@ -588,10 +600,12 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     # path, so emit it here whenever this branch actually drove a pending→approved
     # transition (or freshly created an approved request).
     if access_request_approved_here:
-        capture_for_request(
-            request,
-            "document:access_approved",
-            team_key=invitation.team.key,
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "document:access_approved",
+                team_key=captured_team_key,
+            )
         )
 
     invitation.delete()

@@ -1,4 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -60,6 +61,9 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update branding"))
 
-        capture_for_request(request, "team:branding_updated", team_key=team_key)
+        # Deferred via ``on_commit`` so the event only ships if the
+        # branding update commits — under ATOMIC_REQUESTS an outer
+        # rollback would otherwise produce a ghost event.
+        transaction.on_commit(lambda: capture_for_request(request, "team:branding_updated", team_key=team_key))
 
         return htmx_success_response("Branding updated successfully", triggers={"refreshTeamBranding": True})
