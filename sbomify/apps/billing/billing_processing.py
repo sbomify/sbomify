@@ -265,27 +265,38 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 # Distinct_id = team_key matches the Tier 1 signal pattern at
                 # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
                 # consistent workspace-level attribution across tiers.
-                from sbomify.apps.core.posthog_service import capture
-
                 team_key = team.key or ""
                 distinct_id = team_key or "system"
-                capture(
-                    distinct_id,
-                    "billing:trial_expired",
-                    {"team_key": team_key},
-                    groups={"workspace": team_key} if team_key else None,
-                )
 
-                # Mark completion only now: a later webhook that does reach this
-                # function will see ``trial_expired_emitted_at`` and short-circuit
-                # at the top of this block, so the side effects above run exactly
-                # once across all retries for the happy path.
+                # Write the completion marker FIRST, defer the PostHog capture
+                # via ``transaction.on_commit`` so the marker is durable before
+                # the event fires. The original "capture then mark in a second
+                # transaction" sequence had a race window: a process kill
+                # between the capture and the marker-write would leave the
+                # event fired but the marker unwritten, so the next webhook
+                # past ``TRIAL_EXPIRED_CLAIM_STALE_SECONDS`` would retake the
+                # claim and double-fire side effects + capture. With this
+                # ordering: marker commits, on_commit fires the capture. If
+                # the process dies between commit and the capture firing, the
+                # event is lost (slight under-count) — preferable to the
+                # over-count + duplicate downstream actions of the prior race.
                 with transaction.atomic():
                     team = Team.objects.select_for_update().get(pk=team.pk)
                     billing_limits = (team.billing_plan_limits or {}).copy()
                     billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
                     team.billing_plan_limits = billing_limits
                     team.save()
+
+                    from sbomify.apps.core.posthog_service import capture
+
+                    transaction.on_commit(
+                        lambda: capture(
+                            distinct_id,
+                            "billing:trial_expired",
+                            {"team_key": team_key},
+                            groups={"workspace": team_key} if team_key else None,
+                        )
+                    )
 
         return True
     return False

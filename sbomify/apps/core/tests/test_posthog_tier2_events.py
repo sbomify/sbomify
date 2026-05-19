@@ -260,7 +260,7 @@ def test_capture_for_request_skips_when_disabled(
     assert mock_capture.call_count == 0
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_handle_trial_period_emits_trial_expired_only_once(
     mocker: MockerFixture,
     team_with_business_plan: Team,
@@ -271,6 +271,11 @@ def test_handle_trial_period_emits_trial_expired_only_once(
     still report ``status=trialing`` after we have already downgraded a team
     locally; we rely on a persistent marker in ``billing_plan_limits`` so the
     transition-only side effects do not run twice.
+
+    Uses ``transaction=True`` because ``handle_trial_period`` defers the
+    PostHog capture via ``transaction.on_commit`` and those callbacks only
+    fire on a real commit (not on rollback at end of a non-transactional
+    test).
     """
     import datetime
     from unittest.mock import MagicMock
