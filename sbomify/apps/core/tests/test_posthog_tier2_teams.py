@@ -215,6 +215,34 @@ def test_role_change_no_op_save_does_not_capture(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_role_change_update_fields_without_role_skips_snapshot(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """``save(update_fields=[other])`` must not even snapshot the role.
+
+    Pre_save would otherwise do an extra DB query on every Member.save()
+    that touched a different field (last_login_team, is_default_team).
+    """
+    from django.contrib.auth import get_user_model
+
+    UserModel = get_user_model()
+    other_user = UserModel.objects.create_user(username="other_field", email="other@example.com", password="pw")
+    membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="admin", is_default_team=False)
+
+    mock_capture = patch_capture(mocker)
+
+    # Save with update_fields excluding 'role' — snapshot must be skipped
+    membership.is_default_team = True
+    membership.save(update_fields=["is_default_team"])
+
+    assert "team:role_changed" not in called_events(mock_capture)
+    # Confirm the snapshot attr was NOT set
+    assert not hasattr(membership, "_sbomify_old_role")
+
+
+@pytest.mark.django_db(transaction=True)
 def test_create_access_token_captures_api_token_created(
     mocker: MockerFixture,
     team_with_business_plan: Team,

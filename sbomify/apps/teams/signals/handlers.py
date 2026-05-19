@@ -107,20 +107,36 @@ def _invalidate_pending_invites_cache(email: str | None) -> None:
     cache.delete(f"pending_invitations:{sanitized_email}")
 
 
-# Pre-save snapshot of Member.role so the post_save handler can detect a
-# transition. Keyed by Member pk; entries are popped by the post_save handler
-# so the dict stays bounded and free of cross-request bleed.
-_member_role_snapshots: dict[int, str] = {}
+# Sentinel attached to a Member instance in pre_save so the post_save
+# handler can compare against the prior role. Lives on the instance
+# (not a module-level dict) so it:
+#   * is thread-safe — each save call has its own Member instance
+#   * is leak-proof — if save() raises after pre_save, the snapshot is
+#     garbage-collected with the instance instead of leaving an entry
+#     behind in a process-wide dict
+#   * doesn't bleed across requests in long-lived processes
+_OLD_ROLE_ATTR = "_sbomify_old_role"
 
 
 @receiver(pre_save, sender=Member)
 def snapshot_member_role_for_change_detection(sender: type, instance: Member, **kwargs: Any) -> None:
-    if instance.pk:
-        try:
-            previous = Member.objects.only("role").get(pk=instance.pk)
-            _member_role_snapshots[instance.pk] = previous.role
-        except Member.DoesNotExist:
-            pass
+    if not instance.pk:
+        return
+
+    # When ``save(update_fields=[...])`` is called and ``role`` isn't in
+    # the list, skip the DB lookup entirely — the role cannot change on
+    # this save, so the snapshot would never be consulted by post_save.
+    # This avoids an extra query on every Member.save() that touches a
+    # different field (last_login_team, is_default_team, etc.).
+    update_fields = kwargs.get("update_fields")
+    if update_fields is not None and "role" not in set(update_fields):
+        return
+
+    try:
+        previous = Member.objects.only("role").get(pk=instance.pk)
+    except Member.DoesNotExist:
+        return
+    setattr(instance, _OLD_ROLE_ATTR, previous.role)
 
 
 @receiver(post_save, sender=Member)
@@ -129,13 +145,13 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
 
     Skips: creations (covered by ``team:member_invited`` / invitation-accepted
     flows), no-op saves where role is unchanged, and any path where the
-    pre_save snapshot didn't run (e.g. raw SQL update).
+    pre_save snapshot didn't run (e.g. raw SQL update or
+    ``update_fields`` that excluded ``role``).
     """
     if created:
-        _member_role_snapshots.pop(instance.pk, None)
         return
 
-    old_role = _member_role_snapshots.pop(instance.pk, None)
+    old_role = getattr(instance, _OLD_ROLE_ATTR, None)
     if old_role is None or old_role == instance.role:
         return
 

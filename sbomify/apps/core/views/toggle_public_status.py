@@ -55,15 +55,20 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 log.error(f"Failed to update component {item_id}: {error_detail}, errors: {errors}")
                 return htmx_error_response(error_detail, content={})
 
-            # `visibility` is already the validated lowercase string from request.POST;
-            # avoid re-deriving from `result.get("visibility")` which may be a
-            # ComponentVisibility enum and stringify to "ComponentVisibility.PUBLIC".
+            # ``visibility`` is the validated lowercase string from request.POST;
+            # ``result.get("visibility")`` may be a ``ComponentVisibility`` enum
+            # (depending on the API response shape) which has no ``.capitalize()``
+            # and would stringify to "ComponentVisibility.PUBLIC". Derive the
+            # message text from the local string, and serialize the enum to
+            # its ``.value`` for the HTMX payload so callers see a plain string.
             self._capture_toggle(request, item_type, item_id, visibility)
             result_visibility = result.get("visibility")
-            visibility_text = result_visibility.capitalize() if result_visibility else "private"
+            result_visibility_str = (
+                getattr(result_visibility, "value", result_visibility) if result_visibility else "private"
+            )
             return htmx_success_response(
-                f"{item_type.capitalize()} visibility is now {visibility_text}",
-                content={"visibility": result_visibility},
+                f"{item_type.capitalize()} visibility is now {visibility.capitalize()}",
+                content={"visibility": result_visibility_str},
             )
         else:
             # Products use is_public

@@ -149,6 +149,7 @@ class TestCoverageOfShippedEvents:
         "billing:checkout_completed",
         "billing:enterprise_contact_submitted",
         # vulnerability_scanning:*
+        "vulnerability_scan:initiated",
         "vulnerability_scan:completed",
     }
 

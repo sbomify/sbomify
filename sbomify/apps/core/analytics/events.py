@@ -83,12 +83,21 @@ class EventSpec:
 _REGISTRY: dict[str, EventSpec] = {}
 
 
-def _register(spec: EventSpec) -> EventSpec:
-    """Register a spec; raises on duplicate name to catch copy/paste mistakes."""
+def _register(spec: EventSpec) -> str:
+    """Register a spec; returns the event NAME string.
+
+    Returning the name (not the spec) lets call sites use the module
+    constants directly as the second argument to ``capture()``:
+
+        capture(distinct_id, events.TEAM_MEMBER_INVITED, properties)
+
+    To inspect schema for a registered event, use ``get_spec(name)``.
+    Raises ``ValueError`` on duplicate name to catch copy/paste mistakes.
+    """
     if spec.name in _REGISTRY:
         raise ValueError(f"Duplicate event registration: {spec.name!r}")
     _REGISTRY[spec.name] = spec
-    return spec
+    return spec.name
 
 
 def get_spec(event_name: str) -> EventSpec | None:
@@ -136,10 +145,16 @@ def validate_payload(event_name: str, properties: dict[str, object] | None) -> l
 # Event definitions
 # =============================================================================
 #
-# Constants below mirror the string event names used at capture sites. Use
-# the constant when adding NEW captures to get static reference checks; the
-# existing call sites continue to pass strings — switching them over is
-# mechanical churn deferred to a follow-up.
+# Each ``_register(...)`` call returns the event NAME (a str), so the
+# constants below are plain strings usable directly as the second
+# argument to ``capture(distinct_id, EVENT_NAME, properties)``. To get
+# the registered ``EventSpec`` for schema introspection, call
+# ``get_spec(name)``.
+#
+# Existing call sites continue to pass string literals — switching them
+# over to use these constants is mechanical churn deferred to a
+# follow-up. New captures SHOULD use the constants so a typo is a
+# NameError at import time rather than a silent new event in PostHog.
 
 # --- Team events --------------------------------------------------------------
 
@@ -259,6 +274,7 @@ COMPONENT_CREATED = _register(
         properties={
             "component_id": "The created component's ID.",
             "component_type": "Component type classifier.",
+            "visibility": "One of 'public' / 'private' / 'gated' — the ComponentVisibility enum value.",
         },
     )
 )
@@ -490,6 +506,19 @@ BILLING_ENTERPRISE_CONTACT_SUBMITTED = _register(
 )
 
 # --- Vulnerability scanning events --------------------------------------------
+
+VULNERABILITY_SCAN_INITIATED = _register(
+    EventSpec(
+        name="vulnerability_scan:initiated",
+        description="A vulnerability scan was dispatched to a worker for an SBOM.",
+        distinct_id_kind="workspace",
+        properties={
+            "sbom_id": "Target SBOM's ID.",
+            "plugin": "Plugin selected for the scan.",
+            "reason": "Why the scan was triggered (upload / manual / scheduled / etc.).",
+        },
+    )
+)
 
 VULNERABILITY_SCAN_COMPLETED = _register(
     EventSpec(

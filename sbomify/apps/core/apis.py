@@ -1490,13 +1490,17 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         assert team.key is not None
         schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
 
+        # ``component.visibility`` is a ``ComponentVisibility`` enum; PostHog's
+        # JSON serializer doesn't handle Django enums, so ship the ``.value``
+        # string. ``getattr`` fallback keeps this defensive against the field
+        # ever becoming a plain string.
         capture_for_request(
             request,
             "component:created",
             {
                 "component_id": str(component.id),
                 "component_type": component.component_type or "",
-                "visibility": component.visibility,
+                "visibility": getattr(component.visibility, "value", component.visibility),
             },
             team_key=team.key,
         )
