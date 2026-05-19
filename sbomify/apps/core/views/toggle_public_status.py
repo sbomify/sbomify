@@ -92,6 +92,10 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     @staticmethod
     def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, new_visibility: str) -> None:
+        # Empty team_key here means the session is missing the
+        # ``current_team`` shape; ``capture_for_request`` will skip the
+        # event entirely rather than mis-attribute it to a user PK (see
+        # the empty-string branch in posthog_service.capture_for_request).
         team_key = (request.session.get("current_team") or {}).get("key", "")
         # Deferred via ``on_commit`` so a rollback in the surrounding
         # ``patch_*`` flow doesn't ship a ghost visibility toggle event.

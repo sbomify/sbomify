@@ -65,6 +65,60 @@ def test_capture_for_request_skips_anonymous_distinct_id(
 
 
 @pytest.mark.django_db
+def test_capture_for_request_skips_empty_team_key(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """Explicit ``team_key=""`` must skip — never fall back to user PK.
+
+    Locks in the contract from ``capture_for_request``:
+    * ``team_key=None`` → user-scoped fallback (rare)
+    * ``team_key=""`` → workspace intent that failed to resolve → SKIP
+    * truthy → workspace-keyed distinct_id
+
+    The middle case is the privacy-critical one — silently downgrading
+    a workspace-scoped event to user-scoped would leak user↔workspace
+    correlation into PostHog.
+    """
+    from sbomify.apps.core.posthog_service import capture_for_request
+
+    mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
+    mock_get_distinct = mocker.patch(
+        "sbomify.apps.core.posthog_service.get_distinct_id", return_value="user_pk_should_not_be_used"
+    )
+    mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
+
+    fake_request = mocker.MagicMock()
+    capture_for_request(fake_request, "search:performed", team_key="")
+
+    assert mock_capture.call_count == 0, "Empty team_key must NOT fall back to user PK"
+    # We also shouldn't be reaching for the user PK at all in this branch
+    assert mock_get_distinct.call_count == 0, "Empty team_key path must not call get_distinct_id"
+
+
+@pytest.mark.django_db
+def test_capture_for_request_truthy_team_key_uses_workspace_distinct_id(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """A truthy ``team_key`` becomes the distinct_id and the workspace group."""
+    from sbomify.apps.core.posthog_service import capture_for_request
+
+    mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
+    mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
+
+    fake_request = mocker.MagicMock()
+    capture_for_request(fake_request, "search:performed", {"query_length": 4}, team_key="ws_abc123")
+
+    assert mock_capture.call_count == 1
+    args, kwargs = mock_capture.call_args
+    assert args[0] == "ws_abc123", "distinct_id must equal the team_key"
+    assert kwargs["groups"] == {"workspace": "ws_abc123"}
+
+
+@pytest.mark.django_db
 def test_capture_for_request_skips_when_disabled(
     mocker: MockerFixture,
     team_with_business_plan: Team,

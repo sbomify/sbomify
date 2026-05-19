@@ -148,23 +148,49 @@ def capture_for_request(
     Distinct_id convention (matches PR #822 and the Tier 1 signal pattern):
     workspace key is preferred over user PK so server-side events attribute
     to the workspace, not the user. Cross-correlation of users → workspaces
-    is exactly what we want to avoid in PostHog. When ``team_key`` is not
-    provided (e.g. ``user:account_deleted`` which is genuinely user-scoped),
-    we fall back to the request-derived ``get_distinct_id`` (user PK for
-    authenticated, session ID for anonymous).
+    is exactly what we want to avoid in PostHog.
+
+    Three cases for ``team_key``:
+
+    * ``None`` (kwarg omitted) — caller declared this is a genuinely
+      user-scoped event (e.g. ``user:account_deleted``, where there is
+      no workspace context). Fall back to the request-derived
+      ``get_distinct_id`` (user PK for authenticated, session ID for
+      anonymous). The event will not carry a workspace group.
+    * ``""`` (empty string) — caller INTENDED workspace context but
+      couldn't resolve it (e.g. session missing the ``current_team``
+      key, or the key resolution path returned empty). Skipping here
+      keeps the Tier 2 attribution guarantee intact: a workspace-scoped
+      event must NEVER silently downgrade to user-scoped, otherwise we
+      leak user↔workspace correlation into PostHog and break the
+      workspace-level rollups. The call site should fix its key
+      derivation rather than relying on a fallback.
+    * truthy string — use as ``distinct_id`` and set
+      ``groups={"workspace": team_key}``.
 
     Short-circuits when PostHog is disabled or the request resolves to
     ``anonymous`` so the cookie/session work in ``get_distinct_id`` is
-    skipped on disabled deployments. Resolves ``groups={"workspace":
-    team_key}`` when ``team_key`` is truthy and forwards ``request`` so
-    the cookie-based consent gate in ``capture`` still applies.
+    skipped on disabled deployments. Forwards ``request`` so the
+    cookie-based consent gate in ``capture`` still applies.
     """
     if not is_enabled():
         return
-    distinct_id = team_key or get_distinct_id(request)
+
+    if team_key is None:
+        # Genuinely user-scoped event.
+        distinct_id = get_distinct_id(request)
+        groups: dict[str, str] | None = None
+    elif team_key == "":
+        # Workspace-intent that failed to resolve a key. Better to drop
+        # the event than to mis-attribute it to a user PK.
+        logger.debug("Skipping workspace-scoped event %s — empty team_key", event)
+        return
+    else:
+        distinct_id = team_key
+        groups = {"workspace": team_key}
+
     if not distinct_id or distinct_id == "anonymous":
         return
-    groups = {"workspace": team_key} if team_key else None
     capture(distinct_id, event, properties or {}, groups=groups, request=request)
 
 
