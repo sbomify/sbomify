@@ -273,24 +273,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             )
             invitation.save()
 
-            # Ship the email DOMAIN only — never the local-part. The local-part
-            # identifies a person; the domain identifies a B2B prospect / cohort
-            # which is the analytics value here. A drive-by edit to ship the full
-            # email would leak PII to PostHog. Domain alone can still be
-            # sensitive for some B2B (e.g. an internal subsidiary) — acceptable
-            # trade-off for the funnel metric.
-            invited_email = invite_user_form.cleaned_data["email"]
-            email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
-            capture_for_request(
-                request,
-                "team:member_invited",
-                {
-                    "role": invite_user_form.cleaned_data["role"],
-                    "invited_email_domain": email_domain,
-                },
-                team_key=team.key,
-            )
-
             email_context = {
                 "team": team,
                 "invitation": invitation,
@@ -308,6 +290,28 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 render_to_string("teams/emails/team_invite_email.html.j2", email_context), "text/html"
             )
             email.send()
+
+            # Capture AFTER email.send() — if SMTP fails (transient outage,
+            # template render error) the request raises and we want the
+            # funnel to reflect "no invite shipped", not an inflated
+            # "invite_sent" count. Ship the email DOMAIN only — never the
+            # local-part. The local-part identifies a person; the domain
+            # identifies a B2B prospect / cohort which is the analytics
+            # value here. A drive-by edit to ship the full email would
+            # leak PII to PostHog. Domain alone can still be sensitive for
+            # some B2B (e.g. an internal subsidiary) — acceptable trade-off
+            # for the funnel metric.
+            invited_email = invite_user_form.cleaned_data["email"]
+            email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
+            capture_for_request(
+                request,
+                "team:member_invited",
+                {
+                    "role": invite_user_form.cleaned_data["role"],
+                    "invited_email_domain": email_domain,
+                },
+                team_key=team.key,
+            )
 
             messages.add_message(request, messages.SUCCESS, f"Invite sent to {invite_user_form.cleaned_data['email']}")
 

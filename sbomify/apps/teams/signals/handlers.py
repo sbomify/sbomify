@@ -147,13 +147,32 @@ def capture_role_change(sender: type, instance: Member, created: bool, **kwargs:
     flows), no-op saves where role is unchanged, and any path where the
     pre_save snapshot didn't run (e.g. raw SQL update or
     ``update_fields`` that excluded ``role``).
+
+    Also early-returns when the caller passed ``update_fields`` excluding
+    ``role`` even if a prior save on the same instance set
+    ``_sbomify_old_role`` — otherwise a stale snapshot from an earlier
+    role-change save would fire ``team:role_changed`` again for a write
+    that didn't touch ``role``. The snapshot is also cleared at the end
+    so subsequent saves on the same instance start from a clean slate.
     """
     if created:
+        return
+
+    update_fields = kwargs.get("update_fields")
+    if update_fields is not None and "role" not in set(update_fields):
         return
 
     old_role = getattr(instance, _OLD_ROLE_ATTR, None)
     if old_role is None or old_role == instance.role:
         return
+
+    # Clear the snapshot now that we've consumed it. Without this, the
+    # attribute would survive on the instance and could be mis-read by a
+    # later save that legitimately changes another field.
+    try:
+        delattr(instance, _OLD_ROLE_ATTR)
+    except AttributeError:
+        pass
 
     from sbomify.apps.core.posthog_service import capture
 

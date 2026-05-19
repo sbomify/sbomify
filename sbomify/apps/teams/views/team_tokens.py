@@ -80,10 +80,11 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         token.save()
 
         # Token description is arbitrary user input and may contain PII
-        # (customer names, copied secrets). The event fire itself is the
-        # signal we need; no description-derived properties are sent.
-        # Deferred via ``on_commit`` so a rollback after ``token.save()``
-        # doesn't ship an event for a token that no longer exists.
+        # (customer names, copied secrets). The act of firing the event
+        # is the signal we need; no description-derived properties are
+        # sent. Deferred via ``on_commit`` so a rollback after
+        # ``token.save()`` doesn't ship an event for a token that no
+        # longer exists.
         transaction.on_commit(
             lambda: capture_for_request(
                 request,

@@ -215,6 +215,45 @@ def test_role_change_no_op_save_does_not_capture(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_role_change_followed_by_other_field_save_does_not_refire(
+    mocker: MockerFixture,
+    team_with_business_plan: Team,
+    sample_user: Any,
+) -> None:
+    """A second save touching a non-role field must NOT re-fire team:role_changed.
+
+    Regression: ``_sbomify_old_role`` used to survive on the instance
+    after a successful role-change fire, so a later
+    ``save(update_fields=["is_default_team"])`` would see the stale
+    snapshot and re-emit the event even though role didn't change.
+    """
+    from django.contrib.auth import get_user_model
+
+    UserModel = get_user_model()
+    other_user = UserModel.objects.create_user(username="leak_test", email="leak@example.com", password="pw")
+    membership = Member.objects.create(team=team_with_business_plan, user=other_user, role="guest")
+
+    mock_capture = patch_capture(mocker)
+
+    # First save: actual role change → event fires once
+    membership.role = "admin"
+    membership.save()
+    role_calls_after_first = [c for c in mock_capture.call_args_list if c.args[1] == "team:role_changed"]
+    assert len(role_calls_after_first) == 1
+
+    # Second save: unrelated field change → must NOT re-fire
+    membership.is_default_team = True
+    membership.save(update_fields=["is_default_team"])
+
+    role_calls_after_second = [c for c in mock_capture.call_args_list if c.args[1] == "team:role_changed"]
+    assert len(role_calls_after_second) == 1, (
+        f"Expected only the first save to fire team:role_changed, got {len(role_calls_after_second)} total"
+    )
+    # Snapshot attr must be cleared after the first fire
+    assert not hasattr(membership, "_sbomify_old_role")
+
+
+@pytest.mark.django_db(transaction=True)
 def test_role_change_update_fields_without_role_skips_snapshot(
     mocker: MockerFixture,
     team_with_business_plan: Team,
