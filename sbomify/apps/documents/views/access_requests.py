@@ -23,6 +23,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
@@ -433,8 +434,6 @@ class AccessRequestView(View):
         # Deferred via ``on_commit`` to mirror the cache-invalidate above so the
         # event only ships if the create/update transaction committed.
         if request_state_changed:
-            from sbomify.apps.core.posthog_service import capture_for_request
-
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -618,8 +617,6 @@ class NDASigningView(View):
 
                 # Reload access request with NDA signature relationship
                 access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
-
-                from sbomify.apps.core.posthog_service import capture_for_request
 
                 # Inside the atomic block so transaction.on_commit deferral applies.
                 transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
@@ -1295,8 +1292,6 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             # Invalidate the approved user's session cache so workspace appears immediately
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
-
-            from sbomify.apps.core.posthog_service import capture_for_request
 
             # Mirror the cache-invalidate above: defer via ``on_commit`` so
             # the event only ships if the approval transaction commits. In

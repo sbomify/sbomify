@@ -18,6 +18,7 @@ from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import broadcast_to_workspace, get_client_ip
@@ -282,8 +283,6 @@ def create_access_request(
             # transition (new request or revoked/rejected → pending re-request), not
             # when a duplicate API call returns an already-pending or approved record.
             if request_state_changed:
-                from sbomify.apps.core.posthog_service import capture_for_request
-
                 transaction.on_commit(
                     lambda: capture_for_request(
                         request,

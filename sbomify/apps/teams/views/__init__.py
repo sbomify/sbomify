@@ -26,6 +26,7 @@ from django.views.decorators.http import require_GET
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.decorators import validate_role_in_current_team
 from sbomify.apps.teams.forms import InviteUserForm
@@ -271,8 +272,6 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
                 role=invite_user_form.cleaned_data["role"],
             )
             invitation.save()
-
-            from sbomify.apps.core.posthog_service import capture_for_request
 
             # Ship the email DOMAIN only — never the local-part. The local-part
             # identifies a person; the domain identifies a B2B prospect / cohort
@@ -572,8 +571,6 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
     switch_active_workspace(request, invitation.team, invitation.role)
 
     messages.add_message(request, messages.INFO, f"You have joined {invitation.team.name} as {invitation.role}")
-
-    from sbomify.apps.core.posthog_service import capture_for_request
 
     capture_for_request(
         request,

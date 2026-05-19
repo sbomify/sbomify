@@ -15,6 +15,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.models import Invitation, Member, Team
 from sbomify.apps.teams.utils import can_add_user_to_team, get_user_teams, update_user_teams_session
 
@@ -74,8 +75,6 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
         )
 
         if request is not None:
-            from sbomify.apps.core.posthog_service import capture_for_request
-
             capture_for_request(
                 request,
                 "team:member_invitation_accepted",

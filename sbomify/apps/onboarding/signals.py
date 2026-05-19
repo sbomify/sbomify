@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -82,8 +83,6 @@ def track_first_component_creation(sender: type[Any], instance: Component, creat
                     onboarding_status.mark_component_created()
                     logger.info("Marked first BOM component creation for workspace owner %s", member.user.id)
 
-                from django.db import transaction
-
                 from sbomify.apps.core.posthog_service import capture
 
                 component_id = instance.id
@@ -136,8 +135,6 @@ def track_first_bom_artifact_upload(sender: type[Any], instance: SBOM, created: 
                     onboarding_status.mark_sbom_uploaded()
                     logger.info("Marked first BOM artifact upload for workspace owner %s", member.user.id)
 
-                from django.db import transaction
-
                 from sbomify.apps.core.posthog_service import capture
 
                 team = instance.component.team
@@ -185,8 +182,6 @@ def track_wizard_completion(sender: type[Any], instance: Team, created: bool, **
                     logger.info("Marked wizard completion for user %s", member.user.id)
 
             if any_transitioned:
-                from django.db import transaction
-
                 from sbomify.apps.core.posthog_service import capture
 
                 workspace_key = instance.key

@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
@@ -1102,8 +1103,6 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
         # Only fire on first-time domain set (not domain changes or re-saves),
         # so the "added" semantics match the event name.
         if is_first_time_set:
-            from sbomify.apps.core.posthog_service import capture_for_request
-
             capture_for_request(request, "team:custom_domain_added", team_key=team_key)
 
         return 200, {"domain": normalized_domain, "validated": False}

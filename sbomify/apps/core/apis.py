@@ -20,6 +20,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
     get_team_asset_count,
     optimize_component_queryset,
@@ -593,8 +594,6 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         assert team.key is not None
         schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
-
-        from sbomify.apps.core.posthog_service import capture_for_request
 
         capture_for_request(
             request,
@@ -1490,8 +1489,6 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         assert team.key is not None
         schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
-
-        from sbomify.apps.core.posthog_service import capture_for_request
 
         capture_for_request(
             request,
@@ -2722,8 +2719,6 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 "release_created",
                 {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
             )
-
-        from sbomify.apps.core.posthog_service import capture_for_request
 
         capture_for_request(
             request,
@@ -4197,8 +4192,6 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
         # Fired AFTER soft-delete; the user's other sessions have been invalidated
         # (see delete_user_account), but this request's in-memory user object still
         # resolves a stable distinct_id via request.user.pk.
-        from sbomify.apps.core.posthog_service import capture_for_request
-
         capture_for_request(request, "user:account_deleted")
 
         return 200, {"success": True, "message": result.value}

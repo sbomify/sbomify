@@ -6,6 +6,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views import View
 
 from sbomify.apps.core.models import Component, Product
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import get_team_id_from_session
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -52,8 +53,6 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             }
             for c in components
         ]
-
-        from sbomify.apps.core.posthog_service import capture_for_request
 
         team_key = (request.session.get("current_team") or {}).get("key", "")
         result_count = len(products_data) + len(components_data)

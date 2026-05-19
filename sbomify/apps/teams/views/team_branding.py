@@ -4,6 +4,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.apis import (
     get_team,
     get_team_branding,
@@ -58,8 +59,6 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         status_code, result = update_team_branding(request, team_key, payload)
         if status_code != 200:
             return htmx_error_response(result.get("detail", "Failed to update branding"))
-
-        from sbomify.apps.core.posthog_service import capture_for_request
 
         capture_for_request(request, "team:branding_updated", team_key=team_key)
 

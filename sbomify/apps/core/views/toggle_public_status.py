@@ -9,6 +9,7 @@ from django.views import View
 from sbomify.apps.core.apis import patch_component, patch_product
 from sbomify.apps.core.forms import TogglePublicStatusForm
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ComponentPatchSchema, ProductPatchSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -85,8 +86,6 @@ class TogglePublicStatusView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     @staticmethod
     def _capture_toggle(request: HttpRequest, item_type: str, item_id: str, new_visibility: str) -> None:
-        from sbomify.apps.core.posthog_service import capture_for_request
-
         team_key = (request.session.get("current_team") or {}).get("key", "")
         capture_for_request(
             request,

@@ -33,6 +33,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number, verify_item_access
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
@@ -259,8 +260,6 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
 
-    from sbomify.apps.core.posthog_service import capture_for_request
-
     capture_for_request(
         request,
         "team:member_invitation_accepted",
@@ -333,8 +332,6 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
                 return HttpResponse(status=500)
             messages.error(request, "An error occurred while deleting the token")
             return redirect(reverse("core:settings"))
-
-        from sbomify.apps.core.posthog_service import capture_for_request
 
         capture_for_request(request, "api_token:deleted", team_key=token_team_key)
 

@@ -18,6 +18,7 @@ from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
@@ -682,8 +683,6 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     # entry points; tests cover both paths. Deferred via ``on_commit`` so a
     # rollback after the delete() doesn't leave us with a ghost event for a
     # membership that still exists.
-    from sbomify.apps.core.posthog_service import capture_for_request
-
     transaction.on_commit(
         lambda: capture_for_request(
             request,
