@@ -57,6 +57,11 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
         team_key = (request.session.get("current_team") or {}).get("key", "")
         result_count = len(products_data) + len(components_data)
+        # NEVER include the raw ``query`` string in the event payload — it can
+        # contain customer identifiers, internal component names, or secrets
+        # users accidentally paste into the search bar. Ship the length and
+        # result count only; if someone wants per-query analytics, that's a
+        # separate consent-gated funnel, not a property on this event.
         capture_for_request(
             request,
             "search:performed",

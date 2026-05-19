@@ -145,16 +145,24 @@ def capture_for_request(
 ) -> None:
     """Capture an event from a view, applying the standard guards.
 
-    Short-circuits when PostHog is disabled or the session is anonymous so
-    the cookie/session work in ``get_distinct_id`` is skipped on disabled
-    deployments. Resolves ``groups={"workspace": team_key}`` when ``team_key``
-    is truthy and forwards ``request`` so the cookie-based consent gate in
-    ``capture`` still applies.
+    Distinct_id convention (matches PR #822 and the Tier 1 signal pattern):
+    workspace key is preferred over user PK so server-side events attribute
+    to the workspace, not the user. Cross-correlation of users → workspaces
+    is exactly what we want to avoid in PostHog. When ``team_key`` is not
+    provided (e.g. ``user:account_deleted`` which is genuinely user-scoped),
+    we fall back to the request-derived ``get_distinct_id`` (user PK for
+    authenticated, session ID for anonymous).
+
+    Short-circuits when PostHog is disabled or the request resolves to
+    ``anonymous`` so the cookie/session work in ``get_distinct_id`` is
+    skipped on disabled deployments. Resolves ``groups={"workspace":
+    team_key}`` when ``team_key`` is truthy and forwards ``request`` so
+    the cookie-based consent gate in ``capture`` still applies.
     """
     if not is_enabled():
         return
-    distinct_id = get_distinct_id(request)
-    if distinct_id == "anonymous":
+    distinct_id = team_key or get_distinct_id(request)
+    if not distinct_id or distinct_id == "anonymous":
         return
     groups = {"workspace": team_key} if team_key else None
     capture(distinct_id, event, properties or {}, groups=groups, request=request)

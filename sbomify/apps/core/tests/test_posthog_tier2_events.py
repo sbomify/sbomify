@@ -221,21 +221,24 @@ def test_capture_for_request_skips_anonymous_distinct_id(
     team_with_business_plan: Team,
     sample_user: Any,
 ) -> None:
-    """Even on a view that fires events, capture is skipped when distinct_id is 'anonymous'.
+    """Capture is skipped when distinct_id resolves to ``anonymous`` AND no team_key is supplied.
 
-    Targets the anonymous guard inside ``capture_for_request`` directly; just
-    routing through a logged-out client would short-circuit the view via
-    LoginRequiredMixin before the guard is exercised.
+    ``capture_for_request`` prefers ``team_key`` as the distinct_id when
+    provided (workspace-level attribution per PR #822). The anonymous guard
+    only kicks in for events without a team_key — e.g. user-scoped events
+    like ``user:account_deleted``. ``search:performed`` does pass team_key,
+    so to exercise the guard we patch the helper signature directly.
     """
+    from sbomify.apps.core.posthog_service import capture_for_request
+
     mocker.patch("sbomify.apps.core.posthog_service.is_enabled", return_value=True)
     mocker.patch("sbomify.apps.core.posthog_service.get_distinct_id", return_value="anonymous")
     mock_capture = mocker.patch("sbomify.apps.core.posthog_service.capture")
 
-    client = Client()
-    setup_authenticated_client_session(client, team_with_business_plan, sample_user)
-    response = client.get(reverse("core:search") + "?q=acme")
+    # Simulate a user-scoped event (no team_key) with an anonymous request.
+    fake_request = mocker.MagicMock()
+    capture_for_request(fake_request, "user:account_deleted")
 
-    assert response.status_code == 200
     assert mock_capture.call_count == 0
 
 

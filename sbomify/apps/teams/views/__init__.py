@@ -274,6 +274,12 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
 
             from sbomify.apps.core.posthog_service import capture_for_request
 
+            # Ship the email DOMAIN only — never the local-part. The local-part
+            # identifies a person; the domain identifies a B2B prospect / cohort
+            # which is the analytics value here. A drive-by edit to ship the full
+            # email would leak PII to PostHog. Domain alone can still be
+            # sensitive for some B2B (e.g. an internal subsidiary) — acceptable
+            # trade-off for the funnel metric.
             invited_email = invite_user_form.cleaned_data["email"]
             email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
             capture_for_request(
