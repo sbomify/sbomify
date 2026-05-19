@@ -219,40 +219,22 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             logger.info("Trial ending notification sent")
 
         if days_remaining <= 0:
-            # Two-marker state machine over the transition-only side effects.
-            #
-            # - ``trial_expired_claimed_at`` is reserved under the row lock and
-            #   serves as the race gate: two concurrent expired-trial webhooks
-            #   cannot both see "not claimed" and both fire emails / visibility
-            #   shifts / PostHog events.
-            # - ``trial_expired_emitted_at`` is written only after every side
-            #   effect succeeded. If any of them raised, the claim stays open
-            #   without a completion marker, so a later webhook past the stale
-            #   threshold can retake the claim and finish the work rather than
-            #   skipping permanently (the "set marker before side effects"
-            #   shape would).
-            stale_seconds = getattr(settings, "TRIAL_EXPIRED_CLAIM_STALE_SECONDS", 600)
+            # See ``TrialExpiryEmissionGuard`` for the two-marker state machine
+            # that makes the side effects below crash-tolerant and idempotent
+            # across concurrent / redelivered webhooks.
+            from sbomify.apps.billing.trial_expiry import TrialExpiryEmissionGuard
+
+            guard = TrialExpiryEmissionGuard()
             now = timezone.now()
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
-                already_emitted = bool(billing_limits.get("trial_expired_emitted_at"))
-                should_run_side_effects = False
-                if not already_emitted:
-                    claimed_at = billing_limits.get("trial_expired_claimed_at")
-                    claim_is_fresh = False
-                    if claimed_at:
-                        try:
-                            claim_dt = datetime.datetime.fromisoformat(claimed_at)
-                            claim_is_fresh = (now - claim_dt).total_seconds() < stale_seconds
-                        except (TypeError, ValueError):
-                            claim_is_fresh = False
-                    should_run_side_effects = not claim_is_fresh
+                should_run_side_effects = guard.should_claim(billing_limits, now)
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
                 billing_limits.update(get_community_plan_limits())
                 if should_run_side_effects:
-                    billing_limits["trial_expired_claimed_at"] = now.isoformat()
+                    guard.stamp_claim(billing_limits, now)
                 team.billing_plan_limits = billing_limits
                 team.save()
 
@@ -268,22 +250,15 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
                 team_key = team.key or ""
                 distinct_id = team_key or "system"
 
-                # Write the completion marker FIRST, defer the PostHog capture
+                # Stamp the completion marker FIRST, defer the PostHog capture
                 # via ``transaction.on_commit`` so the marker is durable before
-                # the event fires. The original "capture then mark in a second
-                # transaction" sequence had a race window: a process kill
-                # between the capture and the marker-write would leave the
-                # event fired but the marker unwritten, so the next webhook
-                # past ``TRIAL_EXPIRED_CLAIM_STALE_SECONDS`` would retake the
-                # claim and double-fire side effects + capture. With this
-                # ordering: marker commits, on_commit fires the capture. If
-                # the process dies between commit and the capture firing, the
-                # event is lost (slight under-count) — preferable to the
-                # over-count + duplicate downstream actions of the prior race.
+                # the event fires. See ``TrialExpiryEmissionGuard`` for why
+                # marker-then-event (vs. event-then-marker) is the correct
+                # crash-tolerance ordering.
                 with transaction.atomic():
                     team = Team.objects.select_for_update().get(pk=team.pk)
                     billing_limits = (team.billing_plan_limits or {}).copy()
-                    billing_limits["trial_expired_emitted_at"] = timezone.now().isoformat()
+                    guard.stamp_emitted(billing_limits, timezone.now())
                     team.billing_plan_limits = billing_limits
                     team.save()
 
