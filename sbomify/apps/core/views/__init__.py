@@ -339,7 +339,17 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
         # Deferred via ``on_commit`` so the event only ships if the
         # delete actually committed (matters under ATOMIC_REQUESTS or any
         # wrapping atomic block).
-        transaction.on_commit(lambda: capture_for_request(request, "api_token:deleted", team_key=token_team_key))
+        #
+        # Unscoped legacy tokens (``token.team is None`` → empty
+        # ``token_team_key``) are intentionally NOT captured. The Tier 2
+        # convention is workspace-keyed ``distinct_id`` (see
+        # analytics/events.py and PR #822); emitting with a user PK
+        # fallback would mix scopes for the same event name and skew
+        # workspace-level aggregations in PostHog. Unscoped tokens are
+        # legacy and rare; the count of their deletions is not load-
+        # bearing for any current funnel.
+        if token_team_key:
+            transaction.on_commit(lambda: capture_for_request(request, "api_token:deleted", team_key=token_team_key))
 
         if is_api_request:
             return HttpResponse(status=200)

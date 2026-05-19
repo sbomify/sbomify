@@ -1,9 +1,20 @@
 """Tests for the PostHog event registry.
 
-These exercise the registry itself (invariants, validation helper) and
-also act as drift detection — a new ``capture()`` call site that ships
-a property name not in the registry will surface as a test failure
-when the engineer adds the capture without registering the event.
+These exercise the registry itself (invariants, validation helper) plus
+two layers of drift detection:
+
+* ``TestCoverageOfShippedEvents`` asserts the ``SHIPPED_EVENTS`` set
+  matches the registered set bidirectionally. A new ``capture()`` call
+  site that ships an unregistered event NAME — or a registered event
+  that no production code fires — surfaces as a test failure when the
+  engineer updates this list (which they must, to make their work
+  visible to analytics consumers).
+* Property-level drift (unexpected property names per event) is caught
+  at production runtime: ``posthog_service.capture`` calls
+  ``validate_payload`` and logs warnings on mismatch. CI doesn't
+  currently grep every call site for property names — that would
+  require parsing the codebase. The runtime log is the property-drift
+  surface.
 """
 
 from __future__ import annotations

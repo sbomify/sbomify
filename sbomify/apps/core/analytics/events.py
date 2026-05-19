@@ -20,15 +20,19 @@ This module centralises every event the product fires so that:
   in code that wants strong static checks)
 * every event has a documented description, distinct_id convention
   (workspace / user / system), and property schema
-* a centralised ``validate_payload`` helper can compare a fired
-  payload against the schema and log a warning when they diverge,
-  catching drift in tests and production logs without dropping events
+* ``validate_payload`` helper compares a fired payload against the
+  schema and returns warnings when they diverge. It is wired into
+  ``posthog_service.capture`` to log (never raise) drift in production
+  logs as it happens, and the registry tests assert the
+  ``SHIPPED_EVENTS`` set matches the registered set so drift surfaces
+  in CI too.
 
 The registry deliberately does NOT block unregistered events at
 ``capture`` time — production analytics should be resilient and
-forward-compatible. The intended enforcement is a test that asserts
-every event NAME passed to ``capture`` exists in the registry, so new
-events must be registered before they ship.
+forward-compatible. The intended enforcement is the ``SHIPPED_EVENTS``
+test, which fails CI when a new event ships without a registration
+entry, plus the runtime warning emitted from ``capture`` for property
+drift.
 
 Distinct_id convention
 ======================
@@ -309,12 +313,15 @@ RELEASE_CREATED = _register(
 ITEM_VISIBILITY_TOGGLED = _register(
     EventSpec(
         name="item:visibility_toggled",
-        description="A product or component's public/private visibility was toggled.",
+        description="A product or component's visibility was toggled.",
         distinct_id_kind="workspace",
         properties={
             "item_type": "'product' or 'component'.",
             "item_id": "Affected item's ID.",
-            "new_visibility": "'public' or 'private' — the visibility after the toggle.",
+            "new_visibility": (
+                "Visibility after the toggle. Products: 'public' or 'private'. "
+                "Components: 'public', 'private', or 'gated' (trust-center NDA-gated access)."
+            ),
         },
     )
 )

@@ -186,6 +186,13 @@ def capture(
     as ``distinct_id`` for workspace-level attribution, falling back to
     ``"system"`` when no workspace key is available. They do not create
     person profiles (PostHog is configured with ``person_profiles: 'identified_only'``).
+
+    Runtime drift detection: cross-checks the event name + payload against
+    ``sbomify.apps.core.analytics.events.validate_payload`` and logs (does
+    not raise) any warnings. The event ships regardless so production
+    analytics stays resilient — but a typo'd name or an unregistered
+    property surfaces in logs immediately rather than waiting for the
+    next test run.
     """
     client = _get_client()
     if client is None:
@@ -194,6 +201,17 @@ def capture(
     # Respect user's consent choice from the frontend
     if request and has_opted_out(request):
         return
+
+    # Cross-check against the event registry. Log warnings but never block —
+    # the registry is observation, not enforcement (see analytics/events.py
+    # module docstring for the rationale).
+    try:
+        from sbomify.apps.core.analytics.events import validate_payload
+
+        for warning in validate_payload(event, properties):
+            logger.warning("PostHog event registry drift: %s", warning)
+    except Exception:
+        logger.exception("Failed to run registry validation for event %s", event)
 
     try:
         merged: dict[str, Any] = dict(properties or {})
