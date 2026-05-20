@@ -12,6 +12,7 @@ dependencies = [
     "psycopg2-binary>=2.9.9,<3",
     "django-extensions~=4.1",
     "django-widget-tweaks>=1.5.0,<2",
+    "django-ratelimit>=4.1,<5",
     "pyjwt>=2.12.0,<3",
     "pydantic>=2.11.9,<3",
     "django-anymail[sendgrid]~=15.0",

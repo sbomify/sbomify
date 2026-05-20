@@ -280,6 +280,49 @@ class TestBindingMismatch:
         assert response.status_code == 403
 
 
+class TestRateLimit:
+    """Regression for security finding H-2: the exchange endpoint MUST
+    be rate-limited so an unauthenticated attacker can't:
+    * enumerate component IDs cheaply (status leaks existence)
+    * spam novel-kid tokens to amplify JWKS refresh
+    * brute-force forged signatures
+    """
+
+    @pytest.mark.django_db
+    def test_429_after_burst_from_same_ip(
+        self, github_claims_factory, mock_github_jwks, github_binding, component, mocker
+    ) -> None:
+        from django.core.cache import cache
+
+        # Clear any existing rate-limit counters for the IP from prior tests.
+        cache.clear()
+
+        # Patch the rate limit to a small value so the test is fast.
+        mocker.patch("sbomify.apps.oidc.apis._EXCHANGE_RATE_LIMIT", "3/m")
+
+        token = github_claims_factory(repository_owner_id=67890, repository_id=12345)
+        client = Client()
+        body = json.dumps({"component_id": component.id})
+        headers = {
+            "content_type": "application/json",
+            "HTTP_AUTHORIZATION": f"Bearer {token}",
+        }
+
+        # First 3 requests within the window succeed (or hit some other
+        # status — they're real exchanges) — we just need NONE of them
+        # to be 429.
+        statuses = []
+        for _ in range(3):
+            r = client.post(EXCHANGE_URL, data=body, **headers)
+            statuses.append(r.status_code)
+        assert 429 not in statuses
+
+        # 4th request from the same IP within the same minute → 429
+        r = client.post(EXCHANGE_URL, data=body, **headers)
+        assert r.status_code == 429
+        assert r.json()["detail"] == "too many requests"
+
+
 class TestInfrastructureFailures:
     @pytest.mark.django_db
     def test_jwks_unavailable_503(

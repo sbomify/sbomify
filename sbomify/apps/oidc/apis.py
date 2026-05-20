@@ -26,11 +26,27 @@ from __future__ import annotations
 from typing import Any
 
 from django.http import HttpRequest
+from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
 from ninja import Router, Schema
 
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.oidc.services import exchange_github_oidc_token
 from sbomify.logging import getLogger
+
+# Rate limit for the public, unauthenticated token-exchange endpoint.
+# 60/m per IP is comfortably above the legitimate use case (CI runs
+# rarely exceed 1/min for a single repo, even across all jobs in a
+# workflow) while capping:
+#
+#   * component-id enumeration attacks (404 vs 403 vs 200 differ and
+#     leak workspace inventory cheaply)
+#   * JWKS amplification (each request can trigger a forced refresh
+#     past the cache-level rate limit)
+#   * brute-force forged-signature attempts
+#
+# Security finding H-2.
+_EXCHANGE_RATE_LIMIT = "60/m"
+_EXCHANGE_RATE_LIMIT_GROUP = "oidc:github:exchange"
 
 logger = getLogger(__name__)
 
@@ -65,11 +81,26 @@ def _bearer_token(request: HttpRequest) -> str | None:
         401: ErrorResponse,
         403: ErrorResponse,
         404: ErrorResponse,
+        429: ErrorResponse,
         503: ErrorResponse,
     },
     summary="Exchange a GitHub Actions OIDC token for a short-lived sbomify token.",
 )
 def github_token_exchange(request: HttpRequest, payload: ExchangeRequest) -> tuple[int, Any]:
+    # Rate-limit BEFORE doing any verification work — keeps the cost
+    # of an enumeration attempt at the django-ratelimit cache lookup,
+    # not at the JWKS / DB / JWT-decode level. Sparse 429 body for the
+    # same anti-probe reason as the 401 path.
+    if is_ratelimited(
+        request,
+        group=_EXCHANGE_RATE_LIMIT_GROUP,
+        key="ip",
+        rate=_EXCHANGE_RATE_LIMIT,
+        increment=True,
+    ):
+        logger.info("OIDC exchange: rate-limited request from %s", request.META.get("REMOTE_ADDR", "?"))
+        return 429, {"detail": "too many requests"}
+
     oidc_token = _bearer_token(request)
     if not oidc_token:
         return 400, {"detail": "missing 'Authorization: Bearer <github_oidc_jwt>' header"}
