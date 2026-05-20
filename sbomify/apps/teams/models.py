@@ -493,21 +493,37 @@ class Invitation(models.Model):
             models.Index(fields=["email"]),
             models.Index(fields=["expires_at"]),
         ]
+        constraints = [
+            # DB-level guard against ``role="bot"`` invitations —
+            # covers EVERY persistence path including bulk_create(),
+            # raw SQL, fixture loading, and admin actions that bypass
+            # full_clean(). The Python clean()/save() pair below
+            # produces a friendlier ValidationError for the normal
+            # form/save flow; the DB constraint is the backstop.
+            models.CheckConstraint(
+                check=~models.Q(role="bot"),
+                name="invitation_role_not_bot",
+            ),
+        ]
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
-    # Invitable roles only — ``bot`` and ``guest`` are reserved
-    # (synthetic OIDC identity and self-service trust-center role,
-    # respectively). See settings.TEAMS_INVITABLE_ROLES.
+    # Invitable roles only — ``bot`` is reserved for synthetic OIDC
+    # identities and is forbidden on Invitation rows (CheckConstraint
+    # above + Python clean() below). ``guest`` IS valid here because
+    # the trust-center auto-accept flow creates guest-role invitations.
+    # InviteUserForm UI further restricts choices but the model layer
+    # allows the broader set so non-UI flows work.
     role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
 
     def clean(self) -> None:
-        # Defense-in-depth: even if a caller bypasses the form (raw ORM,
-        # admin action that doesn't validate choices, future API), reject
-        # an invitation with role="bot".
+        # Friendly Python-level guard. The DB CheckConstraint above is
+        # the actual defense (catches bulk_create, raw SQL, fixtures);
+        # this clean() just produces a nicer ValidationError for the
+        # normal form / save() path.
         super().clean()
         if self.role == "bot":
             from django.core.exceptions import ValidationError
@@ -517,10 +533,11 @@ class Invitation(models.Model):
             )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        # Force validation on every save so raw ORM (``.objects.create(...)``,
-        # bulk_create, fixture loading) hits the ``clean()`` guard above.
-        # Without this, ``clean()`` only fires when a form/serializer
-        # explicitly invokes ``full_clean()`` — giving false confidence.
+        # Run full_clean() so the friendly ValidationError surfaces
+        # before we hit the DB CheckConstraint (which produces a less
+        # actionable IntegrityError). Paths that bypass save() entirely
+        # (bulk_create, raw SQL, fixture loading) hit the DB
+        # constraint instead.
         self.full_clean()
         super().save(*args, **kwargs)
 

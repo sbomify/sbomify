@@ -348,12 +348,11 @@ class TestRateLimit:
     def test_429_after_burst_from_same_ip(
         self, github_claims_factory, mock_github_jwks, github_binding, component, mocker
     ) -> None:
-        from django.core.cache import cache
-
-        # Clear any existing rate-limit counters for the IP from prior tests.
-        cache.clear()
-
-        # Patch the rate limit to a small value so the test is fast.
+        # Patch the rate-limit group to a test-only namespace so its
+        # counters live in a sandbox and we never collide with — or
+        # need to ``cache.clear()`` — any other test's cache state.
+        unique_group = f"oidc:github:exchange:test:{component.id}"
+        mocker.patch("sbomify.apps.oidc.apis._EXCHANGE_RATE_LIMIT_GROUP", unique_group)
         mocker.patch("sbomify.apps.oidc.apis._EXCHANGE_RATE_LIMIT", "3/m")
 
         token = github_claims_factory(repository_owner_id=67890, repository_id=12345)
