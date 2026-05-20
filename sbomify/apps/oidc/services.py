@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
+from sbomify.apps.core.models import User
 from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
@@ -56,7 +57,7 @@ def _bot_email(binding_id: str) -> str:
 
 
 @transaction.atomic
-def provision_bot_user_for_binding(binding: "OIDCBinding") -> object:
+def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
     """Create (or fetch) the bot User + workspace Member for ``binding``.
 
     Idempotent. Safe to call from a post_save signal, an admin action,
