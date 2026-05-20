@@ -91,7 +91,13 @@ def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
         bot_user.save(update_fields=["password"])
         logger.info("Provisioned OIDC bot user %s for binding %s", username, binding.id)
 
-    Member.objects.get_or_create(
+    # update_or_create — NOT get_or_create — so a pre-existing Member row
+    # for (team, bot_user) can never silently keep an elevated role. If
+    # the bot was somehow already a member with role="owner" / "admin"
+    # (data integrity error, a future code path that adds the row first,
+    # or a username collision against an unrelated User), the role is
+    # forced back to "bot" here. Security finding C-2.
+    Member.objects.update_or_create(
         team=binding.component.team,
         user=bot_user,
         defaults={"role": _BOT_ROLE, "is_default_team": False},

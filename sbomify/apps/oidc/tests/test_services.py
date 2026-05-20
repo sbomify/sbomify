@@ -76,6 +76,34 @@ class TestProvision:
         # Each binding gets its own audit identity, the whole point of
         # bot-per-binding vs a shared workspace bot.
 
+    @pytest.mark.django_db
+    def test_preexisting_member_row_is_forced_back_to_bot_role(self, component: Component) -> None:
+        """Security regression for C-2: even if the bot user somehow already
+        has a Member row with role='owner' / 'admin' (data integrity error,
+        username collision against an unrelated User, or a future code path
+        that adds the row first), provisioning MUST force the role back to
+        'bot'. ``get_or_create`` silently kept the elevated role; we now use
+        ``update_or_create``.
+        """
+        from django.contrib.auth import get_user_model
+
+        binding, _ = _make_binding(component, repo="acme/widget", repo_id=12345, owner_id=67890)
+        User = get_user_model()
+        # Manually create the bot user + a Member with elevated role
+        # BEFORE provisioning, simulating a pre-existing collision.
+        bot_username = f"oidc-bot-{binding.id}"
+        bot_user = User.objects.create_user(username=bot_username, password="x")
+        Member.objects.create(team=component.team, user=bot_user, role="owner", is_default_team=False)
+
+        # Now provision — must downgrade to "bot"
+        provision_bot_user_for_binding(binding)
+
+        membership = Member.objects.get(team=component.team, user=bot_user)
+        assert membership.role == "bot", (
+            f"Bot user retained elevated role={membership.role!r}; "
+            "update_or_create must force role back to 'bot'."
+        )
+
 
 class TestDeletion:
     @pytest.mark.django_db

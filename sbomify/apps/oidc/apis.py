@@ -152,15 +152,25 @@ def github_token_exchange(request: HttpRequest, payload: ExchangeRequest) -> tup
         return 403, {"detail": "repository not bound to this component"}
 
     # 4. Mint a short-lived AccessToken row owned by the binding's bot
-    # user. The JWT itself is the same shape as a PAT (so it auths
-    # through the existing PersonalAccessTokenAuth path) — what
-    # makes it short-lived is the ``expires_at`` column the auth
-    # path will check in OIDC-5.
+    # user. The JWT carries ``exp``/``aud``/``token_type="oidc"`` in
+    # the payload — see ``create_personal_access_token``. That gives
+    # two independent expiry gates:
+    #   - the JWT ``exp`` claim (enforced inside PyJWT's decode)
+    #   - the DB ``expires_at`` column (enforced in
+    #     ``get_user_and_token_record``)
+    # Even if a DB tamper wipes ``expires_at``, the JWT-level expiry
+    # still rejects the token.
     ttl_seconds = int(getattr(settings, "OIDC_TOKEN_TTL_SECONDS", 900))
     now = timezone.now()
     expires_at = now + timedelta(seconds=ttl_seconds)
 
-    sbomify_jwt = create_personal_access_token(binding.bot_user)
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+
+    sbomify_jwt = create_personal_access_token(
+        binding.bot_user,
+        expires_at=expires_at.timestamp(),
+        token_type=TOKEN_TYPE_OIDC,
+    )
     with transaction.atomic():
         AccessToken.objects.create(
             encoded_token=sbomify_jwt,
