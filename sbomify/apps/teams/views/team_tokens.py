@@ -21,7 +21,10 @@ from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
-    allowed_roles = ["owner", "admin", "member"]
+    # Note: "member" is legacy — it's never been in
+    # ``TEAMS_SUPPORTED_ROLES`` (the choices are owner/admin/guest/bot).
+    # Listing it here was always a no-op match; trimming for clarity.
+    allowed_roles = ["owner", "admin"]
 
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None

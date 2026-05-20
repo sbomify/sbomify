@@ -1,27 +1,62 @@
 """Signal handlers for the OIDC app.
 
-We hook ``post_delete`` on ``OIDCBinding`` so the synthetic bot User
-created during ``provision_bot_user_for_binding`` is also removed when
-the binding goes away. That, in turn, cascades to the bot's Member
-row and every short-lived AccessToken it ever signed.
+Two handlers, both registered from ``apps.OIDCConfig.ready``:
 
-The signal is registered from ``apps.OIDCConfig.ready`` (not at
-module import time) so the User model is loaded by the time the
-handler runs.
+* ``cleanup_bot_user_on_binding_delete`` — post_delete on
+  ``OIDCBinding``: reaps the synthetic bot User, which cascades to
+  the Member row and every short-lived AccessToken the binding ever
+  signed.
+
+* ``forbid_manual_bot_role`` — pre_save on ``Member``: rejects any
+  attempt to write ``role="bot"`` for a user that doesn't have an
+  ``OIDCBinding`` pointing at them. Defends against an admin (or
+  future API) accidentally creating a privileged "bot" Member that
+  isn't backed by a real binding. The
+  ``provision_bot_user_for_binding`` flow is exempted by passing
+  ``__oidc_bot_provisioning__=True`` on the instance.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from django.db.models.signals import post_delete
+from django.core.exceptions import ValidationError
+from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import delete_bot_user_for_binding
+from sbomify.apps.teams.models import Member
 
 
 @receiver(post_delete, sender=OIDCBinding)
 def cleanup_bot_user_on_binding_delete(sender: type, instance: OIDCBinding, **kwargs: Any) -> None:
     """Reap the synthetic bot User after its binding is gone."""
     delete_bot_user_for_binding(instance.id)
+
+
+@receiver(pre_save, sender=Member)
+def forbid_manual_bot_role(sender: type, instance: Member, **kwargs: Any) -> None:
+    """Reject ``Member.role="bot"`` unless the user has an OIDCBinding.
+
+    The "bot" role is reserved for synthetic identities provisioned by
+    ``provision_bot_user_for_binding``. Any other path writing
+    ``role="bot"`` is a privilege-escalation foot-gun (think: future
+    admin-UI rename, a careless migration, a copy-paste in a fixture).
+
+    The provisioning path itself sets
+    ``instance._is_oidc_bot_provisioning = True`` to opt out of this
+    check — at the moment provisioning runs the bot's binding hasn't
+    been attached yet, so the lookup below would falsely reject.
+    """
+    if instance.role != "bot":
+        return
+    if getattr(instance, "_is_oidc_bot_provisioning", False):
+        return
+    # Allow only if the user is the bot for an existing OIDCBinding.
+    has_binding = OIDCBinding.objects.filter(bot_user=instance.user).exists()
+    if not has_binding:
+        raise ValidationError(
+            "role='bot' is reserved for synthetic OIDC binding identities and "
+            "cannot be assigned to a Member outside the OIDC provisioning flow."
+        )

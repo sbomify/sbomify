@@ -111,17 +111,35 @@ def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
         bot_user.save(update_fields=["password"])
         logger.info("Provisioned OIDC bot user %s for binding %s", username, binding.id)
 
-    # update_or_create — NOT get_or_create — so a pre-existing Member row
-    # for (team, bot_user) can never silently keep an elevated role. If
-    # the bot was somehow already a member with role="owner" / "admin"
-    # (data integrity error, a future code path that adds the row first,
-    # or a username collision against an unrelated User), the role is
-    # forced back to "bot" here. Security finding C-2.
-    Member.objects.update_or_create(
-        team=binding.component.team,
-        user=bot_user,
-        defaults={"role": _BOT_ROLE, "is_default_team": False},
-    )
+    # Manually construct + save the Member with the
+    # ``_is_oidc_bot_provisioning`` opt-out flag set BEFORE save() runs,
+    # so the ``forbid_manual_bot_role`` pre_save signal lets it through.
+    # At this point the binding's ``bot_user`` FK hasn't been attached
+    # yet, so the signal's OIDCBinding-lookup defence would falsely
+    # reject. Pattern: fetch-or-construct → flag → save.
+    #
+    # update_or_create semantics (NOT get_or_create) — a pre-existing
+    # Member row for (team, bot_user) can never silently keep an
+    # elevated role. If the bot was somehow already a member with
+    # role="owner" / "admin" (data integrity error, future code path
+    # that adds the row first, or username collision against an
+    # unrelated User), the role is forced back to "bot" here.
+    # Security finding C-2.
+    try:
+        member = Member.objects.get(team=binding.component.team, user=bot_user)
+        member.role = _BOT_ROLE
+        member.is_default_team = False
+        member._is_oidc_bot_provisioning = True  # type: ignore[attr-defined]
+        member.save(update_fields=["role", "is_default_team"])
+    except Member.DoesNotExist:
+        member = Member(
+            team=binding.component.team,
+            user=bot_user,
+            role=_BOT_ROLE,
+            is_default_team=False,
+        )
+        member._is_oidc_bot_provisioning = True  # type: ignore[attr-defined]
+        member.save()
     return bot_user
 
 

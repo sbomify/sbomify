@@ -177,9 +177,20 @@ def get_user_teams(user: User) -> dict[str, Any]:
 
     Returns:
         A dictionary mapping team keys to team data
+
+    Excludes ``role="bot"`` memberships — those belong to synthetic
+    OIDC binding bots, not the human ``user``. A bot's "user-teams"
+    listing only makes sense from the token-exchange path which
+    bypasses this helper entirely.
     """
     teams: dict[str, dict[str, Any]] = {}
-    memberships = Member.objects.filter(user=user).select_related("team").order_by("team__created_at", "team__id").all()
+    memberships = (
+        Member.objects.filter(user=user)
+        .exclude(role="bot")
+        .select_related("team")
+        .order_by("team__created_at", "team__id")
+        .all()
+    )
 
     for membership in memberships:
         team_key = membership.team.key

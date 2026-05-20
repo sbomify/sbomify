@@ -165,8 +165,15 @@ class TestTeamTokensView:
         assert "Unscoped" in content
         assert "Unscoped tokens detected" in content
 
-    def test_member_role_can_access(self, client: Client, sample_team_with_owner_member):
-        """Test that members can access tokens view."""
+    def test_legacy_member_role_is_forbidden(self, client: Client, sample_team_with_owner_member):
+        """Legacy ``role="member"`` (not in TEAMS_SUPPORTED_ROLES) is rejected.
+
+        The previous ``allowed_roles = ["owner", "admin", "member"]`` listed
+        "member" defensively in case data with that role existed in prod.
+        "member" was never in the canonical choices, so we now reject it
+        — this test pins that behaviour so a future re-introduction has to
+        update the canonical role list first.
+        """
         from django.contrib.auth import get_user_model
 
         team = sample_team_with_owner_member.team
@@ -178,7 +185,7 @@ class TestTeamTokensView:
         setup_authenticated_client_session(client, team, member_user)
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
-        assert response.status_code == 200
+        assert response.status_code == 403
 
     def test_admin_role_can_access(self, client: Client, sample_team_with_owner_member):
         """Test that admins can access tokens view."""

@@ -59,7 +59,10 @@ class InviteUserForm(forms.Form):
     )
     role = forms.ChoiceField(
         required=True,
-        choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role != "guest"],
+        # ``guest`` is a self-service trust-center role (not invited).
+        # ``bot`` is reserved for synthetic OIDC binding identities and
+        # must NEVER be human-assignable — see settings.TEAMS_SUPPORTED_ROLES.
+        choices=[(role, label) for role, label in settings.TEAMS_SUPPORTED_ROLES if role not in ("guest", "bot")],
         widget=forms.Select(attrs={"class": "form-control"}),
     )
 

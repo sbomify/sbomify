@@ -13,7 +13,10 @@ if TYPE_CHECKING:
 
 
 def count_team_members(team_id: int | str) -> int:
-    return Member.objects.filter(team_id=team_id).count()
+    # Exclude synthetic ``bot`` Members provisioned by OIDC bindings —
+    # they're not human seats and must not inflate the billing counter
+    # or any UI that surfaces "members" to workspace admins.
+    return Member.objects.filter(team_id=team_id).exclude(role="bot").count()
 
 
 def count_team_owners(team_id: int | str) -> int:

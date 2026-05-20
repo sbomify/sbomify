@@ -77,6 +77,23 @@ class TestProvision:
         # bot-per-binding vs a shared workspace bot.
 
     @pytest.mark.django_db
+    def test_manual_bot_role_assignment_rejected(self, component: Component) -> None:
+        """Security regression for P1-H: any path that tries to write
+        ``Member.role="bot"`` for a user without an OIDCBinding must fail
+        loudly. Defends against a future admin / API accidentally minting
+        a privileged bot Member that isn't backed by a real binding.
+        """
+        from django.core.exceptions import ValidationError
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        unrelated_user = User.objects.create_user(username="not-a-bot", password="x")
+
+        member = Member(team=component.team, user=unrelated_user, role="bot")
+        with pytest.raises(ValidationError, match="reserved for synthetic OIDC binding"):
+            member.save()
+
+    @pytest.mark.django_db
     def test_preexisting_member_row_is_forced_back_to_bot_role(self, component: Component) -> None:
         """Security regression for C-2: even if the bot user somehow already
         has a Member row with role='owner' / 'admin' (data integrity error,
