@@ -753,6 +753,12 @@ TEAMS_SUPPORTED_ROLES = [
     ("guest", "Guest"),
     ("bot", "Bot"),
 ]
+# Invitation.role choices — subset of supported roles that a human
+# admin can pick when inviting someone. Excludes ``bot`` (reserved for
+# OIDC provisioning) AND ``guest`` (self-service trust-center role, not
+# invited). Kept as a derived constant so adding a new role to the
+# canonical list above propagates correctly.
+TEAMS_INVITABLE_ROLES = [(k, v) for k, v in TEAMS_SUPPORTED_ROLES if k not in ("bot", "guest")]
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 

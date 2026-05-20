@@ -66,10 +66,21 @@ class ExchangeResponse(Schema):
 
 
 def _bearer_token(request: HttpRequest) -> str | None:
+    """Extract the bearer token from the Authorization header.
+
+    Per RFC 7235 §2.1 the auth scheme is case-insensitive — a client
+    sending ``bearer`` or ``BEARER`` should be treated the same as
+    ``Bearer``. Splitting on whitespace + case-folding the scheme is
+    the standard pattern.
+    """
     header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
+    parts = header.split(None, 1)
+    if len(parts) != 2:
         return None
-    token = header.removeprefix("Bearer ").strip()
+    scheme, token = parts
+    if scheme.casefold() != "bearer":
+        return None
+    token = token.strip()
     return token or None
 
 

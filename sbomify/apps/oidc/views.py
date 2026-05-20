@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -38,6 +39,10 @@ def _list_context(component: Component, form: OIDCBindingForm | None = None) -> 
             OIDCBinding.objects.filter(component=component).select_related("created_by").order_by("-created_at")
         ),
         "form": form or OIDCBindingForm(),
+        # Used in the embedded workflow snippet so the YAML stays
+        # accurate when ``OIDC_GITHUB_AUDIENCE`` is overridden at the
+        # deployment level (staging, self-hosted, etc.).
+        "oidc_github_audience": settings.OIDC_GITHUB_AUDIENCE,
     }
 
 

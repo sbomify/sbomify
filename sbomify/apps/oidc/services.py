@@ -149,25 +149,42 @@ def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
     return bot_user
 
 
-def delete_bot_user_for_binding(binding_id: str) -> None:
-    """Delete the bot User row for a removed binding.
+def delete_bot_user_by_id(bot_user_id: int) -> None:
+    """Delete a bot User by its primary key.
 
-    Called from a post_delete signal on ``OIDCBinding``. Removing the
-    User cascades to:
+    Called from the ``post_delete`` signal on ``OIDCBinding`` with the
+    binding's ``bot_user_id``. ID-based deletion is correct under any
+    username change — a previous version reconstructed the username
+    from ``binding_id`` and would leak the bot + its AccessTokens if
+    the convention ever drifted.
+
+    Removing the User cascades to:
 
     * the ``Member`` row joining the bot to the workspace
-    * every ``AccessToken`` row that binding ever issued (their
-      ``user`` FK is CASCADE on User)
+    * every ``AccessToken`` row the binding ever issued (FK CASCADE
+      on User)
 
     That last point is the safety property: revoking a binding
     revokes every credential ever derived from it, with no manual
     cleanup step.
     """
     UserModel = get_user_model()  # see ``provision_bot_user_for_binding`` for rationale
+    deleted_count, _ = UserModel.objects.filter(pk=bot_user_id).delete()
+    if deleted_count:
+        logger.info("Removed OIDC bot user pk=%s after binding deletion", bot_user_id)
+
+
+def delete_bot_user_for_binding(binding_id: str) -> None:
+    """Legacy username-based fallback. Kept for idempotency-test compat.
+
+    Prefer ``delete_bot_user_by_id`` in new code — that path is robust
+    to username changes.
+    """
+    UserModel = get_user_model()
     username = _bot_username(binding_id)
     deleted_count, _ = UserModel.objects.filter(username=username).delete()
     if deleted_count:
-        logger.info("Removed OIDC bot user %s after binding deletion", username)
+        logger.info("Removed OIDC bot user %s after binding deletion (legacy fallback)", username)
 
 
 # ============================================================================

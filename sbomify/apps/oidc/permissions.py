@@ -65,11 +65,21 @@ def is_authorised_for_component(request: Any, component: Any) -> bool:
     """Authorise OIDC tokens for the bound component only.
 
     Returns ``True`` for non-OIDC requests (PATs / sessions are
-    governed by ``verify_item_access`` alone). For OIDC requests,
-    returns ``True`` only when the request's bound component matches
-    the target.
+    governed by ``verify_item_access`` alone). For OIDC requests:
+
+    * returns ``True`` only when the request's bound component matches
+      the target.
+    * returns ``False`` when the request is OIDC-authed but the bot
+      user has NO OIDCBinding — defense-in-depth against partial-cleanup
+      data-integrity gaps (e.g. binding deleted but the bot user's
+      cascade somehow didn't fire). An orphan bot must NOT be able to
+      reach any component.
     """
+    # First branch: not an OIDC token at all — no extra check.
+    if not request_is_oidc_authed(request):
+        return True
+    # OIDC-authed: an orphan (no binding) → fail closed.
     bound_id = bound_component_id_for_request(request)
     if bound_id is None:
-        return True
+        return False
     return bound_id == str(component.id)

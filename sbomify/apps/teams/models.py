@@ -497,9 +497,24 @@ class Invitation(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
-    role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
+    # Invitable roles only — ``bot`` and ``guest`` are reserved
+    # (synthetic OIDC identity and self-service trust-center role,
+    # respectively). See settings.TEAMS_INVITABLE_ROLES.
+    role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
+
+    def clean(self) -> None:
+        # Defense-in-depth: even if a caller bypasses the form (raw ORM,
+        # admin action that doesn't validate choices, future API), reject
+        # an invitation with role="bot".
+        super().clean()
+        if self.role == "bot":
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                {"role": "role='bot' is reserved for OIDC trusted-publisher identities and cannot be invited."}
+            )
 
     def __str__(self) -> str:
         return f"{self.team.name}({self.team.pk}) - {self.email} - {self.role}"

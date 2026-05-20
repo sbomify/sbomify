@@ -140,17 +140,11 @@ class TestRequestPredicate:
         fake_req.access_token_record = row
         # The bot is identified as OIDC-authed:
         assert request_is_oidc_authed(fake_req) is True
-        # But has no binding so bound_component_id_for_request returns None:
+        # No binding → fail closed (defense-in-depth: an orphan bot
+        # whose binding was somehow deleted without the cascade firing
+        # must NOT keep component access).
         assert bound_component_id_for_request(fake_req) is None
-        # CURRENT behaviour: ``is_authorised_for_component`` returns True
-        # because ``bound_id is None``. This is arguably a security hole
-        # for orphan bots (they should NOT be able to operate on any
-        # component). Defended-in-depth by ``verify_item_access`` which
-        # checks the bot's Member role — and an orphan bot has no Member
-        # row (binding delete cascades the bot User which cascades the
-        # Member). The test pins the current behaviour for clarity; the
-        # broader defense is at verify_item_access.
-        assert is_authorised_for_component(fake_req, bound_component) is True
+        assert is_authorised_for_component(fake_req, bound_component) is False
 
 
 class TestSBOMUploadScope:

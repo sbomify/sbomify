@@ -25,14 +25,23 @@ from django.db.models.signals import post_delete, pre_save
 from django.dispatch import receiver
 
 from sbomify.apps.oidc.models import OIDCBinding
-from sbomify.apps.oidc.services import delete_bot_user_for_binding
+from sbomify.apps.oidc.services import delete_bot_user_by_id
 from sbomify.apps.teams.models import Member
 
 
 @receiver(post_delete, sender=OIDCBinding)
 def cleanup_bot_user_on_binding_delete(sender: type, instance: OIDCBinding, **kwargs: Any) -> None:
-    """Reap the synthetic bot User after its binding is gone."""
-    delete_bot_user_for_binding(instance.id)
+    """Reap the synthetic bot User after its binding is gone.
+
+    Deletes by the exact ``bot_user_id`` FK on the soon-to-be-removed
+    binding instance — not by reconstructing the username from a
+    derived convention. If the bot's username was ever renamed (admin
+    action, future username-format change) the convention-based
+    deletion would leak the bot User and every AccessToken it ever
+    signed. ID-based deletion stays correct under any naming change.
+    """
+    if instance.bot_user_id is not None:
+        delete_bot_user_by_id(instance.bot_user_id)
 
 
 @receiver(pre_save, sender=Member)

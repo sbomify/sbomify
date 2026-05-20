@@ -131,8 +131,8 @@ Configure your GitHub Actions workflow
 <p>
 Add this step to the workflow that should be authorised to push to
 this component. The <code>audience</code> value must be exactly
-<code>sbomify.com</code> — the backend rejects tokens minted for
-any other audience.
+<code>{{ oidc_github_audience }}</code> — the backend rejects tokens
+minted for any other audience.
 </p>
 {# djlint:off #}
         <pre class="bg-surface border border-border rounded p-3 text-xs overflow-x-auto text-text"><code>{% verbatim %}permissions:
@@ -145,7 +145,7 @@ steps:
     uses: actions/github-script@v7
     with:
       script: |
-        const token = await core.getIDToken('sbomify.com')
+        const token = await core.getIDToken('{% endverbatim %}{{ oidc_github_audience }}{% verbatim %}')
         core.setSecret(token)
         core.setOutput('token', token)
 
