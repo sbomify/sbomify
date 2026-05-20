@@ -95,7 +95,8 @@ def mock_github_jwks(mocker, rsa_keypair: dict[str, Any]) -> Any:
     """
     from django.core.cache import cache
 
-    cache.delete("oidc:github:jwks")
+    cache.delete("sbomify:trusted:oidc:github:jwks")
+    cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
     mock_response = MagicMock()
     mock_response.json.return_value = {"keys": [rsa_keypair["jwk"]]}
     mock_response.raise_for_status.return_value = None

@@ -31,8 +31,57 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-_JWKS_CACHE_KEY = "oidc:github:jwks"
+# Namespaced cache key so the JWKS dict can't collide with anything else
+# that touches the shared Django cache. Defense against cache-poisoning:
+# an attacker who can write to ``cache.set(user_input, ...)`` elsewhere
+# in the codebase still can't overwrite this slot without knowing the
+# full namespaced key.
+_JWKS_CACHE_KEY = "sbomify:trusted:oidc:github:jwks"
+_JWKS_REFRESH_MARKER_KEY = "sbomify:trusted:oidc:github:jwks:last_refresh"
 _JWKS_FETCH_TIMEOUT_SECONDS = 5
+
+# Minimum gap between forced JWKS refreshes triggered by a ``kid`` miss.
+# Without this, an unauthenticated attacker spamming the exchange
+# endpoint with novel ``kid`` headers could DoS-amplify into GitHub's
+# JWKS endpoint (and indirectly into our own legitimate traffic when
+# GitHub starts rate-limiting us). 30 s is enough that legitimate
+# rotations resolve within one minute while attack amplification is
+# capped at 2 fetches/min per process.
+_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS = 30
+
+# Defensive structural validation of cached JWKS entries. The JWKS dict
+# is loaded from cache and handed to PyJWK without integrity checks
+# otherwise — if an attacker poisons the cache (lateral move into
+# Redis, future cache.set() bug elsewhere), they could plant a forged
+# RSA public key whose private half they hold and mint signatures we
+# accept. Validating before trust closes that gap.
+_JWKS_REQUIRED_FIELDS = {"kty", "kid", "n", "e"}
+_JWKS_MIN_MODULUS_BITS = 2048  # RFC 7518 + GitHub's own minimum
+
+
+def _is_valid_signing_jwk(jwk: dict[str, Any]) -> bool:
+    """Return True iff ``jwk`` looks like a usable RSA signing key."""
+    if not isinstance(jwk, dict):
+        return False
+    if not _JWKS_REQUIRED_FIELDS.issubset(jwk):
+        return False
+    if jwk.get("kty") != "RSA":
+        return False
+    # ``use`` and ``alg`` are optional in the spec but GitHub always sets
+    # them; reject anything that's set to a non-signing value.
+    if jwk.get("use") not in (None, "sig"):
+        return False
+    if jwk.get("alg") not in (None, "RS256"):
+        return False
+    # Modulus ``n`` is base64url-encoded; rough length-to-bits check.
+    n = jwk.get("n", "")
+    if not isinstance(n, str):
+        return False
+    # base64url with no padding: 4 chars → 3 bytes → 24 bits.
+    approx_bits = (len(n) * 24) // 4
+    if approx_bits < _JWKS_MIN_MODULUS_BITS:
+        return False
+    return True
 
 
 class OIDCVerificationError(Exception):
@@ -65,22 +114,47 @@ def _fetch_github_jwks() -> dict[str, Any]:
     JWKS rotation is infrequent (key rotation is a planned event) and
     every workflow run does an exchange, so a 1h cache is a good
     balance between freshness and pressure on GitHub.
+
+    Defensive validation: cached entries are re-validated on read AND
+    on write (every ``keys[]`` member must look like a valid RSA
+    signing JWK). A poisoned cache slot fails validation and we
+    refetch — closes the gap an attacker could otherwise use to plant
+    a forged key.
     """
     cached = cache.get(_JWKS_CACHE_KEY)
-    if cached is not None:
+    if cached is not None and _jwks_passes_validation(cached):
         return cast(dict[str, Any], cached)
+    if cached is not None:
+        # Reached only if a poisoned / malformed entry was returned.
+        logger.warning("Discarding invalid cached JWKS entry; refetching")
+        cache.delete(_JWKS_CACHE_KEY)
 
     url = settings.OIDC_GITHUB_JWKS_URL
     try:
-        response = requests.get(url, timeout=_JWKS_FETCH_TIMEOUT_SECONDS)
+        response = requests.get(url, timeout=_JWKS_FETCH_TIMEOUT_SECONDS, allow_redirects=False)
         response.raise_for_status()
         jwks: dict[str, Any] = response.json()
     except requests.RequestException as exc:
         logger.warning("GitHub JWKS fetch failed (%s): %s", url, exc)
         raise OIDCJWKSUnavailable(str(exc)) from exc
 
+    if not _jwks_passes_validation(jwks):
+        # Upstream returned something we don't recognise; better to fail
+        # the request than to cache a degraded document for an hour.
+        logger.warning("GitHub JWKS response failed structural validation; not caching")
+        raise OIDCJWKSUnavailable("upstream JWKS failed validation")
+
     cache.set(_JWKS_CACHE_KEY, jwks, timeout=settings.OIDC_JWKS_CACHE_SECONDS)
     return jwks
+
+
+def _jwks_passes_validation(jwks: Any) -> bool:
+    if not isinstance(jwks, dict):
+        return False
+    keys = jwks.get("keys")
+    if not isinstance(keys, list) or not keys:
+        return False
+    return all(_is_valid_signing_jwk(k) for k in keys)
 
 
 def _signing_key_for_kid(token: str) -> Any:
@@ -104,12 +178,17 @@ def _signing_key_for_kid(token: str) -> Any:
     matching = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
     if not matching:
         # Force a refresh — the signing key may have rotated since the
-        # cache was warmed. One retry is enough; a second miss after
-        # refresh means the token really is signed by a key we don't
-        # know about (likely forged or from a different issuer).
-        cache.delete(_JWKS_CACHE_KEY)
-        jwks = _fetch_github_jwks()
-        matching = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
+        # cache was warmed. The refresh is rate-limited by a separate
+        # marker key so an attacker spamming novel ``kid`` headers
+        # can't amplify into GitHub's JWKS endpoint (and our own
+        # latency budget) more than once per
+        # ``_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS``.
+        last_refresh_marker = cache.get(_JWKS_REFRESH_MARKER_KEY)
+        if last_refresh_marker is None:
+            cache.set(_JWKS_REFRESH_MARKER_KEY, True, timeout=_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS)
+            cache.delete(_JWKS_CACHE_KEY)
+            jwks = _fetch_github_jwks()
+            matching = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
     if not matching:
         raise OIDCInvalidSignature(f"no JWK matches token kid={kid!r}")
 

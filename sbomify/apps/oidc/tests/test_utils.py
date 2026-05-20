@@ -105,7 +105,7 @@ class TestJWKSFailures:
     def test_jwks_http_error_raises_unavailable(self, mocker) -> None:
         from django.core.cache import cache
 
-        cache.delete("oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks")
         mocker.patch(
             "sbomify.apps.oidc.utils.requests.get",
             side_effect=requests.exceptions.ConnectionError("boom"),
@@ -125,14 +125,19 @@ class TestJWKSFailures:
         """If the cached JWKS doesn't contain the token's kid, we refresh once."""
         from django.core.cache import cache
 
-        cache.delete("oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
 
-        # First fetch: empty JWKS (cache will store this). Second fetch (after
-        # kid-miss invalidation): the real JWK. PyJWKClient should succeed
-        # on the second pass.
-        empty_response = MagicMock()
-        empty_response.json.return_value = {"keys": []}
-        empty_response.raise_for_status.return_value = None
+        # First fetch returns a JWKS with a DIFFERENT kid than the token's
+        # — passes structural validation (real RSA key, ≥2048 bits) so it
+        # gets cached, but the token's kid doesn't match. The kid-miss
+        # branch then triggers ONE forced refresh, which returns the
+        # real JWK with the matching kid.
+        other_jwk = dict(rsa_keypair["jwk"])
+        other_jwk["kid"] = "some-other-kid"
+        stale_response = MagicMock()
+        stale_response.json.return_value = {"keys": [other_jwk]}
+        stale_response.raise_for_status.return_value = None
 
         real_response = MagicMock()
         real_response.json.return_value = {"keys": [rsa_keypair["jwk"]]}
@@ -140,12 +145,117 @@ class TestJWKSFailures:
 
         mocker.patch(
             "sbomify.apps.oidc.utils.requests.get",
-            side_effect=[empty_response, real_response],
+            side_effect=[stale_response, real_response],
         )
 
         token = github_claims_factory()
         claims = verify_github_oidc_token(token)
         assert claims["repository"] == "acme/widget"
+
+
+class TestCacheHardening:
+    """Regressions for security finding H-1 (P1-A): JWKS cache poisoning."""
+
+    def test_poisoned_cache_entry_rejected(self, mocker, rsa_keypair) -> None:
+        """A pre-existing cache entry that fails structural validation must
+        be DISCARDED — not handed to PyJWK. Otherwise an attacker who
+        poisoned the cache could plant a forged signing key.
+        """
+        from django.core.cache import cache
+
+        # Plant a poisoned entry: missing required 'n' (modulus). Looks
+        # like JWKS shape on the surface but fails _is_valid_signing_jwk.
+        poisoned = {"keys": [{"kty": "RSA", "kid": "test-kid-1", "e": "AQAB"}]}
+        cache.set("sbomify:trusted:oidc:github:jwks", poisoned, timeout=3600)
+        cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+
+        # The next call should NOT trust the poisoned entry; it should
+        # refetch — verify by mocking the upstream call.
+        real_response = MagicMock()
+        real_response.json.return_value = {"keys": [rsa_keypair["jwk"]]}
+        real_response.raise_for_status.return_value = None
+        get_mock = mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=real_response)
+
+        from sbomify.apps.oidc.utils import _fetch_github_jwks
+
+        result = _fetch_github_jwks()
+        assert result == {"keys": [rsa_keypair["jwk"]]}
+        get_mock.assert_called_once()  # refetched
+
+    def test_undersize_modulus_rejected(self, mocker, rsa_keypair) -> None:
+        """JWKs with a modulus under 2048 bits must be rejected."""
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+        # Real shape, but `n` is shortened to ~100 bits — far below minimum
+        short = dict(rsa_keypair["jwk"])
+        short["n"] = "abcd"
+        weak_response = MagicMock()
+        weak_response.json.return_value = {"keys": [short]}
+        weak_response.raise_for_status.return_value = None
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=weak_response)
+
+        with pytest.raises(OIDCJWKSUnavailable):
+            verify_github_oidc_token("dummy.token.here")
+
+    def test_redirects_disabled_on_jwks_fetch(self, mocker, rsa_keypair) -> None:
+        """``requests.get`` must be called with ``allow_redirects=False`` —
+        SSRF defense against a maliciously-redirecting JWKS host.
+        """
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+        resp = MagicMock()
+        resp.json.return_value = {"keys": [rsa_keypair["jwk"]]}
+        resp.raise_for_status.return_value = None
+        get_mock = mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=resp)
+
+        from sbomify.apps.oidc.utils import _fetch_github_jwks
+
+        _fetch_github_jwks()
+
+        get_mock.assert_called_once()
+        assert get_mock.call_args.kwargs.get("allow_redirects") is False
+
+    def test_kid_miss_refresh_rate_limited(self, mocker, github_claims_factory, rsa_keypair) -> None:
+        """Repeated kid-miss tokens must NOT trigger more than one refresh
+        within the rate-limit window — DoS amplification defense.
+        """
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+
+        # First fetch warms the cache with a JWK whose kid doesn't match.
+        other_jwk = dict(rsa_keypair["jwk"])
+        other_jwk["kid"] = "not-our-kid"
+        stale_response = MagicMock()
+        stale_response.json.return_value = {"keys": [other_jwk]}
+        stale_response.raise_for_status.return_value = None
+
+        # The kid-miss refresh would ALSO miss (same wrong key returned).
+        get_mock = mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=stale_response)
+
+        # Build a token with the real kid (which is NOT in any JWKS we'll serve).
+        token = github_claims_factory()
+
+        # First call: warm cache (1 fetch) + kid-miss refresh (2nd fetch).
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(token)
+        first_call_count = get_mock.call_count
+        assert first_call_count == 2
+
+        # Second call WITHIN the rate-limit window: the kid-miss path
+        # should be SKIPPED (no additional fetch) since the refresh
+        # marker is still live. The cached (still-stale) entry is reused.
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(token)
+        assert get_mock.call_count == first_call_count, (
+            f"Forced JWKS refresh fired again within rate-limit window "
+            f"(call_count {get_mock.call_count}, was {first_call_count})"
+        )
 
 
 class TestDoesNotLeakInternals:

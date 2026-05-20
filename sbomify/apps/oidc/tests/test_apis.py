@@ -290,7 +290,7 @@ class TestInfrastructureFailures:
         """
         from django.core.cache import cache
 
-        cache.delete("oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks")
         mocker.patch(
             "sbomify.apps.oidc.utils.requests.get",
             side_effect=requests.exceptions.ConnectionError("dns boom"),
