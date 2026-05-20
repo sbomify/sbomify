@@ -8,7 +8,16 @@ class AccessToken(models.Model):
         db_table = "access_tokens"
         indexes = [
             models.Index(fields=["team", "user"]),
-            models.Index(fields=["expires_at"], name="access_tokens_expires_at_idx"),
+            # Partial index — only OIDC-issued tokens set ``expires_at``.
+            # A full index would store a NULL entry for every PAT
+            # (the dominant row count) for no payoff; this one stays
+            # ~100x smaller in steady state and serves the only query
+            # that actually filters on the column (expired-token sweep).
+            models.Index(
+                fields=["expires_at"],
+                name="access_tokens_expires_at_idx",
+                condition=models.Q(expires_at__isnull=False),
+            ),
         ]
 
     encoded_token = models.CharField(max_length=1000, null=False, unique=True)

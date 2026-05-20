@@ -299,6 +299,33 @@ class TestCacheHardening:
         with pytest.raises(OIDCJWKSUnavailable):
             verify_github_oidc_token("dummy.token.here")
 
+    def test_ssrf_guard_rejects_non_allowlisted_host(self, mocker, settings, rsa_keypair) -> None:
+        """If ``OIDC_GITHUB_JWKS_URL`` env var is compromised to point at
+        an internal address, the SSRF guard MUST reject before any HTTP
+        is dispatched.
+        """
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        settings.OIDC_GITHUB_JWKS_URL = "http://169.254.169.254/latest/meta-data/"
+        get_mock = mocker.patch("sbomify.apps.oidc.utils.requests.get")
+
+        with pytest.raises(OIDCJWKSUnavailable, match="not allow-listed"):
+            verify_github_oidc_token("dummy.token.here")
+        get_mock.assert_not_called()  # no HTTP attempted
+
+    def test_ssrf_guard_rejects_http_scheme(self, mocker, settings, rsa_keypair) -> None:
+        """Even with the correct host, ``http://`` (non-TLS) is rejected."""
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        settings.OIDC_GITHUB_JWKS_URL = "http://token.actions.githubusercontent.com/.well-known/jwks"
+        get_mock = mocker.patch("sbomify.apps.oidc.utils.requests.get")
+
+        with pytest.raises(OIDCJWKSUnavailable, match="not allow-listed"):
+            verify_github_oidc_token("dummy.token.here")
+        get_mock.assert_not_called()
+
     def test_redirects_disabled_on_jwks_fetch(self, mocker, rsa_keypair) -> None:
         """``requests.get`` must be called with ``allow_redirects=False`` —
         SSRF defense against a maliciously-redirecting JWKS host.

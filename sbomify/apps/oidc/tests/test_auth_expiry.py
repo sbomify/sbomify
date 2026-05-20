@@ -70,9 +70,13 @@ class TestOIDCExpiry:
         assert row is None
 
     @pytest.mark.django_db
-    def test_token_at_exact_expiry_rejected(self) -> None:
+    def test_token_at_exact_expiry_rejected(self, mocker) -> None:
         """Boundary: ``is_expired`` uses ``now >= expires_at``, so an
         exact-tick match should reject (no fence-post off-by-one).
+
+        Uses ``mocker.patch`` (not a try/finally monkey-patch) so the
+        original ``timezone.now`` is restored even if the test is
+        killed mid-execution. Safe under ``pytest-xdist``.
         """
         User = get_user_model()
         user = User.objects.create_user(username="oidc-user-3", password="x")
@@ -80,16 +84,9 @@ class TestOIDCExpiry:
         now = timezone.now()
         encoded, _ = _make_token_for(user, expires_at=now)
 
-        # Mock timezone.now to return EXACTLY the same instant
-        import sbomify.apps.access_tokens.models as models_mod
-
-        original_now = models_mod.timezone.now
-        models_mod.timezone.now = lambda: now
-        try:
-            resolved_user, _ = get_user_and_token_record(encoded)
-            assert resolved_user is None, "Token AT expires_at should be rejected (>= comparison)"
-        finally:
-            models_mod.timezone.now = original_now
+        mocker.patch("sbomify.apps.access_tokens.models.timezone.now", return_value=now)
+        resolved_user, _ = get_user_and_token_record(encoded)
+        assert resolved_user is None, "Token AT expires_at should be rejected (>= comparison)"
 
     @pytest.mark.django_db
     def test_expired_token_in_full_auth_flow_returns_401(self, mocker: Any) -> None:

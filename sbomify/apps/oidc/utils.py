@@ -108,6 +108,26 @@ class OIDCJWKSUnavailable(OIDCVerificationError):
     """The issuer's JWKS endpoint could not be reached."""
 
 
+_ALLOWED_JWKS_HOSTS = frozenset({"token.actions.githubusercontent.com"})
+
+
+def _is_safe_jwks_url(url: str) -> bool:
+    """Reject any JWKS URL that's not HTTPS to a known GitHub host.
+
+    SSRF defense: if ``OIDC_GITHUB_JWKS_URL`` env var is ever
+    compromised, an attacker could point it at an internal metadata
+    service. Allow-list pinning blocks that. Combined with
+    ``allow_redirects=False`` in the fetch itself, the host can't be
+    swapped at runtime either.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        return False
+    return parsed.hostname in _ALLOWED_JWKS_HOSTS
+
+
 def _fetch_github_jwks() -> dict[str, Any]:
     """Fetch GitHub's JWKS document, with a short-TTL Django cache.
 
@@ -120,6 +140,11 @@ def _fetch_github_jwks() -> dict[str, Any]:
     signing JWK). A poisoned cache slot fails validation and we
     refetch — closes the gap an attacker could otherwise use to plant
     a forged key.
+
+    SSRF guard: the URL must be HTTPS to a known GitHub host
+    (``_ALLOWED_JWKS_HOSTS``). Combined with ``allow_redirects=False``
+    on the actual request, this prevents a compromised settings file
+    or env from pivoting the fetch at an internal address.
     """
     cached = cache.get(_JWKS_CACHE_KEY)
     if cached is not None and _jwks_passes_validation(cached):
@@ -130,6 +155,10 @@ def _fetch_github_jwks() -> dict[str, Any]:
         cache.delete(_JWKS_CACHE_KEY)
 
     url = settings.OIDC_GITHUB_JWKS_URL
+    if not _is_safe_jwks_url(url):
+        logger.error("Refusing to fetch JWKS from unsafe URL: %s", url)
+        raise OIDCJWKSUnavailable("JWKS URL not allow-listed")
+
     try:
         response = requests.get(url, timeout=_JWKS_FETCH_TIMEOUT_SECONDS, allow_redirects=False)
         response.raise_for_status()
