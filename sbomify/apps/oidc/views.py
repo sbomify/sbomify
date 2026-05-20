@@ -23,8 +23,7 @@ from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.oidc.forms import OIDCBindingForm
-from sbomify.apps.oidc.models import OIDCBinding
-from sbomify.apps.oidc.services import create_binding, delete_binding
+from sbomify.apps.oidc.services import create_binding, delete_binding, list_bindings_for_component
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -35,9 +34,7 @@ def _list_context(component: Component, form: OIDCBindingForm | None = None) -> 
     """Context dict for the bindings-list partial."""
     return {
         "component": component,
-        "bindings": (
-            OIDCBinding.objects.filter(component=component).select_related("created_by").order_by("-created_at")
-        ),
+        "bindings": list_bindings_for_component(component),
         "form": form or OIDCBindingForm(),
         # Used in the embedded workflow snippet so the YAML stays
         # accurate when ``OIDC_GITHUB_AUDIENCE`` is overridden at the

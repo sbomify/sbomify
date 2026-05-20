@@ -108,11 +108,24 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
         )
 
         # Peek (signature already verified above) to decide which
-        # validation profile applies.
+        # validation profile applies. Suppress aud/exp checks during the
+        # peek itself — for OIDC tokens the aud/exp claims are present
+        # and PyJWT would otherwise raise InvalidAudienceError /
+        # ExpiredSignatureError BEFORE we reach the typed re-decode
+        # below, breaking valid OIDC authentication.
         # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         # Signature was verified by the call above; this decode extracts
         # token_type so we know what to enforce in the final pass.
-        unverified = jwt.decode(token, options={"verify_signature": False})
+        unverified = jwt.decode(
+            token,
+            options={
+                "verify_signature": False,
+                "verify_aud": False,
+                "verify_exp": False,
+                "verify_iat": False,
+                "verify_nbf": False,
+            },
+        )
         token_type = unverified.get("token_type")
 
         decode_kwargs: dict[str, Any] = {

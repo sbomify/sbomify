@@ -203,6 +203,17 @@ class ExchangeResult:
     binding_id: str
 
 
+def list_bindings_for_component(component: "Component") -> list["OIDCBinding"]:
+    """Return all bindings for ``component``, eager-loading ``created_by``.
+
+    Pure read; doesn't need a ServiceResult wrapper. Lives here so the
+    view layer doesn't reach into the ORM directly (CLAUDE.md mandate).
+    """
+    from sbomify.apps.oidc.models import OIDCBinding
+
+    return list(OIDCBinding.objects.filter(component=component).select_related("created_by").order_by("-created_at"))
+
+
 def create_binding(
     *,
     component: "Component",

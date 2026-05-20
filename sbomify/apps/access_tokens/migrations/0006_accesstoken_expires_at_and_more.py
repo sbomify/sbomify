@@ -22,10 +22,15 @@ class Migration(migrations.Migration):
                 null=True,
             ),
         ),
+        # Partial index — only OIDC-issued tokens set ``expires_at``;
+        # a full index would store a NULL entry for every PAT for no
+        # payoff. The conditional shrinks the index ~100x.
         migrations.AddIndex(
             model_name="accesstoken",
             index=models.Index(
-                fields=["expires_at"], name="access_tokens_expires_at_idx"
+                condition=models.Q(("expires_at__isnull", False)),
+                fields=["expires_at"],
+                name="access_tokens_expires_at_idx",
             ),
         ),
     ]
