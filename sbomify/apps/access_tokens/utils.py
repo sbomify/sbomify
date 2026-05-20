@@ -96,9 +96,20 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
 def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, AccessToken | None]:
     """Get user and AccessToken DB record from a personal access token.
 
-    This function verifies the JWT signature AND checks that a matching
-    AccessToken record exists in the database. This enables true revocation:
-    deleting the DB record immediately invalidates the token.
+    Verifies the JWT signature AND checks that a matching AccessToken
+    record exists in the database AND that the record has not expired.
+    Three independent rejection points, ordered from cheapest to most
+    expensive: signature → DB lookup → expiry check.
+
+    The expiry check is the third rejection point because:
+
+    * Long-lived PATs have ``expires_at = NULL`` and are not affected.
+    * OIDC-issued short-lived tokens (see ``sbomify.apps.oidc``) have
+      ``expires_at`` set to ``now + 15 min``; once past that mark, the
+      DB row is treated as if it didn't exist.
+    * A background job could later sweep expired rows but isn't
+      required for correctness — the check here is the source of
+      truth.
 
     Returns:
         (user, access_token_record) on success, (None, None) on failure.
@@ -121,6 +132,16 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
     access_token_record = AccessToken.objects.filter(user=user, encoded_token=token).select_related("team").first()
     if access_token_record is None:
         log.warning(f"No DB record found for token belonging to user {user_id}")
+        return None, None
+
+    if access_token_record.is_expired:
+        # OIDC-issued short-lived token past its TTL. Log at INFO since
+        # this is expected end-of-life, not an attack signal.
+        log.info(
+            "Rejecting expired access token (id=%s, expired_at=%s)",
+            access_token_record.pk,
+            access_token_record.expires_at,
+        )
         return None, None
 
     return user, access_token_record
