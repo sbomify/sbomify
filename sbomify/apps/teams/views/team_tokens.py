@@ -21,9 +21,14 @@ from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """View for managing personal access tokens in workspace settings."""
 
-    # Note: "member" is legacy — it's never been in
-    # ``TEAMS_SUPPORTED_ROLES`` (the choices are owner/admin/guest/bot).
-    # Listing it here was always a no-op match; trimming for clarity.
+    # Workspace-token management is owner/admin only. The previous
+    # value also listed ``"member"`` — that role isn't in the canonical
+    # ``TEAMS_SUPPORTED_ROLES`` choices, but Django CharField choices
+    # aren't DB-enforced, so historical Member rows with
+    # ``role="member"`` (fixtures, legacy migrations) were silently
+    # accepted into this view. Removing it is a deliberate
+    # tightening: those rows were never meant to have token-management
+    # privileges, and the canonical role list is the source of truth.
     allowed_roles = ["owner", "admin"]
 
     def _get_team_tokens_context(

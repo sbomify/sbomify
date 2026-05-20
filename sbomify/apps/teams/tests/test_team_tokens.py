@@ -166,13 +166,17 @@ class TestTeamTokensView:
         assert "Unscoped tokens detected" in content
 
     def test_legacy_member_role_is_forbidden(self, client: Client, sample_team_with_owner_member):
-        """Legacy ``role="member"`` (not in TEAMS_SUPPORTED_ROLES) is rejected.
+        """Legacy ``role="member"`` is now rejected by the tokens view.
 
-        The previous ``allowed_roles = ["owner", "admin", "member"]`` listed
-        "member" defensively in case data with that role existed in prod.
-        "member" was never in the canonical choices, so we now reject it
-        — this test pins that behaviour so a future re-introduction has to
-        update the canonical role list first.
+        Django CharField choices aren't DB-enforced, so historical
+        ``Member(role="member")`` rows (from fixtures + earlier
+        migrations) were silently accepted into ``TeamTokensView``
+        when ``allowed_roles`` listed ``"member"``. Removing it is a
+        deliberate tightening: the canonical role list
+        (``TEAMS_SUPPORTED_ROLES``) is the source of truth, and
+        token-management is owner/admin only. This test pins the
+        tightened behaviour so a future re-introduction has to update
+        the canonical list first.
         """
         from django.contrib.auth import get_user_model
 

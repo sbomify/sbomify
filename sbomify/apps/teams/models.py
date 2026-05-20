@@ -520,10 +520,21 @@ class Invitation(models.Model):
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
 
     def clean(self) -> None:
-        # Friendly Python-level guard. The DB CheckConstraint above is
-        # the actual defense (catches bulk_create, raw SQL, fixtures);
-        # this clean() just produces a nicer ValidationError for the
-        # normal form / save() path.
+        # Friendly Python-level guard, invoked by Django forms and any
+        # caller that explicitly runs full_clean(). The DB
+        # CheckConstraint above is the actual defense — it catches
+        # bulk_create(), raw SQL, fixture loading, AND direct
+        # ``Invitation.objects.create()`` (which doesn't call clean()).
+        # Keeping clean() here means form-based flows get a nice
+        # ValidationError before the DB throws IntegrityError.
+        #
+        # We deliberately do NOT override ``save()`` to call
+        # ``full_clean()``: that would also enforce ``choices`` at the
+        # Python level, breaking legacy rows / tests that have written
+        # non-canonical role values (``"member"`` was historically used
+        # by some fixtures and remains silently stored because Django
+        # CharField choices aren't DB-enforced). The security-critical
+        # case (``role="bot"``) is locked in by the DB constraint.
         super().clean()
         if self.role == "bot":
             from django.core.exceptions import ValidationError
@@ -531,15 +542,6 @@ class Invitation(models.Model):
             raise ValidationError(
                 {"role": "role='bot' is reserved for OIDC trusted-publisher identities and cannot be invited."}
             )
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        # Run full_clean() so the friendly ValidationError surfaces
-        # before we hit the DB CheckConstraint (which produces a less
-        # actionable IntegrityError). Paths that bypass save() entirely
-        # (bulk_create, raw SQL, fixture loading) hit the DB
-        # constraint instead.
-        self.full_clean()
-        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return f"{self.team.name}({self.team.pk}) - {self.email} - {self.role}"
