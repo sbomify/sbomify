@@ -101,7 +101,7 @@ class TestCreate:
         self, authed_client: Client, component: Component, mocker
     ) -> None:
         mocker.patch(
-            "sbomify.apps.oidc.views.resolve_repository",
+            "sbomify.apps.oidc.services.resolve_repository",
             return_value=ResolvedRepository(
                 repository="Acme/Widget",
                 repository_owner="Acme",
@@ -126,7 +126,7 @@ class TestCreate:
     ) -> None:
         # Form-level validation catches this BEFORE we'd hit the GitHub API,
         # so the resolver isn't called at all.
-        called = mocker.patch("sbomify.apps.oidc.views.resolve_repository")
+        called = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
         response = authed_client.post(
             reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
             data={"provider": "github", "repository": "no slash"},
@@ -139,7 +139,7 @@ class TestCreate:
         self, authed_client: Client, component: Component, mocker
     ) -> None:
         mocker.patch(
-            "sbomify.apps.oidc.views.resolve_repository",
+            "sbomify.apps.oidc.services.resolve_repository",
             side_effect=GitHubResolveError("not_found", "Repository 'ghost/repo' was not found."),
         )
         response = authed_client.post(
@@ -169,7 +169,7 @@ class TestCreate:
         )
 
         mocker.patch(
-            "sbomify.apps.oidc.views.resolve_repository",
+            "sbomify.apps.oidc.services.resolve_repository",
             return_value=ResolvedRepository(
                 repository="acme/widget",
                 repository_owner="acme",

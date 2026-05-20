@@ -12,7 +12,7 @@
   NOTE: Django's "{#" comments are SINGLE-LINE only; multi-line needs
   the {% comment %} tag — otherwise the text in between gets parsed.
 {% endcomment %}
-<section id="trusted-publishers-section" class="tw-card tw-card-bordered">
+<section id="trusted-publishers-section" class="tw-card">
 <header class="tw-card-header flex items-start justify-between gap-4">
 <div>
 <h2 class="text-lg font-semibold text-text">Trusted Publishers</h2>
@@ -40,7 +40,7 @@ identity and are valid for 15 minutes.
 {% for binding in bindings %}
 <tr>
 <td>
-<span class="tw-badge tw-badge-neutral">
+<span class="tw-badge tw-badge-secondary">
 <i class="fab fa-github mr-1"></i>{{ binding.get_provider_display }}
 </span>
 </td>
@@ -113,7 +113,7 @@ class="space-y-3"
 {% if form.repository.errors %}
 <p class="tw-form-error">{{ form.repository.errors.0 }}</p>
 {% else %}
-<p class="tw-form-help">{{ form.repository.help_text }}</p>
+<p class="tw-form-helper">{{ form.repository.help_text }}</p>
 {% endif %}
 </div>
 <button type="submit" class="tw-btn tw-btn-primary">
@@ -122,12 +122,12 @@ Add publisher
 </button>
 </div>
 </form>
-<details class="tw-disclosure">
-<summary class="tw-disclosure-summary">
+<details class="border border-border rounded-md overflow-hidden">
+<summary class="px-3 py-2 bg-surface cursor-pointer text-sm font-medium text-text hover:bg-surface-hover flex items-center gap-2">
 <i class="fas fa-circle-info"></i>
 Configure your GitHub Actions workflow
 </summary>
-<div class="tw-disclosure-body space-y-3 text-sm">
+<div class="p-4 space-y-3 text-sm">
 <p>
 Add this step to the workflow that should be authorised to push to
 this component. The <code>audience</code> value must be exactly
@@ -135,7 +135,7 @@ this component. The <code>audience</code> value must be exactly
 any other audience.
 </p>
 {# djlint:off #}
-        <pre class="tw-codeblock"><code>{% verbatim %}permissions:
+        <pre class="bg-surface border border-border rounded p-3 text-xs overflow-x-auto text-text"><code>{% verbatim %}permissions:
   id-token: write    # required to mint the OIDC token
   contents: read
 

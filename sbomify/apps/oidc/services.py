@@ -1,41 +1,61 @@
-"""Service-layer helpers for OIDC bindings.
+"""Service-layer for OIDC bindings and token exchange.
 
-The big one is bot-user provisioning. Every ``OIDCBinding`` owns a
-synthetic ``User`` row that becomes the actor on ``AccessToken``
-records issued by the token-exchange endpoint. Splitting "synthetic
-user per binding" from "shared workspace bot" means audit trails point
-at the exact ``(provider, repo)`` that uploaded an artifact, which is
-the whole point of trusted publishing — you can answer "which CI
-binding pushed this?" without correlation.
+Every ``OIDCBinding`` owns a synthetic ``User`` row that becomes the
+actor on ``AccessToken`` records issued by the token-exchange
+endpoint. Splitting "synthetic user per binding" from "shared
+workspace bot" means audit trails point at the exact ``(provider,
+repo)`` that uploaded an artifact — you can answer "which CI binding
+pushed this?" without cross-correlation.
 
-Lifecycle
----------
+Three public services back the HTTP layer:
 
-* On binding create: ``provision_bot_user_for_binding`` is called,
-  which creates a User + a ``Member`` row joining that user to the
-  Component's workspace at ``role="bot"``. The function is idempotent
-  — calling it twice on the same binding is a no-op.
+* ``create_binding(component, provider, repository_slug, requested_by)``
+  → ``ServiceResult[OIDCBinding]`` — resolves GitHub IDs, provisions
+  the bot user, atomically persists the binding fully populated.
+* ``delete_binding(component, binding_id)`` → ``ServiceResult[str]`` —
+  removes the binding (post_delete signal reaps the bot User and
+  cascades to its AccessToken rows).
+* ``exchange_github_oidc_token(component_id, oidc_token)`` →
+  ``ServiceResult[ExchangeResult]`` — verifies the OIDC token, matches
+  the binding by immutable IDs, mints a short-lived AccessToken row.
 
-* On binding delete: ``delete_bot_user_for_binding`` is wired via a
-  post_delete signal in ``apps.OIDCConfig.ready``. The bot User's
-  deletion cascades to its Member row, AccessToken rows, and any
-  other FK with CASCADE — so a binding removal also revokes every
-  short-lived token that binding ever issued.
+Two internal helpers (``provision_bot_user_for_binding``,
+``delete_bot_user_for_binding``) handle the bot-User lifecycle. The
+delete helper is also wired to ``post_delete`` on ``OIDCBinding`` so
+revoking a binding via any path triggers credential cleanup.
 """
 
 from __future__ import annotations
 
+import datetime
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token
 from sbomify.apps.core.models import User
+from sbomify.apps.core.services.results import ServiceResult
+from sbomify.apps.oidc.github_api import GitHubResolveError, resolve_repository
+from sbomify.apps.oidc.utils import (
+    OIDCExpiredToken,
+    OIDCInvalidAudience,
+    OIDCInvalidIssuer,
+    OIDCInvalidSignature,
+    OIDCJWKSUnavailable,
+    OIDCVerificationError,
+    verify_github_oidc_token,
+)
 from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
     from sbomify.apps.oidc.models import OIDCBinding
+    from sbomify.apps.sboms.models import Component
 
 logger = getLogger(__name__)
 
@@ -124,3 +144,183 @@ def delete_bot_user_for_binding(binding_id: str) -> None:
     deleted_count, _ = User.objects.filter(username=username).delete()
     if deleted_count:
         logger.info("Removed OIDC bot user %s after binding deletion", username)
+
+
+# ============================================================================
+# Public services — wrap orchestration into ServiceResult so views/APIs
+# stay thin dispatch layers (sbomify CLAUDE.md mandate).
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class ExchangeResult:
+    """Successful token-exchange payload."""
+
+    access_token: str
+    expires_in_seconds: int
+    component_id: str
+    binding_id: str
+
+
+def create_binding(
+    *,
+    component: "Component",
+    provider: str,
+    repository_slug: str,
+    requested_by: User,
+) -> ServiceResult["OIDCBinding"]:
+    """Resolve, provision, and persist a new trusted-publisher binding.
+
+    Returns a ServiceResult so the caller (view) can map outcomes to
+    HTTP status without owning any ORM. Two-phase create (binding row
+    first, bot provisioned second, FK attached last) is wrapped in
+    ``transaction.atomic`` so the brief ``bot_user IS NULL`` window
+    never escapes the transaction.
+    """
+    from sbomify.apps.oidc.models import OIDCBinding
+
+    try:
+        resolved = resolve_repository(repository_slug)
+    except GitHubResolveError as exc:
+        # 400 for malformed / not_found / rate_limited / unavailable —
+        # the caller's form field error_code conveys the kind.
+        return ServiceResult.failure(str(exc), status_code=400)
+
+    try:
+        with transaction.atomic():
+            # Phase 1: INSERT the binding with bot_user=NULL so the
+            # generated ``id`` is available to derive the bot's
+            # username. The NULL window lives entirely inside this
+            # transaction.
+            binding = OIDCBinding.objects.create(
+                component=component,
+                provider=provider,
+                repository=resolved.repository.lower(),
+                repository_id=resolved.repository_id,
+                repository_owner_id=resolved.repository_owner_id,
+                bot_user=None,
+                created_by=requested_by,
+            )
+            # Phase 2: provision the bot User + Member.
+            bot = provision_bot_user_for_binding(binding)
+            # Phase 3: attach.
+            binding.bot_user = bot
+            binding.save(update_fields=["bot_user"])
+    except IntegrityError:
+        return ServiceResult.failure(
+            "This repository is already bound to this component.",
+            status_code=409,
+        )
+
+    return ServiceResult.success(binding)
+
+
+def delete_binding(*, component: "Component", binding_id: str) -> ServiceResult[str]:
+    """Remove a binding and (via cascade) every token it ever issued."""
+    from sbomify.apps.oidc.models import OIDCBinding
+
+    binding = OIDCBinding.objects.filter(component=component, pk=binding_id).first()
+    if binding is None:
+        return ServiceResult.failure("Trusted publisher not found.", status_code=404)
+
+    repo_label = binding.repository
+    binding.delete()
+    return ServiceResult.success(repo_label)
+
+
+def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> ServiceResult[ExchangeResult]:
+    """Verify a GitHub OIDC token and mint a short-lived sbomify AccessToken.
+
+    Maps every failure to a ``ServiceResult.failure`` with the HTTP
+    status the caller should return. The status taxonomy matches the
+    one documented on ``apis.github_token_exchange``.
+
+    Sparse error messages are deliberate — see security-auditor finding
+    on not leaking which sub-check failed.
+    """
+    from sbomify.apps.oidc.models import OIDCBinding
+    from sbomify.apps.sboms.models import Component
+
+    if not Component.objects.filter(pk=component_id).exists():
+        return ServiceResult.failure("component not found", status_code=404)
+
+    try:
+        claims = verify_github_oidc_token(oidc_token)
+    except OIDCJWKSUnavailable as exc:
+        logger.warning("OIDC exchange: GitHub JWKS unavailable: %s", exc)
+        return ServiceResult.failure("OIDC verification temporarily unavailable", status_code=503)
+    except (OIDCInvalidSignature, OIDCInvalidIssuer, OIDCInvalidAudience, OIDCExpiredToken) as exc:
+        logger.info("OIDC exchange: token rejected (%s): %s", type(exc).__name__, exc)
+        return ServiceResult.failure("invalid OIDC token", status_code=401)
+    except OIDCVerificationError as exc:
+        logger.warning("OIDC exchange: unexpected verification error: %s", exc)
+        return ServiceResult.failure("invalid OIDC token", status_code=401)
+
+    repository_owner_id = claims.get("repository_owner_id")
+    repository_id = claims.get("repository_id")
+    if not isinstance(repository_owner_id, int) or not isinstance(repository_id, int):
+        return ServiceResult.failure("invalid OIDC token", status_code=401)
+
+    binding = (
+        OIDCBinding.objects.select_related("bot_user", "component__team")
+        .filter(
+            component_id=component_id,
+            provider=OIDCBinding.PROVIDER_GITHUB,
+            repository_owner_id=repository_owner_id,
+            repository_id=repository_id,
+        )
+        .first()
+    )
+    if binding is None:
+        # %r (repr-quoted) defends log aggregators against injection from
+        # the attacker-controlled ``repository`` claim — security H-3.
+        logger.info(
+            "OIDC exchange: no binding for component=%s owner_id=%s repo_id=%s repository=%r",
+            component_id,
+            repository_owner_id,
+            repository_id,
+            claims.get("repository"),
+        )
+        return ServiceResult.failure("repository not bound to this component", status_code=403)
+
+    ttl_seconds = int(getattr(settings, "OIDC_TOKEN_TTL_SECONDS", 900))
+    now = timezone.now()
+    expires_at = now + datetime.timedelta(seconds=ttl_seconds)
+
+    if binding.bot_user is None:
+        # Defensive: the bot_user nullable window should never escape
+        # ``create_binding``'s atomic block, but if data integrity is
+        # somehow violated we'd rather 503 than mint a malformed token.
+        logger.error("OIDC exchange: binding %s has no bot_user — data integrity error", binding.id)
+        return ServiceResult.failure("OIDC verification temporarily unavailable", status_code=503)
+
+    sbomify_jwt = create_personal_access_token(
+        binding.bot_user,
+        expires_at=expires_at.timestamp(),
+        token_type=TOKEN_TYPE_OIDC,
+    )
+    with transaction.atomic():
+        AccessToken.objects.create(
+            encoded_token=sbomify_jwt,
+            description=f"oidc:github:{binding.id}",
+            user=binding.bot_user,
+            team=binding.component.team,
+            expires_at=expires_at,
+        )
+        OIDCBinding.objects.filter(pk=binding.pk).update(last_used_at=now)
+
+    logger.info(
+        "OIDC exchange: issued token for binding=%s component=%s repo=%r ttl=%ds",
+        binding.id,
+        component_id,
+        claims.get("repository"),
+        ttl_seconds,
+    )
+    return ServiceResult.success(
+        ExchangeResult(
+            access_token=sbomify_jwt,
+            expires_in_seconds=ttl_seconds,
+            component_id=component_id,
+            binding_id=binding.id,
+        )
+    )

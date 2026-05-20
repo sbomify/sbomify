@@ -78,7 +78,15 @@ class OIDCBinding(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="oidc_binding",
-        help_text="Synthetic bot identity for this binding. Created on save, deleted via CASCADE.",
+        null=True,
+        help_text=(
+            "Synthetic bot identity for this binding. Created on save, deleted "
+            "via CASCADE. Nullable solely to support the two-phase create flow "
+            "in ``services.create_binding`` — the binding is INSERTed first to "
+            "get a stable ``id`` (used to derive the bot username), then the "
+            "bot is provisioned and the FK is attached. Outside that ~µs "
+            "window inside the create transaction the column is always non-null."
+        ),
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
