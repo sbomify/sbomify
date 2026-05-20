@@ -44,8 +44,12 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 _GITHUB_API_BASE = "https://api.github.com"
-_REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 _FETCH_TIMEOUT_SECONDS = 5
+
+# Public — re-used by ``forms.OIDCBindingForm.clean_repository`` so the
+# form and this resolver agree on what counts as a parseable slug.
+REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
+REPO_SLUG_HELP_TEXT = "Repository must be in the form 'org/repo' (letters, digits, '.', '_', '-' only)."
 
 GitHubResolveErrorKind = Literal["not_found", "rate_limited", "unavailable", "malformed"]
 
@@ -79,11 +83,8 @@ def resolve_repository(repo_slug: str) -> ResolvedRepository:
     flow, so failures bubble up to a form-validation error rather
     than a silent skip.
     """
-    if not _REPO_PATTERN.fullmatch(repo_slug or ""):
-        raise GitHubResolveError(
-            "malformed",
-            "Repository must be in the form 'org/repo' (letters, digits, '.', '_', '-' only).",
-        )
+    if not REPO_PATTERN.fullmatch(repo_slug or ""):
+        raise GitHubResolveError("malformed", REPO_SLUG_HELP_TEXT)
 
     url = f"{_GITHUB_API_BASE}/repos/{repo_slug}"
     headers = {

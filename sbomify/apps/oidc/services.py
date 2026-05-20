@@ -89,11 +89,17 @@ def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
     endpoint) should attach it via ``binding.bot_user = user`` and
     save the binding.
     """
-    User = get_user_model()
+    # ``get_user_model()`` returns the same class as the module-top
+    # ``from sbomify.apps.core.models import User`` import — the local
+    # alias is intentional here to satisfy Django's recommendation
+    # against importing the User model directly in code that touches
+    # the ORM (lets ``AUTH_USER_MODEL`` swaps continue to work even
+    # though sbomify doesn't actually swap it).
+    UserModel = get_user_model()
     username = _bot_username(binding.id)
     email = _bot_email(binding.id)
 
-    bot_user, created = User.objects.get_or_create(
+    bot_user, created = UserModel.objects.get_or_create(
         username=username,
         defaults={
             "email": email,
@@ -157,9 +163,9 @@ def delete_bot_user_for_binding(binding_id: str) -> None:
     revokes every credential ever derived from it, with no manual
     cleanup step.
     """
-    User = get_user_model()
+    UserModel = get_user_model()  # see ``provision_bot_user_for_binding`` for rationale
     username = _bot_username(binding_id)
-    deleted_count, _ = User.objects.filter(username=username).delete()
+    deleted_count, _ = UserModel.objects.filter(username=username).delete()
     if deleted_count:
         logger.info("Removed OIDC bot user %s after binding deletion", username)
 

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import re
-
 from django import forms
 
+# Single source of truth for repository slug validation. Shared with the
+# GitHub REST resolver in ``github_api.py`` so the form and the
+# downstream API agree on what's parseable.
+from sbomify.apps.oidc.github_api import REPO_PATTERN, REPO_SLUG_HELP_TEXT
 from sbomify.apps.oidc.models import OIDCBinding
-
-_REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 
 class OIDCBindingForm(forms.Form):
@@ -42,10 +42,9 @@ class OIDCBindingForm(forms.Form):
 
     def clean_repository(self) -> str:
         value = (self.cleaned_data.get("repository") or "").strip()
-        if not _REPO_PATTERN.fullmatch(value):
-            raise forms.ValidationError(
-                "Repository must be in the form 'org/repo' (letters, digits, '.', '_', '-' only)."
-            )
-        # Normalise to lowercase for display consistency; the canonical
-        # case comes back from GitHub's API in the view.
+        if not REPO_PATTERN.fullmatch(value):
+            raise forms.ValidationError(REPO_SLUG_HELP_TEXT)
+        # Canonical-case lower-casing happens in the view from the
+        # GitHub API's ``full_name`` response. Returning the raw user
+        # input here keeps the form layer pure-validation.
         return value
