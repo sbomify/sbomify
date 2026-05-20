@@ -98,6 +98,58 @@ class TestSuccessfulExchange:
         github_binding.refresh_from_db()
         assert github_binding.last_used_at is not None
 
+    @pytest.mark.django_db
+    def test_replay_within_ttl_succeeds_twice(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """Test-automator P0: two POSTs with the SAME OIDC token within
+        TTL should each succeed and mint distinct AccessToken rows.
+
+        OIDC tokens are short-lived (5-15 min) so reusing one inside its
+        own TTL is legitimate (CI retry, parallel job within one workflow
+        run). Pinning this means a future "one-shot OIDC token" change
+        has to update this test deliberately.
+        """
+        token = github_claims_factory(repository_owner_id=67890, repository_id=12345)
+        client = Client()
+        body = json.dumps({"component_id": component.id})
+        headers = {"content_type": "application/json", "HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+        r1 = client.post(EXCHANGE_URL, data=body, **headers)
+        r2 = client.post(EXCHANGE_URL, data=body, **headers)
+
+        assert r1.status_code == 200
+        assert r2.status_code == 200
+        # Distinct sbomify tokens — each call mints its own with fresh
+        # salt + timestamp.
+        assert r1.json()["access_token"] != r2.json()["access_token"]
+        assert AccessToken.objects.filter(user_id=github_binding.bot_user_id).count() == 2
+
+    @pytest.mark.django_db
+    def test_failed_exchange_does_not_bump_last_used_at(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """Test-automator P1: a 403 (unbound repo) must NOT update
+        ``binding.last_used_at`` — only successful exchanges count.
+        """
+        assert github_binding.last_used_at is None
+        token = github_claims_factory(
+            repository="evil/forge", repository_owner_id=11111, repository_id=22222
+        )
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 403
+        github_binding.refresh_from_db()
+        assert github_binding.last_used_at is None, (
+            "Refused-token exchange must NOT bump last_used_at — the "
+            "timestamp is a 'last legitimate use' indicator."
+        )
+
 
 class TestRequestValidation:
     @pytest.mark.django_db
@@ -186,7 +238,7 @@ class TestTokenRejection:
         assert response.json()["detail"] == "invalid OIDC token"
 
     @pytest.mark.django_db
-    def test_wrong_audience_401(
+    def test_wrong_audience_401_with_sparse_body(
         self, github_claims_factory, mock_github_jwks, github_binding, component
     ) -> None:
         token = github_claims_factory(aud="some-other-service")
@@ -197,11 +249,14 @@ class TestTokenRejection:
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {token}",
         )
+        # ``detail`` MUST match the forged-signature body verbatim —
+        # sparseness is a security property (don't leak which sub-check
+        # failed). Other ErrorResponse fields can vary.
         assert response.status_code == 401
         assert response.json()["detail"] == "invalid OIDC token"
 
     @pytest.mark.django_db
-    def test_expired_token_401(
+    def test_expired_token_401_with_sparse_body(
         self, github_claims_factory, mock_github_jwks, github_binding, component
     ) -> None:
         token = github_claims_factory(exp=int(time.time()) - 60, iat=int(time.time()) - 120)
@@ -213,6 +268,7 @@ class TestTokenRejection:
             HTTP_AUTHORIZATION=f"Bearer {token}",
         )
         assert response.status_code == 401
+        assert response.json()["detail"] == "invalid OIDC token"
 
     @pytest.mark.django_db
     def test_missing_repository_id_claims_401(

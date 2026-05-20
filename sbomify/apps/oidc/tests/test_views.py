@@ -230,6 +230,53 @@ class TestDelete:
 
 class TestPermissions:
     @pytest.mark.django_db
+    def test_admin_role_can_create_and_delete(
+        self, component: Component, team_with_business_plan: Team, mocker
+    ) -> None:
+        """Test-automator P1: admin-role members (not just owners) can
+        manage trusted publishers. ``_TrustedPublishersBase`` accepts
+        both via ``verify_item_access(..., ["owner", "admin"])``.
+        """
+        from django.contrib.auth import get_user_model
+
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.teams.models import Member
+
+        UserModel = get_user_model()
+        admin = UserModel.objects.create_user(username="admin-user", password="x")
+        Member.objects.create(team=team_with_business_plan, user=admin, role="admin")
+
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            return_value=ResolvedRepository(
+                repository="acme/widget",
+                repository_owner="acme",
+                repository_id=12345,
+                repository_owner_id=67890,
+            ),
+        )
+        client = Client()
+        setup_authenticated_client_session(client, team_with_business_plan, admin)
+
+        # Admin creates a binding
+        create_response = client.post(
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
+            data={"provider": "github", "repository": "acme/widget"},
+        )
+        assert create_response.status_code == 200
+        binding = OIDCBinding.objects.get(component=component, repository_id=12345)
+
+        # Admin deletes the binding
+        delete_response = client.post(
+            reverse(
+                "oidc:trusted_publisher_delete",
+                kwargs={"component_id": component.id, "binding_id": binding.id},
+            )
+        )
+        assert delete_response.status_code == 200
+        assert not OIDCBinding.objects.filter(pk=binding.id).exists()
+
+    @pytest.mark.django_db
     def test_guest_member_blocked(self, component: Component, team_with_business_plan: Team) -> None:
         from django.contrib.auth import get_user_model
 

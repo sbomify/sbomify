@@ -66,6 +66,106 @@ class TestSignatureFailures:
         with pytest.raises(OIDCInvalidSignature, match="no JWK matches"):
             verify_github_oidc_token(token)
 
+    def test_double_miss_after_refresh_permanently_fails(
+        self, mocker, github_claims_factory, rsa_keypair
+    ) -> None:
+        """Regression for test-automator P0: if both the initial fetch AND
+        the forced refresh return JWKS without the token's kid, the call
+        must fail with ``OIDCInvalidSignature("no JWK matches")`` — not
+        retry forever.
+        """
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+
+        wrong_jwk = dict(rsa_keypair["jwk"])
+        wrong_jwk["kid"] = "wrong-kid"
+        bad_response = MagicMock()
+        bad_response.json.return_value = {"keys": [wrong_jwk]}
+        bad_response.raise_for_status.return_value = None
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=bad_response)
+
+        token = github_claims_factory()  # default kid="test-kid-1"
+        with pytest.raises(OIDCInvalidSignature, match="no JWK matches"):
+            verify_github_oidc_token(token)
+
+    def test_alg_none_rejected(self, rsa_keypair, mock_github_jwks) -> None:
+        """A JWT with ``alg=none`` (the classic JWT vulnerability) MUST
+        be rejected. PyJWT 2.x refuses ``none`` by default AND the
+        ``algorithms=["RS256"]`` whitelist excludes it — this test pins
+        both layers.
+        """
+        # alg=none tokens have no signature; PyJWT refuses to even encode them
+        # by default, so we hand-construct the JWT.
+        import base64
+        import json as json_mod
+
+        header = base64.urlsafe_b64encode(
+            json_mod.dumps({"alg": "none", "kid": "test-kid-1", "typ": "JWT"}).encode()
+        ).rstrip(b"=").decode()
+        payload = base64.urlsafe_b64encode(
+            json_mod.dumps(
+                {
+                    "iss": "https://token.actions.githubusercontent.com",
+                    "aud": "sbomify.com",
+                    "exp": int(time.time()) + 60,
+                    "iat": int(time.time()),
+                    "sub": "x",
+                }
+            ).encode()
+        ).rstrip(b"=").decode()
+        unsigned_token = f"{header}.{payload}."
+
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(unsigned_token)
+
+    def test_hs256_confusion_attack_rejected(self, rsa_keypair, mock_github_jwks) -> None:
+        """Classic alg-confusion attack: a token whose header claims
+        ``alg=HS256``. If accepted, the verifier would try HMAC against
+        the RSA public key bytes (which an attacker can fetch from JWKS),
+        and the attacker's HMAC signature would verify. Our
+        ``algorithms=["RS256"]`` whitelist prevents this.
+
+        Modern PyJWT (≥2.x) ALSO refuses to encode HS* tokens using a
+        PEM-formatted RSA key as the secret (raises InvalidKeyError),
+        so the attacker has to hand-construct the token bytes. We do
+        that here and assert our verifier rejects it.
+        """
+        import base64
+        import hashlib
+        import hmac
+        import json as json_mod
+
+        # Hand-construct an alg=HS256 JWT WITHOUT going through PyJWT's
+        # encode (which refuses RSA-key-as-HMAC-secret in 2.x).
+        header = base64.urlsafe_b64encode(
+            json_mod.dumps({"alg": "HS256", "kid": "test-kid-1", "typ": "JWT"}).encode()
+        ).rstrip(b"=").decode()
+        payload = base64.urlsafe_b64encode(
+            json_mod.dumps(
+                {
+                    "iss": "https://token.actions.githubusercontent.com",
+                    "aud": "sbomify.com",
+                    "exp": int(time.time()) + 60,
+                    "iat": int(time.time()),
+                    "sub": "x",
+                }
+            ).encode()
+        ).rstrip(b"=").decode()
+        signing_input = f"{header}.{payload}".encode()
+        # The attacker uses the public key (which they can fetch from JWKS) as
+        # the HMAC secret. We simulate that by using a stand-in secret —
+        # the exact bytes don't matter because our verifier should refuse
+        # alg=HS256 outright before the signature is checked.
+        fake_secret = b"attacker-derived-from-public-key"
+        signature = hmac.new(fake_secret, signing_input, hashlib.sha256).digest()
+        sig_b64 = base64.urlsafe_b64encode(signature).rstrip(b"=").decode()
+        confused = f"{header}.{payload}.{sig_b64}"
+
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(confused)
+
     def test_token_missing_kid_header_fails(self, rsa_keypair, mock_github_jwks) -> None:
         token = pyjwt.encode(
             {"iss": "x", "aud": "x", "exp": time.time() + 60, "iat": time.time(), "sub": "x"},

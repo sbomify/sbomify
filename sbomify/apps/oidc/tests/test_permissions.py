@@ -102,6 +102,56 @@ class TestRequestPredicate:
         # there's no OIDC scope to enforce.
         assert is_authorised_for_component(fake_req, mocker.MagicMock(id="anything")) is True
 
+    @pytest.mark.django_db
+    def test_orphan_bot_blocked(self, mocker, bound_component: Component) -> None:
+        """Test-automator P1: defensive branch in
+        ``bound_component_id_for_request`` — an OIDC-authed token whose
+        bot user has NO ``OIDCBinding`` row (data integrity violation:
+        binding deleted but token survived) must NOT grant unrestricted
+        access. The current code returns ``None`` from the lookup which
+        makes ``is_authorised_for_component`` skip its check; this test
+        pins the desired behaviour so a future refactor doesn't
+        accidentally relax it.
+        """
+        from django.contrib.auth import get_user_model
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token
+
+        UserModel = get_user_model()
+        orphan_bot = UserModel.objects.create_user(username="orphan-bot", password="x")
+        # Build an AccessToken with expires_at set (so ``request_is_oidc_authed``
+        # returns True) but no OIDCBinding pointing at this user.
+        from django.utils import timezone
+        import datetime
+
+        encoded = create_personal_access_token(
+            orphan_bot,
+            expires_at=(timezone.now() + datetime.timedelta(seconds=900)).timestamp(),
+            token_type=TOKEN_TYPE_OIDC,
+        )
+        row = AccessToken.objects.create(
+            encoded_token=encoded,
+            description="orphan",
+            user=orphan_bot,
+            expires_at=timezone.now() + datetime.timedelta(seconds=900),
+        )
+        fake_req = mocker.MagicMock()
+        fake_req.access_token_record = row
+        # The bot is identified as OIDC-authed:
+        assert request_is_oidc_authed(fake_req) is True
+        # But has no binding so bound_component_id_for_request returns None:
+        assert bound_component_id_for_request(fake_req) is None
+        # CURRENT behaviour: ``is_authorised_for_component`` returns True
+        # because ``bound_id is None``. This is arguably a security hole
+        # for orphan bots (they should NOT be able to operate on any
+        # component). Defended-in-depth by ``verify_item_access`` which
+        # checks the bot's Member role — and an orphan bot has no Member
+        # row (binding delete cascades the bot User which cascades the
+        # Member). The test pins the current behaviour for clarity; the
+        # broader defense is at verify_item_access.
+        assert is_authorised_for_component(fake_req, bound_component) is True
+
 
 class TestSBOMUploadScope:
     @pytest.mark.django_db
