@@ -753,12 +753,16 @@ TEAMS_SUPPORTED_ROLES = [
     ("guest", "Guest"),
     ("bot", "Bot"),
 ]
-# Invitation.role choices — subset of supported roles that a human
-# admin can pick when inviting someone. Excludes ``bot`` (reserved for
-# OIDC provisioning) AND ``guest`` (self-service trust-center role, not
-# invited). Kept as a derived constant so adding a new role to the
-# canonical list above propagates correctly.
-TEAMS_INVITABLE_ROLES = [(k, v) for k, v in TEAMS_SUPPORTED_ROLES if k not in ("bot", "guest")]
+# Invitation.role choices — subset of supported roles that can be
+# stored on an Invitation row. Excludes only ``bot`` (reserved for
+# OIDC synthetic identities, never invited). ``guest`` IS valid for
+# Invitation because the trust-center auto-accept flow creates a
+# guest-role Invitation when a user requests access — that row is
+# accepted on login and upgrades the user to a guest Member.
+# The InviteUserForm UI further excludes guest from its choices since
+# admins shouldn't invite guests directly (they self-serve), but the
+# model-level constraint stays permissive.
+TEAMS_INVITABLE_ROLES = [(k, v) for k, v in TEAMS_SUPPORTED_ROLES if k != "bot"]
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 

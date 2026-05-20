@@ -110,12 +110,27 @@ def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
         },
     )
     if created:
-        # set_unusable_password ensures no one can log in as this user
-        # via the normal Keycloak / password flow — only the OIDC
-        # token-exchange endpoint can mint tokens for them.
-        bot_user.set_unusable_password()
-        bot_user.save(update_fields=["password"])
         logger.info("Provisioned OIDC bot user %s for binding %s", username, binding.id)
+    else:
+        # Username collision against an existing User. This is extremely
+        # unlikely (binding.id is a 12-char alphanumeric token, ~36^12
+        # collision space) but if it ever happens, the existing user
+        # could have a usable password, ``is_active=False``, or other
+        # state that would break our invariants. Refuse to take over
+        # an unexpected account.
+        if bot_user.email != email or bot_user.first_name != "OIDC" or bot_user.last_name != "Bot":
+            raise RuntimeError(
+                f"OIDC bot username collision: existing user {username!r} does not look like "
+                "a sbomify-provisioned bot. Refusing to take it over."
+            )
+        logger.warning("Re-using existing OIDC bot user %s for binding %s", username, binding.id)
+    # ALWAYS enforce the bot invariants — not just on first create. A
+    # previously-leaked / hand-edited bot row might have a usable
+    # password or ``is_active=False``; reasserting on every provision
+    # keeps the bot non-loginable and live.
+    bot_user.set_unusable_password()
+    bot_user.is_active = True
+    bot_user.save(update_fields=["password", "is_active"])
 
     # Manually construct + save the Member with the
     # ``_is_oidc_bot_provisioning`` opt-out flag set BEFORE save() runs,

@@ -14,7 +14,12 @@ class Migration(migrations.Migration):
             model_name="invitation",
             name="role",
             field=models.CharField(
-                choices=[("owner", "Owner"), ("admin", "Admin")], max_length=255
+                # Excludes only ``bot`` (reserved for OIDC synthetic
+                # identities). ``guest`` stays valid because the
+                # trust-center auto-accept flow creates guest-role
+                # Invitation rows.
+                choices=[("owner", "Owner"), ("admin", "Admin"), ("guest", "Guest")],
+                max_length=255,
             ),
         ),
     ]

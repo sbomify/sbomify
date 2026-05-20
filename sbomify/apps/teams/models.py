@@ -516,6 +516,14 @@ class Invitation(models.Model):
                 {"role": "role='bot' is reserved for OIDC trusted-publisher identities and cannot be invited."}
             )
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # Force validation on every save so raw ORM (``.objects.create(...)``,
+        # bulk_create, fixture loading) hits the ``clean()`` guard above.
+        # Without this, ``clean()`` only fires when a form/serializer
+        # explicitly invokes ``full_clean()`` — giving false confidence.
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"{self.team.name}({self.team.pk}) - {self.email} - {self.role}"
 

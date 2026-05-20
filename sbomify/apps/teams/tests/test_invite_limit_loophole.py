@@ -33,7 +33,7 @@ def test_invite_limit_counts_pending_invitations(django_user_model):
     Invitation.objects.create(
         team=team,
         email="invitee@example.com",
-        role="member",
+        role="admin",
         expires_at=timezone.now() + timezone.timedelta(days=7)
     )
     
