@@ -146,6 +146,7 @@ INSTALLED_APPS = [
     "sbomify.apps.plugins",
     "sbomify.apps.tea",
     "sbomify.apps.controls",
+    "sbomify.apps.oidc",
 ]
 
 
@@ -742,14 +743,34 @@ sentry_sdk.init(
 )
 
 
-# Workspaces app related config (legacy 'teams' app)
-TEAMS_SUPPORTED_ROLES = [("owner", "Owner"), ("admin", "Admin"), ("guest", "Guest")]
+# Workspaces app related config (legacy 'teams' app).
+# The ``bot`` role is reserved for synthetic identities provisioned by
+# OIDC Trusted Publishing bindings (see ``sbomify.apps.oidc``); it should
+# NEVER appear in invite or role-change UIs presented to humans.
+TEAMS_SUPPORTED_ROLES = [
+    ("owner", "Owner"),
+    ("admin", "Admin"),
+    ("guest", "Guest"),
+    ("bot", "Bot"),
+]
 INVITATION_EXPIRY_DAYS = 7  # 7 days
 
 
 JWT_ISSUER = os.environ.get("JWT_ISSUER", "sbomify")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "sbomify")
+
+# OIDC Trusted Publishing — see sbomify.apps.oidc.
+# Action workflows request an ID token with this audience; the backend
+# enforces the ``aud`` claim against it during verification.
+OIDC_GITHUB_ISSUER = os.environ.get("OIDC_GITHUB_ISSUER", "https://token.actions.githubusercontent.com")
+OIDC_GITHUB_JWKS_URL = os.environ.get(
+    "OIDC_GITHUB_JWKS_URL",
+    "https://token.actions.githubusercontent.com/.well-known/jwks",
+)
+OIDC_GITHUB_AUDIENCE = os.environ.get("OIDC_GITHUB_AUDIENCE", "sbomify.com")
+OIDC_TOKEN_TTL_SECONDS = int(os.environ.get("OIDC_TOKEN_TTL_SECONDS", "900"))  # 15 minutes
+OIDC_JWKS_CACHE_SECONDS = int(os.environ.get("OIDC_JWKS_CACHE_SECONDS", "3600"))  # 1 hour
 
 # Localstack and AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
