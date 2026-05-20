@@ -193,6 +193,18 @@ class TestClaimFailures:
         with pytest.raises(OIDCExpiredToken):
             verify_github_oidc_token(token)
 
+    def test_future_iat_rejected(self, github_claims_factory, mock_github_jwks) -> None:
+        """``iat`` (issued-at) in the future is impossible for a legitimate
+        token — defends against attacker-minted tokens with a forward-dated
+        ``iat`` (e.g. an attempt to extend usable window). PyJWT enforces
+        this only when ``verify_iat=True`` is passed; pin the behaviour
+        so a future refactor doesn't drop the option.
+        """
+        future = int(time.time()) + 600
+        token = github_claims_factory(iat=future, exp=future + 60)
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(token)
+
     def test_missing_required_claim_fails(self, github_claims_factory, mock_github_jwks) -> None:
         """The ``require`` option enforces presence of iss/aud/exp/iat/sub."""
         token = github_claims_factory(sub=None)

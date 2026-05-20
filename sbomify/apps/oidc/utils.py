@@ -189,10 +189,15 @@ def _jwks_passes_validation(jwks: Any) -> bool:
 def _signing_key_for_kid(token: str) -> Any:
     """Locate the JWK signing key for the token's ``kid`` header.
 
-    Uses ``PyJWKClient`` so we don't have to hand-build the RSA key
-    from its JWK params — it knows the JWK → PyCryptodome conversion
-    and caches keys per ``kid``. We seed it with our own cached JWKS
-    dict to avoid PyJWKClient doing its own (uncached) HTTP fetch.
+    Walks our cached JWKS dict, finds the entry whose ``kid`` matches
+    the token's header, and constructs the RSA key via ``jwt.PyJWK``.
+    On a cache miss, we invalidate-and-refetch ONCE (rate-limited by
+    ``_JWKS_REFRESH_MARKER_KEY``) — a second miss after refresh raises
+    ``OIDCInvalidSignature("no JWK matches")``.
+
+    We deliberately don't use ``PyJWKClient`` here: it owns its own
+    HTTP fetch and would bypass our validation + rate-limit + SSRF
+    guards. The manual match is simpler given those constraints.
     """
     jwks = _fetch_github_jwks()
     # Build a one-off JWKClient seeded with the JWKS we just fetched.
@@ -227,12 +232,15 @@ def _signing_key_for_kid(token: str) -> Any:
 def verify_github_oidc_token(token: str) -> dict[str, Any]:
     """Fully verify a GitHub Actions OIDC token and return its claims.
 
-    Verifies (PyJWT does all four atomically):
+    Verifies (PyJWT does all atomically):
     * RS256 signature against GitHub's JWKS
     * ``iss`` == ``settings.OIDC_GITHUB_ISSUER``
     * ``aud`` == ``settings.OIDC_GITHUB_AUDIENCE``
-    * ``exp`` is in the future (with PyJWT's default leeway)
-    * ``iat`` is in the past
+    * ``exp`` is in the future (PyJWT default leeway = 0s)
+    * ``iat`` is not in the future (``verify_iat=True``; PyJWT
+      default leeway = 0s, applied symmetrically)
+    * required claims present: ``iss``, ``aud``, ``exp``, ``iat``,
+      ``sub``
 
     Raises ``OIDCVerificationError`` (or a subclass) on any failure.
     The API layer should treat any subclass as 401.
@@ -254,7 +262,13 @@ def verify_github_oidc_token(token: str) -> dict[str, Any]:
             algorithms=["RS256"],
             issuer=settings.OIDC_GITHUB_ISSUER,
             audience=settings.OIDC_GITHUB_AUDIENCE,
-            options={"require": ["iss", "aud", "exp", "iat", "sub"]},
+            options={
+                # PyJWT's ``require`` ONLY enforces claim presence —
+                # the corresponding ``verify_*`` options control
+                # semantic validation. Both layers needed.
+                "require": ["iss", "aud", "exp", "iat", "sub"],
+                "verify_iat": True,
+            },
         )
     except jwt.InvalidIssuerError as exc:
         raise OIDCInvalidIssuer(str(exc)) from exc
