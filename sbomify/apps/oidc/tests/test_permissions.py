@@ -217,10 +217,14 @@ class TestRequestPredicate:
         UserModel = get_user_model()
         # Re-use the bound_component fixture's binding by attaching a
         # *new* bot user to it (avoids touching the original row's
-        # invariants). The username MUST start with the production
-        # ``oidc-bot-`` prefix — ``request_is_oidc_authed`` short-circuits
-        # any other username without doing the binding lookup, which is
-        # the intended optimization for normal PAT traffic.
+        # invariants). The username uses the production ``oidc-bot-…``
+        # convention only to mirror what real bot rows look like —
+        # ``request_is_oidc_authed`` no longer gates on the username
+        # (the round-15 prefix shortcut was removed in round-16 because
+        # a renameable username made it possible to silently demote a
+        # bot to PAT classification). The real check is the binding
+        # lookup itself, which this test exercises by wiping
+        # ``expires_at``.
         from sbomify.apps.oidc.services import BOT_USERNAME_PREFIX
 
         bot = UserModel.objects.create_user(username=f"{BOT_USERNAME_PREFIX}wiped", password="x")

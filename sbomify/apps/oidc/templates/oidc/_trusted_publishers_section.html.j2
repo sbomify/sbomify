@@ -9,8 +9,13 @@
     The whole section is the swap target (id="trusted-publishers-section")
     so create + delete + form errors all land back into the same shell.
 
-    NOTE: Django's "{#" comments are SINGLE-LINE only; multi-line needs
-    the {% comment %} tag — otherwise the text in between gets parsed.
+    NOTE: this file is rendered by Django's template engine despite the
+    ``.html.j2`` extension (sbomify-wide convention — see CLAUDE.md).
+    Django's ``{# ... #}`` comments are single-line per the engine's
+    spec; multi-line block comments need the ``{% comment %}`` tag,
+    otherwise the second line is parsed as template content. Jinja2
+    proper would tolerate multi-line ``{# ... #}`` — we don't have that
+    parser here.
 {% endcomment %}
 <section id="trusted-publishers-section" class="tw-card">
 <header class="tw-card-header">
@@ -52,16 +57,11 @@ workflow's OIDC identity and are valid for 15 minutes.
 <td>
 <div class="flex items-center gap-2">
 <code class="text-sm font-medium">{{ binding.repository }}</code>
-<a href="https://github.com/{{ binding.repository }}"
-target="_blank"
-rel="noopener noreferrer"
-class="text-text-muted hover:text-primary transition-colors"
-title="Open on GitHub">
+<a href="https://github.com/{{ binding.repository }}" target="_blank" rel="noopener noreferrer" class="text-text-muted hover:text-primary transition-colors" title="Open on GitHub">
 <i class="fas fa-arrow-up-right-from-square text-xs"></i>
 </a>
 </div>
-<div class="text-xs text-text-muted mt-1 font-mono"
-title="Immutable IDs pinned at setup — used to defeat account-resurrection attacks">
+<div class="text-xs text-text-muted mt-1 font-mono" title="Immutable IDs pinned at setup — used to defeat account-resurrection attacks">
 owner_id={{ binding.repository_owner_id }} ·
 repo_id={{ binding.repository_id }}
 </div>
@@ -82,14 +82,7 @@ repo_id={{ binding.repository_id }}
 {% endif %}
 </td>
 <td class="text-right">
-<button type="button"
-class="tw-btn tw-btn-sm tw-btn-ghost text-danger hover:bg-danger/10"
-hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}"
-hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-hx-target="#trusted-publishers-section"
-hx-swap="outerHTML"
-hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued."
-title="Revoke this trusted publisher">
+<button type="button" class="tw-btn tw-btn-sm tw-btn-ghost text-danger hover:bg-danger/10" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
 <i class="fas fa-trash"></i>
 <span class="sr-only md:not-sr-only md:ml-1">Revoke</span>
 </button>
@@ -110,11 +103,7 @@ component using OIDC — no long-lived API tokens required.
 </div>
 {% endif %}
 <div class="border-t border-border pt-6">
-<form method="post"
-hx-post="{% url 'oidc:trusted_publishers' component_id=component.id %}"
-hx-target="#trusted-publishers-section"
-hx-swap="outerHTML"
-class="space-y-3">
+<form method="post" hx-post="{% url 'oidc:trusted_publishers' component_id=component.id %}" hx-target="#trusted-publishers-section" hx-swap="outerHTML" class="space-y-3">
 {% csrf_token %}
 <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-start">
 <div>
