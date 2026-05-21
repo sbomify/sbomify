@@ -169,6 +169,14 @@ def _fetch_github_jwks() -> dict[str, Any]:
     except requests.RequestException as exc:
         logger.warning("GitHub JWKS fetch failed (%s): %s", url, exc)
         raise OIDCJWKSUnavailable(str(exc)) from exc
+    except ValueError as exc:
+        # ``response.json()`` raises ``ValueError`` (the parent of
+        # ``json.JSONDecodeError``) on malformed upstream bodies. Without
+        # this branch the exception bubbles up as an unhandled 500; with it
+        # the exchange endpoint maps cleanly to 503 like every other JWKS
+        # unavailability mode.
+        logger.warning("GitHub JWKS response was not valid JSON (%s): %s", url, exc)
+        raise OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}") from exc
 
     if not _jwks_passes_validation(jwks):
         # Upstream returned something we don't recognise; better to fail

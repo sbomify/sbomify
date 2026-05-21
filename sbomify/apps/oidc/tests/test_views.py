@@ -121,23 +121,29 @@ class TestCreate:
         assert binding.bot_user.username == f"oidc-bot-{binding.id}"
 
     @pytest.mark.django_db
-    def test_post_with_malformed_slug_400(
+    def test_post_with_malformed_slug_renders_inline_error(
         self, authed_client: Client, component: Component, mocker
     ) -> None:
         # Form-level validation catches this BEFORE we'd hit the GitHub API,
-        # so the resolver isn't called at all.
+        # so the resolver isn't called at all. The response is HTTP 200
+        # (intentionally, not 400) so the HTMX swap happens and the user
+        # sees the error inline; see the view's form-invalid branch.
         called = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
         response = authed_client.post(
             reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
             data={"provider": "github", "repository": "no slash"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 200
+        # Field-level error class is present in the rendered partial.
+        assert b"tw-form-error" in response.content
         called.assert_not_called()
 
     @pytest.mark.django_db
-    def test_post_when_repo_not_found_returns_error(
+    def test_post_when_repo_not_found_renders_inline_error(
         self, authed_client: Client, component: Component, mocker
     ) -> None:
+        # Upstream GitHub error also returns 200 + inline error for the
+        # same HTMX-swap reason; see the view's resolve-error branch.
         mocker.patch(
             "sbomify.apps.oidc.services.resolve_repository",
             side_effect=GitHubResolveError("not_found", "Repository 'ghost/repo' was not found."),
@@ -146,11 +152,11 @@ class TestCreate:
             reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
             data={"provider": "github", "repository": "ghost/repo"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 200
         assert b"not found" in response.content.lower()
 
     @pytest.mark.django_db
-    def test_duplicate_binding_409(
+    def test_duplicate_binding_renders_inline_error(
         self, authed_client: Client, component: Component, mocker, sample_user
     ) -> None:
         # Pre-existing binding
@@ -181,7 +187,10 @@ class TestCreate:
             reverse("oidc:trusted_publishers", kwargs={"component_id": component.id}),
             data={"provider": "github", "repository": "acme/widget"},
         )
-        assert response.status_code == 409
+        # 200 (intentionally, not 409) so the HTMX swap goes through and
+        # the user sees the duplicate-binding error inline; see the view's
+        # resolve-error branch comment.
+        assert response.status_code == 200
         assert b"already bound" in response.content
 
 

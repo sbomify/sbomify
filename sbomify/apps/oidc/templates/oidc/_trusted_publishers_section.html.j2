@@ -156,7 +156,7 @@ steps:
         -H "Authorization: Bearer ${{ steps.oidc.outputs.token }}" \
         -H "Content-Type: application/json" \
         -d '{"component_id": "{% endverbatim %}{{ component.id }}{% verbatim %}"}' \
-        https://sbomify.com/api/v1/auth/oidc/github/exchange)
+        {% endverbatim %}{{ api_base_url }}{% verbatim %}/api/v1/auth/oidc/github/exchange)
       echo "::add-mask::$(echo "$RESP" | jq -r '.access_token')"
       echo "token=$(echo "$RESP" | jq -r '.access_token')" &gt;&gt; "$GITHUB_OUTPUT"
 
@@ -166,7 +166,7 @@ steps:
         -H "Authorization: Bearer ${{ steps.sbomify.outputs.token }}" \
         -H "Content-Type: application/json" \
         --data-binary @bom.json \
-        https://sbomify.com/api/v1/sboms/artifact/cyclonedx/{% endverbatim %}{{ component.id }}
+        {% endverbatim %}{{ api_base_url }}{% verbatim %}/api/v1/sboms/artifact/cyclonedx/{% endverbatim %}{{ component.id }}
 </code></pre>
 {# djlint:on #}
 <p class="text-xs text-text-muted">

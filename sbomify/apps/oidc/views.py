@@ -42,6 +42,12 @@ def _list_context(component: Component, form: OIDCBindingForm | None = None) -> 
         # accurate when ``OIDC_GITHUB_AUDIENCE`` is overridden at the
         # deployment level (staging, self-hosted, etc.).
         "oidc_github_audience": settings.OIDC_GITHUB_AUDIENCE,
+        # Same reason as the audience: the workflow snippet has to call
+        # the *actual* deployment, not a hardcoded ``sbomify.com``.
+        # Staging, self-hosted, and air-gapped installs would otherwise
+        # show users instructions that point to a different endpoint than
+        # the one they're configuring against.
+        "api_base_url": getattr(settings, "APP_BASE_URL", "") or "https://sbomify.com",
     }
 
 
@@ -78,7 +84,16 @@ class TrustedPublishersView(_TrustedPublishersBase):
 
         form = OIDCBindingForm(request.POST)
         if not form.is_valid():
-            return render(request, SECTION_TEMPLATE, _list_context(component, form=form), status=400)
+            # Return 200 (not 400): the rendered partial IS the new section
+            # state (form re-rendered with the field error). HTMX's default
+            # ``responseHandling`` swaps only on 2xx — returning 400 here
+            # would leave the user with no visible feedback (and trips the
+            # ``django-htmx`` dev-mode debug shim that swaps the whole
+            # ``<html>`` for any 4xx body). Validation failure is
+            # client-state and gets surfaced inline; only server-side
+            # failures (component-not-found, GitHub upstream errors) use
+            # non-2xx codes from the htmx error-response helper.
+            return render(request, SECTION_TEMPLATE, _list_context(component, form=form))
 
         result = create_binding(
             component=component,
@@ -88,12 +103,13 @@ class TrustedPublishersView(_TrustedPublishersBase):
         )
         if not result.ok:
             form.add_error("repository", result.error or "Failed to add trusted publisher.")
-            return render(
-                request,
-                SECTION_TEMPLATE,
-                _list_context(component, form=form),
-                status=result.status_code or 400,
-            )
+            # 200 (not the service's status_code) — see comment on the
+            # form-invalid branch above. HTMX needs a 2xx to swap, and the
+            # rendered partial IS the new state for the user (form with
+            # ``repository`` field error inline). The service's
+            # ``status_code`` is preserved in the form error message for
+            # debugging; surfacing it as the HTTP code would block the swap.
+            return render(request, SECTION_TEMPLATE, _list_context(component, form=form))
 
         binding = result.value
         assert binding is not None

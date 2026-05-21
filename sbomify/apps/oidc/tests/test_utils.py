@@ -225,6 +225,22 @@ class TestJWKSFailures:
         with pytest.raises(OIDCJWKSUnavailable):
             verify_github_oidc_token("dummy.token.here")
 
+    def test_jwks_malformed_json_raises_unavailable(self, mocker) -> None:
+        """Upstream returning non-JSON (HTML error page, truncated body)
+        must map to ``OIDCJWKSUnavailable`` (503) — without this the
+        unhandled ``ValueError`` bubbled to the exchange endpoint as a
+        500 and exposed an internal failure to attackers.
+        """
+        from django.core.cache import cache
+
+        cache.delete("sbomify:trusted:oidc:github:jwks")
+        fake_response = mocker.MagicMock()
+        fake_response.raise_for_status.return_value = None
+        fake_response.json.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=fake_response)
+        with pytest.raises(OIDCJWKSUnavailable, match="not parseable"):
+            verify_github_oidc_token("dummy.token.here")
+
     def test_jwks_is_cached_across_calls(self, github_claims_factory, mock_github_jwks) -> None:
         token1 = github_claims_factory()
         token2 = github_claims_factory()
