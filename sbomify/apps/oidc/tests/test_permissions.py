@@ -140,6 +140,10 @@ class TestRequestPredicate:
         )
         fake_req = mocker.MagicMock()
         fake_req.access_token_record = row
+        # Reset cached binding lookup per fake request to avoid leaks
+        # across tests (the cache is set on the request object).
+        if hasattr(fake_req, "_oidc_binding_cache"):
+            delattr(fake_req, "_oidc_binding_cache")
         # The bot is identified as OIDC-authed:
         assert request_is_oidc_authed(fake_req) is True
         # No binding → fail closed (defense-in-depth: an orphan bot
@@ -147,6 +151,62 @@ class TestRequestPredicate:
         # must NOT keep component access).
         assert bound_component_id_for_request(fake_req) is None
         assert is_authorised_for_component(fake_req, bound_component) is False
+
+    @pytest.mark.django_db
+    def test_oidc_token_with_wiped_expires_at_still_scoped(
+        self, mocker, bound_component: Component
+    ) -> None:
+        """Copilot defense-in-depth: if ``AccessToken.expires_at`` gets
+        wiped on an OIDC token row (migration bug, manual tamper, partial
+        cleanup race) while the user's ``OIDCBinding`` is still healthy,
+        the request must still be classified as OIDC-authed and the
+        component scope check must still apply.
+
+        Before this hardening, ``request_is_oidc_authed`` looked at
+        ``expires_at`` only — a wiped column silently demoted the bot
+        to non-OIDC, which made ``is_authorised_for_component`` a no-op
+        and let the bot reach any component the bot's workspace role
+        permitted. The new OR-based check (expires_at set OR binding
+        exists for user) closes that hole.
+        """
+        from django.contrib.auth import get_user_model
+
+        from sbomify.apps.access_tokens.models import AccessToken
+
+        UserModel = get_user_model()
+        # Re-use the bound_component fixture's binding by attaching a
+        # *new* bot user to it (avoids touching the original row's
+        # invariants).
+        bot = UserModel.objects.create_user(username="wiped-bot", password="x")
+        from sbomify.apps.oidc.models import OIDCBinding
+
+        OIDCBinding.objects.create(
+            component=bound_component,
+            provider=OIDCBinding.PROVIDER_GITHUB,
+            repository="wiped/owner",
+            repository_id=777,
+            repository_owner_id=888,
+            bot_user=bot,
+        )
+        # Persist a token row WITHOUT expires_at — the wiped-column case.
+        row = AccessToken.objects.create(
+            encoded_token="fake-no-exp",
+            description="oidc-wiped",
+            user=bot,
+            expires_at=None,
+        )
+        fake_req = mocker.MagicMock()
+        fake_req.access_token_record = row
+        if hasattr(fake_req, "_oidc_binding_cache"):
+            delattr(fake_req, "_oidc_binding_cache")
+        # Wiped expires_at would have classified this as a PAT pre-fix;
+        # the binding fallback now keeps it OIDC.
+        assert request_is_oidc_authed(fake_req) is True
+        # And scope is enforced: matches bound component, rejects others.
+        assert bound_component_id_for_request(fake_req) == str(bound_component.id)
+        assert is_authorised_for_component(fake_req, bound_component) is True
+        other = mocker.MagicMock(id="other-component-id")
+        assert is_authorised_for_component(fake_req, other) is False
 
 
 class TestSBOMUploadScope:

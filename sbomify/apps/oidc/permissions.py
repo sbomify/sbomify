@@ -30,14 +30,58 @@ from typing import Any
 from sbomify.apps.access_tokens.models import AccessToken
 
 
+def _lookup_binding(request: Any) -> Any:
+    """Return the OIDCBinding row that owns the request's token user, or None."""
+    token_record: AccessToken | None = getattr(request, "access_token_record", None)
+    if token_record is None or token_record.user is None:
+        return None
+    # ``oidc_binding`` is the reverse-side related_name on
+    # ``OIDCBinding.bot_user`` (OneToOne). Looked up via the model so mypy
+    # sees the type.
+    from sbomify.apps.oidc.models import OIDCBinding
+
+    return OIDCBinding.objects.filter(bot_user=token_record.user).only("component_id").first()
+
+
+def _cached_binding(request: Any) -> Any:
+    """``_lookup_binding`` memoised on the request so we hit the DB once
+    per request even if ``request_is_oidc_authed`` AND
+    ``bound_component_id_for_request`` both fire on the same view.
+    """
+    if hasattr(request, "_oidc_binding_cache"):
+        return request._oidc_binding_cache
+    binding = _lookup_binding(request)
+    request._oidc_binding_cache = binding
+    return binding
+
+
 def request_is_oidc_authed(request: Any) -> bool:
     """True iff the request was authenticated via an OIDC-issued AccessToken.
 
-    Distinguished from a regular PAT by the presence of an ``expires_at``
-    column — PATs never set it, OIDC-issued tokens always do.
+    OIDC-ness is asserted by EITHER of two independent signals:
+
+    * ``access_token_record.expires_at`` is set (PATs never set it; OIDC
+      tokens always do at issuance).
+    * An ``OIDCBinding`` row exists with ``bot_user`` pointing at the
+      request's user (every OIDC-issued token belongs to a bot user that
+      a binding owns).
+
+    Belt-and-suspenders by design: requiring BOTH signals to be present
+    would let either getting silently wiped (migration bug, manual
+    tamper, partial-cleanup data race) demote an OIDC token to PAT
+    status — at which point ``is_authorised_for_component`` becomes a
+    no-op and the bot escapes its component scope. Treating EITHER as
+    sufficient means an attacker would have to corrupt both
+    ``AccessToken.expires_at`` AND delete the ``OIDCBinding`` row
+    without taking down the bot user, which is a much harder failure
+    mode.
     """
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
-    return token_record is not None and token_record.expires_at is not None
+    if token_record is None:
+        return False
+    if token_record.expires_at is not None:
+        return True
+    return _cached_binding(request) is not None
 
 
 def bound_component_id_for_request(request: Any) -> str | None:
@@ -46,18 +90,12 @@ def bound_component_id_for_request(request: Any) -> str | None:
     Returns ``None`` when the request isn't OIDC-authed OR when the bot
     has no binding (shouldn't happen — provisioning + cascade-deletion
     keep these in sync — but defensively returns ``None`` rather than
-    raising).
+    raising; the caller in ``is_authorised_for_component`` treats
+    ``None`` as fail-closed for OIDC requests).
     """
     if not request_is_oidc_authed(request):
         return None
-    token_record: AccessToken = request.access_token_record
-    bot_user = token_record.user
-    # ``oidc_binding`` is the reverse-side related_name on
-    # ``OIDCBinding.bot_user`` (OneToOne). Looked up explicitly via the
-    # model rather than the attribute so mypy sees the type.
-    from sbomify.apps.oidc.models import OIDCBinding
-
-    binding = OIDCBinding.objects.filter(bot_user=bot_user).only("component_id").first()
+    binding = _cached_binding(request)
     return str(binding.component_id) if binding else None
 
 
