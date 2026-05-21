@@ -156,8 +156,13 @@ def decode_personal_access_token(token: str) -> dict[str, Any]:
 
         result: dict[str, Any] = jwt.decode(renormalised, **decode_kwargs)
         return result
+    except jwt.ExpiredSignatureError as e:
+        # Routine end-of-life for short-lived OIDC tokens — log at INFO
+        # so it doesn't flood the WARNING channel as an "auth failure".
+        log.info("Token expired: %s", e)
+        raise DecodeError("Token expired") from e
     except InvalidTokenError as e:
-        log.warning(f"Token validation failed: {str(e)}")
+        log.warning("Token validation failed: %s", e)
         raise DecodeError("Invalid token format") from e
 
 
@@ -183,23 +188,28 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
 def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, AccessToken | None]:
     """Get user and AccessToken DB record from a personal access token.
 
-    Verifies the JWT signature AND checks that a matching AccessToken
-    record exists in the database AND that the record has not expired.
-    Three independent rejection points, ordered from cheapest to most
-    expensive: signature → DB lookup → expiry check.
+    Rejection points, in evaluation order:
 
-    The expiry check is the third rejection point because:
+    1. ``decode_personal_access_token``: JWT signature (RS256/HS256
+       against ``SECRET_KEY``) AND — for OIDC-issued tokens
+       (``token_type="oidc"``) — JWT-level ``exp`` and ``aud`` claims.
+       Long-lived PATs (no ``exp``/``aud``) only fail at the
+       signature step.
+    2. User liveness: the JWT's ``sub`` must resolve to a User row
+       with ``is_active=True`` and ``deleted_at IS NULL``.
+    3. AccessToken DB row exists for ``(user, encoded_token)``.
+    4. Row-level expiry: ``AccessToken.expires_at`` (if set) must be
+       in the future. Defense-in-depth on top of the JWT-level
+       ``exp`` check — if a future code path stripped JWT claims but
+       kept the DB row, this catches it.
 
-    * Long-lived PATs have ``expires_at = NULL`` and are not affected.
-    * OIDC-issued short-lived tokens (see ``sbomify.apps.oidc``) have
-      ``expires_at`` set to ``now + 15 min``; once past that mark, the
-      DB row is treated as if it didn't exist.
-    * A background job could later sweep expired rows but isn't
-      required for correctness — the check here is the source of
-      truth.
+    PATs have ``expires_at IS NULL`` and skip step 4 entirely; OIDC
+    tokens always set it. A background sweep of expired rows is
+    optional — step 4 is the source of truth.
 
     Returns:
-        (user, access_token_record) on success, (None, None) on failure.
+        (user, access_token_record) on success, (None, None) on
+        failure (at any of the four rejection points).
     """
     from .models import AccessToken
 
