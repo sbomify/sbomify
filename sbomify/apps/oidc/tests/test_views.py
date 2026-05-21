@@ -94,6 +94,27 @@ class TestListView:
         # LoginRequiredMixin sends to login URL — status 302
         assert response.status_code in (302, 401, 403)
 
+    @pytest.mark.django_db
+    def test_workflow_snippet_normalises_schemeless_app_base_url(
+        self, authed_client: Client, component: Component, settings
+    ) -> None:
+        """Regression: ``APP_BASE_URL`` is commonly configured without a
+        scheme (raw host) in this repo. The rendered workflow snippet
+        must run through ``get_base_url()`` so the embedded ``curl``
+        commands get a usable URL — without normalisation the snippet
+        would emit ``curl app.sbomify.io/api/...`` which curl rejects.
+        """
+        settings.APP_BASE_URL = "app.staging.sbomify.io/"  # schemeless + trailing slash
+        response = authed_client.get(
+            reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
+        )
+        assert response.status_code == 200
+        body = response.content.decode()
+        # The helper prefixes https:// and strips the trailing slash.
+        assert "https://app.staging.sbomify.io/api/v1/auth/oidc/github/exchange" in body
+        # And there's no ``//api/`` artifact from accidental concatenation.
+        assert "//api/v1/" not in body.replace("https://", "")
+
 
 class TestCreate:
     @pytest.mark.django_db

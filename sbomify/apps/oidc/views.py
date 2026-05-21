@@ -23,6 +23,7 @@ from django.views import View
 
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.oidc.forms import OIDCBindingForm
 from sbomify.apps.oidc.services import create_binding, delete_binding, list_bindings_for_component
@@ -46,8 +47,12 @@ def _list_context(component: Component, form: OIDCBindingForm | None = None) -> 
         # the *actual* deployment, not a hardcoded ``sbomify.com``.
         # Staging, self-hosted, and air-gapped installs would otherwise
         # show users instructions that point to a different endpoint than
-        # the one they're configuring against.
-        "api_base_url": getattr(settings, "APP_BASE_URL", "") or "https://sbomify.com",
+        # the one they're configuring against. Use the codebase's
+        # ``get_base_url()`` helper so the value is consistently
+        # scheme-prefixed and trailing-slash-stripped — ``APP_BASE_URL``
+        # is commonly configured without a scheme (raw host), which
+        # would otherwise emit an invalid ``curl host/api/...`` line.
+        "api_base_url": get_base_url() or "https://sbomify.com",
     }
 
 
