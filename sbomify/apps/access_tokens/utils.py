@@ -53,7 +53,22 @@ def create_personal_access_token(
     * ``token_type`` — lets the decoder tell PAT-shape from OIDC-shape
       tokens; future tightening can refuse OIDC tokens at endpoints
       that only accept PATs (or vice-versa).
+
+    Invariant: ``expires_at`` and ``token_type=oidc`` MUST travel
+    together. Without this, a caller could mint a token with
+    ``expires_at`` set but ``token_type="pat"`` — the decoder would
+    skip the JWT-level ``exp``/``aud`` checks (those only fire for
+    ``token_type=oidc``) and the row's DB ``expires_at`` would be the
+    only revocation mechanism, defeating the defense-in-depth the
+    OIDC path is built on. Raise ``ValueError`` at mint time so this
+    inconsistency can never reach a token.
     """
+    if (expires_at is not None) != (token_type == TOKEN_TYPE_OIDC):
+        raise ValueError(
+            "expires_at and token_type=oidc must be set together "
+            f"(got expires_at={expires_at!r}, token_type={token_type!r})"
+        )
+
     salt = uuid4().hex[-4:] + str(time())[-4:]
     payload: dict[str, Any] = {
         "iss": settings.JWT_ISSUER,
