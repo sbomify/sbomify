@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.oidc.services import BOT_USERNAME_PREFIX
 
 
 def _lookup_binding(request: Any) -> Any:
@@ -75,12 +76,29 @@ def request_is_oidc_authed(request: Any) -> bool:
     ``AccessToken.expires_at`` AND delete the ``OIDCBinding`` row
     without taking down the bot user, which is a much harder failure
     mode.
+
+    Performance: the second signal (binding lookup) is gated behind a
+    cheap in-memory username-prefix check so that ordinary PAT
+    requests — which are the common case on upload endpoints —
+    short-circuit at zero DB cost. Only requests whose user looks like
+    an OIDC bot (``oidc-bot-…`` username, set in
+    ``services.provision_bot_user_for_binding``) ever hit the
+    ``OIDCBinding`` row; for everyone else the function returns False
+    purely from the in-memory attributes.
     """
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
     if token_record is None:
         return False
     if token_record.expires_at is not None:
         return True
+    # Cheap gate: only OIDC bot users have the ``oidc-bot-`` username
+    # prefix, so a PAT request can short-circuit here without touching
+    # the DB. If a bot ever does fall through with a wiped
+    # ``expires_at``, the binding lookup below is the real check.
+    user = getattr(token_record, "user", None)
+    username = getattr(user, "username", "") or ""
+    if not username.startswith(BOT_USERNAME_PREFIX):
+        return False
     return _cached_binding(request) is not None
 
 

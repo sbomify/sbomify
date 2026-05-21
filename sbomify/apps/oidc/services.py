@@ -63,17 +63,17 @@ logger = getLogger(__name__)
 # special-use TLD per RFC 6761 §6.3 — guarantees the email is not
 # routable, so a misconfigured mailer can't accidentally try to deliver
 # notifications to "oidc-bot-…@sbomify.local".
-_BOT_USERNAME_PREFIX = "oidc-bot-"
+BOT_USERNAME_PREFIX = "oidc-bot-"
 _BOT_EMAIL_DOMAIN = "sbomify.local"
 _BOT_ROLE = "bot"
 
 
 def _bot_username(binding_id: str) -> str:
-    return f"{_BOT_USERNAME_PREFIX}{binding_id}"
+    return f"{BOT_USERNAME_PREFIX}{binding_id}"
 
 
 def _bot_email(binding_id: str) -> str:
-    return f"{_BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}"
+    return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}"
 
 
 @transaction.atomic

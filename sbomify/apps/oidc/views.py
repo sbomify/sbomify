@@ -7,8 +7,13 @@ rather than full pages. The list partial is the source of truth for
 what the user sees, and both create and delete return the refreshed
 list so the page state matches the database in one round-trip.
 
-Every ORM call lives in ``sbomify.apps.oidc.services`` — these views
-are thin dispatch over ``ServiceResult[T]``.
+Business-logic ORM calls (creating / deleting bindings, listing them
+for a component) live in ``sbomify.apps.oidc.services`` and the views
+are thin dispatch over ``ServiceResult[T]``. The one exception is the
+``_component_or_error`` helper, which resolves a ``Component`` row
+directly so the permission check (``verify_item_access``) can run
+before any service call — keeping permission checks in the view
+layer matches the rest of the codebase.
 """
 
 from __future__ import annotations

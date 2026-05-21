@@ -103,6 +103,46 @@ class TestRequestPredicate:
         assert is_authorised_for_component(fake_req, mocker.MagicMock(id="anything")) is True
 
     @pytest.mark.django_db
+    def test_pat_request_skips_binding_lookup(self, mocker) -> None:
+        """Performance regression: ordinary PAT requests must NOT trigger
+        an ``OIDCBinding`` DB lookup. The cheap username-prefix gate in
+        ``request_is_oidc_authed`` short-circuits at zero DB cost when
+        the token's user isn't named like an OIDC bot.
+
+        Without this gate, every PAT-authenticated upload would do one
+        extra ``OIDCBinding.objects.filter(...).first()`` query — a
+        measurable load increase on the upload endpoints this PR's
+        permission gate is wired into.
+        """
+        from django.contrib.auth import get_user_model
+
+        from sbomify.apps.access_tokens.models import AccessToken
+
+        UserModel = get_user_model()
+        # Regular user (not an OIDC bot — username doesn't start with
+        # ``oidc-bot-``). Their PAT row has ``expires_at=None`` like
+        # every long-lived PAT.
+        user = UserModel.objects.create_user(username="pat-user", password="x")
+        row = AccessToken.objects.create(
+            encoded_token="fake-pat",
+            description="long-lived-pat",
+            user=user,
+            expires_at=None,
+        )
+        fake_req = mocker.MagicMock()
+        fake_req.access_token_record = row
+        if hasattr(fake_req, "_oidc_binding_cache"):
+            delattr(fake_req, "_oidc_binding_cache")
+        # Spy on the OIDCBinding manager — any DB hit would mean the
+        # short-circuit failed.
+        from sbomify.apps.oidc import models as oidc_models
+
+        spy = mocker.spy(oidc_models.OIDCBinding.objects, "filter")
+        assert request_is_oidc_authed(fake_req) is False
+        # The cheap username gate fires; the manager is never called.
+        assert spy.call_count == 0
+
+    @pytest.mark.django_db
     def test_orphan_bot_blocked(self, mocker, bound_component: Component) -> None:
         """Test-automator P1: defensive branch in
         ``bound_component_id_for_request`` — an OIDC-authed token whose
@@ -176,8 +216,13 @@ class TestRequestPredicate:
         UserModel = get_user_model()
         # Re-use the bound_component fixture's binding by attaching a
         # *new* bot user to it (avoids touching the original row's
-        # invariants).
-        bot = UserModel.objects.create_user(username="wiped-bot", password="x")
+        # invariants). The username MUST start with the production
+        # ``oidc-bot-`` prefix — ``request_is_oidc_authed`` short-circuits
+        # any other username without doing the binding lookup, which is
+        # the intended optimization for normal PAT traffic.
+        from sbomify.apps.oidc.services import BOT_USERNAME_PREFIX
+
+        bot = UserModel.objects.create_user(username=f"{BOT_USERNAME_PREFIX}wiped", password="x")
         from sbomify.apps.oidc.models import OIDCBinding
 
         OIDCBinding.objects.create(
