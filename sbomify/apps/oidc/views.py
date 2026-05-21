@@ -128,7 +128,15 @@ class TrustedPublishersView(_TrustedPublishersBase):
 
 
 class TrustedPublisherDeleteView(_TrustedPublishersBase):
-    """DELETE a single binding."""
+    """Delete a single binding via POST (HTMX uses ``hx-post``).
+
+    HTTP DELETE isn't used here because every consumer is an HTMX
+    form-submit (``hx-post`` to this URL), and routing those through
+    a Django POST endpoint avoids the surrounding form / CSRF
+    plumbing needing a separate DELETE codepath. The view is
+    delete-only in *behaviour* — the only mutation it performs is
+    ``services.delete_binding`` — but mounted under POST.
+    """
 
     def post(self, request: HttpRequest, component_id: str, binding_id: str) -> HttpResponse:
         component = self._component_or_error(request, component_id)
