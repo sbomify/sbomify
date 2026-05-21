@@ -1,26 +1,31 @@
 {% comment %}
-  Trusted Publishers section for a Component's settings.
+    Trusted Publishers section for a Component's settings.
 
-  Rendered both:
-    * inline on first page load (via the hx-get='load' container in the
-      component_details_private templates)
-    * as an HTMX swap target after create/delete
+    Rendered both:
+      * inline on first page load (via the hx-get='load' container in the
+        component_details_private templates)
+      * as an HTMX swap target after create/delete
 
-  The whole section is the swap target (id="trusted-publishers-section")
-  so create + delete + form errors all land back into the same shell.
+    The whole section is the swap target (id="trusted-publishers-section")
+    so create + delete + form errors all land back into the same shell.
 
-  NOTE: Django's "{#" comments are SINGLE-LINE only; multi-line needs
-  the {% comment %} tag — otherwise the text in between gets parsed.
+    NOTE: Django's "{#" comments are SINGLE-LINE only; multi-line needs
+    the {% comment %} tag — otherwise the text in between gets parsed.
 {% endcomment %}
 <section id="trusted-publishers-section" class="tw-card">
-<header class="tw-card-header flex items-start justify-between gap-4">
+<header class="tw-card-header">
+<div class="flex items-start gap-3">
+<span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
+<i class="fas fa-shield-halved text-primary"></i>
+</span>
 <div>
-<h4 class="text-lg font-semibold text-text">Trusted Publishers</h4>
+<h4 class="text-lg font-semibold text-text m-0">Trusted Publishers</h4>
 <p class="text-sm text-text-muted m-0 mt-1">
-Authorise a GitHub repository to push SBOMs and documents to this component
-without long-lived secrets. Tokens are issued from the workflow's OIDC
-identity and are valid for 15 minutes.
+Authorise a GitHub repository to push SBOMs and documents to this
+component without long-lived secrets. Tokens are issued from the
+workflow's OIDC identity and are valid for 15 minutes.
 </p>
+</div>
 </div>
 </header>
 <div class="tw-card-body space-y-6">
@@ -45,9 +50,20 @@ identity and are valid for 15 minutes.
 </span>
 </td>
 <td>
-<code class="text-sm">{{ binding.repository }}</code>
-<div class="text-xs text-text-muted mt-1" title="Immutable IDs pinned at setup">
-owner_id={{ binding.repository_owner_id }} · repo_id={{ binding.repository_id }}
+<div class="flex items-center gap-2">
+<code class="text-sm font-medium">{{ binding.repository }}</code>
+<a href="https://github.com/{{ binding.repository }}"
+target="_blank"
+rel="noopener noreferrer"
+class="text-text-muted hover:text-primary transition-colors"
+title="Open on GitHub">
+<i class="fas fa-arrow-up-right-from-square text-xs"></i>
+</a>
+</div>
+<div class="text-xs text-text-muted mt-1 font-mono"
+title="Immutable IDs pinned at setup — used to defeat account-resurrection attacks">
+owner_id={{ binding.repository_owner_id }} ·
+repo_id={{ binding.repository_id }}
 </div>
 </td>
 <td class="text-sm text-text-muted">
@@ -66,17 +82,16 @@ owner_id={{ binding.repository_owner_id }} · repo_id={{ binding.repository_id }
 {% endif %}
 </td>
 <td class="text-right">
-<button
-type="button"
-class="tw-btn tw-btn-sm tw-btn-danger"
+<button type="button"
+class="tw-btn tw-btn-sm tw-btn-ghost text-danger hover:bg-danger/10"
 hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}"
 hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
 hx-target="#trusted-publishers-section"
 hx-swap="outerHTML"
 hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued."
->
+title="Revoke this trusted publisher">
 <i class="fas fa-trash"></i>
-Revoke
+<span class="sr-only md:not-sr-only md:ml-1">Revoke</span>
 </button>
 </td>
 </tr>
@@ -86,22 +101,22 @@ Revoke
 </div>
 {% else %}
 <div class="tw-empty-state">
-<i class="fas fa-shield-halved text-2xl text-text-muted"></i>
-<p class="text-sm text-text-muted mt-2">
-No trusted publishers yet. Add one below to let a GitHub Actions
-workflow push to this component using its OIDC identity.
+<i class="fas fa-shield-halved text-3xl text-text-muted opacity-50"></i>
+<p class="text-sm font-medium text-text mt-3 mb-1">No trusted publishers yet</p>
+<p class="text-xs text-text-muted">
+Add a GitHub repository below to let its Actions workflow push to this
+component using OIDC — no long-lived API tokens required.
 </p>
 </div>
 {% endif %}
-<form
-method="post"
+<div class="border-t border-border pt-6">
+<form method="post"
 hx-post="{% url 'oidc:trusted_publishers' component_id=component.id %}"
 hx-target="#trusted-publishers-section"
 hx-swap="outerHTML"
-class="space-y-3"
->
+class="space-y-3">
 {% csrf_token %}
-<div class="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-3 items-end">
+<div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-start">
 <div>
 <label class="tw-form-label" for="id_provider">Provider</label>
 {{ form.provider }}
@@ -116,26 +131,28 @@ class="space-y-3"
 <p class="tw-form-helper">{{ form.repository.help_text }}</p>
 {% endif %}
 </div>
-<button type="submit" class="tw-btn tw-btn-primary">
+<button type="submit" class="tw-btn tw-btn-primary md:mt-7">
 <i class="fas fa-plus"></i>
 Add publisher
 </button>
 </div>
 </form>
-<details class="border border-border rounded-md overflow-hidden">
-<summary class="px-3 py-2 bg-surface cursor-pointer text-sm font-medium text-text hover:bg-surface-hover flex items-center gap-2">
-<i class="fas fa-circle-info"></i>
-Configure your GitHub Actions workflow
+</div>
+<details class="group rounded-lg bg-surface border border-border/60">
+<summary class="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm font-medium text-text hover:bg-background/40 rounded-lg">
+<i class="fas fa-code text-text-muted"></i>
+<span>Configure your GitHub Actions workflow</span>
+<i class="fas fa-chevron-down text-xs text-text-muted ml-auto transition-transform group-open:rotate-180"></i>
 </summary>
-<div class="p-4 space-y-3 text-sm">
-<p>
-Add this step to the workflow that should be authorised to push to
-this component. The <code>audience</code> value must be exactly
-<code>{{ oidc_github_audience }}</code> — the backend rejects tokens
-minted for any other audience.
+<div class="px-4 pb-4 pt-1 space-y-3 text-sm border-t border-border/40">
+<p class="text-text-muted m-0">
+Add this step to the workflow that should be authorised to push to this
+component. The <code class="px-1.5 py-0.5 rounded bg-background border border-border/40 text-text font-mono text-xs">audience</code> value must be exactly
+<code class="px-1.5 py-0.5 rounded bg-background border border-border/40 text-text font-mono text-xs">{{ oidc_github_audience }}</code> — the backend rejects
+tokens minted for any other audience.
 </p>
 {# djlint:off #}
-        <pre class="bg-surface border border-border rounded p-3 text-xs overflow-x-auto text-text"><code>{% verbatim %}permissions:
+                <pre class="bg-background border border-border rounded-md p-3 text-xs overflow-x-auto text-text"><code>{% verbatim %}permissions:
   id-token: write    # required to mint the OIDC token
   contents: read
 
@@ -169,9 +186,10 @@ steps:
         {% endverbatim %}{{ api_base_url }}{% verbatim %}/api/v1/sboms/artifact/cyclonedx/{% endverbatim %}{{ component.id }}
 </code></pre>
 {# djlint:on #}
-<p class="text-xs text-text-muted">
-The sbomify token expires after 15 minutes — request a fresh one
-for each job that needs it.
+<p class="text-xs text-text-muted m-0 flex items-center gap-1.5">
+<i class="fas fa-clock text-text-muted"></i>
+The sbomify token expires after 15 minutes — request a fresh one for each
+job that needs it.
 </p>
 </div>
 </details>
