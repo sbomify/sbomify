@@ -30,6 +30,7 @@ from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
 from ninja import Router, Schema
 
 from sbomify.apps.core.schemas import ErrorResponse
+from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.oidc.services import exchange_github_oidc_token
 from sbomify.logging import getLogger
 
@@ -102,14 +103,22 @@ def github_token_exchange(request: HttpRequest, payload: ExchangeRequest) -> tup
     # of an enumeration attempt at the django-ratelimit cache lookup,
     # not at the JWKS / DB / JWT-decode level. Sparse 429 body for the
     # same anti-probe reason as the 401 path.
+    # django-ratelimit's built-in ``key="ip"`` reads ``REMOTE_ADDR`` —
+    # which is the proxy's IP, not the client's, since this app sits
+    # behind a trusted Caddy reverse proxy that sets ``X-Real-IP``.
+    # Pass a callable that uses the codebase's ``get_client_ip``
+    # helper so the limit hits real client IPs (and matches the log
+    # line below — without this, every request would log + bucket
+    # against the proxy IP, making the cap effectively global).
+    client_ip = get_client_ip(request) or "unknown"
     if is_ratelimited(
         request,
         group=_EXCHANGE_RATE_LIMIT_GROUP,
-        key="ip",
+        key=lambda group, req: client_ip,
         rate=_EXCHANGE_RATE_LIMIT,
         increment=True,
     ):
-        logger.info("OIDC exchange: rate-limited request from %s", request.META.get("REMOTE_ADDR", "?"))
+        logger.info("OIDC exchange: rate-limited request from %s", client_ip)
         return 429, {"detail": "too many requests"}
 
     oidc_token = _bearer_token(request)

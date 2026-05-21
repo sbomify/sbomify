@@ -103,25 +103,25 @@ class TestRequestPredicate:
         assert is_authorised_for_component(fake_req, mocker.MagicMock(id="anything")) is True
 
     @pytest.mark.django_db
-    def test_pat_request_skips_binding_lookup(self, mocker) -> None:
-        """Performance regression: ordinary PAT requests must NOT trigger
-        an ``OIDCBinding`` DB lookup. The cheap username-prefix gate in
-        ``request_is_oidc_authed`` short-circuits at zero DB cost when
-        the token's user isn't named like an OIDC bot.
+    def test_pat_request_does_at_most_one_binding_lookup(self, mocker) -> None:
+        """Per-request cache regression: even though we no longer gate the
+        binding lookup behind a renamable username prefix (round-16
+        Copilot finding), the lookup MUST be memoised so callers that
+        hit ``request_is_oidc_authed`` AND
+        ``bound_component_id_for_request`` on the same request only pay
+        for one DB round-trip.
 
-        Without this gate, every PAT-authenticated upload would do one
-        extra ``OIDCBinding.objects.filter(...).first()`` query — a
-        measurable load increase on the upload endpoints this PR's
-        permission gate is wired into.
+        The cost per PAT request is a single unique-indexed lookup on
+        ``OIDCBinding.bot_user_id`` — that's deliberate (the indexed
+        probe is cheaper than the correctness risk a username gate
+        introduces). What this test pins is that we don't accidentally
+        do that lookup TWICE per request.
         """
         from django.contrib.auth import get_user_model
 
         from sbomify.apps.access_tokens.models import AccessToken
 
         UserModel = get_user_model()
-        # Regular user (not an OIDC bot — username doesn't start with
-        # ``oidc-bot-``). Their PAT row has ``expires_at=None`` like
-        # every long-lived PAT.
         user = UserModel.objects.create_user(username="pat-user", password="x")
         row = AccessToken.objects.create(
             encoded_token="fake-pat",
@@ -133,14 +133,15 @@ class TestRequestPredicate:
         fake_req.access_token_record = row
         if hasattr(fake_req, "_oidc_binding_cache"):
             delattr(fake_req, "_oidc_binding_cache")
-        # Spy on the OIDCBinding manager — any DB hit would mean the
-        # short-circuit failed.
         from sbomify.apps.oidc import models as oidc_models
 
         spy = mocker.spy(oidc_models.OIDCBinding.objects, "filter")
+        # Both predicates hit on the same request — typical of an
+        # upload endpoint that gates on ``is_authorised_for_component``.
         assert request_is_oidc_authed(fake_req) is False
-        # The cheap username gate fires; the manager is never called.
-        assert spy.call_count == 0
+        assert bound_component_id_for_request(fake_req) is None
+        # Cache means the manager is called at most once across both.
+        assert spy.call_count <= 1
 
     @pytest.mark.django_db
     def test_orphan_bot_blocked(self, mocker, bound_component: Component) -> None:
