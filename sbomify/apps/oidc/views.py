@@ -1,9 +1,11 @@
 """Workspace-owner UI for managing OIDC trusted-publisher bindings.
 
-All three views render HTMX partials (no full-page reloads). The
-list partial is the source of truth for what the user sees, and both
-create + delete return the refreshed list so the page state matches
-the database in one round-trip.
+The module defines two HTMX-driven view classes —
+``TrustedPublishersView`` (list + create) and
+``TrustedPublisherDeleteView`` (delete) — both rendering partials
+rather than full pages. The list partial is the source of truth for
+what the user sees, and both create and delete return the refreshed
+list so the page state matches the database in one round-trip.
 
 Every ORM call lives in ``sbomify.apps.oidc.services`` — these views
 are thin dispatch over ``ServiceResult[T]``.

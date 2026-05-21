@@ -46,7 +46,10 @@ _JWKS_FETCH_TIMEOUT_SECONDS = 5
 # JWKS endpoint (and indirectly into our own legitimate traffic when
 # GitHub starts rate-limiting us). 30 s is enough that legitimate
 # rotations resolve within one minute while attack amplification is
-# capped at 2 fetches/min per process.
+# capped at 2 fetches/min across the entire deployment — the marker
+# lives in Django's cache (typically Redis), so it's shared across
+# every process and replica that hit the same cache namespace, not
+# per-process.
 _JWKS_FORCED_REFRESH_MIN_GAP_SECONDS = 30
 
 # Defensive structural validation of cached JWKS entries. The JWKS dict
@@ -213,10 +216,12 @@ def _signing_key_for_kid(token: str) -> Any:
     if not matching:
         # Force a refresh — the signing key may have rotated since the
         # cache was warmed. The refresh is rate-limited by a separate
-        # marker key so an attacker spamming novel ``kid`` headers
-        # can't amplify into GitHub's JWKS endpoint (and our own
-        # latency budget) more than once per
-        # ``_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS``.
+        # marker key (in Django's cache, typically Redis — so the
+        # ceiling is one forced fetch per
+        # ``_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS`` across the entire
+        # deployment that shares the cache namespace, not per process)
+        # so an attacker spamming novel ``kid`` headers can't amplify
+        # into GitHub's JWKS endpoint or our own latency budget.
         last_refresh_marker = cache.get(_JWKS_REFRESH_MARKER_KEY)
         if last_refresh_marker is None:
             cache.set(_JWKS_REFRESH_MARKER_KEY, True, timeout=_JWKS_FORCED_REFRESH_MIN_GAP_SECONDS)

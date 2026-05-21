@@ -108,10 +108,12 @@ class TestRequestPredicate:
         ``bound_component_id_for_request`` — an OIDC-authed token whose
         bot user has NO ``OIDCBinding`` row (data integrity violation:
         binding deleted but token survived) must NOT grant unrestricted
-        access. The current code returns ``None`` from the lookup which
-        makes ``is_authorised_for_component`` skip its check; this test
-        pins the desired behaviour so a future refactor doesn't
-        accidentally relax it.
+        access. ``bound_component_id_for_request`` returns ``None`` in
+        that case, and ``is_authorised_for_component`` is wired to
+        treat ``None`` as fail-closed for any OIDC-authed request (see
+        ``permissions.py``). This test pins that fail-closed behaviour
+        so a future refactor that re-introduces an authorise-on-None
+        path is caught by CI.
         """
         from django.contrib.auth import get_user_model
 
