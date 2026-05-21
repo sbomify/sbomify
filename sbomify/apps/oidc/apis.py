@@ -56,7 +56,12 @@ router = Router(tags=["OIDC Trusted Publishing"], auth=None)
 
 
 class ExchangeRequest(Schema):
-    component_id: str
+    # Optional at the schema level so a missing / empty field maps to
+    # the documented 400 ("missing component_id") via the explicit
+    # check in the handler, instead of Ninja's auto-generated 422 from
+    # Pydantic. Keeps the public error contract consistent across all
+    # body-validation failures.
+    component_id: str | None = None
 
 
 class ExchangeResponse(Schema):

@@ -33,14 +33,17 @@ from sbomify.apps.access_tokens.models import AccessToken
 def _lookup_binding(request: Any) -> Any:
     """Return the OIDCBinding row that owns the request's token user, or None."""
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
-    if token_record is None or token_record.user is None:
+    if token_record is None or token_record.user_id is None:
         return None
     # ``oidc_binding`` is the reverse-side related_name on
     # ``OIDCBinding.bot_user`` (OneToOne). Looked up via the model so mypy
-    # sees the type.
+    # sees the type. We key on ``user_id`` (FK column) rather than
+    # ``user`` so we don't trigger the lazy User fetch — auth only
+    # ``select_related("team")``, so accessing ``user`` would issue an
+    # extra round-trip per request that hit this predicate.
     from sbomify.apps.oidc.models import OIDCBinding
 
-    return OIDCBinding.objects.filter(bot_user=token_record.user).only("component_id").first()
+    return OIDCBinding.objects.filter(bot_user_id=token_record.user_id).only("component_id").first()
 
 
 def _cached_binding(request: Any) -> Any:

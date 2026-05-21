@@ -12,8 +12,10 @@ Two handlers, both registered from ``apps.OIDCConfig.ready``:
   ``OIDCBinding`` pointing at them. Defends against an admin (or
   future API) accidentally creating a privileged "bot" Member that
   isn't backed by a real binding. The
-  ``provision_bot_user_for_binding`` flow is exempted by passing
-  ``__oidc_bot_provisioning__=True`` on the instance.
+  ``provision_bot_user_for_binding`` flow is exempted by setting
+  ``instance._is_oidc_bot_provisioning = True`` before save —
+  ``forbid_manual_bot_role`` reads exactly that attribute name via
+  ``getattr(instance, "_is_oidc_bot_provisioning", False)``.
 """
 
 from __future__ import annotations
