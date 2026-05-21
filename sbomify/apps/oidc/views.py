@@ -112,8 +112,11 @@ class TrustedPublishersView(_TrustedPublishersBase):
             # form-invalid branch above. HTMX needs a 2xx to swap, and the
             # rendered partial IS the new state for the user (form with
             # ``repository`` field error inline). The service's
-            # ``status_code`` is preserved in the form error message for
-            # debugging; surfacing it as the HTTP code would block the swap.
+            # ``status_code`` is intentionally discarded here (the user-
+            # visible state is the form error); surfacing it as the HTTP
+            # code would block the swap, and we don't include it in the
+            # message text either — for now, debugging relies on the
+            # service-layer log line in ``create_binding``.
             return render(request, SECTION_TEMPLATE, _list_context(component, form=form))
 
         binding = result.value

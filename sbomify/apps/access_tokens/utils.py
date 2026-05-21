@@ -240,7 +240,7 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
         # OIDC-issued short-lived token past its TTL. Log at INFO since
         # this is expected end-of-life, not an attack signal.
         log.info(
-            "Rejecting expired access token (id=%s, expired_at=%s)",
+            "Rejecting expired access token (id=%s, expires_at=%s)",
             access_token_record.pk,
             access_token_record.expires_at,
         )

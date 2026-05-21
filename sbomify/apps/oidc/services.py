@@ -270,8 +270,14 @@ def create_binding(
     try:
         resolved = resolve_repository(repository_slug)
     except GitHubResolveError as exc:
-        # 400 for malformed / not_found / rate_limited / unavailable —
-        # the caller's form field error_code conveys the kind.
+        # 400 for malformed / not_found / rate_limited / unavailable.
+        # The ``kind`` attribute of the exception (e.g. "rate_limited")
+        # is intentionally NOT propagated through the ``ServiceResult``
+        # right now — callers (currently only ``TrustedPublishersView``)
+        # render ``str(exc)`` straight into the form field error, which
+        # is enough for the user. If a future caller needs to branch on
+        # the kind, switch this to a structured failure result rather
+        # than re-parsing the message string.
         return ServiceResult.failure(str(exc), status_code=400)
 
     try:
