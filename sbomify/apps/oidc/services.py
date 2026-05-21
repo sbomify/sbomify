@@ -113,11 +113,12 @@ def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
         logger.info("Provisioned OIDC bot user %s for binding %s", username, binding.id)
     else:
         # Username collision against an existing User. This is extremely
-        # unlikely (binding.id is a 12-char alphanumeric token, ~36^12
-        # collision space) but if it ever happens, the existing user
-        # could have a usable password, ``is_active=False``, or other
-        # state that would break our invariants. Refuse to take over
-        # an unexpected account.
+        # unlikely — ``binding.id`` comes from ``core.utils.generate_id``,
+        # which is a 12-char base62 token (62^12 ≈ 3.2e21, ~72 bits of
+        # entropy) — but if it ever happens, the existing user could
+        # have a usable password, ``is_active=False``, or other state
+        # that would break our invariants. Refuse to take over an
+        # unexpected account.
         if bot_user.email != email or bot_user.first_name != "OIDC" or bot_user.last_name != "Bot":
             raise RuntimeError(
                 f"OIDC bot username collision: existing user {username!r} does not look like "

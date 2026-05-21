@@ -100,9 +100,11 @@ class TrustedPublishersView(_TrustedPublishersBase):
             # would leave the user with no visible feedback (and trips the
             # ``django-htmx`` dev-mode debug shim that swaps the whole
             # ``<html>`` for any 4xx body). Validation failure is
-            # client-state and gets surfaced inline; only server-side
-            # failures (component-not-found, GitHub upstream errors) use
-            # non-2xx codes from the htmx error-response helper.
+            # client-state and gets surfaced inline; component-not-found /
+            # GitHub upstream / other gating failures take a different
+            # path — they go through ``htmx_error_response``, which
+            # currently returns 200 + ``HX-Reswap: none`` so the toast
+            # fires without disturbing the page.
             return render(request, SECTION_TEMPLATE, _list_context(component, form=form))
 
         result = create_binding(
