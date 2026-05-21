@@ -68,7 +68,7 @@ class Migration(migrations.Migration):
                 (
                     "bot_user",
                     models.OneToOneField(
-                        help_text="Synthetic bot identity for this binding. Created on save, deleted via CASCADE. Nullable solely to support the two-phase create flow in ``services.create_binding`` — the binding is INSERTed first to get a stable ``id`` (used to derive the bot username), then the bot is provisioned and the FK is attached. Outside that ~µs window inside the create transaction the column is always non-null.",
+                        help_text="Synthetic bot identity for this binding. Created in the same transaction as the binding via ``services.provision_bot_user_for_binding``. Cleanup is asymmetric: ``on_delete=CASCADE`` runs when the User is deleted (it removes this binding row), NOT when the binding is deleted — for binding → bot cleanup we rely on the ``cleanup_bot_user_on_binding_delete`` post_delete signal in ``signals.py``. Nullable solely to support the two-phase create flow in ``services.create_binding``: the binding is INSERTed first to get a stable ``id`` (used to derive the bot username), then the bot is provisioned and the FK is attached. Outside that ~µs window inside the create transaction the column is always non-null.",
                         null=True,
                         on_delete=django.db.models.deletion.CASCADE,
                         related_name="oidc_binding",
