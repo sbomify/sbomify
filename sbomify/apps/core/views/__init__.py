@@ -33,6 +33,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number, verify_item_access
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
@@ -259,6 +260,16 @@ def accept_user_invitation(request: HttpRequest, invitation_id: int) -> HttpResp
 
     messages.add_message(request, messages.SUCCESS, f"You have joined {team.display_name} as {role}.")
 
+    captured_team_key = team.key
+    transaction.on_commit(
+        lambda: capture_for_request(
+            request,
+            "team:member_invitation_accepted",
+            {"role": role},
+            team_key=captured_team_key,
+        )
+    )
+
     return redirect("core:dashboard")
 
 
@@ -312,6 +323,8 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
                 return HttpResponse(status=403)
             return error_response(request, HttpResponseForbidden("Not allowed"))
 
+        token_team_key = token.team.key if token.team else ""
+
         try:
             token.delete()
         except Exception as e:
@@ -322,6 +335,21 @@ def delete_access_token(request: HttpRequest, token_id: int) -> Any:
                 return HttpResponse(status=500)
             messages.error(request, "An error occurred while deleting the token")
             return redirect(reverse("core:settings"))
+
+        # Deferred via ``on_commit`` so the event only ships if the
+        # delete actually committed (matters under ATOMIC_REQUESTS or any
+        # wrapping atomic block).
+        #
+        # Unscoped legacy tokens (``token.team is None`` → empty
+        # ``token_team_key``) are intentionally NOT captured. The Tier 2
+        # convention is workspace-keyed ``distinct_id`` (see
+        # analytics/events.py and PR #822); emitting with a user PK
+        # fallback would mix scopes for the same event name and skew
+        # workspace-level aggregations in PostHog. Unscoped tokens are
+        # legacy and rare; the count of their deletions is not load-
+        # bearing for any current funnel.
+        if token_team_key:
+            transaction.on_commit(lambda: capture_for_request(request, "api_token:deleted", team_key=token_team_key))
 
         if is_api_request:
             return HttpResponse(status=200)

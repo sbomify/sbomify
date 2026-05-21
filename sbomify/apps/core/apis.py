@@ -20,6 +20,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
     get_team_asset_count,
     optimize_component_queryset,
@@ -626,6 +627,23 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         assert team.key is not None
         schedule_broadcast(team.key, "product_created", {"product_id": str(product.id), "name": product.name})
+
+        # Deferred via ``on_commit`` for the same reason as
+        # ``schedule_broadcast`` above: if the create transaction rolls
+        # back (or the view runs inside an outer atomic that rolls
+        # back), no ghost ``product:created`` event ships for a product
+        # that was never persisted.
+        captured_team_key = team.key
+        captured_product_id = str(product.id)
+        captured_is_public = product.is_public
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "product:created",
+                {"product_id": captured_product_id, "is_public": captured_is_public},
+                team_key=captured_team_key,
+            )
+        )
 
         return 201, _build_item_response(request, product, "product")
 
@@ -1511,6 +1529,28 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         assert team.key is not None
         schedule_broadcast(team.key, "component_created", {"component_id": str(component.id), "name": component.name})
+
+        # ``component.visibility`` is a ``ComponentVisibility`` enum; PostHog's
+        # JSON serializer doesn't handle Django enums, so ship the ``.value``
+        # string. ``getattr`` fallback keeps this defensive against the field
+        # ever becoming a plain string. Deferred via ``on_commit`` so the
+        # event only ships if the create transaction commits.
+        captured_team_key = team.key
+        captured_component_id = str(component.id)
+        captured_component_type = component.component_type or ""
+        captured_visibility = getattr(component.visibility, "value", component.visibility)
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "component:created",
+                {
+                    "component_id": captured_component_id,
+                    "component_type": captured_component_type,
+                    "visibility": captured_visibility,
+                },
+                team_key=captured_team_key,
+            )
+        )
 
         return 201, _build_item_response(request, component, "component")
 
@@ -2723,6 +2763,25 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
                 "release_created",
                 {"release_id": str(release.id), "product_id": str(product.id), "name": release.name},
             )
+
+        # Deferred via ``on_commit`` so the event only ships if the
+        # release-create transaction commits.
+        captured_team_key = product.team.key
+        captured_release_id = str(release.id)
+        captured_product_id = str(product.id)
+        captured_is_prerelease = release.is_prerelease
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "release:created",
+                {
+                    "release_id": captured_release_id,
+                    "product_id": captured_product_id,
+                    "is_prerelease": captured_is_prerelease,
+                },
+                team_key=captured_team_key,
+            )
+        )
 
         return 201, _build_release_response(request, release, include_artifacts=True)
 
@@ -4186,6 +4245,11 @@ def delete_account(request: HttpRequest, data: DeleteAccountRequest) -> Any:
     result = delete_user_account(user)
 
     if result.ok:
+        # Fired AFTER soft-delete; the user's other sessions have been invalidated
+        # (see delete_user_account), but this request's in-memory user object still
+        # resolves a stable distinct_id via request.user.pk.
+        capture_for_request(request, "user:account_deleted")
+
         return 200, {"success": True, "message": result.value}
     elif result.status_code == 403:
         return 403, {"detail": result.error, "error_code": ErrorCode.FORBIDDEN}

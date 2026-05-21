@@ -219,17 +219,59 @@ def handle_trial_period(subscription: Any, team: Team) -> bool:
             logger.info("Trial ending notification sent")
 
         if days_remaining <= 0:
+            # See ``TrialExpiryEmissionGuard`` for the two-marker state machine
+            # that makes the side effects below crash-tolerant and idempotent
+            # across concurrent / redelivered webhooks.
+            from sbomify.apps.billing.trial_expiry import TrialExpiryEmissionGuard
+
+            guard = TrialExpiryEmissionGuard()
+            now = timezone.now()
             with transaction.atomic():
                 team = Team.objects.select_for_update().get(pk=team.pk)
                 billing_limits = (team.billing_plan_limits or {}).copy()
+                should_run_side_effects = guard.should_claim(billing_limits, now)
                 billing_limits.update({"is_trial": False, "subscription_status": "canceled"})
                 team.billing_plan = "community"
                 billing_limits.update(get_community_plan_limits())
+                if should_run_side_effects:
+                    guard.stamp_claim(billing_limits, now)
                 team.billing_plan_limits = billing_limits
                 team.save()
-            handle_community_downgrade_visibility(team)
-            notify_team_owners(team, email_notifications.notify_trial_expired)
-            logger.info("Trial expired — downgraded team %s to community plan", team.key)
+
+            if should_run_side_effects:
+                handle_community_downgrade_visibility(team)
+                notify_team_owners(team, email_notifications.notify_trial_expired)
+                logger.info("Trial expired — downgraded team %s to community plan", team.key)
+
+                # Signal/background context: no request, so consent is not gated here.
+                # Distinct_id = team_key matches the Tier 1 signal pattern at
+                # sbomify/apps/core/signals.py (sbom:uploaded, document:uploaded) for
+                # consistent workspace-level attribution across tiers.
+                team_key = team.key or ""
+                distinct_id = team_key or "system"
+
+                # Stamp the completion marker FIRST, defer the PostHog capture
+                # via ``transaction.on_commit`` so the marker is durable before
+                # the event fires. See ``TrialExpiryEmissionGuard`` for why
+                # marker-then-event (vs. event-then-marker) is the correct
+                # crash-tolerance ordering.
+                with transaction.atomic():
+                    team = Team.objects.select_for_update().get(pk=team.pk)
+                    billing_limits = (team.billing_plan_limits or {}).copy()
+                    guard.stamp_emitted(billing_limits, timezone.now())
+                    team.billing_plan_limits = billing_limits
+                    team.save()
+
+                    from sbomify.apps.core.posthog_service import capture
+
+                    transaction.on_commit(
+                        lambda: capture(
+                            distinct_id,
+                            "billing:trial_expired",
+                            {"team_key": team_key},
+                            groups={"workspace": team_key} if team_key else None,
+                        )
+                    )
 
         return True
     return False

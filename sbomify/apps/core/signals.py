@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
@@ -20,8 +21,6 @@ def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: A
     _update_latest_release_for_sbom(instance)
 
     # Track every SBOM upload for retention analytics
-    from django.db import transaction
-
     from sbomify.apps.core.posthog_service import capture
 
     team = getattr(instance.component, "team", None) if instance.component else None
@@ -70,8 +69,6 @@ def update_latest_release_on_document_created(sender: Any, instance: Any, create
         return
 
     _update_latest_release_for_document(instance)
-
-    from django.db import transaction
 
     from sbomify.apps.core.posthog_service import capture
 

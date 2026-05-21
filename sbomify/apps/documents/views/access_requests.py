@@ -23,6 +23,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
@@ -365,6 +366,7 @@ class AccessRequestView(View):
             return redirect("core:workspace_public", workspace_key=team_key)
 
         # Check for existing request (REVOKED or REJECTED) - if exists, update it to PENDING instead of creating new one
+        request_state_changed = False
         with transaction.atomic():
             # Use select_for_update to prevent race conditions
             existing_request = AccessRequest.objects.select_for_update().filter(team=team, user=user).first()
@@ -389,6 +391,7 @@ class AccessRequestView(View):
                     existing_request.notes = ""
                     existing_request.save()
                     access_request = existing_request
+                    request_state_changed = True
                 elif existing_request.status == AccessRequest.Status.PENDING:
                     # Request already exists and is pending
                     access_request = existing_request
@@ -403,6 +406,7 @@ class AccessRequestView(View):
                         user=user,
                         defaults={"status": AccessRequest.Status.PENDING},
                     )
+                    request_state_changed = created
                     if not created:
                         # Another request was created concurrently, refresh from DB
                         access_request.refresh_from_db()
@@ -414,12 +418,30 @@ class AccessRequestView(View):
                     except AccessRequest.DoesNotExist:
                         # Extremely rare: row was deleted between IntegrityError and get()
                         # Retry get_or_create one more time
-                        access_request, _ = AccessRequest.objects.get_or_create(
+                        access_request, retry_created = AccessRequest.objects.get_or_create(
                             team=team, user=user, defaults={"status": AccessRequest.Status.PENDING}
                         )
+                        request_state_changed = retry_created
 
         # Invalidate cache after transaction commits to avoid long-running transaction
         transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
+
+        # AccessRequest is workspace-scoped (no component_id field). Issue #817 listed
+        # `component_id` as a property but the access-request flow is per-workspace.
+        # Only fire on a state transition (new request or revoked/rejected → pending
+        # re-request) so duplicate submissions for an already-pending or approved
+        # request do not inflate the funnel.
+        # Deferred via ``on_commit`` to mirror the cache-invalidate above so the
+        # event only ships if the create/update transaction committed.
+        if request_state_changed:
+            transaction.on_commit(
+                lambda: capture_for_request(
+                    request,
+                    "document:access_requested",
+                    {"requires_nda": requires_nda},
+                    team_key=team_key,
+                )
+            )
 
         # Only send notification if NDA is not required (request is complete)
         # If NDA is required, notification will be sent after NDA is signed
@@ -596,6 +618,9 @@ class NDASigningView(View):
                 # Reload access request with NDA signature relationship
                 access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
 
+                # Inside the atomic block so transaction.on_commit deferral applies.
+                transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
+
             # Check if there's a pending invitation for this user (from trust center invite)
             pending_invitation_token = request.session.pop("pending_invitation_token", None)
             if pending_invitation_token:
@@ -623,9 +648,24 @@ class NDASigningView(View):
                             update_user_teams_session(request, current_user)
                             switch_active_workspace(request, team, invitation.role)
 
+                            # NDA-gated invitations bypass both accept_invite and the
+                            # login auto-accept signal; without this capture the
+                            # collaboration funnel undercounts invited users who had
+                            # to sign an NDA before joining.
+                            invitation_role = invitation.role
+                            transaction.on_commit(
+                                lambda: capture_for_request(
+                                    request,
+                                    "team:member_invitation_accepted",
+                                    {"role": invitation_role},
+                                    team_key=team_key,
+                                )
+                            )
+
                             invitation.delete()
 
                             # Auto-approve the access request since user has been invited and is now a member
+                            was_pending = access_request.status == AccessRequest.Status.PENDING
                             access_request.status = AccessRequest.Status.APPROVED
                             access_request.decided_at = timezone.now()
                             # Set decided_by to the inviter if available, otherwise leave as None
@@ -637,6 +677,17 @@ class NDASigningView(View):
                                     # Inviter user not found, continue without setting decided_by
                                     pass
                             access_request.save()
+
+                            # Only emit document:access_approved when this is genuinely a
+                            # trust-center invitation (signalled by the `invitation_inviter:`
+                            # cache key set in documents/views/access_requests.py at invite
+                            # send time). Regular workspace invites with a company NDA also
+                            # reach this branch and approve a freshly-created plumbing
+                            # AccessRequest; counting them would inflate the funnel.
+                            if was_pending and inviter_id:
+                                transaction.on_commit(
+                                    lambda: capture_for_request(request, "document:access_approved", team_key=team_key)
+                                )
 
                             # Invalidate cache after transaction commits
                             transaction.on_commit(lambda: _invalidate_access_requests_cache(team))
@@ -1242,6 +1293,12 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             cache_key = f"user_teams_invalidate:{access_request.user.id}"
             cache.set(cache_key, True, timeout=600)  # 10 minutes should be enough
 
+            # Mirror the cache-invalidate above: defer via ``on_commit`` so
+            # the event only ships if the approval transaction commits. In
+            # autocommit mode (current prod) this fires immediately; if the
+            # view ever runs under ``ATOMIC_REQUESTS`` it stays correct.
+            transaction.on_commit(lambda: capture_for_request(request, "document:access_approved", team_key=team_key))
+
             # Send email notification to user
             try:
                 login_url = reverse("core:keycloak_login")
@@ -1288,6 +1345,10 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             )
 
         elif action == "reject":
+            # Mirror the approve branch above: defer via ``on_commit`` so the
+            # event only ships if the reject transaction committed.
+            transaction.on_commit(lambda: capture_for_request(request, "document:access_denied", team_key=team_key))
+
             # Send email notification to user
             try:
                 email_context = {

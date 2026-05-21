@@ -136,6 +136,64 @@ def has_opted_out(request: Any) -> bool:
     return True
 
 
+def capture_for_request(
+    request: Any,
+    event: str,
+    properties: dict[str, Any] | None = None,
+    *,
+    team_key: str | None = None,
+) -> None:
+    """Capture an event from a view, applying the standard guards.
+
+    Distinct_id convention (matches PR #822 and the Tier 1 signal pattern):
+    workspace key is preferred over user PK so server-side events attribute
+    to the workspace, not the user. Cross-correlation of users → workspaces
+    is exactly what we want to avoid in PostHog.
+
+    Three cases for ``team_key``:
+
+    * ``None`` (kwarg omitted) — caller declared this is a genuinely
+      user-scoped event (e.g. ``user:account_deleted``, where there is
+      no workspace context). Fall back to the request-derived
+      ``get_distinct_id`` (user PK for authenticated, session ID for
+      anonymous). The event will not carry a workspace group.
+    * ``""`` (empty string) — caller INTENDED workspace context but
+      couldn't resolve it (e.g. session missing the ``current_team``
+      key, or the key resolution path returned empty). Skipping here
+      keeps the Tier 2 attribution guarantee intact: a workspace-scoped
+      event must NEVER silently downgrade to user-scoped, otherwise we
+      leak user↔workspace correlation into PostHog and break the
+      workspace-level rollups. The call site should fix its key
+      derivation rather than relying on a fallback.
+    * truthy string — use as ``distinct_id`` and set
+      ``groups={"workspace": team_key}``.
+
+    Short-circuits when PostHog is disabled or the request resolves to
+    ``anonymous`` so the cookie/session work in ``get_distinct_id`` is
+    skipped on disabled deployments. Forwards ``request`` so the
+    cookie-based consent gate in ``capture`` still applies.
+    """
+    if not is_enabled():
+        return
+
+    if team_key is None:
+        # Genuinely user-scoped event.
+        distinct_id = get_distinct_id(request)
+        groups: dict[str, str] | None = None
+    elif team_key == "":
+        # Workspace-intent that failed to resolve a key. Better to drop
+        # the event than to mis-attribute it to a user PK.
+        logger.debug("Skipping workspace-scoped event %s — empty team_key", event)
+        return
+    else:
+        distinct_id = team_key
+        groups = {"workspace": team_key}
+
+    if not distinct_id or distinct_id == "anonymous":
+        return
+    capture(distinct_id, event, properties or {}, groups=groups, request=request)
+
+
 def capture(
     distinct_id: str,
     event: str,
@@ -154,6 +212,13 @@ def capture(
     as ``distinct_id`` for workspace-level attribution, falling back to
     ``"system"`` when no workspace key is available. They do not create
     person profiles (PostHog is configured with ``person_profiles: 'identified_only'``).
+
+    Runtime drift detection: cross-checks the event name + payload against
+    ``sbomify.apps.core.analytics.events.validate_payload`` and logs (does
+    not raise) any warnings. The event ships regardless so production
+    analytics stays resilient — but a typo'd name or an unregistered
+    property surfaces in logs immediately rather than waiting for the
+    next test run.
     """
     client = _get_client()
     if client is None:
@@ -162,6 +227,17 @@ def capture(
     # Respect user's consent choice from the frontend
     if request and has_opted_out(request):
         return
+
+    # Cross-check against the event registry. Log warnings but never block —
+    # the registry is observation, not enforcement (see analytics/events.py
+    # module docstring for the rationale).
+    try:
+        from sbomify.apps.core.analytics.events import validate_payload
+
+        for warning in validate_payload(event, properties):
+            logger.warning("PostHog event registry drift: %s", warning)
+    except Exception:
+        logger.exception("Failed to run registry validation for event %s", event)
 
     try:
         merged: dict[str, Any] = dict(properties or {})

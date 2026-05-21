@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
@@ -1080,23 +1081,33 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
     if not is_valid:
         return 400, {"detail": error_message}
 
-    # Store old domain for cache invalidation
-    old_domain = team.custom_domain
-
     try:
         # Normalize domain (validator already does this, but be explicit)
         normalized_domain = payload.domain.strip().lower()
 
+        # Read the pre-save domain inside the same row lock that performs the
+        # write, so two concurrent first-time saves can't both observe an
+        # empty value and both treat themselves as the "first" domain set.
         with transaction.atomic():
-            team.custom_domain = normalized_domain
-            team.custom_domain_validated = False  # Reset validation on change
-            team.save(update_fields=["custom_domain", "custom_domain_validated"])
+            locked_team = Team.objects.select_for_update().get(pk=team.pk)
+            old_domain = locked_team.custom_domain
+            locked_team.custom_domain = normalized_domain
+            locked_team.custom_domain_validated = False  # Reset validation on change
+            locked_team.save(update_fields=["custom_domain", "custom_domain_validated"])
+            is_first_time_set = not old_domain
 
         # Invalidate cache for both old and new domains
         invalidate_custom_domain_cache(old_domain)
         invalidate_custom_domain_cache(normalized_domain)
 
-        return 200, {"domain": team.custom_domain, "validated": team.custom_domain_validated}
+        # Only fire on first-time domain set (not domain changes or re-saves),
+        # so the "added" semantics match the event name. Deferred via
+        # ``on_commit`` so a rollback in the surrounding flow doesn't
+        # ship a ghost event for a domain that wasn't actually persisted.
+        if is_first_time_set:
+            transaction.on_commit(lambda: capture_for_request(request, "team:custom_domain_added", team_key=team_key))
+
+        return 200, {"domain": normalized_domain, "validated": False}
 
     except IntegrityError:
         return 400, {"detail": "This domain is already in use by another workspace"}

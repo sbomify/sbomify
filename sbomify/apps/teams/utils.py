@@ -18,6 +18,7 @@ from sbomify.apps.billing.config import get_unlimited_plan_limits
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import get_stripe_client
 from sbomify.apps.core.models import User
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.logging import getLogger
 
@@ -669,6 +670,7 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     removed_user: User = membership.user
     removed_team_name = membership.team.display_name
     removed_team_key = membership.team.key or ""
+    removed_role = membership.role
     current_user = cast(User, request.user)
     is_self_removal = membership.user_id == current_user.id
 
@@ -676,6 +678,19 @@ def remove_member_safely(request: HttpRequest, membership: Member, active_tab: s
     is_last_workspace = not Member.objects.filter(user=removed_user).exclude(pk=membership.pk).exists()
 
     membership.delete()
+
+    # Fires for both delete_member() and TeamSettingsView._delete_member()
+    # entry points; tests cover both paths. Deferred via ``on_commit`` so a
+    # rollback after the delete() doesn't leave us with a ghost event for a
+    # membership that still exists.
+    transaction.on_commit(
+        lambda: capture_for_request(
+            request,
+            "team:member_removed",
+            {"role": removed_role, "self_removal": is_self_removal},
+            team_key=removed_team_key,
+        )
+    )
 
     # Invalidate the removed user's session cache so workspace disappears immediately
     from django.core.cache import cache

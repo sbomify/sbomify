@@ -4,6 +4,7 @@ from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -13,6 +14,7 @@ from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.models import User
+from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
@@ -76,6 +78,20 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team_id=team_id,
         )
         token.save()
+
+        # Token description is arbitrary user input and may contain PII
+        # (customer names, copied secrets). The act of firing the event
+        # is the signal we need; no description-derived properties are
+        # sent. Deferred via ``on_commit`` so a rollback after
+        # ``token.save()`` doesn't ship an event for a token that no
+        # longer exists.
+        transaction.on_commit(
+            lambda: capture_for_request(
+                request,
+                "api_token:created",
+                team_key=team_key,
+            )
+        )
 
         messages.success(request, "New access token created")
 
