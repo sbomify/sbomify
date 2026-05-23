@@ -66,11 +66,11 @@ The object of the declaration described above is in conformity with Regulation (
 
 The following artefacts accompanying this declaration demonstrate conformity:
 
-- `sboms/*.cdx.json` — Software Bill of Materials in CycloneDX format (*Annex I Part II(1)*)
-- `documents/vulnerability-disclosure-policy.md` — Coordinated Vulnerability Disclosure policy (*Annex I Part II(5)-(6)*)
-- `documents/risk-assessment.md` — Cybersecurity risk assessment (*Annex VII §3*)
-- `documents/user-instructions.md` — User information and instructions (*Annex II*)
-- `documents/secure-decommissioning.md` — Secure decommissioning procedure (*Annex I Part I §13*)
+- `sboms/*.cdx.json` — Software Bill of Materials in CycloneDX format (_Annex I Part II(1)_)
+- `documents/vulnerability-disclosure-policy.md` — Coordinated Vulnerability Disclosure policy (_Annex I Part II(5)-(6)_)
+- `documents/risk-assessment.md` — Cybersecurity risk assessment (_Annex VII §3_)
+- `documents/user-instructions.md` — User information and instructions (_Annex II_)
+- `documents/secure-decommissioning.md` — Secure decommissioning procedure (_Annex I Part I §13_)
 - `security.txt` — RFC 9116 machine-readable security contact
 - `article-14/*.md` — Article 14 notification templates (active from 2026-09-11)
 - `oscal/*.json` — OSCAL catalog and assessment-results for the 21 CRA Annex I controls
@@ -89,4 +89,4 @@ The following artefacts accompanying this declaration demonstrate conformity:
 
 ***
 
-*This declaration is drawn up in accordance with CRA Article 28 and Annex V.*
+This declaration is drawn up in accordance with CRA Article 28 and Annex V.

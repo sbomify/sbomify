@@ -36,5 +36,5 @@
 {% endif %}
 
 ---
-*Submit via ENISA Single Reporting Platform (SRP) to the designated CSIRT and ENISA simultaneously.*
-*This notification must be submitted within 24 hours of becoming aware of the vulnerability or incident.*
+> Submit via ENISA Single Reporting Platform (SRP) to the designated CSIRT and ENISA simultaneously.
+> This notification must be submitted within 24 hours of becoming aware of the vulnerability or incident.
