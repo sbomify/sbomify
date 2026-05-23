@@ -40,6 +40,6 @@
 {% endif %}
 
 ---
-*Submit via ENISA Single Reporting Platform (SRP).*
-*Vulnerability reports: submit within 14 days after corrective measure is available.*
-*Incident reports: submit within 1 month after the incident notification.*
+> Submit via ENISA Single Reporting Platform (SRP).
+> Vulnerability reports: submit within 14 days after corrective measure is available.
+> Incident reports: submit within 1 month after the incident notification.

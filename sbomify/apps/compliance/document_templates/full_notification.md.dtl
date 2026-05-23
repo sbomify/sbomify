@@ -46,5 +46,5 @@
 {% endif %}
 
 ---
-*Submit via ENISA Single Reporting Platform (SRP).*
-*This notification must be submitted within 72 hours of becoming aware of the vulnerability or incident.*
+> Submit via ENISA Single Reporting Platform (SRP).
+> This notification must be submitted within 72 hours of becoming aware of the vulnerability or incident.
