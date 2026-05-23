@@ -159,7 +159,16 @@ def _integrity_readme(manifest_sha256: str) -> str:
 
 
 def _article_14_reporting_readme() -> str:
-    """Article 14 deadlines + ENISA Single Reporting Platform pointers."""
+    """Article 14 deadlines + ENISA Single Reporting Platform pointers.
+
+    Uses a bullet list (not a pipe table) for the deadlines so it
+    renders consistently in every markdown engine the bundle might be
+    viewed in — GitHub, CommonMark-only static-site generators, and
+    plain-text viewers like Apple Preview's markdown-to-PDF converter
+    all render bullets identically; pipe tables are a GFM extension
+    that several common viewers degrade to literal `|`-separated text
+    runs with blank gaps between rows.
+    """
     return (
         "# CRA Article 14 — Reporting Obligations\n\n"
         "Article 14 of Regulation (EU) 2024/2847 requires manufacturers to "
@@ -168,16 +177,18 @@ def _article_14_reporting_readme() -> str:
         "reporting obligations apply from 2026-09-11**; until then, "
         "submissions are voluntary.\n\n"
         "## Deadlines\n\n"
-        "| Deadline | Requirement | Template |\n"
-        "| --- | --- | --- |\n"
-        "| ≤24 h | Early warning: what, affected Member States, malicious?"
-        " | `early-warning-template.md` |\n"
-        "| ≤72 h | Vulnerability / incident notification with corrective"
-        " measures taken | `vulnerability-notification-template.md` |\n"
-        "| ≤14 d | Final report (vulnerability — after corrective measure"
-        " applied) | `final-report-template.md` |\n"
-        "| ≤1 mo | Final report (severe incident)"
-        " | `final-report-template.md` |\n\n"
+        "- **≤24 hours — Early warning.** What happened, which Member "
+        "States are affected, and whether the incident is suspected to "
+        "be malicious. Template: `early-warning-template.md`.\n"
+        "- **≤72 hours — Vulnerability / incident notification.** "
+        "Vulnerability or incident notification with the corrective "
+        "measures taken so far. Template: "
+        "`vulnerability-notification-template.md`.\n"
+        "- **≤14 days — Final vulnerability report.** Final report once "
+        "the corrective measure has been applied. Template: "
+        "`final-report-template.md`.\n"
+        "- **≤1 month — Final incident report.** Final report for severe "
+        "incidents. Template: `final-report-template.md`.\n\n"
         "## Submission channel\n\n"
         "Article 16 designates ENISA to operate the Single Reporting Platform "
         "(SRP). The SRP consumes the notifications above and routes them to "
