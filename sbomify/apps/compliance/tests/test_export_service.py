@@ -397,8 +397,11 @@ class TestBuildExportPackage:
             assert "ENISA" in content
             assert "Article 14" in content
             assert "digital-strategy.ec.europa.eu/en/policies/cra-reporting" in content
-            # Deadlines table — all four rows present.
-            for deadline in ("≤24 h", "≤72 h", "≤14 d", "≤1 mo"):
+            # Deadlines list — all four bullets present. (Spelled-out
+            # forms because the source uses bullets, not a pipe table,
+            # so non-GFM renderers like Apple Preview's md→PDF render
+            # the list as bullets instead of literal ``|``-separated text.)
+            for deadline in ("≤24 hours", "≤72 hours", "≤14 days", "≤1 month"):
                 assert deadline in content
 
     @patch("sbomify.apps.compliance.services.export_service.S3Client")
@@ -788,8 +791,25 @@ class TestExportHelpers:
     def test_article_14_reporting_readme_contains_all_deadlines(self):
         """Readme enumerates all four Article 14 deadlines."""
         content = _article_14_reporting_readme()
-        for token in ("≤24 h", "≤72 h", "≤14 d", "≤1 mo", "2026-09-11", "ENISA"):
+        for token in ("≤24 hours", "≤72 hours", "≤14 days", "≤1 month", "2026-09-11", "ENISA"):
             assert token in content
+
+    def test_article_14_reporting_readme_uses_bullets_not_pipe_table(self):
+        """Regression: the deadlines list MUST be a bullet list, not a
+        pipe table. Non-GFM markdown renderers (Apple Preview's
+        markdown-to-PDF converter, CommonMark-only static site
+        generators) render pipe tables as literal text runs with
+        blank gaps between rows. Bullets render consistently
+        everywhere.
+        """
+        content = _article_14_reporting_readme()
+        # No pipe-table separator line — the canonical "|---|---|---|"
+        # row that GFM uses to delimit the header from the body.
+        assert "| --- |" not in content
+        assert "|---|" not in content
+        # Each deadline is a top-level bullet.
+        for marker in ("- **≤24 hours", "- **≤72 hours", "- **≤14 days", "- **≤1 month"):
+            assert marker in content
 
     def test_article_14_readme_references_ec_portal(self):
         """Readme points operators at the EC CRA reporting page."""
