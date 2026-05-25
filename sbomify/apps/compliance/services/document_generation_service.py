@@ -523,12 +523,15 @@ def _render_template(kind: str, context: dict[str, Any]) -> str:
     templates produce *Markdown*, not HTML — Django's default
     autoescape turns legitimate characters in curator-controlled
     catalog strings into HTML entities (e.g. ``Identify & Document
-    Vulnerabilities`` → ``Identify &amp; Document Vulnerabilities``),
-    which then renders as literal ``&amp;`` text in every downstream
-    markdown viewer because markdown engines don't unescape HTML
-    entities. The Engine is already constructed with
-    ``autoescape=False``, but the Context's flag wins at render time,
-    so it has to be passed here too.
+    Vulnerabilities`` → ``Identify &amp; Document Vulnerabilities``).
+    CommonMark / GFM renderers will eventually decode that back to
+    ``&``, but at least one path we ship to does not: Apple Preview's
+    built-in Markdown-to-PDF converter (the one a manufacturer hits
+    when they double-click a `.md` artifact on macOS) leaves the
+    entity intact, so the user sees literal ``&amp;`` in the rendered
+    PDF. The fix is to never emit the entity at all. The Engine is
+    already constructed with ``autoescape=False``, but the Context's
+    flag wins at render time, so it has to be passed here too.
 
     Safety: operator-supplied free-text fields (product name,
     manufacturer name, intended use, notes, justifications, …) are
