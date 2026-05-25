@@ -493,13 +493,55 @@ class Invitation(models.Model):
             models.Index(fields=["email"]),
             models.Index(fields=["expires_at"]),
         ]
+        constraints = [
+            # DB-level guard against ``role="bot"`` invitations —
+            # covers EVERY persistence path including bulk_create(),
+            # raw SQL, fixture loading, and admin actions that bypass
+            # full_clean(). The Python clean()/save() pair below
+            # produces a friendlier ValidationError for the normal
+            # form/save flow; the DB constraint is the backstop.
+            models.CheckConstraint(
+                check=~models.Q(role="bot"),
+                name="invitation_role_not_bot",
+            ),
+        ]
 
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     email = models.EmailField()
-    role = models.CharField(max_length=255, choices=settings.TEAMS_SUPPORTED_ROLES)
+    # Invitable roles only — ``bot`` is reserved for synthetic OIDC
+    # identities and is forbidden on Invitation rows (CheckConstraint
+    # above + Python clean() below). ``guest`` IS valid here because
+    # the trust-center auto-accept flow creates guest-role invitations.
+    # InviteUserForm UI further restricts choices but the model layer
+    # allows the broader set so non-UI flows work.
+    role = models.CharField(max_length=255, choices=settings.TEAMS_INVITABLE_ROLES)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=calculate_invitation_expiry)
+
+    def clean(self) -> None:
+        # Friendly Python-level guard, invoked by Django forms and any
+        # caller that explicitly runs full_clean(). The DB
+        # CheckConstraint above is the actual defense — it catches
+        # bulk_create(), raw SQL, fixture loading, AND direct
+        # ``Invitation.objects.create()`` (which doesn't call clean()).
+        # Keeping clean() here means form-based flows get a nice
+        # ValidationError before the DB throws IntegrityError.
+        #
+        # We deliberately do NOT override ``save()`` to call
+        # ``full_clean()``: that would also enforce ``choices`` at the
+        # Python level, breaking legacy rows / tests that have written
+        # non-canonical role values (``"member"`` was historically used
+        # by some fixtures and remains silently stored because Django
+        # CharField choices aren't DB-enforced). The security-critical
+        # case (``role="bot"``) is locked in by the DB constraint.
+        super().clean()
+        if self.role == "bot":
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                {"role": "role='bot' is reserved for OIDC trusted-publisher identities and cannot be invited."}
+            )
 
     def __str__(self) -> str:
         return f"{self.team.name}({self.team.pk}) - {self.email} - {self.role}"

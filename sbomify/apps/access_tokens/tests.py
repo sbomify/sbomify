@@ -1,4 +1,5 @@
 import json
+from time import time
 
 import jwt
 import pytest
@@ -36,6 +37,38 @@ def test_access_token_encode_decode(sample_user):  # noqa: F811
 
     user = get_user_from_personal_access_token(token_str)
     assert user == sample_user
+
+
+@pytest.mark.django_db
+def test_create_token_rejects_expires_at_without_oidc_type(sample_user):
+    """Pin the round-21 invariant: ``expires_at`` and ``token_type=oidc``
+    MUST be set together. Without it, a caller could mint an
+    ``expires_at``-set token with default ``token_type="pat"`` — the
+    decoder would skip JWT-level ``exp``/``aud`` enforcement (those
+    only fire for ``token_type=oidc``) and the DB row's ``expires_at``
+    would be the only revocation mechanism, defeating the
+    defense-in-depth the OIDC path is built on.
+    """
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, TOKEN_TYPE_PAT
+
+    # expires_at without oidc type → reject
+    with pytest.raises(ValueError, match="must be set together"):
+        create_personal_access_token(sample_user, expires_at=time() + 900)
+    with pytest.raises(ValueError, match="must be set together"):
+        create_personal_access_token(sample_user, expires_at=time() + 900, token_type=TOKEN_TYPE_PAT)
+
+    # oidc type without expires_at → reject (the symmetric mistake — a
+    # bot token without an exp would never expire at the JWT level)
+    with pytest.raises(ValueError, match="must be set together"):
+        create_personal_access_token(sample_user, token_type=TOKEN_TYPE_OIDC)
+
+    # Both set → accepted
+    token = create_personal_access_token(sample_user, expires_at=time() + 900, token_type=TOKEN_TYPE_OIDC)
+    assert isinstance(token, str)
+
+    # Neither set (plain PAT) → accepted
+    token2 = create_personal_access_token(sample_user)
+    assert isinstance(token2, str)
 
 
 @pytest.mark.django_db

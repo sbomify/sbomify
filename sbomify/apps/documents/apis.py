@@ -12,6 +12,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import broadcast_to_workspace, get_by_uuid_or_pk, verify_item_access
+from sbomify.apps.oidc.permissions import is_authorised_for_component
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.sboms.utils import verify_download_token
 
@@ -105,7 +106,12 @@ def create_document(
         if component is None:
             return 404, {"detail": "Document component not found"}
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        # Allow OIDC bot tokens for trusted-publishing uploads; restrict
+        # them to the bound component (see sboms/apis.py for full
+        # rationale).
+        if not verify_item_access(request, component, ["owner", "admin", "bot"]):
+            return 403, {"detail": "Forbidden"}
+        if not is_authorised_for_component(request, component):
             return 403, {"detail": "Forbidden"}
 
         # Compute SHA256 hash of the document content

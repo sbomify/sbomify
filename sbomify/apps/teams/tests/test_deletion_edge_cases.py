@@ -54,7 +54,7 @@ def test_removal_fallback_when_pending_invites_exist(client, owner, user_with_on
     we do NOT create a personal workspace, but handle it gracefully.
     """
     # 1. Setup: User has a pending invite to Team B (joinable)
-    Invitation.objects.create(team=other_team, email=user_with_one_team.email, role="member")
+    Invitation.objects.create(team=other_team, email=user_with_one_team.email, role="admin")
 
     # 2. Action: Owner removes User from Team A (their only team)
     client.force_login(owner)
@@ -88,7 +88,7 @@ def test_self_removal_fallback_when_pending_invites_exist(client, user_with_one_
     we redirect them to dashboard and clear session.
     """
     # 1. Setup: User has pending invite
-    Invitation.objects.create(team=other_team, email=user_with_one_team.email, role="member")
+    Invitation.objects.create(team=other_team, email=user_with_one_team.email, role="admin")
 
     # 2. Action: User leaves Team A
     client.force_login(user_with_one_team)

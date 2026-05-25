@@ -29,6 +29,7 @@ from sbomify.apps.core.utils import (
     obj_extract,
     verify_item_access,
 )
+from sbomify.apps.oidc.permissions import is_authorised_for_component
 from sbomify.apps.sboms.utils import verify_download_token
 from sbomify.apps.teams.models import ContactProfile
 
@@ -366,7 +367,13 @@ def sbom_upload_cyclonedx(
         if component is None:
             return 404, {"detail": "Component not found"}
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        # Allow OIDC bot tokens for trusted-publishing uploads. The second
+        # check enforces that the bot can only push to ITS bound component,
+        # not anywhere else in the workspace — see
+        # ``sbomify.apps.oidc.permissions.is_authorised_for_component``.
+        if not verify_item_access(request, component, ["owner", "admin", "bot"]):
+            return 403, {"detail": "Forbidden"}
+        if not is_authorised_for_component(request, component):
             return 403, {"detail": "Forbidden"}
 
         # Parse JSON from request body
@@ -497,7 +504,12 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         if component is None:
             return 404, {"detail": "Component not found"}
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        # Allow OIDC bot tokens for trusted-publishing uploads; restrict
+        # them to the bound component (see CycloneDX upload above for
+        # the rationale).
+        if not verify_item_access(request, component, ["owner", "admin", "bot"]):
+            return 403, {"detail": "Forbidden"}
+        if not is_authorised_for_component(request, component):
             return 403, {"detail": "Forbidden"}
 
         # Parse JSON from request body

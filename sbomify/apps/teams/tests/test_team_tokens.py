@@ -165,8 +165,19 @@ class TestTeamTokensView:
         assert "Unscoped" in content
         assert "Unscoped tokens detected" in content
 
-    def test_member_role_can_access(self, client: Client, sample_team_with_owner_member):
-        """Test that members can access tokens view."""
+    def test_legacy_member_role_is_forbidden(self, client: Client, sample_team_with_owner_member):
+        """Legacy ``role="member"`` is now rejected by the tokens view.
+
+        Django CharField choices aren't DB-enforced, so historical
+        ``Member(role="member")`` rows (from fixtures + earlier
+        migrations) were silently accepted into ``TeamTokensView``
+        when ``allowed_roles`` listed ``"member"``. Removing it is a
+        deliberate tightening: the canonical role list
+        (``TEAMS_SUPPORTED_ROLES``) is the source of truth, and
+        token-management is owner/admin only. This test pins the
+        tightened behaviour so a future re-introduction has to update
+        the canonical list first.
+        """
         from django.contrib.auth import get_user_model
 
         team = sample_team_with_owner_member.team
@@ -178,7 +189,7 @@ class TestTeamTokensView:
         setup_authenticated_client_session(client, team, member_user)
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
-        assert response.status_code == 200
+        assert response.status_code == 403
 
     def test_admin_role_can_access(self, client: Client, sample_team_with_owner_member):
         """Test that admins can access tokens view."""

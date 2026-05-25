@@ -28,6 +28,13 @@
         <div>
             {% include "documents/components/document_upload.html.j2" with component_id=component.id document_type_subcategories=document_type_subcategories %}
         </div>
+        <div hx-get="{% url 'oidc:trusted_publishers' component_id=component.id %}"
+             hx-trigger="load"
+             hx-swap="outerHTML">
+            <div class="tw-card tw-card-bordered">
+                <div class="tw-card-body text-text-muted text-sm">Loading trusted publishers…</div>
+            </div>
+        </div>
     {% endif %}
 {% endblock %}
 {% block table_section %}
