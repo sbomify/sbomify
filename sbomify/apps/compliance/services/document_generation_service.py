@@ -388,8 +388,18 @@ def _build_risk_assessment_context(assessment: CRAAssessment, base: dict[str, An
                 {
                     "title": f.control.title,
                     "status": f.get_status_display(),
-                    "notes": _sanitize(f.notes, escape_pipe=True) if f.notes else "",
-                    "justification": _sanitize(f.justification, escape_pipe=True) if f.justification else "",
+                    # ``escape_markdown=True`` is required now that
+                    # ``_render_template`` runs with autoescape OFF —
+                    # without it, an operator-supplied note containing
+                    # ``<script>`` / ``[click](javascript:…)`` / etc.
+                    # would land literally in the rendered Markdown
+                    # and execute when that Markdown is viewed in a
+                    # tool that supports inline HTML (Pandoc, GitHub,
+                    # Confluence, VS Code preview).
+                    "notes": _sanitize(f.notes, escape_pipe=True, escape_markdown=True) if f.notes else "",
+                    "justification": (
+                        _sanitize(f.justification, escape_pipe=True, escape_markdown=True) if f.justification else ""
+                    ),
                 }
             )
         counts[f.status] = counts.get(f.status, 0) + 1
