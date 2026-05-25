@@ -1260,9 +1260,16 @@ class TestDoCRejectsMarkdownInjection:
         )
         content = result.value
         # Raw HTML/JS fragments must NOT survive into the rendered doc.
-        assert "<script>" not in content
-        assert "<iframe" not in content
-        assert "<img onerror" not in content
+        # The correct invariant is that any ``<`` from operator input is
+        # CommonMark-escaped as ``\<`` — when a downstream markdown
+        # renderer encounters ``\<iframe>`` it emits the literal text
+        # ``<iframe>`` (not an HTML element), so the payload can't
+        # execute. Check that every operator-supplied ``<tag`` appears
+        # preceded by the escape backslash, not bare.
+        for tag in ("<script", "<iframe", "<img onerror"):
+            assert tag not in content.replace("\\" + tag, ""), (
+                f"Found unescaped {tag!r} in rendered markdown:\n{content[:500]}"
+            )
         # The label text is still there — just Markdown-escaped.
         assert "script" in content
 
@@ -1280,7 +1287,8 @@ class TestDoCRejectsMarkdownInjection:
             hostile_assessment, CRAGeneratedDocument.DocumentKind.USER_INSTRUCTIONS
         )
         content = result.value
-        assert "<img onerror" not in content
+        # Same backslash-escape invariant as the DoC test above.
+        assert "<img onerror" not in content.replace("\\<img onerror", "")
         assert "![pixel](http://attacker" not in content
         assert "[confirm](https://attacker" not in content
 

@@ -58,5 +58,7 @@ This assessment evaluates the cybersecurity risks associated with {{ product_nam
 
 {% if support_period_end %}**Support until:** {{ support_period_end }}
 {% else %}**Support period:** [To be determined]
-{% endif %}---
+{% endif %}
+---
+
 This risk assessment is prepared in accordance with CRA Annex VII, Section 3.

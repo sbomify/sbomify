@@ -507,12 +507,32 @@ def _build_document_context(assessment: CRAAssessment, kind: str) -> dict[str, A
 
 
 def _render_template(kind: str, context: dict[str, Any]) -> str:
-    """Render a Django template by document kind."""
+    """Render a Django template by document kind.
+
+    ``autoescape=False`` on the Context is intentional. The CRA doc
+    templates produce *Markdown*, not HTML — Django's default
+    autoescape turns legitimate characters in curator-controlled
+    catalog strings into HTML entities (e.g. ``Identify & Document
+    Vulnerabilities`` → ``Identify &amp; Document Vulnerabilities``),
+    which then renders as literal ``&amp;`` text in every downstream
+    markdown viewer because markdown engines don't unescape HTML
+    entities. The Engine is already constructed with
+    ``autoescape=False``, but the Context's flag wins at render time,
+    so it has to be passed here too.
+
+    Safety: operator-supplied free-text fields (product name,
+    manufacturer name, intended use, notes, justifications, …) are
+    routed through ``_sanitize(value, escape_markdown=True)`` BEFORE
+    they reach this context, so a malicious operator can't inject
+    HTML / Markdown payloads regardless of this autoescape setting.
+    The unescaped pass-through only matters for the catalog and
+    enum-display strings, which are curator-controlled.
+    """
     template_name = _TEMPLATE_MAP.get(kind)
     if not template_name:
         raise ValueError(f"Unknown document kind: {kind}")
     template = _engine.get_template(template_name)
-    return template.render(Context(context))
+    return template.render(Context(context, autoescape=False))
 
 
 def generate_document(
