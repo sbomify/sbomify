@@ -533,13 +533,19 @@ def _render_template(kind: str, context: dict[str, Any]) -> str:
     already constructed with ``autoescape=False``, but the Context's
     flag wins at render time, so it has to be passed here too.
 
-    Safety: operator-supplied free-text fields (product name,
-    manufacturer name, intended use, notes, justifications, …) are
-    routed through ``_sanitize(value, escape_markdown=True)`` BEFORE
-    they reach this context, so a malicious operator can't inject
-    HTML / Markdown payloads regardless of this autoescape setting.
-    The unescaped pass-through only matters for the catalog and
-    enum-display strings, which are curator-controlled.
+    Safety: every operator-supplied value entering this context is
+    sanitized — URLs through ``_sanitize_url`` and everything else
+    through ``_sanitize``. Free-text fields where markdown injection
+    is a realistic vector (product name, manufacturer name/address,
+    intended use, finding notes/justifications, signature fields,
+    update / support descriptions, data-deletion instructions) are
+    additionally passed ``escape_markdown=True`` to neutralise raw
+    ``<``, ``[``, ``*``, etc. Constrained-syntax fields whose model
+    validator rules out those characters (emails, country codes,
+    market codes) are sanitized without the extra markdown pass.
+    The unescaped pass-through that this autoescape flag controls
+    therefore only matters for the catalog and enum-display strings,
+    which are curator-controlled.
     """
     template_name = _TEMPLATE_MAP.get(kind)
     if not template_name:
