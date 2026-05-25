@@ -82,11 +82,12 @@ def test_duplicate_component_name_returns_field_errors(
     # with no `errors` key at all.
     assert "errors" in data, f"ErrorResponse.errors was stripped (issue #952 regression). Got: {data}"
     assert isinstance(data["errors"], dict)
-    # Django's `unique_together = ("team", "name")` constraint surfaces
-    # as a per-instance error keyed by `__all__` (Django's catch-all).
-    # The exact key may be `__all__` or `name` depending on which clean
-    # path raised; the important assertion is that SOMETHING per-field
-    # made it through.
+    # Django's ``unique_together = ("team", "name")`` constraint surfaces
+    # the validation error under ``__all__`` (NON_FIELD_ERRORS). The
+    # important assertion for the #952 regression is that the dict
+    # survived serialization at all; the helper's any-key scan covers
+    # the alternative single-field ``unique=True`` shape in
+    # ``TestValidationErrorResponseHelper``.
     assert any(data["errors"].values()), f"`errors` dict was preserved but is empty: {data['errors']}"
 
 

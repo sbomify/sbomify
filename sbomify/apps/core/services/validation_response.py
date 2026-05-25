@@ -21,11 +21,30 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from sbomify.apps.core.schemas import ErrorCode
 
 
+def _is_unique_violation(msg_dict: dict[str, list[str]]) -> bool:
+    """Detect "already exists" anywhere in a ``message_dict``.
+
+    Django's ``validate_unique()`` routes errors differently depending on
+    which constraint fired:
+
+    - ``Meta.unique_together`` (and ``UniqueConstraint`` without ``fields``-
+      scoped clean) → ``NON_FIELD_ERRORS`` (``"__all__"``).
+    - ``models.CharField(..., unique=True)`` / any single-field uniqueness
+      → keyed by that field name (e.g. ``{"name": ["...already exists."]}``).
+
+    Both affected models in this PR use ``unique_together`` so the runtime
+    path is always ``__all__``. The any-key scan keeps the helper robust to
+    future schema changes (e.g. adding ``unique=True`` to a slug field) and
+    third-party fields whose validators raise the same message under their
+    own key.
+    """
+    return any("already exists" in m.lower() for messages in msg_dict.values() for m in messages)
+
+
 def validation_error_response(ve: DjangoValidationError, resource_label: str) -> tuple[int, dict[str, Any]]:
     """Map a ``DjangoValidationError`` to an ``ErrorResponse`` 400 body.
 
     Surfaces ``DUPLICATE_NAME`` when ``validate_unique()`` flagged the failure
-    (``message_dict`` has a ``__all__`` entry containing ``"already exists"``)
     so clients can distinguish a duplicate from a generic validation failure
     without grepping the prose detail string. Other validation errors stay
     on ``INVALID_DATA``.
@@ -35,15 +54,13 @@ def validation_error_response(ve: DjangoValidationError, resource_label: str) ->
     this team") so the same helper can serve component / contact-entity /
     any future caller without conflating error vocabulary.
 
-    The ``"already exists"`` substring — not just the ``__all__`` key — is
-    the disambiguator: some model-level ``clean()`` rules also bind their
-    errors to ``__all__`` (e.g. "Mutually-exclusive fields A and B were
-    both set") and must NOT be misclassified as a duplicate.
+    The ``"already exists"`` substring — not the key name — is the
+    disambiguator: some model-level ``clean()`` rules also bind their errors
+    to ``__all__`` (e.g. "Mutually-exclusive fields A and B were both set")
+    and must NOT be misclassified as a duplicate.
     """
     msg_dict = ve.message_dict
-    unique_hits = msg_dict.get("__all__", [])
-    is_unique_violation = any("already exists" in m.lower() for m in unique_hits)
-    if is_unique_violation:
+    if _is_unique_violation(msg_dict):
         return 400, {
             "detail": f"A {resource_label} with this name already exists in this team",
             "errors": msg_dict,

@@ -905,6 +905,37 @@ class TestValidationErrorResponseHelper:
         assert status == 400
         assert body["error_code"].value == "INVALID_DATA"
 
+    def test_field_keyed_unique_violation_maps_to_duplicate_name(self):
+        """Single-field ``unique=True`` constraints (as opposed to
+        ``Meta.unique_together``) surface the validation error under the
+        field name, NOT ``__all__``. Pin the helper's any-key scan so the
+        DUPLICATE_NAME detection still fires for those cases — guards
+        against a future model adding ``unique=True`` to a slug/email/etc."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError({"name": ["Component with this Name already exists."]})
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "DUPLICATE_NAME"
+        assert "already exists" in body["detail"].lower()
+        assert "name" in body["errors"]
+
+    def test_field_keyed_non_unique_error_keeps_invalid_data(self):
+        """Symmetry-pin for the field-keyed branch: a field-level error
+        whose message does NOT contain "already exists" must stay on
+        ``INVALID_DATA`` (i.e. the any-key scan still respects the
+        substring disambiguator, not just the key location)."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError({"slug": ["Enter a valid slug consisting of letters, numbers, hyphens or underscores."]})
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "INVALID_DATA"
+
 
 # =============================================================================
 # BUSINESS LOGIC TESTS (Moved from View Tests)
