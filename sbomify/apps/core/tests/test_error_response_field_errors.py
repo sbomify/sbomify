@@ -69,25 +69,25 @@ def test_duplicate_component_name_returns_field_errors(
 
     # Standard fields: still there
     assert "detail" in data
-    assert data.get("error_code") == "INVALID_DATA"
+    # Issue #953: the same path that this test exercises (POST a duplicate
+    # name) now surfaces ``DUPLICATE_NAME`` directly instead of the catch-all
+    # ``INVALID_DATA``. The original #952 invariant — "errors dict survives
+    # serialization" — is unchanged; only the error_code label is more
+    # specific now.
+    assert data.get("error_code") == "DUPLICATE_NAME"
 
     # The new fix: `errors` field is preserved on the wire (not stripped
     # by the django-ninja serializer). Before the schema fix, this assertion
     # would fail because the response was `{"detail": "...", "error_code": "..."}`
     # with no `errors` key at all.
-    assert "errors" in data, (
-        "ErrorResponse.errors was stripped (issue #952 regression). "
-        f"Got: {data}"
-    )
+    assert "errors" in data, f"ErrorResponse.errors was stripped (issue #952 regression). Got: {data}"
     assert isinstance(data["errors"], dict)
     # Django's `unique_together = ("team", "name")` constraint surfaces
     # as a per-instance error keyed by `__all__` (Django's catch-all).
     # The exact key may be `__all__` or `name` depending on which clean
     # path raised; the important assertion is that SOMETHING per-field
     # made it through.
-    assert any(data["errors"].values()), (
-        f"`errors` dict was preserved but is empty: {data['errors']}"
-    )
+    assert any(data["errors"].values()), f"`errors` dict was preserved but is empty: {data['errors']}"
 
 
 @pytest.mark.django_db
@@ -103,9 +103,9 @@ def test_error_response_schema_round_trip():
         errors={"name": ["Component with this Team and Name already exists."]},
     )
     dumped = resp.model_dump()
-    assert dumped["errors"] == {
-        "name": ["Component with this Team and Name already exists."]
-    }, "ErrorResponse.errors must round-trip through pydantic serialization."
+    assert dumped["errors"] == {"name": ["Component with this Team and Name already exists."]}, (
+        "ErrorResponse.errors must round-trip through pydantic serialization."
+    )
 
     # Without `errors` set, the field defaults to None at the pydantic
     # level. Note: django-ninja does NOT apply `exclude_none` by default,
