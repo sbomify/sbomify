@@ -388,8 +388,18 @@ def _build_risk_assessment_context(assessment: CRAAssessment, base: dict[str, An
                 {
                     "title": f.control.title,
                     "status": f.get_status_display(),
-                    "notes": _sanitize(f.notes, escape_pipe=True) if f.notes else "",
-                    "justification": _sanitize(f.justification, escape_pipe=True) if f.justification else "",
+                    # ``escape_markdown=True`` is required now that
+                    # ``_render_template`` runs with autoescape OFF —
+                    # without it, an operator-supplied note containing
+                    # ``<script>`` / ``[click](javascript:…)`` / etc.
+                    # would land literally in the rendered Markdown
+                    # and execute when that Markdown is viewed in a
+                    # tool that supports inline HTML (Pandoc, GitHub,
+                    # Confluence, VS Code preview).
+                    "notes": _sanitize(f.notes, escape_pipe=True, escape_markdown=True) if f.notes else "",
+                    "justification": (
+                        _sanitize(f.justification, escape_pipe=True, escape_markdown=True) if f.justification else ""
+                    ),
                 }
             )
         counts[f.status] = counts.get(f.status, 0) + 1
@@ -507,12 +517,41 @@ def _build_document_context(assessment: CRAAssessment, kind: str) -> dict[str, A
 
 
 def _render_template(kind: str, context: dict[str, Any]) -> str:
-    """Render a Django template by document kind."""
+    """Render a Django template by document kind.
+
+    ``autoescape=False`` on the Context is intentional. The CRA doc
+    templates produce *Markdown*, not HTML — Django's default
+    autoescape turns legitimate characters in curator-controlled
+    catalog strings into HTML entities (e.g. ``Identify & Document
+    Vulnerabilities`` → ``Identify &amp; Document Vulnerabilities``).
+    CommonMark / GFM renderers will eventually decode that back to
+    ``&``, but at least one path we ship to does not: Apple Preview's
+    built-in Markdown-to-PDF converter (the one a manufacturer hits
+    when they double-click a `.md` artifact on macOS) leaves the
+    entity intact, so the user sees literal ``&amp;`` in the rendered
+    PDF. The fix is to never emit the entity at all. The Engine is
+    already constructed with ``autoescape=False``, but the Context's
+    flag wins at render time, so it has to be passed here too.
+
+    Safety: every operator-supplied value entering this context is
+    sanitized — URLs through ``_sanitize_url`` and everything else
+    through ``_sanitize``. Free-text fields where markdown injection
+    is a realistic vector (product name, manufacturer name/address,
+    intended use, finding notes/justifications, signature fields,
+    update / support descriptions, data-deletion instructions) are
+    additionally passed ``escape_markdown=True`` to neutralise raw
+    ``<``, ``[``, ``*``, etc. Constrained-syntax fields whose model
+    validator rules out those characters (emails, country codes,
+    market codes) are sanitized without the extra markdown pass.
+    The unescaped pass-through that this autoescape flag controls
+    therefore only matters for the catalog and enum-display strings,
+    which are curator-controlled.
+    """
     template_name = _TEMPLATE_MAP.get(kind)
     if not template_name:
         raise ValueError(f"Unknown document kind: {kind}")
     template = _engine.get_template(template_name)
-    return template.render(Context(context))
+    return template.render(Context(context, autoescape=False))
 
 
 def generate_document(

@@ -18,34 +18,34 @@ This assessment evaluates the cybersecurity risks associated with {{ product_nam
 
 ### 2.1 Security by Design (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes | Justification |
-|---------|--------|-------|---------------|
-{% for finding in sd_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
-{% endfor %}
+{% for finding in sd_findings %}- **{{ finding.title }}** — _{{ finding.status }}_
+{% if finding.notes %}  {{ finding.notes }}
+{% endif %}{% if finding.justification %}  Justification: {{ finding.justification }}
+{% endif %}{% endfor %}
 ### 2.2 Data Protection (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes | Justification |
-|---------|--------|-------|---------------|
-{% for finding in dp_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
-{% endfor %}
+{% for finding in dp_findings %}- **{{ finding.title }}** — _{{ finding.status }}_
+{% if finding.notes %}  {{ finding.notes }}
+{% endif %}{% if finding.justification %}  Justification: {{ finding.justification }}
+{% endif %}{% endfor %}
 ### 2.3 Availability & Resilience (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes | Justification |
-|---------|--------|-------|---------------|
-{% for finding in av_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
-{% endfor %}
+{% for finding in av_findings %}- **{{ finding.title }}** — _{{ finding.status }}_
+{% if finding.notes %}  {{ finding.notes }}
+{% endif %}{% if finding.justification %}  Justification: {{ finding.justification }}
+{% endif %}{% endfor %}
 ### 2.4 Monitoring & Logging (Annex I, Part I — risk-based per CRA Art 13(4))
 
-| Control | Status | Notes | Justification |
-|---------|--------|-------|---------------|
-{% for finding in mn_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} | {{ finding.justification }} |
-{% endfor %}
+{% for finding in mn_findings %}- **{{ finding.title }}** — _{{ finding.status }}_
+{% if finding.notes %}  {{ finding.notes }}
+{% endif %}{% if finding.justification %}  Justification: {{ finding.justification }}
+{% endif %}{% endfor %}
 ### 2.5 Vulnerability Handling (Annex I, Part II — always mandatory per CRA Art 13(4))
 
-| Control | Status | Notes |
-|---------|--------|-------|
-{% for finding in vh_findings %}| {{ finding.title }} | {{ finding.status }} | {{ finding.notes }} |
-{% endfor %}
+{% for finding in vh_findings %}- **{{ finding.title }}** — _{{ finding.status }}_
+{% if finding.notes %}  {{ finding.notes }}
+{% endif %}{% if finding.justification %}  Justification: {{ finding.justification }}
+{% endif %}{% endfor %}
 ## 3. Summary
 
 - **Total Controls Assessed:** {{ summary.total }}
@@ -60,4 +60,5 @@ This assessment evaluates the cybersecurity risks associated with {{ product_nam
 {% else %}**Support period:** [To be determined]
 {% endif %}
 ---
-*This risk assessment is prepared in accordance with CRA Annex VII, Section 3.*
+
+This risk assessment is prepared in accordance with CRA Annex VII, Section 3.

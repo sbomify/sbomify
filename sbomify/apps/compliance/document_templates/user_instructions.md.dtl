@@ -66,4 +66,4 @@ Vulnerability disclosure policy: {{ vdp_url }}
 {% endif %}
 
 ---
-*This document is provided in accordance with CRA Annex II user information requirements.*
+This document is provided in accordance with CRA Annex II user information requirements.

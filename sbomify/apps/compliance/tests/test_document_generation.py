@@ -663,9 +663,7 @@ class TestSelectAppliedStandards:
         bsi = next(s for s in standards if "BSI TR-03183-2" in s["citation"])
         assert bsi["cra_requirements_covered"], "BSI must map to CRA Annex I Part II(1)"
         assert bsi["harmonised"] is False
-        assert "Annex I, Part II, §1" in {
-            req["cra_reference"] for req in bsi["cra_requirements_covered"]
-        }
+        assert "Annex I, Part II, §1" in {req["cra_reference"] for req in bsi["cra_requirements_covered"]}
 
     def test_radio_equipment_opt_in_pulls_en_18031_1(self, assessment):
         """Ticking ``is_radio_equipment`` on Step 1 must add EN 18031-1
@@ -741,9 +739,7 @@ class TestSelectAppliedStandards:
         assessment.processes_personal_data = True
         assessment.save(update_fields=["is_radio_equipment", "processes_personal_data"])
 
-        en_2 = next(
-            s for s in _select_applied_standards(assessment) if "EN 18031-2" in s["citation"]
-        )
+        en_2 = next(s for s in _select_applied_standards(assessment) if "EN 18031-2" in s["citation"])
         assert en_2["restrictions"], "EN 18031-2 must surface OJ restrictions on the DoC"
         assert any("default password" in r.lower() for r in en_2["restrictions"])
 
@@ -752,9 +748,7 @@ class TestSelectAppliedStandards:
         assessment.handles_financial_value = True
         assessment.save(update_fields=["is_radio_equipment", "handles_financial_value"])
 
-        en_3 = next(
-            s for s in _select_applied_standards(assessment) if "EN 18031-3" in s["citation"]
-        )
+        en_3 = next(s for s in _select_applied_standards(assessment) if "EN 18031-3" in s["citation"])
         assert en_3["restrictions"], "EN 18031-3 must surface OJ restrictions on the DoC"
         assert any("default password" in r.lower() for r in en_3["restrictions"])
 
@@ -839,7 +833,11 @@ class TestEvaluateAppliesWhen:
                 {"any_of": [{"processes_personal_data": True}, {"handles_financial_value": True}]},
             ]
         }
-        facts = {"product_category": "radio_equipment", "processes_personal_data": False, "handles_financial_value": True}
+        facts = {
+            "product_category": "radio_equipment",
+            "processes_personal_data": False,
+            "handles_financial_value": True,
+        }
         assert _evaluate_applies_when(rule, facts)
         facts_neither = dict(facts, handles_financial_value=False)
         assert not _evaluate_applies_when(rule, facts_neither)
@@ -953,6 +951,26 @@ class TestRiskAssessment:
         assert "Security by Design" in content
         assert "Vulnerability Handling" in content
         assert "Satisfied" in content
+
+    def test_findings_list_has_no_blank_lines_when_notes_empty(self, assessment):
+        """Regression: the per-finding bullet block uses inline `{% if %}` so that
+        empty notes/justification do NOT emit whitespace-only lines between
+        bullets. A blank line between `- **A**` and `- **B**` would force
+        CommonMark renderers into loose-list mode (with extra paragraph
+        spacing) — verify the template stays tight."""
+        import re
+
+        result = get_document_preview(assessment, CRAGeneratedDocument.DocumentKind.RISK_ASSESSMENT)
+        content = result.value
+
+        # Find each `### 2.x ...` section in turn; each must be a tight list:
+        # adjacent `- **…**` lines with no intervening blank line.
+        sections = re.findall(r"### 2\.\d [^\n]+\n\n(.*?)(?=\n### |\n## |\Z)", content, re.DOTALL)
+        assert sections, "expected at least one ### 2.x findings section"
+        for section in sections:
+            assert "\n\n- **" not in section, (
+                f"findings list has a blank line before a bullet — loose-list regression:\n{section!r}"
+            )
 
 
 @pytest.mark.django_db
@@ -1237,7 +1255,7 @@ class TestDoCRejectsMarkdownInjection:
             profile=profile,
             name='ACME <script>alert("mfr")</script>',
             email="info@example.test",
-            address='Street 1 [phish](javascript:alert(1))',
+            address="Street 1 [phish](javascript:alert(1))",
             is_manufacturer=True,
         )
         p = Product.objects.create(
@@ -1255,39 +1273,39 @@ class TestDoCRejectsMarkdownInjection:
         return a
 
     def test_doc_renders_without_raw_script_tags(self, hostile_assessment):
-        result = get_document_preview(
-            hostile_assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY
-        )
+        result = get_document_preview(hostile_assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
         content = result.value
         # Raw HTML/JS fragments must NOT survive into the rendered doc.
-        assert "<script>" not in content
-        assert "<iframe" not in content
-        assert "<img onerror" not in content
+        # The correct invariant is that any ``<`` from operator input is
+        # CommonMark-escaped as ``\<`` — when a downstream markdown
+        # renderer encounters ``\<iframe>`` it emits the literal text
+        # ``<iframe>`` (not an HTML element), so the payload can't
+        # execute. Check that every operator-supplied ``<tag`` appears
+        # preceded by the escape backslash, not bare.
+        for tag in ("<script", "<iframe", "<img onerror"):
+            assert tag not in content.replace("\\" + tag, ""), (
+                f"Found unescaped {tag!r} in rendered markdown:\n{content[:500]}"
+            )
         # The label text is still there — just Markdown-escaped.
         assert "script" in content
 
     def test_doc_renders_without_unescaped_markdown_links(self, hostile_assessment):
-        result = get_document_preview(
-            hostile_assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY
-        )
+        result = get_document_preview(hostile_assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
         content = result.value
         # A bare `[phish](javascript:...)` sequence in the output would
         # render as a clickable link. Escaped brackets break that shape.
         assert "[phish](javascript" not in content
 
     def test_user_instructions_escapes_hostile_input(self, hostile_assessment):
-        result = get_document_preview(
-            hostile_assessment, CRAGeneratedDocument.DocumentKind.USER_INSTRUCTIONS
-        )
+        result = get_document_preview(hostile_assessment, CRAGeneratedDocument.DocumentKind.USER_INSTRUCTIONS)
         content = result.value
-        assert "<img onerror" not in content
+        # Same backslash-escape invariant as the DoC test above.
+        assert "<img onerror" not in content.replace("\\<img onerror", "")
         assert "![pixel](http://attacker" not in content
         assert "[confirm](https://attacker" not in content
 
     def test_decommissioning_guide_escapes_data_deletion_instructions(self, hostile_assessment):
-        result = get_document_preview(
-            hostile_assessment, CRAGeneratedDocument.DocumentKind.DECOMMISSIONING_GUIDE
-        )
+        result = get_document_preview(hostile_assessment, CRAGeneratedDocument.DocumentKind.DECOMMISSIONING_GUIDE)
         content = result.value
         assert "[confirm](https://attacker" not in content
 
@@ -1309,6 +1327,7 @@ class TestManufacturerPolicyParity:
         from sbomify.apps.compliance.services.export_service import (
             _is_placeholder_manufacturer as export_predicate,
         )
+
         assert doc_predicate is export_predicate
 
     def test_placeholder_vocabulary_is_single_source(self):
@@ -1316,9 +1335,7 @@ class TestManufacturerPolicyParity:
         under the compliance services — no local copies."""
         import importlib
 
-        mod = importlib.import_module(
-            "sbomify.apps.compliance.services._manufacturer_policy"
-        )
+        mod = importlib.import_module("sbomify.apps.compliance.services._manufacturer_policy")
         assert isinstance(mod.PLACEHOLDER_MANUFACTURER_VALUES, frozenset)
         # Invariants: whitespace stripped, lowercase keys, empty string
         # included to model "no manufacturer configured".
