@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
 from ninja import File, Router
@@ -19,6 +20,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorResponse
+from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
 from sbomify.apps.teams.schemas import (
@@ -808,6 +810,8 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
         return 201, serialize_contact_profile(profile)
     except ValueError as e:
         return 400, {"detail": str(e)}
+    except DjangoValidationError as ve:
+        return validation_error_response(ve, "contact entity")
     except IntegrityError:
         return 400, {"detail": "A profile with this name already exists"}
 
@@ -908,6 +912,8 @@ def update_contact_profile(
         return 200, serialize_contact_profile(profile)
     except ValueError as e:
         return 400, {"detail": str(e)}
+    except DjangoValidationError as ve:
+        return validation_error_response(ve, "contact entity")
     except IntegrityError:
         return 400, {"detail": "A profile with this name already exists"}
 

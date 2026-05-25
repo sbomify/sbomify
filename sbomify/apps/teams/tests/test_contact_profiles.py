@@ -17,7 +17,7 @@ from sbomify.apps.teams.models import ContactProfile
 @pytest.mark.django_db
 def test_contact_profile_crud_with_entities(sample_team_with_owner_member, authenticated_api_client):  # noqa: F811
     """Test CRUD operations using the new entity-based structure (CycloneDX aligned).
-    
+
     Authors are now stored as entity contacts with is_author=True, not in a separate table.
     When authors are passed via API, they are created as entity contacts.
     """
@@ -522,9 +522,7 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     )
 
     # Create a contact with a unique name and email combination
-    contact1 = ContactProfileContact.objects.create(
-        entity=entity, name="John Doe", email="john@example.com"
-    )
+    contact1 = ContactProfileContact.objects.create(entity=entity, name="John Doe", email="john@example.com")
 
     # Create a form for a new contact with the same name and email
     form_data = {
@@ -535,11 +533,7 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
 
     # CONTROL TEST: Without exclusion, a duplicate should be detected
     # Verify that a duplicate exists in the database (this proves the control case)
-    lookup_kwargs = {
-        "entity": entity,
-        "name": "John Doe",
-        "email": "john@example.com"
-    }
+    lookup_kwargs = {"entity": entity, "name": "John Doe", "email": "john@example.com"}
     # Without exclusion, this query should find contact1 (the duplicate)
     duplicates_without_exclusion = ContactProfileContact.objects.filter(**lookup_kwargs)
     assert duplicates_without_exclusion.exists(), (
@@ -547,34 +541,33 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
         "This proves that validate_unique should detect the duplicate when exclude_pks doesn't include it."
     )
     assert contact1.pk in duplicates_without_exclusion.values_list("pk", flat=True)
-    
+
     # Verify the mixin's query logic (used by validate_unique) would find the duplicate
     # when contact1.pk is not excluded. This simulates what validate_unique() does internally.
     form_without_exclusion = ContactProfileContactForm(data=form_data)
     form_without_exclusion.instance.entity = entity
     form_without_exclusion.instance.entity_id = entity.pk
-    
+
     # Populate cleaned_data and set instance values so validate_unique can access them
     form_without_exclusion.is_valid()
     if form_without_exclusion.is_valid():
         form_without_exclusion.instance.name = form_without_exclusion.cleaned_data["name"]
         form_without_exclusion.instance.email = form_without_exclusion.cleaned_data["email"]
-    
+
     # Set _exclude_pks_from_unique to a non-empty set that doesn't include contact1.pk
     # This forces the mixin to use its custom logic, but contact1.pk is not excluded
     form_without_exclusion._exclude_pks_from_unique = {999999}  # Non-existent PK, so contact1 won't be excluded
-    
+
     # Verify the mixin's query logic would find the duplicate (this simulates what validate_unique does)
     test_lookup = {
         "entity": form_without_exclusion.instance.entity,
         "name": form_without_exclusion.instance.name,
-        "email": form_without_exclusion.instance.email
+        "email": form_without_exclusion.instance.email,
     }
     # Without excluding contact1.pk, the query should find it
     test_duplicates = ContactProfileContact.objects.filter(**test_lookup).exclude(pk__in={999999})
     assert test_duplicates.exists(), (
-        "Control test: The mixin's query logic should find the duplicate when it's not excluded. "
-        f"Lookup: {test_lookup}"
+        f"Control test: The mixin's query logic should find the duplicate when it's not excluded. Lookup: {test_lookup}"
     )
     assert contact1.pk in test_duplicates.values_list("pk", flat=True), (
         "Control test: contact1.pk should be found by the query when not excluded. "
@@ -598,11 +591,11 @@ def test_delete_aware_mixin_excludes_deleted_pks_from_unique_validation(
     if form_with_exclusion.is_valid():
         form_with_exclusion.instance.name = form_with_exclusion.cleaned_data["name"]
         form_with_exclusion.instance.email = form_with_exclusion.cleaned_data["email"]
-    
+
     # validate_unique should complete without raising ValidationError
     # because contact1.pk is excluded from the unique check query
     form_with_exclusion.validate_unique()  # Should not raise ValidationError
-    
+
     # If we get here without a ValidationError, the mixin is working correctly
     assert form_with_exclusion._exclude_pks_from_unique == {contact1.pk}
 
@@ -631,9 +624,8 @@ def test_base_delete_aware_inline_formset_excludes_deleted_forms(
 
     # Create a contact for entity1 (required for entities)
     from sbomify.apps.teams.models import ContactProfileContact
-    ContactProfileContact.objects.create(
-        entity=entity1, name="Contact", email="contact@example.com"
-    )
+
+    ContactProfileContact.objects.create(entity=entity1, name="Contact", email="contact@example.com")
 
     # Create formset data that deletes entity1 and adds a new entity with the same name
     # This tests that we can delete and re-add with the same name
@@ -667,7 +659,7 @@ def test_base_delete_aware_inline_formset_excludes_deleted_forms(
 
     # Check if formset is valid
     is_valid = formset.is_valid()
-    
+
     # If not valid, check that it's not due to unique constraint on name
     # (it might fail for other reasons like missing contacts)
     if not is_valid:
@@ -675,20 +667,19 @@ def test_base_delete_aware_inline_formset_excludes_deleted_forms(
         errors = formset.errors
         non_field_errors = formset.non_form_errors()
         form_errors = [form.errors for form in formset.forms]
-        
+
         # The formset should not have unique constraint errors on name
         # when the entity with that name is marked for deletion
         # We check that there's NO unique constraint error on the name field by ensuring
         # that if "already exists" appears, it's not related to the "name" field
         error_messages = str(errors) + str(non_field_errors) + str(form_errors)
         error_messages_lower = error_messages.lower()
-        
+
         # Use AND logic: fail only if BOTH "already exists" AND "name" are present
         # This correctly verifies there's no unique constraint error on the name field
         has_name_unique_error = "already exists" in error_messages_lower and "name" in error_messages_lower
         assert not has_name_unique_error, (
-            f"Expected no unique constraint error on name field when entity is deleted. "
-            f"Got errors: {error_messages}"
+            f"Expected no unique constraint error on name field when entity is deleted. Got errors: {error_messages}"
         )
     else:
         # If valid, that's perfect
@@ -710,12 +701,8 @@ def test_base_delete_aware_inline_formset_multiple_deletions(
     )
 
     # Create two contacts with the same name
-    contact1 = ContactProfileContact.objects.create(
-        entity=entity, name="Same Contact", email="contact1@example.com"
-    )
-    contact2 = ContactProfileContact.objects.create(
-        entity=entity, name="Same Contact", email="contact2@example.com"
-    )
+    contact1 = ContactProfileContact.objects.create(entity=entity, name="Same Contact", email="contact1@example.com")
+    contact2 = ContactProfileContact.objects.create(entity=entity, name="Same Contact", email="contact2@example.com")
 
     # Create formset data that deletes both contacts and adds a new one with the same name
     formset_data = {
@@ -767,3 +754,174 @@ def test_delete_aware_mixin_without_excluded_pks_uses_default_validation(
     # Should use default validation (no _exclude_pks_from_unique attribute)
     # This should work for a new entity
     assert form.is_valid()
+
+
+@pytest.mark.django_db
+def test_create_contact_profile_duplicate_entity_name_returns_400(
+    sample_team_with_owner_member,  # noqa: F811
+    authenticated_api_client,
+):
+    """Issue #953 (related): POSTing a contact profile with two entities
+    sharing the same name must surface a clean ``DUPLICATE_NAME`` 400.
+
+    Before the fix the ``ContactEntity.save()`` chain called ``full_clean()``,
+    ``validate_unique()`` raised a ``DjangoValidationError`` that the
+    outer ``try`` block didn't catch, and Django returned **HTTP 500** —
+    worse than the issue-#953 mislabeling because the request looked like
+    a server failure rather than a validation problem."""
+    team = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+
+    payload = {
+        "name": "Dup-Entity Profile",
+        "entities": [
+            {
+                "name": "Same Name",
+                "email": "first@example.com",
+                "is_manufacturer": True,
+                "is_supplier": False,
+                "is_author": False,
+                "contacts": [{"name": "C1", "email": "c1@example.com"}],
+            },
+            {
+                "name": "Same Name",
+                "email": "second@example.com",
+                "is_manufacturer": False,
+                "is_supplier": True,
+                "is_author": False,
+                "contacts": [{"name": "C2", "email": "c2@example.com"}],
+            },
+        ],
+    }
+
+    response = client.post(
+        f"/api/v1/workspaces/{team.key}/contact-profiles",
+        json.dumps(payload),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 400, f"got {response.status_code}: {response.content!r}"
+    body = response.json()
+    assert body["error_code"] == "DUPLICATE_NAME"
+    assert "already exists" in body["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_update_contact_profile_legacy_rename_to_duplicate_returns_400(
+    sample_team_with_owner_member,  # noqa: F811
+    authenticated_api_client,
+):
+    """Issue #953 (related): PATCH on the legacy single-entity rename path
+    (``payload.company`` mutates ``first_entity.name``) must surface a
+    clean 400 with ``DUPLICATE_NAME`` when the new name collides with
+    another entity in the same profile, instead of crashing with 500."""
+    team = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+
+    create_payload = {
+        "name": "Rename-Collision Profile",
+        "entities": [
+            {
+                "name": "Original",
+                "email": "first@example.com",
+                "is_manufacturer": True,
+                "is_supplier": False,
+                "is_author": False,
+                "contacts": [{"name": "C1", "email": "c1@example.com"}],
+            },
+            {
+                "name": "Squatter",
+                "email": "second@example.com",
+                "is_manufacturer": False,
+                "is_supplier": True,
+                "is_author": False,
+                "contacts": [{"name": "C2", "email": "c2@example.com"}],
+            },
+        ],
+    }
+    response = client.post(
+        f"/api/v1/workspaces/{team.key}/contact-profiles",
+        json.dumps(create_payload),
+        content_type="application/json",
+        **headers,
+    )
+    assert response.status_code == 201
+    profile_id = response.json()["id"]
+
+    # The first entity returned by ``profile.entities.first()`` is the one
+    # the legacy ``payload.company`` rename targets. Find it so the assertion
+    # is unambiguous about which row will collide.
+    profile = ContactProfile.objects.get(id=profile_id)
+    first = profile.entities.first()
+    assert first is not None
+    other_name = "Squatter" if first.name == "Original" else "Original"
+
+    response = client.patch(
+        f"/api/v1/workspaces/{team.key}/contact-profiles/{profile_id}",
+        json.dumps({"company": other_name}),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 400, f"got {response.status_code}: {response.content!r}"
+    body = response.json()
+    assert body["error_code"] == "DUPLICATE_NAME", f"got body: {body}"
+    assert "already exists" in body["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_update_contact_profile_entities_duplicate_name_returns_400(
+    sample_team_with_owner_member,  # noqa: F811
+    authenticated_api_client,
+):
+    """Same invariant as the legacy-rename test, but via the new
+    entity-based PATCH (``payload.entities`` → ``_upsert_entities``).
+    Submitting two new entities with the same name must surface a clean
+    DUPLICATE_NAME 400, not bubble up as 500."""
+    team = sample_team_with_owner_member.team
+    client, token = authenticated_api_client
+    headers = get_api_headers(token)
+
+    response = client.post(
+        f"/api/v1/workspaces/{team.key}/contact-profiles",
+        json.dumps({"name": "Seed Profile"}),
+        content_type="application/json",
+        **headers,
+    )
+    assert response.status_code == 201
+    profile_id = response.json()["id"]
+
+    dup_payload = {
+        "entities": [
+            {
+                "name": "Twin",
+                "email": "one@example.com",
+                "is_manufacturer": True,
+                "is_supplier": False,
+                "is_author": False,
+                "contacts": [{"name": "C1", "email": "c1@example.com"}],
+            },
+            {
+                "name": "Twin",
+                "email": "two@example.com",
+                "is_manufacturer": False,
+                "is_supplier": True,
+                "is_author": False,
+                "contacts": [{"name": "C2", "email": "c2@example.com"}],
+            },
+        ],
+    }
+    response = client.patch(
+        f"/api/v1/workspaces/{team.key}/contact-profiles/{profile_id}",
+        json.dumps(dup_payload),
+        content_type="application/json",
+        **headers,
+    )
+
+    assert response.status_code == 400, f"got {response.status_code}: {response.content!r}"
+    body = response.json()
+    assert body["error_code"] == "DUPLICATE_NAME", f"got body: {body}"
+    assert "already exists" in body["detail"].lower()

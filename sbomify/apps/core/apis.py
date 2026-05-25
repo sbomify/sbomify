@@ -26,6 +26,7 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
+from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
@@ -582,36 +583,6 @@ def _check_billing_limits(team_id: str, resource_type: str) -> tuple[bool, str, 
         )
 
     return True, "", None
-
-
-def _validation_error_response(ve: DjangoValidationError, resource_label: str) -> tuple[int, dict[str, Any]]:
-    """Map ``DjangoValidationError`` from ``full_clean()`` to an ``ErrorResponse`` dict.
-
-    Surfaces ``DUPLICATE_NAME`` when ``validate_unique()`` flagged the failure
-    (``message_dict`` has a ``__all__`` entry saying "already exists"), so
-    clients can distinguish a duplicate from a generic validation failure
-    without grepping the prose detail string. Other validation errors keep
-    ``INVALID_DATA`` so existing behaviour is preserved.
-
-    Issue #953 — ``full_clean()`` raises ``validate_unique()`` BEFORE the
-    DB ``IntegrityError`` ever fires, so handlers that call ``full_clean()``
-    (the three Component CRUD endpoints) never reach their ``IntegrityError``
-    branch on a duplicate name.
-    """
-    msg_dict = ve.message_dict
-    unique_hits = msg_dict.get("__all__", [])
-    is_unique_violation = any("already exists" in m.lower() for m in unique_hits)
-    if is_unique_violation:
-        return 400, {
-            "detail": f"A {resource_label} with this name already exists in this team",
-            "errors": msg_dict,
-            "error_code": ErrorCode.DUPLICATE_NAME,
-        }
-    return 400, {
-        "detail": "Validation error",
-        "errors": msg_dict,
-        "error_code": ErrorCode.INVALID_DATA,
-    }
 
 
 # =============================================================================
@@ -1543,7 +1514,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
             try:
                 component.full_clean()
             except DjangoValidationError as ve:
-                return _validation_error_response(ve, "component")
+                return validation_error_response(ve, "component")
 
             # Assign default contact profile after validation passes
             default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
@@ -1761,7 +1732,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             try:
                 component.full_clean()
             except DjangoValidationError as ve:
-                return _validation_error_response(ve, "component")
+                return validation_error_response(ve, "component")
 
             component.save()
 
@@ -1889,7 +1860,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             try:
                 component.full_clean()
             except DjangoValidationError as ve:
-                return _validation_error_response(ve, "component")
+                return validation_error_response(ve, "component")
 
             component.save()
 

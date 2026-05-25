@@ -864,16 +864,16 @@ def test_patch_component_duplicate_name_returns_duplicate_name_code(
 
 
 class TestValidationErrorResponseHelper:
-    """Unit tests for the ``_validation_error_response`` helper that drives
+    """Unit tests for the ``validation_error_response`` helper that drives
     issue #953's DUPLICATE_NAME / INVALID_DATA distinction."""
 
     def test_unique_violation_maps_to_duplicate_name(self):
         from django.core.exceptions import ValidationError
 
-        from sbomify.apps.core.apis import _validation_error_response
+        from sbomify.apps.core.services.validation_response import validation_error_response
 
         ve = ValidationError({"__all__": ["Component with this Team and Name already exists."]})
-        status, body = _validation_error_response(ve, "component")
+        status, body = validation_error_response(ve, "component")
         assert status == 400
         assert body["error_code"].value == "DUPLICATE_NAME"
         assert "already exists" in body["detail"].lower()
@@ -882,10 +882,10 @@ class TestValidationErrorResponseHelper:
     def test_field_level_validation_error_keeps_invalid_data(self):
         from django.core.exceptions import ValidationError
 
-        from sbomify.apps.core.apis import _validation_error_response
+        from sbomify.apps.core.services.validation_response import validation_error_response
 
         ve = ValidationError({"gating_mode": ["gating_mode can only be set when visibility is gated"]})
-        status, body = _validation_error_response(ve, "component")
+        status, body = validation_error_response(ve, "component")
         assert status == 400
         assert body["error_code"].value == "INVALID_DATA"
         assert body["detail"] == "Validation error"
@@ -898,10 +898,10 @@ class TestValidationErrorResponseHelper:
         ``"already exists"`` substring is the disambiguator."""
         from django.core.exceptions import ValidationError
 
-        from sbomify.apps.core.apis import _validation_error_response
+        from sbomify.apps.core.services.validation_response import validation_error_response
 
         ve = ValidationError({"__all__": ["Mutually-exclusive fields A and B were both set."]})
-        status, body = _validation_error_response(ve, "component")
+        status, body = validation_error_response(ve, "component")
         assert status == 400
         assert body["error_code"].value == "INVALID_DATA"
 
