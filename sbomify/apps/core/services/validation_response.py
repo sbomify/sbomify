@@ -20,25 +20,49 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from sbomify.apps.core.schemas import ErrorCode
 
+_UNIQUE_ERROR_CODES = frozenset({"unique", "unique_together"})
 
-def _is_unique_violation(msg_dict: dict[str, list[str]]) -> bool:
-    """Detect "already exists" anywhere in a ``message_dict``.
 
-    Django's ``validate_unique()`` routes errors differently depending on
-    which constraint fired:
+def _is_unique_violation(ve: DjangoValidationError) -> bool:
+    """Detect a uniqueness-constraint failure on a ``DjangoValidationError``.
 
-    - ``Meta.unique_together`` (and ``UniqueConstraint`` without ``fields``-
-      scoped clean) → ``NON_FIELD_ERRORS`` (``"__all__"``).
-    - ``models.CharField(..., unique=True)`` / any single-field uniqueness
-      → keyed by that field name (e.g. ``{"name": ["...already exists."]}``).
+    Prefers the structured ``ValidationError.error_dict`` path so we read the
+    ``code`` attribute Django sets on errors raised by ``validate_unique()``
+    (``"unique"`` for single-field, ``"unique_together"`` for multi-field).
+    This is robust against:
 
-    Both affected models in this PR use ``unique_together`` so the runtime
-    path is always ``__all__``. The any-key scan keeps the helper robust to
-    future schema changes (e.g. adding ``unique=True`` to a slug field) and
-    third-party fields whose validators raise the same message under their
-    own key.
+    - **i18n**: if ``USE_I18N=True`` is ever flipped on, Django translates
+      the default unique message and a substring match for ``"already
+      exists"`` would silently stop matching.
+    - **False positives**: custom ``clean()`` rules that happen to use the
+      phrase "already exists" (e.g. ``ContactProfileContact.clean()`` raises
+      ``"A security contact already exists in this profile..."`` — that's a
+      role-exclusivity rule, NOT a name uniqueness violation, and surfacing
+      it as ``DUPLICATE_NAME`` would tell the API client "rename and retry"
+      when the actual fix is "demote the other security contact").
+
+    Fallback: if ``error_dict`` isn't available (a caller built the
+    ``ValidationError`` from a plain string with no code), drop down to the
+    legacy substring grep so behaviour doesn't regress for those paths.
+
+    See ``teams/views/contact_profiles.py::_format_formset_errors`` for the
+    matching error-code pattern on the HTML form side.
     """
-    return any("already exists" in m.lower() for messages in msg_dict.values() for m in messages)
+    error_dict = getattr(ve, "error_dict", None)
+    if error_dict:
+        for errors in error_dict.values():
+            for err in errors:
+                if getattr(err, "code", None) in _UNIQUE_ERROR_CODES:
+                    return True
+        # error_dict was present but no unique code — definitively NOT a
+        # unique violation (custom clean() raised it; substring grep would
+        # be a false positive here).
+        return False
+    # Plain ``ValidationError("...")`` / ``ValidationError([...])`` —
+    # accessing ``message_dict`` here would raise ``AttributeError``, so
+    # use ``messages`` which is always available. Substring check is the
+    # least-bad option for unstructured input (no ``code`` to read).
+    return any("already exists" in m.lower() for m in ve.messages)
 
 
 def validation_error_response(
@@ -66,13 +90,21 @@ def validation_error_response(
             is "A {resource_label} with this name already exists in this
             {scope_label}".
 
-    The ``"already exists"`` substring — not the key name — is the
-    disambiguator: some model-level ``clean()`` rules also bind their errors
-    to ``__all__`` (e.g. "Mutually-exclusive fields A and B were both set")
-    and must NOT be misclassified as a duplicate.
+    Disambiguation between a true uniqueness violation and a custom
+    ``clean()`` rule that happens to say "already exists" is done by
+    inspecting the ``ValidationError.error_dict``'s ``code`` attribute
+    (Django sets ``code="unique"`` / ``"unique_together"`` on
+    ``validate_unique()``'s errors). See ``_is_unique_violation``.
     """
-    msg_dict = ve.message_dict
-    if _is_unique_violation(msg_dict):
+    # ``message_dict`` raises ``AttributeError`` if the ValidationError
+    # was built from a plain string / list rather than a dict; fall back
+    # to a synthetic ``{"__all__": [...]}`` shape so the response always
+    # carries an ``errors`` dict in the same wire format.
+    try:
+        msg_dict = ve.message_dict
+    except AttributeError:
+        msg_dict = {"__all__": list(ve.messages)}
+    if _is_unique_violation(ve):
         return 400, {
             "detail": f"A {resource_label} with this name already exists in this {scope_label}",
             "errors": msg_dict,

@@ -19,7 +19,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
-from sbomify.apps.core.schemas import ErrorResponse
+from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact, Member, Team
@@ -812,8 +812,21 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
         return 400, {"detail": str(e)}
     except DjangoValidationError as ve:
         return validation_error_response(ve, "contact entity", scope_label="contact profile")
-    except IntegrityError:
-        return 400, {"detail": "A profile with this name already exists"}
+    except IntegrityError as e:
+        # The atomic block touches ContactProfile, ContactEntity, AND
+        # ContactProfileContact — each with its own unique constraints
+        # (profile name, entity name per profile, contact name+email per
+        # entity). ``full_clean()`` covers all three at the model layer,
+        # so this branch is a backstop for genuine concurrent-write races
+        # where validate_unique() passed and a DB constraint then fired.
+        # Log the underlying exception so operators can identify which
+        # constraint tripped; return a non-specific 400 rather than
+        # presuming the failure was the profile name.
+        logger.warning("IntegrityError in contact-profile handler: %s", e)
+        return 400, {
+            "detail": "Could not save contact profile due to a database constraint (possibly a duplicate name)",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
 
 
 @router.patch(
@@ -914,8 +927,21 @@ def update_contact_profile(
         return 400, {"detail": str(e)}
     except DjangoValidationError as ve:
         return validation_error_response(ve, "contact entity", scope_label="contact profile")
-    except IntegrityError:
-        return 400, {"detail": "A profile with this name already exists"}
+    except IntegrityError as e:
+        # The atomic block touches ContactProfile, ContactEntity, AND
+        # ContactProfileContact — each with its own unique constraints
+        # (profile name, entity name per profile, contact name+email per
+        # entity). ``full_clean()`` covers all three at the model layer,
+        # so this branch is a backstop for genuine concurrent-write races
+        # where validate_unique() passed and a DB constraint then fired.
+        # Log the underlying exception so operators can identify which
+        # constraint tripped; return a non-specific 400 rather than
+        # presuming the failure was the profile name.
+        logger.warning("IntegrityError in contact-profile handler: %s", e)
+        return 400, {
+            "detail": "Could not save contact profile due to a database constraint (possibly a duplicate name)",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
 
 
 @router.delete(
