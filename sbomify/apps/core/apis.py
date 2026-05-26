@@ -26,6 +26,7 @@ from sbomify.apps.core.queries import (
     optimize_component_queryset,
     optimize_product_queryset,
 )
+from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict, verify_item_access
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
@@ -1513,11 +1514,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
             try:
                 component.full_clean()
             except DjangoValidationError as ve:
-                return 400, {
-                    "detail": "Validation error",
-                    "errors": ve.message_dict,
-                    "error_code": ErrorCode.INVALID_DATA,
-                }
+                return validation_error_response(ve, "component")
 
             # Assign default contact profile after validation passes
             default_profile = ContactProfile.objects.filter(team_id=team_id, is_default=True).first()
@@ -1735,11 +1732,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
             try:
                 component.full_clean()
             except DjangoValidationError as ve:
-                return 400, {
-                    "detail": "Validation error",
-                    "errors": ve.message_dict,
-                    "error_code": ErrorCode.INVALID_DATA,
-                }
+                return validation_error_response(ve, "component")
 
             component.save()
 
@@ -1867,11 +1860,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
             try:
                 component.full_clean()
             except DjangoValidationError as ve:
-                return 400, {
-                    "detail": "Validation error",
-                    "errors": ve.message_dict,
-                    "error_code": ErrorCode.INVALID_DATA,
-                }
+                return validation_error_response(ve, "component")
 
             component.save()
 

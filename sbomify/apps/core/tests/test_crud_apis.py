@@ -789,6 +789,246 @@ def test_patch_component_empty_body(
     assert data["metadata"] == sample_component.metadata
 
 
+@pytest.mark.django_db
+def test_update_component_duplicate_name_returns_duplicate_name_code(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Issue #953: PUT /components/{id} with a name that collides with an
+    existing component in the same team must surface ``DUPLICATE_NAME``, not
+    the generic ``INVALID_DATA`` that ``full_clean()``'s
+    ``validate_unique()`` would otherwise produce."""
+    client = Client()
+    # Create a second component in the same team to collide with
+    Component.objects.create(
+        name="Existing Component",
+        team=sample_component.team,
+        component_type=sample_component.component_type,
+    )
+
+    url = reverse("api-1:update_component", kwargs={"component_id": sample_component.id})
+    payload = {
+        "name": "Existing Component",
+        "visibility": "private",
+        "is_global": False,
+        "metadata": {},
+    }
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.put(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error_code"] == "DUPLICATE_NAME"
+    assert "already exists" in body["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_patch_component_duplicate_name_returns_duplicate_name_code(
+    sample_component: Component,  # noqa: F811
+    sample_access_token: AccessToken,  # noqa: F811
+):
+    """Issue #953: same invariant as the PUT case, but via PATCH (which goes
+    through a separate handler with its own ``full_clean()`` call)."""
+    client = Client()
+    Component.objects.create(
+        name="Other Component",
+        team=sample_component.team,
+        component_type=sample_component.component_type,
+    )
+
+    url = reverse("api-1:patch_component", kwargs={"component_id": sample_component.id})
+    payload = {"name": "Other Component"}
+
+    assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
+    setup_test_session(client, sample_component.team, sample_component.team.members.first())
+
+    response = client.patch(
+        url,
+        json.dumps(payload),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error_code"] == "DUPLICATE_NAME"
+    assert "already exists" in body["detail"].lower()
+
+
+class TestValidationErrorResponseHelper:
+    """Unit tests for the ``validation_error_response`` helper that drives
+    issue #953's DUPLICATE_NAME / INVALID_DATA distinction."""
+
+    @staticmethod
+    def _unique_together_error(field: str, msg: str):
+        """Build a ``ValidationError`` that mirrors what Django's
+        ``validate_unique()`` actually raises — ``ValidationError(code=...)``
+        nested inside an ``error_dict``. Plain ``ValidationError({field:
+        [msg]})`` does NOT populate the ``code`` attribute, so unit tests
+        that bypass real ``validate_unique`` MUST construct the nested
+        error explicitly or they'll silently exercise the substring
+        fallback rather than the code-based primary path."""
+        from django.core.exceptions import ValidationError
+
+        return ValidationError(
+            {field: [ValidationError(msg, code="unique_together" if field == "__all__" else "unique")]}
+        )
+
+    def test_unique_violation_maps_to_duplicate_name(self):
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = self._unique_together_error("__all__", "Component with this Team and Name already exists.")
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "DUPLICATE_NAME"
+        assert "already exists" in body["detail"].lower()
+        assert "__all__" in body["errors"]
+
+    def test_field_level_validation_error_keeps_invalid_data(self):
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError({"gating_mode": ["gating_mode can only be set when visibility is gated"]})
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "INVALID_DATA"
+        assert body["detail"] == "Validation error"
+        assert "gating_mode" in body["errors"]
+
+    def test_all_key_without_unique_code_keeps_invalid_data(self):
+        """Some non-uniqueness errors also land under ``__all__`` (custom
+        model-level ``clean()`` rules that don't bind to a single field).
+        The helper must NOT misclassify those as DUPLICATE_NAME — the
+        ``code="unique"/"unique_together"`` is the disambiguator."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        # Plain string with no ``code`` set — represents a custom clean() rule.
+        ve = ValidationError({"__all__": ["Mutually-exclusive fields A and B were both set."]})
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "INVALID_DATA"
+
+    def test_already_exists_in_clean_rule_message_keeps_invalid_data(self):
+        """R3 Copilot regression guard: ``ContactProfileContact.clean()``
+        raises ``ValidationError("A security contact already exists in this
+        profile. ...")`` to enforce a role-exclusivity rule, NOT name
+        uniqueness. The previous substring-grep implementation would have
+        misclassified this as ``DUPLICATE_NAME`` and told the API client
+        "rename and retry" when the right fix is "demote the other
+        security contact". Now we read ``ValidationError.code`` to
+        disambiguate."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        # Mirrors the real raise in ``ContactProfileContact.clean()`` — a
+        # plain-string ValidationError with NO unique code attached, even
+        # though the prose contains "already exists".
+        ve = ValidationError(
+            {
+                "__all__": [
+                    ValidationError(
+                        "A security contact already exists in this profile. "
+                        "Each profile can have only one security/vulnerability reporting contact."
+                    )
+                ]
+            }
+        )
+        status, body = validation_error_response(ve, "contact")
+        assert status == 400
+        assert body["error_code"].value == "INVALID_DATA", (
+            f"misclassified non-uniqueness clean() rule as DUPLICATE_NAME: {body}"
+        )
+
+    def test_field_keyed_unique_violation_maps_to_duplicate_name(self):
+        """Single-field ``unique=True`` constraints (as opposed to
+        ``Meta.unique_together``) surface the validation error under the
+        field name with ``code="unique"``. Pin both shapes so a future
+        model adding ``unique=True`` to a slug/email keeps working."""
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = self._unique_together_error("name", "Component with this Name already exists.")
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "DUPLICATE_NAME"
+        assert "already exists" in body["detail"].lower()
+        assert "name" in body["errors"]
+
+    def test_field_keyed_non_unique_error_keeps_invalid_data(self):
+        """Symmetry-pin for the field-keyed branch: a field-level error
+        whose code is NOT ``unique`` must stay on ``INVALID_DATA``."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError({"slug": ["Enter a valid slug consisting of letters, numbers, hyphens or underscores."]})
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "INVALID_DATA"
+
+    def test_scope_label_overrides_default_team_wording(self):
+        """``scope_label`` lets callers whose model isn't team-scoped
+        produce an accurate duplicate detail. ContactEntity uses
+        ``unique_together = ("profile", "name")``, so its handlers pass
+        ``scope_label="contact profile"`` and the response should read
+        "in this contact profile" — never "in this team"."""
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = self._unique_together_error("__all__", "Contact entity with this Profile and Name already exists.")
+        status, body = validation_error_response(ve, "contact entity", scope_label="contact profile")
+        assert status == 400
+        assert body["error_code"].value == "DUPLICATE_NAME"
+        assert "in this contact profile" in body["detail"]
+        assert "team" not in body["detail"].lower()
+
+    def test_dict_with_string_messages_and_no_code_is_invalid_data(self):
+        """``ValidationError({"__all__": ["...already exists."]})`` (dict
+        with plain string values) still populates ``error_dict``, but the
+        inner errors carry ``code=None``. The R3 fix treats that as
+        NOT-a-uniqueness violation — which is the correct strict reading:
+        if the caller didn't wrap their string in
+        ``ValidationError(msg, code="unique")``, there's no structured
+        signal that it actually IS a uniqueness error. Real
+        ``validate_unique()`` always sets the code, so production paths
+        are unaffected; only synthetic ``ValidationError(dict_of_strings)``
+        constructions land here, and INVALID_DATA is the safer default."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError({"__all__": ["Component with this Team and Name already exists."]})
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        assert body["error_code"].value == "INVALID_DATA"
+
+    def test_plain_string_no_dict_falls_back_to_substring(self):
+        """``ValidationError("...already exists.")`` (no dict, no code)
+        is the ONLY shape that hits the substring fallback. Pin it so the
+        fallback path doesn't silently disappear if someone refactors the
+        helper — synthetic callers that rebuild a ValidationError from a
+        DB exception's args still get the duplicate code mapped."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError("Component with this Team and Name already exists.")
+        status, body = validation_error_response(ve, "component")
+        assert status == 400
+        # No error_dict on this shape → substring grep on message_dict.
+        assert body["error_code"].value == "DUPLICATE_NAME"
+
+
 # =============================================================================
 # BUSINESS LOGIC TESTS (Moved from View Tests)
 # =============================================================================
@@ -953,20 +1193,11 @@ class TestDuplicateNamesAPI:
         )
         assert response.status_code == 400
         error_response = response.json()
-        # The error might be in detail (IntegrityError) or errors.name (ValidationError)
-        # Check if it's a validation error with name field, or integrity error with "already exists"
-        detail = error_response.get("detail", "")
-        errors = error_response.get("errors", {})
-        # Accept either "already exists" in detail, or validation error (which may not include errors dict)
-        # The important thing is that we get a 400 error for duplicate names
-        has_duplicate_error = (
-            "already exists" in detail
-            or (errors and "name" in errors)
-            or (
-                detail == "Validation error" and response.status_code == 400
-            )  # Validation error for duplicate is acceptable
-        )
-        assert has_duplicate_error, f"Expected duplicate name error (400), got: {error_response}"
+        # Issue #953: full_clean() raises validate_unique() before the DB
+        # IntegrityError ever fires, so the handler MUST surface
+        # DUPLICATE_NAME directly rather than the generic INVALID_DATA.
+        assert error_response["error_code"] == "DUPLICATE_NAME"
+        assert "already exists" in error_response["detail"].lower()
 
         # Verify only one component exists
         assert Component.objects.filter(team=team, name="Duplicate Component").count() == 1
