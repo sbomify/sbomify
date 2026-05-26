@@ -41,7 +41,11 @@ def _is_unique_violation(msg_dict: dict[str, list[str]]) -> bool:
     return any("already exists" in m.lower() for messages in msg_dict.values() for m in messages)
 
 
-def validation_error_response(ve: DjangoValidationError, resource_label: str) -> tuple[int, dict[str, Any]]:
+def validation_error_response(
+    ve: DjangoValidationError,
+    resource_label: str,
+    scope_label: str = "team",
+) -> tuple[int, dict[str, Any]]:
     """Map a ``DjangoValidationError`` to an ``ErrorResponse`` 400 body.
 
     Surfaces ``DUPLICATE_NAME`` when ``validate_unique()`` flagged the failure
@@ -49,10 +53,18 @@ def validation_error_response(ve: DjangoValidationError, resource_label: str) ->
     without grepping the prose detail string. Other validation errors stay
     on ``INVALID_DATA``.
 
-    ``resource_label`` is interpolated into the friendly detail string for
-    duplicate cases ("A {resource_label} with this name already exists in
-    this team") so the same helper can serve component / contact-entity /
-    any future caller without conflating error vocabulary.
+    Parameters:
+        ve: The Django ``ValidationError`` raised by ``full_clean()``.
+        resource_label: Singular name of the resource being created/updated
+            (``"component"``, ``"contact entity"``, …). Interpolated into the
+            duplicate detail string.
+        scope_label: The scope inside which uniqueness is enforced. Defaults
+            to ``"team"`` because the bulk of CRUD resources have
+            ``unique_together = ("team", "name")``; pass e.g.
+            ``"contact profile"`` for ``ContactEntity`` whose uniqueness is
+            ``unique_together = ("profile", "name")``. The resulting detail
+            is "A {resource_label} with this name already exists in this
+            {scope_label}".
 
     The ``"already exists"`` substring — not the key name — is the
     disambiguator: some model-level ``clean()`` rules also bind their errors
@@ -62,7 +74,7 @@ def validation_error_response(ve: DjangoValidationError, resource_label: str) ->
     msg_dict = ve.message_dict
     if _is_unique_violation(msg_dict):
         return 400, {
-            "detail": f"A {resource_label} with this name already exists in this team",
+            "detail": f"A {resource_label} with this name already exists in this {scope_label}",
             "errors": msg_dict,
             "error_code": ErrorCode.DUPLICATE_NAME,
         }

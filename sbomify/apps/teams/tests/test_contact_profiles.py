@@ -805,7 +805,10 @@ def test_create_contact_profile_duplicate_entity_name_returns_400(
     assert response.status_code == 400, f"got {response.status_code}: {response.content!r}"
     body = response.json()
     assert body["error_code"] == "DUPLICATE_NAME"
+    # Detail string must scope the duplicate to the profile, not the team —
+    # ContactEntity's ``unique_together = ("profile", "name")`` is per-profile.
     assert "already exists" in body["detail"].lower()
+    assert "contact profile" in body["detail"].lower()
 
 
 @pytest.mark.django_db
@@ -869,7 +872,10 @@ def test_update_contact_profile_legacy_rename_to_duplicate_returns_400(
     assert response.status_code == 400, f"got {response.status_code}: {response.content!r}"
     body = response.json()
     assert body["error_code"] == "DUPLICATE_NAME", f"got body: {body}"
+    # Detail string must scope the duplicate to the profile, not the team —
+    # ContactEntity's ``unique_together = ("profile", "name")`` is per-profile.
     assert "already exists" in body["detail"].lower()
+    assert "contact profile" in body["detail"].lower()
 
 
 @pytest.mark.django_db
@@ -924,4 +930,7 @@ def test_update_contact_profile_entities_duplicate_name_returns_400(
     assert response.status_code == 400, f"got {response.status_code}: {response.content!r}"
     body = response.json()
     assert body["error_code"] == "DUPLICATE_NAME", f"got body: {body}"
+    # Detail string must scope the duplicate to the profile, not the team —
+    # ContactEntity's ``unique_together = ("profile", "name")`` is per-profile.
     assert "already exists" in body["detail"].lower()
+    assert "contact profile" in body["detail"].lower()

@@ -811,7 +811,7 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
     except ValueError as e:
         return 400, {"detail": str(e)}
     except DjangoValidationError as ve:
-        return validation_error_response(ve, "contact entity")
+        return validation_error_response(ve, "contact entity", scope_label="contact profile")
     except IntegrityError:
         return 400, {"detail": "A profile with this name already exists"}
 
@@ -913,7 +913,7 @@ def update_contact_profile(
     except ValueError as e:
         return 400, {"detail": str(e)}
     except DjangoValidationError as ve:
-        return validation_error_response(ve, "contact entity")
+        return validation_error_response(ve, "contact entity", scope_label="contact profile")
     except IntegrityError:
         return 400, {"detail": "A profile with this name already exists"}
 

@@ -936,6 +936,23 @@ class TestValidationErrorResponseHelper:
         assert status == 400
         assert body["error_code"].value == "INVALID_DATA"
 
+    def test_scope_label_overrides_default_team_wording(self):
+        """``scope_label`` lets callers whose model isn't team-scoped
+        produce an accurate duplicate detail. ContactEntity uses
+        ``unique_together = ("profile", "name")``, so its handlers pass
+        ``scope_label="contact profile"`` and the response should read
+        "in this contact profile" — never "in this team"."""
+        from django.core.exceptions import ValidationError
+
+        from sbomify.apps.core.services.validation_response import validation_error_response
+
+        ve = ValidationError({"__all__": ["Contact entity with this Profile and Name already exists."]})
+        status, body = validation_error_response(ve, "contact entity", scope_label="contact profile")
+        assert status == 400
+        assert body["error_code"].value == "DUPLICATE_NAME"
+        assert "in this contact profile" in body["detail"]
+        assert "team" not in body["detail"].lower()
+
 
 # =============================================================================
 # BUSINESS LOGIC TESTS (Moved from View Tests)
