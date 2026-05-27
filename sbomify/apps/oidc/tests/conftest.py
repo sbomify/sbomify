@@ -70,6 +70,12 @@ def github_claims_factory(rsa_keypair: dict[str, Any]):
             "sub": "repo:acme/widget:ref:refs/heads/main",
             "repository": "acme/widget",
             "repository_owner": "acme",
+            # GitHub Actions encodes every numeric identifier in the JWT
+            # as a JSON *string* (see GitHub's OIDC hardening docs); using
+            # strings here keeps the fixture aligned with real tokens and
+            # exercises the production string→int coerce path.
+            "repository_id": "12345",
+            "repository_owner_id": "67890",
             "ref": "refs/heads/main",
             "workflow_ref": "acme/widget/.github/workflows/publish.yml@refs/heads/main",
             "actor": "octocat",

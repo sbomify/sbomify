@@ -133,9 +133,7 @@ class TestSuccessfulExchange:
         ``binding.last_used_at`` — only successful exchanges count.
         """
         assert github_binding.last_used_at is None
-        token = github_claims_factory(
-            repository="evil/forge", repository_owner_id=11111, repository_id=22222
-        )
+        token = github_claims_factory(repository="evil/forge", repository_owner_id=11111, repository_id=22222)
         client = Client()
         response = client.post(
             EXCHANGE_URL,
@@ -146,8 +144,7 @@ class TestSuccessfulExchange:
         assert response.status_code == 403
         github_binding.refresh_from_db()
         assert github_binding.last_used_at is None, (
-            "Refused-token exchange must NOT bump last_used_at — the "
-            "timestamp is a 'last legitimate use' indicator."
+            "Refused-token exchange must NOT bump last_used_at — the timestamp is a 'last legitimate use' indicator."
         )
 
 
@@ -288,6 +285,125 @@ class TestTokenRejection:
         )
         assert response.status_code == 401
 
+    @pytest.mark.django_db
+    def test_string_repository_id_claims_succeed(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """Real GitHub tokens encode ``repository_id`` and
+        ``repository_owner_id`` as JSON strings (``"74"``, not ``74``).
+
+        Regression for the production 401-loop where every exchange was
+        rejected because the service-layer typecheck required Python
+        ``int`` — see services._coerce_repo_int_claim.
+        """
+        token = github_claims_factory(repository_owner_id="67890", repository_id="12345")
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 200, response.content
+
+    @pytest.mark.django_db
+    def test_non_numeric_string_repository_id_401(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """A non-numeric string in ``repository_id`` must still 401.
+
+        Accepting strings (to mirror GitHub) shouldn't open the door to
+        forged tokens with arbitrary payloads in the ID claim.
+        """
+        token = github_claims_factory(repository_owner_id="67890", repository_id="not-a-number")
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "invalid OIDC token"
+
+    @pytest.mark.django_db
+    def test_bool_repository_id_claim_rejected(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """``bool`` is an ``int`` subclass in Python — ``int(True) == 1``.
+
+        Without an explicit reject, a forged token with
+        ``"repository_id": true`` would silently coerce to ``1`` and
+        attempt a binding lookup. Belt-and-suspenders: reject explicitly.
+        """
+        token = github_claims_factory(repository_owner_id=True, repository_id=True)
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401
+
+    @pytest.mark.django_db
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            "  12345  ",  # whitespace
+            "+12345",  # positive sign
+            "-12345",  # negative
+            "1_2345",  # PEP 515 underscore separator
+            "12345.0",  # decimal
+            "0x3039",  # hex
+            "١٢٣٤٥",  # Arabic-Indic digits (decimal, but non-ASCII)
+            "",  # empty
+        ],
+    )
+    def test_non_canonical_string_repository_id_401(
+        self, github_claims_factory, mock_github_jwks, github_binding, component, bad_value
+    ) -> None:
+        """GitHub emits ASCII-decimal-only strings; everything else 401.
+
+        Python's ``int()`` is permissive (accepts whitespace, signs,
+        PEP 515 underscores, and Unicode decimal digits) — the helper
+        deliberately tightens to ``value.isascii() and value.isdigit()``
+        to mirror GitHub's wire format exactly. Regression for
+        defense-in-depth finding on the OIDC PR.
+        """
+        token = github_claims_factory(repository_owner_id="67890", repository_id=bad_value)
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401, response.content
+
+    @pytest.mark.django_db
+    def test_repository_id_overflowing_bigint_401(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """A value > 2**63-1 must 401, not 500.
+
+        Python ints are unbounded, but ``OIDCBinding.repository_id`` is
+        a PostgreSQL ``bigint``. Without the range check, the
+        downstream ``filter(repository_id=<huge>)`` would raise
+        ``DataError`` and propagate as an unhandled 500 — violating
+        the documented 401-only-for-bad-token error contract.
+        """
+        too_big = str(2**63)  # one over int64 max
+        token = github_claims_factory(repository_owner_id="67890", repository_id=too_big)
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401, response.content
+
 
 class TestBindingMismatch:
     @pytest.mark.django_db
@@ -380,9 +496,7 @@ class TestRateLimit:
 
 class TestInfrastructureFailures:
     @pytest.mark.django_db
-    def test_jwks_unavailable_503(
-        self, github_claims_factory, github_binding, component, mocker, rsa_keypair
-    ) -> None:
+    def test_jwks_unavailable_503(self, github_claims_factory, github_binding, component, mocker, rsa_keypair) -> None:
         """GitHub's JWKS endpoint being down must NOT be conflated with a bad
         token — return 503 so CI doesn't retry-loop a real config error.
         """

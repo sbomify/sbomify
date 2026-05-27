@@ -68,6 +68,58 @@ _BOT_EMAIL_DOMAIN = "sbomify.local"
 _BOT_ROLE = "bot"
 
 
+# PostgreSQL ``bigint`` (the underlying type of ``OIDCBinding.repository_id``
+# and ``repository_owner_id``) is signed 64-bit. A coerced Python int that
+# exceeds this range would survive ``int()`` (Python ints are unbounded) but
+# raise ``DataError`` from psycopg when handed to ``filter()`` below — a 500
+# instead of the documented 401. Cap to the positive side: GitHub IDs are
+# always positive 32-bit integers in practice, but pinning to int64 keeps the
+# bound aligned with the database column.
+_MAX_REPO_INT_CLAIM = 2**63 - 1
+
+
+def _coerce_repo_int_claim(value: Any) -> int | None:
+    """Return ``value`` as an ``int`` iff it's a non-negative bigint-sized
+    integer expressed exactly the way GitHub emits it (an ASCII-decimal
+    string), or a Python ``int`` of the same magnitude.
+
+    GitHub's OIDC tokens encode ``repository_id`` / ``repository_owner_id``
+    as JSON strings — ``"74"``, ``"65"``, … — so the str branch is the
+    primary path. ``int`` is also accepted because our test factory (and
+    conceivably other OIDC providers) may encode them as JSON numbers.
+
+    Rejected (returns ``None`` → caller maps to 401):
+
+    * ``None``, ``bool``, ``float``, ``list``, ``dict`` — wrong JSON type.
+      ``bool`` is called out explicitly because in Python ``isinstance(True,
+      int)`` is ``True`` and would otherwise let a forged ``"…": true``
+      claim through as the integer ``1``.
+    * Strings with whitespace, sign prefixes (``"+74"``, ``"-74"``), PEP-515
+      underscore separators (``"7_4"``), or non-ASCII decimal digits
+      (``"١٢٣"`` etc.) — Python's ``int()`` accepts all of
+      these but GitHub never emits any of them, so accepting them only
+      widens the input surface for forged tokens.
+    * Negative integers — GitHub IDs are always positive.
+    * Integers ``> 2**63 - 1`` — would overflow PostgreSQL ``bigint`` when
+      handed to ``OIDCBinding.objects.filter(repository_id=…)`` and raise
+      a 500 instead of a clean 401.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if 0 <= value <= _MAX_REPO_INT_CLAIM else None
+    if isinstance(value, str):
+        # ``isascii() and isdigit()`` admits only ``"0"`` … ``"9"`` —
+        # rejects ``"١"``-style Unicode digits, leading ``+``/``-``,
+        # whitespace, and PEP 515 underscores. Also rejects the empty
+        # string. Matches GitHub's wire format exactly.
+        if not (value.isascii() and value.isdigit()):
+            return None
+        coerced = int(value)
+        return coerced if coerced <= _MAX_REPO_INT_CLAIM else None
+    return None
+
+
 def _bot_username(binding_id: str) -> str:
     return f"{BOT_USERNAME_PREFIX}{binding_id}"
 
@@ -351,9 +403,25 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
         logger.warning("OIDC exchange: unexpected verification error: %s", exc)
         return ServiceResult.failure("invalid OIDC token", status_code=401)
 
-    repository_owner_id = claims.get("repository_owner_id")
-    repository_id = claims.get("repository_id")
-    if not isinstance(repository_owner_id, int) or not isinstance(repository_id, int):
+    # GitHub Actions OIDC tokens ship every numeric identifier as a JSON
+    # *string* (``"repository_id": "74"``, ``"repository_owner_id": "65"``,
+    # ``"actor_id": "12"`` …) — see the ``Example subject claims`` table
+    # in GitHub's OIDC hardening docs. A naive ``isinstance(..., int)``
+    # check therefore rejects every real-world token. Coerce defensively:
+    # accept ``str`` and ``int`` (some OIDC providers — and our own tests
+    # — encode as int), reject everything else including ``bool`` (which
+    # would otherwise pass ``int()`` because ``bool`` is an ``int``
+    # subclass in Python).
+    raw_owner_id = claims.get("repository_owner_id")
+    raw_repo_id = claims.get("repository_id")
+    repository_owner_id = _coerce_repo_int_claim(raw_owner_id)
+    repository_id = _coerce_repo_int_claim(raw_repo_id)
+    if repository_owner_id is None or repository_id is None:
+        logger.info(
+            "OIDC exchange: token missing/invalid repo id claims (repository_owner_id=%r repository_id=%r)",
+            raw_owner_id,
+            raw_repo_id,
+        )
         return ServiceResult.failure("invalid OIDC token", status_code=401)
 
     binding = (
