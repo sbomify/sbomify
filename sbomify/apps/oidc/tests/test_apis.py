@@ -288,6 +288,67 @@ class TestTokenRejection:
         )
         assert response.status_code == 401
 
+    @pytest.mark.django_db
+    def test_string_repository_id_claims_succeed(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """Real GitHub tokens encode ``repository_id`` and
+        ``repository_owner_id`` as JSON strings (``"74"``, not ``74``).
+
+        Regression for the production 401-loop where every exchange was
+        rejected because the service-layer typecheck required Python
+        ``int`` — see services._coerce_repo_int_claim.
+        """
+        token = github_claims_factory(repository_owner_id="67890", repository_id="12345")
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 200, response.content
+
+    @pytest.mark.django_db
+    def test_non_numeric_string_repository_id_401(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """A non-numeric string in ``repository_id`` must still 401.
+
+        Accepting strings (to mirror GitHub) shouldn't open the door to
+        forged tokens with arbitrary payloads in the ID claim.
+        """
+        token = github_claims_factory(repository_owner_id="67890", repository_id="not-a-number")
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "invalid OIDC token"
+
+    @pytest.mark.django_db
+    def test_bool_repository_id_claim_rejected(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """``bool`` is an ``int`` subclass in Python — ``int(True) == 1``.
+
+        Without an explicit reject, a forged token with
+        ``"repository_id": true`` would silently coerce to ``1`` and
+        attempt a binding lookup. Belt-and-suspenders: reject explicitly.
+        """
+        token = github_claims_factory(repository_owner_id=True, repository_id=True)
+        client = Client()
+        response = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401
+
 
 class TestBindingMismatch:
     @pytest.mark.django_db

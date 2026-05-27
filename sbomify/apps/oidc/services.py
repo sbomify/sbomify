@@ -68,6 +68,32 @@ _BOT_EMAIL_DOMAIN = "sbomify.local"
 _BOT_ROLE = "bot"
 
 
+def _coerce_repo_int_claim(value: Any) -> int | None:
+    """Return ``value`` as an ``int`` iff it's a numeric ``str`` or ``int``.
+
+    GitHub's OIDC tokens encode ``repository_id`` / ``repository_owner_id``
+    as JSON strings, but our test factory (and conceivably other OIDC
+    providers) may use ints. Accept both; reject ``None``, ``bool``,
+    floats, non-numeric strings, and any other type by returning ``None``
+    — the caller maps that to 401.
+
+    ``bool`` deserves the explicit reject: in Python ``isinstance(True,
+    int)`` is True and ``int(True) == 1``, so without the guard a
+    forged token shipping ``"repository_id": true`` would silently
+    coerce to 1.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _bot_username(binding_id: str) -> str:
     return f"{BOT_USERNAME_PREFIX}{binding_id}"
 
@@ -351,9 +377,26 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
         logger.warning("OIDC exchange: unexpected verification error: %s", exc)
         return ServiceResult.failure("invalid OIDC token", status_code=401)
 
-    repository_owner_id = claims.get("repository_owner_id")
-    repository_id = claims.get("repository_id")
-    if not isinstance(repository_owner_id, int) or not isinstance(repository_id, int):
+    # GitHub Actions OIDC tokens ship every numeric identifier as a JSON
+    # *string* (``"repository_id": "74"``, ``"repository_owner_id": "65"``,
+    # ``"actor_id": "12"`` …) — see the ``Example subject claims`` table
+    # in GitHub's OIDC hardening docs. A naive ``isinstance(..., int)``
+    # check therefore rejects every real-world token. Coerce defensively:
+    # accept ``str`` and ``int`` (some OIDC providers — and our own tests
+    # — encode as int), reject everything else including ``bool`` (which
+    # would otherwise pass ``int()`` because ``bool`` is an ``int``
+    # subclass in Python).
+    raw_owner_id = claims.get("repository_owner_id")
+    raw_repo_id = claims.get("repository_id")
+    repository_owner_id = _coerce_repo_int_claim(raw_owner_id)
+    repository_id = _coerce_repo_int_claim(raw_repo_id)
+    if repository_owner_id is None or repository_id is None:
+        logger.info(
+            "OIDC exchange: token missing/invalid repo id claims "
+            "(repository_owner_id=%r repository_id=%r)",
+            raw_owner_id,
+            raw_repo_id,
+        )
         return ServiceResult.failure("invalid OIDC token", status_code=401)
 
     binding = (
