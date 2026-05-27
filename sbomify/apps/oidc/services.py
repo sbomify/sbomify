@@ -418,8 +418,7 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
     repository_id = _coerce_repo_int_claim(raw_repo_id)
     if repository_owner_id is None or repository_id is None:
         logger.info(
-            "OIDC exchange: token missing/invalid repo id claims "
-            "(repository_owner_id=%r repository_id=%r)",
+            "OIDC exchange: token missing/invalid repo id claims (repository_owner_id=%r repository_id=%r)",
             raw_owner_id,
             raw_repo_id,
         )

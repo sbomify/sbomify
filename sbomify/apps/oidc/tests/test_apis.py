@@ -133,9 +133,7 @@ class TestSuccessfulExchange:
         ``binding.last_used_at`` — only successful exchanges count.
         """
         assert github_binding.last_used_at is None
-        token = github_claims_factory(
-            repository="evil/forge", repository_owner_id=11111, repository_id=22222
-        )
+        token = github_claims_factory(repository="evil/forge", repository_owner_id=11111, repository_id=22222)
         client = Client()
         response = client.post(
             EXCHANGE_URL,
@@ -146,8 +144,7 @@ class TestSuccessfulExchange:
         assert response.status_code == 403
         github_binding.refresh_from_db()
         assert github_binding.last_used_at is None, (
-            "Refused-token exchange must NOT bump last_used_at — the "
-            "timestamp is a 'last legitimate use' indicator."
+            "Refused-token exchange must NOT bump last_used_at — the timestamp is a 'last legitimate use' indicator."
         )
 
 
@@ -499,9 +496,7 @@ class TestRateLimit:
 
 class TestInfrastructureFailures:
     @pytest.mark.django_db
-    def test_jwks_unavailable_503(
-        self, github_claims_factory, github_binding, component, mocker, rsa_keypair
-    ) -> None:
+    def test_jwks_unavailable_503(self, github_claims_factory, github_binding, component, mocker, rsa_keypair) -> None:
         """GitHub's JWKS endpoint being down must NOT be conflated with a bad
         token — return 503 so CI doesn't retry-loop a real config error.
         """
