@@ -68,29 +68,55 @@ _BOT_EMAIL_DOMAIN = "sbomify.local"
 _BOT_ROLE = "bot"
 
 
+# PostgreSQL ``bigint`` (the underlying type of ``OIDCBinding.repository_id``
+# and ``repository_owner_id``) is signed 64-bit. A coerced Python int that
+# exceeds this range would survive ``int()`` (Python ints are unbounded) but
+# raise ``DataError`` from psycopg when handed to ``filter()`` below — a 500
+# instead of the documented 401. Cap to the positive side: GitHub IDs are
+# always positive 32-bit integers in practice, but pinning to int64 keeps the
+# bound aligned with the database column.
+_MAX_REPO_INT_CLAIM = 2**63 - 1
+
+
 def _coerce_repo_int_claim(value: Any) -> int | None:
-    """Return ``value`` as an ``int`` iff it's a numeric ``str`` or ``int``.
+    """Return ``value`` as an ``int`` iff it's a non-negative bigint-sized
+    integer expressed exactly the way GitHub emits it (an ASCII-decimal
+    string), or a Python ``int`` of the same magnitude.
 
     GitHub's OIDC tokens encode ``repository_id`` / ``repository_owner_id``
-    as JSON strings, but our test factory (and conceivably other OIDC
-    providers) may use ints. Accept both; reject ``None``, ``bool``,
-    floats, non-numeric strings, and any other type by returning ``None``
-    — the caller maps that to 401.
+    as JSON strings — ``"74"``, ``"65"``, … — so the str branch is the
+    primary path. ``int`` is also accepted because our test factory (and
+    conceivably other OIDC providers) may encode them as JSON numbers.
 
-    ``bool`` deserves the explicit reject: in Python ``isinstance(True,
-    int)`` is True and ``int(True) == 1``, so without the guard a
-    forged token shipping ``"repository_id": true`` would silently
-    coerce to 1.
+    Rejected (returns ``None`` → caller maps to 401):
+
+    * ``None``, ``bool``, ``float``, ``list``, ``dict`` — wrong JSON type.
+      ``bool`` is called out explicitly because in Python ``isinstance(True,
+      int)`` is ``True`` and would otherwise let a forged ``"…": true``
+      claim through as the integer ``1``.
+    * Strings with whitespace, sign prefixes (``"+74"``, ``"-74"``), PEP-515
+      underscore separators (``"7_4"``), or non-ASCII decimal digits
+      (``"١٢٣"`` etc.) — Python's ``int()`` accepts all of
+      these but GitHub never emits any of them, so accepting them only
+      widens the input surface for forged tokens.
+    * Negative integers — GitHub IDs are always positive.
+    * Integers ``> 2**63 - 1`` — would overflow PostgreSQL ``bigint`` when
+      handed to ``OIDCBinding.objects.filter(repository_id=…)`` and raise
+      a 500 instead of a clean 401.
     """
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value
+        return value if 0 <= value <= _MAX_REPO_INT_CLAIM else None
     if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
+        # ``isascii() and isdigit()`` admits only ``"0"`` … ``"9"`` —
+        # rejects ``"١"``-style Unicode digits, leading ``+``/``-``,
+        # whitespace, and PEP 515 underscores. Also rejects the empty
+        # string. Matches GitHub's wire format exactly.
+        if not (value.isascii() and value.isdigit()):
             return None
+        coerced = int(value)
+        return coerced if coerced <= _MAX_REPO_INT_CLAIM else None
     return None
 
 
