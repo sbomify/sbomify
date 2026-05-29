@@ -347,6 +347,146 @@ class TestDocumentUploadScope:
         assert response.status_code == 403
 
 
+class TestOIDCTokenIsUploadOnly:
+    """End-to-end: an OIDC-issued sbomify token has the bare minimum
+    permission needed for trusted publishing — and nothing else.
+
+    The bot user is a workspace Member at ``role="bot"``. Every endpoint
+    that gates on ``["owner", "admin"]`` (component CRUD, product CRUD,
+    metadata edits, …) MUST reject the bot. Only the two upload
+    endpoints — which explicitly include ``"bot"`` in ``allowed_roles``
+    AND check ``is_authorised_for_component`` — accept it, and only
+    for the component the binding pins.
+
+    This pins the "least privilege" property of the OIDC token end-to-end.
+    A regression that adds ``"bot"`` to a non-upload endpoint's
+    ``allowed_roles`` (or removes ``is_authorised_for_component`` from
+    an upload endpoint) will be caught here.
+    """
+
+    _MINIMAL_CDX = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"timestamp": "2026-01-01T00:00:00Z"},
+        "components": [],
+    }
+
+    @pytest.mark.django_db
+    def test_oidc_token_can_upload_sbom_to_bound_component(
+        self, oidc_sbomify_token, bound_component
+    ) -> None:
+        """Positive control: the one thing the OIDC token is for —
+        uploading to its bound component — must work. Without this, a
+        regression that breaks the bot role in ``allowed_roles`` would
+        be hidden behind all the negative assertions below.
+        """
+        client = Client()
+        response = client.post(
+            f"/api/v1/sboms/artifact/cyclonedx/{bound_component.id}",
+            data=json.dumps(self._MINIMAL_CDX),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        # Permission gate passed; 201 on success, 400/409 if payload/duplicate
+        # — anything but 403 means the bot was allowed past the role check.
+        assert response.status_code != 403, response.content
+
+    @pytest.mark.django_db
+    def test_oidc_token_cannot_create_component(self, oidc_sbomify_token) -> None:
+        """POST /components requires owner/admin. Bot must be 403.
+
+        ``create_component`` derives the target workspace from the
+        token's scope (``_get_user_team_id`` returns the bot's
+        ``token_team``), so this exercises the bot reaching its OWN
+        workspace and STILL being rejected — i.e. workspace membership
+        alone is not sufficient.
+        """
+        client = Client()
+        response = client.post(
+            "/api/v1/components",
+            data=json.dumps({"name": "bot-attempt"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert response.status_code == 403, response.content
+
+    @pytest.mark.django_db
+    def test_oidc_token_cannot_delete_bound_component(
+        self, oidc_sbomify_token, bound_component
+    ) -> None:
+        """DELETE on the bot's OWN bound component must still be 403.
+
+        Critical: the bot can *upload to* its bound component but must
+        not be able to *destroy* it. Upload and destroy are different
+        privileges; conflating them would let a compromised CI token
+        nuke the artifacts it was meant to publish.
+        """
+        client = Client()
+        response = client.delete(
+            f"/api/v1/components/{bound_component.id}",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert response.status_code == 403, response.content
+
+    @pytest.mark.django_db
+    def test_oidc_token_cannot_patch_component_metadata(
+        self, oidc_sbomify_token, bound_component
+    ) -> None:
+        """PATCH /components/{id}/metadata requires owner/admin.
+
+        Metadata edits change how downstream consumers (SBOM-Index,
+        compliance reports) interpret the artifact — strictly a human
+        operation, not a publishing-bot one.
+        """
+        client = Client()
+        response = client.patch(
+            f"/api/v1/components/{bound_component.id}/metadata",
+            data=json.dumps({"supplier": {"name": "evil-supplier"}}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert response.status_code == 403, response.content
+
+    @pytest.mark.django_db
+    def test_oidc_token_cannot_create_product(self, oidc_sbomify_token) -> None:
+        """POST /products requires owner/admin. Bot must be 403.
+
+        Same shape as the component-create check, exercised against the
+        Product endpoint to pin the property across both resource types.
+        """
+        client = Client()
+        response = client.post(
+            "/api/v1/products",
+            data=json.dumps({"name": "bot-product"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert response.status_code == 403, response.content
+
+    @pytest.mark.django_db
+    def test_oidc_token_cannot_upload_sbom_to_other_component(
+        self, oidc_sbomify_token, other_component
+    ) -> None:
+        """Even on the upload path itself, the bot is scope-locked to
+        its bound component. ``other_component`` is in the SAME
+        workspace as the binding — workspace membership alone (bot
+        role) would let a non-OIDC actor reach it, but
+        ``is_authorised_for_component`` adds the per-binding lock.
+
+        Already covered by ``TestSBOMUploadScope`` above; restated here
+        to assert "upload anywhere" is NOT what the bot can do.
+        """
+        client = Client()
+        response = client.post(
+            f"/api/v1/sboms/artifact/cyclonedx/{other_component.id}",
+            data=json.dumps(self._MINIMAL_CDX),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert response.status_code == 403, response.content
+
+
 class TestNonOidcRequestsUnaffected:
     @pytest.mark.django_db
     def test_pat_user_with_admin_role_still_works(

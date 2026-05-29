@@ -355,6 +355,172 @@ def test_scoped_token_create_component(sample_team_with_owner_member):  # noqa: 
     assert data["team_id"] == str(team.id)
 
 
+# ============================================================================
+# Multi-workspace token scope integration test
+# ============================================================================
+#
+# Property under test: a user can belong to many workspaces, but a PAT scoped
+# to workspace A must only grant access to workspace A. The token's scope is
+# the source of truth — being a member (or even owner) of workspace B is NOT
+# enough to use a workspace-A token against workspace-B resources.
+#
+# This is the security boundary the ``token_team`` enforcement in
+# ``verify_item_access`` (sbomify/apps/core/utils.py) draws. The unit-level
+# checks above (``test_scoped_token_wrong_team_access``) pin the predicate;
+# this test pins the end-to-end HTTP behaviour on a real upload endpoint so
+# that a regression in the wiring (e.g. a future view that bypasses
+# ``verify_item_access``) shows up here.
+
+
+@pytest.fixture
+def _minimal_cdx_payload() -> dict:
+    """Smallest valid CycloneDX 1.6 document the upload endpoint accepts.
+
+    Real-world SBOMs are much larger, but the upload endpoint cares about
+    schema validity, not size — and we want the test to fail on scope
+    rejection (403), never on payload parsing.
+    """
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"timestamp": "2026-01-01T00:00:00Z"},
+        "components": [],
+    }
+
+
+@pytest.mark.django_db
+def test_token_scoped_to_one_workspace_blocks_other_workspaces(
+    sample_user,  # noqa: F811
+    _minimal_cdx_payload,
+):
+    """End-to-end: a user owns two workspaces, but a PAT scoped to
+    workspace A cannot reach workspace B's component.
+
+    Mirrors the canonical multi-tenancy attack: a CI token leaks out of
+    one workspace and is replayed against another workspace the same
+    user happens to belong to. The token's ``team`` FK MUST be the
+    deciding factor — not the user's membership.
+    """
+    from sbomify.apps.sboms.models import Component
+
+    # Two distinct workspaces — same user is owner of both.
+    workspace_a = Team.objects.create(name="Workspace A")
+    workspace_a.key = number_to_random_token(workspace_a.pk)
+    workspace_a.save()
+    workspace_b = Team.objects.create(name="Workspace B")
+    workspace_b.key = number_to_random_token(workspace_b.pk)
+    workspace_b.save()
+    Member.objects.create(user=sample_user, team=workspace_a, role="owner", is_default_team=True)
+    Member.objects.create(user=sample_user, team=workspace_b, role="owner")
+
+    # One component per workspace — the upload target.
+    component_a = Component.objects.create(
+        name="Component in A", team=workspace_a, component_type=Component.ComponentType.BOM
+    )
+    component_b = Component.objects.create(
+        name="Component in B", team=workspace_b, component_type=Component.ComponentType.BOM
+    )
+
+    # PAT scoped to workspace A only.
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="PAT scoped to Workspace A",
+        team=workspace_a,
+    )
+
+    client = Client()
+    body = json.dumps(_minimal_cdx_payload)
+    headers = {"content_type": "application/json", "HTTP_AUTHORIZATION": f"Bearer {token_str}"}
+
+    # Workspace A: the token's home — upload must NOT be rejected as forbidden.
+    # (We only assert "not 403" so this test stays focused on the scope check
+    # and doesn't get coupled to validator/storage-layer details.)
+    response_a = client.post(
+        f"/api/v1/sboms/artifact/cyclonedx/{component_a.id}", data=body, **headers
+    )
+    assert response_a.status_code != 403, (
+        f"Workspace-A token rejected on its own workspace's component: "
+        f"{response_a.status_code} {response_a.content!r}"
+    )
+
+    # Workspace B: same user, same role, but the token is NOT scoped there.
+    # MUST be 403. A 200/201 here would mean the user's membership leaked
+    # past the token's scope — the bug this test is here to catch.
+    response_b = client.post(
+        f"/api/v1/sboms/artifact/cyclonedx/{component_b.id}", data=body, **headers
+    )
+    assert response_b.status_code == 403, (
+        f"Workspace-A token accepted upload to Workspace B's component "
+        f"(membership leaked past token scope): {response_b.status_code} {response_b.content!r}"
+    )
+
+
+@pytest.mark.django_db
+def test_token_scoped_to_workspace_a_cannot_create_in_workspace_b(
+    sample_user,  # noqa: F811
+):
+    """Scoped-token issuance points implicit-team actions at exactly one
+    workspace. A user owns workspaces A and B; the token is scoped to A.
+    ``create_component`` derives the target workspace from the token's
+    scope (``_get_user_team_id`` returns ``token_team.id`` first), so
+    the component MUST land in A even though sample_user could legally
+    create components in B via session auth.
+
+    This pins the second half of the scope contract: not just "B is
+    rejected" but "A is the only thing reachable" — a token can't be
+    coerced into operating on the user's default workspace if it's
+    scoped elsewhere.
+    """
+    workspace_a = Team.objects.create(name="Workspace A (scoped target)")
+    workspace_a.key = number_to_random_token(workspace_a.pk)
+    workspace_a.save()
+    workspace_b = Team.objects.create(name="Workspace B (default)")
+    workspace_b.key = number_to_random_token(workspace_b.pk)
+    workspace_b.save()
+    # B is the DEFAULT — a buggy ``_get_user_team_id`` that forgot
+    # ``token_team`` would fall through to the default and create in B.
+    Member.objects.create(user=sample_user, team=workspace_b, role="owner", is_default_team=True)
+    Member.objects.create(user=sample_user, team=workspace_a, role="owner")
+
+    plan_a = BillingPlan.objects.create(
+        key="multi_scope_plan_a", name="Plan A", max_products=10, max_components=10
+    )
+    plan_b = BillingPlan.objects.create(
+        key="multi_scope_plan_b", name="Plan B", max_products=10, max_components=10
+    )
+    workspace_a.billing_plan = plan_a.key
+    workspace_a.save()
+    workspace_b.billing_plan = plan_b.key
+    workspace_b.save()
+
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="PAT scoped to Workspace A",
+        team=workspace_a,
+    )
+
+    client = Client()
+    response = client.post(
+        reverse("api-1:create_component"),
+        json.dumps({"name": "scoped-create"}),
+        content_type="application/json",
+        HTTP_AUTHORIZATION=f"Bearer {token_str}",
+    )
+
+    assert response.status_code == 201, response.json()
+    # The component MUST belong to workspace A (the token's scope), NOT to
+    # B (the user's default workspace). This is the implicit-target guarantee.
+    assert response.json()["team_id"] == str(workspace_a.id), (
+        f"Component created in wrong workspace: token scoped to {workspace_a.id} "
+        f"but component landed in {response.json()['team_id']} (workspace B is {workspace_b.id})"
+    )
+
+
 # -- optional_token_auth decorator contract -----------------------------------
 #
 # The decorator wraps view handlers that allow anonymous access. The contract:
