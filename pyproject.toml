@@ -6,7 +6,7 @@ authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
 readme = "README.md"
 dependencies = [
-    "django>=5.2.14,<6",
+    "django>=5.2.14,<7",
     "python-dotenv>=1.2.2,<2",
     "urllib3>=2.7.0,<3",
     "psycopg2-binary>=2.9.9,<3",
@@ -36,7 +36,7 @@ dependencies = [
     "license-expression>=30.4.4,<31",
     "pyyaml>=6.0.2,<7",
     "dramatiq-crontab>=1.0.12,<2",
-    "uvicorn[standard]>=0.45.0,<0.47",
+    "uvicorn[standard]>=0.45.0,<0.49",
     "uvicorn-worker>=0.4.0,<0.5",
     "gunicorn>=25.0.3,<27",
     "django-dramatiq>=0.15.0",
@@ -80,7 +80,7 @@ dev = [
     "pre-commit>=4.3.0,<5",
     "datamodel-code-generator[http]~=0.44",
     "pytest-json-report>=1.5.0,<2",
-    "pytest-playwright>=0.7.1,<0.8",
+    "pytest-playwright>=0.7.1,<0.9",
     "djlint>=1.36.4,<2",
     "django-cors-headers>=4.9.0",
     "django-stubs[compatible-mypy]>=5.2.0,<7",
