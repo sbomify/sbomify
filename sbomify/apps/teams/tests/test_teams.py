@@ -1290,6 +1290,21 @@ def test_team_branding_atomic_upload(sample_team_with_owner_member: Member, mock
 
 
 @pytest.mark.django_db
+def test_team_branding_api_rejects_non_member(
+    sample_team_with_owner_member: Member,  # noqa: F811
+    guest_user,  # noqa: F811
+):
+    """A user who is not a member of the workspace cannot read its branding (BOLA regression)."""
+    team = sample_team_with_owner_member.team
+    client = Client()
+    assert client.login(username="guest", password="guest")  # nosec B106
+
+    response = client.get(f"/api/v1/workspaces/{team.key}/branding")
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Forbidden"
+
+
+@pytest.mark.django_db
 def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  # noqa: F811
     client = Client()
 

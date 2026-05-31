@@ -113,6 +113,40 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases")
         assert response.status_code == 200
 
+    def test_list_sbom_releases_redacts_private_product_for_non_members(self):
+        """Gated SBOMs are publicly listable, but private product names/IDs must not leak."""
+        client = Client()
+
+        # Component is publicly viewable (gated), but its release lives in a PRIVATE product.
+        self.component1.visibility = Component.Visibility.GATED
+        self.component1.save()
+        assert self.product1.is_public is False
+        ReleaseArtifact.objects.create(release=self.release1, sbom=self.sbom1_cdx)
+
+        response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases")
+        assert response.status_code == 200
+        item = json.loads(response.content)["items"][0]
+        assert item["id"] == str(self.release1.id)
+        assert item["is_public"] is False
+        # Private product name and id are withheld from non-members.
+        assert item["product_name"] == ""
+        assert item["product_id"] == ""
+
+    def test_list_sbom_releases_shows_private_product_to_members(self, authenticated_api_client):
+        """Workspace members still see private product names/IDs on gated SBOM releases."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
+        self.component1.visibility = Component.Visibility.GATED
+        self.component1.save()
+        ReleaseArtifact.objects.create(release=self.release1, sbom=self.sbom1_cdx)
+
+        response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases", **headers)
+        assert response.status_code == 200
+        item = json.loads(response.content)["items"][0]
+        assert item["product_name"] == "Test Product 1"
+        assert item["product_id"] == str(self.product1.id)
+
     def test_add_sbom_to_releases_new(self, authenticated_api_client):
         """Test adding an SBOM to releases (new case)."""
         client, access_token = authenticated_api_client

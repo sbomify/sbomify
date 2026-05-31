@@ -3651,6 +3651,11 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
         if not verify_item_access(request, sbom.component, ["guest", "owner", "admin"]):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # Whether the requester is a member of the SBOM's workspace. Non-members may
+    # reach this endpoint when the component is public/gated, so private product
+    # names and IDs must be withheld from them to avoid leaking private products.
+    has_workspace_access = verify_item_access(request, sbom.component, ["guest", "owner", "admin"])
+
     # Get all releases containing this SBOM
     release_artifacts_queryset = (
         ReleaseArtifact.objects.filter(sbom=sbom)
@@ -3661,19 +3666,22 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     # Apply pagination
     paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
 
-    items = [
-        {
-            "id": str(artifact.release.id),
-            "name": artifact.release.name,
-            "description": artifact.release.description,
-            "is_prerelease": artifact.release.is_prerelease,
-            "is_latest": artifact.release.is_latest,
-            "product_id": str(artifact.release.product.id),
-            "product_name": artifact.release.product.name,
-            "is_public": artifact.release.product.is_public,
-        }
-        for artifact in paginated_artifacts
-    ]
+    items = []
+    for artifact in paginated_artifacts:
+        product = artifact.release.product
+        reveal_product = product.is_public or has_workspace_access
+        items.append(
+            {
+                "id": str(artifact.release.id),
+                "name": artifact.release.name,
+                "description": artifact.release.description,
+                "is_prerelease": artifact.release.is_prerelease,
+                "is_latest": artifact.release.is_latest,
+                "product_id": str(product.id) if reveal_product else "",
+                "product_name": product.name if reveal_product else "",
+                "is_public": product.is_public,
+            }
+        )
 
     return {"items": items, "pagination": pagination_meta}
 

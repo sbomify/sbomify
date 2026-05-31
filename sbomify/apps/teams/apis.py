@@ -126,7 +126,10 @@ def _normalize_branding_payload(branding: dict[str, Any] | None) -> dict[str, An
     return data
 
 
-@router.get("/{team_key}/branding", response={200: BrandingInfoWithUrls, 400: ErrorResponse, 404: ErrorResponse})
+@router.get(
+    "/{team_key}/branding",
+    response={200: BrandingInfoWithUrls, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+)
 def get_team_branding(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     """Get workspace branding information.
 
@@ -141,6 +144,11 @@ def get_team_branding(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         team = Team.objects.get(pk=team_id)
     except Team.DoesNotExist:
         return 404, {"detail": "Workspace not found"}
+
+    user = cast(User, request.user)
+    if not Member.objects.filter(user=user, team=team).exists():
+        logger.warning(f"User {user.username} is not a member of team {team_key}")
+        return 403, {"detail": "Forbidden"}
 
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data)
