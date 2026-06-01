@@ -1,15 +1,22 @@
-"""OIDC token-exchange API.
+"""OIDC trusted-publishing API.
 
-Single endpoint: ``POST /api/v1/auth/oidc/github/exchange``.
+Two concerns, two auth postures:
 
-A GitHub Actions runner presents its OIDC token in the
-``Authorization: Bearer`` header; the body names the target Component.
-The endpoint is a thin dispatch into
-``services.exchange_github_oidc_token`` which owns every ORM call and
-the verification logic.
+* ``POST /github/exchange`` — PUBLIC (``auth=None``). A GitHub Actions
+  runner presents its OIDC token in the ``Authorization: Bearer``
+  header; the body names the target Component. Thin dispatch into
+  ``services.exchange_github_oidc_token``.
 
-Status code mapping (defense-in-depth — error bodies are intentionally
-sparse so an attacker can't probe which check failed):
+* ``GET/POST/DELETE /github/bindings`` — AUTHENTICATED (PAT or session)
+  and owner/admin-gated. Lets workspace owners manage trusted-publisher
+  bindings over the API (the same operations the UI exposes), so the
+  GitHub Action / wizard can register a binding during setup instead of
+  the user hand-creating one in the UI. Thin dispatch into
+  ``services.create_binding`` / ``delete_binding`` /
+  ``list_bindings_for_component``.
+
+Exchange status mapping (defense-in-depth — error bodies are
+intentionally sparse so an attacker can't probe which check failed):
 
 * 400 — missing body fields / malformed component_id
 * 401 — invalid OIDC token (signature, issuer, audience, expiry,
@@ -19,19 +26,40 @@ sparse so an attacker can't probe which check failed):
 * 404 — Component doesn't exist.
 * 503 — GitHub's JWKS endpoint is unreachable. Distinct from 401 so CI
   doesn't retry-loop a real config error.
+
+Binding-management status mapping:
+
+* 201 — binding created.
+* 204 — binding deleted.
+* 400 — malformed repository slug / unknown provider.
+* 401 — no / invalid credential.
+* 404 — Component doesn't exist OR the caller isn't an owner/admin of
+  its workspace. The two are deliberately conflated so a non-member
+  can't enumerate workspace inventory by status code.
+* 409 — that repository is already bound to the Component.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
+from typing import Any, cast
 
 from django.http import HttpRequest
 from django_ratelimit.core import is_ratelimited  # type: ignore[import-untyped]
 from ninja import Router, Schema
+from ninja.security import django_auth
 
+from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.models import User
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.core.utils import get_client_ip
-from sbomify.apps.oidc.services import exchange_github_oidc_token
+from sbomify.apps.core.utils import get_client_ip, verify_item_access
+from sbomify.apps.oidc.models import OIDCBinding
+from sbomify.apps.oidc.services import (
+    create_binding,
+    delete_binding,
+    exchange_github_oidc_token,
+    list_bindings_for_component,
+)
 from sbomify.logging import getLogger
 
 # Rate limit for the public, unauthenticated token-exchange endpoint.
@@ -146,3 +174,109 @@ def github_token_exchange(request: HttpRequest, payload: ExchangeRequest) -> tup
         "component_id": exchange.component_id,
         "token_type": "Bearer",  # nosec B105 — OAuth2 token_type sentinel, not a credential
     }
+
+
+# ============================================================================
+# Binding management — authenticated, owner/admin-gated CRUD over the same
+# services the UI uses. Dual auth (PAT for the action/CI, session for the web
+# UI) overrides the router-level ``auth=None`` per-route.
+# ============================================================================
+
+_BINDING_AUTH = (PersonalAccessTokenAuth(), django_auth)
+_VALID_PROVIDERS = {value for value, _label in OIDCBinding.PROVIDER_CHOICES}
+
+
+class BindingCreateRequest(Schema):
+    component_id: str
+    repository: str
+    provider: str = OIDCBinding.PROVIDER_GITHUB
+
+
+class BindingResponse(Schema):
+    id: str
+    component_id: str
+    provider: str
+    repository: str
+    repository_id: int
+    repository_owner_id: int
+    created_at: datetime
+    last_used_at: datetime | None = None
+
+
+def _component_for_management(request: HttpRequest, component_id: str) -> Any | None:
+    """Resolve a Component the caller may manage bindings for, else ``None``.
+
+    Returns ``None`` for BOTH "no such component" and "caller isn't an
+    owner/admin of its workspace" — the caller maps either to 404 so a
+    non-member can't distinguish them (anti-enumeration). Mirrors the UI's
+    ``_component_or_error`` permission gate. Component import is local to
+    match the service layer's circular-import avoidance.
+    """
+    from sbomify.apps.sboms.models import Component
+
+    component = Component.objects.filter(pk=component_id).select_related("team").first()
+    if component is None or not verify_item_access(request, component, ["owner", "admin"]):
+        return None
+    return component
+
+
+@router.get(
+    "/github/bindings",
+    auth=_BINDING_AUTH,
+    response={200: list[BindingResponse], 401: ErrorResponse, 404: ErrorResponse},
+    summary="List GitHub trusted-publisher bindings for a component.",
+)
+def list_github_bindings(request: HttpRequest, component_id: str) -> tuple[int, Any]:
+    component = _component_for_management(request, component_id)
+    if component is None:
+        return 404, {"detail": "component not found or insufficient permissions"}
+    return 200, list_bindings_for_component(component)
+
+
+@router.post(
+    "/github/bindings",
+    auth=_BINDING_AUTH,
+    response={
+        201: BindingResponse,
+        400: ErrorResponse,
+        401: ErrorResponse,
+        404: ErrorResponse,
+        409: ErrorResponse,
+    },
+    summary="Create a GitHub trusted-publisher binding for a component.",
+)
+def create_github_binding(request: HttpRequest, payload: BindingCreateRequest) -> tuple[int, Any]:
+    provider = payload.provider or OIDCBinding.PROVIDER_GITHUB
+    if provider not in _VALID_PROVIDERS:
+        return 400, {"detail": f"unsupported provider '{provider}'"}
+
+    component = _component_for_management(request, payload.component_id)
+    if component is None:
+        return 404, {"detail": "component not found or insufficient permissions"}
+
+    result = create_binding(
+        component=component,
+        provider=provider,
+        repository_slug=payload.repository,
+        requested_by=cast(User, request.user),
+    )
+    if not result.ok:
+        return result.status_code or 500, {"detail": result.error or "failed to create binding"}
+    return 201, result.value
+
+
+@router.delete(
+    "/github/bindings/{binding_id}",
+    auth=_BINDING_AUTH,
+    response={204: None, 401: ErrorResponse, 404: ErrorResponse},
+    summary="Delete a GitHub trusted-publisher binding.",
+)
+def delete_github_binding(request: HttpRequest, binding_id: str, component_id: str) -> tuple[int, Any]:
+    component = _component_for_management(request, component_id)
+    if component is None:
+        return 404, {"detail": "component not found or insufficient permissions"}
+
+    result = delete_binding(component=component, binding_id=binding_id)
+    if not result.ok:
+        return result.status_code or 404, {"detail": result.error or "trusted publisher not found"}
+    return 204, None

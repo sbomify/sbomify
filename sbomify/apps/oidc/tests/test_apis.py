@@ -16,12 +16,15 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+from sbomify.apps.oidc.github_api import GitHubResolveError, ResolvedRepository
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import provision_bot_user_for_binding
 from sbomify.apps.sboms.models import Component
 from sbomify.apps.teams.models import Team
 
 EXCHANGE_URL = "/api/v1/auth/oidc/github/exchange"
+BINDINGS_URL = "/api/v1/auth/oidc/github/bindings"
 
 
 @pytest.fixture
@@ -527,3 +530,186 @@ class TestInfrastructureFailures:
             HTTP_AUTHORIZATION=f"Bearer {token}",
         )
         assert response.status_code == 503
+
+
+# ============================================================================
+# Binding-management API: GET/POST/DELETE /api/v1/auth/oidc/github/bindings
+#
+# Authenticated (PAT or session), owner/admin-gated, thin dispatch over the
+# same services the UI uses. resolve_repository (the GitHub REST call) is
+# mocked so create tests don't hit the network. Permission failures conflate
+# to 404 (anti-enumeration) — a non-owner can't tell "no such component" from
+# "you can't manage this one".
+# ============================================================================
+
+_RESOLVED = ResolvedRepository(
+    repository="acme/widget",
+    repository_owner="acme",
+    repository_id=12345,
+    repository_owner_id=67890,
+)
+
+
+@pytest.fixture
+def owned_component(sample_team_with_owner_member) -> Component:
+    """A component in a workspace where ``sample_user`` is the owner."""
+    return Component.objects.create(name="Binding API Test", team=sample_team_with_owner_member.team)
+
+
+@pytest.mark.django_db
+class TestBindingManagementCreate:
+    def test_owner_creates_binding_201(self, authenticated_api_client, owned_component, mocker) -> None:
+        mocker.patch("sbomify.apps.oidc.services.resolve_repository", return_value=_RESOLVED)
+        client, token = authenticated_api_client
+
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/widget"}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 201, response.content
+        body = response.json()
+        assert body["repository"] == "acme/widget"
+        assert body["repository_id"] == 12345
+        assert body["repository_owner_id"] == 67890
+        assert body["provider"] == OIDCBinding.PROVIDER_GITHUB
+        assert body["component_id"] == owned_component.id
+        # Row persisted + bot user provisioned (so a later exchange works).
+        binding = OIDCBinding.objects.get(pk=body["id"])
+        assert binding.bot_user is not None
+
+    def test_malformed_repository_400_no_network(self, authenticated_api_client, owned_component, mocker) -> None:
+        """A slug that isn't 'org/repo' is rejected before any GitHub call."""
+        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository", side_effect=_RESOLVED)
+        # resolve_repository validates the pattern itself and raises 'malformed';
+        # patch it to the real behaviour for this one case so we exercise the 400.
+        resolve.side_effect = GitHubResolveError("malformed", "bad slug")
+        client, token = authenticated_api_client
+
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": owned_component.id, "repository": "not-a-valid-slug"}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 400, response.content
+
+    def test_duplicate_binding_409(self, authenticated_api_client, owned_component, mocker) -> None:
+        mocker.patch("sbomify.apps.oidc.services.resolve_repository", return_value=_RESOLVED)
+        client, token = authenticated_api_client
+        body = json.dumps({"component_id": owned_component.id, "repository": "acme/widget"})
+
+        first = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert first.status_code == 201
+        second = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert second.status_code == 409, second.content
+
+    def test_unknown_component_404(self, authenticated_api_client, mocker) -> None:
+        mocker.patch("sbomify.apps.oidc.services.resolve_repository", return_value=_RESOLVED)
+        client, token = authenticated_api_client
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": "does_not_exist", "repository": "acme/widget"}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 404, response.content
+
+    def test_unauthenticated_rejected(self, owned_component) -> None:
+        """No credential → rejected. The dual-auth tuple is
+        ``(PersonalAccessTokenAuth, django_auth)``; with no Bearer and no
+        session, the session backend's CSRF check fires first on this unsafe
+        method, so a live server returns 403. The test client disables CSRF
+        enforcement, so here it surfaces as Ninja's 401. Either way it's
+        rejected before any handler logic — accept both. (A real action call
+        always presents a PAT, which authenticates via the Bearer path and
+        never reaches the CSRF check.)"""
+        client = Client()
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/widget"}),
+            content_type="application/json",
+        )
+        assert response.status_code in (401, 403)
+
+    def test_non_member_conflated_to_404(self, guest_api_client, owned_component, mocker) -> None:
+        """A token whose user has NO role in the component's workspace gets 404,
+        not 403 — same body as 'no such component' so inventory can't leak."""
+        mocker.patch("sbomify.apps.oidc.services.resolve_repository", return_value=_RESOLVED)
+        client, token = guest_api_client
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/widget"}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 404, response.content
+        # And nothing was created.
+        assert not OIDCBinding.objects.filter(component=owned_component).exists()
+
+
+@pytest.mark.django_db
+class TestBindingManagementListDelete:
+    def _create(self, client, token, component, mocker) -> str:
+        mocker.patch("sbomify.apps.oidc.services.resolve_repository", return_value=_RESOLVED)
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": component.id, "repository": "acme/widget"}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 201, response.content
+        return response.json()["id"]
+
+    def test_list_returns_bindings(self, authenticated_api_client, owned_component, mocker) -> None:
+        client, token = authenticated_api_client
+        binding_id = self._create(client, token, owned_component, mocker)
+
+        response = client.get(f"{BINDINGS_URL}?component_id={owned_component.id}", **get_api_headers(token))
+        assert response.status_code == 200, response.content
+        bindings = response.json()
+        assert [b["id"] for b in bindings] == [binding_id]
+        assert bindings[0]["repository"] == "acme/widget"
+
+    def test_list_empty_for_component_without_bindings(self, authenticated_api_client, owned_component) -> None:
+        client, token = authenticated_api_client
+        response = client.get(f"{BINDINGS_URL}?component_id={owned_component.id}", **get_api_headers(token))
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_list_non_member_404(self, guest_api_client, owned_component) -> None:
+        client, token = guest_api_client
+        response = client.get(f"{BINDINGS_URL}?component_id={owned_component.id}", **get_api_headers(token))
+        assert response.status_code == 404
+
+    def test_delete_removes_binding_204(self, authenticated_api_client, owned_component, mocker) -> None:
+        client, token = authenticated_api_client
+        binding_id = self._create(client, token, owned_component, mocker)
+
+        response = client.delete(
+            f"{BINDINGS_URL}/{binding_id}?component_id={owned_component.id}", **get_api_headers(token)
+        )
+        assert response.status_code == 204, response.content
+        assert not OIDCBinding.objects.filter(pk=binding_id).exists()
+
+    def test_delete_unknown_binding_404(self, authenticated_api_client, owned_component) -> None:
+        client, token = authenticated_api_client
+        response = client.delete(
+            f"{BINDINGS_URL}/does_not_exist?component_id={owned_component.id}", **get_api_headers(token)
+        )
+        assert response.status_code == 404
+
+    def test_delete_non_member_404(self, guest_api_client, authenticated_api_client, owned_component, mocker) -> None:
+        """A non-member can't delete another workspace's binding (404, and the
+        binding survives)."""
+        owner_client, owner_token = authenticated_api_client
+        binding_id = self._create(owner_client, owner_token, owned_component, mocker)
+
+        guest_client, guest_token = guest_api_client
+        response = guest_client.delete(
+            f"{BINDINGS_URL}/{binding_id}?component_id={owned_component.id}", **get_api_headers(guest_token)
+        )
+        assert response.status_code == 404
+        assert OIDCBinding.objects.filter(pk=binding_id).exists()
