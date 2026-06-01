@@ -1,3 +1,4 @@
+{% load humanize %}
 {# Inner template for dashboard stats card - receives color classes via with #}
 <a href="{{ href }}"
    class="block tw-card p-5 border {{ border_class }} {{ hover_class }} transition-all duration-200 hover:shadow-md group"
@@ -10,7 +11,7 @@
                 </div>
                 <span class="text-sm font-medium text-text-muted uppercase tracking-wide">{{ title }}</span>
             </div>
-            <div class="text-3xl font-bold text-text mb-1">{{ count }}</div>
+            <div class="text-3xl font-bold text-text mb-1">{{ count|intcomma }}</div>
             {% if trend %}
                 <div class="flex items-center gap-1.5 text-sm">
                     {% if trend_positive %}
