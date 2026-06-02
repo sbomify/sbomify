@@ -309,6 +309,8 @@ def create_binding(
     provider: str,
     repository_slug: str,
     requested_by: User,
+    repository_id: int | None = None,
+    repository_owner_id: int | None = None,
 ) -> ServiceResult["OIDCBinding"]:
     """Resolve, provision, and persist a new trusted-publisher binding.
 
@@ -317,21 +319,41 @@ def create_binding(
     first, bot provisioned second, FK attached last) is wrapped in
     ``transaction.atomic`` so the brief ``bot_user IS NULL`` window
     never escapes the transaction.
+
+    Repo identity comes from one of two paths:
+
+    * ``repository_id`` + ``repository_owner_id`` BOTH supplied — trust
+      them as-is and skip the GitHub lookup. This is how a binding gets
+      created for a PRIVATE repo: sbomify can't read a private repo's
+      metadata unauthenticated, so the caller (the wizard, using the
+      operator's own GitHub auth) resolves the immutable IDs locally and
+      passes them in. The caller is already owner/admin-gated, and the
+      IDs only govern which repo may publish to the caller's OWN
+      component, so trusting caller-supplied IDs grants no cross-tenant
+      power. The ``repository_slug`` is still used (lowercased) for the
+      display name. Both IDs must be supplied together — validated by the
+      API layer.
+    * neither supplied — resolve ``repository_slug`` → immutable IDs via
+      GitHub's REST API (public repos only).
     """
     from sbomify.apps.oidc.models import OIDCBinding
 
-    try:
-        resolved = resolve_repository(repository_slug)
-    except GitHubResolveError as exc:
-        # 400 for malformed / not_found / rate_limited / unavailable.
-        # The ``kind`` attribute of the exception (e.g. "rate_limited")
-        # is intentionally NOT propagated through the ``ServiceResult``
-        # right now — callers (currently only ``TrustedPublishersView``)
-        # render ``str(exc)`` straight into the form field error, which
-        # is enough for the user. If a future caller needs to branch on
-        # the kind, switch this to a structured failure result rather
-        # than re-parsing the message string.
-        return ServiceResult.failure(str(exc), status_code=400)
+    if repository_id is not None and repository_owner_id is not None:
+        repo_name, repo_id, owner_id = repository_slug.lower(), repository_id, repository_owner_id
+    else:
+        try:
+            resolved = resolve_repository(repository_slug)
+        except GitHubResolveError as exc:
+            # 400 for malformed / not_found / rate_limited / unavailable.
+            # The ``kind`` attribute of the exception (e.g. "rate_limited")
+            # is intentionally NOT propagated through the ``ServiceResult``
+            # right now — callers (currently only ``TrustedPublishersView``)
+            # render ``str(exc)`` straight into the form field error, which
+            # is enough for the user. If a future caller needs to branch on
+            # the kind, switch this to a structured failure result rather
+            # than re-parsing the message string.
+            return ServiceResult.failure(str(exc), status_code=400)
+        repo_name, repo_id, owner_id = resolved.repository.lower(), resolved.repository_id, resolved.repository_owner_id
 
     try:
         with transaction.atomic():
@@ -342,9 +364,9 @@ def create_binding(
             binding = OIDCBinding.objects.create(
                 component=component,
                 provider=provider,
-                repository=resolved.repository.lower(),
-                repository_id=resolved.repository_id,
-                repository_owner_id=resolved.repository_owner_id,
+                repository=repo_name,
+                repository_id=repo_id,
+                repository_owner_id=owner_id,
                 bot_user=None,
                 created_by=requested_by,
             )
