@@ -61,9 +61,13 @@ workflow's OIDC identity and are valid for 15 minutes.
 <i class="fas fa-arrow-up-right-from-square text-xs"></i>
 </a>
 </div>
-<div class="text-xs text-text-muted mt-1 font-mono" title="Immutable IDs pinned at setup — used to defeat account-resurrection attacks">
+<div class="text-xs text-text-muted mt-1 font-mono" title="Immutable IDs used to defeat account-resurrection attacks. Pinned at setup for public repos; pinned from the first OIDC publish for private repos.">
+{% if binding.repository_id %}
 owner_id={{ binding.repository_owner_id }} ·
 repo_id={{ binding.repository_id }}
+{% else %}
+<span class="italic">awaiting first publish — IDs pin automatically</span>
+{% endif %}
 </div>
 </td>
 <td class="text-sm text-text-muted">

@@ -716,94 +716,193 @@ class TestBindingManagementListDelete:
 
 
 @pytest.mark.django_db
-class TestBindingManagementExplicitIds:
-    """Caller-supplied immutable IDs let a binding be created for a repo the
-    backend can't resolve unauthenticated (private repos). The wizard resolves
-    them via the user's local GitHub auth and passes them here — no GitHub call
-    happens server-side, so resolve_repository is never invoked."""
+class TestBindingCreateDefersForPrivateRepo:
+    """A private repo can't be resolved unauthenticated, so the binding is
+    created UNPINNED (IDs NULL) and the IDs are pinned later from the first
+    OIDC token. Only a malformed slug is rejected outright (covered in
+    TestBindingManagementCreate)."""
 
-    def test_explicit_ids_skip_github_resolve(self, authenticated_api_client, owned_component, mocker) -> None:
-        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+    def test_private_repo_creates_unpinned_binding(self, authenticated_api_client, owned_component, mocker) -> None:
+        # resolve_repository 404s for a private repo (GitHubResolveError 'not_found').
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            side_effect=GitHubResolveError("not_found", "private or missing"),
+        )
         client, token = authenticated_api_client
 
         response = client.post(
             BINDINGS_URL,
-            data=json.dumps(
-                {
-                    "component_id": owned_component.id,
-                    "repository": "aurangzaib048/rwaj-assessment",
-                    "repository_id": 999001,
-                    "repository_owner_id": 999002,
-                }
-            ),
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/private-repo"}),
             content_type="application/json",
             **get_api_headers(token),
         )
 
         assert response.status_code == 201, response.content
-        resolve.assert_not_called()  # no unauthenticated GitHub lookup for a private repo
         body = response.json()
-        assert body["repository_id"] == 999001
-        assert body["repository_owner_id"] == 999002
-        assert body["repository"] == "aurangzaib048/rwaj-assessment"
+        assert body["repository"] == "acme/private-repo"
+        assert body["repository_id"] is None  # unpinned — awaiting first publish
+        assert body["repository_owner_id"] is None
         binding = OIDCBinding.objects.get(pk=body["id"])
-        assert binding.repository_id == 999001
-        assert binding.repository_owner_id == 999002
+        assert binding.repository_id is None
+        assert binding.bot_user is not None  # bot provisioned even while unpinned
 
-    def test_one_id_only_is_400(self, authenticated_api_client, owned_component, mocker) -> None:
-        """repository_id without repository_owner_id (or vice versa) is rejected —
-        a half-specified identity can't be matched at exchange time."""
-        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+    def test_transient_resolve_failure_also_defers(self, authenticated_api_client, owned_component, mocker) -> None:
+        """A rate-limited / unreachable GitHub also defers (we can't read the IDs
+        right now) — the binding is created unpinned rather than failing."""
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            side_effect=GitHubResolveError("unavailable", "github down"),
+        )
         client, token = authenticated_api_client
-
         response = client.post(
             BINDINGS_URL,
-            data=json.dumps({"component_id": owned_component.id, "repository": "acme/widget", "repository_id": 999001}),
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/widget"}),
             content_type="application/json",
             **get_api_headers(token),
         )
-        assert response.status_code == 400, response.content
-        resolve.assert_not_called()
+        assert response.status_code == 201, response.content
+        assert response.json()["repository_id"] is None
 
-    @pytest.mark.parametrize("bad_id", [-1, 0, 2**63])
-    def test_out_of_range_ids_are_400(self, authenticated_api_client, owned_component, mocker, bad_id) -> None:
-        """IDs must be positive and fit PostgreSQL bigint — a 0/negative/overflow
-        value would either never match or raise a DB DataError (500)."""
-        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+    def test_duplicate_unpinned_name_is_409(self, authenticated_api_client, owned_component, mocker) -> None:
+        """Two UNPINNED bindings for the same name on a component conflict — the
+        unpinned-name unique constraint maps to a 409."""
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            side_effect=GitHubResolveError("not_found", "private"),
+        )
         client, token = authenticated_api_client
+        body = json.dumps({"component_id": owned_component.id, "repository": "acme/private-repo"})
+
+        first = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert first.status_code == 201
+        second = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert second.status_code == 409, second.content
+
+    def test_freed_name_rebindable_after_pin(self, authenticated_api_client, owned_component, mocker) -> None:
+        """A PINNED binding keeps its (possibly stale-after-rename) name, but
+        because pinned bindings are keyed by ID, that name must NOT block a new
+        binding for the same name (e.g. a different repo that reused a freed
+        name). Regression for the conditional uniqueness."""
+        client, token = authenticated_api_client
+        body = json.dumps({"component_id": owned_component.id, "repository": "acme/widget"})
+
+        # 1) Public repo → resolved + pinned at create.
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            return_value=ResolvedRepository(
+                repository="acme/widget", repository_owner="acme", repository_id=111, repository_owner_id=222
+            ),
+        )
+        first = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert first.status_code == 201
+        assert first.json()["repository_id"] == 111  # pinned
+
+        # 2) New binding for the SAME name now defers (private) — not blocked by
+        #    the pinned binding above (which is keyed by ID, not name).
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            side_effect=GitHubResolveError("not_found", "private"),
+        )
+        second = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert second.status_code == 201, second.content
+        assert second.json()["repository_id"] is None  # unpinned
+
+
+@pytest.mark.django_db
+def test_partial_pin_rejected_by_check_constraint(component, sample_user) -> None:
+    """The both-or-neither CheckConstraint forbids a half-pinned row (one ID
+    set, the other NULL): it could never match an exchange and would fall into
+    the wrong conditional-uniqueness branch."""
+    from django.db import IntegrityError, transaction
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            OIDCBinding.objects.create(
+                component=component,
+                provider=OIDCBinding.PROVIDER_GITHUB,
+                repository="acme/widget",
+                repository_id=12345,
+                repository_owner_id=None,  # half-pinned → violates the constraint
+                bot_user=None,
+                created_by=sample_user,
+            )
+
+
+def _make_unpinned_binding(component: Component, repository: str, sample_user) -> OIDCBinding:
+    """Create an UNPINNED binding (IDs NULL) with a provisioned bot user.
+
+    Mirrors the real two-phase create in ``services.create_binding``: insert
+    with ``bot_user=None`` (the FK is nullable for exactly this window), then
+    provision the bot and attach it — no throwaway placeholder User needed.
+    """
+    binding = OIDCBinding.objects.create(
+        component=component,
+        provider=OIDCBinding.PROVIDER_GITHUB,
+        repository=repository,
+        repository_id=None,
+        repository_owner_id=None,
+        bot_user=None,
+        created_by=sample_user,
+    )
+    bot = provision_bot_user_for_binding(binding)
+    binding.bot_user = bot
+    binding.save(update_fields=["bot_user"])
+    return binding
+
+
+@pytest.mark.django_db
+class TestDeferredPinningAtExchange:
+    """An unpinned binding gets its immutable IDs pinned from the first signed
+    OIDC token (matched by repository name); afterwards it matches by ID."""
+
+    def test_first_exchange_pins_ids(self, github_claims_factory, mock_github_jwks, component, sample_user) -> None:
+        binding = _make_unpinned_binding(component, "acme/widget", sample_user)
+        token = github_claims_factory(repository="acme/widget", repository_owner_id=67890, repository_id=12345)
+        client = Client()
 
         response = client.post(
-            BINDINGS_URL,
-            data=json.dumps(
-                {
-                    "component_id": owned_component.id,
-                    "repository": "acme/widget",
-                    "repository_id": bad_id,
-                    "repository_owner_id": 999002,
-                }
-            ),
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
             content_type="application/json",
-            **get_api_headers(token),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
         )
-        assert response.status_code == 400, response.content
-        resolve.assert_not_called()
 
-    def test_explicit_ids_still_owner_admin_gated(self, guest_api_client, owned_component, mocker) -> None:
-        """Supplying IDs doesn't bypass the owner/admin gate — a non-member 404s."""
-        mocker.patch("sbomify.apps.oidc.services.resolve_repository")
-        client, token = guest_api_client
+        assert response.status_code == 200, response.content
+        binding.refresh_from_db()
+        assert binding.repository_id == 12345  # pinned from the verified token
+        assert binding.repository_owner_id == 67890
+
+    def test_second_exchange_matches_by_pinned_id(
+        self, github_claims_factory, mock_github_jwks, component, sample_user
+    ) -> None:
+        _make_unpinned_binding(component, "acme/widget", sample_user)
+        token = github_claims_factory(repository="acme/widget", repository_owner_id=67890, repository_id=12345)
+        client = Client()
+        body = json.dumps({"component_id": component.id})
+        headers = {"content_type": "application/json", "HTTP_AUTHORIZATION": f"Bearer {token}"}
+
+        first = client.post(EXCHANGE_URL, data=body, **headers)
+        second = client.post(EXCHANGE_URL, data=body, **headers)
+
+        assert first.status_code == 200, first.content
+        assert second.status_code == 200, second.content  # now matched on the pinned IDs
+
+    def test_unpinned_binding_not_claimed_by_other_repo(
+        self, github_claims_factory, mock_github_jwks, component, sample_user
+    ) -> None:
+        """A token for a DIFFERENT repo name must not pin/claim an unpinned
+        binding — it stays unpinned and the exchange 403s."""
+        binding = _make_unpinned_binding(component, "acme/widget", sample_user)
+        token = github_claims_factory(repository="evil/forge", repository_owner_id=99999, repository_id=88888)
+        client = Client()
+
         response = client.post(
-            BINDINGS_URL,
-            data=json.dumps(
-                {
-                    "component_id": owned_component.id,
-                    "repository": "acme/widget",
-                    "repository_id": 999001,
-                    "repository_owner_id": 999002,
-                }
-            ),
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
             content_type="application/json",
-            **get_api_headers(token),
+            HTTP_AUTHORIZATION=f"Bearer {token}",
         )
-        assert response.status_code == 404, response.content
-        assert not OIDCBinding.objects.filter(component=owned_component).exists()
+
+        assert response.status_code == 403
+        binding.refresh_from_db()
+        assert binding.repository_id is None  # untouched

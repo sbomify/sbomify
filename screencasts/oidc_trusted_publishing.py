@@ -41,13 +41,13 @@ from conftest import (
 )
 from sbomify.apps.oidc.github_api import ResolvedRepository
 
-DEMO_REPOSITORY = "aurangzaib048/lithium"
-# Fake-but-stable IDs so the recording shows the same "owner_id=… ·
-# repo_id=…" subline every time. Real GitHub values would shift if
-# the repo were ever transferred / renamed; deterministic ones keep
-# the screencast frame-stable across re-records.
-_FAKE_OWNER_ID = 44493075
-_FAKE_REPO_ID = 1203430154
+DEMO_REPOSITORY = "acme/widget"
+# Fictitious, fixed IDs so the recording shows the same "owner_id=… ·
+# repo_id=…" subline every time — and so no real GitHub account/repo is
+# embedded in the screencast. Deterministic values also keep the frame
+# stable across re-records (real IDs would shift on transfer / rename).
+_FAKE_OWNER_ID = 10000001
+_FAKE_REPO_ID = 200000002
 
 # Minimal CycloneDX 1.6 payload — same shape as the existing
 # ``test_validate_cyclonedx_sbom_1_4`` test fixture, bumped to 1.6.
@@ -60,7 +60,7 @@ _MINIMAL_CDX = {
     "metadata": {
         "component": {
             "type": "application",
-            "name": "lithium",
+            "name": "widget",
             "version": "1.0.0-oidc-demo",
         },
     },
@@ -379,6 +379,6 @@ def oidc_trusted_publishing(
     pace(page, 1000)
 
     # The newly-uploaded SBOM carries the metadata-supplied component name.
-    new_sbom_row = page.locator("a:has-text('lithium')").first
+    new_sbom_row = page.locator("a:has-text('widget')").first
     new_sbom_row.wait_for(state="visible", timeout=10_000)
     pace(page, 3000)
