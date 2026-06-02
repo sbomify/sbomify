@@ -160,11 +160,13 @@ class TestCreate:
         called.assert_not_called()
 
     @pytest.mark.django_db
-    def test_post_when_repo_not_found_renders_inline_error(
+    def test_post_when_repo_not_found_creates_unpinned_binding(
         self, authed_client: Client, component: Component, mocker
     ) -> None:
-        # Upstream GitHub error also returns 200 + inline error for the
-        # same HTMX-swap reason; see the view's resolve-error branch.
+        # A private (or as-yet-unresolvable) repo 404s on the unauthenticated
+        # GitHub lookup. Rather than erroring, the UI now creates the binding
+        # UNPINNED and pins its IDs from the first OIDC publish — so private
+        # repos can use trusted publishing too (same path as the API/CLI).
         mocker.patch(
             "sbomify.apps.oidc.services.resolve_repository",
             side_effect=GitHubResolveError("not_found", "Repository 'ghost/repo' was not found."),
@@ -174,7 +176,10 @@ class TestCreate:
             data={"provider": "github", "repository": "ghost/repo"},
         )
         assert response.status_code == 200
-        assert b"not found" in response.content.lower()
+        binding = OIDCBinding.objects.get(component=component, repository="ghost/repo")
+        assert binding.repository_id is None  # unpinned — pins on first publish
+        assert binding.repository_owner_id is None
+        assert binding.bot_user is not None
 
     @pytest.mark.django_db
     def test_duplicate_binding_renders_inline_error(

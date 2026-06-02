@@ -30,22 +30,29 @@ class OIDCBinding(models.Model):
     Account-resurrection guard
     --------------------------
 
-    We MUST NOT match incoming OIDC tokens on the mutable
-    ``repository`` (``"org/repo"``) string alone — if a GitHub
-    organisation is deleted and someone else registers the same name,
-    they'd be able to mint tokens claiming the original repository and
-    take over a binding. Per PyPI's experience with this exact attack
-    surface, the right identifiers are GitHub's IMMUTABLE numeric IDs:
+    Once a binding is *pinned*, we match incoming OIDC tokens on GitHub's
+    IMMUTABLE numeric IDs, NEVER the mutable ``repository`` string — if a
+    GitHub org is deleted and someone re-registers the name, they must
+    not be able to take over the binding. Per PyPI's experience with this
+    attack surface, the stable identifiers are:
 
     * ``repository_owner_id`` — the user/org's stable ID
     * ``repository_id`` — the repository's stable ID
 
-    These are pinned at binding-create time (resolved from GitHub's
-    REST API in ``github_api.resolve_repository``) and matched on
-    every token exchange. The ``repository`` / ``repository_owner``
-    strings are kept for display only; they may drift if the
-    repository is renamed but the binding stays valid because the IDs
-    still match.
+    *When* those IDs are pinned depends on what we can read at create time:
+
+    * **Public repo** — resolved from GitHub's REST API
+      (``github_api.resolve_repository``) at create time and pinned
+      immediately.
+    * **Private repo** — sbomify can't read its metadata anonymously, so
+      the binding is created UNPINNED (IDs NULL) and the IDs are pinned
+      from the first *signed* OIDC token at exchange (the token already
+      carries them). Trust-on-first-use: the ``repository`` name binds to
+      whoever publishes first, a narrow window between create and first
+      publish. After pinning, matching is ID-based like the public case.
+
+    The ``repository`` string is the match key only while UNPINNED; once
+    pinned it's display-only and may drift after a rename.
     """
 
     PROVIDER_GITHUB = "github"
@@ -57,21 +64,30 @@ class OIDCBinding(models.Model):
     repository = models.CharField(
         max_length=255,
         help_text=(
-            "External repository identifier for DISPLAY only. GitHub: 'org/repo' "
-            "(case-insensitive, stored lowercase). Matching uses the immutable "
-            "IDs below; this string may go stale after a rename."
+            "External repository identifier. GitHub: 'org/repo' (case-insensitive, "
+            "stored lowercase). Used to match a still-UNPINNED binding on the first "
+            "exchange; once the IDs below are pinned, matching is by ID and this "
+            "string is display-only (may go stale after a rename)."
         ),
     )
     repository_id = models.BigIntegerField(
+        null=True,
+        blank=True,
         help_text=(
-            "GitHub's immutable numeric repository ID. The token-exchange "
-            "endpoint matches incoming tokens against this, NEVER the name."
+            "GitHub's immutable numeric repository ID. NULL until pinned. Resolved "
+            "at create time for public repos; for private repos (sbomify can't read "
+            "their metadata anonymously) it stays NULL and is pinned from the first "
+            "signed OIDC token at exchange. Once set, the exchange matches on this, "
+            "NEVER the name."
         ),
     )
     repository_owner_id = models.BigIntegerField(
+        null=True,
+        blank=True,
         help_text=(
-            "GitHub's immutable numeric owner (user/org) ID. Matched alongside "
-            "``repository_id`` to defeat account-resurrection attacks."
+            "GitHub's immutable numeric owner (user/org) ID. NULL until pinned "
+            "(see ``repository_id``). Matched alongside ``repository_id`` to defeat "
+            "account-resurrection attacks."
         ),
     )
     bot_user = models.OneToOneField(
@@ -111,13 +127,18 @@ class OIDCBinding(models.Model):
     class Meta:
         db_table = "oidc_bindings"
         constraints = [
+            # One binding per (component, provider, repo name). Name-based (not
+            # ID-based) because IDs can be NULL until pinned — a NULL-ID unique
+            # constraint would let duplicate unpinned bindings slip through
+            # (NULLs compare distinct in Postgres). The name is the stable key
+            # at create time for both public and private repos.
             models.UniqueConstraint(
-                fields=["component", "provider", "repository_owner_id", "repository_id"],
-                name="oidc_binding_unique_per_component_repo_ids",
+                fields=["component", "provider", "repository"],
+                name="oidc_binding_unique_per_component_repo",
             ),
         ]
         indexes = [
-            # Token-exchange hot-path lookup is by (provider, repository_owner_id, repository_id)
+            # Pinned-exchange hot path: lookup by (provider, repository_owner_id, repository_id).
             models.Index(
                 fields=["provider", "repository_owner_id", "repository_id"],
                 name="oidc_binding_provider_ids_idx",

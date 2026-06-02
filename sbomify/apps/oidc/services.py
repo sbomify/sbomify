@@ -309,50 +309,41 @@ def create_binding(
     provider: str,
     repository_slug: str,
     requested_by: User,
-    repository_id: int | None = None,
-    repository_owner_id: int | None = None,
 ) -> ServiceResult["OIDCBinding"]:
-    """Resolve, provision, and persist a new trusted-publisher binding.
+    """Resolve (or defer), provision, and persist a new trusted-publisher binding.
 
-    Returns a ServiceResult so the caller (view) can map outcomes to
-    HTTP status without owning any ORM. Two-phase create (binding row
-    first, bot provisioned second, FK attached last) is wrapped in
-    ``transaction.atomic`` so the brief ``bot_user IS NULL`` window
-    never escapes the transaction.
+    The caller supplies only ``repository_slug`` (``"org/repo"``) — the same
+    minimal input for public and private repos. Repo identity is then pinned
+    along one of two timelines:
 
-    Repo identity comes from one of two paths:
+    * **Public repo** — ``resolve_repository`` reads the immutable IDs from
+      GitHub's REST API (unauthenticated) and we pin them on the new row now.
+    * **Private repo** — sbomify can't read its metadata anonymously
+      (``resolve_repository`` raises ``not_found``/``unavailable``), so the
+      binding is created UNPINNED (``repository_id``/``repository_owner_id``
+      = NULL). The IDs are pinned later, from the first signed OIDC token, in
+      ``exchange_github_oidc_token``. A malformed slug (bad ``org/repo`` shape)
+      is the only resolve failure that 400s — it's never going to resolve.
 
-    * ``repository_id`` + ``repository_owner_id`` BOTH supplied — trust
-      them as-is and skip the GitHub lookup. This is how a binding gets
-      created for a PRIVATE repo: sbomify can't read a private repo's
-      metadata unauthenticated, so the caller (the wizard, using the
-      operator's own GitHub auth) resolves the immutable IDs locally and
-      passes them in. The caller is already owner/admin-gated, and the
-      IDs only govern which repo may publish to the caller's OWN
-      component, so trusting caller-supplied IDs grants no cross-tenant
-      power. The ``repository_slug`` is still used (lowercased) for the
-      display name. Both IDs must be supplied together — validated by the
-      API layer.
-    * neither supplied — resolve ``repository_slug`` → immutable IDs via
-      GitHub's REST API (public repos only).
+    Returns a ServiceResult so the caller (view/API) can map outcomes to HTTP
+    status without owning any ORM. Two-phase create (binding row first, bot
+    provisioned second, FK attached last) is wrapped in ``transaction.atomic``
+    so the brief ``bot_user IS NULL`` window never escapes the transaction.
     """
     from sbomify.apps.oidc.models import OIDCBinding
 
-    if repository_id is not None and repository_owner_id is not None:
-        repo_name, repo_id, owner_id = repository_slug.lower(), repository_id, repository_owner_id
-    else:
-        try:
-            resolved = resolve_repository(repository_slug)
-        except GitHubResolveError as exc:
-            # 400 for malformed / not_found / rate_limited / unavailable.
-            # The ``kind`` attribute of the exception (e.g. "rate_limited")
-            # is intentionally NOT propagated through the ``ServiceResult``
-            # right now — callers (currently only ``TrustedPublishersView``)
-            # render ``str(exc)`` straight into the form field error, which
-            # is enough for the user. If a future caller needs to branch on
-            # the kind, switch this to a structured failure result rather
-            # than re-parsing the message string.
+    try:
+        resolved = resolve_repository(repository_slug)
+    except GitHubResolveError as exc:
+        if exc.kind == "malformed":
+            # Not a parseable 'org/repo' — never resolvable, so reject outright.
             return ServiceResult.failure(str(exc), status_code=400)
+        # not_found (private or non-existent) / rate_limited / unavailable: we
+        # can't read the IDs now. Create UNPINNED and pin from the first OIDC
+        # token at exchange. The slug shape is already valid (malformed handled
+        # above), so normalise the user's input for the display/match name.
+        repo_name, repo_id, owner_id = repository_slug.lower(), None, None
+    else:
         repo_name, repo_id, owner_id = resolved.repository.lower(), resolved.repository_id, resolved.repository_owner_id
 
     try:
@@ -456,6 +447,57 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
         )
         .first()
     )
+    if binding is None:
+        # No pinned (ID-matched) binding. A private repo's binding is created
+        # UNPINNED (IDs NULL); pin it now from this verified token, matching on
+        # the (also-signed) repository name. Trust-on-first-use: the first valid
+        # publish for that name claims the binding and freezes its IDs.
+        repo_claim = claims.get("repository")
+        repo_name = repo_claim.lower() if isinstance(repo_claim, str) else None
+        if repo_name:
+            unpinned = (
+                OIDCBinding.objects.select_related("bot_user", "component__team")
+                .filter(
+                    component_id=component_id,
+                    provider=OIDCBinding.PROVIDER_GITHUB,
+                    repository=repo_name,
+                    repository_id__isnull=True,
+                )
+                .first()
+            )
+            if unpinned is not None:
+                # Guard on repository_id IS NULL so two concurrent first-exchanges
+                # can't double-pin — the loser's UPDATE touches 0 rows.
+                did_pin = OIDCBinding.objects.filter(pk=unpinned.pk, repository_id__isnull=True).update(
+                    repository_id=repository_id,
+                    repository_owner_id=repository_owner_id,
+                )
+                if did_pin:
+                    unpinned.repository_id = repository_id
+                    unpinned.repository_owner_id = repository_owner_id
+                    binding = unpinned
+                    logger.info(
+                        "OIDC exchange: pinned binding=%s component=%s repo=%r owner_id=%s repo_id=%s (first use)",
+                        unpinned.id,
+                        component_id,
+                        repo_name,
+                        repository_owner_id,
+                        repository_id,
+                    )
+                else:
+                    # Lost the race; a concurrent exchange just pinned it. Same
+                    # repo ⇒ same IDs, so re-fetch via the now-pinned ID match.
+                    binding = (
+                        OIDCBinding.objects.select_related("bot_user", "component__team")
+                        .filter(
+                            component_id=component_id,
+                            provider=OIDCBinding.PROVIDER_GITHUB,
+                            repository_owner_id=repository_owner_id,
+                            repository_id=repository_id,
+                        )
+                        .first()
+                    )
+
     if binding is None:
         # %r (repr-quoted) defends log aggregators against injection from
         # the attacker-controlled ``repository`` claim — security H-3.
