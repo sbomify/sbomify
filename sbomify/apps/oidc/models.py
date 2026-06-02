@@ -127,6 +127,19 @@ class OIDCBinding(models.Model):
     class Meta:
         db_table = "oidc_bindings"
         constraints = [
+            # Both IDs are pinned together or not at all. Enforce it at the DB
+            # so a partial-pin (reachable only via a manual edit / backfill)
+            # can't exist — such a row would never match an exchange lookup and
+            # would land in the wrong uniqueness branch below. This is also why
+            # the conditional constraints below check BOTH columns, not just
+            # ``repository_id``.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(repository_id__isnull=True, repository_owner_id__isnull=True)
+                    | models.Q(repository_id__isnull=False, repository_owner_id__isnull=False)
+                ),
+                name="oidc_binding_ids_both_or_neither",
+            ),
             # Uniqueness is conditional on pin state, because the natural key
             # changes once a binding is pinned:
             #   * UNPINNED (IDs NULL) — keyed by repo NAME. Stops a second
@@ -140,12 +153,12 @@ class OIDCBinding(models.Model):
             #     the freed name.
             models.UniqueConstraint(
                 fields=["component", "provider", "repository"],
-                condition=models.Q(repository_id__isnull=True),
+                condition=models.Q(repository_id__isnull=True, repository_owner_id__isnull=True),
                 name="oidc_binding_unique_unpinned_repo_name",
             ),
             models.UniqueConstraint(
                 fields=["component", "provider", "repository_owner_id", "repository_id"],
-                condition=models.Q(repository_id__isnull=False),
+                condition=models.Q(repository_id__isnull=False, repository_owner_id__isnull=False),
                 name="oidc_binding_unique_pinned_repo_ids",
             ),
         ]

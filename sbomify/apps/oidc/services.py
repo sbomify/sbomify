@@ -318,12 +318,14 @@ def create_binding(
 
     * **Public repo** — ``resolve_repository`` reads the immutable IDs from
       GitHub's REST API (unauthenticated) and we pin them on the new row now.
-    * **Private repo** — sbomify can't read its metadata anonymously
-      (``resolve_repository`` raises ``not_found``/``unavailable``), so the
-      binding is created UNPINNED (``repository_id``/``repository_owner_id``
-      = NULL). The IDs are pinned later, from the first signed OIDC token, in
-      ``exchange_github_oidc_token``. A malformed slug (bad ``org/repo`` shape)
-      is the only resolve failure that 400s — it's never going to resolve.
+    * **Private repo (or any unresolvable-now repo)** — sbomify can't read the
+      IDs right now, so the binding is created UNPINNED
+      (``repository_id``/``repository_owner_id`` = NULL) and the IDs are pinned
+      later, from the first signed OIDC token, in
+      ``exchange_github_oidc_token``. This is the path for EVERY
+      ``GitHubResolveError`` except ``malformed``: ``not_found`` (private or
+      non-existent), ``rate_limited``, and ``unavailable`` all defer. Only a
+      ``malformed`` slug (bad ``org/repo`` shape) 400s — it can never resolve.
 
     Returns a ServiceResult so the caller (view/API) can map outcomes to HTTP
     status without owning any ORM. Two-phase create (binding row first, bot

@@ -808,6 +808,26 @@ class TestBindingCreateDefersForPrivateRepo:
         assert second.json()["repository_id"] is None  # unpinned
 
 
+@pytest.mark.django_db
+def test_partial_pin_rejected_by_check_constraint(component, sample_user) -> None:
+    """The both-or-neither CheckConstraint forbids a half-pinned row (one ID
+    set, the other NULL): it could never match an exchange and would fall into
+    the wrong conditional-uniqueness branch."""
+    from django.db import IntegrityError, transaction
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            OIDCBinding.objects.create(
+                component=component,
+                provider=OIDCBinding.PROVIDER_GITHUB,
+                repository="acme/widget",
+                repository_id=12345,
+                repository_owner_id=None,  # half-pinned → violates the constraint
+                bot_user=None,
+                created_by=sample_user,
+            )
+
+
 def _make_unpinned_binding(component: Component, repository: str, sample_user) -> OIDCBinding:
     """Create an UNPINNED binding (IDs NULL) with a provisioned bot user.
 
