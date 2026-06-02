@@ -732,14 +732,14 @@ class TestBindingCreateDefersForPrivateRepo:
 
         response = client.post(
             BINDINGS_URL,
-            data=json.dumps({"component_id": owned_component.id, "repository": "aurangzaib048/rwaj-assessment"}),
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/private-repo"}),
             content_type="application/json",
             **get_api_headers(token),
         )
 
         assert response.status_code == 201, response.content
         body = response.json()
-        assert body["repository"] == "aurangzaib048/rwaj-assessment"
+        assert body["repository"] == "acme/private-repo"
         assert body["repository_id"] is None  # unpinned — awaiting first publish
         assert body["repository_owner_id"] is None
         binding = OIDCBinding.objects.get(pk=body["id"])
@@ -763,20 +763,65 @@ class TestBindingCreateDefersForPrivateRepo:
         assert response.status_code == 201, response.content
         assert response.json()["repository_id"] is None
 
+    def test_duplicate_unpinned_name_is_409(self, authenticated_api_client, owned_component, mocker) -> None:
+        """Two UNPINNED bindings for the same name on a component conflict — the
+        unpinned-name unique constraint maps to a 409."""
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            side_effect=GitHubResolveError("not_found", "private"),
+        )
+        client, token = authenticated_api_client
+        body = json.dumps({"component_id": owned_component.id, "repository": "acme/private-repo"})
+
+        first = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert first.status_code == 201
+        second = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert second.status_code == 409, second.content
+
+    def test_freed_name_rebindable_after_pin(self, authenticated_api_client, owned_component, mocker) -> None:
+        """A PINNED binding keeps its (possibly stale-after-rename) name, but
+        because pinned bindings are keyed by ID, that name must NOT block a new
+        binding for the same name (e.g. a different repo that reused a freed
+        name). Regression for the conditional uniqueness."""
+        client, token = authenticated_api_client
+        body = json.dumps({"component_id": owned_component.id, "repository": "acme/widget"})
+
+        # 1) Public repo → resolved + pinned at create.
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            return_value=ResolvedRepository(
+                repository="acme/widget", repository_owner="acme", repository_id=111, repository_owner_id=222
+            ),
+        )
+        first = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert first.status_code == 201
+        assert first.json()["repository_id"] == 111  # pinned
+
+        # 2) New binding for the SAME name now defers (private) — not blocked by
+        #    the pinned binding above (which is keyed by ID, not name).
+        mocker.patch(
+            "sbomify.apps.oidc.services.resolve_repository",
+            side_effect=GitHubResolveError("not_found", "private"),
+        )
+        second = client.post(BINDINGS_URL, data=body, content_type="application/json", **get_api_headers(token))
+        assert second.status_code == 201, second.content
+        assert second.json()["repository_id"] is None  # unpinned
+
 
 def _make_unpinned_binding(component: Component, repository: str, sample_user) -> OIDCBinding:
-    """Create an UNPINNED binding (IDs NULL) with a provisioned bot user."""
-    from django.contrib.auth import get_user_model
+    """Create an UNPINNED binding (IDs NULL) with a provisioned bot user.
 
-    User = get_user_model()
-    placeholder = User.objects.create_user(username=f"placeholder-{repository.replace('/', '-')}", password="x")
+    Mirrors the real two-phase create in ``services.create_binding``: insert
+    with ``bot_user=None`` (the FK is nullable for exactly this window), then
+    provision the bot and attach it — no throwaway placeholder User needed.
+    """
     binding = OIDCBinding.objects.create(
         component=component,
         provider=OIDCBinding.PROVIDER_GITHUB,
         repository=repository,
         repository_id=None,
         repository_owner_id=None,
-        bot_user=placeholder,
+        bot_user=None,
         created_by=sample_user,
     )
     bot = provision_bot_user_for_binding(binding)

@@ -127,14 +127,26 @@ class OIDCBinding(models.Model):
     class Meta:
         db_table = "oidc_bindings"
         constraints = [
-            # One binding per (component, provider, repo name). Name-based (not
-            # ID-based) because IDs can be NULL until pinned — a NULL-ID unique
-            # constraint would let duplicate unpinned bindings slip through
-            # (NULLs compare distinct in Postgres). The name is the stable key
-            # at create time for both public and private repos.
+            # Uniqueness is conditional on pin state, because the natural key
+            # changes once a binding is pinned:
+            #   * UNPINNED (IDs NULL) — keyed by repo NAME. Stops a second
+            #     unpinned binding for the same name slipping in before the
+            #     first pins. (A plain NULL-column unique constraint can't do
+            #     this — NULLs compare distinct in Postgres.)
+            #   * PINNED — keyed by the immutable IDs. Restores per-repo dedup
+            #     and, crucially, does NOT key on the mutable ``repository``
+            #     string: after a rename the binding keeps its stale name but
+            #     must not block someone binding a NEW repo that later reuses
+            #     the freed name.
             models.UniqueConstraint(
                 fields=["component", "provider", "repository"],
-                name="oidc_binding_unique_per_component_repo",
+                condition=models.Q(repository_id__isnull=True),
+                name="oidc_binding_unique_unpinned_repo_name",
+            ),
+            models.UniqueConstraint(
+                fields=["component", "provider", "repository_owner_id", "repository_id"],
+                condition=models.Q(repository_id__isnull=False),
+                name="oidc_binding_unique_pinned_repo_ids",
             ),
         ]
         indexes = [

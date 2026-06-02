@@ -466,9 +466,13 @@ def exchange_github_oidc_token(*, component_id: str, oidc_token: str) -> Service
                 .first()
             )
             if unpinned is not None:
-                # Guard on repository_id IS NULL so two concurrent first-exchanges
-                # can't double-pin — the loser's UPDATE touches 0 rows.
-                did_pin = OIDCBinding.objects.filter(pk=unpinned.pk, repository_id__isnull=True).update(
+                # Guard on BOTH IDs being NULL so two concurrent first-exchanges
+                # can't double-pin (the loser's UPDATE touches 0 rows), and a
+                # partially-pinned row (only reachable via manual edits/backfills)
+                # can't be (re)claimed — the invariant is both pinned together.
+                did_pin = OIDCBinding.objects.filter(
+                    pk=unpinned.pk, repository_id__isnull=True, repository_owner_id__isnull=True
+                ).update(
                     repository_id=repository_id,
                     repository_owner_id=repository_owner_id,
                 )
