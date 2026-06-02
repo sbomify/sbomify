@@ -184,12 +184,24 @@ def github_token_exchange(request: HttpRequest, payload: ExchangeRequest) -> tup
 
 _BINDING_AUTH = (PersonalAccessTokenAuth(), django_auth)
 _VALID_PROVIDERS = {value for value, _label in OIDCBinding.PROVIDER_CHOICES}
+# PostgreSQL bigint upper bound — the columns ``repository_id`` /
+# ``repository_owner_id`` are signed 64-bit. A caller-supplied value outside
+# [1, 2**63-1] would either never match a real GitHub ID or raise a DataError
+# (500) at insert; reject it as a clean 400 instead.
+_MAX_REPO_INT = 2**63 - 1
 
 
 class BindingCreateRequest(Schema):
     component_id: str
     repository: str
     provider: str = OIDCBinding.PROVIDER_GITHUB
+    # Optional caller-supplied immutable GitHub IDs. When BOTH are given the
+    # server skips its (unauthenticated) GitHub lookup and trusts them — this
+    # is how a binding is created for a PRIVATE repo, whose metadata sbomify
+    # can't read anonymously. The wizard resolves them with the operator's own
+    # GitHub auth and passes them here. Both-or-neither; validated in the handler.
+    repository_id: int | None = None
+    repository_owner_id: int | None = None
 
 
 class BindingResponse(Schema):
@@ -250,6 +262,17 @@ def create_github_binding(request: HttpRequest, payload: BindingCreateRequest) -
     if provider not in _VALID_PROVIDERS:
         return 400, {"detail": f"unsupported provider '{provider}'"}
 
+    # Caller-supplied IDs (private-repo path) must be given together and fit a
+    # positive bigint — a half-pair can't be matched at exchange time, and an
+    # out-of-range value would never match a real GitHub ID (or 500 at insert).
+    repo_id = payload.repository_id
+    owner_id = payload.repository_owner_id
+    if (repo_id is None) != (owner_id is None):
+        return 400, {"detail": "repository_id and repository_owner_id must be supplied together"}
+    if repo_id is not None and owner_id is not None:
+        if not (1 <= repo_id <= _MAX_REPO_INT and 1 <= owner_id <= _MAX_REPO_INT):
+            return 400, {"detail": "repository_id and repository_owner_id must be positive 64-bit integers"}
+
     component = _component_for_management(request, payload.component_id)
     if component is None:
         return 404, {"detail": "component not found or insufficient permissions"}
@@ -259,6 +282,8 @@ def create_github_binding(request: HttpRequest, payload: BindingCreateRequest) -
         provider=provider,
         repository_slug=payload.repository,
         requested_by=cast(User, request.user),
+        repository_id=repo_id,
+        repository_owner_id=owner_id,
     )
     if not result.ok:
         return result.status_code or 500, {"detail": result.error or "failed to create binding"}

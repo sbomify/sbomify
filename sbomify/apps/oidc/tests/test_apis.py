@@ -713,3 +713,97 @@ class TestBindingManagementListDelete:
         )
         assert response.status_code == 404
         assert OIDCBinding.objects.filter(pk=binding_id).exists()
+
+
+@pytest.mark.django_db
+class TestBindingManagementExplicitIds:
+    """Caller-supplied immutable IDs let a binding be created for a repo the
+    backend can't resolve unauthenticated (private repos). The wizard resolves
+    them via the user's local GitHub auth and passes them here — no GitHub call
+    happens server-side, so resolve_repository is never invoked."""
+
+    def test_explicit_ids_skip_github_resolve(self, authenticated_api_client, owned_component, mocker) -> None:
+        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+        client, token = authenticated_api_client
+
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps(
+                {
+                    "component_id": owned_component.id,
+                    "repository": "aurangzaib048/rwaj-assessment",
+                    "repository_id": 999001,
+                    "repository_owner_id": 999002,
+                }
+            ),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+
+        assert response.status_code == 201, response.content
+        resolve.assert_not_called()  # no unauthenticated GitHub lookup for a private repo
+        body = response.json()
+        assert body["repository_id"] == 999001
+        assert body["repository_owner_id"] == 999002
+        assert body["repository"] == "aurangzaib048/rwaj-assessment"
+        binding = OIDCBinding.objects.get(pk=body["id"])
+        assert binding.repository_id == 999001
+        assert binding.repository_owner_id == 999002
+
+    def test_one_id_only_is_400(self, authenticated_api_client, owned_component, mocker) -> None:
+        """repository_id without repository_owner_id (or vice versa) is rejected —
+        a half-specified identity can't be matched at exchange time."""
+        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+        client, token = authenticated_api_client
+
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps({"component_id": owned_component.id, "repository": "acme/widget", "repository_id": 999001}),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 400, response.content
+        resolve.assert_not_called()
+
+    @pytest.mark.parametrize("bad_id", [-1, 0, 2**63])
+    def test_out_of_range_ids_are_400(self, authenticated_api_client, owned_component, mocker, bad_id) -> None:
+        """IDs must be positive and fit PostgreSQL bigint — a 0/negative/overflow
+        value would either never match or raise a DB DataError (500)."""
+        resolve = mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+        client, token = authenticated_api_client
+
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps(
+                {
+                    "component_id": owned_component.id,
+                    "repository": "acme/widget",
+                    "repository_id": bad_id,
+                    "repository_owner_id": 999002,
+                }
+            ),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 400, response.content
+        resolve.assert_not_called()
+
+    def test_explicit_ids_still_owner_admin_gated(self, guest_api_client, owned_component, mocker) -> None:
+        """Supplying IDs doesn't bypass the owner/admin gate — a non-member 404s."""
+        mocker.patch("sbomify.apps.oidc.services.resolve_repository")
+        client, token = guest_api_client
+        response = client.post(
+            BINDINGS_URL,
+            data=json.dumps(
+                {
+                    "component_id": owned_component.id,
+                    "repository": "acme/widget",
+                    "repository_id": 999001,
+                    "repository_owner_id": 999002,
+                }
+            ),
+            content_type="application/json",
+            **get_api_headers(token),
+        )
+        assert response.status_code == 404, response.content
+        assert not OIDCBinding.objects.filter(component=owned_component).exists()
