@@ -507,6 +507,89 @@ class TestNonOidcRequestsUnaffected:
         assert response.status_code != 403, response.content
 
 
+class TestPublicRepoEndToEnd:
+    """Full public-repo trusted-publishing path, end to end through publish.
+
+    A PUBLIC repo's binding is PINNED at create time (sbomify read the repo's
+    immutable IDs from the unauthenticated GitHub API). At exchange the signed
+    OIDC token is matched against the binding BY ID — the IDs are already frozen
+    and must NOT change — and that short-lived token then publishes an SBOM to
+    the bound component. This is the public-repo counterpart of
+    ``TestPrivateRepoEndToEnd`` (which pins on first use instead of matching).
+    """
+
+    @pytest.mark.django_db
+    def test_public_repo_exchange_matches_by_id_then_publishes_sbom(
+        self, github_claims_factory, mock_github_jwks, binding_for_bound, bound_component
+    ) -> None:
+        # 1) A GitHub Actions OIDC token whose immutable IDs match the binding
+        #    that was already pinned at create time (public repo).
+        gh_token = github_claims_factory(repository="acme/widget", repository_owner_id=67890, repository_id=12345)
+        client = Client()
+
+        # 2) Exchange: matches the PINNED binding by (owner_id, repo_id) and
+        #    returns a short-lived sbomify token.
+        exchange = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": bound_component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {gh_token}",
+        )
+        assert exchange.status_code == 200, exchange.content
+        sbomify_token = exchange.json()["access_token"]
+
+        # The binding stays pinned to its original create-time IDs — a public
+        # binding is matched by ID, never re-pinned (the inverse of the private
+        # deferred-pin path, which freezes NULL IDs from the first token).
+        binding_for_bound.refresh_from_db()
+        assert binding_for_bound.repository_id == 12345
+        assert binding_for_bound.repository_owner_id == 67890
+
+        # 3) Publish: upload an SBOM with the short-lived token. Anything other
+        #    than 403 means the pinned binding scoped the upload correctly — the
+        #    public-repo flow works end to end.
+        minimal_cdx = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "metadata": {"timestamp": "2026-01-01T00:00:00Z"},
+            "components": [],
+        }
+        upload = client.post(
+            f"/api/v1/sboms/artifact/cyclonedx/{bound_component.id}",
+            data=json.dumps(minimal_cdx),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sbomify_token}",
+        )
+        assert upload.status_code != 403, f"Public-repo upload was forbidden: {upload.content!r}"
+
+    @pytest.mark.django_db
+    def test_public_repo_token_scope_locked_to_bound_component(
+        self, github_claims_factory, mock_github_jwks, binding_for_bound, bound_component, other_component
+    ) -> None:
+        """The pinned-binding token is scope-locked exactly like the deferred
+        one — it must NOT be able to publish to a different component."""
+        gh_token = github_claims_factory(repository="acme/widget", repository_owner_id=67890, repository_id=12345)
+        client = Client()
+        exchange = client.post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": bound_component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {gh_token}",
+        )
+        assert exchange.status_code == 200, exchange.content
+        sbomify_token = exchange.json()["access_token"]
+
+        minimal_cdx = {"bomFormat": "CycloneDX", "specVersion": "1.6", "version": 1, "components": []}
+        forbidden = client.post(
+            f"/api/v1/sboms/artifact/cyclonedx/{other_component.id}",
+            data=json.dumps(minimal_cdx),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {sbomify_token}",
+        )
+        assert forbidden.status_code == 403, forbidden.content
+
+
 @pytest.fixture
 def unpinned_binding_for_bound(bound_component: Component, sample_user):
     """A PRIVATE-repo binding: created UNPINNED (IDs NULL, bot provisioned).
