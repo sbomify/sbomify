@@ -160,8 +160,10 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    # Must precede CsrfViewMiddleware so the bearer exemption flag is set before any
+    # CSRF enforcement can run (Ninja's check_csrf and CsrfViewMiddleware both honour it).
     "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
