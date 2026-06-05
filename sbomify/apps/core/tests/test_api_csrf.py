@@ -1,12 +1,13 @@
 """Conformance tests for the global NinjaAPI CSRF enforcement (#922).
 
-The webhook view enables ``NinjaAPI(csrf=True)`` so session/cookie-authenticated API
+``NinjaAPI(csrf=True)`` (sbomify/apis.py) makes session/cookie-authenticated API
 mutations require an ``X-CSRFToken``. PAT/bearer clients carry no CSRF cookie and are
 exempted by ``BearerAuthCsrfExemptMiddleware`` so programmatic API access still works.
 
-These use ``Client(enforce_csrf_checks=True)`` because the default test client disables
-CSRF entirely (which is exactly why a naive ``csrf=True`` would ship green yet break PAT
-clients in production).
+Every test here uses ``Client(enforce_csrf_checks=True)`` — the default test client
+disables CSRF entirely, which is exactly why a naive ``csrf=True`` would ship green yet
+break PAT clients in production (and why a bearer test on the default client would pass
+even with the exemption middleware removed).
 """
 
 import pytest
@@ -54,12 +55,19 @@ def test_session_mutation_with_csrf_token_passes_the_gate(sample_user):
 
 
 def test_bearer_mutation_without_csrf_token_is_exempt(authenticated_api_client):
-    """A PAT/bearer API mutation without X-CSRFToken must be CSRF-exempt and authenticate."""
-    client, token = authenticated_api_client
+    """A PAT/bearer API mutation without X-CSRFToken must be CSRF-exempt and authenticate.
+
+    Uses a fresh ``Client(enforce_csrf_checks=True)`` rather than the fixture's default
+    client (which disables CSRF) so the *only* thing that can exempt this request is
+    ``BearerAuthCsrfExemptMiddleware``: without it the bearer request — carrying no CSRF
+    cookie — would be a 403, so a 404 here genuinely proves the exemption.
+    """
+    _, token = authenticated_api_client
+    client = Client(enforce_csrf_checks=True)
 
     resp = client.patch(
         BRANDING_URL, data=BODY, content_type="application/json", **get_api_headers(token)
     )
 
-    # Not a CSRF 403: the bearer request clears the gate, authenticates, and 404s on the team.
+    # Exempt -> clears the CSRF gate, authenticates, and 404s on the nonexistent team.
     assert resp.status_code == 404
