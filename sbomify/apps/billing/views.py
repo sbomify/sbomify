@@ -764,7 +764,8 @@ class StripeWebhookView(View):
             # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient
             # condition for ops, distinct from an unexpected crash. Both are non-2xx, so
             # Stripe re-delivers either way.
-            logger.error("Retryable webhook error (Stripe will retry): %s", e)
+            # exc_info captures the chained root cause (these are raised `from e`).
+            logger.error("Retryable webhook error (Stripe will retry): %s", e, exc_info=True)
             return HttpResponse(status=503)
         except StripeError as e:
             logger.error("Stripe business logic error (acknowledged): %s", e)

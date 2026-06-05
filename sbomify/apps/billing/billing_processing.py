@@ -410,11 +410,10 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     except BillingRetryableError:
         raise
     except StripeError:
-        logger.warning(
-            "Permanent failure fetching customer %s for subscription %s; treating as no team",
-            subscription.customer,
-            subscription.id,
-        )
+        # Don't log the Stripe customer/subscription identifiers here (flagged as
+        # sensitive by code scanning); the subscription id is still carried in the
+        # terminal Team.DoesNotExist raised below.
+        logger.warning("Permanent failure fetching Stripe customer during team resolution; treating as no team")
         customer = None
 
     if customer is not None and customer.metadata and "team_key" in customer.metadata:
