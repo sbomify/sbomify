@@ -161,6 +161,7 @@ MIDDLEWARE = [
     "django_htmx.middleware.HtmxMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "sbomify.apps.core.middleware.BearerAuthCsrfExemptMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "sbomify.apps.core.middleware.HtmxMessagesMiddleware",
@@ -812,6 +813,30 @@ if DEBUG:
     # CORS settings - allow all origins in development mode
     CORS_ALLOW_ALL_ORIGINS = True
     CORS_ALLOW_CREDENTIALS = True
+else:
+    # Production cookie + transport hardening (#922). Caddy terminates TLS at the edge
+    # (SECURE_PROXY_SSL_HEADER above lets Django see the original scheme), but Caddy
+    # cannot set the Secure/SameSite attributes on Django-issued cookies — so we set them
+    # here. (Tests relax these via test_settings; the HTTP test client can't use them.)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # Session cookie stays "Lax" (NOT "Strict"): the Keycloak/OIDC login callback is a
+    # cross-site top-level navigation, and a Strict session cookie would not be sent on
+    # it, breaking the OAuth state handshake. The CSRF cookie can be Strict — it is read
+    # by JS and only sent on same-site mutations.
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Strict"
+
+    # Defense-in-depth behind Caddy's edge HTTP->HTTPS redirect. Exempt the internal
+    # health check, which is probed over plain HTTP without an X-Forwarded-Proto header.
+    SECURE_SSL_REDIRECT = True
+    SECURE_REDIRECT_EXEMPT = [r"^UuPha8mu/"]
+
+    # HSTS (Caddy sets it at the edge too; harmless to assert at the app for direct hits).
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
 STRIPE_API_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_SECRET_KEY = STRIPE_API_KEY

@@ -36,6 +36,16 @@ EMAIL_SUBJECT_PREFIX = "[sbomify] "
 from .settings import *  # NOQA
 from .settings import BASE_DIR  # Import BASE_DIR explicitly
 
+# settings.py applies production cookie/transport hardening under `if not DEBUG:`, and
+# tests run with DEBUG=False — so relax the transport-level settings that the HTTP test
+# client cannot satisfy (SECURE_SSL_REDIRECT would 301 every request; secure cookies
+# aren't sent over the test client's http). CSRF enforcement itself is exercised
+# explicitly via Client(enforce_csrf_checks=True) in the conformance tests.
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 0
+
 # Override django_dramatiq settings to use StubBroker
 # This prevents django_dramatiq from attempting to connect to Redis during tests
 # This MUST come after the settings import to properly override the Redis settings

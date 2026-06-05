@@ -633,3 +633,29 @@ class GzipRequestDecompressionMiddleware:
         del request.META["HTTP_CONTENT_ENCODING"]
 
         return self.get_response(request)
+
+
+class BearerAuthCsrfExemptMiddleware:
+    """Exempt bearer/token API requests from CSRF enforcement.
+
+    ``NinjaAPI(csrf=True)`` enforces CSRF for *every* request (it is global and runs
+    before auth), including Personal Access Token clients that carry no CSRF cookie —
+    which would 403 every programmatic API mutation. CSRF only protects
+    cookie/session-authenticated requests: a CSRF attacker rides the victim's cookies
+    and *cannot* set an ``Authorization`` header (browsers never send it cross-site and
+    CORS preflight blocks it). So a request bearing a token header is, by construction,
+    not a CSRF vector.
+
+    For such requests we set ``request._dont_enforce_csrf_checks`` — honoured both by
+    Django's ``CsrfViewMiddleware`` and by Ninja's ``check_csrf`` (which delegates to
+    it) — leaving full CSRF enforcement in place for cookie/session requests.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if request.META.get("HTTP_AUTHORIZATION", "").lower().startswith(("bearer ", "token ")):
+            # Django-internal flag honoured by CsrfViewMiddleware / Ninja's check_csrf.
+            request._dont_enforce_csrf_checks = True  # type: ignore[attr-defined]  # noqa: SLF001
+        return self.get_response(request)
