@@ -75,9 +75,9 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     if isinstance(exc, StripeError):
         # Explicit terminal business error or a terminal Stripe failure — preserve it.
         raise exc
-    # Keep the message generic (it is re-logged by the view); the original exception —
-    # which may carry Stripe identifiers — stays only in the chained traceback (exc_info).
-    logger.error("Unexpected webhook handler error: %s", type(exc).__name__, exc_info=True)
+    # Don't log here: the webhook view logs this (with exc_info) when it returns 5xx,
+    # so logging again would double the stack trace. Keep the message generic; the
+    # original exception (with any Stripe identifiers) stays in the chained traceback.
     raise BillingRetryableError(f"Unexpected error processing webhook event ({type(exc).__name__})") from exc
 
 
@@ -824,7 +824,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             billing_limits = (team.billing_plan_limits or {}).copy()
             billing_limits["subscription_status"] = "active"
             billing_limits["last_updated"] = timezone.now().isoformat()
-            billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0
+            billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
             billing_limits["last_payment_currency"] = invoice.currency
             billing_limits["last_processed_webhook_id"] = webhook_id
 
@@ -843,7 +843,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
         from sbomify.apps.core.posthog_service import capture
 
-        amount = invoice.amount_paid / 100.0 if invoice.amount_paid else 0
+        amount = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
         workspace_key = team.key
         distinct_id = workspace_key or "system"
         capture(
@@ -972,7 +972,7 @@ def handle_checkout_completed(session: Any) -> None:
                 "stripe_subscription_id": session.subscription,
                 "subscription_status": subscription.status,
                 "last_updated": timezone.now().isoformat(),
-                "last_payment_amount": session.amount_total / 100.0 if session.amount_total else 0,
+                "last_payment_amount": session.amount_total / 100.0 if session.amount_total else 0.0,
                 "last_payment_currency": session.currency,
                 "last_processed_checkout_session": session.id,
             }
@@ -1002,7 +1002,7 @@ def handle_checkout_completed(session: Any) -> None:
 
         from sbomify.apps.core.posthog_service import capture, group_identify
 
-        amount = session.amount_total / 100.0 if session.amount_total else 0
+        amount = session.amount_total / 100.0 if session.amount_total else 0.0
         if team_key:
             capture(
                 team_key,
