@@ -342,6 +342,21 @@ class TestBillingProcessing:
         assert self.team.billing_plan_limits["last_processed_checkout_session"] == self.session.id
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_checkout_completed_trialing_is_idempotent_on_redelivery(self, mock_email):
+        """A redelivered TRIALING checkout must not re-run handle_trial_period (no duplicate trial email)."""
+        self.subscription.status = "trialing"
+        self.subscription.trial_end = int((timezone.now() + datetime.timedelta(days=14)).timestamp())
+        self.stripe_client.get_subscription.return_value = self.subscription
+
+        with patch("sbomify.apps.billing.billing_processing.handle_trial_period") as mock_trial:
+            billing_processing.handle_checkout_completed(self.session)
+            assert mock_trial.call_count == 1  # ran on first delivery
+
+            billing_processing.handle_checkout_completed(self.session)  # Stripe redelivery
+            # The guard short-circuits before the trial-period side-effect path is reached.
+            assert mock_trial.call_count == 1
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_payment_succeeded_precommit_db_failure_is_retryable(self, mock_email):
         """A transient failure writing the billing state (pre-commit) must retry."""
         with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
@@ -375,6 +390,18 @@ class TestBillingProcessing:
         ):
             # Does not raise, despite the cache failure.
             billing_processing.handle_payment_succeeded(self.invoice)
+
+        self.team.refresh_from_db()
+        assert self.team.billing_plan_limits["subscription_status"] == "active"
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_payment_succeeded_postcommit_notify_failure_is_best_effort(self, mock_email):
+        """A post-commit notification outage must NOT fail the webhook (best-effort, like cache)."""
+        with patch(
+            "sbomify.apps.billing.billing_processing.notify_team_owners",
+            side_effect=Exception("smtp blip"),
+        ):
+            billing_processing.handle_payment_succeeded(self.invoice)  # does not raise
 
         self.team.refresh_from_db()
         assert self.team.billing_plan_limits["subscription_status"] == "active"

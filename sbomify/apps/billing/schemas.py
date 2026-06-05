@@ -22,6 +22,9 @@ class BillingLimitsData(TypedDict, total=False):
     next_billing_date: str | None
     last_updated: str
     last_processed_webhook_id: str | None
+    last_processed_checkout_session: str
+    last_payment_amount: float
+    last_payment_currency: str | None
 
 
 class PlanSchema(Schema):

@@ -36,17 +36,20 @@ logger = getLogger(__name__)
 stripe_client = get_stripe_client()
 
 
-def _best_effort(description: str, fn: Any, *args: Any) -> None:
-    """Run a non-billing-critical, post-commit side effect without failing the webhook.
+def _best_effort(description: str, fn: Any, *args: Any, **kwargs: Any) -> None:
+    """Run a non-billing-critical side effect (cache invalidation, notifications, analytics)
+    without failing the webhook.
 
-    The billing state is already committed by the time these run, and the idempotency
-    guard would skip them on a retry anyway — so a transient failure here must not raise
-    (which would only trigger a futile retry that re-skips the side effect). Log and move on.
+    These run alongside — usually after — the billing-state write, which is the only part
+    that must be durable. A transient failure here must not raise: a 5xx would trigger a
+    retry that the idempotency guard then skips, so the side effect is lost either way and
+    the retry is futile. Log and move on; the cache is short-TTL self-healing and the
+    billing state is reconciled by subsequent Stripe events / the trial-sync cron.
     """
     try:
-        fn(*args)
+        fn(*args, **kwargs)
     except Exception as e:
-        logger.warning("Non-critical post-commit side effect failed (%s): %s", description, e)
+        logger.warning("Non-critical side effect failed (%s): %s", description, e)
 
 
 def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
@@ -344,7 +347,13 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
         previous_status = billing_limits.get("subscription_status")
         billing_limits = _update_billing_from_subscription(team, subscription, webhook_id)
 
-        _send_subscription_notifications(team, subscription.status, previous_status)
+        _best_effort(
+            "subscription updated notifications",
+            _send_subscription_notifications,
+            team,
+            subscription.status,
+            previous_status,
+        )
 
         from sbomify.apps.core.posthog_service import capture, group_identify
 
@@ -529,14 +538,16 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
         try:
             handle_trial_period(subscription, team)
         except BillingRetryableError:
+            # Transient handle_trial_period failures (DB blip during the trial-expiry
+            # downgrade, etc.) are already surfaced as BillingRetryableError by its
+            # @handle_stripe_errors decorator — propagate so the event retries (5xx).
             raise
         except StripeError as e:
-            # handle_trial_period is @handle_stripe_errors-decorated, so a transient
-            # internal failure (e.g. a DB blip during the trial-expiry downgrade) is
-            # flattened to a plain StripeError. Reclassify as retryable so the
-            # subscription.updated path returns 5xx (visible + Stripe retries) rather
-            # than silently acknowledging it with 200 — matching the checkout path.
-            raise BillingRetryableError(f"Trial-period processing failed transiently: {e!s}") from e
+            # Defensive: handle_trial_period makes no Stripe calls today, so it cannot
+            # raise a plain terminal StripeError — but if that ever changes, reclassify it
+            # as retryable here rather than letting a trial-processing failure be
+            # acknowledged with 200.
+            raise BillingRetryableError(f"Trial-period processing failed: {e!s}") from e
 
     return billing_limits
 
@@ -683,7 +694,9 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
                 team.billing_plan_limits = billing_limits
                 team.save()
 
-        notify_team_owners(team, email_notifications.notify_subscription_ended)
+        _best_effort(
+            "subscription ended notification", notify_team_owners, team, email_notifications.notify_subscription_ended
+        )
         logger.info("Subscription ended notification sent")
 
         from sbomify.apps.core.posthog_service import capture, group_identify
@@ -744,7 +757,13 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
 
         _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
 
-        notify_team_owners(team, email_notifications.notify_payment_failed, invoice.id)
+        _best_effort(
+            "payment failed notification",
+            notify_team_owners,
+            team,
+            email_notifications.notify_payment_failed,
+            invoice.id,
+        )
         logger.warning(f"Payment failed notification sent (invoice {invoice.id})")
 
         from sbomify.apps.core.posthog_service import capture
@@ -815,7 +834,9 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
 
         _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
 
-        notify_team_owners(team, email_notifications.notify_payment_succeeded)
+        _best_effort(
+            "payment succeeded notification", notify_team_owners, team, email_notifications.notify_payment_succeeded
+        )
         logger.info("Payment successful notification sent")
 
         from sbomify.apps.core.posthog_service import capture
@@ -933,6 +954,13 @@ def handle_checkout_completed(session: Any) -> None:
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
 
+            # Re-check under the row lock: the unlocked guard above closes the common
+            # sequential-redelivery case, but two concurrent deliveries could both pass
+            # it before either committed. The lock serializes them here.
+            if (team.billing_plan_limits or {}).get("last_processed_checkout_session") == session.id:
+                logger.info("Checkout session %s already processed (checked after lock), skipping", session.id)
+                return
+
             team.billing_plan = plan.key
             team.has_selected_billing_plan = True
             billing_limits: dict[str, Any] = {
@@ -960,6 +988,12 @@ def handle_checkout_completed(session: Any) -> None:
             team.save()
 
         if subscription.status == "trialing":
+            # Runs after the idempotency marker is committed: a transient failure here
+            # returns 5xx, but the redelivery short-circuits on the marker rather than
+            # re-running this step. That is a deliberate trade-off — re-running would
+            # risk a duplicate trial-ending email, since handle_trial_period is not
+            # idempotent — and the trial markers/expiry downgrade are reconciled by the
+            # subsequent customer.subscription.updated event and the trial-sync cron.
             handle_trial_period(subscription, team)
 
         logger.info("Successfully processed checkout session for team %s", team_key)
