@@ -62,27 +62,30 @@ def handle_stripe_errors(func: F) -> F:
             return func(*args, **kwargs)
         except StripeError:
             raise
+        # Terminal failures: the same request cannot succeed on retry.
         except stripe.error.CardError as e:
             logger.error("Card error: code=%s, param=%s", e.code, e.param)
             raise StripeError(f"Card error: {e.user_message}")
-        except stripe.error.RateLimitError as e:
-            logger.error("Rate limit error: %s", e.code)
-            raise StripeError("Too many requests made to Stripe API")
         except stripe.error.InvalidRequestError as e:
             logger.error("Invalid Stripe request: param=%s, message=%s", e.param, str(e))
             raise StripeError("Invalid request to payment provider.")
         except stripe.error.AuthenticationError:
             logger.error("Stripe authentication error")
             raise StripeError("Authentication with payment provider failed.")
+        # Transient failures: a retry may succeed once Stripe recovers.
+        except stripe.error.RateLimitError as e:
+            logger.error("Rate limit error: %s", e.code)
+            raise BillingRetryableError("Too many requests made to Stripe API")
         except stripe.error.APIConnectionError:
             logger.error("Stripe API connection error")
-            raise StripeError("Could not connect to payment provider.")
+            raise BillingRetryableError("Could not connect to payment provider.")
         except stripe.error.StripeError as e:
+            # Unclassified Stripe error (e.g. an API 5xx) — default to retryable.
             logger.error("Stripe error: code=%s, message=%s", e.code, str(e), exc_info=True)
-            raise StripeError("A payment processing error occurred.")
+            raise BillingRetryableError("A payment processing error occurred.")
         except Exception as e:
             logger.error("Unexpected error in Stripe operation: %s", type(e).__name__, exc_info=True)
-            raise StripeError("An unexpected error occurred.") from e
+            raise BillingRetryableError("An unexpected error occurred.") from e
 
     return wrapper  # type: ignore[return-value]
 

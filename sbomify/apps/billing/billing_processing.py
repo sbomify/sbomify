@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime
 from enum import Enum
 from functools import wraps
-from typing import Any
+from typing import Any, NoReturn
 
 from django.conf import settings
 from django.db import models, transaction
@@ -34,6 +34,46 @@ from .stripe_client import BillingRetryableError, StripeError, get_stripe_client
 logger = getLogger(__name__)
 
 stripe_client = get_stripe_client()
+
+
+def _best_effort(description: str, fn: Any, *args: Any) -> None:
+    """Run a non-billing-critical, post-commit side effect without failing the webhook.
+
+    The billing state is already committed by the time these run, and the idempotency
+    guard would skip them on a retry anyway — so a transient failure here must not raise
+    (which would only trigger a futile retry that re-skips the side effect). Log and move on.
+    """
+    try:
+        fn(*args)
+    except Exception as e:
+        logger.warning("Non-critical post-commit side effect failed (%s): %s", description, e)
+
+
+def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
+    """Single source of truth for the webhook retryable/terminal contract.
+
+    Every webhook handler funnels its failures through here so the 200-vs-5xx policy
+    lives in one place instead of being hand-rolled (and drifting) across handlers:
+
+    * ``BillingRetryableError`` (incl. transient Stripe failures surfaced by the
+      ``handle_stripe_errors`` decorator) -> propagate so the view returns 5xx and
+      Stripe retries.
+    * ``Team.DoesNotExist`` / an explicit terminal ``StripeError`` (e.g. an invalid
+      subscription status, or a terminal Stripe failure such as a missing customer)
+      -> terminal: the view acknowledges with 200.
+    * Anything else (unexpected) -> retryable, so a transient bug/outage is not
+      silently dropped.
+    """
+    if isinstance(exc, BillingRetryableError):
+        raise exc
+    if isinstance(exc, Team.DoesNotExist):
+        # Terminal: a genuinely nonexistent team cannot be conjured by a retry.
+        raise StripeError(str(exc) or "No team found for webhook event") from exc
+    if isinstance(exc, StripeError):
+        # Explicit terminal business error or a terminal Stripe failure — preserve it.
+        raise exc
+    logger.error("Unexpected webhook handler error: %s: %s", type(exc).__name__, exc, exc_info=True)
+    raise BillingRetryableError(f"{type(exc).__name__}: {exc!s}") from exc
 
 
 class BillingResourceType(str, Enum):
@@ -299,7 +339,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
             logger.info("Webhook already processed, skipping")
             return
 
-        invalidate_subscription_cache(subscription.id, team.key)
+        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
         previous_status = billing_limits.get("subscription_status")
         billing_limits = _update_billing_from_subscription(team, subscription, webhook_id)
@@ -329,30 +369,8 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
 
         logger.info(f"Updated subscription status to {subscription.status}")
 
-    except BillingRetryableError:
-        # Already classified as retryable downstream — propagate so the view returns 5xx.
-        raise
-    except Team.DoesNotExist:
-        # Every lookup strategy exhausted: the team genuinely does not exist.
-        # Terminal — retrying cannot conjure a team, so acknowledge (200).
-        logger.error("No team found for subscription")
-        raise StripeError("No team found for subscription")
-    except StripeError:
-        # Explicitly-raised terminal business error (e.g. invalid status) — acknowledge.
-        raise
     except Exception as e:
-        # Unexpected failure (e.g. a transient DB error): retry rather than drop.
-        subscription_id = getattr(subscription, "id", None) or (
-            subscription.get("id") if isinstance(subscription, dict) else None
-        )
-        logger.error(
-            "Error processing subscription update: %s: %s",
-            type(e).__name__,
-            str(e),
-            exc_info=True,
-            extra={"subscription_id": subscription_id},
-        )
-        raise BillingRetryableError(f"Error processing subscription update: {type(e).__name__}: {e!s}") from e
+        _raise_classified_webhook_error(e)
 
 
 def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, Any]]:
@@ -374,18 +392,23 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     except Team.DoesNotExist:
         pass
 
-    # Last resort: recover the team via the Stripe customer's metadata. A failure
-    # to reach Stripe here is transient, so it must be retried — not misclassified
-    # as a terminal "no team" and silently acknowledged.
+    # Last resort: recover the team via the Stripe customer's metadata. A *transient*
+    # Stripe outage here must be retried (BillingRetryableError); a *permanent* failure
+    # (e.g. no such customer) cannot be resolved by retrying, so fall through to the
+    # terminal "no team" path rather than amplifying futile retries.
     try:
         customer = stripe_client.get_customer(subscription.customer)
-    except StripeError as e:
-        raise BillingRetryableError(
-            f"Could not fetch customer {subscription.customer} to resolve team "
-            f"for subscription {subscription.id}: {e!s}"
-        ) from e
+    except BillingRetryableError:
+        raise
+    except StripeError:
+        logger.warning(
+            "Permanent failure fetching customer %s for subscription %s; treating as no team",
+            subscription.customer,
+            subscription.id,
+        )
+        customer = None
 
-    if customer.metadata and "team_key" in customer.metadata:
+    if customer is not None and customer.metadata and "team_key" in customer.metadata:
         try:
             team = Team.objects.get(key=customer.metadata["team_key"])
         except Team.DoesNotExist:
@@ -560,7 +583,7 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
             logger.info("Webhook already processed for deleted subscription, skipping")
             return
 
-        invalidate_subscription_cache(subscription.id, team.key)
+        _best_effort("subscription cache invalidation", invalidate_subscription_cache, subscription.id, team.key)
 
         cancel_at_period_end = billing_limits.get("cancel_at_period_end", False)
         scheduled_downgrade_plan = billing_limits.get("scheduled_downgrade_plan")
@@ -682,15 +705,8 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
 
         logger.info("Subscription canceled")
 
-    except BillingRetryableError:
-        raise
-    except Team.DoesNotExist:
-        logger.error(f"No team found for subscription {subscription.id}")
-        raise StripeError(f"No team found for subscription {subscription.id}")
     except Exception as e:
-        # Transient failure during cancellation/downgrade — retry rather than strand a stale plan.
-        logger.error("Error processing subscription deletion: %s: %s", type(e).__name__, str(e), exc_info=True)
-        raise BillingRetryableError(f"Error processing subscription deletion: {type(e).__name__}: {e!s}") from e
+        _raise_classified_webhook_error(e)
 
 
 @handle_stripe_errors
@@ -726,7 +742,7 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        invalidate_subscription_cache(invoice.subscription, team.key)
+        _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
 
         notify_team_owners(team, email_notifications.notify_payment_failed, invoice.id)
         logger.warning(f"Payment failed notification sent (invoice {invoice.id})")
@@ -744,15 +760,8 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
 
         logger.warning("Payment failed")
 
-    except BillingRetryableError:
-        raise
-    except Team.DoesNotExist:
-        logger.error(f"No team found for subscription {invoice.subscription}")
-        raise StripeError(f"No team found for subscription {invoice.subscription}")
     except Exception as e:
-        # Transient failure recording the past_due flag — retry, don't drop the event.
-        logger.error("Error processing payment failure: %s: %s", type(e).__name__, str(e), exc_info=True)
-        raise BillingRetryableError(f"Error processing payment failure: {type(e).__name__}: {e!s}") from e
+        _raise_classified_webhook_error(e)
 
 
 @handle_stripe_errors
@@ -804,7 +813,7 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             team.billing_plan_limits = billing_limits
             team.save()
 
-        invalidate_subscription_cache(invoice.subscription, team.key)
+        _best_effort("invoice cache invalidation", invalidate_subscription_cache, invoice.subscription, team.key)
 
         notify_team_owners(team, email_notifications.notify_payment_succeeded)
         logger.info("Payment successful notification sent")
@@ -826,15 +835,8 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             groups={"workspace": workspace_key} if workspace_key else None,
         )
 
-    except BillingRetryableError:
-        raise
-    except Team.DoesNotExist:
-        logger.error(f"No team found for subscription {invoice.subscription}")
-        raise StripeError(f"No team found for subscription {invoice.subscription}")
     except Exception as e:
-        # Transient failure recording the successful payment — retry, don't drop the event.
-        logger.error("Error processing payment success: %s: %s", type(e).__name__, str(e), exc_info=True)
-        raise BillingRetryableError(f"Error processing payment success: {type(e).__name__}: {e!s}") from e
+        _raise_classified_webhook_error(e)
 
 
 def get_current_limits(team: Team) -> dict[str, Any]:
@@ -882,6 +884,14 @@ def handle_checkout_completed(session: Any) -> None:
 
     try:
         team = Team.objects.get(key=team_key)
+
+        # Idempotency: a redelivery of the same checkout session must short-circuit
+        # BEFORE the outbound Stripe calls (get_subscription / cancel_subscription),
+        # otherwise each retry re-issues them. Keyed on the session id since the view
+        # dispatches this handler without an event object.
+        if (team.billing_plan_limits or {}).get("last_processed_checkout_session") == session.id:
+            logger.info("Checkout session %s already processed for team %s, skipping", session.id, team_key)
+            return
 
         plan_key = session.metadata.get("plan_key", "business")
         plan = BillingPlan.objects.get(key=plan_key)
@@ -934,6 +944,7 @@ def handle_checkout_completed(session: Any) -> None:
                 "last_updated": timezone.now().isoformat(),
                 "last_payment_amount": session.amount_total / 100.0 if session.amount_total else 0,
                 "last_payment_currency": session.currency,
+                "last_processed_checkout_session": session.id,
             }
 
             if hasattr(subscription, "current_period_end") and subscription.current_period_end:
@@ -972,21 +983,10 @@ def handle_checkout_completed(session: Any) -> None:
                 "workspace", team_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
             )
 
-    except BillingRetryableError:
-        # Already classified as retryable (e.g. a failed old-subscription cancel) — propagate.
-        raise
-    except Team.DoesNotExist:
-        # The checkout references a team that no longer exists — terminal, acknowledge.
-        logger.error(f"Team with key {team_key} not found")
-        raise StripeError(f"Team with key {team_key} not found")
-    except BillingPlan.DoesNotExist as e:
-        # A momentarily-unresolvable plan (deploy/sync race) — retry rather than drop a paid checkout.
-        logger.critical(f"Billing plan {plan_key} not found during checkout — retrying instead of dropping")
-        raise BillingRetryableError(f"Billing plan {plan_key} not found") from e
     except Exception as e:
-        # Unexpected/transient failure while persisting the checkout — retry, don't drop the paid event.
-        logger.error("Error processing checkout: %s", str(e), exc_info=True)
-        raise BillingRetryableError(f"Error processing checkout: {e!s}") from e
+        # Team.DoesNotExist -> terminal; a missing BillingPlan / unexpected failure -> retryable
+        # (don't drop a paid checkout). See _raise_classified_webhook_error.
+        _raise_classified_webhook_error(e)
 
 
 @handle_stripe_errors

@@ -244,16 +244,31 @@ class TestBillingProcessing:
         """Last-resort team resolution: a transient get_customer failure must retry, not 200-drop.
 
         When neither the subscription_id nor customer_id DB lookups match, the resolver
-        falls back to stripe_client.get_customer(). A transient failure there must surface
-        as BillingRetryableError (5xx), not be acknowledged as terminal.
+        falls back to stripe_client.get_customer(). A transient failure there (surfaced as
+        BillingRetryableError by the decorator) must propagate as retryable (5xx).
         """
         # Make both DB lookups miss by pointing the event at IDs no team has.
         self.subscription.id = "sub_unmapped_e2e"
         self.subscription.customer = "cus_unmapped_e2e"
-        self.stripe_client.get_customer.side_effect = StripeError("Could not connect to payment provider.")
+        self.stripe_client.get_customer.side_effect = BillingRetryableError("Could not connect to payment provider.")
 
         with pytest.raises(BillingRetryableError):
             billing_processing.handle_subscription_updated(self.subscription)
+
+    def test_resolve_team_permanent_get_customer_failure_is_terminal(self):
+        """A permanent get_customer failure (e.g. no such customer) must be terminal (200), not retried.
+
+        Reclassifying a permanent 'no such customer' as retryable would burn Stripe's
+        ~3-day retry window on a condition that can never succeed (review follow-up).
+        """
+        self.subscription.id = "sub_unmapped_e2e"
+        self.subscription.customer = "cus_unmapped_e2e"
+        # A plain StripeError models a terminal Stripe failure (InvalidRequestError -> StripeError).
+        self.stripe_client.get_customer.side_effect = StripeError("Invalid request to payment provider.")
+
+        with pytest.raises(StripeError) as exc:
+            billing_processing.handle_subscription_updated(self.subscription)
+        assert not isinstance(exc.value, BillingRetryableError)
 
     def test_resolve_team_customer_metadata_points_to_missing_team_is_terminal(self):
         """If get_customer succeeds but its metadata team_key resolves to no team -> terminal (200)."""
@@ -314,33 +329,55 @@ class TestBillingProcessing:
             billing_processing.handle_checkout_completed(self.session)
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
-    def test_payment_succeeded_transient_failure_is_retryable(self, mock_email):
-        """A transient cache/DB failure recording a successful payment must retry."""
-        with patch(
-            "sbomify.apps.billing.billing_processing.invalidate_subscription_cache",
-            side_effect=Exception("redis blip"),
-        ):
+    def test_checkout_completed_is_idempotent_on_redelivery(self, mock_email):
+        """A redelivered checkout session must short-circuit before re-issuing Stripe calls."""
+        billing_processing.handle_checkout_completed(self.session)
+        calls_after_first = self.stripe_client.get_subscription.call_count
+
+        billing_processing.handle_checkout_completed(self.session)  # Stripe redelivery
+
+        # The redelivery must NOT re-issue the outbound get_subscription call.
+        assert self.stripe_client.get_subscription.call_count == calls_after_first
+        self.team.refresh_from_db()
+        assert self.team.billing_plan_limits["last_processed_checkout_session"] == self.session.id
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_payment_succeeded_precommit_db_failure_is_retryable(self, mock_email):
+        """A transient failure writing the billing state (pre-commit) must retry."""
+        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_payment_succeeded(self.invoice)
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
-    def test_payment_failed_transient_failure_is_retryable(self, mock_email):
-        """A transient cache/DB failure recording a past_due flag must retry."""
-        with patch(
-            "sbomify.apps.billing.billing_processing.invalidate_subscription_cache",
-            side_effect=Exception("redis blip"),
-        ):
+    def test_payment_failed_precommit_db_failure_is_retryable(self, mock_email):
+        """A transient failure writing the past_due state (pre-commit) must retry."""
+        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_payment_failed(self.invoice)
 
-    def test_subscription_deleted_transient_failure_is_retryable(self):
-        """A transient failure during cancellation/downgrade must retry, not strand a stale plan."""
+    def test_subscription_deleted_precommit_db_failure_is_retryable(self):
+        """A transient failure writing the cancellation (pre-commit) must retry, not strand a stale plan."""
+        with patch("sbomify.apps.teams.models.Team.save", side_effect=Exception("db write blip")):
+            with pytest.raises(BillingRetryableError):
+                billing_processing.handle_subscription_deleted(self.subscription)
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_payment_succeeded_postcommit_cache_failure_is_best_effort(self, mock_email):
+        """A post-commit cache-invalidation blip must NOT fail the webhook (best-effort).
+
+        The billing state is already committed; a retry would only idempotency-skip the
+        cache invalidation, so raising (5xx) would be a futile retry. It must return
+        normally and leave the committed state intact.
+        """
         with patch(
             "sbomify.apps.billing.billing_processing.invalidate_subscription_cache",
             side_effect=Exception("redis blip"),
         ):
-            with pytest.raises(BillingRetryableError):
-                billing_processing.handle_subscription_deleted(self.subscription)
+            # Does not raise, despite the cache failure.
+            billing_processing.handle_payment_succeeded(self.invoice)
+
+        self.team.refresh_from_db()
+        assert self.team.billing_plan_limits["subscription_status"] == "active"
 
     @patch("sbomify.apps.billing.billing_processing.email_notifications")
     def test_subscription_updated_trial_period_transient_failure_is_retryable(self, mock_email):
