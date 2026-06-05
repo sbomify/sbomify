@@ -75,8 +75,10 @@ def _raise_classified_webhook_error(exc: Exception) -> NoReturn:
     if isinstance(exc, StripeError):
         # Explicit terminal business error or a terminal Stripe failure — preserve it.
         raise exc
-    logger.error("Unexpected webhook handler error: %s: %s", type(exc).__name__, exc, exc_info=True)
-    raise BillingRetryableError(f"{type(exc).__name__}: {exc!s}") from exc
+    # Keep the message generic (it is re-logged by the view); the original exception —
+    # which may carry Stripe identifiers — stays only in the chained traceback (exc_info).
+    logger.error("Unexpected webhook handler error: %s", type(exc).__name__, exc_info=True)
+    raise BillingRetryableError(f"Unexpected error processing webhook event ({type(exc).__name__})") from exc
 
 
 class BillingResourceType(str, Enum):
@@ -425,8 +427,9 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
             logger.warning("Found team by customer metadata")
             return team, team.billing_plan_limits or {}
 
-    # Definitively unresolved after every strategy → terminal "no team".
-    raise Team.DoesNotExist(f"No team found for subscription {subscription.id}")
+    # Definitively unresolved after every strategy → terminal "no team". Keep the
+    # message free of the Stripe subscription id (re-logged by the webhook view).
+    raise Team.DoesNotExist("No team found for the subscription in this webhook event")
 
 
 def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str) -> dict[str, Any]:
