@@ -22,7 +22,28 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 class StripeError(Exception):
-    """Base class for Stripe-related errors."""
+    """Base class for Stripe-related errors.
+
+    Treated as a *terminal* business error by the webhook view: the event is
+    acknowledged (HTTP 200) and Stripe stops retrying. Use this only when a
+    retry cannot possibly change the outcome (e.g. an unknown event type or a
+    genuinely nonexistent team).
+    """
+
+    pass
+
+
+class BillingRetryableError(StripeError):
+    """A transient/recoverable failure that Stripe should retry.
+
+    Subclasses :class:`StripeError` so existing ``except StripeError`` handlers
+    (and the ``handle_stripe_errors`` decorator's ``except StripeError: raise``)
+    keep working unchanged, while the webhook view can catch this *first* and
+    return a 5xx so Stripe re-delivers the event. Raise for conditions that may
+    succeed on a later attempt: transient DB/Stripe outages, a checkout race
+    where the team↔subscription mapping is not yet written, or a billing plan
+    that is momentarily unresolvable.
+    """
 
     pass
 

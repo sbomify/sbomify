@@ -29,7 +29,7 @@ from .billing_helpers import (
 from .config import get_unlimited_plan_limits, is_billing_enabled
 from .models import BillingPlan
 from .stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
-from .stripe_client import StripeError, get_stripe_client, handle_stripe_errors
+from .stripe_client import BillingRetryableError, StripeError, get_stripe_client, handle_stripe_errors
 
 logger = getLogger(__name__)
 
@@ -329,10 +329,19 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
 
         logger.info(f"Updated subscription status to {subscription.status}")
 
+    except BillingRetryableError:
+        # Already classified as retryable downstream — propagate so the view returns 5xx.
+        raise
     except Team.DoesNotExist:
+        # Every lookup strategy exhausted: the team genuinely does not exist.
+        # Terminal — retrying cannot conjure a team, so acknowledge (200).
         logger.error("No team found for subscription")
         raise StripeError("No team found for subscription")
+    except StripeError:
+        # Explicitly-raised terminal business error (e.g. invalid status) — acknowledge.
+        raise
     except Exception as e:
+        # Unexpected failure (e.g. a transient DB error): retry rather than drop.
         subscription_id = getattr(subscription, "id", None) or (
             subscription.get("id") if isinstance(subscription, dict) else None
         )
@@ -343,7 +352,7 @@ def handle_subscription_updated(subscription: Any, event: Any = None) -> None:
             exc_info=True,
             extra={"subscription_id": subscription_id},
         )
-        raise StripeError(f"Error processing subscription update: {type(e).__name__}: {e!s}")
+        raise BillingRetryableError(f"Error processing subscription update: {type(e).__name__}: {e!s}") from e
 
 
 def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, Any]]:
@@ -365,16 +374,28 @@ def _resolve_team_from_subscription(subscription: Any) -> tuple[Team, dict[str, 
     except Team.DoesNotExist:
         pass
 
+    # Last resort: recover the team via the Stripe customer's metadata. A failure
+    # to reach Stripe here is transient, so it must be retried — not misclassified
+    # as a terminal "no team" and silently acknowledged.
     try:
         customer = stripe_client.get_customer(subscription.customer)
-        if customer.metadata and "team_key" in customer.metadata:
+    except StripeError as e:
+        raise BillingRetryableError(
+            f"Could not fetch customer {subscription.customer} to resolve team "
+            f"for subscription {subscription.id}: {e!s}"
+        ) from e
+
+    if customer.metadata and "team_key" in customer.metadata:
+        try:
             team = Team.objects.get(key=customer.metadata["team_key"])
+        except Team.DoesNotExist:
+            pass
+        else:
             logger.warning("Found team by customer metadata")
             return team, team.billing_plan_limits or {}
-        raise Team.DoesNotExist("No team key in customer metadata")
-    except Exception as e:
-        logger.error(f"Failed to recover team for subscription {subscription.id}: {e!s}")
-        raise StripeError(f"No team found for subscription {subscription.id}")
+
+    # Definitively unresolved after every strategy → terminal "no team".
+    raise Team.DoesNotExist(f"No team found for subscription {subscription.id}")
 
 
 def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id: str) -> dict[str, Any]:
@@ -429,10 +450,16 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
             else:
                 logger.warning("Could not find customer ID in subscription")
 
-        subscription_items = getattr(subscription, "items", None)
+        # Real StripeObjects subclass dict, so ``subscription.items`` resolves to the
+        # dict METHOD rather than the line-item list. Read items via subscript access
+        # for dict-like payloads; fall back to attribute access for plain objects.
+        if isinstance(subscription, dict):
+            items_obj = subscription.get("items")
+        else:
+            items_obj = getattr(subscription, "items", None)
         items_data = None
-        if subscription_items is not None and hasattr(subscription_items, "data"):
-            items_data = subscription_items.data
+        if items_obj is not None:
+            items_data = items_obj.get("data") if isinstance(items_obj, dict) else getattr(items_obj, "data", None)
 
         if items_data:
             try:
@@ -464,8 +491,13 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
                         "max_components": plan.max_components,
                     }
                 )
-            except BillingPlan.DoesNotExist:
-                logger.critical("Billing plan not found during subscription update")
+            except BillingPlan.DoesNotExist as e:
+                # Persisting subscription_status=active with stale limits here would
+                # silently corrupt entitlements. Raise inside the atomic block so the
+                # whole update rolls back and Stripe retries (self-heals a deploy/sync
+                # race; alerts ops via the 5xx if the plan is genuinely missing).
+                logger.critical("Billing plan not found during subscription update — not persisting stale limits")
+                raise BillingRetryableError("Billing plan not found during subscription update") from e
 
         team.billing_plan_limits = billing_limits
         team.save()
@@ -640,9 +672,15 @@ def handle_subscription_deleted(subscription: Any, event: Any = None) -> None:
 
         logger.info("Subscription canceled")
 
+    except BillingRetryableError:
+        raise
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {subscription.id}")
         raise StripeError(f"No team found for subscription {subscription.id}")
+    except Exception as e:
+        # Transient failure during cancellation/downgrade — retry rather than strand a stale plan.
+        logger.error("Error processing subscription deletion: %s: %s", type(e).__name__, str(e), exc_info=True)
+        raise BillingRetryableError(f"Error processing subscription deletion: {type(e).__name__}: {e!s}") from e
 
 
 @handle_stripe_errors
@@ -696,9 +734,15 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
 
         logger.warning("Payment failed")
 
+    except BillingRetryableError:
+        raise
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
         raise StripeError(f"No team found for subscription {invoice.subscription}")
+    except Exception as e:
+        # Transient failure recording the past_due flag — retry, don't drop the event.
+        logger.error("Error processing payment failure: %s: %s", type(e).__name__, str(e), exc_info=True)
+        raise BillingRetryableError(f"Error processing payment failure: {type(e).__name__}: {e!s}") from e
 
 
 @handle_stripe_errors
@@ -772,9 +816,15 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             groups={"workspace": workspace_key} if workspace_key else None,
         )
 
+    except BillingRetryableError:
+        raise
     except Team.DoesNotExist:
         logger.error(f"No team found for subscription {invoice.subscription}")
         raise StripeError(f"No team found for subscription {invoice.subscription}")
+    except Exception as e:
+        # Transient failure recording the successful payment — retry, don't drop the event.
+        logger.error("Error processing payment success: %s: %s", type(e).__name__, str(e), exc_info=True)
+        raise BillingRetryableError(f"Error processing payment success: {type(e).__name__}: {e!s}") from e
 
 
 def get_current_limits(team: Team) -> dict[str, Any]:
@@ -836,26 +886,29 @@ def handle_checkout_completed(session: Any) -> None:
                 stripe_client.cancel_subscription(existing_subscription_id)
                 logger.info("Successfully cancelled old subscription")
             except StripeError as e:
+                # A failed cancel (often a transient Stripe outage) must NOT be
+                # acknowledged: returning 200 strands both subscriptions active
+                # (double billing) with no retry. Raise retryable so Stripe
+                # re-delivers; a persistent failure exhausts retries and alerts.
                 logger.critical(
                     "CRITICAL: Failed to cancel old subscription: %s. "
-                    "Cannot proceed with checkout - both subscriptions would be active. "
-                    "MANUAL INTERVENTION REQUIRED immediately.",
+                    "Both subscriptions would be active — deferring via retry.",
                     e,
                 )
-                raise StripeError(
-                    "Cannot complete checkout: failed to cancel existing subscription. "
-                    "Both subscriptions would be active. Manual intervention required."
-                )
+                raise BillingRetryableError(
+                    "Cannot complete checkout yet: failed to cancel existing subscription; "
+                    "retrying to avoid leaving both subscriptions active."
+                ) from e
             except Exception as e:
                 logger.critical(
                     "CRITICAL: Unexpected error cancelling old subscription: %s. "
-                    "Cannot proceed with checkout - both subscriptions would be active.",
+                    "Both subscriptions would be active — deferring via retry.",
                     e,
                 )
-                raise StripeError(
-                    "Cannot complete checkout: unexpected error cancelling existing subscription. "
-                    "Manual intervention required."
-                )
+                raise BillingRetryableError(
+                    "Cannot complete checkout yet: unexpected error cancelling existing subscription; "
+                    "retrying to avoid leaving both subscriptions active."
+                ) from e
 
         with transaction.atomic():
             team = Team.objects.select_for_update().get(pk=team.pk)
@@ -909,15 +962,21 @@ def handle_checkout_completed(session: Any) -> None:
                 "workspace", team_key, {"billing_plan": plan.key, "subscription_status": subscription.status}
             )
 
+    except BillingRetryableError:
+        # Already classified as retryable (e.g. a failed old-subscription cancel) — propagate.
+        raise
     except Team.DoesNotExist:
+        # The checkout references a team that no longer exists — terminal, acknowledge.
         logger.error(f"Team with key {team_key} not found")
         raise StripeError(f"Team with key {team_key} not found")
-    except BillingPlan.DoesNotExist:
-        logger.error(f"Billing plan {plan_key} not found")
-        raise StripeError(f"Billing plan {plan_key} not found")
+    except BillingPlan.DoesNotExist as e:
+        # A momentarily-unresolvable plan (deploy/sync race) — retry rather than drop a paid checkout.
+        logger.critical(f"Billing plan {plan_key} not found during checkout — retrying instead of dropping")
+        raise BillingRetryableError(f"Billing plan {plan_key} not found") from e
     except Exception as e:
+        # Unexpected/transient failure while persisting the checkout — retry, don't drop the paid event.
         logger.error("Error processing checkout: %s", str(e), exc_info=True)
-        raise StripeError(f"Error processing checkout: {e!s}")
+        raise BillingRetryableError(f"Error processing checkout: {e!s}") from e
 
 
 @handle_stripe_errors

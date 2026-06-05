@@ -16,7 +16,7 @@ from sbomify.apps.sboms.models import Product
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
 
-from ..stripe_client import StripeError
+from ..stripe_client import BillingRetryableError, StripeError
 
 User = get_user_model()
 pytestmark = pytest.mark.django_db
@@ -239,6 +239,82 @@ class TestBillingProcessing:
         self.team.delete()
         with pytest.raises(StripeError):
             billing_processing.handle_subscription_updated(self.subscription)
+
+    # ------------------------------------------------------------------
+    # #996: retryable vs terminal classification across ALL handlers.
+    # A transient/recoverable failure must raise BillingRetryableError so the
+    # webhook view returns 5xx and Stripe re-delivers — never a silent 200 drop.
+    # ------------------------------------------------------------------
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_checkout_failed_cancel_is_retryable_not_dropped(self, mock_email):
+        """Issue #996: a failed old-subscription cancel must retry, not double-bill silently."""
+        old_sub_id = "sub_old_999"
+        self.team.billing_plan_limits["stripe_subscription_id"] = old_sub_id
+        self.team.save()
+
+        self.session.subscription = "sub_new_111"
+        self.stripe_client.get_subscription.return_value = MagicMock(
+            id="sub_new_111",
+            status="active",
+            trial_end=None,
+            items=MagicMock(data=[MagicMock(price=MagicMock(product="prod_123", metadata={"plan_key": "business"}))]),
+            metadata={"plan_key": "business"},
+        )
+        # Stripe outage while cancelling the old subscription.
+        self.stripe_client.cancel_subscription.side_effect = StripeError("Stripe temporarily unavailable")
+
+        with pytest.raises(BillingRetryableError):
+            billing_processing.handle_checkout_completed(self.session)
+
+        # Must NOT have switched to the new subscription (no double-billing persisted).
+        self.team.refresh_from_db()
+        assert self.team.billing_plan_limits["stripe_subscription_id"] == old_sub_id
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_checkout_transient_failure_is_retryable(self, mock_email):
+        """A transient failure while persisting a checkout must retry, not drop the paid event."""
+        self.stripe_client.get_subscription.side_effect = Exception("transient infra blip")
+
+        with pytest.raises(BillingRetryableError):
+            billing_processing.handle_checkout_completed(self.session)
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_checkout_missing_plan_is_retryable(self, mock_email):
+        """A momentarily-unresolvable BillingPlan during checkout must retry (deploy/sync race)."""
+        self.session.metadata = {"team_key": self.team.key, "plan_key": "does_not_exist"}
+
+        with pytest.raises(BillingRetryableError):
+            billing_processing.handle_checkout_completed(self.session)
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_payment_succeeded_transient_failure_is_retryable(self, mock_email):
+        """A transient cache/DB failure recording a successful payment must retry."""
+        with patch(
+            "sbomify.apps.billing.billing_processing.invalidate_subscription_cache",
+            side_effect=Exception("redis blip"),
+        ):
+            with pytest.raises(BillingRetryableError):
+                billing_processing.handle_payment_succeeded(self.invoice)
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_payment_failed_transient_failure_is_retryable(self, mock_email):
+        """A transient cache/DB failure recording a past_due flag must retry."""
+        with patch(
+            "sbomify.apps.billing.billing_processing.invalidate_subscription_cache",
+            side_effect=Exception("redis blip"),
+        ):
+            with pytest.raises(BillingRetryableError):
+                billing_processing.handle_payment_failed(self.invoice)
+
+    def test_subscription_deleted_transient_failure_is_retryable(self):
+        """A transient failure during cancellation/downgrade must retry, not strand a stale plan."""
+        with patch(
+            "sbomify.apps.billing.billing_processing.invalidate_subscription_cache",
+            side_effect=Exception("redis blip"),
+        ):
+            with pytest.raises(BillingRetryableError):
+                billing_processing.handle_subscription_deleted(self.subscription)
 
 
 
