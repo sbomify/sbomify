@@ -503,7 +503,17 @@ def _update_billing_from_subscription(team: Team, subscription: Any, webhook_id:
         team.save()
 
     if subscription.status == "trialing" and subscription.trial_end:
-        handle_trial_period(subscription, team)
+        try:
+            handle_trial_period(subscription, team)
+        except BillingRetryableError:
+            raise
+        except StripeError as e:
+            # handle_trial_period is @handle_stripe_errors-decorated, so a transient
+            # internal failure (e.g. a DB blip during the trial-expiry downgrade) is
+            # flattened to a plain StripeError. Reclassify as retryable so the
+            # subscription.updated path returns 5xx (visible + Stripe retries) rather
+            # than silently acknowledging it with 200 — matching the checkout path.
+            raise BillingRetryableError(f"Trial-period processing failed transiently: {e!s}") from e
 
     return billing_limits
 

@@ -240,6 +240,32 @@ class TestBillingProcessing:
         with pytest.raises(StripeError):
             billing_processing.handle_subscription_updated(self.subscription)
 
+    def test_resolve_team_transient_get_customer_failure_is_retryable(self):
+        """Last-resort team resolution: a transient get_customer failure must retry, not 200-drop.
+
+        When neither the subscription_id nor customer_id DB lookups match, the resolver
+        falls back to stripe_client.get_customer(). A transient failure there must surface
+        as BillingRetryableError (5xx), not be acknowledged as terminal.
+        """
+        # Make both DB lookups miss by pointing the event at IDs no team has.
+        self.subscription.id = "sub_unmapped_e2e"
+        self.subscription.customer = "cus_unmapped_e2e"
+        self.stripe_client.get_customer.side_effect = StripeError("Could not connect to payment provider.")
+
+        with pytest.raises(BillingRetryableError):
+            billing_processing.handle_subscription_updated(self.subscription)
+
+    def test_resolve_team_customer_metadata_points_to_missing_team_is_terminal(self):
+        """If get_customer succeeds but its metadata team_key resolves to no team -> terminal (200)."""
+        self.subscription.id = "sub_unmapped_e2e"
+        self.subscription.customer = "cus_unmapped_e2e"
+        self.stripe_client.get_customer.return_value = MagicMock(metadata={"team_key": "no_such_team"})
+
+        # Terminal: a genuinely nonexistent team is a plain StripeError, not retryable.
+        with pytest.raises(StripeError) as exc:
+            billing_processing.handle_subscription_updated(self.subscription)
+        assert not isinstance(exc.value, BillingRetryableError)
+
     # ------------------------------------------------------------------
     # #996: retryable vs terminal classification across ALL handlers.
     # A transient/recoverable failure must raise BillingRetryableError so the
@@ -315,6 +341,26 @@ class TestBillingProcessing:
         ):
             with pytest.raises(BillingRetryableError):
                 billing_processing.handle_subscription_deleted(self.subscription)
+
+    @patch("sbomify.apps.billing.billing_processing.email_notifications")
+    def test_subscription_updated_trial_period_transient_failure_is_retryable(self, mock_email):
+        """A transient failure inside handle_trial_period (trialing path) must retry, not 200-drop.
+
+        handle_trial_period is @handle_stripe_errors-decorated, so any internal failure
+        surfaces as a plain StripeError. Without reclassification it would be caught by
+        handle_subscription_updated's `except StripeError: raise` (terminal -> 200),
+        silently dropping the trialing event — the exact #996 class, and inconsistent
+        with the checkout path which already retries.
+        """
+        self.subscription.status = "trialing"
+        self.subscription.trial_end = int((timezone.now() + datetime.timedelta(days=3)).timestamp())
+
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_trial_period",
+            side_effect=StripeError("An unexpected error occurred."),
+        ):
+            with pytest.raises(BillingRetryableError):
+                billing_processing.handle_subscription_updated(self.subscription)
 
 
 

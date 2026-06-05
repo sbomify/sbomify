@@ -761,11 +761,15 @@ class StripeWebhookView(View):
 
         except BillingRetryableError as e:
             # Transient/recoverable failure — do NOT acknowledge, let Stripe retry.
+            # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient
+            # condition for ops, distinct from an unexpected crash. Both are non-2xx, so
+            # Stripe re-delivers either way.
             logger.error("Retryable webhook error (Stripe will retry): %s", e)
             return HttpResponse(status=503)
         except StripeError as e:
             logger.error("Stripe business logic error (acknowledged): %s", e)
             return HttpResponse(status=200)
         except Exception as e:
+            # Unexpected/unclassified error — 500 so Stripe retries and ops gets paged.
             logger.exception("Unexpected webhook error: %s", e)
             return HttpResponse(status=500)
