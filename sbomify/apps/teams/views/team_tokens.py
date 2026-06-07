@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any, cast
 
 from django.contrib import messages
@@ -7,6 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
 from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
@@ -78,12 +80,20 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         user = cast(User, request.user)
         team_id = token_to_number(team_key)
 
+        # PAT expiry lives in the DB row (the JWT stays claim-less — ``exp``
+        # is reserved for short-lived OIDC tokens). ``get_user_and_token_record``
+        # rejects a row once ``expires_at`` is in the past. ``None`` means
+        # never expires (the explicit "No expiration" choice).
+        expiry_days = form.expiry_days()
+        expires_at = timezone.now() + timedelta(days=expiry_days) if expiry_days is not None else None
+
         access_token_str = create_personal_access_token(user)
         token = AccessToken(
             encoded_token=access_token_str,
             user=user,
             description=form.cleaned_data["description"],
             team_id=team_id,
+            expires_at=expires_at,
         )
         token.save()
 

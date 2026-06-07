@@ -1,12 +1,16 @@
 """Tests for team tokens view."""
 
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
@@ -220,3 +224,113 @@ class TestTeamTokensView:
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
         assert response.status_code == 403
+
+
+class TestCreateAccessTokenFormExpiry:
+    """``CreateAccessTokenForm`` exposes a selectable token TTL (#215)."""
+
+    def test_default_expiry_is_90_days(self):
+        """Omitting the choice falls back to the secure default of 90 days."""
+        form = CreateAccessTokenForm({"description": "CI token"})
+        assert form.is_valid(), form.errors
+        assert form.expiry_days() == 90
+
+    def test_explicit_expiry_choice_is_honoured(self):
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_days": "30"})
+        assert form.is_valid(), form.errors
+        assert form.expiry_days() == 30
+
+    def test_no_expiration_choice_returns_none(self):
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_days": "never"})
+        assert form.is_valid(), form.errors
+        assert form.expiry_days() is None
+
+    def test_invalid_expiry_choice_is_rejected(self):
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_days": "forever-and-ever"})
+        assert not form.is_valid()
+        assert "expires_in_days" in form.errors
+
+
+@pytest.mark.django_db
+class TestTeamTokenExpiry:
+    """Token creation persists the chosen expiry and the UI surfaces it (#215)."""
+
+    def _post(self, client, team, data):
+        return client.post(reverse("teams:team_tokens", kwargs={"team_key": team.key}), data)
+
+    def test_post_sets_default_90_day_expiry(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        before = timezone.now()
+        self._post(client, team, {"description": "Default expiry"})
+
+        token = AccessToken.objects.get(user=user, description="Default expiry")
+        assert token.expires_at is not None
+        assert not token.is_expired
+        # ~90 days out, allowing for the small window the request takes.
+        assert before + timedelta(days=89, hours=23) <= token.expires_at <= before + timedelta(days=90, minutes=1)
+
+    def test_post_respects_chosen_expiry(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        before = timezone.now()
+        self._post(client, team, {"description": "Short token", "expires_in_days": "30"})
+
+        token = AccessToken.objects.get(user=user, description="Short token")
+        assert token.expires_at is not None
+        assert before + timedelta(days=29, hours=23) <= token.expires_at <= before + timedelta(days=30, minutes=1)
+
+    def test_post_no_expiration_leaves_null(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        self._post(client, team, {"description": "Forever token", "expires_in_days": "never"})
+
+        token = AccessToken.objects.get(user=user, description="Forever token")
+        assert token.expires_at is None
+
+    def test_listing_shows_expiry_date(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        AccessToken.objects.create(
+            user=user,
+            description="Expiring Token",
+            encoded_token="expiring_tok",
+            team=team,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+
+        content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
+        assert "Expires" in content
+
+    def test_listing_shows_never_for_unset_expiry(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        AccessToken.objects.create(
+            user=user, description="Forever Token", encoded_token="forever_tok", team=team, expires_at=None
+        )
+
+        content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
+        assert "Never expires" in content
+
+    def test_listing_flags_expired_token(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        AccessToken.objects.create(
+            user=user,
+            description="Dead Token",
+            encoded_token="dead_tok",
+            team=team,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
+        assert "Expired" in content
