@@ -300,13 +300,34 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
         if not user_id:
             return 403, {"detail": "Invalid token: missing user information"}
 
-        try:
-            from django.contrib.auth import get_user_model
+        from django.contrib.auth import get_user_model
 
-            User = get_user_model()
-            User.objects.get(id=user_id)
+        from sbomify.apps.core.services.access_control import check_component_access
+
+        # Match PAT auth liveness filtering: a soft-deleted / deactivated
+        # account must not download via a signed URL during the purge grace
+        # window (sbomify.apps.access_tokens.utils.get_user_and_token_record).
+        User = get_user_model()
+        try:
+            token_user = User.objects.get(id=user_id, is_active=True, deleted_at__isnull=True)
         except User.DoesNotExist:
             return 403, {"detail": "Invalid token: user not found"}
+
+        # The signed token delegates a download; it is not standalone
+        # authorization. Re-check the token user's CURRENT access so a
+        # revoked member/guest cannot keep downloading via a captured signed
+        # URL for the token TTL (#997). The endpoint is auth=None, so bind the
+        # token user onto the request and use the canonical access service.
+        request.user = token_user
+        access_result = check_component_access(request, document.component)
+        if not access_result.has_access:
+            log.info(
+                "Signed URL access denied for document %s, user %s: %s",
+                document_id,
+                user_id,
+                access_result.reason,
+            )
+            return 403, {"detail": "Access has been revoked or is no longer valid"}
 
         # Log the access for audit purposes
         log.info(f"Signed URL access to private document {document_id} by user {user_id}")

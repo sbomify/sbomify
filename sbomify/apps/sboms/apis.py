@@ -852,13 +852,33 @@ def download_sbom_signed(
         if not user_id:
             return 403, {"detail": "Invalid token: missing user information"}
 
-        try:
-            from django.contrib.auth import get_user_model
+        from django.contrib.auth import get_user_model
 
-            User = get_user_model()
-            User.objects.get(id=user_id)
+        # Match PAT auth liveness filtering: a soft-deleted / deactivated
+        # account must not download via a signed URL during the purge grace
+        # window (sbomify.apps.access_tokens.utils.get_user_and_token_record).
+        User = get_user_model()
+        try:
+            token_user = User.objects.get(id=user_id, is_active=True, deleted_at__isnull=True)
         except User.DoesNotExist:
             return 403, {"detail": "Invalid token: user not found"}
+
+        # The signed token only delegates a download; it is NOT standalone
+        # authorization. Re-check the token user's CURRENT access so that
+        # revoking their membership/NDA immediately invalidates any signed
+        # URL they captured, instead of leaving it valid for the token TTL
+        # (#997). The endpoint is auth=None, so bind the token user onto the
+        # request and route through the canonical access service.
+        request.user = token_user
+        access_result = check_component_access(request, sbom.component)
+        if not access_result.has_access:
+            log.info(
+                "Signed URL access denied for SBOM %s, user %s: %s",
+                sbom_id,
+                user_id,
+                access_result.reason,
+            )
+            return 403, {"detail": "Access has been revoked or is no longer valid"}
 
         # Log the access for audit purposes
         log.info(f"Signed URL access to private SBOM {sbom_id} by user {user_id}")
