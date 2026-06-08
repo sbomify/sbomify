@@ -1564,29 +1564,32 @@ def _resolve_output_version(output_format: str, version: str | None) -> str:
 
 
 def compute_release_artifact_set_hash(release: Any) -> str:
-    """Deterministic, content-sensitive fingerprint of a release's SBOM artifact set.
+    """Deterministic fingerprint of the members that appear in a PUBLIC aggregate.
 
-    Computed from the DB only (no S3 reads). The fingerprint covers, per member:
+    Computed from the DB only (no S3 reads). Only PUBLIC-visibility members are
+    fingerprinted, because the aggregate cache is used solely for public products
+    and the builders exclude non-public members from a public product's
+    aggregate. Filtering to exactly the included set means:
 
-    * ``sbom__id`` — identity of the member SBOM,
-    * ``sbom__sbom_filename`` — the sha256 of the artifact bytes (see
-      object_store.upload_sbom), so a replaced artifact busts the key,
-    * ``sbom__component__visibility`` — because for PUBLIC products the builder
-      EXCLUDES non-public members; a visibility flip (PUBLIC <-> PRIVATE) changes
-      which members appear in the aggregate, so it MUST change the cache key or a
-      stale doc could keep exposing a now-private member.
+    * adding/removing/replacing a PUBLIC member — or a member flipping
+      PUBLIC <-> PRIVATE, i.e. entering/leaving the public set — busts the key
+      (a stale doc must never keep exposing a now-private member); while
+    * changing a PRIVATE/GATED member — which never appears in the public
+      aggregate — does NOT needlessly bust it.
 
-    Ordered by ``sbom__id`` so the fingerprint is independent of row insertion
-    order. (ADR-004: artifacts are immutable, so the filename is a faithful
-    content fingerprint.)
+    ``sbom_filename`` is the sha256 of the artifact bytes (object_store.upload_sbom),
+    so a replaced member busts the key. Ordered by ``sbom__id`` for determinism.
+    (ADR-004: artifacts are immutable, so the filename is a faithful fingerprint.)
     """
+    from sbomify.apps.sboms.models import Component
+
     members = (
-        release.artifacts.filter(sbom__isnull=False)
+        release.artifacts.filter(sbom__isnull=False, sbom__component__visibility=Component.Visibility.PUBLIC)
         .order_by("sbom__id")
-        .values_list("sbom__id", "sbom__sbom_filename", "sbom__component__visibility")
+        .values_list("sbom__id", "sbom__sbom_filename")
     )
-    payload = "|".join(f"{sid}:{fname}:{vis}" for sid, fname, vis in members)
-    return hashlib.sha256(f"v1|{payload}".encode()).hexdigest()
+    payload = "|".join(f"{sid}:{fname}" for sid, fname in members)
+    return hashlib.sha256(f"v2|{payload}".encode()).hexdigest()
 
 
 def get_release_sbom_package(

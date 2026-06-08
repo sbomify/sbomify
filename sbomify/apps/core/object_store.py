@@ -74,7 +74,9 @@ class S3Client:
             response = self.s3.Bucket(settings.AWS_SBOMS_STORAGE_BUCKET_NAME).Object(object_name).get()
             return response["Body"].read()  # type: ignore[no-any-return]
         except ClientError as e:
-            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "NoSuchBucket", "404"):
+            # Only a missing object is an expected cache miss. A missing bucket is
+            # a misconfiguration and must fail loudly rather than degrade silently.
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
                 return None
             raise
 

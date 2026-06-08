@@ -106,6 +106,34 @@ class TestAggregateCache:
         # The now-private member is excluded from the rebuilt public aggregate.
         assert rebuilt != first
 
+    def test_private_member_change_does_not_bust_cache(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """A PRIVATE member never appears in a public aggregate, so changing it
+        must NOT bust the public cache — only the included (public) members do.
+        """
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        priv = _make_member_sbom(team, s3_sboms_mock, "secret")
+        priv.component.visibility = Component.Visibility.PRIVATE
+        priv.component.save()
+        ReleaseArtifact.objects.create(release=release, sbom=priv)
+
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")  # cold build creates the cache
+        keys_before = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert len(keys_before) == 1
+
+        # Replace the PRIVATE member's content (new filename); the public aggregate is unchanged.
+        s3_sboms_mock.uploaded_files["secret-v2.json"] = s3_sboms_mock.uploaded_files["secret.json"]
+        priv.sbom_filename = "secret-v2.json"
+        priv.save()
+
+        s3_sboms_mock.get_calls.clear()
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
+        keys_after = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert keys_after == keys_before, "a private-member change must not bust the public cache"
+        assert "alpha.json" not in s3_sboms_mock.get_calls, "should have been a cache hit"
+
     def test_private_product_is_not_cached(
         self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
