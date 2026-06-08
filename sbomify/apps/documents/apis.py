@@ -303,7 +303,7 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
 
         from django.contrib.auth import get_user_model
 
-        from sbomify.apps.core.services.access_control import check_component_access
+        from sbomify.apps.core.services.access_control import check_component_access_for_user
 
         # Match PAT auth liveness filtering: a soft-deleted / deactivated
         # account must not download via a signed URL during the purge grace
@@ -315,12 +315,10 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
             return 403, {"detail": "Invalid token: user not found"}
 
         # The signed token delegates a download; it is not standalone
-        # authorization. Re-check the token user's CURRENT access so a
-        # revoked member/guest cannot keep downloading via a captured signed
-        # URL for the token TTL (#997). The endpoint is auth=None, so bind the
-        # token user onto the request and use the canonical access service.
-        request.user = token_user
-        access_result = check_component_access(request, document.component)
+        # authorization. Re-check the token user's CURRENT access against live
+        # DB state (no session role-cache) so a revoked member/guest cannot
+        # keep downloading via a captured signed URL for the token TTL (#997).
+        access_result = check_component_access_for_user(token_user, document.component)
         if not access_result.has_access:
             log.info(
                 "Signed URL access denied for document %s, user %s: %s",

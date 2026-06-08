@@ -19,7 +19,7 @@ from sbomify.apps.core.apis import get_component_metadata, patch_component_metad
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
-from sbomify.apps.core.services.access_control import check_component_access
+from sbomify.apps.core.services.access_control import check_component_access, check_component_access_for_user
 from sbomify.apps.core.utils import (
     ExtractSpec,
     broadcast_to_workspace,
@@ -865,13 +865,11 @@ def download_sbom_signed(
             return 403, {"detail": "Invalid token: user not found"}
 
         # The signed token only delegates a download; it is NOT standalone
-        # authorization. Re-check the token user's CURRENT access so that
-        # revoking their membership/NDA immediately invalidates any signed
-        # URL they captured, instead of leaving it valid for the token TTL
-        # (#997). The endpoint is auth=None, so bind the token user onto the
-        # request and route through the canonical access service.
-        request.user = token_user
-        access_result = check_component_access(request, sbom.component)
+        # authorization. Re-check the token user's CURRENT access against live
+        # DB state (no session role-cache) so that revoking their
+        # membership/NDA immediately invalidates a captured signed URL instead
+        # of leaving it valid for the token TTL (#997).
+        access_result = check_component_access_for_user(token_user, sbom.component)
         if not access_result.has_access:
             log.info(
                 "Signed URL access denied for SBOM %s, user %s: %s",

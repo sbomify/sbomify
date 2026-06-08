@@ -238,3 +238,24 @@ def check_component_access(
         requires_authentication=False,
         requires_access_request=False,
     )
+
+
+def check_component_access_for_user(
+    user: User, component: Component, team: Team | None = None
+) -> ComponentAccessResult:
+    """Access check for a user with no HTTP-request context.
+
+    Use this for delegated checks (e.g. re-validating a signed-download
+    token's user) where there is no authenticated session to trust. It
+    evaluates LIVE database state only: it builds a stub request carrying
+    just the user and an EMPTY session, so the PRIVATE-component path in
+    ``verify_item_access`` never short-circuits on a (possibly stale)
+    ``session["user_teams"]`` role cache. Routes through
+    ``check_component_access`` so the rules stay in one place.
+    """
+    stub = HttpRequest()
+    stub.user = user
+    # Empty session -> verify_item_access skips its session role-cache and
+    # falls through to the authoritative DB membership lookup.
+    stub.session = {}  # type: ignore[assignment]
+    return check_component_access(stub, component, team)

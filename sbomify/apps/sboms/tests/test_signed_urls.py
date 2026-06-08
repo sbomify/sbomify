@@ -343,6 +343,45 @@ class TestSignedURLs:
             get_user_model().objects.filter(id=self.user.id).update(is_active=False)
             assert self.client.get(url, {"token": token}).status_code == 403
 
+    def test_signed_download_revoked_with_stale_session_cache_denied(self):
+        """#1008: revocation is enforced from LIVE DB state, never a stale
+        session role-cache. A revoked user who is still logged in (their
+        session still lists them as owner) must still get 403 — verify_item_access
+        short-circuits on session["user_teams"], so the re-check must not run
+        against that cache.
+        """
+        from sbomify.apps.teams.models import Member
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["user_teams"] = {self.team.key: {"role": "owner"}}
+        session.save()
+        Member.objects.filter(team=self.team, user=self.user).delete()
+
+        token = make_download_token(self.private_sbom.id, str(self.user.id))
+        url = f"/api/v1/sboms/{self.private_sbom.id}/download/signed"
+        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+            mock_s3_client.return_value.get_sbom_data.return_value = b'{"test": "data"}'
+            assert self.client.get(url, {"token": token}).status_code == 403
+
+    def test_signed_document_download_revoked_with_stale_session_cache_denied(self):
+        """#1008 document equivalent: a stale session role-cache must not
+        override live-DB revocation on the document signed-download path.
+        """
+        from sbomify.apps.teams.models import Member
+
+        self.client.force_login(self.user)
+        session = self.client.session
+        session["user_teams"] = {self.team.key: {"role": "owner"}}
+        session.save()
+        Member.objects.filter(team=self.team, user=self.user).delete()
+
+        token = make_document_download_token(self.private_document.id, str(self.user.id))
+        url = f"/api/v1/documents/{self.private_document.id}/download/signed"
+        with patch("sbomify.apps.documents.apis.S3Client") as mock_s3_client:
+            mock_s3_client.return_value.get_document_data.return_value = b"doc bytes"
+            assert self.client.get(url, {"token": token}).status_code == 403
+
     def test_signed_document_download_gated_guest_allowed_then_revoked(self, guest_user):  # noqa: F811
         """#997: an approved gated guest keeps signed-URL access (no
         regression), but a REVOKED guest is denied. Guards that the fix
