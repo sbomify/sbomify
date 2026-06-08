@@ -62,14 +62,23 @@ def github_claims_factory(rsa_keypair: dict[str, Any]):
 
     def _build(**overrides: Any) -> str:
         now = int(time.time())
+        # Derive the repo-shaped claims (sub, repository_owner, workflow_ref)
+        # from the effective repository so overriding ``repository=`` alone
+        # still yields an internally consistent token. A real GitHub OIDC JWT
+        # never has ``sub``/``workflow_ref`` pointing at a different repo than
+        # ``repository``; hardcoding them here would make any non-default
+        # repository token self-contradictory. Explicit overrides for these
+        # claims still win via the ``defaults.update(overrides)`` below.
+        repository = overrides.get("repository") or "acme/widget"
+        repository_owner = repository.split("/", 1)[0]
         defaults = {
             "iss": settings.OIDC_GITHUB_ISSUER,
             "aud": settings.OIDC_GITHUB_AUDIENCE,
             "iat": now,
             "exp": now + 300,
-            "sub": "repo:acme/widget:ref:refs/heads/main",
-            "repository": "acme/widget",
-            "repository_owner": "acme",
+            "sub": f"repo:{repository}:ref:refs/heads/main",
+            "repository": repository,
+            "repository_owner": repository_owner,
             # GitHub Actions encodes every numeric identifier in the JWT
             # as a JSON *string* (see GitHub's OIDC hardening docs); using
             # strings here keeps the fixture aligned with real tokens and
@@ -77,7 +86,7 @@ def github_claims_factory(rsa_keypair: dict[str, Any]):
             "repository_id": "12345",
             "repository_owner_id": "67890",
             "ref": "refs/heads/main",
-            "workflow_ref": "acme/widget/.github/workflows/publish.yml@refs/heads/main",
+            "workflow_ref": f"{repository}/.github/workflows/publish.yml@refs/heads/main",
             "actor": "octocat",
             "run_id": "12345",
         }
