@@ -1542,7 +1542,7 @@ def get_product_sbom_package(
     # Rename file to use product name instead of release name
     format_lower = output_format.lower()
     extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
-    product_sbom_path = target_folder / f"{product.name}{extension}"
+    product_sbom_path = target_folder / _safe_sbom_filename(product.name, extension)
 
     # Move the release SBOM to product SBOM path
     sbom_path.rename(product_sbom_path)
@@ -1563,6 +1563,19 @@ def _resolve_output_version(output_format: str, version: str | None) -> str:
     return "1.6" if output_format == "cyclonedx" else "2.3"
 
 
+def _safe_sbom_filename(stem: str, extension: str) -> str:
+    """Build a target filename from user-derived names (product/release) that
+    cannot escape ``target_folder``.
+
+    Product and release names are user-controlled; joining them onto a path with
+    ``target_folder / name`` would allow path traversal (``..``) or absolute-path
+    override if they contained separators. Neutralize path separators + null
+    bytes and strip leading dots/spaces so the result is always a pure basename.
+    """
+    safe = stem.replace("/", "_").replace("\\", "_").replace("\x00", "").lstrip(". ")
+    return f"{safe or 'sbom'}{extension}"
+
+
 def compute_release_artifact_set_hash(release: Any) -> str:
     """Deterministic fingerprint of the members that appear in a PUBLIC aggregate.
 
@@ -1581,8 +1594,6 @@ def compute_release_artifact_set_hash(release: Any) -> str:
     so a replaced member busts the key. Ordered by ``sbom__id`` for determinism.
     (ADR-004: artifacts are immutable, so the filename is a faithful fingerprint.)
     """
-    from sbomify.apps.sboms.models import Component
-
     members = (
         release.artifacts.filter(sbom__isnull=False, sbom__component__visibility=Component.Visibility.PUBLIC)
         .order_by("sbom__id")
@@ -1637,7 +1648,7 @@ def get_release_sbom_package(
     else:
         extension = ".cdx.json"
 
-    sbom_path = target_folder / f"{release.product.name}-{release.name}{extension}"
+    sbom_path = target_folder / _safe_sbom_filename(f"{release.product.name}-{release.name}", extension)
 
     # Aggregated SBOMs are expensive to build (O(N) serial member fetches) and
     # the public release/product download endpoints are unauthenticated — a

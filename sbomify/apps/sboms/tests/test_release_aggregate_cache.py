@@ -166,6 +166,22 @@ class TestAggregateCache:
             k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")
         ], "an incomplete build (skipped member) must not be cached"
 
+    def test_malicious_names_cannot_escape_target_folder(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """Product/release names are user-controlled; the built file must stay a
+        basename inside target_folder even if a name contains path separators.
+        """
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        release.product.name = "../../evil"
+        release.product.save()
+        release.name = "../escape"
+        release.save()
+
+        path = get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
+        assert path.resolve().parent == tmp_path.resolve(), "build must not escape target_folder"
+
     def test_spdx_builder_no_redundant_per_artifact_sbom_get(
         self, tmp_path, team_with_business_plan, s3_sboms_mock, mocker  # noqa: F811
     ):
