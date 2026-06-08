@@ -69,15 +69,28 @@ def _token_is_oidc_typed(token_record: AccessToken) -> bool:
     as an OIDC discriminator. The token reaching this point already
     passed authentication, so the decode succeeds and isn't expired; any
     decode failure falls through to the binding-based fallback.
+
+    Memoised on the token-record instance: ``request_is_oidc_authed``
+    runs twice per upload request (once in ``is_authorised_for_component``
+    and again in ``bound_component_id_for_request``), and
+    ``request.access_token_record`` is that same per-request instance both
+    times — so the JWT is verified at most once per request without a
+    request-scoped cache attribute (cf. ``_cached_binding``).
     """
+    cached = getattr(token_record, "_is_oidc_typed", None)
+    if cached is not None:
+        return bool(cached)
+
     from jwt.exceptions import DecodeError
 
     from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, decode_personal_access_token
 
     try:
-        return decode_personal_access_token(token_record.encoded_token).get("token_type") == TOKEN_TYPE_OIDC
+        result = decode_personal_access_token(token_record.encoded_token).get("token_type") == TOKEN_TYPE_OIDC
     except DecodeError:
-        return False
+        result = False
+    setattr(token_record, "_is_oidc_typed", result)
+    return result
 
 
 def request_is_oidc_authed(request: Any) -> bool:
@@ -107,11 +120,13 @@ def request_is_oidc_authed(request: Any) -> bool:
     ``OIDCBinding`` row without taking down the bot user.
 
     Performance: ``request_is_oidc_authed`` is only reached on the
-    component-scoped upload endpoints. For an OIDC request the
-    ``token_type`` check short-circuits before any binding query; a PAT
-    request pays one JWT verify plus one unique-indexed probe on
-    ``OIDCBinding.bot_user_id`` (memoised via ``_cached_binding`` so a
-    caller that also hits ``bound_component_id_for_request`` shares it).
+    component-scoped upload endpoints, and runs at most one JWT verify
+    plus (for a PAT) one unique-indexed probe on ``OIDCBinding.bot_user_id``
+    per request. Both are memoised — the ``token_type`` decode on the
+    token-record instance (``_token_is_oidc_typed``) and the binding
+    lookup via ``_cached_binding`` — so the second call this predicate
+    receives within a request (``is_authorised_for_component`` then
+    ``bound_component_id_for_request``) is effectively free.
     """
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
     if token_record is None:

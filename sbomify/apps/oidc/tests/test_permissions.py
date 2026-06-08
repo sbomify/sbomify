@@ -304,6 +304,60 @@ class TestRequestPredicate:
         # verify_item_access alone) — NOT a 403.
         assert is_authorised_for_component(fake_req, mocker.MagicMock(id="any-component")) is True
 
+    @pytest.mark.django_db
+    def test_oidc_type_decoded_at_most_once_per_request(self, mocker, bound_component: Component) -> None:
+        """The signed ``token_type`` is verified at most once per request.
+
+        ``is_authorised_for_component`` calls ``request_is_oidc_authed``,
+        then ``bound_component_id_for_request`` calls it again — so the
+        JWT-decode in ``_token_is_oidc_typed`` would run twice without
+        memoisation. The result is cached on the per-request token-record
+        instance; this pins that an upload request never re-verifies the
+        JWT (regression guard for the round-3 Copilot perf finding).
+        """
+        import datetime
+
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        from sbomify.apps.access_tokens import utils as at_utils
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, create_personal_access_token
+        from sbomify.apps.oidc.models import OIDCBinding
+        from sbomify.apps.oidc.services import BOT_USERNAME_PREFIX
+
+        UserModel = get_user_model()
+        bot = UserModel.objects.create_user(username=f"{BOT_USERNAME_PREFIX}once", password="x")
+        OIDCBinding.objects.create(
+            component=bound_component,
+            provider=OIDCBinding.PROVIDER_GITHUB,
+            repository="once/repo",
+            repository_id=1,
+            repository_owner_id=2,
+            bot_user=bot,
+        )
+        encoded = create_personal_access_token(
+            bot,
+            expires_at=(timezone.now() + datetime.timedelta(seconds=900)).timestamp(),
+            token_type=TOKEN_TYPE_OIDC,
+        )
+        row = AccessToken.objects.create(
+            encoded_token=encoded,
+            description="oidc once",
+            user=bot,
+            expires_at=timezone.now() + datetime.timedelta(seconds=900),
+        )
+        fake_req = mocker.MagicMock()
+        fake_req.access_token_record = row
+        if hasattr(fake_req, "_oidc_binding_cache"):
+            delattr(fake_req, "_oidc_binding_cache")
+
+        spy = mocker.spy(at_utils, "decode_personal_access_token")
+        # Runs request_is_oidc_authed twice internally (the gate + the
+        # bound-component lookup) yet decodes the JWT at most once.
+        assert is_authorised_for_component(fake_req, bound_component) is True
+        assert spy.call_count <= 1
+
 
 class TestSBOMUploadScope:
     @pytest.mark.django_db
