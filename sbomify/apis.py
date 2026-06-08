@@ -29,6 +29,11 @@ class UTCZRenderer(JSONRenderer):
 
 
 api = NinjaAPI(
+    # CSRF protects cookie/session-authenticated requests. Personal Access Token
+    # (bearer) clients are exempted by BearerAuthCsrfExemptMiddleware so the API stays
+    # usable for programmatic clients (which carry no CSRF cookie and cannot be a CSRF
+    # vector). See sbomify/apps/core/middleware.py.
+    csrf=True,
     renderer=UTCZRenderer(),
     title="sbomify API",
     version=__version__,
