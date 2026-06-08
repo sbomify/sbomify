@@ -369,4 +369,120 @@ def test_stripe_webhook_error_handling(factory):
             assert response.status_code == 500
 
 
+@pytest.mark.django_db
+def test_stripe_webhook_retryable_error_returns_5xx(factory, team_with_business_plan):
+    """A retryable handler failure must NOT be acknowledged (200) — Stripe has to retry."""
+    from sbomify.apps.billing.stripe_client import BillingRetryableError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "customer.subscription.updated"
+    mock_event.id = "evt_retryable_996"
+    mock_event.data.object = {"id": "sub_test123", "customer": "cus_test123"}
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "customer.subscription.updated"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_subscription_updated",
+            side_effect=BillingRetryableError("transient team-lookup failure"),
+        ):
+            response = StripeWebhookView.as_view()(request)
+
+    # Stripe retries on any non-2xx; the dropped-event bug returned 200 here.
+    assert response.status_code >= 500
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_terminal_error_returns_200(factory, team_with_business_plan):
+    """A genuinely terminal business error stays acknowledged (200) so Stripe stops retrying."""
+    from sbomify.apps.billing.stripe_client import StripeError
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    mock_event = MagicMock()
+    mock_event.type = "customer.subscription.updated"
+    mock_event.id = "evt_terminal_996"
+    mock_event.data.object = {"id": "sub_test123", "customer": "cus_test123"}
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "customer.subscription.updated"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        with patch(
+            "sbomify.apps.billing.billing_processing.handle_subscription_updated",
+            side_effect=StripeError("no such team — truly nonexistent"),
+        ):
+            response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_stripe_webhook_subscription_updated_real_handler(factory, team_with_business_plan):
+    """Happy-path webhook that does NOT mock the handler — exercises real team/plan resolution.
+
+    Uses a genuine ``stripe.Subscription`` (not a MagicMock) so the production
+    items-dict access path runs through the view, and seeds the team on ``community``
+    so the plan flip to ``business`` is an *active* proof the resolver ran (not a
+    tautology against a fixture that already starts on business).
+    """
+    import stripe
+
+    from sbomify.apps.billing.views import StripeWebhookView
+
+    # Seed a different starting plan so the post-webhook assertion is meaningful.
+    team_with_business_plan.billing_plan = "community"
+    team_with_business_plan.save()
+    assert "last_processed_webhook_id" not in (team_with_business_plan.billing_plan_limits or {})
+
+    subscription = stripe.Subscription.construct_from(
+        {
+            "id": "sub_test123",
+            "object": "subscription",
+            "customer": "cus_test123",
+            "status": "active",
+            "current_period_end": 1893456000,
+            "metadata": {"plan_key": "business"},
+            "cancel_at_period_end": False,
+            "cancel_at": None,
+            "items": {"object": "list", "data": [{"price": {"id": "price_test_business_monthly"}}]},
+        },
+        "sk_test_dummy",
+    )
+
+    mock_event = MagicMock()
+    mock_event.type = "customer.subscription.updated"
+    mock_event.id = "evt_real_handler_996"
+    mock_event.data.object = subscription
+
+    request = factory.post(
+        reverse("billing:webhook"),
+        data=json.dumps({"type": "customer.subscription.updated"}),
+        content_type="application/json",
+    )
+    request.headers = {"Stripe-Signature": "test_sig"}
+
+    with patch("sbomify.apps.billing.views.stripe_client") as mock_stripe_client:
+        mock_stripe_client.construct_webhook_event.return_value = mock_event
+        response = StripeWebhookView.as_view()(request)
+
+    assert response.status_code == 200
+    team_with_business_plan.refresh_from_db()
+    # Proves the real handler ran end-to-end (idempotency marker only written by the handler).
+    assert team_with_business_plan.billing_plan_limits["last_processed_webhook_id"] == "evt_real_handler_996"
+    # Active proof the items-dict plan-resolution path ran: community -> business.
+    assert team_with_business_plan.billing_plan == "business"
+
+
 

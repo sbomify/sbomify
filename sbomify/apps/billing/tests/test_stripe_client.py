@@ -6,7 +6,7 @@ import pytest
 import stripe
 from django.conf import settings
 
-from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+from sbomify.apps.billing.stripe_client import BillingRetryableError, StripeClient, StripeError
 
 
 class TestStripeClient:
@@ -52,6 +52,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "Card error" in str(exc_info.value)
+        # Terminal: a declined card will not succeed on retry.
+        assert not isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_rate_limit_error(self, mock_retrieve):
@@ -62,6 +64,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "Too many requests made to Stripe API" in str(exc_info.value)
+        # Transient: rate limiting clears, so this is retryable.
+        assert isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_invalid_request_error(self, mock_retrieve):
@@ -72,6 +76,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "Invalid request to payment provider." in str(exc_info.value)
+        # Terminal: a bad request / resource_missing will not succeed on retry.
+        assert not isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_authentication_error(self, mock_retrieve):
@@ -82,6 +88,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "Authentication with payment provider failed." in str(exc_info.value)
+        # Terminal: a credential/config error will not self-heal on retry.
+        assert not isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_api_connection_error(self, mock_retrieve):
@@ -92,6 +100,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "Could not connect to payment provider." in str(exc_info.value)
+        # Transient: a connection blip is retryable.
+        assert isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_generic_stripe_error(self, mock_retrieve):
@@ -102,6 +112,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "A payment processing error occurred." in str(exc_info.value)
+        # Transient by default: an unclassified Stripe API error (e.g. a 5xx) is retryable.
+        assert isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.retrieve")
     def test_get_customer_unexpected_error(self, mock_retrieve):
@@ -112,6 +124,8 @@ class TestStripeClient:
             self.client.get_customer("cus_123")
 
         assert "An unexpected error occurred." in str(exc_info.value)
+        # Unexpected: retry rather than silently treat as terminal.
+        assert isinstance(exc_info.value, BillingRetryableError)
 
     @patch("stripe.Customer.create")
     def test_create_customer_success(self, mock_create):

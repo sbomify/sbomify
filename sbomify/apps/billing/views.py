@@ -42,7 +42,7 @@ from .billing_helpers import (
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
-from .stripe_client import StripeError, get_stripe_client
+from .stripe_client import BillingRetryableError, StripeError, get_stripe_client
 from .stripe_pricing_service import StripePricingService
 from .stripe_sync import sync_subscription_from_stripe
 from .tasks import send_enterprise_inquiry_email
@@ -736,7 +736,8 @@ class StripeWebhookView(View):
             logger.error("Webhook signature verification failed")
             return HttpResponseForbidden("Invalid signature")
 
-        # Phase 2: Process event — 200 on business errors (acknowledged), 500 on unexpected (Stripe retries)
+        # Phase 2: Process event. Acknowledge (200) only genuinely terminal business
+        # errors; return 5xx for retryable/unexpected failures so Stripe re-delivers.
         try:
             if event.type == "checkout.session.completed":
                 session = event.data.object
@@ -758,9 +759,18 @@ class StripeWebhookView(View):
 
             return HttpResponse(status=200)
 
+        except BillingRetryableError as e:
+            # Transient/recoverable failure — do NOT acknowledge, let Stripe retry.
+            # 503 (vs the 500 below) is deliberate: it flags an *anticipated* transient
+            # condition for ops, distinct from an unexpected crash. Both are non-2xx, so
+            # Stripe re-delivers either way.
+            # exc_info captures the chained root cause (these are raised `from e`).
+            logger.error("Retryable webhook error (Stripe will retry): %s", e, exc_info=True)
+            return HttpResponse(status=503)
         except StripeError as e:
             logger.error("Stripe business logic error (acknowledged): %s", e)
             return HttpResponse(status=200)
         except Exception as e:
+            # Unexpected/unclassified error — 500 so Stripe retries and ops gets paged.
             logger.exception("Unexpected webhook error: %s", e)
             return HttpResponse(status=500)

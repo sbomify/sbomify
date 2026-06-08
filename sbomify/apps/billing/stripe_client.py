@@ -22,7 +22,28 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 class StripeError(Exception):
-    """Base class for Stripe-related errors."""
+    """Base class for Stripe-related errors.
+
+    Treated as a *terminal* business error by the webhook view: the event is
+    acknowledged (HTTP 200) and Stripe stops retrying. Use this only when a
+    retry cannot possibly change the outcome (e.g. an unknown event type or a
+    genuinely nonexistent team).
+    """
+
+    pass
+
+
+class BillingRetryableError(StripeError):
+    """A transient/recoverable failure that Stripe should retry.
+
+    Subclasses :class:`StripeError` so existing ``except StripeError`` handlers
+    (and the ``handle_stripe_errors`` decorator's ``except StripeError: raise``)
+    keep working unchanged, while the webhook view can catch this *first* and
+    return a 5xx so Stripe re-delivers the event. Raise for conditions that may
+    succeed on a later attempt: transient DB/Stripe outages, a checkout race
+    where the team↔subscription mapping is not yet written, or a billing plan
+    that is momentarily unresolvable.
+    """
 
     pass
 
@@ -41,27 +62,30 @@ def handle_stripe_errors(func: F) -> F:
             return func(*args, **kwargs)
         except StripeError:
             raise
+        # Terminal failures: the same request cannot succeed on retry.
         except stripe.error.CardError as e:
             logger.error("Card error: code=%s, param=%s", e.code, e.param)
-            raise StripeError(f"Card error: {e.user_message}")
-        except stripe.error.RateLimitError as e:
-            logger.error("Rate limit error: %s", e.code)
-            raise StripeError("Too many requests made to Stripe API")
+            raise StripeError(f"Card error: {e.user_message}") from e
         except stripe.error.InvalidRequestError as e:
             logger.error("Invalid Stripe request: param=%s, message=%s", e.param, str(e))
-            raise StripeError("Invalid request to payment provider.")
-        except stripe.error.AuthenticationError:
+            raise StripeError("Invalid request to payment provider.") from e
+        except stripe.error.AuthenticationError as e:
             logger.error("Stripe authentication error")
-            raise StripeError("Authentication with payment provider failed.")
-        except stripe.error.APIConnectionError:
+            raise StripeError("Authentication with payment provider failed.") from e
+        # Transient failures: a retry may succeed once Stripe recovers.
+        except stripe.error.RateLimitError as e:
+            logger.error("Rate limit error: %s", e.code)
+            raise BillingRetryableError("Too many requests made to Stripe API") from e
+        except stripe.error.APIConnectionError as e:
             logger.error("Stripe API connection error")
-            raise StripeError("Could not connect to payment provider.")
+            raise BillingRetryableError("Could not connect to payment provider.") from e
         except stripe.error.StripeError as e:
+            # Unclassified Stripe error (e.g. an API 5xx) — default to retryable.
             logger.error("Stripe error: code=%s, message=%s", e.code, str(e), exc_info=True)
-            raise StripeError("A payment processing error occurred.")
+            raise BillingRetryableError("A payment processing error occurred.") from e
         except Exception as e:
             logger.error("Unexpected error in Stripe operation: %s", type(e).__name__, exc_info=True)
-            raise StripeError("An unexpected error occurred.") from e
+            raise BillingRetryableError("An unexpected error occurred.") from e
 
     return wrapper  # type: ignore[return-value]
 
