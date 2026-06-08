@@ -263,26 +263,26 @@ class TestTeamTokenExpiry:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        before = timezone.now()
         self._post(client, team, {"description": "Default expiry"})
 
         token = AccessToken.objects.get(user=user, description="Default expiry")
         assert token.expires_at is not None
         assert not token.is_expired
-        # ~90 days out, allowing for the small window the request takes.
-        assert before + timedelta(days=89, hours=23) <= token.expires_at <= before + timedelta(days=90, minutes=1)
+        # Assert the row's own created_at -> expires_at span is ~90 days.
+        # Using the token's timestamps (not a test-side wall clock) keeps
+        # this independent of how long the request/DB work takes under CI.
+        assert abs((token.expires_at - token.created_at) - timedelta(days=90)) <= timedelta(minutes=1)
 
     def test_post_respects_chosen_expiry(self, client: Client, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        before = timezone.now()
         self._post(client, team, {"description": "Short token", "expires_in_days": "30"})
 
         token = AccessToken.objects.get(user=user, description="Short token")
         assert token.expires_at is not None
-        assert before + timedelta(days=29, hours=23) <= token.expires_at <= before + timedelta(days=30, minutes=1)
+        assert abs((token.expires_at - token.created_at) - timedelta(days=30)) <= timedelta(minutes=1)
 
     def test_post_no_expiration_leaves_null(self, client: Client, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team

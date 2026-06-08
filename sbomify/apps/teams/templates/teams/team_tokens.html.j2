@@ -74,6 +74,7 @@
                 <div class="flex flex-col sm:flex-row gap-3">
                     <div class="flex-1">
                         {% with field=create_access_token_form.description %}
+                            <label for="{{ field.id_for_label }}" class="sr-only">Token name</label>
                             <input type="text"
                                    id="{{ field.id_for_label }}"
                                    name="{{ field.html_name }}"
