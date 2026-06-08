@@ -974,6 +974,17 @@ class ReleaseSPDX30Builder(SPDX30Mixin, ReleaseSPDX3Builder):
 # =============================================================================
 
 
+def default_version_for_format(output_format: SBOMFormat | str) -> SBOMVersion:
+    """Single source of truth for the default SBOM version per output format.
+
+    Used by ``get_sbom_builder`` (to pick a builder when no version is given) and
+    by the aggregate-cache key resolution (``sboms.utils._resolve_output_version``)
+    so the cache key and the actually-built version can never drift apart.
+    """
+    fmt = SBOMFormat(output_format) if isinstance(output_format, str) else output_format
+    return SBOMVersion.CDX_1_6 if fmt == SBOMFormat.CYCLONEDX else SBOMVersion.SPDX_2_3
+
+
 def get_sbom_builder(
     entity_type: str,
     output_format: SBOMFormat | str,
@@ -1002,12 +1013,9 @@ def get_sbom_builder(
     if isinstance(output_format, str):
         output_format = SBOMFormat(output_format.lower())
 
-    # Normalize version and set defaults
+    # Normalize version and set defaults (shared with the aggregate cache key)
     if version is None:
-        if output_format == SBOMFormat.CYCLONEDX:
-            version = SBOMVersion.CDX_1_6
-        else:
-            version = SBOMVersion.SPDX_2_3
+        version = default_version_for_format(output_format)
     elif isinstance(version, str):
         version = SBOMVersion(version)
 

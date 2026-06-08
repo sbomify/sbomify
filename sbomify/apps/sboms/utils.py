@@ -1553,14 +1553,15 @@ def get_product_sbom_package(
 def _resolve_output_version(output_format: str, version: str | None) -> str:
     """Resolve the concrete format version the builder would use.
 
-    Mirrors ``get_sbom_builder``'s defaults (CycloneDX -> 1.6, SPDX -> 2.3) so
-    the aggregate cache key never depends on a ``None`` sentinel — otherwise a
-    future change to the default version could serve a stale cached object for
-    the new default. MUST stay in sync with ``get_sbom_builder``.
+    Defers to the shared ``builders.default_version_for_format`` (the same source
+    ``get_sbom_builder`` uses) so the aggregate cache key never depends on a
+    ``None`` sentinel and can't drift from the version actually built.
     """
     if version:
         return version
-    return "1.6" if output_format == "cyclonedx" else "2.3"
+    from sbomify.apps.sboms.builders import default_version_for_format
+
+    return str(default_version_for_format(output_format).value)
 
 
 def _safe_sbom_filename(stem: str, extension: str) -> str:
@@ -1599,8 +1600,13 @@ def compute_release_artifact_set_hash(release: Any) -> str:
         .order_by("sbom__id")
         .values_list("sbom__id", "sbom__sbom_filename")
     )
-    payload = "|".join(f"{sid}:{fname}" for sid, fname in members)
-    return hashlib.sha256(f"v2|{payload}".encode()).hexdigest()
+    # Hash incrementally and stream the rows so a release with many members never
+    # materializes one large concatenated string (keeps byte-for-byte determinism
+    # with the previous "v2|a:b|c:d" scheme).
+    digest = hashlib.sha256(b"v2")
+    for sid, fname in members.iterator():
+        digest.update(f"|{sid}:{fname}".encode())
+    return digest.hexdigest()
 
 
 def get_release_sbom_package(
