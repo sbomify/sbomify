@@ -290,12 +290,13 @@ def download_document_signed(request: HttpRequest, document_id: str, token: str 
     if payload.get("document_id") != document_id:
         return 403, {"detail": "Token is not valid for this document"}
 
-    # For private components, we need to ensure the token is valid
-    # The token itself provides the authorization
+    # Non-public components: the signed token only proves which artifact +
+    # user the URL was minted for. It is NOT standalone authorization — we
+    # re-check the token user's current access below (#997).
     from sbomify.apps.sboms.models import Component
 
     if document.component.visibility != Component.Visibility.PUBLIC:
-        # Additional security: verify the user from the token exists
+        # Verify the user from the token exists (and is live)
         user_id = payload.get("user_id")
         if not user_id:
             return 403, {"detail": "Invalid token: missing user information"}

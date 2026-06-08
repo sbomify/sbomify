@@ -844,10 +844,11 @@ def download_sbom_signed(
     if payload.get("sbom_id") != sbom_id:
         return 403, {"detail": "Token is not valid for this SBOM"}
 
-    # For private components, we need to ensure the token is valid
-    # The token itself provides the authorization
+    # Non-public components: the signed token only proves which artifact +
+    # user the URL was minted for. It is NOT standalone authorization — we
+    # re-check the token user's current access below (#997).
     if sbom.component.visibility != Component.Visibility.PUBLIC:
-        # Additional security: verify the user from the token exists
+        # Verify the user from the token exists (and is live)
         user_id = payload.get("user_id")
         if not user_id:
             return 403, {"detail": "Invalid token: missing user information"}

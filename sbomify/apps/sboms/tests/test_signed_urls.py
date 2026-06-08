@@ -378,6 +378,39 @@ class TestSignedURLs:
             )
             assert self.client.get(url, {"token": token}).status_code == 403
 
+    def test_signed_sbom_download_gated_guest_allowed_then_revoked(self, guest_user):  # noqa: F811
+        """#997: the SBOM signed-download path also routes any non-PUBLIC
+        component (including GATED) through check_component_access — an
+        approved gated guest keeps access, a revoked one is denied.
+        """
+        from sbomify.apps.documents.access_models import AccessRequest
+        from sbomify.apps.teams.models import Member
+
+        gated_component = Component.objects.create(
+            name="Gated SBOM Component",
+            team=self.team,
+            visibility=Component.Visibility.GATED,
+            component_type=Component.ComponentType.BOM,
+        )
+        gated_sbom = SBOM.objects.create(
+            name="Gated SBOM",
+            component=gated_component,
+            format="cyclonedx",
+            version="1.0.0",
+            sbom_filename="gated_sbom.json",
+        )
+        Member.objects.create(team=self.team, user=guest_user, role="guest")
+
+        token = make_download_token(gated_sbom.id, str(guest_user.id))
+        url = f"/api/v1/sboms/{gated_sbom.id}/download/signed"
+        with patch("sbomify.apps.sboms.apis.S3Client") as mock_s3_client:
+            mock_s3_client.return_value.get_sbom_data.return_value = b'{"gated": "sbom"}'
+            assert self.client.get(url, {"token": token}).status_code == 200
+            AccessRequest.objects.create(
+                team=self.team, user=guest_user, status=AccessRequest.Status.REVOKED
+            )
+            assert self.client.get(url, {"token": token}).status_code == 403
+
 
 @pytest.mark.django_db
 class TestSignedURLIntegration:
