@@ -80,8 +80,8 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         user = cast(User, request.user)
         team_id = token_to_number(team_key)
 
-        # PAT expiry lives in the DB row (the JWT stays claim-less — ``exp``
-        # is reserved for short-lived OIDC tokens). ``get_user_and_token_record``
+        # PAT expiry lives in the DB row (the JWT carries no ``exp``/``aud`` —
+        # those are reserved for short-lived OIDC tokens). ``get_user_and_token_record``
         # rejects a row once ``expires_at`` is in the past. ``None`` means
         # never expires (the explicit "No expiration" choice).
         expiry_days = form.expiry_days()
