@@ -567,13 +567,13 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
             if supplier:
                 package["supplier"] = supplier
 
-            # Add external reference to original SBOM
-            from sbomify.apps.sboms.models import SBOM
+            # Add external reference to original SBOM. ``sbom_instance`` is the
+            # select_related-loaded artifact.sbom (same row sbom_id points to),
+            # so re-fetching it per artifact is redundant (#998).
             from sbomify.apps.sboms.utils import get_download_url_for_sbom
 
             try:
-                original_sbom = SBOM.objects.get(id=sbom_id)
-                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                download_url = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
                 package["externalRefs"] = [
                     {
                         "referenceCategory": "OTHER",
@@ -836,13 +836,13 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             if version:
                 pkg_element["software_packageVersion"] = str(version)
 
-            # Add external reference to original SBOM
-            from sbomify.apps.sboms.models import SBOM as SBOMModel
+            # Add external reference to original SBOM. ``sbom_instance`` is the
+            # select_related-loaded artifact.sbom (same row sbom_id points to),
+            # so re-fetching it per artifact is redundant (#998).
             from sbomify.apps.sboms.utils import get_download_url_for_sbom
 
             try:
-                original_sbom = SBOMModel.objects.get(id=sbom_id)
-                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                download_url = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
                 pkg_element["externalRef"] = [
                     {
                         "type": "ExternalRef",

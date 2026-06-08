@@ -1550,6 +1550,23 @@ def get_product_sbom_package(
     return product_sbom_path
 
 
+def compute_release_artifact_set_hash(release: Any) -> str:
+    """Deterministic, content-sensitive fingerprint of a release's SBOM artifact set.
+
+    Computed from the DB only (no S3 reads). ``sbom_filename`` is the sha256 of
+    the artifact bytes (see object_store.upload_sbom), so including it makes the
+    hash change whenever a member is added, removed, or replaced — exactly what
+    the aggregate cache key needs. Ordered by ``sbom__id`` so the fingerprint is
+    independent of row insertion order. (ADR-004: artifacts are immutable, so the
+    filename is a faithful content fingerprint.)
+    """
+    members = (
+        release.artifacts.filter(sbom__isnull=False).order_by("sbom__id").values_list("sbom__id", "sbom__sbom_filename")
+    )
+    payload = "|".join(f"{sid}:{fname}" for sid, fname in members)
+    return hashlib.sha256(f"v1|{payload}".encode()).hexdigest()
+
+
 def get_release_sbom_package(
     release: Any,
     target_folder: Path,
@@ -1588,16 +1605,6 @@ def get_release_sbom_package(
     if version and version not in supported[format_lower]:
         raise ValueError(f"Unsupported version {version} for {output_format}. Supported: {supported[format_lower]}")
 
-    # Get the appropriate builder
-    builder = get_sbom_builder(
-        entity_type="release",
-        output_format=format_lower,
-        version=version,
-        entity=release,
-        user=user,
-    )
-    sbom = builder(target_folder)
-
     # Determine file extension based on format
     # Both CDX and SPDX builders return Pydantic models for consistent serialization
     if format_lower == "spdx":
@@ -1606,7 +1613,42 @@ def get_release_sbom_package(
         extension = ".cdx.json"
 
     sbom_path = target_folder / f"{release.product.name}-{release.name}{extension}"
-    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
+
+    # Aggregated SBOMs are expensive to build (O(N) serial member fetches) and
+    # the public release/product download endpoints are unauthenticated — a
+    # cheap DoS amplifier (#998). For PUBLIC products the aggregate is
+    # content-addressable (only public members, which carry plain non-expiring
+    # URLs), so cache it in S3 keyed by an artifact-set hash and serve it
+    # directly on repeat downloads. Private releases are NOT cached: they are
+    # authenticated-only (not the DoS vector) and embed short-lived signed
+    # member URLs that must stay fresh.
+    cache_key: str | None = None
+    s3: Any = None
+    if release.product.is_public:
+        from sbomify.apps.core.object_store import S3Client
+
+        set_hash = compute_release_artifact_set_hash(release)
+        cache_key = f"aggregates/release/{release.id}/{format_lower}-{version or 'default'}-{set_hash}.json"
+        s3 = S3Client("SBOMS")
+        cached = s3.get_cached_aggregate(cache_key)
+        if cached is not None:
+            sbom_path.write_bytes(cached)
+            return sbom_path
+
+    # Cache miss (or private release): build the aggregate.
+    builder = get_sbom_builder(
+        entity_type="release",
+        output_format=format_lower,
+        version=version,
+        entity=release,
+        user=user,
+    )
+    sbom = builder(target_folder)
+    body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
+    sbom_path.write_bytes(body)
+
+    if cache_key is not None and s3 is not None:
+        s3.put_cached_aggregate(cache_key, body)
 
     return sbom_path
 
