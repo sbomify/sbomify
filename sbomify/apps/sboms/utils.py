@@ -1550,20 +1550,42 @@ def get_product_sbom_package(
     return product_sbom_path
 
 
+def _resolve_output_version(output_format: str, version: str | None) -> str:
+    """Resolve the concrete format version the builder would use.
+
+    Mirrors ``get_sbom_builder``'s defaults (CycloneDX -> 1.6, SPDX -> 2.3) so
+    the aggregate cache key never depends on a ``None`` sentinel — otherwise a
+    future change to the default version could serve a stale cached object for
+    the new default. MUST stay in sync with ``get_sbom_builder``.
+    """
+    if version:
+        return version
+    return "1.6" if output_format == "cyclonedx" else "2.3"
+
+
 def compute_release_artifact_set_hash(release: Any) -> str:
     """Deterministic, content-sensitive fingerprint of a release's SBOM artifact set.
 
-    Computed from the DB only (no S3 reads). ``sbom_filename`` is the sha256 of
-    the artifact bytes (see object_store.upload_sbom), so including it makes the
-    hash change whenever a member is added, removed, or replaced — exactly what
-    the aggregate cache key needs. Ordered by ``sbom__id`` so the fingerprint is
-    independent of row insertion order. (ADR-004: artifacts are immutable, so the
-    filename is a faithful content fingerprint.)
+    Computed from the DB only (no S3 reads). The fingerprint covers, per member:
+
+    * ``sbom__id`` — identity of the member SBOM,
+    * ``sbom__sbom_filename`` — the sha256 of the artifact bytes (see
+      object_store.upload_sbom), so a replaced artifact busts the key,
+    * ``sbom__component__visibility`` — because for PUBLIC products the builder
+      EXCLUDES non-public members; a visibility flip (PUBLIC <-> PRIVATE) changes
+      which members appear in the aggregate, so it MUST change the cache key or a
+      stale doc could keep exposing a now-private member.
+
+    Ordered by ``sbom__id`` so the fingerprint is independent of row insertion
+    order. (ADR-004: artifacts are immutable, so the filename is a faithful
+    content fingerprint.)
     """
     members = (
-        release.artifacts.filter(sbom__isnull=False).order_by("sbom__id").values_list("sbom__id", "sbom__sbom_filename")
+        release.artifacts.filter(sbom__isnull=False)
+        .order_by("sbom__id")
+        .values_list("sbom__id", "sbom__sbom_filename", "sbom__component__visibility")
     )
-    payload = "|".join(f"{sid}:{fname}" for sid, fname in members)
+    payload = "|".join(f"{sid}:{fname}:{vis}" for sid, fname, vis in members)
     return hashlib.sha256(f"v1|{payload}".encode()).hexdigest()
 
 
@@ -1627,8 +1649,9 @@ def get_release_sbom_package(
     if release.product.is_public:
         from sbomify.apps.core.object_store import S3Client
 
+        resolved_version = _resolve_output_version(format_lower, version)
         set_hash = compute_release_artifact_set_hash(release)
-        cache_key = f"aggregates/release/{release.id}/{format_lower}-{version or 'default'}-{set_hash}.json"
+        cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{set_hash}.json"
         s3 = S3Client("SBOMS")
         cached = s3.get_cached_aggregate(cache_key)
         if cached is not None:

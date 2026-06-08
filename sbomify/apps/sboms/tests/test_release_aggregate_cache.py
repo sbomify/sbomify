@@ -70,7 +70,7 @@ class TestAggregateCache:
     ):
         team = team_with_business_plan
         release = _public_release(team, s3_sboms_mock)
-        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")  # warm
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")  # cold build creates the cache
         assert len([k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")]) == 1
 
         # Add a third member -> new artifact-set hash -> new cache key -> rebuild.
@@ -81,6 +81,30 @@ class TestAggregateCache:
         assert "gamma.json" in s3_sboms_mock.get_calls, "changed set must re-fetch members"
         assert len([k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")]) == 2
         assert b"gamma" in rebuilt
+
+    def test_member_visibility_change_busts_cache(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """A member flipping PUBLIC->PRIVATE drops out of a public aggregate, so
+        the cache key MUST change — otherwise the stale doc would keep exposing a
+        now-private member. (Visibility is part of the artifact-set hash.)
+        """
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        first = get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes()
+        keys_before = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert len(keys_before) == 1
+
+        member = release.artifacts.order_by("sbom__id").first().sbom
+        member.component.visibility = Component.Visibility.PRIVATE
+        member.component.save()
+
+        rebuilt = get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes()
+        keys_after = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert keys_after != keys_before, "visibility change must produce a new cache key"
+        assert len(keys_after) == 2
+        # The now-private member is excluded from the rebuilt public aggregate.
+        assert rebuilt != first
 
     def test_private_product_is_not_cached(
         self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811

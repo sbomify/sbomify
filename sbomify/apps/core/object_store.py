@@ -62,13 +62,17 @@ class S3Client:
         Aggregated release/product SBOMs are expensive to build (O(N) member
         fetches). For public releases the result is content-addressed (the key
         embeds an artifact-set hash), so it is cached in the SBOMS bucket and
-        served directly on repeat downloads. Unlike ``get_file_data``, a missing
-        key returns ``None`` rather than raising.
+        served directly on repeat downloads. A missing key returns ``None``.
+
+        Fetches directly rather than via ``get_file_data`` because a cache miss
+        (``NoSuchKey``) is expected on every cold build — ``get_file_data``
+        prints the ``ClientError`` before re-raising, which would spam logs.
         """
         if self.bucket_type != "SBOMS":
             raise ValueError("This method is only for SBOMS bucket")
         try:
-            return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+            response = self.s3.Bucket(settings.AWS_SBOMS_STORAGE_BUCKET_NAME).Object(object_name).get()
+            return response["Body"].read()  # type: ignore[no-any-return]
         except ClientError as e:
             if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "NoSuchBucket", "404"):
                 return None
