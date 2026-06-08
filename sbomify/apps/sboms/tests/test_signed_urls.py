@@ -382,7 +382,7 @@ class TestSignedURLs:
             mock_s3_client.return_value.get_document_data.return_value = b"doc bytes"
             assert self.client.get(url, {"token": token}).status_code == 403
 
-    def test_signed_document_download_gated_guest_allowed_then_revoked(self, guest_user):  # noqa: F811
+    def test_signed_document_download_gated_guest_allowed_then_revoked(self, guest_user):
         """#997: an approved gated guest keeps signed-URL access (no
         regression), but a REVOKED guest is denied. Guards that the fix
         routes through the gated-access service rather than naively
@@ -417,7 +417,7 @@ class TestSignedURLs:
             )
             assert self.client.get(url, {"token": token}).status_code == 403
 
-    def test_signed_sbom_download_gated_guest_allowed_then_revoked(self, guest_user):  # noqa: F811
+    def test_signed_sbom_download_gated_guest_allowed_then_revoked(self, guest_user):
         """#997: the SBOM signed-download path also routes any non-PUBLIC
         component (including GATED) through check_component_access — an
         approved gated guest keeps access, a revoked one is denied.
