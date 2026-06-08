@@ -96,6 +96,9 @@ class BaseSBOMBuilder(ABC):
         self.user = user
         self.temp_files: list[Path] = []
         self.target_folder: Optional[Path] = None
+        # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
+        # Callers use this to avoid caching an incomplete aggregate (#998).
+        self.had_member_fetch_error: bool = False
 
     @property
     @abstractmethod
@@ -172,6 +175,9 @@ class BaseSBOMBuilder(ABC):
             return download_path, str(sbom.id)
         except Exception as e:
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
+            # A transient fetch error skips this member; flag the build as
+            # incomplete so the partial aggregate is not cached (#998).
+            self.had_member_fetch_error = True
             return None
 
     def select_best_sbom(self, sboms: list[Any]) -> Any:

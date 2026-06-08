@@ -1656,7 +1656,13 @@ def get_release_sbom_package(
         set_hash = compute_release_artifact_set_hash(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{set_hash}.json"
         s3 = S3Client("SBOMS")
-        cached = s3.get_cached_aggregate(cache_key)
+        # The cache is an optimization — a read failure (e.g. AccessDenied on
+        # the prefix) must fall back to a rebuild, not 500 the download.
+        try:
+            cached = s3.get_cached_aggregate(cache_key)
+        except Exception as e:
+            log.warning("Aggregate cache read failed for %s, rebuilding: %s", cache_key, e)
+            cached = None
         if cached is not None:
             sbom_path.write_bytes(cached)
             return sbom_path
@@ -1673,8 +1679,19 @@ def get_release_sbom_package(
     body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
     sbom_path.write_bytes(body)
 
+    # Only cache a COMPLETE build. The builders skip a member on an S3 fetch
+    # error (non-fatal, returns a partial aggregate); caching that would freeze
+    # an incomplete document under this artifact-set hash indefinitely, so a
+    # transient blip would persist. Cache writes are best-effort — a failure to
+    # store must not fail the download.
     if cache_key is not None and s3 is not None:
-        s3.put_cached_aggregate(cache_key, body)
+        if getattr(builder, "had_member_fetch_error", False):
+            log.warning("Skipping aggregate cache for %s: build had member fetch errors", cache_key)
+        else:
+            try:
+                s3.put_cached_aggregate(cache_key, body)
+            except Exception as e:
+                log.warning("Aggregate cache write failed for %s (served anyway): %s", cache_key, e)
 
     return sbom_path
 

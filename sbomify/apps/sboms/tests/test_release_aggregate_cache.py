@@ -147,6 +147,25 @@ class TestAggregateCache:
 
         assert not [k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")]
 
+    def test_incomplete_build_is_not_cached(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """If a member fetch fails (transient S3 error -> member skipped), the
+        partial aggregate must NOT be cached — otherwise the incomplete document
+        would be frozen under this artifact-set hash indefinitely.
+        """
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        # Simulate a transient fetch failure: drop one member's bytes from S3.
+        missing = release.artifacts.order_by("sbom__id").first().sbom
+        s3_sboms_mock.uploaded_files.pop(missing.sbom_filename, None)
+
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
+
+        assert not [
+            k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")
+        ], "an incomplete build (skipped member) must not be cached"
+
     def test_spdx_builder_no_redundant_per_artifact_sbom_get(
         self, tmp_path, team_with_business_plan, s3_sboms_mock, mocker  # noqa: F811
     ):
