@@ -8,11 +8,11 @@ class AccessToken(models.Model):
         db_table = "access_tokens"
         indexes = [
             models.Index(fields=["team", "user"]),
-            # Partial index — only OIDC-issued tokens set ``expires_at``.
-            # A full index would store a NULL entry for every PAT
-            # (the dominant row count) for no payoff; this one stays
-            # ~100x smaller in steady state and serves the only query
-            # that actually filters on the column (expired-token sweep).
+            # Partial index on non-NULL ``expires_at``. Both OIDC tokens
+            # and PATs that opt into an expiry populate the column; only
+            # never-expiring tokens (``expires_at IS NULL``) are excluded.
+            # The expired-token sweep only ever filters on non-NULL rows,
+            # so indexing the NULL population would cost space for no gain.
             models.Index(
                 fields=["expires_at"],
                 name="access_tokens_expires_at_idx",
@@ -29,8 +29,9 @@ class AccessToken(models.Model):
         null=True,
         blank=True,
         help_text=(
-            "Optional expiry. NULL = never expires (personal access tokens). "
-            "Set for OIDC-issued tokens which are short-lived (default 15 min)."
+            "Optional expiry. NULL = never expires. Personal access tokens default to "
+            "90 days (user-selectable, may be NULL); OIDC-issued tokens are short-lived "
+            "(default 15 min)."
         ),
     )
 
@@ -39,5 +40,5 @@ class AccessToken(models.Model):
 
     @property
     def is_expired(self) -> bool:
-        """True for OIDC tokens past their expiry; False for PATs (no expiry)."""
+        """True once a token with a set ``expires_at`` is past it; False when ``expires_at`` is NULL (never expires)."""
         return self.expires_at is not None and timezone.now() >= self.expires_at

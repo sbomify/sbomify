@@ -1,0 +1,27 @@
+{% comment %}
+Render an access token's expiry state as a single line (#215).
+
+Required kwarg:
+  token - an AccessToken instance (uses .is_expired and .expires_at).
+
+States:
+  - expired:        red "Expired <date>"
+  - expiring:       muted "Expires <date>"
+  - no expiry set:  muted "Never expires"
+{% endcomment %}
+{% if token.is_expired %}
+    <p class="text-sm text-danger m-0">
+        <i class="fas fa-circle-exclamation text-xs mr-1" aria-hidden="true"></i>
+        Expired {{ token.expires_at|date:"M j, Y" }}
+    </p>
+{% elif token.expires_at %}
+    <p class="text-sm text-text-muted m-0">
+        <i class="fas fa-hourglass-half text-xs mr-1" aria-hidden="true"></i>
+        Expires {{ token.expires_at|date:"M j, Y" }}
+    </p>
+{% else %}
+    <p class="text-sm text-text-muted m-0">
+        <i class="fas fa-infinity text-xs mr-1" aria-hidden="true"></i>
+        Never expires
+    </p>
+{% endif %}

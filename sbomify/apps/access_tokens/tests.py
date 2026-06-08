@@ -72,6 +72,44 @@ def test_create_token_rejects_expires_at_without_oidc_type(sample_user):
 
 
 @pytest.mark.django_db
+def test_expired_pat_row_is_rejected(sample_user):  # noqa: F811
+    """#215: a personal access token whose DB row has expired is rejected.
+
+    PATs carry no JWT ``exp`` (that's reserved for short-lived OIDC
+    tokens); their expiry lives entirely in ``AccessToken.expires_at``
+    and is enforced by step 4 of ``get_user_and_token_record``. This
+    pins that an expired PAT can no longer authenticate, while a PAT
+    with a future expiry still can.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    # Expired PAT → rejected.
+    expired_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=expired_str,
+        description="Expired PAT",
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    user, record = get_user_and_token_record(expired_str)
+    assert user is None and record is None
+
+    # Future-dated PAT → still authenticates.
+    live_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=live_str,
+        description="Live PAT",
+        expires_at=timezone.now() + timedelta(days=90),
+    )
+    user, record = get_user_and_token_record(live_str)
+    assert user == sample_user
+    assert record is not None and not record.is_expired
+
+
+@pytest.mark.django_db
 def test_token_with_minimal_payload(sample_user):  # noqa: F811
     # Create a token with just the required fields
     minimal_payload = {

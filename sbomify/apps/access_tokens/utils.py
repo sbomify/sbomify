@@ -218,9 +218,10 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
        ``exp`` check — if a future code path stripped JWT claims but
        kept the DB row, this catches it.
 
-    PATs have ``expires_at IS NULL`` and skip step 4 entirely; OIDC
-    tokens always set it. A background sweep of expired rows is
-    optional — step 4 is the source of truth.
+    Tokens with ``expires_at IS NULL`` (never-expiring) skip step 4
+    entirely; PATs with a chosen expiry and OIDC tokens both pass
+    through it. A background sweep of expired rows is optional —
+    step 4 is the source of truth.
 
     Returns:
         (user, access_token_record) on success, (None, None) on
@@ -252,8 +253,9 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
         return None, None
 
     if access_token_record.is_expired:
-        # OIDC-issued short-lived token past its TTL. Log at INFO since
-        # this is expected end-of-life, not an attack signal.
+        # Token is past its DB-row expires_at (an OIDC TTL or a PAT with
+        # an expiry set). Log at INFO since this is expected end-of-life,
+        # not an attack signal.
         log.info(
             "Rejecting expired access token (id=%s, expires_at=%s)",
             access_token_record.pk,
