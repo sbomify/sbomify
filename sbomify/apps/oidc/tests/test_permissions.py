@@ -163,8 +163,9 @@ class TestRequestPredicate:
 
         UserModel = get_user_model()
         orphan_bot = UserModel.objects.create_user(username="orphan-bot", password="x")
-        # Build an AccessToken with expires_at set (so ``request_is_oidc_authed``
-        # returns True) but no OIDCBinding pointing at this user.
+        # Build an AccessToken backed by a real OIDC JWT (token_type="oidc",
+        # so ``request_is_oidc_authed`` returns True) but with no OIDCBinding
+        # pointing at this user.
         from django.utils import timezone
         import datetime
 
@@ -207,8 +208,8 @@ class TestRequestPredicate:
         ``expires_at`` only — a wiped column silently demoted the bot
         to non-OIDC, which made ``is_authorised_for_component`` a no-op
         and let the bot reach any component the bot's workspace role
-        permitted. The new OR-based check (expires_at set OR binding
-        exists for user) closes that hole.
+        permitted. The OR-based check (signed ``token_type="oidc"`` claim
+        OR binding exists for user) closes that hole.
         """
         from django.contrib.auth import get_user_model
 
@@ -257,6 +258,51 @@ class TestRequestPredicate:
         assert is_authorised_for_component(fake_req, bound_component) is True
         other = mocker.MagicMock(id="other-component-id")
         assert is_authorised_for_component(fake_req, other) is False
+
+    @pytest.mark.django_db
+    def test_pat_with_expiry_is_not_oidc_authed(self, mocker) -> None:
+        """#1007 regression: an expiring PERSONAL access token must NOT be
+        misclassified as OIDC-authed.
+
+        Before #1007 only OIDC tokens set ``expires_at``, so
+        ``request_is_oidc_authed`` keyed on ``expires_at is not None``.
+        Now PATs carry a DB-row ``expires_at`` too (default 90 days), so
+        that signal would flag every expiring PAT as OIDC — sending it
+        into the OIDC branch of ``is_authorised_for_component``, finding
+        no binding, and 403'ing legitimate PAT uploads. The discriminator
+        is now the signed ``token_type`` claim (plus the binding
+        fallback), neither of which a PAT satisfies.
+        """
+        import datetime
+
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+        UserModel = get_user_model()
+        user = UserModel.objects.create_user(username="expiring-pat-user", password="x")
+        # A real PAT JWT (token_type="pat", no exp/aud) whose DB row carries
+        # a 90-day expiry — exactly what the new token-creation UI mints.
+        encoded = create_personal_access_token(user)
+        row = AccessToken.objects.create(
+            encoded_token=encoded,
+            description="expiring pat",
+            user=user,
+            expires_at=timezone.now() + datetime.timedelta(days=90),
+        )
+        fake_req = mocker.MagicMock()
+        fake_req.access_token_record = row
+        if hasattr(fake_req, "_oidc_binding_cache"):
+            delattr(fake_req, "_oidc_binding_cache")
+
+        # Not OIDC: a PAT carries token_type="pat" and owns no binding.
+        assert request_is_oidc_authed(fake_req) is False
+        assert bound_component_id_for_request(fake_req) is None
+        # So the component-scope gate is a no-op (PAT access governed by
+        # verify_item_access alone) — NOT a 403.
+        assert is_authorised_for_component(fake_req, mocker.MagicMock(id="any-component")) is True
 
 
 class TestSBOMUploadScope:

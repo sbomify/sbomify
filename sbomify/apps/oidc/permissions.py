@@ -58,41 +58,65 @@ def _cached_binding(request: Any) -> Any:
     return binding
 
 
+def _token_is_oidc_typed(token_record: AccessToken) -> bool:
+    """True iff the token's signed JWT carries ``token_type="oidc"``.
+
+    This is the authoritative OIDC signal: the claim is covered by the
+    HMAC signature (so it can't be forged without ``SECRET_KEY``) and is
+    ``"oidc"`` only for OIDC-issued tokens. We re-decode here rather than
+    keying on ``expires_at`` because, since #1007, PATs may also set a
+    DB-row ``expires_at`` (default 90 days) — making that column useless
+    as an OIDC discriminator. The token reaching this point already
+    passed authentication, so the decode succeeds and isn't expired; any
+    decode failure falls through to the binding-based fallback.
+    """
+    from jwt.exceptions import DecodeError
+
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC, decode_personal_access_token
+
+    try:
+        return decode_personal_access_token(token_record.encoded_token).get("token_type") == TOKEN_TYPE_OIDC
+    except DecodeError:
+        return False
+
+
 def request_is_oidc_authed(request: Any) -> bool:
     """True iff the request was authenticated via an OIDC-issued AccessToken.
 
-    OIDC-ness is asserted by EITHER of two independent signals:
+    OIDC-ness is asserted by EITHER of two independent, OIDC-specific
+    signals:
 
-    * ``access_token_record.expires_at`` is set (PATs never set it; OIDC
-      tokens always do at issuance).
-    * An ``OIDCBinding`` row exists with ``bot_user`` pointing at the
+    * the signed JWT's ``token_type`` claim is ``"oidc"`` — authoritative
+      and tamper-evident (HMAC over ``SECRET_KEY``).
+    * an ``OIDCBinding`` row exists with ``bot_user`` pointing at the
       request's user (every OIDC-issued token belongs to a bot user that
       a binding owns).
+
+    ``expires_at`` is deliberately NOT a signal: since #1007 personal
+    access tokens may also carry a DB-row ``expires_at`` (default 90
+    days), so keying on it would misclassify an expiring PAT as OIDC and
+    403 its uploads in ``is_authorised_for_component``.
 
     Belt-and-suspenders by design: requiring BOTH signals to be present
     would let either getting silently wiped (migration bug, manual
     tamper, partial-cleanup data race) demote an OIDC token to PAT
     status — at which point ``is_authorised_for_component`` becomes a
     no-op and the bot escapes its component scope. Treating EITHER as
-    sufficient means an attacker would have to corrupt both
-    ``AccessToken.expires_at`` AND delete the ``OIDCBinding`` row
-    without taking down the bot user, which is a much harder failure
-    mode.
+    sufficient means an attacker would have to forge the signed
+    ``token_type`` claim (needs ``SECRET_KEY``) AND delete the
+    ``OIDCBinding`` row without taking down the bot user.
 
-    Performance: the binding lookup fires once per request and is
-    memoised via ``_cached_binding`` so callers that hit both
-    ``request_is_oidc_authed`` AND ``bound_component_id_for_request``
-    share the result. The query itself is a unique-indexed lookup on
-    ``OIDCBinding.bot_user_id`` (the OneToOneField creates the
-    constraint), so the cost per PAT request is one B-tree probe —
-    chosen over a username-prefix shortcut because any prefix-based
-    gate would silently demote a renamed bot to PAT status and bypass
-    the component-scope check.
+    Performance: ``request_is_oidc_authed`` is only reached on the
+    component-scoped upload endpoints. For an OIDC request the
+    ``token_type`` check short-circuits before any binding query; a PAT
+    request pays one JWT verify plus one unique-indexed probe on
+    ``OIDCBinding.bot_user_id`` (memoised via ``_cached_binding`` so a
+    caller that also hits ``bound_component_id_for_request`` shares it).
     """
     token_record: AccessToken | None = getattr(request, "access_token_record", None)
     if token_record is None:
         return False
-    if token_record.expires_at is not None:
+    if _token_is_oidc_typed(token_record):
         return True
     return _cached_binding(request) is not None
 
