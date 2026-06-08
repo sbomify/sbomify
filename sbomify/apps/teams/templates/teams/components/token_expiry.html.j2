@@ -11,17 +11,17 @@ States:
 {% endcomment %}
 {% if token.is_expired %}
     <p class="text-sm text-danger m-0">
-        <i class="fas fa-circle-exclamation text-xs mr-1"></i>
+        <i class="fas fa-circle-exclamation text-xs mr-1" aria-hidden="true"></i>
         Expired {{ token.expires_at|date:"M j, Y" }}
     </p>
 {% elif token.expires_at %}
     <p class="text-sm text-text-muted m-0">
-        <i class="fas fa-hourglass-half text-xs mr-1"></i>
+        <i class="fas fa-hourglass-half text-xs mr-1" aria-hidden="true"></i>
         Expires {{ token.expires_at|date:"M j, Y" }}
     </p>
 {% else %}
     <p class="text-sm text-text-muted m-0">
-        <i class="fas fa-infinity text-xs mr-1"></i>
+        <i class="fas fa-infinity text-xs mr-1" aria-hidden="true"></i>
         Never expires
     </p>
 {% endif %}
