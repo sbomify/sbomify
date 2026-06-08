@@ -1655,12 +1655,20 @@ def get_release_sbom_package(
         resolved_version = _resolve_output_version(format_lower, version)
         set_hash = compute_release_artifact_set_hash(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{set_hash}.json"
+        from botocore.exceptions import ClientError
+
         s3 = S3Client("SBOMS")
-        # The cache is an optimization — a read failure (e.g. AccessDenied on
-        # the prefix) must fall back to a rebuild, not 500 the download.
+        # The cache is an optimization — a read failure scoped to the cache
+        # (e.g. AccessDenied on the aggregates/ prefix while members stay
+        # readable) falls back to a rebuild rather than 500'ing the download. A
+        # MISSING BUCKET is a whole-bucket misconfiguration — the rebuild reads
+        # members from the same bucket and would fail too — so let it surface
+        # loudly (get_cached_aggregate only swallows NoSuchKey).
         try:
             cached = s3.get_cached_aggregate(cache_key)
-        except Exception as e:
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "NoSuchBucket":
+                raise
             log.warning("Aggregate cache read failed for %s, rebuilding: %s", cache_key, e)
             cached = None
         if cached is not None:
