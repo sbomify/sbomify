@@ -1577,35 +1577,45 @@ def _safe_sbom_filename(stem: str, extension: str) -> str:
     return f"{safe or 'sbom'}{extension}"
 
 
-def compute_release_artifact_set_hash(release: Any) -> str:
-    """Deterministic fingerprint of the members that appear in a PUBLIC aggregate.
+def compute_release_aggregate_fingerprint(release: Any) -> str:
+    """Deterministic fingerprint of EVERY mutable input that shapes a public aggregate.
 
-    Computed from the DB only (no S3 reads). Only PUBLIC-visibility members are
-    fingerprinted, because the aggregate cache is used solely for public products
-    and the builders exclude non-public members from a public product's
-    aggregate. Filtering to exactly the included set means:
+    Computed from the DB only (no S3 reads). A change to any of these busts the
+    cache key so the next download rebuilds:
 
-    * adding/removing/replacing a PUBLIC member — or a member flipping
-      PUBLIC <-> PRIVATE, i.e. entering/leaving the public set — busts the key
-      (a stale doc must never keep exposing a now-private member); while
-    * changing a PRIVATE/GATED member — which never appears in the public
-      aggregate — does NOT needlessly bust it.
+    * its PUBLIC member SBOMs (id + ``sbom_filename``, which is the sha256 of the
+      bytes). Only PUBLIC members are fingerprinted — exactly the set a public
+      aggregate contains — so a member flipping PUBLIC <-> PRIVATE busts the key
+      while private/gated member churn does not needlessly rebuild; and
+    * the release/product METADATA the builder embeds: the product + release
+      names (the aggregate's top-level component name) and the product external
+      references it renders from product links + identifiers. So a rename or a
+      link/identifier edit also triggers a rebuild.
 
-    ``sbom_filename`` is the sha256 of the artifact bytes (object_store.upload_sbom),
-    so a replaced member busts the key. Ordered by ``sbom__id`` for determinism.
-    (ADR-004: artifacts are immutable, so the filename is a faithful fingerprint.)
+    Rows are ordered and fields ``\\x1f``-delimited so distinct inputs can't
+    collide. (ADR-004: member artifacts are immutable, so the filename is a
+    faithful content fingerprint.)
     """
+    digest = hashlib.sha256(b"v3")
+
     members = (
         release.artifacts.filter(sbom__isnull=False, sbom__component__visibility=Component.Visibility.PUBLIC)
         .order_by("sbom__id")
         .values_list("sbom__id", "sbom__sbom_filename")
     )
-    # Hash incrementally and stream the rows so a release with many members never
-    # materializes one large concatenated string (keeps byte-for-byte determinism
-    # with the previous "v2|a:b|c:d" scheme).
-    digest = hashlib.sha256(b"v2")
     for sid, fname in members.iterator():
-        digest.update(f"|{sid}:{fname}".encode())
+        digest.update(f"|m:{sid}\x1f{fname}".encode())
+
+    # Mutable metadata embedded in the aggregate's top-level component.
+    product = release.product
+    digest.update(f"|name:{product.name}\x1f{release.name}".encode())
+    for ident_type, value in product.identifiers.order_by("id").values_list("identifier_type", "value").iterator():
+        digest.update(f"|id:{ident_type}\x1f{value}".encode())
+    for lt, title, url, desc in (
+        product.links.order_by("id").values_list("link_type", "title", "url", "description").iterator()
+    ):
+        digest.update(f"|ln:{lt}\x1f{title}\x1f{url}\x1f{desc}".encode())
+
     return digest.hexdigest()
 
 
@@ -1670,8 +1680,8 @@ def get_release_sbom_package(
         from sbomify.apps.core.object_store import S3Client
 
         resolved_version = _resolve_output_version(format_lower, version)
-        set_hash = compute_release_artifact_set_hash(release)
-        cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{set_hash}.json"
+        fingerprint = compute_release_aggregate_fingerprint(release)
+        cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
         from botocore.exceptions import ClientError
 
         s3 = S3Client("SBOMS")

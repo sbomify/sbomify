@@ -106,6 +106,26 @@ class TestAggregateCache:
         # The now-private member is excluded from the rebuilt public aggregate.
         assert rebuilt != first
 
+    def test_product_rename_busts_cache(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """The aggregate embeds the product/release name, so a rename (same
+        artifact set) must bust the cache and rebuild — not serve the old name.
+        """
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
+        keys_before = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert len(keys_before) == 1
+
+        release.product.name = "Renamed Product"
+        release.product.save()
+
+        rebuilt = get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes()
+        keys_after = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert keys_after != keys_before, "a product rename must bust the cache"
+        assert b"Renamed Product" in rebuilt
+
     def test_private_member_change_does_not_bust_cache(
         self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
