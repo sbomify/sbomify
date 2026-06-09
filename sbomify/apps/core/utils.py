@@ -437,7 +437,7 @@ def verify_item_access(
     if token_team is not None and team_id is not None and team_id != token_team.id:
         return False
 
-    if not team_id:
+    if team_id is None:
         return False
 
     # Import here to avoid circular imports
