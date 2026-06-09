@@ -1592,11 +1592,18 @@ def compute_release_aggregate_fingerprint(release: Any) -> str:
       references it renders from product links + identifiers. So a rename or a
       link/identifier edit also triggers a rebuild.
 
-    Rows are ordered and fields ``\\x1f``-delimited so distinct inputs can't
-    collide. (ADR-004: member artifacts are immutable, so the filename is a
-    faithful content fingerprint.)
+    Rows are ordered, and every field is length-prefixed (netstring-style) before
+    hashing so user-controlled values cannot collide regardless of content — no
+    reliance on a delimiter byte that a name/URL could itself contain. (ADR-004:
+    member artifacts are immutable, so the filename is a faithful fingerprint.)
     """
-    digest = hashlib.sha256(b"v3")
+    digest = hashlib.sha256(b"v4")
+
+    def feed(*parts: Any) -> None:
+        for part in parts:
+            b = str(part).encode()
+            digest.update(f"{len(b)}:".encode())
+            digest.update(b)
 
     members = (
         release.artifacts.filter(sbom__isnull=False, sbom__component__visibility=Component.Visibility.PUBLIC)
@@ -1604,17 +1611,17 @@ def compute_release_aggregate_fingerprint(release: Any) -> str:
         .values_list("sbom__id", "sbom__sbom_filename")
     )
     for sid, fname in members.iterator():
-        digest.update(f"|m:{sid}\x1f{fname}".encode())
+        feed("m", sid, fname)
 
     # Mutable metadata embedded in the aggregate's top-level component.
     product = release.product
-    digest.update(f"|name:{product.name}\x1f{release.name}".encode())
+    feed("name", product.name, release.name)
     for ident_type, value in product.identifiers.order_by("id").values_list("identifier_type", "value").iterator():
-        digest.update(f"|id:{ident_type}\x1f{value}".encode())
+        feed("id", ident_type, value)
     for lt, title, url, desc in (
         product.links.order_by("id").values_list("link_type", "title", "url", "description").iterator()
     ):
-        digest.update(f"|ln:{lt}\x1f{title}\x1f{url}\x1f{desc}".encode())
+        feed("ln", lt, title, url, desc)
 
     return digest.hexdigest()
 
@@ -1682,7 +1689,7 @@ def get_release_sbom_package(
         resolved_version = _resolve_output_version(format_lower, version)
         fingerprint = compute_release_aggregate_fingerprint(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
-        from botocore.exceptions import ClientError
+        from botocore.exceptions import BotoCoreError, ClientError
 
         s3 = S3Client("SBOMS")
         # The cache is an optimization — a read failure scoped to the cache
@@ -1696,6 +1703,11 @@ def get_release_sbom_package(
         except ClientError as e:
             if e.response.get("Error", {}).get("Code") == "NoSuchBucket":
                 raise
+            log.warning("Aggregate cache read failed for %s, rebuilding: %s", cache_key, e)
+            cached = None
+        except BotoCoreError as e:
+            # Connection errors, timeouts, etc. — the cache is best-effort, so any
+            # boto read failure falls back to a rebuild rather than 500'ing.
             log.warning("Aggregate cache read failed for %s, rebuilding: %s", cache_key, e)
             cached = None
         if cached is not None:
