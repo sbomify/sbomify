@@ -420,59 +420,36 @@ def verify_item_access(
 
     If the request was authenticated with a scoped access token, access is
     denied when the item belongs to a different team than the token's scope.
+
+    The role is read authoritatively from the database (the ``Member`` row), NOT
+    from the session's cached ``user_teams`` snapshot. That snapshot is mutable
+    and only refreshed periodically, so a demoted or removed member would keep
+    their old (elevated) role on it until the next refresh — trusting it for an
+    authorization decision is a privilege-escalation / revocation-bypass risk.
     """
     if not request.user.is_authenticated:
         return False
 
-    # Enforce token workspace scoping
-    token_team = getattr(request, "token_team", None)
-    if token_team is not None:
-        item_team_id = _extract_team_id(item)
-        if item_team_id is not None and item_team_id != token_team.id:
-            return False
+    team_id = _extract_team_id(item)
 
-    team_id = None
-    team_key = None
+    # Enforce token workspace scoping.
+    token_team = getattr(request, "token_team", None)
+    if token_team is not None and team_id is not None and team_id != token_team.id:
+        return False
+
+    if not team_id:
+        return False
 
     # Import here to avoid circular imports
     from sbomify.apps.teams.models import Member
 
-    # Handle Team objects directly
-    if hasattr(item, "_meta") and item._meta.label == "teams.Team":
-        team_id = item.id
-        team_key = item.key
-    # Handle objects with team relationship
-    elif hasattr(item, "team_id"):
-        team_id = item.team_id
-        if hasattr(item, "team"):
-            team_key = item.team.key
-    elif hasattr(item, "team"):
-        team_id = item.team.id if hasattr(item.team, "id") else None
-        team_key = item.team.key if hasattr(item.team, "key") else None
-    # Handle SBOM objects (component.team relationship)
-    elif hasattr(item, "component") and hasattr(item.component, "team_id"):
-        team_id = item.component.team_id
-        team_key = item.component.team.key
-
-    # Check session data first
-    if team_key and "user_teams" in request.session:
-        team_data = request.session["user_teams"].get(team_key)
-        if team_data and "role" in team_data:
-            # If no roles are specified, any role is allowed
-            if allowed_roles is None:
-                return True
-            return team_data["role"] in allowed_roles
-
-    # Fall back to database check
-    if team_id:
-        member = Member.objects.filter(user=request.user, team_id=team_id).first()
-        if member:
-            # If no roles are specified, any role is allowed
-            if allowed_roles is None:
-                return True
-            return member.role in allowed_roles
-
-    return False
+    member = Member.objects.filter(user=request.user, team_id=team_id).first()
+    if member is None:
+        return False
+    # If no roles are specified, any role is allowed.
+    if allowed_roles is None:
+        return True
+    return member.role in allowed_roles
 
 
 def add_artifact_to_release(

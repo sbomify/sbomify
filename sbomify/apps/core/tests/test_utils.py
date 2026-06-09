@@ -212,3 +212,50 @@ class TestAddArtifactToReleaseCrossTeamCheck:
         result = add_artifact_to_release(release, document=doc)
         assert result["created"] is True
         assert result["replaced"] is False
+
+
+@pytest.mark.django_db
+class TestVerifyItemAccessIsDbAuthoritative:
+    """verify_item_access must read the role from the DB, never from the mutable
+    (possibly stale) session ``user_teams`` cache — a demoted or removed member
+    must not keep elevated access until the cache happens to refresh."""
+
+    @staticmethod
+    def _request(user, user_teams):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.user = user
+        request.session = {"user_teams": user_teams}
+        return request
+
+    def test_stale_cached_role_does_not_grant_elevated_access(self, sample_team_with_owner_member):
+        from sbomify.apps.core.utils import verify_item_access
+
+        member = sample_team_with_owner_member
+        team = member.team
+
+        # Demote to guest in the DB; the session cache is stale and still says owner.
+        member.role = "guest"
+        member.save(update_fields=["role"])
+        request = self._request(member.user, {team.key: {"role": "owner"}})
+
+        # Owner/admin-only check is denied based on the live DB role (guest)...
+        assert verify_item_access(request, team, ["owner", "admin"]) is False
+        # ...while the user's real (guest) access still works.
+        assert verify_item_access(request, team, ["guest"]) is True
+
+    def test_stale_cached_role_for_removed_member_is_denied(self, sample_team_with_owner_member):
+        from sbomify.apps.core.utils import verify_item_access
+        from sbomify.apps.teams.models import Member
+
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+
+        # Remove the membership (queryset delete leaves the fixture instance intact
+        # for teardown); the session cache is stale and still grants owner.
+        Member.objects.filter(pk=sample_team_with_owner_member.pk).delete()
+        request = self._request(user, {team.key: {"role": "owner"}})
+
+        assert verify_item_access(request, team, ["owner", "admin"]) is False
+        assert verify_item_access(request, team, None) is False
