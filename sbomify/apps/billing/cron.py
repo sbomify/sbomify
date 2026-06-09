@@ -12,7 +12,7 @@ from typing import Any
 import dramatiq
 from dramatiq_crontab import cron
 
-from .tasks import check_stale_trials_task
+from .tasks import check_stale_trials_task, sync_active_subscriptions_task
 
 
 # Schedule stale trial check to run daily at 2:00 AM UTC
@@ -40,3 +40,22 @@ def daily_stale_trial_check(*args: Any, **kwargs: Any) -> None:
     cases where webhooks were missed or failed to process.
     """
     check_stale_trials_task.send()
+
+
+# Schedule a full subscription sync daily at 3:30 AM UTC. Webhooks are the
+# primary path that keeps billing_plan_limits current; this is the safety net
+# for missed/failed webhooks, and replaces the per-request Stripe sync that used
+# to run in the team_context context processor.
+@cron("30 3 * * *")  # type: ignore[untyped-decorator]  # Daily at 3:30 AM UTC
+@dramatiq.actor(
+    queue_name="billing_cron",
+    max_retries=1,
+    time_limit=600000,  # 10 minute timeout
+)
+def daily_subscription_sync(*args: Any, **kwargs: Any) -> None:
+    """Daily safety-net sync of all teams with a Stripe subscription.
+
+    Subscription data is normally synced by Stripe webhooks; this catches any
+    cases where webhooks were missed or failed to process.
+    """
+    sync_active_subscriptions_task.send()

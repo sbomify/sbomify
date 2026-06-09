@@ -170,7 +170,8 @@ def team_context(request: Any) -> Any:
     This enables global access to 'team' and 'is_owner' for banners/navigation
     without requiring every view to pass them explicitly.
 
-    Also syncs subscription data from Stripe to ensure billing status is always up-to-date.
+    Reads billing status from the DB only — no Stripe API calls. ``billing_plan_limits``
+    is kept current by Stripe webhooks plus a daily safety-net sync task.
     """
     if not request.user.is_authenticated:
         return {}
@@ -187,43 +188,21 @@ def team_context(request: Any) -> Any:
         # We could use select_related hooks or simple caching here if performance is an issue
         team = Team.objects.get(key=team_key)
 
-        # Sync subscription data from Stripe if subscription exists
-        # This ensures billing status is always current for banners/notifications
-        from sbomify.apps.billing.config import is_billing_enabled
-
-        billing_limits = team.billing_plan_limits or {}
-        stripe_sub_id = billing_limits.get("stripe_subscription_id")
-        if is_billing_enabled() and stripe_sub_id:
-            try:
-                from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
-
-                # Sync in background (non-blocking) - if it fails, we still show the page
-                # Use force_refresh=False to use cache, but sync will still check for changes
-                result = sync_subscription_from_stripe(team, force_refresh=False)
-                if result:
-                    # Refresh team to get updated billing_plan_limits
-                    team.refresh_from_db()
-                    logger.debug(f"Successfully synced subscription for team {team_key}")
-                else:
-                    logger.debug(f"Sync returned False for team {team_key} (may not have subscription)")
-            except asyncio.CancelledError:
-                # ASGI cancels the coroutine on client disconnect during blocking Stripe calls.
-                # Must be caught before Exception (on Python <3.14, CancelledError IS an Exception).
-                logger.debug(f"Stripe sync cancelled for team {team_key} (client disconnected)")
-                raise
-            except Exception as e:
-                # Don't break page rendering if Stripe sync fails
-                logger.warning(f"Failed to sync subscription for team {team_key}: {e}", exc_info=True)
-
-        # Determine if owner
-        # Optimization: Check if the session already has reliable role info,
-        # but fetching DB ensures latest status (important for billing updates etc)
+        # Determine if owner. Billing status (banners/notifications) is read
+        # straight from team.billing_plan_limits below; it is NOT synced from
+        # Stripe here. That blocking 1-5s API call ran on EVERY authenticated
+        # request — degrading page loads and causing ASGI CancelledError on
+        # client disconnect. The DB is kept current by Stripe webhooks
+        # (customer.subscription.updated / invoice.*) plus a daily safety-net
+        # task (billing.cron.daily_subscription_sync).
         is_owner = False
         member = Member.objects.filter(team=team, user=request.user).first()
         if member and member.role == "owner":
             is_owner = True
 
         from django.conf import settings
+
+        from sbomify.apps.billing.config import is_billing_enabled
 
         return {
             "team": team,
