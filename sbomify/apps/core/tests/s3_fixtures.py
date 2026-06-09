@@ -23,6 +23,9 @@ class MockS3Client:
         self.uploaded_files: dict[str, bytes] = {}
         self.should_raise_error = False
         self.error_message = "S3 operation failed"
+        # Per-object call tracking so cache tests can assert what was fetched
+        # (member SBOMs vs the cached aggregate) — #998.
+        self.get_calls: list[str] = []
 
     def upload_data_as_file(self, bucket_name: str, object_name: str, data: bytes) -> None:
         """Mock upload_data_as_file method."""
@@ -58,7 +61,23 @@ class MockS3Client:
             raise ValueError("This method is only for SBOMS bucket")
         if self.should_raise_error:
             raise Exception(self.error_message)
+        self.get_calls.append(object_name)
         return self.uploaded_files.get(object_name)
+
+    def get_cached_aggregate(self, object_name: str) -> bytes | None:
+        """Mock get_cached_aggregate (#998): None on miss, never raises NoSuchKey."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        if self.should_raise_error:
+            raise Exception(self.error_message)
+        self.get_calls.append(object_name)
+        return self.uploaded_files.get(object_name)
+
+    def put_cached_aggregate(self, object_name: str, data: bytes) -> None:
+        """Mock put_cached_aggregate (#998)."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        self.uploaded_files[object_name] = data
 
     def get_document_data(self, object_name: str) -> bytes | None:
         """Mock get_document_data method."""

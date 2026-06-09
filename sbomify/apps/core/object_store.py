@@ -56,6 +56,36 @@ class S3Client:
 
         return self.get_file_data(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
 
+    def get_cached_aggregate(self, object_name: str) -> bytes | None:
+        """Return a cached aggregated-SBOM blob by key, or None if absent (#998).
+
+        Aggregated release/product SBOMs are expensive to build (O(N) member
+        fetches). For public releases the result is content-addressed (the key
+        embeds an artifact-set hash), so it is cached in the SBOMS bucket and
+        served directly on repeat downloads. A missing key returns ``None``.
+
+        Fetches directly rather than via ``get_file_data`` because a cache miss
+        (``NoSuchKey``) is expected on every cold build — ``get_file_data``
+        prints the ``ClientError`` before re-raising, which would spam logs.
+        """
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        try:
+            response = self.s3.Bucket(settings.AWS_SBOMS_STORAGE_BUCKET_NAME).Object(object_name).get()
+            return response["Body"].read()  # type: ignore[no-any-return]
+        except ClientError as e:
+            # Only a missing object is an expected cache miss. A missing bucket is
+            # a misconfiguration and must fail loudly rather than degrade silently.
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return None
+            raise
+
+    def put_cached_aggregate(self, object_name: str, data: bytes) -> None:
+        """Store a built aggregated-SBOM blob under the given cache key (#998)."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
+
     _HEX_SHA256_RE = re.compile(r"[a-f0-9]{64}\Z")
 
     def _upload_sbom_artifact(self, sbom_id: str, sbom_hash: str, data: bytes, suffix: str) -> str:

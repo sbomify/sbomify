@@ -96,6 +96,9 @@ class BaseSBOMBuilder(ABC):
         self.user = user
         self.temp_files: list[Path] = []
         self.target_folder: Optional[Path] = None
+        # Set when a member SBOM fetch fails (non-fatal — the member is skipped).
+        # Callers use this to avoid caching an incomplete aggregate (#998).
+        self.had_member_fetch_error: bool = False
 
     @property
     @abstractmethod
@@ -172,6 +175,9 @@ class BaseSBOMBuilder(ABC):
             return download_path, str(sbom.id)
         except Exception as e:
             log.warning(f"Failed to download SBOM {sbom.sbom_filename}: {e}")
+            # A transient fetch error skips this member; flag the build as
+            # incomplete so the partial aggregate is not cached (#998).
+            self.had_member_fetch_error = True
             return None
 
     def select_best_sbom(self, sboms: list[Any]) -> Any:
@@ -567,13 +573,13 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
             if supplier:
                 package["supplier"] = supplier
 
-            # Add external reference to original SBOM
-            from sbomify.apps.sboms.models import SBOM
+            # Add external reference to original SBOM. ``sbom_instance`` is the
+            # select_related-loaded artifact.sbom (same row sbom_id points to),
+            # so re-fetching it per artifact is redundant (#998).
             from sbomify.apps.sboms.utils import get_download_url_for_sbom
 
             try:
-                original_sbom = SBOM.objects.get(id=sbom_id)
-                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                download_url = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
                 package["externalRefs"] = [
                     {
                         "referenceCategory": "OTHER",
@@ -836,13 +842,13 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             if version:
                 pkg_element["software_packageVersion"] = str(version)
 
-            # Add external reference to original SBOM
-            from sbomify.apps.sboms.models import SBOM as SBOMModel
+            # Add external reference to original SBOM. ``sbom_instance`` is the
+            # select_related-loaded artifact.sbom (same row sbom_id points to),
+            # so re-fetching it per artifact is redundant (#998).
             from sbomify.apps.sboms.utils import get_download_url_for_sbom
 
             try:
-                original_sbom = SBOMModel.objects.get(id=sbom_id)
-                download_url = get_download_url_for_sbom(original_sbom, self.user, settings.APP_BASE_URL)
+                download_url = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
                 pkg_element["externalRef"] = [
                     {
                         "type": "ExternalRef",
@@ -968,6 +974,17 @@ class ReleaseSPDX30Builder(SPDX30Mixin, ReleaseSPDX3Builder):
 # =============================================================================
 
 
+def default_version_for_format(output_format: SBOMFormat | str) -> SBOMVersion:
+    """Single source of truth for the default SBOM version per output format.
+
+    Used by ``get_sbom_builder`` (to pick a builder when no version is given) and
+    by the aggregate-cache key resolution (``sboms.utils._resolve_output_version``)
+    so the cache key and the actually-built version can never drift apart.
+    """
+    fmt = SBOMFormat(output_format) if isinstance(output_format, str) else output_format
+    return SBOMVersion.CDX_1_6 if fmt == SBOMFormat.CYCLONEDX else SBOMVersion.SPDX_2_3
+
+
 def get_sbom_builder(
     entity_type: str,
     output_format: SBOMFormat | str,
@@ -996,12 +1013,9 @@ def get_sbom_builder(
     if isinstance(output_format, str):
         output_format = SBOMFormat(output_format.lower())
 
-    # Normalize version and set defaults
+    # Normalize version and set defaults (shared with the aggregate cache key)
     if version is None:
-        if output_format == SBOMFormat.CYCLONEDX:
-            version = SBOMVersion.CDX_1_6
-        else:
-            version = SBOMVersion.SPDX_2_3
+        version = default_version_for_format(output_format)
     elif isinstance(version, str):
         version = SBOMVersion(version)
 

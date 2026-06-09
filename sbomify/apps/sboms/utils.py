@@ -1542,12 +1542,88 @@ def get_product_sbom_package(
     # Rename file to use product name instead of release name
     format_lower = output_format.lower()
     extension = ".spdx.json" if format_lower == "spdx" else ".cdx.json"
-    product_sbom_path = target_folder / f"{product.name}{extension}"
+    product_sbom_path = target_folder / _safe_sbom_filename(product.name, extension)
 
     # Move the release SBOM to product SBOM path
     sbom_path.rename(product_sbom_path)
 
     return product_sbom_path
+
+
+def _resolve_output_version(output_format: str, version: str | None) -> str:
+    """Resolve the concrete format version the builder would use.
+
+    Defers to the shared ``builders.default_version_for_format`` (the same source
+    ``get_sbom_builder`` uses) so the aggregate cache key never depends on a
+    ``None`` sentinel and can't drift from the version actually built.
+    """
+    if version:
+        return version
+    from sbomify.apps.sboms.builders import default_version_for_format
+
+    return str(default_version_for_format(output_format).value)
+
+
+def _safe_sbom_filename(stem: str, extension: str) -> str:
+    """Build a target filename from user-derived names (product/release) that
+    cannot escape ``target_folder``.
+
+    Product and release names are user-controlled; joining them onto a path with
+    ``target_folder / name`` would allow path traversal (``..``) or absolute-path
+    override if they contained separators. Neutralize path separators + null
+    bytes and strip leading dots/spaces so the result is always a pure basename.
+    """
+    safe = stem.replace("/", "_").replace("\\", "_").replace("\x00", "").lstrip(". ")
+    return f"{safe or 'sbom'}{extension}"
+
+
+def compute_release_aggregate_fingerprint(release: Any) -> str:
+    """Deterministic fingerprint of EVERY mutable input that shapes a public aggregate.
+
+    Computed from the DB only (no S3 reads). A change to any of these busts the
+    cache key so the next download rebuilds:
+
+    * its PUBLIC member SBOMs (id + ``sbom_filename``, which is the sha256 of the
+      bytes). Only PUBLIC members are fingerprinted — exactly the set a public
+      aggregate contains — so a member flipping PUBLIC <-> PRIVATE busts the key
+      while private/gated member churn does not needlessly rebuild; and
+    * the release/product METADATA the builder embeds: the product + release
+      names (the aggregate's top-level component name) and the product external
+      references it renders from product links + identifiers. So a rename or a
+      link/identifier edit also triggers a rebuild.
+
+    Rows are ordered, and every field is length-prefixed (netstring-style) before
+    hashing so user-controlled values cannot collide regardless of content — no
+    reliance on a delimiter byte that a name/URL could itself contain. (ADR-004:
+    member artifacts are immutable, so the filename is a faithful fingerprint.)
+    """
+    digest = hashlib.sha256(b"v4")
+
+    def feed(*parts: Any) -> None:
+        for part in parts:
+            b = str(part).encode()
+            digest.update(f"{len(b)}:".encode())
+            digest.update(b)
+
+    members = (
+        release.artifacts.filter(sbom__isnull=False, sbom__component__visibility=Component.Visibility.PUBLIC)
+        .order_by("sbom__id")
+        .values_list("sbom__id", "sbom__sbom_filename")
+    )
+    for sid, fname in members.iterator():
+        feed("m", sid, fname)
+
+    # Mutable metadata embedded in the aggregate's top-level component.
+    product = release.product
+    feed("name", product.name, release.name)
+    for ident_type, value in product.identifiers.order_by("id").values_list("identifier_type", "value").iterator():
+        feed("id", ident_type, value)
+    for lt, title, url, desc in (
+        product.links.order_by("id").values_list("link_type", "title", "url", "description").iterator()
+    ):
+        feed("ln", lt, title, url, desc)
+
+    return digest.hexdigest()
 
 
 def get_release_sbom_package(
@@ -1588,7 +1664,57 @@ def get_release_sbom_package(
     if version and version not in supported[format_lower]:
         raise ValueError(f"Unsupported version {version} for {output_format}. Supported: {supported[format_lower]}")
 
-    # Get the appropriate builder
+    # Determine file extension based on format
+    # Both CDX and SPDX builders return Pydantic models for consistent serialization
+    if format_lower == "spdx":
+        extension = ".spdx.json"
+    else:
+        extension = ".cdx.json"
+
+    sbom_path = target_folder / _safe_sbom_filename(f"{release.product.name}-{release.name}", extension)
+
+    # Aggregated SBOMs are expensive to build (O(N) serial member fetches) and
+    # the public release/product download endpoints are unauthenticated — a
+    # cheap DoS amplifier (#998). For PUBLIC products the aggregate is
+    # content-addressable (only public members, which carry plain non-expiring
+    # URLs), so cache it in S3 keyed by an artifact-set hash and serve it
+    # directly on repeat downloads. Private releases are NOT cached: they are
+    # authenticated-only (not the DoS vector) and embed short-lived signed
+    # member URLs that must stay fresh.
+    cache_key: str | None = None
+    s3: Any = None
+    if release.product.is_public:
+        from sbomify.apps.core.object_store import S3Client
+
+        resolved_version = _resolve_output_version(format_lower, version)
+        fingerprint = compute_release_aggregate_fingerprint(release)
+        cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
+        from botocore.exceptions import BotoCoreError, ClientError
+
+        s3 = S3Client("SBOMS")
+        # The cache is an optimization — a read failure scoped to the cache
+        # (e.g. AccessDenied on the aggregates/ prefix while members stay
+        # readable) falls back to a rebuild rather than 500'ing the download. A
+        # MISSING BUCKET is a whole-bucket misconfiguration — the rebuild reads
+        # members from the same bucket and would fail too — so let it surface
+        # loudly (get_cached_aggregate only swallows NoSuchKey).
+        try:
+            cached = s3.get_cached_aggregate(cache_key)
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") == "NoSuchBucket":
+                raise
+            log.warning("Aggregate cache read failed for %s, rebuilding: %s", cache_key, e)
+            cached = None
+        except BotoCoreError as e:
+            # Connection errors, timeouts, etc. — the cache is best-effort, so any
+            # boto read failure falls back to a rebuild rather than 500'ing.
+            log.warning("Aggregate cache read failed for %s, rebuilding: %s", cache_key, e)
+            cached = None
+        if cached is not None:
+            sbom_path.write_bytes(cached)
+            return sbom_path
+
+    # Cache miss (or private release): build the aggregate.
     builder = get_sbom_builder(
         entity_type="release",
         output_format=format_lower,
@@ -1597,16 +1723,22 @@ def get_release_sbom_package(
         user=user,
     )
     sbom = builder(target_folder)
+    body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
+    sbom_path.write_bytes(body)
 
-    # Determine file extension based on format
-    # Both CDX and SPDX builders return Pydantic models for consistent serialization
-    if format_lower == "spdx":
-        extension = ".spdx.json"
-    else:
-        extension = ".cdx.json"
-
-    sbom_path = target_folder / f"{release.product.name}-{release.name}{extension}"
-    sbom_path.write_text(sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True))
+    # Only cache a COMPLETE build. The builders skip a member on an S3 fetch
+    # error (non-fatal, returns a partial aggregate); caching that would freeze
+    # an incomplete document under this artifact-set hash indefinitely, so a
+    # transient blip would persist. Cache writes are best-effort — a failure to
+    # store must not fail the download.
+    if cache_key is not None and s3 is not None:
+        if getattr(builder, "had_member_fetch_error", False):
+            log.warning("Skipping aggregate cache for %s: build had member fetch errors", cache_key)
+        else:
+            try:
+                s3.put_cached_aggregate(cache_key, body)
+            except Exception as e:
+                log.warning("Aggregate cache write failed for %s (served anyway): %s", cache_key, e)
 
     return sbom_path
 
