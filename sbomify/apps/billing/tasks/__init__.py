@@ -193,9 +193,9 @@ def sync_active_subscriptions_task() -> None:
         logger.info("Billing is not enabled, skipping subscription sync")
         return
 
-    teams_with_subscriptions = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
-        billing_plan_limits__has_key="stripe_subscription_id"
-    )
+    # JSON path lookup (portable across SQLite/Postgres, unlike has_key) — also
+    # naturally excludes a null subscription id.
+    teams_with_subscriptions = Team.objects.filter(billing_plan_limits__stripe_subscription_id__isnull=False)
 
     synced = 0
     errors = 0
