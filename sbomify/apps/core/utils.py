@@ -414,9 +414,9 @@ def verify_item_access(
     """
     Verify if the user has access to the item based on the allowed roles.
 
-    This function works with any model that has a team relationship.
-    For Team objects, it uses the team directly.
-    For other objects, it looks for team_id or team.key attributes.
+    This function works with any model that has a team relationship. The team is
+    resolved via ``_extract_team_id``: a Team object is used directly, otherwise
+    the team id is taken from the object's ``team_id`` / ``team`` / ``component``.
 
     If the request was authenticated with a scoped access token, access is
     denied when the item belongs to a different team than the token's scope.
