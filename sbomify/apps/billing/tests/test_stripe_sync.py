@@ -277,48 +277,32 @@ class TestSyncCaching:
 class TestSyncIntegration:
     """Test sync integration with views and context processors."""
 
-    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
-    def test_context_processor_calls_sync(self, mock_sync, sample_user, team_with_subscription):
-        """Test that context processor calls sync on page load."""
+    def test_context_processor_does_not_call_sync(self, sample_user, team_with_subscription, mocker):
+        """The context processor must NOT make a blocking Stripe sync on page load.
+
+        Subscription data is kept fresh by webhooks + the daily safety-net task;
+        team_context reads billing_plan_limits straight from the DB.
+        """
         from django.test import RequestFactory
 
         from sbomify.apps.core.context_processors import team_context
+
+        mock_sync = mocker.patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
 
         factory = RequestFactory()
         request = factory.get("/")
         request.user = sample_user
         request.session = {"current_team": {"key": team_with_subscription.key}}
 
-        # Mock sync to succeed
-        mock_sync.return_value = True
-
         context = team_context(request)
-        assert "team" in context
-        # Sync should be called
-        mock_sync.assert_called_once()
+        assert context["team"] == team_with_subscription
+        assert "is_owner" in context
+        assert "billing_enabled" in context
+        mock_sync.assert_not_called()
 
-    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
-    def test_context_processor_handles_sync_failure(self, mock_sync, sample_user, team_with_subscription):
-        """Test that context processor handles sync failure gracefully."""
-        from django.test import RequestFactory
-
-        from sbomify.apps.core.context_processors import team_context
-
-        factory = RequestFactory()
-        request = factory.get("/")
-        request.user = sample_user
-        request.session = {"current_team": {"key": team_with_subscription.key}}
-
-        # Mock sync to fail
-        mock_sync.side_effect = Exception("Sync failed")
-
-        # Should not crash
-        context = team_context(request)
-        assert "team" in context  # Should still return team
-
-    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
-    def test_context_processor_reraises_cancelled_error(self, mock_sync, sample_user, team_with_subscription):
-        """Test that CancelledError is re-raised (not swallowed) for proper ASGI abort."""
+    def test_context_processor_reraises_cancelled_error(self, sample_user, team_with_subscription, mocker):
+        """A request cancelled mid-DB-query (ASGI client disconnect) must re-raise
+        CancelledError so the request aborts properly, rather than being swallowed."""
         import asyncio
 
         from django.test import RequestFactory
@@ -330,10 +314,38 @@ class TestSyncIntegration:
         request.user = sample_user
         request.session = {"current_team": {"key": team_with_subscription.key}}
 
-        mock_sync.side_effect = asyncio.CancelledError()
-
+        mocker.patch(
+            "sbomify.apps.teams.models.Member.objects.filter",
+            side_effect=asyncio.CancelledError(),
+        )
         with pytest.raises(asyncio.CancelledError):
             team_context(request)
+
+    def test_periodic_task_syncs_teams_with_subscriptions(self, team_with_subscription, mocker):
+        """The daily safety-net task syncs every team that has a Stripe subscription
+        (the fallback for missed webhooks that replaces the per-request sync)."""
+        from sbomify.apps.billing.tasks import sync_active_subscriptions_task
+
+        mocker.patch("sbomify.apps.billing.tasks.is_billing_enabled", return_value=True)
+        mock_sync = mocker.patch(
+            "sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe", return_value=True
+        )
+
+        sync_active_subscriptions_task()
+
+        synced_teams = [call.args[0] for call in mock_sync.call_args_list]
+        assert team_with_subscription in synced_teams
+
+    def test_periodic_task_noop_when_billing_disabled(self, mocker):
+        """When billing is disabled the safety-net task does nothing."""
+        from sbomify.apps.billing.tasks import sync_active_subscriptions_task
+
+        mocker.patch("sbomify.apps.billing.tasks.is_billing_enabled", return_value=False)
+        mock_sync = mocker.patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
+
+        sync_active_subscriptions_task()
+
+        mock_sync.assert_not_called()
 
     @patch("sbomify.apps.teams.views.team_settings.sync_subscription_from_stripe")
     def test_team_settings_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
@@ -350,9 +362,15 @@ class TestSyncIntegration:
         # Sync should be called
         mock_sync.assert_called_once()
 
-    @patch("sbomify.apps.billing.stripe_sync.sync_subscription_from_stripe")
+    @patch("sbomify.apps.billing.views.sync_subscription_from_stripe")
     def test_billing_return_calls_sync(self, mock_sync, client, sample_user, team_with_subscription):
-        """Test that billing return view calls sync after checkout."""
+        """The billing return view syncs the subscription after checkout.
+
+        Patched at the view's import binding because the view calls
+        sync_subscription_from_stripe directly (not via the context processor,
+        which no longer syncs). Stripe objects are fully concretized so nothing
+        MagicMock leaks into the JSON billing_plan_limits.
+        """
         from unittest.mock import patch as mock_patch
 
         client.force_login(sample_user)
@@ -371,9 +389,16 @@ class TestSyncIntegration:
             mock_subscription.id = "sub_test_new"  # Different ID to avoid idempotency check
             mock_subscription.status = "active"
             mock_subscription.current_period_end = int((timezone.now() + datetime.timedelta(days=30)).timestamp())
+            mock_subscription.cancel_at_period_end = False
+            mock_subscription.cancel_at = None
+            mock_subscription.trial_end = None
+            mock_subscription.items = None  # skip the line-item interval lookup
             mock_client.get_subscription.return_value = mock_subscription
 
             mock_customer = MagicMock()
+            mock_customer.id = "cus_test_123"
+            mock_client.get_customer.return_value = mock_customer
+
             # Ensure plan exists
             from sbomify.apps.billing.models import BillingPlan
 
@@ -381,9 +406,6 @@ class TestSyncIntegration:
 
             response = client.get("/billing/return/?session_id=cs_test_123", follow=True)
 
-            # Should be successful (likely redirect to dashboard, which is 200 with follow=True,
-            # or 302 if follow=False. With follow=True, dashboard usually returns 200)
             assert response.status_code == 200
-
-            # Should call sync after processing
+            # The view syncs after persisting the subscription.
             mock_sync.assert_called_once()

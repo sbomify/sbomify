@@ -176,6 +176,41 @@ You can reply to this email and we'll receive your message at {settings.ENTERPRI
 
 
 @dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
+def sync_active_subscriptions_task() -> None:
+    """Safety-net sync of every team that has a Stripe subscription.
+
+    Subscription data is normally kept current by Stripe webhooks
+    (customer.subscription.updated / invoice.*). This task — scheduled daily by
+    ``billing.cron.daily_subscription_sync`` — is the fallback for missed/failed
+    webhooks, and replaces the per-request Stripe sync that used to run inside
+    the ``team_context`` context processor on every authenticated page load.
+    """
+    from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
+    from sbomify.apps.teams.models import Team
+
+    record_task_breadcrumb("sync_active_subscriptions_task", "start")
+    if not is_billing_enabled():
+        logger.info("Billing is not enabled, skipping subscription sync")
+        return
+
+    teams_with_subscriptions = Team.objects.exclude(billing_plan_limits__isnull=True).filter(
+        billing_plan_limits__has_key="stripe_subscription_id"
+    )
+
+    synced = 0
+    errors = 0
+    for team in teams_with_subscriptions.iterator():
+        try:
+            if sync_subscription_from_stripe(team, force_refresh=True):
+                synced += 1
+        except Exception:
+            logger.warning("Failed to sync subscription for team %s", team.key, exc_info=True)
+            errors += 1
+
+    logger.info("Subscription sync complete: synced=%d, errors=%d", synced, errors)
+
+
+@dramatiq.actor(queue_name="billing", max_retries=1, time_limit=600000)  # 10 minutes
 def check_stale_trials_task() -> None:
     """
     Check for stale trial subscriptions and sync them with Stripe.
