@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 from unittest.mock import MagicMock
 
 import jwt as pyjwt
@@ -29,6 +28,33 @@ class TestHappyPath:
         assert claims["repository"] == "acme/widget"
         assert claims["actor"] == "octocat"
         assert claims["aud"] == "sbomify.com"
+
+
+class TestClockSkewLeeway:
+    """GitHub's issuer clock can run a few seconds ahead of the verifier, so a
+    freshly minted token's ``iat``/``nbf`` is often slightly in the *future* at
+    verification time. With PyJWT's default ``leeway=0`` this raises
+    ``ImmatureSignatureError`` ("not yet valid"), which the verifier remaps to a
+    401 — failing every exchange. The verifier must tolerate a small clock skew.
+    """
+
+    def test_iat_slightly_in_future_is_accepted(self, github_claims_factory, mock_github_jwks) -> None:
+        now = int(time.time())
+        token = github_claims_factory(iat=now + 30)
+        claims = verify_github_oidc_token(token)
+        assert claims["repository"] == "acme/widget"
+
+    def test_nbf_slightly_in_future_is_accepted(self, github_claims_factory, mock_github_jwks) -> None:
+        now = int(time.time())
+        token = github_claims_factory(nbf=now + 30)
+        claims = verify_github_oidc_token(token)
+        assert claims["repository"] == "acme/widget"
+
+    def test_far_future_beyond_leeway_still_rejected(self, github_claims_factory, mock_github_jwks) -> None:
+        now = int(time.time())
+        token = github_claims_factory(iat=now + 3600, nbf=now + 3600, exp=now + 7200)
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(token)
 
 
 class TestSignatureFailures:
