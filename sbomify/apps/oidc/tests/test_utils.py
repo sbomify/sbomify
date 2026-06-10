@@ -38,6 +38,13 @@ class TestClockSkewLeeway:
     401 — failing every exchange. The verifier must tolerate a small clock skew.
     """
 
+    @pytest.fixture(autouse=True)
+    def _pin_leeway(self, settings) -> None:
+        # Pin the leeway so these tests are deterministic regardless of any
+        # OIDC_GITHUB_LEEWAY_SECONDS env override: 30s of skew is within it,
+        # 3600s is well beyond it.
+        settings.OIDC_GITHUB_LEEWAY_SECONDS = 60
+
     def test_iat_slightly_in_future_is_accepted(self, github_claims_factory, mock_github_jwks) -> None:
         now = int(time.time())
         token = github_claims_factory(iat=now + 30)
