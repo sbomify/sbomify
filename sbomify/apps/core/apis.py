@@ -242,6 +242,9 @@ def _build_item_base(
     has_crud_permissions: bool | None,
 ) -> dict[str, Any]:
     """Fields common to every item-type response."""
+    # ``item`` is a Product or a Component; use the resource-specific manage
+    # action so the catalog stays meaningful (both map to the same MANAGE tier).
+    manage_action = "product:manage" if isinstance(item, Product) else "component:manage"
     return {
         "id": item.id,
         "name": item.name,
@@ -249,7 +252,7 @@ def _build_item_base(
         "team_id": str(item.team_id),
         "created_at": item.created_at.isoformat(),
         "has_crud_permissions": (
-            has_crud_permissions if has_crud_permissions is not None else can(request, "workspace:manage", item).allowed
+            has_crud_permissions if has_crud_permissions is not None else can(request, manage_action, item).allowed
         ),
     }
 

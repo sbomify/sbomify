@@ -167,18 +167,29 @@ def test_all_can_actions_used_in_code_are_registered():
     be registered in the catalog — otherwise can() raises UnknownActionError at
     runtime. Guards against typos / renames that the type checker can't catch.
     """
+    import ast
     import pathlib
-    import re
 
     apps_root = pathlib.Path(__file__).resolve().parents[2]  # sbomify/apps
     registered = set(authz._ROLE_ACTIONS) | set(authz._ABAC_ACTIONS)
-    # Matches  can(<actor>, "action:verb", ...)  with a string-literal action.
-    call = re.compile(r'\bcan\(\s*[^,]+,\s*"([^"]+)"')
+
+    # Parse the AST and pull the literal 2nd argument of real can(...) calls.
+    # This avoids the regex pitfalls of matching quotes/docstrings: it sees only
+    # actual calls, and both "single" and 'double' quoted literals. Dynamic
+    # actions (variables / f-strings) are skipped — they can't be checked
+    # statically, but every action also appears as a literal at some call site.
     used: set[str] = set()
     for path in apps_root.rglob("*.py"):
         if "/tests/" in str(path) or path.name == "authz.py":
             continue
-        used.update(call.findall(path.read_text()))
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if not isinstance(node, ast.Call) or len(node.args) < 2:
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+            arg = node.args[1]
+            if name == "can" and isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                used.add(arg.value)
 
     unregistered = used - registered
     assert not unregistered, f"can() actions used in code but missing from the catalog: {sorted(unregistered)}"
