@@ -550,7 +550,7 @@ jobs:
       - name: Generate and Upload SBOM
         uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
-          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          OIDC_AUDIENCE: stage.sbomify.com
           API_BASE_URL: 'https://stage.sbomify.com'
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
@@ -619,7 +619,7 @@ jobs:
       - name: Generate and Upload SBOM
         uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
-          TOKEN: ${{ secrets.SBOMIFY_STAGE_TOKEN }}
+          OIDC_AUDIENCE: stage.sbomify.com
           API_BASE_URL: 'https://stage.sbomify.com'
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
@@ -699,7 +699,7 @@ jobs:
       - name: Generate and Upload SBOM
         uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
-          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          OIDC_AUDIENCE: sbomify.com
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
           COMPONENT_VERSION: ${{ steps.version.outputs.version }}
@@ -767,7 +767,7 @@ jobs:
       - name: Generate and Upload SBOM
         uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
         env:
-          TOKEN: ${{ secrets.SBOMIFY_TOKEN }}
+          OIDC_AUDIENCE: sbomify.com
           COMPONENT_ID: ${{ matrix.component_id }}
           COMPONENT_NAME: ${{ matrix.component_name }}
           COMPONENT_VERSION: ${{ steps.version.outputs.version }}
