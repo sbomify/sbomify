@@ -1202,7 +1202,7 @@ _MAX_PROVENANCE_SIZE = 10 * 1024 * 1024  # 10 MB
 def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = False) -> SBOM | tuple[int, dict[str, Any]]:
     """Look up an SBOM and verify access. Returns SBOM or (status, error_dict).
 
-    For write=True (uploads), requires owner/admin via verify_item_access.
+    For write=True (uploads), requires owner/admin via can("sbom:manage", ...).
     For write=False (downloads), uses check_component_access to support public SBOMs.
     """
     sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()

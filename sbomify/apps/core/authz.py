@@ -41,7 +41,9 @@ MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
 """Upload artifacts — also granted to OIDC/CI ``bot`` identities."""
 
-READ_MEMBER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_GUEST)
+# Order mirrors the predominant call-site literal ``["guest", "owner", "admin"]``
+# (membership is order-independent, but the parity keeps the claim above honest).
+READ_MEMBER: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN)
 """Any workspace member may read internal (non-public) workspace data."""
 
 
