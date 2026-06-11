@@ -134,3 +134,18 @@ def test_abac_action_delegates_to_component_access(workspace):
 def test_unknown_action_raises():
     with pytest.raises(UnknownActionError):
         can(HttpRequest(), "component:teleport", object())
+
+
+def test_decision_is_fail_closed_in_boolean_context():
+    """Security invariant: a denied Decision MUST be falsy.
+
+    Call sites guard with ``if not can(...)``; that only denies if ``Decision``
+    is falsy when ``allowed`` is False. Without ``__bool__`` the object would be
+    truthy, ``not can(...)`` would always be False, and every gate would fail
+    OPEN. This pins the fail-closed behaviour directly.
+    """
+    assert bool(Decision(allowed=False)) is False
+    assert bool(Decision(allowed=True)) is True
+    # `if not can(...)` -> enters the deny branch only for a denied decision.
+    assert (not Decision(allowed=False)) is True
+    assert (not Decision(allowed=True)) is False
