@@ -149,3 +149,27 @@ def test_decision_is_fail_closed_in_boolean_context():
     # `if not can(...)` -> enters the deny branch only for a denied decision.
     assert (not Decision(allowed=False)) is True
     assert (not Decision(allowed=True)) is False
+
+
+def test_all_can_actions_used_in_code_are_registered():
+    """Every action string passed to can() across the (non-test) codebase must
+    be registered in the catalog — otherwise can() raises UnknownActionError at
+    runtime. Guards against typos / renames that the type checker can't catch.
+    """
+    import pathlib
+    import re
+
+    apps_root = pathlib.Path(__file__).resolve().parents[2]  # sbomify/apps
+    registered = set(authz._ROLE_ACTIONS) | set(authz._ABAC_ACTIONS)
+    # Matches  can(<actor>, "action:verb", ...)  with a string-literal action.
+    call = re.compile(r'\bcan\(\s*[^,]+,\s*"([^"]+)"')
+    used: set[str] = set()
+    for path in apps_root.rglob("*.py"):
+        if "/tests/" in str(path) or path.name == "authz.py":
+            continue
+        used.update(call.findall(path.read_text()))
+
+    unregistered = used - registered
+    assert not unregistered, f"can() actions used in code but missing from the catalog: {sorted(unregistered)}"
+    # Sanity: the scan actually found the migrated actions.
+    assert {"product:manage", "component:manage", "artifact:publish"} <= used
