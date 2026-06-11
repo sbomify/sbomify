@@ -326,7 +326,7 @@ def _public_api_item_access_checks(
 
     rec: Component | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
 
-    if not can(request, "workspace:manage", rec):
+    if not can(request, f"{item_type}:manage", rec):  # item_type is validated to product|component above
         return 403, {"detail": "Forbidden"}
 
     return rec
