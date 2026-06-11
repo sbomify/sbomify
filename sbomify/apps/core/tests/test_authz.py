@@ -12,7 +12,7 @@ from django.http import HttpRequest
 
 from sbomify.apps.core import authz
 from sbomify.apps.core.authz import Decision, UnknownActionError, can
-from sbomify.apps.core.models import Component
+from sbomify.apps.core.models import Component, Product
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.teams.models import Member, Team
 
@@ -41,6 +41,15 @@ def workspace(db):
     return team, component
 
 
+def _resource_for(res_key, team, component):
+    """Resolve a matrix resource key to a model the action applies to."""
+    if res_key == "team":
+        return team
+    if res_key == "product":
+        return Product.objects.create(name="authz-prod", team=team)
+    return component
+
+
 # (action, resource, expected-allowed per role) — the role->capability matrix,
 # written to match what the inline checks grant today.
 _MATRIX = {
@@ -48,6 +57,8 @@ _MATRIX = {
     "component:manage": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
     "artifact:publish": ("component", {"owner": True, "admin": True, "guest": False, "bot": True}),
     "workspace:read": ("team", {"owner": True, "admin": True, "guest": True, "bot": False}),
+    "component:administer": ("component", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    "product:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": False}),
 }
 _CASES = [(a, role, exp[role]) for a, (_res, exp) in _MATRIX.items() for role in ("owner", "admin", "guest", "bot")]
 
@@ -56,7 +67,7 @@ _CASES = [(a, role, exp[role]) for a, (_res, exp) in _MATRIX.items() for role in
 @pytest.mark.parametrize("action,role,expected", _CASES)
 def test_role_capability_matrix(workspace, action, role, expected):
     team, component = workspace
-    resource = team if _MATRIX[action][0] == "team" else component
+    resource = _resource_for(_MATRIX[action][0], team, component)
     user = _user(f"{role}-{action.replace(':', '-')}")
     _member(team, user, role)
 
@@ -72,7 +83,7 @@ def test_role_capability_matrix(workspace, action, role, expected):
 @pytest.mark.parametrize("action", list(_MATRIX))
 def test_non_member_is_always_denied(workspace, action):
     team, component = workspace
-    resource = team if _MATRIX[action][0] == "team" else component
+    resource = _resource_for(_MATRIX[action][0], team, component)
     assert can(_user(f"outsider-{action.replace(':', '-')}"), action, resource).allowed is False
 
 
