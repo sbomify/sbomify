@@ -178,9 +178,13 @@ def test_all_can_actions_used_in_code_are_registered():
     # actual calls, and both "single" and 'double' quoted literals. Dynamic
     # actions (variables / f-strings) are skipped — they can't be checked
     # statically, but every action also appears as a literal at some call site.
+    # Skip dirs that can't contain can() call sites (tests) or are large and
+    # generated (migrations, schema modules) — keeps the scan fast. ``parts``
+    # is platform-independent, unlike a "/tests/" substring check.
+    skip_dirs = {"tests", "migrations", "sbom_format_schemas"}
     used: set[str] = set()
     for path in apps_root.rglob("*.py"):
-        if "/tests/" in str(path) or path.name == "authz.py":
+        if path.name == "authz.py" or skip_dirs.intersection(path.parts):
             continue
         for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
             if not isinstance(node, ast.Call) or len(node.args) < 2:
