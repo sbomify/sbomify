@@ -784,6 +784,12 @@ OIDC_GITHUB_JWKS_URL = os.environ.get(
 OIDC_GITHUB_AUDIENCE = os.environ.get("OIDC_GITHUB_AUDIENCE", "sbomify.com")
 OIDC_TOKEN_TTL_SECONDS = int(os.environ.get("OIDC_TOKEN_TTL_SECONDS", "900"))  # 15 minutes
 OIDC_JWKS_CACHE_SECONDS = int(os.environ.get("OIDC_JWKS_CACHE_SECONDS", "3600"))  # 1 hour
+# Clock-skew tolerance (seconds) applied symmetrically to nbf/iat/exp when
+# verifying GitHub OIDC tokens. GitHub's issuer clock can run a few seconds
+# ahead of ours, so a freshly minted token's nbf/iat is often slightly in the
+# future at verification time; with zero leeway PyJWT rejects it as "not yet
+# valid" and every exchange fails. 60s matches common JWT clock-skew guidance.
+OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "60"))
 
 # Localstack and AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")

@@ -249,9 +249,13 @@ def verify_github_oidc_token(token: str) -> dict[str, Any]:
     * RS256 signature against GitHub's JWKS
     * ``iss`` == ``settings.OIDC_GITHUB_ISSUER``
     * ``aud`` == ``settings.OIDC_GITHUB_AUDIENCE``
-    * ``exp`` is in the future (PyJWT default leeway = 0s)
-    * ``iat`` is not in the future (``verify_iat=True``; PyJWT
-      default leeway = 0s, applied symmetrically)
+    * ``exp`` is in the future, ``iat``/``nbf`` are not in the future
+      (``verify_iat=True``) — each tolerant of up to
+      ``settings.OIDC_GITHUB_LEEWAY_SECONDS`` of clock skew, applied
+      symmetrically. GitHub's issuer clock often runs a few seconds ahead
+      of ours, so a fresh token's ``iat``/``nbf`` is slightly in the future
+      at verification time; with zero leeway PyJWT would reject it as "not
+      yet valid" and every exchange would 401.
     * required claims present: ``iss``, ``aud``, ``exp``, ``iat``,
       ``sub``
 
@@ -275,6 +279,7 @@ def verify_github_oidc_token(token: str) -> dict[str, Any]:
             algorithms=["RS256"],
             issuer=settings.OIDC_GITHUB_ISSUER,
             audience=settings.OIDC_GITHUB_AUDIENCE,
+            leeway=settings.OIDC_GITHUB_LEEWAY_SECONDS,
             options={
                 # PyJWT's ``require`` ONLY enforces claim presence —
                 # the corresponding ``verify_*`` options control

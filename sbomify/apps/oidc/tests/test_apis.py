@@ -54,6 +54,58 @@ def github_binding(component: Component, sample_user):
     return binding
 
 
+class TestClockSkewExchange:
+    """End-to-end reproduction of the production failure through the real
+    exchange endpoint: when GitHub's issuer clock runs ahead of the verifier, a
+    fresh token's ``iat``/``nbf`` is slightly in the future. With the old
+    ``leeway=0`` every exchange 401'd ("Last used: never"); with the clock-skew
+    leeway the full path (verify → coerce → binding lookup → mint) must succeed.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _pin_leeway(self, settings) -> None:
+        # Deterministic regardless of any OIDC_GITHUB_LEEWAY_SECONDS env override.
+        settings.OIDC_GITHUB_LEEWAY_SECONDS = 60
+
+    @pytest.mark.django_db
+    def test_future_iat_nbf_token_still_exchanges(
+        self, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        now = int(time.time())
+        # Simulate GitHub's issuer clock ~30s ahead of ours -> future iat/nbf.
+        token = github_claims_factory(
+            repository_owner_id=67890, repository_id=12345, iat=now + 30, nbf=now + 30
+        )
+        response = Client().post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 200, response.content
+        assert "access_token" in response.json()
+
+    @pytest.mark.django_db
+    def test_zero_leeway_rejects_future_token(
+        self, settings, github_claims_factory, mock_github_jwks, github_binding, component
+    ) -> None:
+        """Anchors the root cause: with no leeway (the old behavior) the very same
+        future-iat/nbf token is rejected by the endpoint with 401 — the exact
+        production failure this fix removes."""
+        settings.OIDC_GITHUB_LEEWAY_SECONDS = 0
+        now = int(time.time())
+        token = github_claims_factory(
+            repository_owner_id=67890, repository_id=12345, iat=now + 30, nbf=now + 30
+        )
+        response = Client().post(
+            EXCHANGE_URL,
+            data=json.dumps({"component_id": component.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {token}",
+        )
+        assert response.status_code == 401, response.content
+
+
 class TestSuccessfulExchange:
     @pytest.mark.django_db
     def test_returns_short_lived_token_and_creates_db_row(
