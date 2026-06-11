@@ -9,8 +9,8 @@ from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpRe
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.errors import error_response
-from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -25,7 +25,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
         except SBOM.DoesNotExist:
             return error_response(request, HttpResponseNotFound("SBOM not found"))
 
-        if not verify_item_access(request, sbom, ["owner", "admin"]):
+        if not can(request, "sbom:manage", sbom):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
         vulnerabilities_data: dict[str, Any] | None = None

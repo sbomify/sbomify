@@ -118,7 +118,7 @@ class Command(BaseCommand):
                     mock_request.session = MagicMock()
 
                     # Upload SBOM via API - functions handle version detection and validation
-                    with patch("sbomify.apps.sboms.apis.verify_item_access", return_value=True):
+                    with patch("sbomify.apps.sboms.apis.can", return_value=True):
                         if "spdxVersion" in sbom_data_dict:
                             # SPDX format
                             status_code, response_data = sbom_upload_spdx(mock_request, component.id)

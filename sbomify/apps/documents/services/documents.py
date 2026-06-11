@@ -6,8 +6,9 @@ from typing import Any
 from django.db import transaction
 from django.http import HttpRequest
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.core.utils import broadcast_to_workspace, verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.documents.models import Document
 from sbomify.apps.documents.schemas import DocumentUpdateRequest
 
@@ -59,7 +60,7 @@ def update_document_metadata(
     except Document.DoesNotExist:
         return ServiceResult.failure("Document not found", status_code=404)
 
-    if not verify_item_access(request, document.component, ["owner", "admin"]):
+    if not can(request, "document:manage", document.component):
         return ServiceResult.failure("Only owners and admins can update documents", status_code=403)
 
     update_fields = []
@@ -95,7 +96,7 @@ def delete_document_record(request: HttpRequest, document_id: str) -> ServiceRes
     except Document.DoesNotExist:
         return ServiceResult.failure("Document not found", status_code=404)
 
-    if not verify_item_access(request, document.component, ["owner", "admin"]):
+    if not can(request, "document:manage", document.component):
         return ServiceResult.failure("Only owners and admins can delete documents", status_code=403)
 
     # Capture info for broadcast before deleting

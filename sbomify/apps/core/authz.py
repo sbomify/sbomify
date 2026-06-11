@@ -66,6 +66,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "workspace:delete": ADMINISTER,
     "billing:manage": ADMINISTER,
     "member:manage": ADMINISTER,
+    "component:administer": ADMINISTER,
     # owner + admin management (the dominant capability)
     "workspace:manage": MANAGE,
     "product:create": MANAGE,
@@ -80,6 +81,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # any-member read of internal (non-public) workspace data
     "workspace:read": READ_MEMBER,
     "component:read_internal": READ_MEMBER,
+    "product:read": READ_MEMBER,
     "release:read": READ_MEMBER,
     "document:read": READ_MEMBER,
     "sbom:read": READ_MEMBER,

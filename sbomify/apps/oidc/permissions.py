@@ -9,16 +9,16 @@ on any component other than the one its binding pins.
 
 Two-step pattern at the call site::
 
-    if not verify_item_access(request, component, ["owner", "admin", "bot"]):
+    if not can(request, "artifact:publish", component):
         return 403, ...
     if not is_authorised_for_component(request, component):
         return 403, ...
 
 The two checks are independent:
 
-* ``verify_item_access`` enforces the workspace role (covers session
-  + PAT + bot membership). For PATs / sessions this is the whole
-  picture.
+* ``can(..., "artifact:publish", ...)`` enforces the workspace role
+  (owner/admin/bot, via ``verify_item_access``; covers session + PAT +
+  bot membership). For PATs / sessions this is the whole picture.
 * ``is_authorised_for_component`` is a no-op for PATs / sessions; for
   OIDC tokens it locks the bot to its bound component_id.
 """

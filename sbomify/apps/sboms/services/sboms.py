@@ -7,9 +7,10 @@ from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.services.results import ServiceResult
-from sbomify.apps.core.utils import broadcast_to_workspace, verify_item_access
+from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.models import SBOM
 
 log = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     except SBOM.DoesNotExist:
         return ServiceResult.failure("SBOM not found", status_code=404)
 
-    if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+    if not can(request, "sbom:manage", sbom.component):
         return ServiceResult.failure("Only owners or admins of the component can delete SBOMs", status_code=403)
 
     # Capture info for broadcast before deleting

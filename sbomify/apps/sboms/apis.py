@@ -28,7 +28,6 @@ from sbomify.apps.core.utils import (
     dict_update,
     get_by_uuid_or_pk,
     obj_extract,
-    verify_item_access,
 )
 from sbomify.apps.oidc.permissions import is_authorised_for_component
 from sbomify.apps.sboms.utils import verify_download_token
@@ -327,7 +326,7 @@ def _public_api_item_access_checks(
 
     rec: Component | Product = get_object_or_404(model_class, pk=item_id)  # type: ignore[assignment]
 
-    if not verify_item_access(request, rec, ["owner", "admin"]):
+    if not can(request, "workspace:manage", rec):
         return 403, {"detail": "Forbidden"}
 
     return rec
@@ -932,7 +931,7 @@ def sbom_upload_file(
         if component is None:
             return 404, {"detail": "Component not found"}
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        if not can(request, "component:manage", component):
             return 403, {"detail": "Forbidden"}
 
         # Validate file size before reading
