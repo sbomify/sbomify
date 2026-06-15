@@ -202,6 +202,22 @@ exclude = ["migrations", "sbom_format_schemas", "test_settings.py", "tests", "te
 
 [tool.ruff.lint]
 select = ["F", "E", "I", "Q", "T"]
+# TID251 (banned-api) keeps new authorization checks going through can() — the
+# single decision point — instead of re-introducing scattered inline role
+# checks via verify_item_access.
+extend-select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sbomify.apps.core.utils.verify_item_access".msg = "Use can() from sbomify.apps.core.authz for authorization checks. verify_item_access is the role-based primitive can() delegates to; importing it directly re-introduces scattered inline role-list checks."
+
+[tool.ruff.lint.per-file-ignores]
+# The authorization core legitimately imports verify_item_access:
+#   authz.can() delegates to it; check_component_access routes resource (ABAC)
+#   access through it; the compliance permission helpers are a parameterized
+#   wrapper around it. (Test files are already excluded above.)
+"sbomify/apps/core/authz.py" = ["TID251"]
+"sbomify/apps/core/services/access_control.py" = ["TID251"]
+"sbomify/apps/compliance/permissions.py" = ["TID251"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

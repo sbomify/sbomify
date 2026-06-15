@@ -160,3 +160,42 @@ def test_decision_is_fail_closed_in_boolean_context():
     # `if not can(...)` -> enters the deny branch only for a denied decision.
     assert (not Decision(allowed=False)) is True
     assert (not Decision(allowed=True)) is False
+
+
+def test_all_can_actions_used_in_code_are_registered():
+    """Every action string passed to can() across the (non-test) codebase must
+    be registered in the catalog — otherwise can() raises UnknownActionError at
+    runtime. Guards against typos / renames that the type checker can't catch.
+    """
+    import ast
+    import pathlib
+
+    apps_root = pathlib.Path(__file__).resolve().parents[2]  # sbomify/apps
+    registered = set(authz._ROLE_ACTIONS) | set(authz._ABAC_ACTIONS)
+
+    # Parse the AST and pull the literal 2nd argument of real can(...) calls.
+    # This avoids the regex pitfalls of matching quotes/docstrings: it sees only
+    # actual calls, and both "single" and 'double' quoted literals. Dynamic
+    # actions (variables / f-strings) are skipped — they can't be checked
+    # statically, but every action also appears as a literal at some call site.
+    # Skip dirs that can't contain can() call sites (tests) or are large and
+    # generated (migrations, schema modules) — keeps the scan fast. ``parts``
+    # is platform-independent, unlike a "/tests/" substring check.
+    skip_dirs = {"tests", "migrations", "sbom_format_schemas"}
+    used: set[str] = set()
+    for path in apps_root.rglob("*.py"):
+        if path.name == "authz.py" or skip_dirs.intersection(path.parts):
+            continue
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if not isinstance(node, ast.Call) or len(node.args) < 2:
+                continue
+            func = node.func
+            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+            arg = node.args[1]
+            if name == "can" and isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                used.add(arg.value)
+
+    unregistered = used - registered
+    assert not unregistered, f"can() actions used in code but missing from the catalog: {sorted(unregistered)}"
+    # Sanity: the scan actually found the migrated actions.
+    assert {"product:manage", "component:manage", "artifact:publish"} <= used

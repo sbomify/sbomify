@@ -6,14 +6,17 @@ a named ``action`` to the capability the codebase already enforces, then
 ``check_component_access`` (resource-attribute-based) — so its decision is
 identical to the scattered inline role checks it is meant to replace.
 
-This is the first phase of consolidating authorization: introduce the facade
-with no behaviour change. Later work migrates call sites onto ``can`` and grows
-the action catalog / capability model; until then both styles coexist.
+Authorization is consolidated here with no behaviour change: the call sites use
+``can``, and a ruff banned-api rule blocks new direct ``verify_item_access``
+imports outside the authz core, so role checks don't scatter again. ``can`` still
+delegates to ``verify_item_access`` / ``check_component_access`` — it unifies the
+two, it doesn't replace them. Growing finer roles / per-resource token scopes is
+future work.
 
-Why a facade instead of a rewrite: every call site today passes a raw role list
+Why a facade instead of a rewrite: every inline check passed a raw role list
 (``["owner", "admin"]``) to ``verify_item_access``. Naming the role sets as
 capabilities and giving each action one definition turns "what can an admin do"
-from an emergent property of ~170 call sites into a single table here.
+from an emergent property of the call sites into a single table here.
 """
 
 from __future__ import annotations
