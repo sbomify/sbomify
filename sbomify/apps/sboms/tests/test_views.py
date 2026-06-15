@@ -442,8 +442,11 @@ def test_sbom_download_product_private_authorized(
     mock_open = mocker.patch("builtins.open")
     mock_open.return_value.__enter__.return_value.read.return_value = mock_zip_content
 
-    # Mock verify_item_access to return True for authorized access
-    mocker.patch("sbomify.apps.core.views.verify_item_access", return_value=True)
+    # Mock can() with a real allowed Decision (not a bare bool) so the guard
+    # authorizes and the test stays faithful if the view ever uses .allowed.
+    from sbomify.apps.core.authz import Decision
+
+    mocker.patch("sbomify.apps.core.views.can", return_value=Decision(allowed=True))
 
     uri = reverse("core:sbom_download_product", kwargs={"product_id": sample_product.id})
     response = client.get(uri)

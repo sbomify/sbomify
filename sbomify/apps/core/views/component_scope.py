@@ -6,8 +6,8 @@ from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpR
 from django.shortcuts import redirect
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
 
@@ -23,7 +23,7 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         if component.component_type != Component.ComponentType.DOCUMENT:
             return HttpResponseBadRequest("Only documents can be workspace-wide")
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        if not can(request, "component:manage", component):
             return HttpResponseForbidden("Only owners and admins can change scope")
 
         target_scope = request.POST.get("target_scope")

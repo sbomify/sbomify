@@ -50,9 +50,10 @@ from ninja import Router, Schema
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.schemas import ErrorResponse
-from sbomify.apps.core.utils import get_client_ip, verify_item_access
+from sbomify.apps.core.utils import get_client_ip
 from sbomify.apps.oidc.models import OIDCBinding
 from sbomify.apps.oidc.services import (
     create_binding,
@@ -219,7 +220,7 @@ def _component_for_management(request: HttpRequest, component_id: str) -> Any | 
     from sbomify.apps.sboms.models import Component
 
     component = Component.objects.filter(pk=component_id).select_related("team").first()
-    if component is None or not verify_item_access(request, component, ["owner", "admin"]):
+    if component is None or not can(request, "component:manage", component):
         return None
     return component
 

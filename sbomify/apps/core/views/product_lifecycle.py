@@ -12,10 +12,10 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Product
 from sbomify.apps.core.services.cle import create_cle_event
-from sbomify.apps.core.utils import verify_item_access
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +35,14 @@ class ProductLifecycleView(LoginRequiredMixin, View):
         except Product.DoesNotExist:
             return None, "Product not found"
 
-        if not verify_item_access(request, product, ["guest", "owner", "admin"]):
+        if not can(request, "product:read", product):
             return None, "Permission denied"
 
         return product, None
 
     def _get_context(self, request: HttpRequest, product: Product) -> dict[str, Any]:
         """Get context for rendering."""
-        can_edit = verify_item_access(request, product, ["owner", "admin"])
+        can_edit = can(request, "product:manage", product).allowed
         return {
             "product": product,
             "can_edit": can_edit,
@@ -64,7 +64,7 @@ class ProductLifecycleView(LoginRequiredMixin, View):
             return htmx_error_response(error or "Product not found")
 
         # Check edit permissions
-        if not verify_item_access(request, product, ["owner", "admin"]):
+        if not can(request, "product:manage", product):
             return htmx_error_response("Permission denied")
 
         # Parse dates from form

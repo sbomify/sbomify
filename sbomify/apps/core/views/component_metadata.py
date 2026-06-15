@@ -14,9 +14,9 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import Component
-from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.teams.forms import ContactEntityFormSet, ContactProfileContactFormSet
 from sbomify.apps.teams.models import ContactEntity, ContactProfile, ContactProfileContact
 from sbomify.apps.teams.schemas import ContactProfileContactSchema
@@ -35,7 +35,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         except Component.DoesNotExist:
             return htmx_error_response("Component not found")
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        if not can(request, "component:manage", component):
             return htmx_error_response("Permission denied")
 
         # Get or create a component-private profile for editing
@@ -67,7 +67,7 @@ class ComponentMetadataFormView(LoginRequiredMixin, View):
         except Component.DoesNotExist:
             return htmx_error_response("Component not found")
 
-        if not verify_item_access(request, component, ["owner", "admin"]):
+        if not can(request, "component:manage", component):
             return htmx_error_response("Permission denied")
 
         try:

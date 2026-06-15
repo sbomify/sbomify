@@ -11,7 +11,7 @@ Business-logic ORM calls (creating / deleting bindings, listing them
 for a component) live in ``sbomify.apps.oidc.services`` and the views
 are thin dispatch over ``ServiceResult[T]``. The one exception is the
 ``_component_or_error`` helper, which resolves a ``Component`` row
-directly so the permission check (``verify_item_access``) can run
+directly so the permission check (``can(.., "component:manage", ..)``) can run
 before any service call — keeping permission checks in the view
 layer matches the rest of the codebase.
 """
@@ -26,10 +26,10 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import get_base_url
-from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.oidc.forms import OIDCBindingForm
 from sbomify.apps.oidc.services import create_binding, delete_binding, list_bindings_for_component
 from sbomify.apps.sboms.models import Component
@@ -72,7 +72,7 @@ class _TrustedPublishersBase(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def _component_or_error(self, request: HttpRequest, component_id: str) -> Component | None:
         component = Component.objects.filter(pk=component_id).select_related("team").first()
-        if component is None or not verify_item_access(request, component, ["owner", "admin"]):
+        if component is None or not can(request, "component:manage", component):
             self._error = htmx_error_response("Component not found or insufficient permissions.")
             return None
         return component

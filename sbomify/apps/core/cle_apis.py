@@ -7,6 +7,7 @@ from ninja import Query, Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.cle_schemas import (
     CLEEventCreateSchema,
     CLEEventResponseSchema,
@@ -25,7 +26,6 @@ from sbomify.apps.core.services.cle import (
     create_release_support_definition,
     create_support_definition,
 )
-from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.models import (
     ComponentCLEEvent,
     ComponentCLESupportDefinition,
@@ -63,7 +63,7 @@ def _get_product_or_404(request: HttpRequest, product_id: str) -> Product | tupl
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
 
-    if not verify_item_access(request, product, ["owner", "admin"]):
+    if not can(request, "product:manage", product):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return product
@@ -79,7 +79,7 @@ def _get_component_or_404(request: HttpRequest, component_id: str) -> Component 
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.COMPONENT_NOT_FOUND}
 
-    if not verify_item_access(request, component, ["owner", "admin"]):
+    if not can(request, "component:manage", component):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return component
@@ -95,7 +95,7 @@ def _get_release_or_404(request: HttpRequest, release_id: str) -> Release | tupl
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
-    if not verify_item_access(request, release.product, ["owner", "admin"]):
+    if not can(request, "release:manage", release.product):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return release
@@ -116,7 +116,7 @@ def _get_component_release_or_404(
             "error_code": ErrorCode.COMPONENT_RELEASE_NOT_FOUND,
         }
 
-    if not verify_item_access(request, component_release.component, ["owner", "admin"]):
+    if not can(request, "component:manage", component_release.component):
         return 403, {"detail": "Permission denied", "error_code": ErrorCode.FORBIDDEN}
 
     return component_release

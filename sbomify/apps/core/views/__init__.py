@@ -33,8 +33,9 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.posthog_service import capture_for_request
-from sbomify.apps.core.utils import token_to_number, verify_item_access
+from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
 from sbomify.apps.core.views.component_details_public import ComponentDetailsPublicView as ComponentDetailsPublicView
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
@@ -531,7 +532,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     except Component.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    if not verify_item_access(request, component, ["owner"]):
+    if not can(request, "component:administer", component):
         return error_response(request, HttpResponseForbidden("Only allowed for owners of the component"))
 
     target_team = request.session.get("user_teams", {}).get(team_key, {})
@@ -575,7 +576,7 @@ def sbom_download_product(request: HttpRequest, product_id: str) -> HttpResponse
         return error_response(request, HttpResponseNotFound("Product not found"))
 
     if not product.is_public:
-        if not verify_item_access(request, product, ["owner", "admin"]):
+        if not can(request, "product:manage", product):
             return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     # Get format parameters from query string and normalize early
@@ -616,7 +617,7 @@ def get_component_metadata(request: HttpRequest, component_id: str) -> HttpRespo
     except Component.DoesNotExist:
         return error_response(request, HttpResponseNotFound("Component not found"))
 
-    if not verify_item_access(request, component, ["owner", "admin"]):
+    if not can(request, "component:manage", component):
         return error_response(request, HttpResponseForbidden("Only allowed for members of the team"))
 
     metadata = component.metadata or {}

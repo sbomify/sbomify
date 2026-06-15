@@ -11,8 +11,8 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
-from sbomify.apps.core.utils import verify_item_access
 
 from .models import CRAAssessment, CRAExportPackage, OSCALFinding, OSCALObservation
 from .permissions import check_cra_access
@@ -157,7 +157,7 @@ def create_or_get_assessment(request: HttpRequest, product_id: str) -> _Response
     except Product.DoesNotExist:
         return 404, ErrorResponse(error="Product not found", error_code="not_found")
 
-    if not verify_item_access(request, product, ["owner", "admin"]):
+    if not can(request, "product:manage", product):
         return 403, ErrorResponse(error="Forbidden", error_code="permission_denied")
 
     if not check_cra_access(product.team):

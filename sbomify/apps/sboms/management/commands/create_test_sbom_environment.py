@@ -11,6 +11,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 from django.http import HttpRequest
 
+from sbomify.apps.core.authz import Decision
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
 from sbomify.apps.sboms.models import SBOM, Component, Product, ProductComponent
@@ -160,8 +161,8 @@ class Command(BaseCommand):
 
                 format_type = ""
 
-                # Patch verify_item_access for the duration of the API call
-                with patch("sbomify.apps.sboms.apis.verify_item_access", return_value=True):
+                # Patch can() to authorize the seeding API call
+                with patch("sbomify.apps.sboms.apis.can", return_value=Decision(allowed=True)):
                     if "spdxVersion" in sbom_data_dict:
                         format_type = "spdx"
                         self.stdout.write(f"Processing {format_type.upper()} SBOM: {sbom_file}")
