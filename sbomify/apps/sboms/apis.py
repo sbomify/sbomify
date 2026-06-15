@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.purl import extract_purl_qualifiers
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -371,7 +372,7 @@ def sbom_upload_cyclonedx(
         # check enforces that the bot can only push to ITS bound component,
         # not anywhere else in the workspace — see
         # ``sbomify.apps.oidc.permissions.is_authorised_for_component``.
-        if not verify_item_access(request, component, ["owner", "admin", "bot"]):
+        if not can(request, "artifact:publish", component):
             return 403, {"detail": "Forbidden"}
         if not is_authorised_for_component(request, component):
             return 403, {"detail": "Forbidden"}
@@ -507,7 +508,7 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         # Allow OIDC bot tokens for trusted-publishing uploads; restrict
         # them to the bound component (see CycloneDX upload above for
         # the rationale).
-        if not verify_item_access(request, component, ["owner", "admin", "bot"]):
+        if not can(request, "artifact:publish", component):
             return 403, {"detail": "Forbidden"}
         if not is_authorised_for_component(request, component):
             return 403, {"detail": "Forbidden"}
@@ -1201,14 +1202,14 @@ _MAX_PROVENANCE_SIZE = 10 * 1024 * 1024  # 10 MB
 def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = False) -> SBOM | tuple[int, dict[str, Any]]:
     """Look up an SBOM and verify access. Returns SBOM or (status, error_dict).
 
-    For write=True (uploads), requires owner/admin via verify_item_access.
+    For write=True (uploads), requires owner/admin via can("sbom:manage", ...).
     For write=False (downloads), uses check_component_access to support public SBOMs.
     """
     sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
     if sbom is None:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
     if write:
-        if not verify_item_access(request, sbom.component, ["owner", "admin"]):
+        if not can(request, "sbom:manage", sbom.component):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
     else:
         access = check_component_access(request, sbom.component)
