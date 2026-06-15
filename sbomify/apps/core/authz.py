@@ -77,9 +77,12 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "document:manage": MANAGE,
     # artifact upload — also allows OIDC/CI bot identities
     "artifact:publish": PUBLISH,
-    # any-member read of internal workspace data
+    # any-member read of internal (non-public) workspace data
     "workspace:read": READ_MEMBER,
     "component:read_internal": READ_MEMBER,
+    "release:read": READ_MEMBER,
+    "document:read": READ_MEMBER,
+    "sbom:read": READ_MEMBER,
 }
 
 # Actions authorized by resource attributes (visibility / NDA / access request)
