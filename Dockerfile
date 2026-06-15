@@ -288,6 +288,14 @@ ENV UV_NO_SYNC=1
 # Chainguard Python is at /usr/bin/python, not /usr/local/bin/python3.X.
 # The python3.X symlink name is derived dynamically to avoid hardcoding the minor version.
 # psycopg2-binary bundles libpq, so no shared library staging is needed.
+#
+# Strip test_data/ fixtures from the prod tree before it is copied into the
+# distroless image. They are sample SBOMs/lockfiles used only by the test suite;
+# `COPY . .` bakes them in, where the image SBOM scanner reads them as installed
+# packages and reports phantom CVEs for the historical snapshots they describe.
+# This runs ONLY in the collectstatic -> python-app-prod path, so the dev image
+# (python-app-dev, built from python-dependencies) keeps the fixtures that the
+# create_test_sbom_environment management command loads.
 RUN mkdir -p /code/staticfiles && \
     uv run python manage.py collectstatic --noinput && \
     PYTHON_MINOR=$(python3 -c 'import sys; print("python%d.%d" % sys.version_info[:2])') && \
@@ -295,6 +303,7 @@ RUN mkdir -p /code/staticfiles && \
     ln -s /usr/bin/python /code/.venv/bin/python && \
     ln -s /usr/bin/python /code/.venv/bin/python3 && \
     ln -s /usr/bin/python "/code/.venv/bin/${PYTHON_MINOR}" && \
+    find /code -type d -name test_data -prune -exec rm -rf {} + && \
     mkdir -p /staged-dirs/var/lib/dramatiq-prometheus /staged-dirs/tmp/.cache && \
     chown -R 65532:65532 /staged-dirs/var /staged-dirs/tmp
 
