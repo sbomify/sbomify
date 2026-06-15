@@ -1,14 +1,14 @@
 # Base Python version
 ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.3.5
+ARG OSV_SCANNER_VERSION=v2.3.8
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
-ARG COSIGN_VERSION=v3.0.6
+ARG COSIGN_VERSION=v3.1.1
 # Chainguard distroless Python for production, pinned by digest for reproducibility.
 # IMPORTANT: This image must provide the same Python minor version as PYTHON_VERSION above.
 # To update: docker pull cgr.dev/chainguard/python:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970f2d4316ffe1f42abcb0413282b555bf7ce9b0774a7c79
+ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:33334c2bf93fd99e6b3c42b518cc44bb5277a954826cdb4f9275ef95818d7eb7
 # Chainguard Wolfi base for the weasyprint-libs builder stage, pinned by
 # digest so the builder image itself is reproducible. The actual .so
 # versions still come from `apk add` against the live Wolfi repo at build
@@ -17,7 +17,7 @@ ARG CHAINGUARD_PYTHON_IMAGE=cgr.dev/chainguard/python@sha256:af9f881767681598970
 # compatible across rebuilds. Bump the digest below when you want to pick
 # up newer patches.
 # To update: docker pull cgr.dev/chainguard/wolfi-base:latest && docker inspect --format '{{index .RepoDigests 0}}'
-ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:0cff4df29a6597173dc8b813787318150141eb96ac783dc3ff4f5ff52c49a1e2
+ARG CHAINGUARD_WOLFI_BASE_IMAGE=cgr.dev/chainguard/wolfi-base@sha256:34977aa13765da89f60fee8fe5230e2bb1c55192df08e383c58221ee0d1277fb
 
 # Build metadata arguments (passed from CI/CD)
 ARG BUILD_DATE=""
