@@ -303,7 +303,7 @@ RUN mkdir -p /code/staticfiles && \
     ln -s /usr/bin/python /code/.venv/bin/python && \
     ln -s /usr/bin/python /code/.venv/bin/python3 && \
     ln -s /usr/bin/python "/code/.venv/bin/${PYTHON_MINOR}" && \
-    find /code -type d -name test_data -prune -exec rm -rf {} + && \
+    find /code/sbomify -type d -name test_data -prune -exec rm -rf {} + && \
     mkdir -p /staged-dirs/var/lib/dramatiq-prometheus /staged-dirs/tmp/.cache && \
     chown -R 65532:65532 /staged-dirs/var /staged-dirs/tmp
 
