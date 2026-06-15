@@ -491,7 +491,7 @@ wheels = [
 
 [[package]]
 name = "compliance-trestle"
-version = "4.0.1"
+version = "4.0.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -512,9 +512,9 @@ dependencies = [
     { name = "requests" },
     { name = "ruamel-yaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/22/1da373336b31baf96a7f442fc7601a67d530ccdcbefe36decf5276448a21/compliance_trestle-4.0.1.tar.gz", hash = "sha256:b75d45a80dee6d6d91714c2b882f6a637d9c464cb8009ab9d2796f885e36f869", size = 324970, upload-time = "2026-03-18T14:42:20.568Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/54/9b548300fee6e67fd56810483b0e7aa2e3b6203fb46f294e198193c53c40/compliance_trestle-4.0.3.tar.gz", hash = "sha256:9084287775e34155b61938318fe59dc59efcd076b215ed041273f4286e35fd2c", size = 330189, upload-time = "2026-05-20T11:20:21.266Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/d0/9cbd626f9da70a8705e1d7c39f91d23fa33cac1bf6515c2cfeb6413fdae7/compliance_trestle-4.0.1-py3-none-any.whl", hash = "sha256:7a77e7cfc03c8c69198346347fa7b76dfdf0e93078db749d022d90453b5a18d2", size = 471194, upload-time = "2026-03-18T14:42:18.634Z" },
+    { url = "https://files.pythonhosted.org/packages/10/44/6e68810a33ca7b29a9f45e5765481e6eb6e0abccd401eb8f93694ff2cd11/compliance_trestle-4.0.3-py3-none-any.whl", hash = "sha256:3bcd5763574e73d5533b637179c5af18d427d8ccbb5f50354d0b5cd6d0afbcdb", size = 477341, upload-time = "2026-05-20T11:20:19.252Z" },
 ]
 
 [[package]]
@@ -1800,7 +1800,7 @@ wheels = [
 
 [[package]]
 name = "paramiko"
-version = "4.0.0"
+version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bcrypt" },
@@ -1808,9 +1808,9 @@ dependencies = [
     { name = "invoke" },
     { name = "pynacl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1f/e7/81fdcbc7f190cdb058cffc9431587eb289833bdd633e2002455ca9bb13d4/paramiko-4.0.0.tar.gz", hash = "sha256:6a25f07b380cc9c9a88d2b920ad37167ac4667f8d9886ccebd8f90f654b5d69f", size = 1630743, upload-time = "2025-08-04T01:02:03.711Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/62/93/dcc25d52f49022ae6175d15e6bd751f1acc99b98bc61fc55e5155a7be2e7/paramiko-5.0.0.tar.gz", hash = "sha256:36763b5b95c2a0dcfdf1abc48e48156ee425b21efe2f0e787c2dd5a95c0e5e79", size = 1548586, upload-time = "2026-05-09T18:28:52.256Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/90/a744336f5af32c433bd09af7854599682a383b37cfd78f7de263de6ad6cb/paramiko-4.0.0-py3-none-any.whl", hash = "sha256:0e20e00ac666503bf0b4eda3b6d833465a2b7aff2e2b3d79a8bba5ef144ee3b9", size = 223932, upload-time = "2025-08-04T01:02:02.029Z" },
+    { url = "https://files.pythonhosted.org/packages/82/5b/eadf6d45de38d30ab603f49393b6cd2cbe7e233af8cf90197e32782b68a9/paramiko-5.0.0-py3-none-any.whl", hash = "sha256:b7044611c30140d9a75261653210e2002977b71a0497ff3ba0d98d7edbf62f7c", size = 208919, upload-time = "2026-05-09T18:28:50.295Z" },
 ]
 
 [[package]]
