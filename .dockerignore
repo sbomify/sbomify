@@ -5,7 +5,13 @@ fly.toml
 .env
 localstack-volume/
 test_env
-sboms/tests/test_data/osv-scanner.toml
+# Test fixtures: sample SBOMs/lockfiles used only by the test suite. They are
+# never needed at runtime, and baking them in via `COPY . .` makes image
+# scanners read them as installed packages — surfacing phantom CVEs for the
+# historical dependency snapshots they describe. Exclude every test_data dir
+# (the prior `sboms/tests/test_data/osv-scanner.toml` pattern was relative to
+# the wrong root and matched nothing).
+**/test_data/
 **/__snapshots__/
 **/__diffs__/
 node_modules/
