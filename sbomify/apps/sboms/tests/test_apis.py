@@ -3539,3 +3539,22 @@ def test_download_sbom_with_fallback_filename(
     assert response.status_code == 200
     assert response.content == b'{"name": "test sbom content"}'
     assert f'attachment; filename="sbom_{sbom.uuid}.json"' in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+def test_delete_sbom_api_admin_forbidden(sample_sbom: SBOM):  # noqa: F811
+    """Deleting an SBOM is owner-only (#468); an admin gets 403 and the SBOM survives."""
+    from django.contrib.auth import get_user_model
+
+    from sbomify.apps.teams.models import Member
+
+    team = sample_sbom.component.team
+    admin = get_user_model().objects.create_user(username="admin-del-sbom-user", password="x")
+    Member.objects.create(user=admin, team=team, role="admin")
+
+    client = Client()
+    client.force_login(admin)
+    response = client.delete(reverse("api-1:delete_sbom", kwargs={"sbom_id": sample_sbom.id}))
+
+    assert response.status_code == 403
+    assert SBOM.objects.filter(id=sample_sbom.id).exists()

@@ -1806,3 +1806,22 @@ def test_release_with_unicode_version(
 
     assert get_response.status_code == 200
     assert get_response.json()["version"] == unicode_version
+
+
+@pytest.mark.django_db
+def test_delete_release_admin_forbidden(sample_team_with_owner_member: Member):  # noqa: F811
+    """Deleting a release is owner-only (#468); an admin gets 403 and the release survives."""
+    from django.contrib.auth import get_user_model
+
+    team = sample_team_with_owner_member.team
+    product = Product.objects.create(name="admin-del-rel-product", team=team)
+    release = Release.objects.create(product=product, name="v9.9.9")
+    admin = get_user_model().objects.create_user(username="admin-del-rel-user", password="x")
+    Member.objects.create(user=admin, team=team, role="admin")
+
+    client = Client()
+    client.force_login(admin)
+    response = client.delete(reverse("api-1:delete_release", kwargs={"release_id": release.id}))
+
+    assert response.status_code == 403
+    assert Release.objects.filter(id=release.id).exists()

@@ -45,10 +45,19 @@ ADMINISTER: tuple[str, ...] = (ROLE_OWNER,)
 """Owner-only: billing, member management, workspace settings/deletion."""
 
 MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
-"""Create/update/delete products, components, releases, and artifact metadata."""
+"""Create/update products, components, releases, and artifact metadata (admins
+included). Destructive *deletion* of a domain resource is the separate, stricter
+``DELETE`` tier (#468)."""
 
-PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""Upload artifacts — also granted to OIDC/CI ``bot`` identities."""
+DELETE: tuple[str, ...] = (ROLE_OWNER,)
+"""Owner-only deletion of a domain resource (product / component / release /
+SBOM / document). Carved out of ``MANAGE`` so admins can create and edit but not
+destroy (#468)."""
+
+PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT, ROLE_GUEST)
+"""Upload artifacts — granted to OIDC/CI ``bot`` identities and, per #468, to
+guests (so a low-trust member can contribute artifacts without management
+rights)."""
 
 # Order mirrors the predominant call-site literal ``["guest", "owner", "admin"]``
 # (membership is order-independent, but the parity keeps the claim above honest).
@@ -85,7 +94,13 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "release:manage": MANAGE,
     "sbom:manage": MANAGE,
     "document:manage": MANAGE,
-    # artifact upload — also allows OIDC/CI bot identities
+    # owner-only deletion of domain resources (#468) — stricter than MANAGE
+    "product:delete": DELETE,
+    "component:delete": DELETE,
+    "release:delete": DELETE,
+    "sbom:delete": DELETE,
+    "document:delete": DELETE,
+    # artifact upload — allows OIDC/CI bot identities and guests (#468)
     "artifact:publish": PUBLISH,
     # any-member read of internal (non-public) workspace data
     "workspace:read": READ_MEMBER,

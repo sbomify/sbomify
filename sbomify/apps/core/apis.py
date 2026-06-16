@@ -878,8 +878,8 @@ def delete_product(request: HttpRequest, product_id: str) -> Any:
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
-    if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can delete products", "error_code": ErrorCode.FORBIDDEN}
+    if not can(request, "product:delete", product):
+        return 403, {"detail": "Only owners can delete products", "error_code": ErrorCode.FORBIDDEN}
 
     # Capture data for broadcast before deletion
     workspace_key = product.team.key
@@ -1894,8 +1894,8 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
     except Component.DoesNotExist:
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
-    if not can(request, "component:manage", component):
-        return 403, {"detail": "Only owners and admins can delete components", "error_code": ErrorCode.FORBIDDEN}
+    if not can(request, "component:delete", component):
+        return 403, {"detail": "Only owners can delete components", "error_code": ErrorCode.FORBIDDEN}
 
     # Capture data for broadcast before deletion
     workspace_key = component.team.key
@@ -2988,8 +2988,8 @@ def delete_release(request: HttpRequest, release_id: str) -> Any:
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
-    if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can delete releases", "error_code": ErrorCode.FORBIDDEN}
+    if not can(request, "release:delete", release.product):
+        return 403, {"detail": "Only owners can delete releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent deleting latest releases
     if release.is_latest:

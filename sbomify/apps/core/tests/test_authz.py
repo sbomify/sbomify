@@ -55,7 +55,11 @@ def _resource_for(res_key, team, component):
 _MATRIX = {
     "workspace:administer": ("team", {"owner": True, "admin": False, "guest": False, "bot": False}),
     "component:manage": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "artifact:publish": ("component", {"owner": True, "admin": True, "guest": False, "bot": True}),
+    # #468: deleting a domain resource is owner-only (carved out of MANAGE).
+    "component:delete": ("component", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    "product:delete": ("product", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    # #468: guests may upload artifacts (joined the PUBLISH tier).
+    "artifact:publish": ("component", {"owner": True, "admin": True, "guest": True, "bot": True}),
     "workspace:read": ("team", {"owner": True, "admin": True, "guest": True, "bot": False}),
     "component:administer": ("component", {"owner": True, "admin": False, "guest": False, "bot": False}),
     "product:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": False}),
