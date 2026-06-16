@@ -126,7 +126,12 @@ def is_valid_scope(scope: str) -> bool:
 SCOPE_PRESETS: dict[str, list[str] | None] = {
     "full": None,
     "publish": ["artifact:publish"],
-    "read_only": sorted(action for action, tier in _ROLE_ACTIONS.items() if tier == READ_MEMBER),
+    # READ_MEMBER role-based reads plus the ABAC component:access read path, so a
+    # read-only token can still read gated/public components (can() checks scope
+    # before ABAC).
+    "read_only": sorted(
+        [action for action, tier in _ROLE_ACTIONS.items() if tier == READ_MEMBER] + list(_ABAC_ACTIONS)
+    ),
 }
 
 
@@ -181,6 +186,12 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
 
     request = actor if isinstance(actor, HttpRequest) else _stub_request_for_user(actor)
 
+    # Validate the action FIRST so a typo raises loudly even for a scoped token —
+    # the scope gate below must not be able to mask an unregistered action as a
+    # merely-denied Decision.
+    if action not in ALL_ACTIONS:
+        raise UnknownActionError(action)
+
     # Token action-scope gate: a scoped API token can only narrow access. Runs
     # before the role/ABAC dispatch so an out-of-scope action is denied even when
     # the user's role would allow it. Non-token actors (sessions, delegated
@@ -194,8 +205,6 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
         result = check_component_access(request, component)
         return Decision(result.has_access, result.reason)
 
-    roles = _ROLE_ACTIONS.get(action)
-    if roles is None:
-        raise UnknownActionError(action)
+    roles = _ROLE_ACTIONS[action]  # present: validated against ALL_ACTIONS above
     allowed = verify_item_access(request, resource, list(roles))
     return Decision(allowed, "" if allowed else f"requires role in {roles}")

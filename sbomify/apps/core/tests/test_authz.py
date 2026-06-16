@@ -309,3 +309,27 @@ class TestTokenScopeEnforcement:
         req = self._request(bot, ["artifact:publish"])
         assert can(req, "artifact:publish", component).allowed is True
         assert can(req, "component:manage", component).allowed is False
+
+
+@pytest.mark.django_db
+def test_scoped_token_unknown_action_still_raises(workspace):
+    """A scoped token must NOT mask a typo'd action as a denied Decision — an
+    unregistered action raises UnknownActionError regardless of token scope."""
+    from sbomify.apps.access_tokens.models import AccessToken
+
+    team, component = workspace
+    owner = _user("scope-unknown-action")
+    _member(team, owner, "owner")
+    req = HttpRequest()
+    req.user = owner
+    req.session = {}
+    req.access_token_record = AccessToken(scopes=["sbom:read"])
+    with pytest.raises(UnknownActionError):
+        can(req, "component:teleport", component)
+
+
+def test_read_only_preset_includes_abac_access():
+    """The read-only scope must cover the ABAC component:access read path, not
+    just the role-based read actions, or read-only tokens couldn't read gated
+    components (can() checks scope before ABAC)."""
+    assert "component:access" in authz.SCOPE_PRESETS["read_only"]

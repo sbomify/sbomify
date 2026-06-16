@@ -730,7 +730,8 @@ def test_action_scoped_token_blocks_out_of_scope_endpoint(sample_team_with_owner
     url = reverse("api-1:create_component")
     payload = {"name": "Scope Test Component"}
 
-    # Read-only-scoped token: does NOT grant workspace:manage → 403 even for owner.
+    # Token scoped to a single action (sbom:read): does NOT grant workspace:manage
+    # → 403 even for an owner. (Narrower than the UI "read_only" preset bundle.)
     read_token = create_personal_access_token(user)
     AccessToken.objects.create(
         user=user, encoded_token=read_token, description="read-only", team=team, scopes=["sbom:read"]
