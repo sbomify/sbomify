@@ -476,20 +476,15 @@ def test_token_scoped_to_one_workspace_blocks_other_workspaces(
     # Workspace A: the token's home — upload must NOT be rejected as forbidden.
     # (We only assert "not 403" so this test stays focused on the scope check
     # and doesn't get coupled to validator/storage-layer details.)
-    response_a = client.post(
-        f"/api/v1/sboms/artifact/cyclonedx/{component_a.id}", data=body, **headers
-    )
+    response_a = client.post(f"/api/v1/sboms/artifact/cyclonedx/{component_a.id}", data=body, **headers)
     assert response_a.status_code != 403, (
-        f"Workspace-A token rejected on its own workspace's component: "
-        f"{response_a.status_code} {response_a.content!r}"
+        f"Workspace-A token rejected on its own workspace's component: {response_a.status_code} {response_a.content!r}"
     )
 
     # Workspace B: same user, same role, but the token is NOT scoped there.
     # MUST be 403. A 200/201 here would mean the user's membership leaked
     # past the token's scope — the bug this test is here to catch.
-    response_b = client.post(
-        f"/api/v1/sboms/artifact/cyclonedx/{component_b.id}", data=body, **headers
-    )
+    response_b = client.post(f"/api/v1/sboms/artifact/cyclonedx/{component_b.id}", data=body, **headers)
     assert response_b.status_code == 403, (
         f"Workspace-A token accepted upload to Workspace B's component "
         f"(membership leaked past token scope): {response_b.status_code} {response_b.content!r}"
@@ -523,12 +518,8 @@ def test_token_scoped_to_workspace_a_cannot_create_in_workspace_b(
     Member.objects.create(user=sample_user, team=workspace_b, role="owner", is_default_team=True)
     Member.objects.create(user=sample_user, team=workspace_a, role="owner")
 
-    plan_a = BillingPlan.objects.create(
-        key="multi_scope_plan_a", name="Plan A", max_products=10, max_components=10
-    )
-    plan_b = BillingPlan.objects.create(
-        key="multi_scope_plan_b", name="Plan B", max_products=10, max_components=10
-    )
+    plan_a = BillingPlan.objects.create(key="multi_scope_plan_a", name="Plan A", max_products=10, max_components=10)
+    plan_b = BillingPlan.objects.create(key="multi_scope_plan_b", name="Plan B", max_products=10, max_components=10)
     workspace_a.billing_plan = plan_a.key
     workspace_a.save()
     workspace_b.billing_plan = plan_b.key
@@ -710,3 +701,74 @@ def test_optional_token_auth_scheme_case_insensitive_for_valid_token(sample_user
 
     assert calls == ["ran"]
     assert result == sample_user.id
+
+
+# ============================================================================
+# Action-scope (#215 / #1002) end-to-end enforcement
+# ============================================================================
+#
+# Property: a token's action scopes narrow what it can do over real HTTP,
+# independent of the user's role. A read-scoped token owned by a workspace
+# OWNER is still rejected by a manage endpoint; an unscoped (NULL) token of the
+# same owner is accepted — proving the scope gate in can() is the deciding
+# factor, not the role.
+
+
+@pytest.mark.django_db
+def test_action_scoped_token_blocks_out_of_scope_endpoint(sample_team_with_owner_member):  # noqa: F811
+    member = sample_team_with_owner_member
+    team = member.team
+    user = member.user
+    if not team.key or len(team.key) < 9:
+        team.key = number_to_random_token(team.pk)
+        team.save()
+
+    plan = BillingPlan.objects.create(key="scope_plan", name="Scope Plan", max_products=10, max_components=10)
+    team.billing_plan = plan.key
+    team.save()
+
+    url = reverse("api-1:create_component")
+    payload = {"name": "Scope Test Component"}
+
+    # Read-only-scoped token: does NOT grant workspace:manage → 403 even for owner.
+    read_token = create_personal_access_token(user)
+    AccessToken.objects.create(
+        user=user, encoded_token=read_token, description="read-only", team=team, scopes=["sbom:read"]
+    )
+    resp_scoped = Client().post(
+        url, json.dumps(payload), content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {read_token}"
+    )
+    assert resp_scoped.status_code == 403, f"scoped token should be forbidden, got {resp_scoped.status_code}"
+
+    # Unscoped (NULL) token of the SAME owner → allowed (201). Only the scope differs.
+    full_token = create_personal_access_token(user)
+    AccessToken.objects.create(user=user, encoded_token=full_token, description="full", team=team, scopes=None)
+    resp_full = Client().post(
+        url, json.dumps(payload), content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {full_token}"
+    )
+    assert resp_full.status_code == 201, (
+        f"unscoped token should succeed, got {resp_full.status_code}: {resp_full.content!r}"
+    )
+
+
+@pytest.mark.django_db
+def test_create_token_form_maps_scope_presets():
+    from sbomify.apps.core.authz import SCOPE_PRESETS
+    from sbomify.apps.core.forms import CreateAccessTokenForm
+
+    f = CreateAccessTokenForm({"description": "x", "scope": "full"})
+    assert f.is_valid(), f.errors
+    assert f.scopes() is None  # full / unscoped
+
+    f = CreateAccessTokenForm({"description": "x", "scope": "publish"})
+    assert f.is_valid(), f.errors
+    assert f.scopes() == ["artifact:publish"]
+
+    f = CreateAccessTokenForm({"description": "x", "scope": "read_only"})
+    assert f.is_valid(), f.errors
+    assert f.scopes() == SCOPE_PRESETS["read_only"]
+
+    # default (no scope provided) -> full
+    f = CreateAccessTokenForm({"description": "x"})
+    assert f.is_valid(), f.errors
+    assert f.scopes() is None

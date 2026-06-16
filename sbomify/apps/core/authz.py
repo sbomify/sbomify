@@ -6,12 +6,18 @@ a named ``action`` to the capability the codebase already enforces, then
 ``check_component_access`` (resource-attribute-based) — so its decision is
 identical to the scattered inline role checks it is meant to replace.
 
-Authorization is consolidated here with no behaviour change: the call sites use
-``can``, and a ruff banned-api rule blocks new direct ``verify_item_access``
-imports outside the authz core, so role checks don't scatter again. ``can`` still
-delegates to ``verify_item_access`` / ``check_component_access`` — it unifies the
-two, it doesn't replace them. Growing finer roles / per-resource token scopes is
-future work.
+Authorization is consolidated here with no behaviour change to role checks: the
+call sites use ``can``, and a ruff banned-api rule blocks new direct
+``verify_item_access`` imports outside the authz core, so role checks don't
+scatter again. ``can`` still delegates to ``verify_item_access`` /
+``check_component_access`` — it unifies the two, it doesn't replace them.
+
+``can`` also enforces API-token **action scopes** (#215): when the actor is a
+request authenticated by a scoped access token, the action must be in the
+token's scopes (a set of action strings) or the decision is denied *before* the
+role/ABAC check — scope can only narrow, never widen. An unscoped (``NULL``)
+token is full-capability (legacy default). Growing finer workspace roles (#468)
+is the remaining future work.
 
 Why a facade instead of a rewrite: every inline check passed a raw role list
 (``["owner", "admin"]``) to ``verify_item_access``. Naming the role sets as
@@ -95,6 +101,50 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
 # a Component or expose ``.component``.
 _ABAC_ACTIONS: frozenset[str] = frozenset({"component:access"})
 
+# Every action ``can`` understands — the vocabulary a token scope draws from.
+ALL_ACTIONS: frozenset[str] = frozenset(_ROLE_ACTIONS) | _ABAC_ACTIONS
+# Resource prefixes (the part before ``:``) — the valid targets of a ``<res>:*`` bundle.
+_RESOURCES: frozenset[str] = frozenset(a.split(":", 1)[0] for a in ALL_ACTIONS)
+
+# Token scope grammar (a scope is a set of ``can`` action strings):
+#   "*"                 -> every action (full token)
+#   "<resource>:*"      -> every verb for that resource
+#   "<resource>:<verb>" -> that exact action
+SCOPE_WILDCARD = "*"
+
+
+def is_valid_scope(scope: str) -> bool:
+    """True iff ``scope`` is a grammatically valid token scope string."""
+    if scope == SCOPE_WILDCARD or scope in ALL_ACTIONS:
+        return True
+    return scope.endswith(":*") and scope[:-2] in _RESOURCES
+
+
+# Named scope presets surfaced in the token-creation UI. Each label maps to a
+# concrete scope value (``None`` = full / unscoped). Kept here so the UI can't
+# drift from the action vocabulary above.
+SCOPE_PRESETS: dict[str, list[str] | None] = {
+    "full": None,
+    "publish": ["artifact:publish"],
+    "read_only": sorted(action for action, tier in _ROLE_ACTIONS.items() if tier == READ_MEMBER),
+}
+
+
+def _scope_permits(scopes: list[str] | None, action: str) -> bool:
+    """Does a token's ``scopes`` grant ``action``?
+
+    ``None`` means an unscoped (legacy / full-capability) token — it permits
+    everything, matching the ``expires_at IS NULL = never expires`` precedent.
+    An empty list permits nothing. Scope can only *narrow* access; the role and
+    resource-attribute checks still run afterwards.
+    """
+    if scopes is None or SCOPE_WILDCARD in scopes:
+        return True
+    if action in scopes:
+        return True
+    resource = action.split(":", 1)[0]
+    return f"{resource}:*" in scopes
+
 
 class UnknownActionError(KeyError):
     """Raised when ``can`` is asked about an action that isn't registered."""
@@ -130,6 +180,14 @@ def can(actor: Any, action: str, resource: Any) -> Decision:
     from sbomify.apps.core.utils import verify_item_access
 
     request = actor if isinstance(actor, HttpRequest) else _stub_request_for_user(actor)
+
+    # Token action-scope gate: a scoped API token can only narrow access. Runs
+    # before the role/ABAC dispatch so an out-of-scope action is denied even when
+    # the user's role would allow it. Non-token actors (sessions, delegated
+    # user-stub checks) carry no access_token_record, so this is a no-op for them.
+    token = getattr(request, "access_token_record", None)
+    if token is not None and not _scope_permits(token.scopes, action):
+        return Decision(False, f"token scope does not grant {action!r}")
 
     if action in _ABAC_ACTIONS:
         component = getattr(resource, "component", resource)

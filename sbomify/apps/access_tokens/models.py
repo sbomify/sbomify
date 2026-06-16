@@ -25,6 +25,17 @@ class AccessToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     team = models.ForeignKey("teams.Team", on_delete=models.CASCADE, null=True, blank=True)
+    scopes = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Action scopes — a list of can() action strings, e.g. ['artifact:publish']. "
+            "NULL = unscoped full-capability token (legacy default). An action scope can "
+            "only narrow access: the user's workspace role and resource attributes still "
+            "apply. Workspace scoping is the separate 'team' field."
+        ),
+    )
     expires_at = models.DateTimeField(
         null=True,
         blank=True,
