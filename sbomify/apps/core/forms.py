@@ -59,7 +59,14 @@ class CreateAccessTokenForm(forms.Form):
         """
         from sbomify.apps.core.authz import SCOPE_PRESETS
 
-        return SCOPE_PRESETS.get(self.cleaned_data.get("scope") or "full")
+        # Direct index (not .get) so a SCOPE_CHOICES/SCOPE_PRESETS drift raises
+        # KeyError instead of silently falling through to a full token. The
+        # choice is validated against SCOPE_CHOICES (a subset of the preset keys),
+        # and a blank choice (required=False) falls back to "full".
+        preset = SCOPE_PRESETS[self.cleaned_data.get("scope") or "full"]
+        # Copy the preset list so a caller mutating token.scopes in place can't
+        # corrupt the shared SCOPE_PRESETS value (None stays None — full token).
+        return list(preset) if preset is not None else None
 
     def expiry_days(self) -> int | None:
         """Chosen token lifetime in days, or ``None`` for no expiration.
