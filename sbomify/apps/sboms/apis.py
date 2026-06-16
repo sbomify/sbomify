@@ -1208,7 +1208,7 @@ def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = Fals
     if sbom is None:
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
     if write:
-        if not can(request, "sbom:delete", sbom.component):
+        if not can(request, "sbom:manage", sbom.component):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
     else:
         access = check_component_access(request, sbom.component)
