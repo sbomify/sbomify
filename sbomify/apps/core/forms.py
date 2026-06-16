@@ -35,6 +35,32 @@ class CreateAccessTokenForm(forms.Form):
         widget=forms.Select(attrs={"class": "tw-form-select"}),
     )
 
+    # Action scope (#215). "full" = unscoped (legacy default); the others narrow
+    # what the token may do regardless of the user's role. Maps to a concrete
+    # scope list via authz.SCOPE_PRESETS so the choices can't drift from the
+    # action vocabulary can() enforces.
+    SCOPE_CHOICES = [
+        ("full", "Full access"),
+        ("publish", "Publish only (CI/CD upload)"),
+        ("read_only", "Read-only"),
+    ]
+    scope = forms.ChoiceField(
+        choices=SCOPE_CHOICES,
+        required=False,
+        initial="full",
+        label="Access scope",
+        widget=forms.Select(attrs={"class": "tw-form-select"}),
+    )
+
+    def scopes(self) -> list[str] | None:
+        """Chosen action scopes, or ``None`` for an unscoped (full) token.
+
+        Only valid after ``is_valid()``.
+        """
+        from sbomify.apps.core.authz import SCOPE_PRESETS
+
+        return SCOPE_PRESETS.get(self.cleaned_data.get("scope") or "full")
+
     def expiry_days(self) -> int | None:
         """Chosen token lifetime in days, or ``None`` for no expiration.
 

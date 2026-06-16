@@ -94,6 +94,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             description=form.cleaned_data["description"],
             team_id=team_id,
             expires_at=expires_at,
+            scopes=form.scopes(),
         )
         token.save()
 

@@ -94,6 +94,32 @@ class TestTeamTokensView:
         assert new_token is not None
         assert new_token.team_id == team.id
 
+    def test_post_creates_token_with_default_full_scope(self, client: Client, sample_team_with_owner_member):
+        """A token created without picking a scope is unscoped (NULL = full, legacy default)."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        client.post(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}),
+            {"description": "Full Token"},
+        )
+        tok = AccessToken.objects.get(user=user, description="Full Token")
+        assert tok.scopes is None
+
+    def test_post_creates_scoped_token(self, client: Client, sample_team_with_owner_member):
+        """Picking the 'publish' scope persists the concrete action scope on the token."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        client.post(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}),
+            {"description": "CI Token", "scope": "publish"},
+        )
+        tok = AccessToken.objects.get(user=user, description="CI Token")
+        assert tok.scopes == ["artifact:publish"]
+
     def test_post_invalid_form_returns_error(self, client: Client, sample_team_with_owner_member):
         """Test that POST with invalid form returns error."""
         team = sample_team_with_owner_member.team
@@ -126,9 +152,7 @@ class TestTeamTokensView:
         assert token is not None
         assert token.encoded_token in response.content.decode()
 
-    def test_token_listing_filtered_by_team(
-        self, client: Client, sample_team_with_owner_member
-    ):
+    def test_token_listing_filtered_by_team(self, client: Client, sample_team_with_owner_member):
         """Create tokens for 2 teams, verify GET only shows current team's tokens."""
         team_a = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
