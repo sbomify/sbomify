@@ -199,3 +199,137 @@ def test_all_can_actions_used_in_code_are_registered():
     assert not unregistered, f"can() actions used in code but missing from the catalog: {sorted(unregistered)}"
     # Sanity: the scan actually found the migrated actions.
     assert {"product:manage", "component:manage", "artifact:publish"} <= used
+
+
+class TestScopePermits:
+    """Token action-scope grammar: a scope is a set of can() action strings.
+
+    NULL/None scopes = full (legacy/back-compat); "*" = full; "<resource>:*" =
+    every verb for that resource; "<resource>:<verb>" = that exact action.
+    """
+
+    def test_none_scope_permits_everything(self):
+        assert authz._scope_permits(None, "component:manage") is True
+        assert authz._scope_permits(None, "workspace:delete") is True
+
+    def test_wildcard_permits_everything(self):
+        assert authz._scope_permits(["*"], "component:manage") is True
+        assert authz._scope_permits(["*"], "billing:manage") is True
+
+    def test_exact_action_scope(self):
+        assert authz._scope_permits(["sbom:read"], "sbom:read") is True
+        assert authz._scope_permits(["sbom:read"], "sbom:manage") is False
+        assert authz._scope_permits(["sbom:read"], "component:manage") is False
+
+    def test_resource_bundle_scope(self):
+        assert authz._scope_permits(["component:*"], "component:manage") is True
+        assert authz._scope_permits(["component:*"], "component:read_internal") is True
+        assert authz._scope_permits(["component:*"], "sbom:manage") is False
+
+    def test_empty_scope_permits_nothing(self):
+        assert authz._scope_permits([], "sbom:read") is False
+
+    def test_publish_only_token(self):
+        scopes = ["artifact:publish"]
+        assert authz._scope_permits(scopes, "artifact:publish") is True
+        assert authz._scope_permits(scopes, "component:manage") is False
+
+    def test_is_valid_scope(self):
+        assert authz.is_valid_scope("*") is True
+        assert authz.is_valid_scope("component:*") is True
+        assert authz.is_valid_scope("sbom:read") is True
+        assert authz.is_valid_scope("artifact:publish") is True
+        # invalid
+        assert authz.is_valid_scope("bogus:verb") is False
+        assert authz.is_valid_scope("nonresource:*") is False
+        assert authz.is_valid_scope("sbom") is False
+        assert authz.is_valid_scope("") is False
+
+    def test_all_actions_matches_registered_actions(self):
+        assert "component:manage" in authz.ALL_ACTIONS
+        assert "artifact:publish" in authz.ALL_ACTIONS
+        assert "component:access" in authz.ALL_ACTIONS  # ABAC action included
+
+
+@pytest.mark.django_db
+class TestTokenScopeEnforcement:
+    """can() enforces an authed token's action scopes BEFORE role/ABAC checks.
+
+    A scope can only narrow: an owner whose token is scoped to ['sbom:read'] is
+    still denied 'component:manage'. An unscoped (None) token behaves as today.
+    """
+
+    def _request(self, user, scopes):
+        from sbomify.apps.access_tokens.models import AccessToken
+
+        req = HttpRequest()
+        req.user = user
+        req.session = {}
+        req.access_token_record = AccessToken(scopes=scopes)  # unsaved; only .scopes read
+        return req
+
+    def test_scoped_token_denies_out_of_scope_action(self, workspace):
+        team, component = workspace
+        owner = _user("scope-owner-1")
+        _member(team, owner, "owner")
+        req = self._request(owner, ["sbom:read"])
+        # in scope
+        assert can(req, "sbom:read", component).allowed is True
+        # out of scope — owner role would allow, but the token doesn't grant it
+        denied = can(req, "component:manage", component)
+        assert denied.allowed is False
+        assert "scope" in denied.reason.lower()
+
+    def test_unscoped_token_behaves_as_role(self, workspace):
+        team, component = workspace
+        owner = _user("scope-owner-2")
+        _member(team, owner, "owner")
+        req = self._request(owner, None)  # legacy / full
+        assert can(req, "component:manage", component).allowed is True
+
+    def test_wildcard_token_behaves_as_role(self, workspace):
+        team, component = workspace
+        owner = _user("scope-owner-3")
+        _member(team, owner, "owner")
+        req = self._request(owner, ["*"])
+        assert can(req, "component:manage", component).allowed is True
+
+    def test_scope_cannot_widen_beyond_role(self, workspace):
+        """A guest with an 'all actions' token still can't manage (role gates)."""
+        team, component = workspace
+        guest = _user("scope-guest")
+        _member(team, guest, "guest")
+        req = self._request(guest, ["*"])
+        assert can(req, "component:manage", component).allowed is False  # role denies
+
+    def test_publish_scoped_bot_token(self, workspace):
+        team, component = workspace
+        bot = _user("scope-bot")
+        _member(team, bot, "bot")
+        req = self._request(bot, ["artifact:publish"])
+        assert can(req, "artifact:publish", component).allowed is True
+        assert can(req, "component:manage", component).allowed is False
+
+
+@pytest.mark.django_db
+def test_scoped_token_unknown_action_still_raises(workspace):
+    """A scoped token must NOT mask a typo'd action as a denied Decision — an
+    unregistered action raises UnknownActionError regardless of token scope."""
+    from sbomify.apps.access_tokens.models import AccessToken
+
+    team, component = workspace
+    owner = _user("scope-unknown-action")
+    _member(team, owner, "owner")
+    req = HttpRequest()
+    req.user = owner
+    req.session = {}
+    req.access_token_record = AccessToken(scopes=["sbom:read"])
+    with pytest.raises(UnknownActionError):
+        can(req, "component:teleport", component)
+
+
+def test_read_only_preset_includes_abac_access():
+    """The read-only scope must cover the ABAC component:access read path, not
+    just the role-based read actions, or read-only tokens couldn't read gated
+    components (can() checks scope before ABAC)."""
+    assert "component:access" in authz.SCOPE_PRESETS["read_only"]

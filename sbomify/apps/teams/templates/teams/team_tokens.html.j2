@@ -85,6 +85,13 @@
                         {% endwith %}
                     </div>
                     <div class="sm:w-44">
+                        {% with field=create_access_token_form.scope %}
+                            <label for="{{ field.id_for_label }}" class="sr-only">Access scope</label>
+                            {{ field }}
+                            {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                        {% endwith %}
+                    </div>
+                    <div class="sm:w-44">
                         {% with field=create_access_token_form.expires_in_days %}
                             <label for="{{ field.id_for_label }}" class="sr-only">Expiration</label>
                             {{ field }}
@@ -96,7 +103,7 @@
                     </button>
                 </div>
                 <p class="tw-form-hint mt-2">
-                    Give your token a descriptive name and choose when it should expire. Expiring tokens limit the damage if one is leaked.
+                    Give your token a descriptive name, choose its access scope, and choose when it should expire. Narrow scopes and expiry limit the damage if a token is leaked.
                 </p>
             </form>
         </div>
