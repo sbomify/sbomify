@@ -62,6 +62,24 @@ def test_assess_classifies_each_crypto_asset(tmp_path: Path):
     assert rsa.metadata and rsa.metadata["pqc_status"] == "quantum_vulnerable"
 
 
+def test_non_algorithm_asset_is_not_labelled_unrecognized_algorithm(tmp_path: Path):
+    # A certificate/protocol the classifier can't grade is "not assessed", not an "unrecognized algorithm".
+    doc = _cbom(_crypto("server-cert", asset_type="certificate"))
+    finding = _assess(doc, tmp_path).findings[0]
+    assert finding.status == "info"
+    assert "not assessed" in finding.title.lower()
+    assert "certificate" in finding.title.lower()
+    assert "algorithm" not in finding.title.lower()
+    assert finding.remediation is None
+
+
+def test_named_algorithm_inside_certificate_still_classified(tmp_path: Path):
+    # If a non-algorithm asset's name does identify an algorithm, keep the real verdict.
+    doc = _cbom(_crypto("RSA-2048-signing-cert", asset_type="certificate"))
+    finding = _assess(doc, tmp_path).findings[0]
+    assert finding.status == "fail"  # RSA -> quantum-vulnerable
+
+
 def test_assess_empty_cbom_warns(tmp_path: Path):
     result = _assess(_cbom(), tmp_path)
     assert result.summary.total_findings == 1

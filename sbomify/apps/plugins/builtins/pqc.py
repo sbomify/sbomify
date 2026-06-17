@@ -127,14 +127,30 @@ class PqcReadinessPlugin(AssessmentPlugin):
 
     def _finding(self, index: int, result: PqcResult) -> Finding:
         asset, verdict = result.asset, result.assessment
+        name = asset.name or "Unnamed asset"
+        finding_id = f"{_PLUGIN_NAME}:{asset.bom_ref or asset.name or f'asset-{index}'}"
+
+        # A non-algorithm asset (certificate / protocol / related material) that the classifier
+        # could not grade is "not assessed" — it is not an "unrecognized algorithm", so don't give
+        # it an algorithm label or algorithm remediation.
+        if verdict.status is PqcStatus.UNKNOWN and asset.asset_type is not None and asset.asset_type != "algorithm":
+            kind = asset.asset_type.replace("-", " ")
+            return Finding(
+                id=finding_id,
+                title=f"{name} — {kind} (not assessed)",
+                description=f"{kind.capitalize()} assets are not assessed for post-quantum readiness by this check.",
+                status="info",
+                severity="info",
+                metadata={"pqc_status": verdict.status.value, "asset_type": asset.asset_type},
+            )
+
         status, severity = _VERDICT.get(verdict.status, ("warning", "medium"))
         description = verdict.reason
         if verdict.data_quality_flag:
             description = f"{description}. {verdict.data_quality_flag}"
-        ref = asset.bom_ref or asset.name or f"asset-{index}"
         return Finding(
-            id=f"{_PLUGIN_NAME}:{ref}",
-            title=f"{asset.name or 'Unnamed asset'} — {_LABELS.get(verdict.status, 'Unknown')}",
+            id=finding_id,
+            title=f"{name} — {_LABELS.get(verdict.status, 'Unknown')}",
             description=description,
             status=status,
             severity=severity,
