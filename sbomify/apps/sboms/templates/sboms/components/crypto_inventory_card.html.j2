@@ -1,0 +1,69 @@
+{% comment %}
+Lazy-loaded crypto-asset (CBOM) inventory card. Rendered as a standalone HTMX
+partial (no base template) and swapped into its own placeholder. Shows raw
+inventory facts derived from the immutable CycloneDX artifact — no post-quantum
+safe/vulnerable judgment (that is a later, separate increment).
+{% endcomment %}
+<section id="crypto-inventory-card" class="tw-card">
+    <div class="px-6 py-4 border-b border-border">
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-lock text-primary"></i>
+            Cryptographic Assets
+            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ crypto_inventory.count }}</span>
+        </h4>
+    </div>
+    <div class="p-6 space-y-6">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="px-4 py-3 rounded-lg bg-border/30 text-center">
+                <div class="text-2xl font-bold text-text">{{ crypto_inventory.count }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Total</div>
+            </div>
+            {% for asset_type, n in crypto_inventory.by_asset_type.items %}
+                <div class="px-4 py-3 rounded-lg bg-info/10 border border-info/20 text-center">
+                    <div class="text-2xl font-bold text-info">{{ n }}</div>
+                    <div class="text-xs text-info uppercase tracking-wide mt-1">{{ asset_type }}</div>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-text-muted border-b border-border">
+                        <th class="py-2 pr-4 font-medium">Asset</th>
+                        <th class="py-2 pr-4 font-medium">Type</th>
+                        <th class="py-2 pr-4 font-medium">Primitive</th>
+                        <th class="py-2 pr-4 font-medium">Parameters</th>
+                        <th class="py-2 pr-4 font-medium">NIST Quantum Level</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in crypto_inventory.assets %}
+                        <tr class="border-b border-border/50">
+                            <td class="py-2 pr-4 font-medium text-text">{{ asset.name|default:"—" }}</td>
+                            <td class="py-2 pr-4">
+                                <span class="tw-badge tw-badge-secondary">{{ asset.asset_type|default:"unknown" }}</span>
+                            </td>
+                            <td class="py-2 pr-4 text-text-muted">{{ asset.primitive|default:"—" }}</td>
+                            <td class="py-2 pr-4 text-text-muted">
+                                {% if asset.algorithm_family %}{{ asset.algorithm_family }}{% endif %}
+                                {% if asset.parameter_set %}{{ asset.parameter_set }}{% endif %}
+                                {% if asset.curve %}· {{ asset.curve }}{% endif %}
+                                {% if not asset.algorithm_family and not asset.parameter_set and not asset.curve %}—{% endif %}
+                            </td>
+                            <td class="py-2 pr-4 text-text-muted">
+                                {% if asset.nist_quantum_security_level is not None %}
+                                    {{ asset.nist_quantum_security_level }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-text-muted m-0">
+            Derived from the CycloneDX document. sbomify does not modify the uploaded artifact.
+        </p>
+    </div>
+</section>

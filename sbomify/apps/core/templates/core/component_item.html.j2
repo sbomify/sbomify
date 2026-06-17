@@ -197,6 +197,10 @@
                     </div>
                 </div>
             {% endif %}
+            {# Cryptographic Assets (CBOM) — lazy-loaded; collapses when there are none #}
+            <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+                 hx-trigger="load"
+                 hx-swap="outerHTML"></div>
             {# Assessment Results Section #}
             {% if assessment_runs %}
                 <div>
