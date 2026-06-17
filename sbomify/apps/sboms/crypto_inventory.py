@@ -81,25 +81,45 @@ def _dict_or_none(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _str_or_none(value: Any) -> str | None:
+    """Coerce a CycloneDX scalar to ``str`` (keep hashable, schema-clean).
+
+    A spec-conformant value is already a string. A scalar (int/float/bool) is
+    stringified so data is not lost. Anything else (dict/list) is dropped to
+    ``None`` — it would be unhashable for ``by_asset_type`` and would violate the
+    ``str | None`` API schema, both of which the module promises never to raise on.
+    """
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):  # bool is an int subclass — fine
+        return str(value)
+    return None
+
+
+def _str_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(str(v) for v in value if isinstance(v, (str, int, float)))
+
+
 def _project_asset(component: dict[str, Any]) -> CryptoAsset:
     crypto = _dict_or_none(component.get("cryptoProperties")) or {}
     algo = _dict_or_none(crypto.get("algorithmProperties")) or {}
-    functions = algo.get("cryptoFunctions")
     return CryptoAsset(
-        name=component.get("name"),
-        bom_ref=component.get("bom-ref"),
-        oid=crypto.get("oid") or component.get("oid"),
-        asset_type=crypto.get("assetType"),
-        primitive=algo.get("primitive"),
-        algorithm_family=algo.get("algorithmFamily"),
-        parameter_set=algo.get("parameterSetIdentifier"),
-        curve=algo.get("curve") or algo.get("ellipticCurve"),
+        name=_str_or_none(component.get("name")),
+        bom_ref=_str_or_none(component.get("bom-ref")),
+        oid=_str_or_none(crypto.get("oid") or component.get("oid")),
+        asset_type=_str_or_none(crypto.get("assetType")),
+        primitive=_str_or_none(algo.get("primitive")),
+        algorithm_family=_str_or_none(algo.get("algorithmFamily")),
+        parameter_set=_str_or_none(algo.get("parameterSetIdentifier")),
+        curve=_str_or_none(algo.get("curve") or algo.get("ellipticCurve")),
         nist_quantum_security_level=_as_int(algo.get("nistQuantumSecurityLevel")),
         classical_security_level=_as_int(algo.get("classicalSecurityLevel")),
-        crypto_functions=tuple(functions) if isinstance(functions, (list, tuple)) else (),
-        mode=algo.get("mode"),
-        padding=algo.get("padding"),
-        execution_environment=algo.get("executionEnvironment"),
+        crypto_functions=_str_tuple(algo.get("cryptoFunctions")),
+        mode=_str_or_none(algo.get("mode")),
+        padding=_str_or_none(algo.get("padding")),
+        execution_environment=_str_or_none(algo.get("executionEnvironment")),
         certificate=_dict_or_none(crypto.get("certificateProperties")),
         protocol=_dict_or_none(crypto.get("protocolProperties")),
         related_material=_dict_or_none(crypto.get("relatedCryptoMaterialProperties")),

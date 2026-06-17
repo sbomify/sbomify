@@ -144,6 +144,8 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
     try:
         document = json.loads(raw)
     except (ValueError, TypeError):
+        # ValueError covers JSONDecodeError and UnicodeDecodeError (non-UTF-8 bytes),
+        # so a corrupt artifact degrades to an empty inventory rather than a 500.
         document = None
 
     inventory = derive_crypto_inventory(document if isinstance(document, dict) else None)

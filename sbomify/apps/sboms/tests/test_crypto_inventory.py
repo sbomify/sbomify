@@ -87,3 +87,32 @@ def test_non_crypto_sbom_yields_empty_inventory():
 def test_handles_empty_or_missing_components():
     assert derive_crypto_inventory({}).count == 0
     assert derive_crypto_inventory({"components": []}).count == 0
+
+
+def test_malformed_field_types_never_raise_and_stay_schema_clean():
+    """Garbage field types must not raise (incl. by_asset_type's Counter) nor break the str|None API schema."""
+    doc = {
+        "components": [
+            {
+                "type": "cryptographic-asset",
+                "name": ["not", "a", "string"],
+                "cryptoProperties": {
+                    "assetType": {"nested": "dict"},  # unhashable -> would break Counter
+                    "algorithmProperties": {
+                        "primitive": ["list"],  # non-str on a str field
+                        "parameterSetIdentifier": 768,  # scalar -> coerced to "768"
+                        "cryptoFunctions": ["keygen", {"x": 1}],  # mixed -> only str-able kept
+                    },
+                },
+            }
+        ]
+    }
+    inv = derive_crypto_inventory(doc)
+    assert inv.count == 1
+    assert inv.by_asset_type == {}  # non-string assetType dropped, no TypeError
+    asset = inv.assets[0]
+    assert asset.asset_type is None
+    assert asset.name is None  # non-string dropped
+    assert asset.primitive is None  # list dropped
+    assert asset.parameter_set == "768"  # scalar coerced to str
+    assert all(isinstance(f, str) for f in asset.crypto_functions)

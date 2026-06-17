@@ -82,3 +82,12 @@ def test_403_for_private_sbom_without_access(sample_sbom: SBOM, mocker: MockerFi
     _mock_s3(mocker, b"{}")
     response = Client().get(_url(sample_sbom.id))  # no session, component is private
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_invalid_utf8_artifact_yields_empty_inventory_not_500(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    # Corrupt (non-UTF-8) bytes must degrade to an empty inventory, never a 500.
+    _mock_s3(mocker, b"\xff\xfe\x00not-valid-utf8")
+    response = _owner_client(sample_sbom).get(_url(sample_sbom.id))
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
