@@ -114,6 +114,9 @@ class CryptoAssetSchema(Schema):
     certificate: dict[str, Any] | None = None
     protocol: dict[str, Any] | None = None
     related_material: dict[str, Any] | None = None
+    pqc_status: str | None = None
+    pqc_reason: str | None = None
+    pqc_data_quality_flag: str | None = None
 
 
 class CryptoInventorySchema(Schema):
@@ -123,6 +126,8 @@ class CryptoInventorySchema(Schema):
     component_id: str
     count: int
     by_asset_type: dict[str, int]
+    pqc_overall: str
+    pqc_counts: dict[str, int]
     assets: list[CryptoAssetSchema]
 
 

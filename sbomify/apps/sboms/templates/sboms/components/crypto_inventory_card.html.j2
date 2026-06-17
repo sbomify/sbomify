@@ -1,3 +1,4 @@
+{% load pqc_extras %}
 {% comment %}
 Lazy-loaded crypto-asset (CBOM) inventory card. Rendered as a standalone HTMX
 partial (no base template) and swapped into its own placeholder. Shows raw
@@ -10,6 +11,9 @@ safe/vulnerable judgment (that is a later, separate increment).
             <i class="fas fa-lock text-primary"></i>
             Cryptographic Assets
             <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ crypto_inventory.count }}</span>
+            <span class="tw-badge tw-badge-{{ crypto_inventory.pqc_overall|pqc_overall_variant }} ml-auto">
+                {{ crypto_inventory.pqc_overall|pqc_overall_label }}
+            </span>
         </h4>
     </div>
     <div class="p-6 space-y-6">
@@ -30,6 +34,7 @@ safe/vulnerable judgment (that is a later, separate increment).
                 <thead>
                     <tr class="text-left text-text-muted border-b border-border">
                         <th class="py-2 pr-4 font-medium">Asset</th>
+                        <th class="py-2 pr-4 font-medium">Quantum readiness</th>
                         <th class="py-2 pr-4 font-medium">Type</th>
                         <th class="py-2 pr-4 font-medium">Primitive</th>
                         <th class="py-2 pr-4 font-medium">Parameters</th>
@@ -40,6 +45,13 @@ safe/vulnerable judgment (that is a later, separate increment).
                     {% for asset in crypto_inventory.assets %}
                         <tr class="border-b border-border/50">
                             <td class="py-2 pr-4 font-medium text-text">{{ asset.name|default:"—" }}</td>
+                            <td class="py-2 pr-4">
+                                <span class="tw-badge tw-badge-{{ asset.pqc_status|pqc_variant }}">{{ asset.pqc_status|pqc_label }}</span>
+                                {% if asset.pqc_data_quality_flag %}
+                                    <i class="fas fa-triangle-exclamation text-warning ml-1"
+                                       title="{{ asset.pqc_data_quality_flag }}"></i>
+                                {% endif %}
+                            </td>
                             <td class="py-2 pr-4">
                                 <span class="tw-badge tw-badge-secondary">{{ asset.asset_type|default:"unknown" }}</span>
                             </td>
