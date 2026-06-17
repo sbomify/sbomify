@@ -1588,6 +1588,16 @@ def list_components(
         if not team_id:
             return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
+        # Route this internal read through can() so a narrow-scoped API token
+        # (e.g. a publish-only CI token) honours its scope: listing components
+        # exposes private workspace data, which a non-read token scope must not
+        # reach. No behaviour change for sessions or full/unscoped tokens —
+        # component:read_internal is the READ_MEMBER tier every current member
+        # already satisfies; it only adds the token action-scope gate.
+        team = Team.objects.filter(id=team_id).first()
+        if team is not None and not can(request, "component:read_internal", team):
+            return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
         components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
