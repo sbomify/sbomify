@@ -138,7 +138,7 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
         return ServiceResult.failure("SBOM file not found", status_code=404)
 
     raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
-    if raw is None:
+    if not raw:  # None or empty body == missing/corrupt artifact (matches download_sbom)
         return ServiceResult.failure("SBOM file not found", status_code=404)
 
     try:

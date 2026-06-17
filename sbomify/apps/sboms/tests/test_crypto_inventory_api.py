@@ -65,8 +65,14 @@ def test_404_for_unknown_sbom(sample_sbom: SBOM, mocker: MockerFixture):  # noqa
 
 
 @pytest.mark.django_db
-def test_404_when_artifact_missing_from_storage(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
-    _mock_s3(mocker, None)
+@pytest.mark.parametrize("payload", [None, b""])
+def test_404_when_artifact_missing_from_storage(
+    sample_sbom: SBOM,  # noqa: F811
+    mocker: MockerFixture,
+    payload: bytes | None,
+):
+    # An empty object body is corruption/absence, not a crypto-free SBOM: 404, not an empty inventory.
+    _mock_s3(mocker, payload)
     response = _owner_client(sample_sbom).get(_url(sample_sbom.id))
     assert response.status_code == 404
 
