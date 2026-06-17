@@ -73,6 +73,7 @@ class TestBuiltinReconciliation:
             "sbom-verification",
             "osv",
             "dependency-track",
+            "pqc-readiness",
         }
         assert set(builtins.values_list("name", flat=True)) == expected_names
 

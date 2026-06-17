@@ -230,6 +230,29 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # PQC Readiness Plugin (post-quantum classification of CBOM crypto assets)
+        from .builtins.pqc import PqcReadinessPlugin
+
+        _register(
+            "pqc-readiness",
+            {
+                "display_name": "Post-Quantum Readiness",
+                "description": (
+                    "Classifies the cryptographic assets in a CycloneDX CBOM for post-quantum "
+                    "readiness. Each algorithm is graded quantum-safe, quantum-vulnerable, or "
+                    "needs-review against NIST guidance (FIPS 203/204/205, NIST IR 8547, NSA "
+                    "CNSA 2.0). Applies only to CBOM artifacts (bom_type 'cbom')."
+                ),
+                "category": "compliance",
+                "version": PqcReadinessPlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.pqc.PqcReadinessPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # Reconcile: disable builtin plugins no longer in codebase
         if not registered_builtin_names:
             return
