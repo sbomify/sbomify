@@ -1,9 +1,9 @@
 {% load pqc_extras %}
 {% comment %}
 Lazy-loaded crypto-asset (CBOM) inventory card. Rendered as a standalone HTMX
-partial (no base template) and swapped into its own placeholder. Shows raw
-inventory facts derived from the immutable CycloneDX artifact — no post-quantum
-safe/vulnerable judgment (that is a later, separate increment).
+partial (no base template) and swapped into its own placeholder. Shows the crypto
+assets derived from the immutable CycloneDX artifact, with each asset's and the
+inventory's overall post-quantum readiness verdict from the pqc module.
 {% endcomment %}
 <section id="crypto-inventory-card" class="tw-card">
     <div class="px-6 py-4 border-b border-border">
