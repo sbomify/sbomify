@@ -3,6 +3,7 @@ from django.urls.resolvers import URLPattern
 from django.views.generic import RedirectView
 
 from sbomify.apps.sboms.views import (
+    ComponentCryptoPostureView,
     SbomCryptoInventoryView,
     SbomDownloadView,
     SbomsTableView,
@@ -76,5 +77,10 @@ urlpatterns: list[URLPattern] = [
         "sbom/<str:sbom_id>/crypto-inventory",
         SbomCryptoInventoryView.as_view(),
         name="sbom_crypto_inventory",
+    ),
+    path(
+        "component/<str:component_id>/crypto-posture",
+        ComponentCryptoPostureView.as_view(),
+        name="component_crypto_posture",
     ),
 ]
