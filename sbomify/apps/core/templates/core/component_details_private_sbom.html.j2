@@ -20,6 +20,10 @@
             <p class="mt-3 text-text-muted">Loading vulnerability trends...</p>
         </div>
     </div>
+    {# Post-Quantum posture — lazy-loaded; collapses when the latest artifact has no crypto assets #}
+    <div hx-get="{% url 'sboms:component_crypto_posture' component_id=component.id %}"
+         hx-trigger="load"
+         hx-swap="outerHTML"></div>
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}

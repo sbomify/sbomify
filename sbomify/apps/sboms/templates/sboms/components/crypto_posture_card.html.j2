@@ -1,0 +1,39 @@
+{% load pqc_extras %}
+{% comment %}
+Lazy-loaded component-level post-quantum posture card (HTMX partial, no base
+template). Summarizes the overall PQC readiness of the component's most recent
+artifact and links through to the per-SBOM cryptographic-asset detail. Renders
+nothing (placeholder collapses) when the latest artifact has no crypto assets.
+{% endcomment %}
+<section id="crypto-posture-card" class="tw-card">
+    <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-2">
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-shield-halved text-primary"></i>
+            Post-Quantum Posture
+        </h4>
+        <span class="tw-badge tw-badge-{{ posture.pqc_overall|pqc_overall_variant }}">
+            {{ posture.pqc_overall|pqc_overall_label }}
+        </span>
+    </div>
+    <div class="p-6 space-y-4">
+        <div class="grid grid-cols-3 gap-3">
+            <div class="px-4 py-3 rounded-lg bg-danger/10 border border-danger/20 text-center">
+                <div class="text-2xl font-bold text-danger">{{ posture.pqc_counts.quantum_vulnerable|default:0 }}</div>
+                <div class="text-xs text-danger uppercase tracking-wide mt-1">Vulnerable</div>
+            </div>
+            <div class="px-4 py-3 rounded-lg bg-warning/10 border border-warning/20 text-center">
+                <div class="text-2xl font-bold text-warning">{{ posture.pqc_counts.review|default:0 }}</div>
+                <div class="text-xs text-warning uppercase tracking-wide mt-1">Review</div>
+            </div>
+            <div class="px-4 py-3 rounded-lg bg-success/10 border border-success/20 text-center">
+                <div class="text-2xl font-bold text-success">{{ posture.pqc_counts.quantum_safe|default:0 }}</div>
+                <div class="text-xs text-success uppercase tracking-wide mt-1">Quantum-safe</div>
+            </div>
+        </div>
+        <a href="{% url 'core:component_item' component_id 'sboms' sbom_id %}"
+           class="text-sm text-primary hover:underline inline-flex items-center gap-1">
+            View {{ posture.count }} cryptographic asset{{ posture.count|pluralize }}
+            <i class="fas fa-arrow-right text-xs"></i>
+        </a>
+    </div>
+</section>

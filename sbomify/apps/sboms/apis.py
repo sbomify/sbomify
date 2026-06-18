@@ -739,6 +739,7 @@ def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     response={200: CryptoInventorySchema, 403: ErrorResponse, 404: ErrorResponse},
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
+@decorate_view(optional_auth)
 def get_sbom_crypto_inventory(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     """Return the derived cryptographic-asset (CBOM) inventory for an SBOM.
 
