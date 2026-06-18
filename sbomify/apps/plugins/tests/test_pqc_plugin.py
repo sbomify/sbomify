@@ -80,6 +80,18 @@ def test_named_algorithm_inside_certificate_still_classified(tmp_path: Path):
     assert finding.status == "fail"  # RSA -> quantum-vulnerable
 
 
+def test_summary_counts_include_info_and_sum_to_total(tmp_path: Path):
+    # A cert produces a status="info" finding; the summary must count it so the
+    # per-status counts sum to total_findings.
+    doc = _cbom(_crypto("RSA-2048", primitive="pke"), _crypto("server-cert", asset_type="certificate"))
+    summary = _assess(doc, tmp_path).summary
+    assert summary.info_count == 1
+    assert (
+        summary.pass_count + summary.fail_count + summary.warning_count + summary.error_count + summary.info_count
+        == summary.total_findings
+    )
+
+
 def test_assess_empty_cbom_warns(tmp_path: Path):
     result = _assess(_cbom(), tmp_path)
     assert result.summary.total_findings == 1

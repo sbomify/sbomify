@@ -22,16 +22,18 @@ class ComponentCryptoPostureView(View):
     """
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
-        latest = SBOM.objects.filter(component_id=component_id).order_by("-created_at").first()
-        if latest is None:
+        latest_id = (
+            SBOM.objects.filter(component_id=component_id).order_by("-created_at").values_list("id", flat=True).first()
+        )
+        if latest_id is None:
             return HttpResponse("")
 
-        result = get_crypto_inventory(request, latest.id)
+        result = get_crypto_inventory(request, latest_id)
         if not result.ok or not (result.value or {}).get("count"):
             return HttpResponse("")
 
         return render(
             request,
             POSTURE_TEMPLATE,
-            {"posture": result.value, "component_id": component_id, "sbom_id": latest.id},
+            {"posture": result.value, "component_id": component_id, "sbom_id": latest_id},
         )

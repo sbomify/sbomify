@@ -10,8 +10,10 @@ from django.test import Client
 from django.urls import reverse
 from pytest_mock.plugin import MockerFixture
 
+from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
 from ..models import SBOM
-from .fixtures import sample_component, sample_sbom  # noqa: F401
+from .fixtures import sample_access_token, sample_component, sample_sbom  # noqa: F401
 from .test_views import setup_test_session
 
 _DATA = Path(__file__).parent / "test_data"
@@ -91,6 +93,19 @@ def test_invalid_utf8_artifact_yields_empty_inventory_not_500(sample_sbom: SBOM,
     response = _owner_client(sample_sbom).get(_url(sample_sbom.id))
     assert response.status_code == 200
     assert response.json()["count"] == 0
+
+
+@pytest.mark.django_db
+def test_personal_access_token_reads_private_inventory(
+    sample_sbom: SBOM,  # noqa: F811
+    sample_access_token,  # noqa: F811
+    mocker: MockerFixture,
+):
+    # auth=None must still honor a PAT (via optional_auth) for private SBOMs — no session, bearer only.
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+    response = Client().get(_url(sample_sbom.id), **get_api_headers(sample_access_token))
+    assert response.status_code == 200
+    assert response.json()["count"] == 6
 
 
 @pytest.mark.django_db

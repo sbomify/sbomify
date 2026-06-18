@@ -165,6 +165,7 @@ class PqcReadinessPlugin(AssessmentPlugin):
             fail_count=sum(1 for f in findings if f.status == "fail"),
             warning_count=sum(1 for f in findings if f.status == "warning"),
             error_count=sum(1 for f in findings if f.status == "error"),
+            info_count=sum(1 for f in findings if f.status == "info"),
         )
 
     def _error_result(self, message: str) -> AssessmentResult:

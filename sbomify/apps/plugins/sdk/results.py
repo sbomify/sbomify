@@ -140,6 +140,7 @@ class AssessmentSummary:
         fail_count: Number of findings with status "fail".
         warning_count: Number of findings with status "warning".
         error_count: Number of findings with status "error".
+        info_count: Number of findings with status "info".
         by_severity: Severity counts dict (e.g., {"critical": 0, "high": 1}).
     """
 
@@ -148,6 +149,7 @@ class AssessmentSummary:
     fail_count: int = 0
     warning_count: int = 0
     error_count: int = 0
+    info_count: int = 0
     by_severity: dict[str, int] | None = None
 
     def to_dict(self) -> dict[str, Any]:

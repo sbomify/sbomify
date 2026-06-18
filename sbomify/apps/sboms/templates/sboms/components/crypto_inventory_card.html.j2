@@ -58,8 +58,14 @@ inventory's overall post-quantum readiness verdict from the pqc module.
                             <td class="py-2 pr-4 text-text-muted">{{ asset.primitive|default:"—" }}</td>
                             <td class="py-2 pr-4 text-text-muted">
                                 {% if asset.algorithm_family %}{{ asset.algorithm_family }}{% endif %}
-                                {% if asset.parameter_set %}{{ asset.parameter_set }}{% endif %}
-                                {% if asset.curve %}· {{ asset.curve }}{% endif %}
+                                {% if asset.parameter_set %}
+                                    {% if asset.algorithm_family %}·{% endif %}
+                                    {{ asset.parameter_set }}
+                                {% endif %}
+                                {% if asset.curve %}
+                                    {% if asset.algorithm_family or asset.parameter_set %}·{% endif %}
+                                    {{ asset.curve }}
+                                {% endif %}
                                 {% if not asset.algorithm_family and not asset.parameter_set and not asset.curve %}—{% endif %}
                             </td>
                             <td class="py-2 pr-4 text-text-muted">
