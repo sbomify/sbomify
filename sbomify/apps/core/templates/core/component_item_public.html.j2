@@ -111,6 +111,12 @@
                 </a>
             </div>
         </div>
+        {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}
+        {% if component.component_type == 'bom' %}
+            <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+                 hx-trigger="load"
+                 hx-swap="outerHTML"></div>
+        {% endif %}
     </div>
 {% endblock %}
 {% block scripts %}

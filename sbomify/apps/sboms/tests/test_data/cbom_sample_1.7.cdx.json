@@ -1,0 +1,18 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "version": 1,
+  "metadata": {"timestamp": "2026-01-01T00:00:00Z", "component": {"type": "application", "name": "demo-app", "version": "2.0"}},
+  "components": [
+    {
+      "type": "cryptographic-asset", "name": "ECDSA-P384", "bom-ref": "c-ecdsa17",
+      "cryptoProperties": {"assetType": "algorithm",
+        "algorithmProperties": {"primitive": "signature", "algorithmFamily": "ecdsa", "ellipticCurve": "secp384r1", "nistQuantumSecurityLevel": 0}}
+    },
+    {
+      "type": "cryptographic-asset", "name": "ML-DSA-65", "bom-ref": "c-mldsa17",
+      "cryptoProperties": {"assetType": "algorithm",
+        "algorithmProperties": {"primitive": "signature", "algorithmFamily": "ml-dsa", "parameterSetIdentifier": "65", "nistQuantumSecurityLevel": 3}}
+    }
+  ]
+}

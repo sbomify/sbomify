@@ -36,6 +36,7 @@ from sbomify.apps.teams.models import ContactProfile
 from .models import SBOM, Component, Product
 from .schemas import (
     ComponentMetaData,
+    CryptoInventorySchema,
     CycloneDXSupportedVersion,
     SBOMResponseSchema,
     SBOMUploadRequest,
@@ -52,7 +53,7 @@ from .schemas import (
     validate_cyclonedx_sbom,
     validate_spdx_sbom,
 )
-from .services.sboms import delete_sbom_record, get_sbom_detail
+from .services.sboms import delete_sbom_record, get_crypto_inventory, get_sbom_detail
 
 log = logging.getLogger(__name__)
 
@@ -727,6 +728,24 @@ def get_cyclonedx_component_metadata(
 def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
     """Get a specific SBOM by ID."""
     result = get_sbom_detail(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
+
+    return 200, result.value or {}
+
+
+@router.get(
+    "/{sbom_id}/crypto-inventory",
+    response={200: CryptoInventorySchema, 403: ErrorResponse, 404: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public SBOMs
+)
+def get_sbom_crypto_inventory(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
+    """Return the derived cryptographic-asset (CBOM) inventory for an SBOM.
+
+    Projects the ``cryptographic-asset`` components of the stored CycloneDX
+    artifact. Non-crypto SBOMs return an empty inventory rather than an error.
+    """
+    result = get_crypto_inventory(request, sbom_id)
     if not result.ok:
         return result.status_code or 400, {"detail": result.error or "Invalid request"}
 

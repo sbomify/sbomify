@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -11,6 +12,7 @@ from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
+from sbomify.apps.sboms.crypto_inventory import CryptoAsset, derive_crypto_inventory
 from sbomify.apps.sboms.models import SBOM
 
 log = logging.getLogger(__name__)
@@ -90,3 +92,69 @@ def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[st
         return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_sbom(sbom))
+
+
+def _serialize_crypto_asset(asset: CryptoAsset) -> dict[str, Any]:
+    return {
+        "name": asset.name,
+        "bom_ref": asset.bom_ref,
+        "oid": asset.oid,
+        "asset_type": asset.asset_type,
+        "primitive": asset.primitive,
+        "algorithm_family": asset.algorithm_family,
+        "parameter_set": asset.parameter_set,
+        "curve": asset.curve,
+        "nist_quantum_security_level": asset.nist_quantum_security_level,
+        "classical_security_level": asset.classical_security_level,
+        "crypto_functions": list(asset.crypto_functions),
+        "mode": asset.mode,
+        "padding": asset.padding,
+        "execution_environment": asset.execution_environment,
+        "certificate": asset.certificate,
+        "protocol": asset.protocol,
+        "related_material": asset.related_material,
+    }
+
+
+def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[str, Any]]:
+    """Derive the cryptographic-asset (CBOM) inventory for an SBOM.
+
+    Reads the immutable artifact from storage and projects its
+    ``cryptographic-asset`` components (ADR-004 — nothing is persisted or
+    mutated). Returns an empty inventory when the artifact carries no crypto
+    assets or is not a parseable CycloneDX document.
+    """
+    try:
+        sbom = SBOM.objects.select_related("component", "component__team").get(pk=sbom_id)
+    except SBOM.DoesNotExist:
+        return ServiceResult.failure("SBOM not found", status_code=404)
+
+    from sbomify.apps.core.services.access_control import check_component_access
+
+    if not check_component_access(request, sbom.component).has_access:
+        return ServiceResult.failure("Forbidden", status_code=403)
+
+    if not sbom.sbom_filename:
+        return ServiceResult.failure("SBOM file not found", status_code=404)
+
+    raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
+    if not raw:  # None or empty body == missing/corrupt artifact (matches download_sbom)
+        return ServiceResult.failure("SBOM file not found", status_code=404)
+
+    try:
+        document = json.loads(raw)
+    except (ValueError, TypeError):
+        # ValueError covers JSONDecodeError and UnicodeDecodeError (non-UTF-8 bytes),
+        # so a corrupt artifact degrades to an empty inventory rather than a 500.
+        document = None
+
+    inventory = derive_crypto_inventory(document if isinstance(document, dict) else None)
+    return ServiceResult.success(
+        {
+            "sbom_id": str(sbom.id),
+            "component_id": str(sbom.component.id),
+            "count": inventory.count,
+            "by_asset_type": inventory.by_asset_type,
+            "assets": [_serialize_crypto_asset(a) for a in inventory.assets],
+        }
+    )

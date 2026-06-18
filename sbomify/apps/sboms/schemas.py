@@ -27,6 +27,8 @@ __all__ = [
     "ComponentMetaData",
     "ComponentMetaDataUpdate",
     "ComponentSupplierContactSchema",
+    "CryptoAssetSchema",
+    "CryptoInventorySchema",
     "CustomLicenseSchema",
     "CycloneDXSupportedVersion",
     "LicenseSchema",
@@ -90,6 +92,38 @@ class SBOMResponseSchema(BaseModel):
     signature_blob_key: str | None = None
     signature_type: str | None = None
     provenance_blob_key: str | None = None
+
+
+class CryptoAssetSchema(Schema):
+    """One ``cryptographic-asset`` component, projected for the CBOM inventory."""
+
+    name: str | None = None
+    bom_ref: str | None = None
+    oid: str | None = None
+    asset_type: str | None = None
+    primitive: str | None = None
+    algorithm_family: str | None = None
+    parameter_set: str | None = None
+    curve: str | None = None
+    nist_quantum_security_level: int | None = None
+    classical_security_level: int | None = None
+    crypto_functions: list[str] = Field(default_factory=list)
+    mode: str | None = None
+    padding: str | None = None
+    execution_environment: str | None = None
+    certificate: dict[str, Any] | None = None
+    protocol: dict[str, Any] | None = None
+    related_material: dict[str, Any] | None = None
+
+
+class CryptoInventorySchema(Schema):
+    """Derived cryptographic-asset inventory (CBOM) for a single SBOM."""
+
+    sbom_id: str
+    component_id: str
+    count: int
+    by_asset_type: dict[str, int]
+    assets: list[CryptoAssetSchema]
 
 
 class DashboardSBOMUploadInfo(Schema):

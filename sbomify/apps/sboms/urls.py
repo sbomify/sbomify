@@ -2,7 +2,12 @@ from django.urls import path
 from django.urls.resolvers import URLPattern
 from django.views.generic import RedirectView
 
-from sbomify.apps.sboms.views import SbomDownloadView, SbomsTableView, SbomVulnerabilitiesView
+from sbomify.apps.sboms.views import (
+    SbomCryptoInventoryView,
+    SbomDownloadView,
+    SbomsTableView,
+    SbomVulnerabilitiesView,
+)
 
 app_name = "sboms"
 urlpatterns: list[URLPattern] = [
@@ -66,5 +71,10 @@ urlpatterns: list[URLPattern] = [
         SbomsTableView.as_view(),
         name="sboms_table_public",
         kwargs={"is_public_view": True},
+    ),
+    path(
+        "sbom/<str:sbom_id>/crypto-inventory",
+        SbomCryptoInventoryView.as_view(),
+        name="sbom_crypto_inventory",
     ),
 ]
