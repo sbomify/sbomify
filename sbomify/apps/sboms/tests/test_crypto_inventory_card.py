@@ -91,6 +91,15 @@ def test_card_visible_on_public_component_to_anonymous(sample_sbom: SBOM, mocker
 
 
 @pytest.mark.django_db
+def test_card_shows_pqc_readiness(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+    html = _owner_client(sample_sbom).get(_card_url(sample_sbom.id)).content.decode()
+    assert "At risk" in html  # overall readiness badge (RSA/ECDSA vulnerable)
+    assert "Vulnerable" in html  # per-asset status
+    assert "Quantum-safe" in html  # ML-KEM
+
+
+@pytest.mark.django_db
 def test_item_page_wires_lazy_placeholder(sample_sbom: SBOM):  # noqa: F811
     """The SBOM item detail page lazy-loads the card via hx-get (no S3 read at page render)."""
     client = _owner_client(sample_sbom)

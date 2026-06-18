@@ -14,6 +14,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.crypto_inventory import CryptoAsset, derive_crypto_inventory
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.sboms.pqc import assess_inventory
 
 log = logging.getLogger(__name__)
 
@@ -149,12 +150,23 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
         document = None
 
     inventory = derive_crypto_inventory(document if isinstance(document, dict) else None)
+    summary = assess_inventory(inventory)
     return ServiceResult.success(
         {
             "sbom_id": str(sbom.id),
             "component_id": str(sbom.component.id),
             "count": inventory.count,
             "by_asset_type": inventory.by_asset_type,
-            "assets": [_serialize_crypto_asset(a) for a in inventory.assets],
+            "pqc_overall": summary.overall,
+            "pqc_counts": summary.counts,
+            "assets": [
+                {
+                    **_serialize_crypto_asset(result.asset),
+                    "pqc_status": result.assessment.status.value,
+                    "pqc_reason": result.assessment.reason,
+                    "pqc_data_quality_flag": result.assessment.data_quality_flag,
+                }
+                for result in summary.results
+            ],
         }
     )

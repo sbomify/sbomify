@@ -91,3 +91,15 @@ def test_invalid_utf8_artifact_yields_empty_inventory_not_500(sample_sbom: SBOM,
     response = _owner_client(sample_sbom).get(_url(sample_sbom.id))
     assert response.status_code == 200
     assert response.json()["count"] == 0
+
+
+@pytest.mark.django_db
+def test_inventory_includes_pqc_classification(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+    body = _owner_client(sample_sbom).get(_url(sample_sbom.id)).json()
+
+    assert body["pqc_overall"] == "at_risk"  # RSA + ECDSA present
+    assert body["pqc_counts"]["quantum_vulnerable"] >= 1
+    by_name = {a["name"]: a for a in body["assets"]}
+    assert by_name["RSA-2048"]["pqc_status"] == "quantum_vulnerable"
+    assert by_name["ML-KEM-768"]["pqc_status"] == "quantum_safe"
