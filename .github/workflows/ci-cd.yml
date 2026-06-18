@@ -628,7 +628,7 @@ jobs:
   publish-cbom-production:
     name: Publish CBOM (production)
     needs: [docker-build]
-    if: startsWith(github.ref, 'refs/tags/v') && vars.CBOM_COMPONENT_ID_PRODUCTION != ''
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.CBOM_COMPONENT_ID_PRODUCTION != ''
     permissions:
       id-token: write
       contents: read

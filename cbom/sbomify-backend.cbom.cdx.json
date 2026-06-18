@@ -96,8 +96,8 @@
           "cryptoFunctions": ["keyderive"]
         }
       },
-      "evidence": {"occurrences": [{"location": "sbomify/settings.py"}]},
-      "description": "Django default password hasher (PBKDF2-HMAC-SHA256); largely vestigial as auth is delegated to Keycloak."
+      "evidence": {"occurrences": [{"location": "sbomify/settings.py#L484"}]},
+      "description": "Django default password hasher (PBKDF2-HMAC-SHA256), implied by django.contrib.auth + AUTH_PASSWORD_VALIDATORS; largely vestigial as auth is delegated to Keycloak."
     },
     {
       "type": "cryptographic-asset",
