@@ -16,6 +16,7 @@ from ninja.security import django_auth
 from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -149,6 +150,9 @@ def get_team_branding(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     if not Member.objects.filter(user=user, team=team).exists():
         logger.warning(f"User {user.username} is not a member of team {team_key}")
         return 403, {"detail": "Forbidden"}
+
+    if not can(request, "workspace:read", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data)
@@ -708,6 +712,10 @@ def list_contact_profiles(request: HttpRequest, team_key: str) -> tuple[int, Any
     if error:
         return error
 
+    assert team is not None  # guaranteed when error is None
+    if not can(request, "workspace:read", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
     # Allow all team members to view contact profiles (for use in component metadata)
     # Exclude component-private profiles as they're managed through component metadata
     profiles = (
@@ -1238,6 +1246,9 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
         return 403, {"detail": "Access denied"}
     if membership.role == "guest":
         return 403, {"detail": "Guest members can only access public pages"}
+
+    if not can(request, "workspace:read", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, _build_team_response(request, team)
 

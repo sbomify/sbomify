@@ -7,6 +7,8 @@ from django.contrib.auth.base_user import AbstractBaseUser
 from django.test import Client
 from django.urls import reverse
 
+from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.access_tokens.utils import create_personal_access_token
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     business_plan,
@@ -15,6 +17,7 @@ from sbomify.apps.billing.tests.fixtures import (  # noqa: F401
     mock_stripe,
     sample_user,
 )
+from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from sbomify.apps.sboms.models import SBOM, Component
 
@@ -90,6 +93,45 @@ def test_get_usage(
 
     assert data["products"] == 1
     assert data["components"] == 1
+
+
+@pytest.mark.django_db
+def test_get_usage_token_scope_gate(
+    client: Client,
+    sample_user: AbstractBaseUser,  # noqa: F811
+    team_with_business_plan: Team,  # noqa: F811
+):
+    """get_usage is a READ_MEMBER action gated by can("workspace:read", team).
+
+    A publish-only token must be rejected (403); a read_only token and a full
+    (unscoped) token must both pass (200). sample_user is already an owner member
+    of the team via the fixture, so only the token scope distinguishes the cases.
+    """
+
+    def tok(scopes: list[str] | None) -> str:
+        token_str = create_personal_access_token(sample_user)
+        AccessToken.objects.create(
+            user=sample_user,
+            encoded_token=token_str,
+            team=team_with_business_plan,
+            scopes=scopes,
+            description="scope-gate test token",
+        )
+        return token_str
+
+    url = f"{reverse('api-1:get_usage')}?team_key={team_with_business_plan.key}"
+
+    pub = tok(["artifact:publish"])
+    response = client.get(url, HTTP_AUTHORIZATION=f"Bearer {pub}")
+    assert response.status_code == 403, response.content
+
+    ro = tok(SCOPE_PRESETS["read_only"])
+    response = client.get(url, HTTP_AUTHORIZATION=f"Bearer {ro}")
+    assert response.status_code == 200, response.content
+
+    full = tok(None)
+    response = client.get(url, HTTP_AUTHORIZATION=f"Bearer {full}")
+    assert response.status_code == 200, response.content
 
 
 @pytest.mark.django_db

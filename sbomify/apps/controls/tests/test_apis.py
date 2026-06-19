@@ -295,6 +295,41 @@ class TestListControls:
 
 
 @pytest.mark.django_db
+class TestTokenReadScope:
+    """A controls read endpoint now routes through can(), so a narrow-scoped
+    token (no read scope) is denied — it previously bypassed the token-scope gate
+    and could enumerate private workspace controls data.
+    """
+
+    def test_list_catalogs_enforces_token_read_scope(self, sample_team_with_owner_member):
+        from django.test import Client
+
+        from sbomify.apps.access_tokens.models import AccessToken
+        from sbomify.apps.access_tokens.utils import create_personal_access_token
+        from sbomify.apps.core.authz import SCOPE_PRESETS
+
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        url = "/api/v1/controls/catalogs/"
+
+        def tok(scopes):
+            s = create_personal_access_token(user)
+            AccessToken.objects.create(user=user, encoded_token=s, description="t", team=team, scopes=scopes)
+            return s
+
+        client = Client()
+        # publish-only token: no read scope -> 403 (was 200 before the fix)
+        pub = tok(["artifact:publish"])
+        assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {pub}").status_code == 403
+        # read-only preset (includes workspace:read) -> 200
+        ro = tok(SCOPE_PRESETS["read_only"])
+        assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {ro}").status_code == 200
+        # unscoped (full) token -> 200, unchanged
+        full = tok(None)
+        assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {full}").status_code == 200
+
+
+@pytest.mark.django_db
 class TestPublicSummary:
     """Test public controls summary endpoint (no auth required)."""
 

@@ -1305,6 +1305,37 @@ def test_team_branding_api_rejects_non_member(
 
 
 @pytest.mark.django_db
+def test_get_team_branding_enforces_token_read_scope(sample_team_with_owner_member: Member):  # noqa: F811
+    """The branding endpoint routes through can(), so a narrow-scoped token (no
+    read scope) is denied — a publish-only token could previously read internal
+    workspace branding it had no scope for.
+    """
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.core.authz import SCOPE_PRESETS
+
+    team = sample_team_with_owner_member.team
+    user = sample_team_with_owner_member.user
+    url = f"/api/v1/workspaces/{team.key}/branding"
+
+    def tok(scopes):
+        s = create_personal_access_token(user)
+        AccessToken.objects.create(user=user, encoded_token=s, description="t", team=team, scopes=scopes)
+        return s
+
+    client = Client()
+    # publish-only token: no read scope -> 403
+    pub = tok(["artifact:publish"])
+    assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {pub}").status_code == 403
+    # read-only preset (includes workspace:read) -> 200
+    ro = tok(SCOPE_PRESETS["read_only"])
+    assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {ro}").status_code == 200
+    # unscoped (full) token -> 200, unchanged
+    full = tok(None)
+    assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {full}").status_code == 200
+
+
+@pytest.mark.django_db
 def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  # noqa: F811
     client = Client()
 
