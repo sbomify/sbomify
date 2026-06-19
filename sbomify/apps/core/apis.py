@@ -2411,6 +2411,13 @@ def get_dashboard_summary(
     if is_internal_member:
         current_user: Any = request.user
         user_teams_qs = Team.objects.filter(member__user=current_user)
+        # A workspace-scoped API token must only see its own workspace's data:
+        # without this, a token bound to workspace A would still aggregate the
+        # user's other workspaces (B, C, …) into the dashboard. Sessions (no
+        # token_team) keep the all-workspaces view.
+        token_team = getattr(request, "token_team", None)
+        if token_team is not None:
+            user_teams_qs = user_teams_qs.filter(id=token_team.id)
         # Route this internal read through can() so a narrow-scoped API token
         # (e.g. a publish-only CI token) honours its scope: the authenticated
         # dashboard aggregates private workspace data, which a non-read token
