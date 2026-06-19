@@ -804,3 +804,23 @@ def test_download_document_default_content_type(
     assert response.status_code == 200
     assert response.content == b"test document content"
     assert response["Content-Type"] == "application/octet-stream"
+
+
+@pytest.mark.django_db
+def test_get_document_denied_for_publish_only_token(sample_document):
+    """get_document runs under PAT auth, so a publish-only token must be denied a
+    private document's metadata (scope gate), not served it."""
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+
+    team = sample_document.component.team
+    owner = Member.objects.filter(team=team, role="owner").first()
+    assert owner is not None
+    token_str = create_personal_access_token(owner.user)
+    AccessToken.objects.create(
+        user=owner.user, encoded_token=token_str, description="publish-only", team=team, scopes=["artifact:publish"]
+    )
+
+    url = reverse("api-1:get_document", kwargs={"document_id": sample_document.id})
+    response = Client().get(url, HTTP_AUTHORIZATION=f"Bearer {token_str}")
+    assert response.status_code == 403

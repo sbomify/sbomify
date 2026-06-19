@@ -84,12 +84,14 @@ def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[st
 
     component = sbom.component
 
-    # Use centralized access control
-    from sbomify.apps.core.services.access_control import check_component_access
+    # Route through the authz front door so a scoped API token's read scope is
+    # honoured — check_component_access alone enforces visibility/NDA but not the
+    # token action-scope (that gate lives in can()). component:access is the ABAC
+    # read action; no change for sessions, anonymous callers, or full/read-only
+    # tokens, only non-read-scoped tokens are newly denied.
+    from sbomify.apps.core.authz import can
 
-    access_result = check_component_access(request, component)
-
-    if not access_result.has_access:
+    if not can(request, "component:access", component).allowed:
         return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_sbom(sbom))
@@ -130,9 +132,12 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
     except SBOM.DoesNotExist:
         return ServiceResult.failure("SBOM not found", status_code=404)
 
-    from sbomify.apps.core.services.access_control import check_component_access
+    # Route through can() so a scoped API token's read scope is honoured (this
+    # endpoint runs optional_auth, so a PAT reaches it). component:access is the
+    # ABAC read action; no change for sessions / full / read-only tokens.
+    from sbomify.apps.core.authz import can
 
-    if not check_component_access(request, sbom.component).has_access:
+    if not can(request, "component:access", sbom.component).allowed:
         return ServiceResult.failure("Forbidden", status_code=403)
 
     if not sbom.sbom_filename:

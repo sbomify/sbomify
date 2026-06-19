@@ -118,3 +118,24 @@ def test_inventory_includes_pqc_classification(sample_sbom: SBOM, mocker: Mocker
     by_name = {a["name"]: a for a in body["assets"]}
     assert by_name["RSA-2048"]["pqc_status"] == "quantum_vulnerable"
     assert by_name["ML-KEM-768"]["pqc_status"] == "quantum_safe"
+
+
+@pytest.mark.django_db
+def test_publish_only_token_denied_private_inventory(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    # optional_auth processes the PAT, so the token scope must be honoured: a
+    # publish-only token must NOT read a private SBOM's crypto inventory.
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.teams.models import Member
+
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+    team = sample_sbom.component.team
+    owner = Member.objects.filter(team=team, role="owner").first()
+    assert owner is not None
+    token_str = create_personal_access_token(owner.user)
+    AccessToken.objects.create(
+        user=owner.user, encoded_token=token_str, description="publish-only", team=team, scopes=["artifact:publish"]
+    )
+
+    response = Client().get(_url(sample_sbom.id), HTTP_AUTHORIZATION=f"Bearer {token_str}")
+    assert response.status_code == 403
