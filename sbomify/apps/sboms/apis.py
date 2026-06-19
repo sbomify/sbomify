@@ -1233,7 +1233,7 @@ def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = Fals
         if not can(request, "sbom:manage", sbom.component):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
     else:
-        if not can(request, "component:access", sbom.component).allowed:
+        if not can(request, "component:access", sbom.component):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
     return sbom
 

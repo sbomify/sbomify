@@ -543,9 +543,16 @@ def test_provenance_download_not_attached(
 
 
 @pytest.mark.django_db
-def test_download_signature_denied_for_publish_only_token(sbom_with_hash: SBOM):
-    """The download endpoints run optional_auth, so a publish-only token must be
-    denied a private SBOM's signature (scope gate), not served it."""
+@pytest.mark.parametrize("artifact", ["signature", "provenance"])
+def test_download_denied_for_publish_only_token(
+    sbom_with_hash: SBOM,
+    mocker: MockerFixture,
+    artifact: str,
+):
+    """Both download endpoints run optional_auth, so a publish-only token must be
+    denied a private SBOM's signature/provenance (scope gate), not served it. The
+    scope check precedes any S3 access, so boto3 is stubbed only as a guard."""
+    mocker.patch("boto3.resource")
     from sbomify.apps.access_tokens.utils import create_personal_access_token
     from sbomify.apps.teams.models import Member
 
@@ -558,7 +565,7 @@ def test_download_signature_denied_for_publish_only_token(sbom_with_hash: SBOM):
     )
 
     client = Client()
-    url = f"/api/v1/sboms/sbom/{sbom_with_hash.id}/signature"
+    url = f"/api/v1/sboms/sbom/{sbom_with_hash.id}/{artifact}"
     response = client.get(url, **get_api_headers(token))
 
     assert response.status_code == 403

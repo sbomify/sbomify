@@ -46,7 +46,7 @@ def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult
     # alone enforces visibility/NDA but not the token action-scope (that gate
     # lives in can()). component:access is the ABAC read action; no change for
     # sessions, anonymous callers, or full/read-only tokens.
-    if not can(request, "component:access", component).allowed:
+    if not can(request, "component:access", component):
         return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_document(document))

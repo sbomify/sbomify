@@ -91,7 +91,7 @@ def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[st
     # tokens, only non-read-scoped tokens are newly denied.
     from sbomify.apps.core.authz import can
 
-    if not can(request, "component:access", component).allowed:
+    if not can(request, "component:access", component):
         return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_sbom(sbom))
@@ -137,7 +137,7 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
     # ABAC read action; no change for sessions / full / read-only tokens.
     from sbomify.apps.core.authz import can
 
-    if not can(request, "component:access", sbom.component).allowed:
+    if not can(request, "component:access", sbom.component):
         return ServiceResult.failure("Forbidden", status_code=403)
 
     if not sbom.sbom_filename:
