@@ -10,6 +10,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.queries import get_team_asset_counts
 from sbomify.apps.core.schemas import ErrorResponse
@@ -67,6 +68,9 @@ def get_usage(request: HttpRequest) -> tuple[int, Any]:
 
         if not team.members.filter(member__user=request.user).exists():
             return 403, {"detail": "You do not have access to this workspace"}
+
+        if not can(request, "workspace:read", team):
+            return 403, {"detail": "Forbidden"}
 
         counts = get_team_asset_counts(str(team.id))
 

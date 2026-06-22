@@ -56,6 +56,7 @@ from sbomify.apps.controls.services.status_service import (
     get_controls_detail,
     upsert_status,
 )
+from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import Product, User
 from sbomify.apps.core.schemas import ErrorResponse
 from sbomify.apps.core.utils import token_to_number
@@ -114,6 +115,9 @@ def list_catalogs(request: HttpRequest, include_inactive: bool = False) -> tuple
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     result = get_all_catalogs(team) if include_inactive else get_active_catalogs(team)
     if not result.ok:
         return 400, ErrorResponse(detail=result.error or "Unknown error")
@@ -239,6 +243,9 @@ def get_catalog(request: HttpRequest, catalog_id: str) -> tuple[int, Any]:
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
     except ControlCatalog.DoesNotExist:
@@ -329,6 +336,9 @@ def export_csv(request: HttpRequest, catalog_id: str, product_id: str | None = N
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
     except ControlCatalog.DoesNotExist:
@@ -363,6 +373,9 @@ def export_summary_csv(request: HttpRequest, catalog_id: str) -> HttpResponse | 
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
     except ControlCatalog.DoesNotExist:
@@ -394,6 +407,9 @@ def list_controls(request: HttpRequest, catalog_id: str, product_id: str | None 
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     try:
         catalog = ControlCatalog.objects.get(id=catalog_id, team=team)
     except ControlCatalog.DoesNotExist:
@@ -518,6 +534,9 @@ def list_control_mappings(request: HttpRequest, control_id: str) -> tuple[int, A
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     try:
         control = Control.objects.select_related("catalog").get(id=control_id, catalog__team=team)
     except Control.DoesNotExist:
@@ -665,6 +684,9 @@ def list_evidence(request: HttpRequest, control_id: str) -> tuple[int, Any]:
         return err
 
     assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
+
     control_status, cs_err = _resolve_control_status(control_id, team)
     if cs_err:
         return cs_err
@@ -803,6 +825,10 @@ def list_automation_mappings(request: HttpRequest) -> tuple[int, Any]:
     team, err = _get_user_team(request)
     if err:
         return err
+
+    assert team is not None
+    if not can(request, "workspace:read", team):
+        return 403, ErrorResponse(detail="Forbidden")
 
     return 200, AutomationMappingSchema(mappings=get_automation_mappings())
 

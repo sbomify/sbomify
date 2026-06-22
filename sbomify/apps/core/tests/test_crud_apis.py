@@ -3181,3 +3181,67 @@ def test_list_components_enforces_token_read_scope(sample_team_with_owner_member
     # unscoped (full) token -> 200, unchanged
     full = tok(None)
     assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {full}").status_code == 200
+
+
+@pytest.mark.django_db
+def test_list_products_enforces_token_read_scope(sample_team_with_owner_member: Member):  # noqa: F811
+    """#1029: the products-list endpoint now routes through can(), so a
+    narrow-scoped token (no read scope) is denied — it previously bypassed the
+    token-scope gate and could enumerate private workspace products.
+    """
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.core.authz import SCOPE_PRESETS
+
+    team = sample_team_with_owner_member.team
+    user = sample_team_with_owner_member.user
+    Product.objects.create(name="scope-gap-private-product", team=team)
+    url = reverse("api-1:list_products")
+
+    def tok(scopes):
+        s = create_personal_access_token(user)
+        AccessToken.objects.create(user=user, encoded_token=s, description="t", team=team, scopes=scopes)
+        return s
+
+    client = Client()
+    # publish-only token: no read scope -> 403 (was 200 before the fix)
+    pub = tok(["artifact:publish"])
+    assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {pub}").status_code == 403
+    # read-only preset (includes product:read) -> 200
+    ro = tok(SCOPE_PRESETS["read_only"])
+    assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {ro}").status_code == 200
+    # unscoped (full) token -> 200, unchanged
+    full = tok(None)
+    assert client.get(url, HTTP_AUTHORIZATION=f"Bearer {full}").status_code == 200
+
+
+@pytest.mark.django_db
+def test_dashboard_summary_scoped_token_sees_only_its_workspace(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """A workspace-bound token's dashboard must aggregate only that workspace —
+    not the user's other workspaces. Without the token_team filter, a token for
+    workspace A would also count workspace B's products/components."""
+    from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.teams.models import Team
+
+    user = sample_team_with_owner_member.user
+    team_a = sample_team_with_owner_member.team
+    team_b = Team.objects.create(name="scope-gap-other-workspace")
+    Member.objects.create(user=user, team=team_b, role="owner")
+
+    Product.objects.create(name="ws-a-product", team=team_a)
+    Product.objects.create(name="ws-b-product-1", team=team_b)
+    Product.objects.create(name="ws-b-product-2", team=team_b)
+
+    # Token bound to workspace A only.
+    token_str = create_personal_access_token(user)
+    AccessToken.objects.create(user=user, encoded_token=token_str, description="ws-a", team=team_a)
+
+    url = reverse("api-1:get_dashboard_summary")
+    resp = Client().get(url, HTTP_AUTHORIZATION=f"Bearer {token_str}")
+    assert resp.status_code == 200
+    # Sanity: workspace B has products that must be excluded from A's token view.
+    assert Product.objects.filter(team=team_b).count() >= 2
+    assert resp.json()["total_products"] == Product.objects.filter(team=team_a).count()

@@ -679,6 +679,16 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         if not team_id:
             return 403, {"detail": "No current team selected", "error_code": ErrorCode.NO_CURRENT_TEAM}
 
+        # Route this internal read through can() so a narrow-scoped API token
+        # (e.g. a publish-only CI token) honours its scope: listing products
+        # exposes private workspace data, which a non-read token scope must not
+        # reach. No behaviour change for sessions or full/unscoped tokens —
+        # product:read is the READ_MEMBER tier every current member already
+        # satisfies; it only adds the token action-scope gate.
+        team = Team.objects.filter(id=team_id).first()
+        if team is not None and not can(request, "product:read", team):
+            return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
         products_queryset = optimize_product_queryset(Product.objects.filter(team_id=team_id))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
@@ -2401,6 +2411,23 @@ def get_dashboard_summary(
     if is_internal_member:
         current_user: Any = request.user
         user_teams_qs = Team.objects.filter(member__user=current_user)
+        # A workspace-scoped API token must only see its own workspace's data:
+        # without this, a token bound to workspace A would still aggregate the
+        # user's other workspaces (B, C, …) into the dashboard. Sessions (no
+        # token_team) keep the all-workspaces view.
+        token_team = getattr(request, "token_team", None)
+        if token_team is not None:
+            user_teams_qs = user_teams_qs.filter(id=token_team.id)
+        # Route this internal read through can() so a narrow-scoped API token
+        # (e.g. a publish-only CI token) honours its scope: the authenticated
+        # dashboard aggregates private workspace data, which a non-read token
+        # scope must not reach. No behaviour change for sessions or
+        # full/unscoped tokens — workspace:read is the READ_MEMBER tier every
+        # current member already satisfies; it only adds the token scope gate.
+        team_id = _get_user_team_id(request)
+        team = Team.objects.filter(id=team_id).first() if team_id else None
+        if team is not None and not can(request, "workspace:read", team):
+            return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
         # Base querysets for the user's teams
         products_qs = Product.objects.filter(team__in=user_teams_qs)
         components_qs = Component.objects.filter(team__in=user_teams_qs)
@@ -2555,6 +2582,17 @@ def list_all_releases(
                             "error_code": ErrorCode.FORBIDDEN,
                         }
 
+                    # Route this internal read through can() so a narrow-scoped
+                    # API token (e.g. a publish-only CI token) honours its scope:
+                    # listing releases of a private product exposes private
+                    # workspace data, which a non-read token scope must not
+                    # reach. No behaviour change for sessions or full/unscoped
+                    # tokens — release:read is the READ_MEMBER tier every current
+                    # member already satisfies; it only adds the token scope gate.
+                    team = Team.objects.filter(id=team_id).first()
+                    if team is not None and not can(request, "release:read", team):
+                        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
                     # Verify the product belongs to the user's team
                     if str(product.team.id) != team_id:
                         return 403, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
@@ -2573,6 +2611,16 @@ def list_all_releases(
                     "detail": "Guest members can only access public pages",
                     "error_code": ErrorCode.FORBIDDEN,
                 }
+
+            # Route this internal read through can() so a narrow-scoped API token
+            # (e.g. a publish-only CI token) honours its scope: listing all team
+            # releases exposes private workspace data, which a non-read token
+            # scope must not reach. No behaviour change for sessions or
+            # full/unscoped tokens — release:read is the READ_MEMBER tier every
+            # current member already satisfies; it only adds the token scope gate.
+            team = Team.objects.filter(id=team_id).first()
+            if team is not None and not can(request, "release:read", team):
+                return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
             # Build the base query for releases belonging to the user's team
             query = Release.objects.filter(product__team_id=team_id).select_related("product")
