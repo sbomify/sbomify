@@ -7,7 +7,7 @@
     "timestamp": "2026-06-22T00:00:00Z",
     "component": {
       "bom-ref": "sbomify-container",
-      "type": "application",
+      "type": "container",
       "name": "Container",
       "description": "sbomify's production container image. VEX justifications for High advisories embedded in the osv-scanner and cosign CLI binaries that are bundled to run the OSV and signature-verification plugins. These are operator tooling invoked as subprocesses on trusted inputs, not sbomify runtime code."
     },
