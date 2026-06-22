@@ -97,13 +97,14 @@ Submitted by user: {user_email} ({user_name})
 Submitted at: {submitted_at}
 """
 
-        # Send email to sales team
+        # Send email to sales team. Reply-to is the prospect so a reply reaches
+        # them rather than bouncing back to the sales inbox.
         sales_email = EmailMessage(
             subject=subject,
             body=message_content,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[settings.ENTERPRISE_SALES_EMAIL],
-            reply_to=[settings.ENTERPRISE_SALES_EMAIL],
+            reply_to=[str(email)] if email else [settings.ENTERPRISE_SALES_EMAIL],
         )
         sales_email.send(fail_silently=False)
 

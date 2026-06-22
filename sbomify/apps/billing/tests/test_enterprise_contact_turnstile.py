@@ -110,3 +110,38 @@ class TestEnterpriseContactTurnstile:
                 
                 # Task should be called
                 assert mock_task.send.called
+
+
+@pytest.mark.django_db
+def test_enterprise_inquiry_replies_to_submitter(settings):
+    """The sales-team notification must reply to the inquirer, not to ourselves,
+    so a reply reaches the prospect instead of the sales inbox."""
+    from django.core import mail
+
+    from sbomify.apps.billing.tasks import send_enterprise_inquiry_email
+
+    mail.outbox = []
+    form_data = {
+        "company_name": "Acme",
+        "company_size_display": "50-100",
+        "industry": "Tech",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "email": "jane@acme.example",
+        "primary_use_case_display": "Compliance",
+        "message": "We need enterprise.",
+        "newsletter_signup": False,
+    }
+
+    send_enterprise_inquiry_email(form_data, is_public=True)
+
+    assert len(mail.outbox) == 2
+    sales_notification, user_confirmation = mail.outbox[0], mail.outbox[1]
+
+    # Notification to the sales team -> reply goes to the prospect.
+    assert sales_notification.to == [settings.ENTERPRISE_SALES_EMAIL]
+    assert sales_notification.reply_to == ["jane@acme.example"]
+
+    # Confirmation to the prospect -> reply still reaches the sales team.
+    assert user_confirmation.to == ["jane@acme.example"]
+    assert user_confirmation.reply_to == [settings.ENTERPRISE_SALES_EMAIL]
