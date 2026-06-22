@@ -1438,3 +1438,30 @@ class TestGuestMemberExclusion:
         
         assert guest_user.email not in member_emails
         assert sample_user.email in member_emails
+
+
+@pytest.mark.django_db
+def test_access_request_notification_replies_to_requester(team_with_business_plan, sample_user, guest_user):
+    """The 'new access request' notification to admins must reply to the requester,
+    not to hello@sbomify.com, so admins reply to the person asking for access."""
+    from django.core import mail
+
+    from sbomify.apps.documents.access_apis import (
+        _notify_admins_of_access_request as notify_api,
+    )
+    from sbomify.apps.documents.views.access_requests import (
+        _notify_admins_of_access_request as notify_view,
+    )
+
+    Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
+    access_request = AccessRequest.objects.create(
+        team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.PENDING
+    )
+
+    for notify in (notify_view, notify_api):
+        mail.outbox = []
+        notify(access_request, team_with_business_plan)
+        assert mail.outbox, "expected an admin notification email"
+        message = mail.outbox[0]
+        assert message.to == [sample_user.email]
+        assert message.reply_to == [guest_user.email]

@@ -211,7 +211,8 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
                     body=render_to_string("documents/emails/access_request_notification.txt", email_context),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     to=[admin_member.user.email],
-                    reply_to=["hello@sbomify.com"],
+                    # Reply-to the requester so an admin's reply reaches them, not our own inbox.
+                    reply_to=[requester_email or "hello@sbomify.com"],
                 )
                 email.attach_alternative(
                     render_to_string("documents/emails/access_request_notification.html.j2", email_context),
