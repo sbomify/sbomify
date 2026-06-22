@@ -1,7 +1,7 @@
 # Base Python version
 ARG PYTHON_VERSION=3.14-slim-trixie@sha256:fb83750094b46fd6b8adaa80f66e2302ecbe45d513f6cece637a841e1025b4ca
 ARG BUILD_ENV=production # Default to production
-ARG OSV_SCANNER_VERSION=v2.3.8
+ARG OSV_SCANNER_VERSION=v2.4.0
 # For releases, see: https://github.com/sigstore/cosign/releases
 # Pin Cosign to a current release to pick up security fixes and ensure reproducible builds.
 ARG COSIGN_VERSION=v3.1.1

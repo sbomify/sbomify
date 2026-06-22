@@ -1,0 +1,54 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-06-22T00:00:00Z",
+    "component": {
+      "bom-ref": "sbomify-frontend-stack",
+      "type": "application",
+      "name": "Frontend Stack",
+      "description": "sbomify's frontend dependency graph (bun.lock). VEX justifications for High/Critical advisories that cannot be remediated by a version bump."
+    },
+    "authors": [
+      {
+        "name": "sbomify maintainers"
+      }
+    ]
+  },
+  "vulnerabilities": [
+    {
+      "id": "GHSA-5c6j-r48x-rmvq",
+      "source": {
+        "name": "GitHub Advisory Database",
+        "url": "https://github.com/advisories/GHSA-5c6j-r48x-rmvq"
+      },
+      "ratings": [
+        {
+          "source": {
+            "name": "GitHub Advisory Database"
+          },
+          "score": 8.1,
+          "severity": "high",
+          "method": "CVSSv31",
+          "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        }
+      ],
+      "description": "Serialize JavaScript is vulnerable to RCE via RegExp.flags and Date.prototype.toISOString() when an attacker-controlled object is passed to serialize(). Fixed in serialize-javascript 7.0.3.",
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "response": [
+          "update"
+        ],
+        "detail": "serialize-javascript is a build-time-only transitive dependency of @rollup/plugin-terser (which pins serialize-javascript ^6.0.1) and workbox-build, used solely to serialize the terser minifier's worker options during `vite build`. It is not bundled into the production browser assets that sbomify ships, so the vulnerable code is not present in the deployed/distributed artifact. The exploit additionally requires serialize() to be called on an attacker-controlled object; the build only serializes sbomify's own trusted terser configuration, so the path is unreachable even at build time. Remediation to 7.0.3 is blocked: 7.x calls crypto.randomUUID() at module load and @rollup/plugin-terser still pins ^6.0.1, so forcing 7.0.3 via an override breaks `vite build`. sbomify will adopt the fix once @rollup/plugin-terser raises its serialize-javascript floor."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/serialize-javascript@6.0.2"
+        }
+      ]
+    }
+  ]
+}
