@@ -35,14 +35,17 @@
           "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H"
         }
       ],
-      "description": "Serialize JavaScript is vulnerable to RCE via RegExp.flags and Date.prototype.toISOString() when an attacker-controlled object is passed to serialize(). Fixed in serialize-javascript 7.0.3.",
+      "cwes": [
+        96
+      ],
+      "description": "serialize-javascript is vulnerable to RCE: RegExp.flags (and Date.prototype.toISOString) are interpolated into the serialized output without escaping, so an attacker who controls an object passed to serialize() can inject JavaScript that runs when the output is later evaluated. Affected <= 7.0.2; fixed in 7.0.3.",
       "analysis": {
         "state": "not_affected",
         "justification": "code_not_present",
         "response": [
           "update"
         ],
-        "detail": "serialize-javascript is a build-time-only transitive dependency of @rollup/plugin-terser (which pins serialize-javascript ^6.0.1) and workbox-build, used solely to serialize the terser minifier's worker options during `vite build`. It is not bundled into the production browser assets that sbomify ships, so the vulnerable code is not present in the deployed/distributed artifact. The exploit additionally requires serialize() to be called on an attacker-controlled object; the build only serializes sbomify's own trusted terser configuration, so the path is unreachable even at build time. Remediation to 7.0.3 is blocked: 7.x calls crypto.randomUUID() at module load and @rollup/plugin-terser still pins ^6.0.1, so forcing 7.0.3 via an override breaks `vite build`. sbomify will adopt the fix once @rollup/plugin-terser raises its serialize-javascript floor."
+        "detail": "serialize-javascript is a build-time-only transitive dependency, reached via vite-plugin-pwa -> workbox-build@7.4.0 -> @rollup/plugin-terser (0.4.x), where it serializes the terser minifier's worker options during `vite build`. It is not bundled into the production browser assets that sbomify ships, so the vulnerable code is not present in the deployed/distributed artifact. Exploitation additionally requires serialize() to receive an attacker-controlled object; the build only serializes sbomify's own trusted terser configuration, so the path is unreachable even at build time. Remediation to 7.0.3 is blocked at the build-tool layer: @rollup/plugin-terser raised its serialize-javascript floor to ^7.0.3 in v1.0.0, but workbox-build@7.4.0 still depends on the @rollup/plugin-terser 0.4.x line (which pins ^6.0.1), so 6.0.2 stays the resolved version. serialize-javascript 7.x also dropped the randombytes dependency in favour of the global Web Crypto API (crypto.getRandomValues) at module load and raised its engines floor to Node >= 20. sbomify will adopt the fix once workbox-build updates its @rollup/plugin-terser dependency."
       },
       "affects": [
         {

@@ -12,9 +12,9 @@ where an upstream fix is expected.
 
 | File | Component | Residual | Justification |
 | --- | --- | --- | --- |
-| `frontend-stack.vex.cdx.json` | Frontend Stack (`bun.lock`) | `serialize-javascript@6.0.2` (GHSA-5c6j-r48x-rmvq) | `code_not_present` — build-time-only minifier dep (`@rollup/plugin-terser` pins `^6.0.1`), not shipped to the browser bundle; 7.0.3 breaks `vite build` (calls `crypto.randomUUID()` at load). |
-| `container.vex.cdx.json` | Container image | 3× `github.com/docker/docker` High in the **osv-scanner** binary | `code_not_reachable` — osv-scanner is run against SBOM/lockfile inputs, never a Docker daemon. |
-| `container.vex.cdx.json` | Container image | Go-stdlib `CVE-2026-42504` MIME DoS in the **cosign** binary | `requires_environment` — cosign contacts only trusted sigstore/OCI endpoints; cosign v3.1.1 is the latest release (built on Go 1.26.3). |
+| `frontend-stack.vex.cdx.json` | Frontend Stack (`bun.lock`) | `serialize-javascript@6.0.2` (GHSA-5c6j-r48x-rmvq) | `code_not_present` — build-time-only minifier dep, not shipped to the browser bundle. 6.x stays resolved because `workbox-build@7.4.0` still pins the `@rollup/plugin-terser` 0.4.x line (which caps serialize-javascript at `^6.0.1`); `@rollup/plugin-terser` 1.0.0+ moves to `^7.0.3` but isn't reachable until workbox-build updates. |
+| `container.vex.cdx.json` | Container image | `CVE-2026-34040` (Moby AuthZ bypass), `CVE-2026-41567` (archive-copy in-container decompressor exec), `CVE-2026-42306` (`docker cp` TOCTOU mount redirect) in the **osv-scanner** binary's indirect `github.com/docker/docker` dep | `code_not_reachable` — all three are Docker **daemon** code paths; osv-scanner is a client/scanner run against SBOM/lockfile inputs and never starts a daemon. |
+| `container.vex.cdx.json` | Container image | Go-stdlib `CVE-2026-42504` (`mime.WordDecoder.DecodeHeader` quadratic-complexity DoS) in the **cosign** binary | `code_not_reachable` — the RFC 2047 email encoded-word decoder is not on cosign's HTTP+JSON path to the registry/Rekor/Fulcio. cosign v3.1.1 (Go 1.26.3) is the latest release; fixed by Go 1.26.4+. |
 
 ## How these are applied
 
