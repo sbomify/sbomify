@@ -9,7 +9,7 @@
       "bom-ref": "sbomify-container",
       "type": "container",
       "name": "Container",
-      "description": "sbomify's production container image. VEX justifications for High advisories embedded in the osv-scanner and cosign CLI binaries that are bundled to run the OSV and signature-verification plugins. These are operator tooling invoked as subprocesses on trusted inputs, not sbomify runtime code."
+      "description": "sbomify's production container image. VEX justifications for High advisories embedded in the osv-scanner and cosign CLI binaries that the OSV and signature-verification plugins invoke as subprocesses. sbomify treats the inputs these tools process (user-uploaded SBOMs, downloaded signature/attestation bundles) as untrusted; each justification below rests on code-path unreachability (Docker-daemon operations or RFC 2047 email decoding that these tools never perform in sbomify's usage), not on input trust."
     },
     "authors": [
       {
