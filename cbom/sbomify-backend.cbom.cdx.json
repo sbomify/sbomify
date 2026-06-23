@@ -1,0 +1,114 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-06-18T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "sbomify-backend",
+      "description": "sbomify Python (Django) backend — Cryptography Bill of Materials"
+    },
+    "properties": [
+      {"name": "cdx:cbom:scope", "value": "first-party cryptographic usage of the sbomify backend"}
+    ]
+  },
+  "components": [
+    {
+      "type": "cryptographic-asset",
+      "name": "RSA-2048",
+      "bom-ref": "crypto/algorithm/rsa-2048",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "oid": "1.2.840.113549.1.1.1",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "parameterSetIdentifier": "2048",
+          "classicalSecurityLevel": 112,
+          "nistQuantumSecurityLevel": 0,
+          "cryptoFunctions": ["verify"]
+        }
+      },
+      "evidence": {"occurrences": [{"location": "sbomify/apps/oidc/utils.py#L279"}]},
+      "description": "RS256 verification of inbound GitHub Actions OIDC tokens (verify-side; key is GitHub's)."
+    },
+    {
+      "type": "cryptographic-asset",
+      "name": "ECDSA-P256",
+      "bom-ref": "crypto/algorithm/ecdsa-p256",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "oid": "1.2.840.10045.4.3.2",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "curve": "P-256",
+          "classicalSecurityLevel": 128,
+          "nistQuantumSecurityLevel": 0,
+          "cryptoFunctions": ["verify"]
+        }
+      },
+      "evidence": {"occurrences": [{"location": "sbomify/apps/plugins/builtins/verification.py#L241"}]},
+      "description": "Sigstore/cosign signature verification of user-uploaded SBOM attestations (ECDSA P-256 + SHA-256)."
+    },
+    {
+      "type": "cryptographic-asset",
+      "name": "HMAC-SHA-256",
+      "bom-ref": "crypto/algorithm/hmac-sha-256",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "mac",
+          "parameterSetIdentifier": "256",
+          "nistQuantumSecurityLevel": 5,
+          "cryptoFunctions": ["tag", "verify"]
+        }
+      },
+      "evidence": {"occurrences": [{"location": "sbomify/apps/access_tokens/utils.py#L83"}]},
+      "description": "HS256 signing/verification of sbomify personal access tokens and OIDC-issued tokens (Django SECRET_KEY)."
+    },
+    {
+      "type": "cryptographic-asset",
+      "name": "SHA-256",
+      "bom-ref": "crypto/algorithm/sha-256",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "oid": "2.16.840.1.101.3.4.2.1",
+        "algorithmProperties": {
+          "primitive": "hash",
+          "parameterSetIdentifier": "256",
+          "nistQuantumSecurityLevel": 2,
+          "cryptoFunctions": ["digest"]
+        }
+      },
+      "evidence": {"occurrences": [{"location": "sbomify/apps/core/object_store.py#L48"}]},
+      "description": "Content-addressing, integrity digests, and dedup/cache keys across storage and SBOM handling."
+    },
+    {
+      "type": "cryptographic-asset",
+      "name": "PBKDF2-HMAC-SHA256",
+      "bom-ref": "crypto/algorithm/pbkdf2-hmac-sha256",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "kdf",
+          "parameterSetIdentifier": "256",
+          "nistQuantumSecurityLevel": 5,
+          "cryptoFunctions": ["keyderive"]
+        }
+      },
+      "evidence": {"occurrences": [{"location": "sbomify/settings.py#L484"}]},
+      "description": "Django default password hasher (PBKDF2-HMAC-SHA256), implied by django.contrib.auth + AUTH_PASSWORD_VALIDATORS; largely vestigial as auth is delegated to Keycloak."
+    },
+    {
+      "type": "cryptographic-asset",
+      "name": "TLS",
+      "bom-ref": "crypto/protocol/tls",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {"type": "tls", "version": "1.3"}
+      },
+      "evidence": {"occurrences": [{"location": "sbomify/apps/core/object_store.py#L13"}]},
+      "description": "TLS for outbound HTTPS (JWKS fetch, package registries) and S3/MinIO transport (boto3, AWS SigV4)."
+    }
+  ]
+}

@@ -568,6 +568,102 @@ jobs:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
 
   # =========================================================================
+  # Publish CBOM (Cryptography Bill of Materials)
+  #
+  # Uploads the committed, hand-maintained CycloneDX 1.6 CBOM
+  # (cbom/sbomify-backend.cbom.cdx.json) that inventories sbomify's own
+  # cryptographic usage. No off-the-shelf tool reliably generates a CBOM for
+  # sbomify's Python-via-wrappers stack (cdxgen detects Java/JS only; IBM
+  # CBOMkit keys on direct pyca/cryptography calls, which sbomify rarely makes),
+  # so the CBOM is maintained as code and CI signs + attests + uploads it via
+  # OIDC trusted publishing, exactly like the source SBOMs above.
+  #
+  # DORMANT until configured: each job runs only when its component repo
+  # variable is set. To enable, create a dedicated CBOM component in the
+  # sbomify workspace, give it an OIDC trusted-publishing binding to this repo,
+  # and set repo variable CBOM_COMPONENT_ID_STAGING / CBOM_COMPONENT_ID_PRODUCTION
+  # (optionally CBOM_PRODUCT_RELEASE_ID_* to tag a product release). A dedicated
+  # component is required because the action uploads with the default bom_type
+  # ("sbom"), which would collide with the Python Stack component's package SBOM.
+  # =========================================================================
+  publish-cbom-staging:
+    name: Publish CBOM (staging)
+    needs: [docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.CBOM_COMPONENT_ID_STAGING != ''
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Determine version
+        id: version
+        uses: ./.github/actions/determine-version
+
+      - name: Upload CBOM
+        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          API_BASE_URL: 'https://stage.sbomify.com'
+          COMPONENT_ID: ${{ vars.CBOM_COMPONENT_ID_STAGING }}
+          COMPONENT_NAME: 'Cryptography (CBOM)'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          SBOM_FILE: 'cbom/sbomify-backend.cbom.cdx.json'
+          PRODUCT_RELEASE: ${{ vars.CBOM_PRODUCT_RELEASE_ID_STAGING != '' && format('["{0}:{1}"]', vars.CBOM_PRODUCT_RELEASE_ID_STAGING, steps.version.outputs.version) || '' }}
+          SBOM_FORMAT: cyclonedx
+          AUGMENT: false
+          ENRICH: false
+          UPLOAD: true
+          OUTPUT_FILE: 'cbom-out.cdx.json'
+
+      - name: Attest CBOM
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: '${{ github.workspace }}/cbom-out.cdx.json'
+
+  publish-cbom-production:
+    name: Publish CBOM (production)
+    needs: [docker-build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.CBOM_COMPONENT_ID_PRODUCTION != ''
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Determine version
+        id: version
+        uses: ./.github/actions/determine-version
+
+      - name: Upload CBOM
+        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
+        env:
+          COMPONENT_ID: ${{ vars.CBOM_COMPONENT_ID_PRODUCTION }}
+          COMPONENT_NAME: 'Cryptography (CBOM)'
+          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
+          SBOM_FILE: 'cbom/sbomify-backend.cbom.cdx.json'
+          PRODUCT_RELEASE: ${{ vars.CBOM_PRODUCT_RELEASE_ID_PRODUCTION != '' && format('["{0}:{1}"]', vars.CBOM_PRODUCT_RELEASE_ID_PRODUCTION, steps.version.outputs.version) || '' }}
+          SBOM_FORMAT: cyclonedx
+          AUGMENT: false
+          ENRICH: false
+          UPLOAD: true
+          OUTPUT_FILE: 'cbom-out.cdx.json'
+
+      - name: Attest CBOM
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: '${{ github.workspace }}/cbom-out.cdx.json'
+
+  # =========================================================================
   # Generate Container SBOMs (Staging) - master branch only
   # =========================================================================
   generate-container-sboms-staging:
