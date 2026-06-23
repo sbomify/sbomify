@@ -605,6 +605,14 @@ def setup_browser_session(
     sample_user: AbstractBaseUser,
     team: Team,
 ) -> dict[str, Any]:
+    # A team with an active business subscription has finished plan selection.
+    # The shared fixture leaves ``has_selected_billing_plan`` at its model
+    # default (False), which makes the dashboard (and other authenticated
+    # pages) redirect into the onboarding plan-selection wizard mid-recording.
+    if not team.has_selected_billing_plan:
+        team.has_selected_billing_plan = True
+        team.save(update_fields=["has_selected_billing_plan"])
+
     django_client = Client()
     setup_authenticated_client_session(django_client, team, sample_user)
 

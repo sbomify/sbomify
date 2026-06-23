@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest
@@ -143,7 +144,15 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
     if not sbom.sbom_filename:
         return ServiceResult.failure("SBOM file not found", status_code=404)
 
-    raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
+    try:
+        raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
+    except (BotoCoreError, ClientError):
+        # The posture card is best-effort and lazy-loaded after page render
+        # (ComponentCryptoPostureView). An unreachable or erroring object store
+        # must collapse the card, not surface a 500 — the global HTMX handler
+        # would otherwise render the 500 as an error toast over the page.
+        log.warning("Crypto inventory: object store unavailable for SBOM %s", sbom_id, exc_info=True)
+        return ServiceResult.failure("SBOM file unavailable", status_code=503)
     if not raw:  # None or empty body == missing/corrupt artifact (matches download_sbom)
         return ServiceResult.failure("SBOM file not found", status_code=404)
 
