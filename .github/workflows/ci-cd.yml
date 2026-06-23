@@ -666,10 +666,11 @@ jobs:
   # =========================================================================
   # Publish VEX (Vulnerability Exploitability eXchange)
   #
-  # Uploads the committed CycloneDX 1.6 VEX documents (vex/*.cdx.json, produced
-  # by `manage.py generate_self_vex` from the curated vex/justifications.yaml
-  # ledger) as bom_type=vex artifacts on the components their justifications
-  # cover. The sbomify-action cannot set a bom_type, so these upload via a direct
+  # Uploads the committed, hand-maintained CycloneDX 1.6 VEX documents
+  # (vex/*.vex.cdx.json, maintained directly like the CBOM and validated by the
+  # check_self_vex test) as bom_type=vex artifacts on the components their
+  # justifications cover. The sbomify-action cannot set a bom_type, so these
+  # upload via a direct
   # API POST with ?bom_type=vex (per the sbomify VEX FAQ), authenticated by the
   # same OIDC trusted-publishing exchange the SBOM/CBOM jobs use.
   #

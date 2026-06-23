@@ -4,6 +4,7 @@
   "specVersion": "1.6",
   "version": 1,
   "metadata": {
+    "timestamp": "2026-06-23T00:00:00Z",
     "component": {
       "bom-ref": "sbomify-container",
       "type": "container",
