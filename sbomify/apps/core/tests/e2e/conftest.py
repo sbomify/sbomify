@@ -21,6 +21,7 @@ from sbomify.apps.core.tests.e2e.utils import (
     take_screenshot as _take_screenshot,
     BROWSER_WIDTH,
     BROWSER_HEIGHT,
+    SNAPSHOT_DIFF_THRESHOLD,
 )
 
 
@@ -126,7 +127,7 @@ class SnapshotMixin:
         self,
         baseline_image_path: str | Path,
         current_image_path: str | Path,
-        threshold: float = 0.0,
+        threshold: float = SNAPSHOT_DIFF_THRESHOLD,
     ) -> None:
         _assert_screenshot(baseline_image_path, current_image_path, threshold)
 
