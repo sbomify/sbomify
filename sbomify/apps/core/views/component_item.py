@@ -145,7 +145,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 .first()
             )
             if latest_scan:
-                result_json = latest_scan.result or {}
+                from sbomify.apps.vulnerability_scanning.vex import apply_vex_suppression, load_vex_suppressions
+
+                suppressions = load_vex_suppressions(component_id_from_item)
+                result_json = apply_vex_suppression(latest_scan.result or {}, suppressions) or {}
                 summary = result_json.get("summary", {})
                 by_severity = summary.get("by_severity", {})
                 vulnerability_summary = {

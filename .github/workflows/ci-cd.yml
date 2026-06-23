@@ -680,10 +680,9 @@ jobs:
   #
   # DORMANT until opted in: runs only when repo variable PUBLISH_VEX == 'true'.
   #
-  # NOTE: publishing the VEX stores and exposes it (API + trust center) but does
-  # not yet suppress dashboard findings. sbomify's scanners skip bom_type=vex and
-  # nothing applies the analysis to Dependency-Track; consumption is tracked
-  # separately.
+  # Once uploaded, a component's bom_type=vex artifact suppresses its not_affected
+  # findings from the vulnerability dashboard (applied at read time in
+  # vulnerability_scanning/vex.py, provider-agnostic, never mutating the scan).
   # =========================================================================
   publish-vex-staging:
     name: Publish VEX (staging, ${{ matrix.name }})

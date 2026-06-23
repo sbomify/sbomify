@@ -44,10 +44,16 @@ uv run python manage.py check_self_vex --findings scan.json  # + un-triaged gate
 
 The validation runs in CI through the test suite (it loads these exact files).
 
+## Consumption
+
+Uploading a `bom_type=vex` artifact to a component suppresses its `not_affected`
+findings from the vulnerability dashboard. Suppression is applied at read time
+(`vulnerability_scanning/vex.py`), provider-agnostic (OSV and Dependency-Track),
+and never mutates the stored scan result (ADR-004). A finding matches a statement
+when their vulnerability ids (or aliases) intersect and they name the same package,
+so a different package hit by the same CVE is not over-suppressed.
+
 ## Publishing
 
 `.github/scripts/publish-vex.sh` uploads each document to its component as
 `bom_type=vex` via OIDC trusted publishing (the gated `publish-vex` CI jobs).
-Publishing stores and exposes the VEX (API + trust center) but does not yet
-suppress dashboard findings; sbomify's scanners skip `bom_type=vex` and nothing
-applies the analysis to Dependency-Track. Consumption is tracked separately.
