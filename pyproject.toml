@@ -13,7 +13,7 @@ dependencies = [
     "django-extensions~=4.1",
     "django-widget-tweaks>=1.5.0,<2",
     "django-ratelimit>=4.1,<5",
-    "pyjwt>=2.12.0,<3",
+    "pyjwt>=2.13.0,<3",
     "pydantic>=2.11.9,<3",
     "django-anymail[sendgrid]~=15.0",
     "whitenoise>=6.11.0,<7",
@@ -109,7 +109,7 @@ default-groups = [
 ]
 
 override-dependencies = [
-    "cryptography>=46.0.7",
+    "cryptography>=49.0.0",
     "pillow>=12.2.0",
     "pygments>=2.20.0",
     "rfc3161-client>=1.0.6",
