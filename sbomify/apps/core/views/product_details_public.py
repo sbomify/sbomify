@@ -91,10 +91,10 @@ def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: 
             annotated_artifacts_count=Count("artifacts"),
             annotated_has_sboms=Exists(ReleaseArtifact.objects.filter(release=OuterRef("pk"), sbom__isnull=False)),
         )
-        # ``name`` is the final tiebreaker (it's the model's default ordering):
-        # releases created in the same instant — e.g. seeded together, or the
-        # frozen clock used by e2e snapshots — otherwise sort arbitrarily, which
-        # reorders the releases table run to run.
+        # ``name`` is a stable final tiebreaker: releases created in the same
+        # instant — e.g. seeded together, or under the frozen clock used by e2e
+        # snapshots — share released_at/created_at and would otherwise sort
+        # arbitrarily, reordering the releases table run to run.
         .order_by("-released_at", "-created_at", "name")[:limit]
     )
 

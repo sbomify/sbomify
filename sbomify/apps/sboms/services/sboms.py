@@ -146,11 +146,18 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
 
     try:
         raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
-    except (BotoCoreError, ClientError):
-        # The posture card is best-effort and lazy-loaded after page render
-        # (ComponentCryptoPostureView). An unreachable or erroring object store
-        # must collapse the card, not surface a 500 — the global HTMX handler
-        # would otherwise render the 500 as an error toast over the page.
+    except ClientError as exc:
+        # A genuinely missing object is "not found" — same as the SBOM download
+        # path — not an outage; don't mask it as a 5xx. Any other client error
+        # (bad bucket, denied) is a real misconfiguration that must surface.
+        if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+            return ServiceResult.failure("SBOM file not found", status_code=404)
+        raise
+    except BotoCoreError:
+        # Connection/timeout errors (an unreachable object store). The posture
+        # card is best-effort and lazy-loaded after page render
+        # (ComponentCryptoPostureView), so collapse it rather than surface a 500
+        # the global HTMX handler would render as an error toast over the page.
         log.warning("Crypto inventory: object store unavailable for SBOM %s", sbom_id, exc_info=True)
         return ServiceResult.failure("SBOM file unavailable", status_code=503)
     if not raw:  # None or empty body == missing/corrupt artifact (matches download_sbom)
