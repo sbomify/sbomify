@@ -540,3 +540,32 @@ def test_provenance_download_not_attached(
 
     assert response.status_code == 404
     assert "No provenance attached" in response.json()["detail"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("artifact", ["signature", "provenance"])
+def test_download_denied_for_publish_only_token(
+    sbom_with_hash: SBOM,
+    mocker: MockerFixture,
+    artifact: str,
+):
+    """Both download endpoints run optional_auth, so a publish-only token must be
+    denied a private SBOM's signature/provenance (scope gate), not served it. The
+    scope check precedes any S3 access, so boto3 is stubbed only as a guard."""
+    mocker.patch("boto3.resource")
+    from sbomify.apps.access_tokens.utils import create_personal_access_token
+    from sbomify.apps.teams.models import Member
+
+    team = sbom_with_hash.component.team
+    owner = Member.objects.filter(team=team, role="owner").first()
+    assert owner is not None
+    token_str = create_personal_access_token(owner.user)
+    token = AccessToken.objects.create(
+        user=owner.user, encoded_token=token_str, description="publish-only", team=team, scopes=["artifact:publish"]
+    )
+
+    client = Client()
+    url = f"/api/v1/sboms/sbom/{sbom_with_hash.id}/{artifact}"
+    response = client.get(url, **get_api_headers(token))
+
+    assert response.status_code == 403

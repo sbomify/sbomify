@@ -1222,7 +1222,9 @@ def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = Fals
     """Look up an SBOM and verify access. Returns SBOM or (status, error_dict).
 
     For write=True (uploads), requires owner/admin via can("sbom:manage", ...).
-    For write=False (downloads), uses check_component_access to support public SBOMs.
+    For write=False (downloads), uses can("component:access", ...): the same
+    visibility/NDA logic as check_component_access plus the API-token scope gate,
+    so public SBOMs stay downloadable while a non-read-scoped token is denied.
     """
     sbom = SBOM.objects.select_related("component", "component__team").filter(pk=sbom_id).first()
     if sbom is None:
@@ -1231,8 +1233,7 @@ def _get_sbom_or_error(request: HttpRequest, sbom_id: str, *, write: bool = Fals
         if not can(request, "sbom:manage", sbom.component):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
     else:
-        access = check_component_access(request, sbom.component)
-        if not access.has_access:
+        if not can(request, "component:access", sbom.component):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
     return sbom
 

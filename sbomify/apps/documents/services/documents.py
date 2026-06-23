@@ -41,12 +41,12 @@ def get_document_detail(request: HttpRequest, document_id: str) -> ServiceResult
 
     component = document.component
 
-    # Use centralized access control
-    from sbomify.apps.core.services.access_control import check_component_access
-
-    access_result = check_component_access(request, component)
-
-    if not access_result.has_access:
+    # Route through the authz front door so a scoped API token's read scope is
+    # honoured — this endpoint runs under PAT auth, and check_component_access
+    # alone enforces visibility/NDA but not the token action-scope (that gate
+    # lives in can()). component:access is the ABAC read action; no change for
+    # sessions, anonymous callers, or full/read-only tokens.
+    if not can(request, "component:access", component):
         return ServiceResult.failure("Forbidden", status_code=403)
 
     return ServiceResult.success(serialize_document(document))
