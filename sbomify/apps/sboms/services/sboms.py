@@ -146,19 +146,20 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
 
     try:
         raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
-    except ClientError as exc:
-        # A genuinely missing object is "not found" — same as the SBOM download
-        # path — not an outage; don't mask it as a 5xx. Any other client error
-        # (bad bucket, denied) is a real misconfiguration that must surface.
-        if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+    except (BotoCoreError, ClientError) as exc:
+        # The posture card is best-effort and lazy-loaded after page render
+        # (ComponentCryptoPostureView / SbomCryptoInventoryView): ANY storage
+        # failure must collapse it, never 500 — a 500 reintroduces the
+        # nondeterministic HTMX error toast and degrades the page on a transient
+        # outage. A genuinely missing object is "not found" (same as the SBOM
+        # download path); everything else — unreachable store, NoSuchBucket,
+        # AccessDenied, bad credentials — is reported as temporarily unavailable.
+        code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else None
+        if code in ("NoSuchKey", "404"):
             return ServiceResult.failure("SBOM file not found", status_code=404)
-        raise
-    except BotoCoreError:
-        # Connection/timeout errors (an unreachable object store). The posture
-        # card is best-effort and lazy-loaded after page render
-        # (ComponentCryptoPostureView), so collapse it rather than surface a 500
-        # the global HTMX handler would render as an error toast over the page.
-        log.warning("Crypto inventory: object store unavailable for SBOM %s", sbom_id, exc_info=True)
+        log.warning(
+            "Crypto inventory: object store error (%s) for SBOM %s", code or "connection", sbom_id, exc_info=True
+        )
         return ServiceResult.failure("SBOM file unavailable", status_code=503)
     if not raw:  # None or empty body == missing/corrupt artifact (matches download_sbom)
         return ServiceResult.failure("SBOM file not found", status_code=404)
