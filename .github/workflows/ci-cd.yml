@@ -664,6 +664,105 @@ jobs:
           subject-path: '${{ github.workspace }}/cbom-out.cdx.json'
 
   # =========================================================================
+  # Publish VEX (Vulnerability Exploitability eXchange)
+  #
+  # Uploads the committed CycloneDX 1.6 VEX documents (vex/*.cdx.json, produced
+  # by `manage.py generate_self_vex` from the curated vex/justifications.yaml
+  # ledger) as bom_type=vex artifacts on the components their justifications
+  # cover. The sbomify-action cannot set a bom_type, so these upload via a direct
+  # API POST with ?bom_type=vex (per the sbomify VEX FAQ), authenticated by the
+  # same OIDC trusted-publishing exchange the SBOM/CBOM jobs use.
+  #
+  # The VEX reuses the existing Frontend Stack / Container components: bom_type=vex
+  # does not collide with their bom_type=sbom package SBOMs, and their OIDC
+  # bindings already authorise this repo, so no dedicated component is needed.
+  #
+  # DORMANT until opted in: runs only when repo variable PUBLISH_VEX == 'true'.
+  #
+  # NOTE: publishing the VEX stores and exposes it (API + trust center) but does
+  # not yet suppress dashboard findings. sbomify's scanners skip bom_type=vex and
+  # nothing applies the analysis to Dependency-Track; consumption is tracked
+  # separately.
+  # =========================================================================
+  publish-vex-staging:
+    name: Publish VEX (staging, ${{ matrix.name }})
+    needs: [docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.PUBLISH_VEX == 'true'
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Frontend Stack
+            component_id: 'Kpj3ZylyBDkb'
+            vex_file: 'vex/frontend-stack.vex.cdx.json'
+          - name: Container
+            component_id: 'odzUCI8r2any'
+            vex_file: 'vex/container.vex.cdx.json'
+    env:
+      API_BASE_URL: 'https://stage.sbomify.com'
+      OIDC_AUDIENCE: 'sbomify.com'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Determine version
+        id: version
+        uses: ./.github/actions/determine-version
+
+      - name: Publish VEX via OIDC
+        env:
+          COMPONENT_ID: ${{ matrix.component_id }}
+          VEX_FILE: ${{ matrix.vex_file }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./.github/scripts/publish-vex.sh
+
+  publish-vex-production:
+    name: Publish VEX (production, ${{ matrix.name }})
+    needs: [docker-build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_VEX == 'true'
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Frontend Stack
+            component_id: 'Kpj3ZylyBDkb'
+            vex_file: 'vex/frontend-stack.vex.cdx.json'
+          - name: Container
+            component_id: 'odzUCI8r2any'
+            vex_file: 'vex/container.vex.cdx.json'
+    env:
+      API_BASE_URL: 'https://app.sbomify.com'
+      OIDC_AUDIENCE: 'sbomify.com'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Determine version
+        id: version
+        uses: ./.github/actions/determine-version
+
+      - name: Publish VEX via OIDC
+        env:
+          COMPONENT_ID: ${{ matrix.component_id }}
+          VEX_FILE: ${{ matrix.vex_file }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./.github/scripts/publish-vex.sh
+
+  # =========================================================================
   # Generate Container SBOMs (Staging) - master branch only
   # =========================================================================
   generate-container-sboms-staging:
