@@ -1,0 +1,157 @@
+# Curated VEX justifications for sbomify's own components.
+#
+# A person edits the judgment fields only: state, justification, response, detail
+# (and the component grouping + purl). The advisory metadata (severity,
+# cvss_vector, cwes, aliases, description) can be hand-filled or refreshed from
+# the OSV API with:
+#
+#   uv run python manage.py generate_self_vex --enrich
+#
+# Generate the CycloneDX 1.6 VEX documents (vex/<key>.vex.cdx.json):
+#
+#   uv run python manage.py generate_self_vex
+#
+# Gate CI against un-triaged findings (exit non-zero if a scan finding has no
+# entry here):
+#
+#   uv run python manage.py generate_self_vex --check scan-findings.json
+#
+# justification must be a CycloneDX impactAnalysisJustification value:
+#   code_not_present, code_not_reachable, requires_configuration,
+#   requires_dependency, requires_environment, protected_by_compiler,
+#   protected_at_runtime, protected_at_perimeter, protected_by_mitigating_control
+version: 1
+components:
+  - key: frontend-stack
+    name: Frontend Stack
+    type: application
+    description: >-
+      sbomify's frontend dependency graph (bun.lock). Justifications for High
+      advisories that cannot be cleared by a version bump.
+    findings:
+      - id: GHSA-5c6j-r48x-rmvq
+        purl: pkg:npm/serialize-javascript@6.0.2
+        severity: high
+        cvss_score: 8.1
+        cvss_vector: CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H
+        cwes: [96]
+        description: >-
+          serialize-javascript is vulnerable to RCE: RegExp.flags (and
+          Date.prototype.toISOString) are interpolated into the output without
+          escaping, so an attacker who controls an object passed to serialize()
+          can inject JavaScript. Affected <= 7.0.2; fixed in 7.0.3.
+        state: not_affected
+        justification: code_not_present
+        response: [update]
+        detail: >-
+          serialize-javascript is a build-time-only transitive dependency
+          (vite-plugin-pwa -> workbox-build@7.4.0 -> @rollup/plugin-terser 0.4.x),
+          used to serialize the terser minifier's worker options during
+          `vite build`. It is not bundled into the production browser assets, so
+          the vulnerable code is not present in the deployed artifact, and the
+          build only serializes sbomify's own trusted terser configuration.
+          @rollup/plugin-terser raised its serialize-javascript floor to ^7.0.3
+          in 1.0.0, but workbox-build@7.4.0 still pins the 0.4.x line; sbomify
+          adopts the fix once workbox-build updates.
+
+  - key: container
+    name: Container
+    type: container
+    description: >-
+      sbomify's production container image. Justifications for High advisories
+      embedded in the osv-scanner and cosign CLI binaries the OSV and
+      signature-verification plugins invoke. sbomify treats the inputs these
+      tools process (user-uploaded SBOMs, downloaded signature bundles) as
+      untrusted; each justification rests on code-path unreachability, not trust.
+    findings:
+      - id: CVE-2026-34040
+        purl: pkg:golang/github.com/docker/docker@v28.5.2+incompatible
+        severity: high
+        cvss_score: 8.8
+        cvss_vector: CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H
+        cwes: [288]
+        aliases: [GHSA-x744-4wpc-v9h2, GO-2026-4887]
+        description: >-
+          Moby/Docker daemon authorization-plugin (AuthZ) bypass via an oversized
+          request body, in github.com/docker/docker/pkg/authorization. Embedded
+          as an indirect Go-module dependency of osv-scanner. Fixed in Docker
+          Engine 29.3.1.
+        state: not_affected
+        justification: code_not_reachable
+        response: [update]
+        detail: >-
+          The vulnerable code is the Docker daemon's server-side AuthZ
+          middleware. docker/docker is an indirect dependency of osv-scanner (via
+          osv-scalibr / go-containerregistry) used only by its container-image
+          scanning paths, which act as a client. osv-scanner never runs a Docker
+          daemon, so the path is unreachable; sbomify uses osv-scanner only for
+          static SBOM/dependency analysis.
+
+      - id: CVE-2026-41567
+        purl: pkg:golang/github.com/docker/docker@v28.5.2+incompatible
+        severity: high
+        cvss_score: 7.2
+        cvss_vector: CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:H/I:H/A:N
+        cwes: [427]
+        aliases: [GHSA-x86f-5xw2-fm2r]
+        description: >-
+          Docker/Moby daemon archive-copy handler (PUT /containers/{id}/archive,
+          `docker cp`) resolves a decompression binary (xz/unpigz) from the
+          running container's filesystem, so a trojanised in-container
+          decompressor can execute with daemon privileges. Embedded as an
+          indirect Go-module dependency of osv-scanner. Fixed in Docker Engine
+          29.5.1 / moby v2.0.0-beta.14.
+        state: not_affected
+        justification: code_not_reachable
+        response: [update]
+        detail: >-
+          A Docker daemon runtime code path (the archive-upload handler spawning
+          an external in-container decompressor), not an image-layer/tar parsing
+          bug. osv-scanner does static dependency/SBOM analysis and never starts a
+          daemon, creates a container, or invokes the archive-copy path, so the
+          function is unreachable in sbomify.
+
+      - id: CVE-2026-42306
+        purl: pkg:golang/github.com/docker/docker@v28.5.2+incompatible
+        severity: high
+        cvss_score: 7.2
+        cvss_vector: CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:N/I:H/A:H
+        cwes: [367, 61]
+        aliases: [GHSA-rg2x-37c3-w2rh]
+        description: >-
+          Race condition (TOCTOU) in the Docker daemon's `docker cp` mount setup
+          (github.com/docker/docker/daemon): a process inside a container can
+          replace the bind-mount destination with a symlink, redirecting the
+          mount to an arbitrary host path. Embedded as an indirect Go-module
+          dependency of osv-scanner. Fixed in Docker Engine 29.5.1 / moby
+          v2.0.0-beta.14.
+        state: not_affected
+        justification: code_not_reachable
+        response: [update]
+        detail: >-
+          Daemon-only TOCTOU mount-setup code reached via `docker cp` /
+          PUT|HEAD /containers/{id}/archive against a live daemon. osv-scanner
+          parses lockfiles/SBOMs and image-layer metadata and never executes the
+          daemon's copy/mount logic, so the path is unreachable in sbomify.
+
+      - id: CVE-2026-42504
+        purl: pkg:golang/stdlib@v1.26.3
+        severity: high
+        aliases: [GO-2026-5038]
+        cwes: [407]
+        description: >-
+          Go standard library `mime` package: quadratic-complexity CPU
+          exhaustion (DoS) in mime.WordDecoder.DecodeHeader when decoding an
+          RFC 2047 MIME header with many invalid encoded-words. Present because
+          the cosign v3.1.1 binary is built with Go 1.26.3 (fixed in Go
+          1.25.11 / 1.26.4).
+        state: not_affected
+        justification: code_not_reachable
+        response: [update]
+        detail: >-
+          mime.WordDecoder.DecodeHeader is the RFC 2047 email encoded-word
+          decoder; it is not on cosign's execution path. cosign's communication
+          with the OCI registry, Rekor, and Fulcio is HTTP+JSON and never decodes
+          RFC 2047 email headers, so the function -- compiled into the binary's
+          stdlib -- is unreachable. cosign v3.1.1 is the latest release; sbomify
+          rebuilds on the next cosign release compiled with Go 1.26.4+.

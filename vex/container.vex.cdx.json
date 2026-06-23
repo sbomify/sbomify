@@ -1,0 +1,170 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "sbomify-container",
+      "type": "container",
+      "name": "Container",
+      "description": "sbomify's production container image. Justifications for High advisories embedded in the osv-scanner and cosign CLI binaries the OSV and signature-verification plugins invoke. sbomify treats the inputs these tools process (user-uploaded SBOMs, downloaded signature bundles) as untrusted; each justification rests on code-path unreachability, not trust."
+    },
+    "authors": [
+      {
+        "name": "sbomify maintainers"
+      }
+    ]
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2026-34040",
+      "description": "Moby/Docker daemon authorization-plugin (AuthZ) bypass via an oversized request body, in github.com/docker/docker/pkg/authorization. Embedded as an indirect Go-module dependency of osv-scanner. Fixed in Docker Engine 29.3.1.",
+      "references": [
+        {
+          "id": "GHSA-x744-4wpc-v9h2",
+          "source": {
+            "name": "OSV"
+          }
+        },
+        {
+          "id": "GO-2026-4887",
+          "source": {
+            "name": "OSV"
+          }
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "CVSSv31",
+          "vector": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:H",
+          "score": 8.8
+        }
+      ],
+      "cwes": [
+        288
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "response": [
+          "update"
+        ],
+        "detail": "The vulnerable code is the Docker daemon's server-side AuthZ middleware. docker/docker is an indirect dependency of osv-scanner (via osv-scalibr / go-containerregistry) used only by its container-image scanning paths, which act as a client. osv-scanner never runs a Docker daemon, so the path is unreachable; sbomify uses osv-scanner only for static SBOM/dependency analysis."
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/github.com/docker/docker@v28.5.2+incompatible"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41567",
+      "description": "Docker/Moby daemon archive-copy handler (PUT /containers/{id}/archive, `docker cp`) resolves a decompression binary (xz/unpigz) from the running container's filesystem, so a trojanised in-container decompressor can execute with daemon privileges. Embedded as an indirect Go-module dependency of osv-scanner. Fixed in Docker Engine 29.5.1 / moby v2.0.0-beta.14.",
+      "references": [
+        {
+          "id": "GHSA-x86f-5xw2-fm2r",
+          "source": {
+            "name": "OSV"
+          }
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "CVSSv31",
+          "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:H/I:H/A:N",
+          "score": 7.2
+        }
+      ],
+      "cwes": [
+        427
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "response": [
+          "update"
+        ],
+        "detail": "A Docker daemon runtime code path (the archive-upload handler spawning an external in-container decompressor), not an image-layer/tar parsing bug. osv-scanner does static dependency/SBOM analysis and never starts a daemon, creates a container, or invokes the archive-copy path, so the function is unreachable in sbomify."
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/github.com/docker/docker@v28.5.2+incompatible"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42306",
+      "description": "Race condition (TOCTOU) in the Docker daemon's `docker cp` mount setup (github.com/docker/docker/daemon): a process inside a container can replace the bind-mount destination with a symlink, redirecting the mount to an arbitrary host path. Embedded as an indirect Go-module dependency of osv-scanner. Fixed in Docker Engine 29.5.1 / moby v2.0.0-beta.14.",
+      "references": [
+        {
+          "id": "GHSA-rg2x-37c3-w2rh",
+          "source": {
+            "name": "OSV"
+          }
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "CVSSv31",
+          "vector": "CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:N/I:H/A:H",
+          "score": 7.2
+        }
+      ],
+      "cwes": [
+        367,
+        61
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "response": [
+          "update"
+        ],
+        "detail": "Daemon-only TOCTOU mount-setup code reached via `docker cp` / PUT|HEAD /containers/{id}/archive against a live daemon. osv-scanner parses lockfiles/SBOMs and image-layer metadata and never executes the daemon's copy/mount logic, so the path is unreachable in sbomify."
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/github.com/docker/docker@v28.5.2+incompatible"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42504",
+      "description": "Go standard library `mime` package: quadratic-complexity CPU exhaustion (DoS) in mime.WordDecoder.DecodeHeader when decoding an RFC 2047 MIME header with many invalid encoded-words. Present because the cosign v3.1.1 binary is built with Go 1.26.3 (fixed in Go 1.25.11 / 1.26.4).",
+      "references": [
+        {
+          "id": "GO-2026-5038",
+          "source": {
+            "name": "OSV"
+          }
+        }
+      ],
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "other"
+        }
+      ],
+      "cwes": [
+        407
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_reachable",
+        "response": [
+          "update"
+        ],
+        "detail": "mime.WordDecoder.DecodeHeader is the RFC 2047 email encoded-word decoder; it is not on cosign's execution path. cosign's communication with the OCI registry, Rekor, and Fulcio is HTTP+JSON and never decodes RFC 2047 email headers, so the function -- compiled into the binary's stdlib -- is unreachable. cosign v3.1.1 is the latest release; sbomify rebuilds on the next cosign release compiled with Go 1.26.4+."
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.26.3"
+        }
+      ]
+    }
+  ]
+}
