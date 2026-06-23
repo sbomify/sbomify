@@ -1,6 +1,7 @@
 import pytest
 from playwright.sync_api import Page
 
+from sbomify.apps.core.models import Component
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 
 
@@ -67,6 +68,12 @@ class TestComponentDetailsPublicSnapshot:
         snapshot,
         width: int,
     ) -> None:
+        # The /public/component/ view forbids PRIVATE components (403), so the
+        # component must be public for the public page to render. Scoped to the
+        # public test so the private snapshot keeps exercising a private component.
+        sbom_component_details.visibility = Component.Visibility.PUBLIC
+        sbom_component_details.save(update_fields=["visibility"])
+
         authenticated_page.goto(f"/public/component/{sbom_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
@@ -82,6 +89,11 @@ class TestComponentDetailsPublicSnapshot:
         snapshot,
         width: int,
     ) -> None:
+        # See note above: the public view 403s PRIVATE components, so flip this
+        # one public for the public-page snapshot only.
+        document_component_details.visibility = Component.Visibility.PUBLIC
+        document_component_details.save(update_fields=["visibility"])
+
         authenticated_page.goto(f"/public/component/{document_component_details.id}/")
         authenticated_page.wait_for_load_state("networkidle")
 
