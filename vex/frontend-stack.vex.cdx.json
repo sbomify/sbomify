@@ -16,6 +16,15 @@
       }
     ]
   },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/serialize-javascript@6.0.2",
+      "type": "library",
+      "name": "serialize-javascript",
+      "purl": "pkg:npm/serialize-javascript@6.0.2",
+      "version": "6.0.2"
+    }
+  ],
   "vulnerabilities": [
     {
       "id": "GHSA-5c6j-r48x-rmvq",

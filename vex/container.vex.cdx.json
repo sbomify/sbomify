@@ -16,6 +16,22 @@
       }
     ]
   },
+  "components": [
+    {
+      "bom-ref": "pkg:golang/github.com/docker/docker@v28.5.2+incompatible",
+      "type": "library",
+      "name": "docker",
+      "purl": "pkg:golang/github.com/docker/docker@v28.5.2+incompatible",
+      "version": "v28.5.2+incompatible"
+    },
+    {
+      "bom-ref": "pkg:golang/stdlib@v1.26.3",
+      "type": "library",
+      "name": "stdlib",
+      "purl": "pkg:golang/stdlib@v1.26.3",
+      "version": "v1.26.3"
+    }
+  ],
   "vulnerabilities": [
     {
       "id": "CVE-2026-34040",
