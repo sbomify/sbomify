@@ -217,7 +217,6 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    if: false  # Temporarily disabled - tests are failing
     runs-on: ubuntu-latest
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
@@ -301,7 +300,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: e2e-test-diffs-${{ matrix.test-group.name }}
+          name: e2e-test-diffs
           path: 'sbomify/apps/*/tests/e2e/__diffs__/*.jpg'
           if-no-files-found: ignore
 

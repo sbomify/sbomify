@@ -4,6 +4,7 @@ import json
 import logging
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest
@@ -143,7 +144,23 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
     if not sbom.sbom_filename:
         return ServiceResult.failure("SBOM file not found", status_code=404)
 
-    raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
+    try:
+        raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
+    except (BotoCoreError, ClientError) as exc:
+        # The posture card is best-effort and lazy-loaded after page render
+        # (ComponentCryptoPostureView / SbomCryptoInventoryView): ANY storage
+        # failure must collapse it, never 500 — a 500 reintroduces the
+        # nondeterministic HTMX error toast and degrades the page on a transient
+        # outage. A genuinely missing object is "not found" (same as the SBOM
+        # download path); everything else — unreachable store, NoSuchBucket,
+        # AccessDenied, bad credentials — is reported as temporarily unavailable.
+        code = exc.response.get("Error", {}).get("Code") if isinstance(exc, ClientError) else None
+        if code in ("NoSuchKey", "404"):
+            return ServiceResult.failure("SBOM file not found", status_code=404)
+        log.warning(
+            "Crypto inventory: object store error (%s) for SBOM %s", code or "connection", sbom_id, exc_info=True
+        )
+        return ServiceResult.failure("SBOM file unavailable", status_code=503)
     if not raw:  # None or empty body == missing/corrupt artifact (matches download_sbom)
         return ServiceResult.failure("SBOM file not found", status_code=404)
 

@@ -91,7 +91,12 @@ def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: 
             annotated_artifacts_count=Count("artifacts"),
             annotated_has_sboms=Exists(ReleaseArtifact.objects.filter(release=OuterRef("pk"), sbom__isnull=False)),
         )
-        .order_by("-released_at", "-created_at")[:limit]
+        # Reuse the model's default ordering (which sorts NULL released_at LAST,
+        # so unreleased rows don't float to the top) and append ``name`` as a
+        # stable tiebreaker: releases sharing a timestamp — seeded together, or
+        # under the frozen clock used by e2e snapshots — would otherwise sort
+        # arbitrarily and reorder the releases table run to run.
+        .order_by(*(Release._meta.ordering or []), "name")[:limit]
     )
 
     public_releases = []

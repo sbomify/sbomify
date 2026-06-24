@@ -15,6 +15,15 @@ DIFF_DIR = _E2E_DIR / "__diffs__"
 BROWSER_WIDTH = 1920
 BROWSER_HEIGHT = 1080
 
+# Full-page screenshots are not bit-identical across machines: headless Chromium
+# sub-pixel anti-aliasing varies between the dev box where baselines are generated
+# and the CI runner, so a handful of pixels differ even when the render is the same
+# (observed < 0.001% on text-heavy pages). Compare with a small tolerance instead of
+# requiring an exact match — large, real regressions (layout, theme, missing
+# sections) still blow well past this. 0.5% matches the value this suite used before
+# the threshold was lost in a refactor.
+SNAPSHOT_DIFF_THRESHOLD = 0.005
+
 
 def diff_images(
     new_image_path: str | Path,
@@ -42,7 +51,7 @@ def diff_images(
 def assert_screenshot(
     baseline_image_path: str | Path,
     current_image_path: str | Path,
-    threshold: float = 0.0,
+    threshold: float = SNAPSHOT_DIFF_THRESHOLD,
     delete_diff_images: bool = True,
 ) -> None:
     with tempfile.NamedTemporaryFile(

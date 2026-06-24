@@ -15,9 +15,7 @@ class TestCriticalPaths:
         team = sample_team_with_owner_member.team
 
         # Setup billing plan
-        BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
-        )
+        BillingPlan.objects.create(key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10)
         team.billing_plan = "e2e_plan"
         team.save()
 
@@ -77,9 +75,7 @@ class TestCriticalPaths:
         team = sample_team_with_owner_member.team
 
         # Setup billing plan
-        BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
-        )
+        BillingPlan.objects.create(key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10)
         team.billing_plan = "e2e_plan"
         team.save()
 
@@ -145,9 +141,7 @@ class TestCriticalPaths:
         team = sample_team_with_owner_member.team
 
         # Setup billing plan
-        BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
-        )
+        BillingPlan.objects.create(key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10)
         team.billing_plan = "e2e_plan"
         team.save()
 
@@ -156,22 +150,21 @@ class TestCriticalPaths:
         session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
         session.save()
 
-        # Create a new token - it will redirect to team_tokens
-        response = client.post(reverse("core:settings"), {"description": "Test Token"}, follow=True)
+        # Tokens are workspace-scoped and created via the workspace tokens view.
+        # The view re-renders the tokens list with the new token, so the
+        # description is visible in the response.
+        response = client.post(
+            reverse("teams:team_tokens", kwargs={"team_key": team.key}),
+            {"description": "Test Token"},
+        )
         assert response.status_code == 200
         content = response.content.decode()
-        # The redirect goes to team_tokens which shows the token in a JSON script tag
-        # The token description should be in the JSON data: {"id":"...","description":"Test Token",...}
         assert "Test Token" in content, (
             f"'Test Token' not found in content. Looking for token in team_tokens template. "
             f"Content preview: {content[:1000] if len(content) > 1000 else content}"
         )
 
-        # Verify token appears in list - redirects to team_tokens
-        response = client.get(reverse("core:settings"), follow=True)
-        assert response.status_code == 200
-
-        # Tokens are lazy loaded via HTMX, so we need to fetch the tokens endpoint
+        # Verify token appears in list on a fresh fetch
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
         assert response.status_code == 200
         content = response.content.decode()
@@ -192,9 +185,7 @@ class TestCriticalPaths:
         team = sample_team_with_owner_member.team
 
         # Setup billing plan
-        BillingPlan.objects.create(
-            key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10
-        )
+        BillingPlan.objects.create(key="e2e_plan", name="E2E Test Plan", max_components=10, max_products=10)
         team.billing_plan = "e2e_plan"
         team.save()
 

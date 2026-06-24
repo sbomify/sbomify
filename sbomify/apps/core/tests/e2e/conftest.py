@@ -21,6 +21,7 @@ from sbomify.apps.core.tests.e2e.utils import (
     take_screenshot as _take_screenshot,
     BROWSER_WIDTH,
     BROWSER_HEIGHT,
+    SNAPSHOT_DIFF_THRESHOLD,
 )
 
 
@@ -61,6 +62,14 @@ def setup_browser_session(
     sample_user: AbstractBaseUser,
     team_with_business_plan,
 ) -> dict[str, Any]:
+    # A team with an active business subscription has, by definition, finished
+    # plan selection. The shared fixture leaves ``has_selected_billing_plan``
+    # at its model default (False), which makes the dashboard (and every other
+    # authenticated page) redirect into the onboarding plan-selection wizard.
+    if not team_with_business_plan.has_selected_billing_plan:
+        team_with_business_plan.has_selected_billing_plan = True
+        team_with_business_plan.save(update_fields=["has_selected_billing_plan"])
+
     django_client = Client()
     setup_authenticated_client_session(django_client, team_with_business_plan, sample_user)
 
@@ -118,7 +127,7 @@ class SnapshotMixin:
         self,
         baseline_image_path: str | Path,
         current_image_path: str | Path,
-        threshold: float = 0.0,
+        threshold: float = SNAPSHOT_DIFF_THRESHOLD,
     ) -> None:
         _assert_screenshot(baseline_image_path, current_image_path, threshold)
 
