@@ -51,6 +51,7 @@ class AssessmentSummarySchema(BaseModel):
     info_count: int = 0
     error_count: int = 0
     by_severity: dict[str, int] | None = None
+    suppressed_count: int = 0
 
 
 class AssessmentResultSchema(BaseModel):
