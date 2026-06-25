@@ -837,9 +837,12 @@ else:
     CSRF_COOKIE_SAMESITE = "Strict"
 
     # Defense-in-depth behind Caddy's edge HTTP->HTTPS redirect. Exempt the internal
-    # health check, which is probed over plain HTTP without an X-Forwarded-Proto header.
+    # endpoints, which are probed over plain HTTP (container-to-container, no
+    # X-Forwarded-Proto header): the Django health check, and the on-demand-TLS "ask"
+    # endpoint Caddy hits to decide whether to issue a certificate for a custom/trust
+    # center domain. A 301 here makes Caddy refuse the redirect and deny the cert.
     SECURE_SSL_REDIRECT = True
-    SECURE_REDIRECT_EXEMPT = [r"^UuPha8mu/"]
+    SECURE_REDIRECT_EXEMPT = [r"^UuPha8mu/", r"^api/v1/internal/"]
 
     # HSTS (Caddy sets it at the edge too; harmless to assert at the app for direct hits).
     SECURE_HSTS_SECONDS = 31536000  # 1 year
