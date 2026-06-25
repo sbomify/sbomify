@@ -32,6 +32,7 @@ dependencies = [
     "dramatiq[redis,watch]>=2.0.0,<3",
     "django-redis>=5.0.0",
     "redis>=4.0.0",
+    "requests>=2.32.0,<3",
     "tenacity>=9.1.2,<10",
     "license-expression>=30.4.4,<31",
     "pyyaml>=6.0.2,<7",
