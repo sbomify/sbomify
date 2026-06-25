@@ -1,5 +1,6 @@
 # skip_file  # nosec
 """Tests for internal API endpoints (no auth required - secured at proxy level)."""
+
 from __future__ import annotations
 
 import pytest
@@ -334,3 +335,35 @@ def test_check_domain_allowed_no_auth_required():
     # Should not return 401 (unauthorized) - either 200 or 404
     assert response.status_code in [200, 404]
     assert response.status_code != 401
+
+
+@pytest.mark.django_db
+@override_settings(
+    SECURE_SSL_REDIRECT=True,
+    SECURE_REDIRECT_EXEMPT=[r"^UuPha8mu/", r"^api/v1/internal/"],
+    APP_BASE_URL="https://app.example.com",
+)
+def test_check_domain_allowed_not_redirected_under_ssl_redirect():
+    """Regression for the on-demand TLS ask endpoint (PR #1051).
+
+    Caddy probes this endpoint directly over plain HTTP (container-to-container,
+    no X-Forwarded-Proto header). With SECURE_SSL_REDIRECT=True it must NOT be
+    301-redirected to https — Caddy refuses to follow redirects on the ask
+    endpoint and would deny the certificate. The fix exempts ^api/v1/internal/
+    from SECURE_REDIRECT_EXEMPT.
+
+    The Client is constructed inside the override so SecurityMiddleware compiles
+    the exempt list (done once in __init__) from the overridden settings.
+    """
+    client = Client()
+
+    # Sanity: the override is actually live — a non-exempt path over plain HTTP
+    # is redirected. Without this, a stale middleware instance reading
+    # SECURE_SSL_REDIRECT=False would make the assertion below pass vacuously.
+    redirected = client.get("/", secure=False)
+    assert redirected.status_code in (301, 302)
+    assert redirected.headers["Location"].startswith("https://")
+
+    # The ask endpoint is exempt, so it answers directly instead of redirecting.
+    response = client.get("/api/v1/internal/domains?domain=app.example.com", secure=False)
+    assert response.status_code == 200
