@@ -2777,8 +2777,8 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     except Product.DoesNotExist:
         return 404, {"detail": "Product not found", "error_code": ErrorCode.PRODUCT_NOT_FOUND}
 
-    if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can create releases", "error_code": ErrorCode.FORBIDDEN}
+    if not can(request, "release:create", product):
+        return 403, {"detail": "You do not have permission to create releases", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -3380,8 +3380,11 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
-    if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can manage release artifacts", "error_code": ErrorCode.FORBIDDEN}
+    if not can(request, "release:tag", release.product):
+        return 403, {
+            "detail": "You do not have permission to add artifacts to this release",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent adding artifacts to latest releases
     if release.is_latest:

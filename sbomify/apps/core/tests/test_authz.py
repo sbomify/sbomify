@@ -63,6 +63,13 @@ _MATRIX = {
     "workspace:read": ("team", {"owner": True, "admin": True, "guest": True, "bot": False}),
     "component:administer": ("component", {"owner": True, "admin": False, "guest": False, "bot": False}),
     "product:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": False}),
+    # CI/OIDC publish workflow: a release-cutting bot reads (to check existence),
+    # creates, and tags releases — but cannot rename or delete them. Guests stay
+    # out of create/tag (they may upload artifacts, not cut releases).
+    "release:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": True}),
+    "release:create": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
+    "release:tag": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
+    "release:manage": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
 }
 _CASES = [(a, role, exp[role]) for a, (_res, exp) in _MATRIX.items() for role in ("owner", "admin", "guest", "bot")]
 
