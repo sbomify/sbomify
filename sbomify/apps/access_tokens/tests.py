@@ -763,7 +763,8 @@ def test_create_token_form_maps_scope_presets():
 
     f = CreateAccessTokenForm({"description": "x", "scope": "publish"})
     assert f.is_valid(), f.errors
-    assert f.scopes() == ["artifact:publish"]
+    assert f.scopes() == SCOPE_PRESETS["publish"]
+    assert "release:create" in f.scopes()  # the publish preset covers cutting a release
 
     f = CreateAccessTokenForm({"description": "x", "scope": "read_only"})
     assert f.is_valid(), f.errors

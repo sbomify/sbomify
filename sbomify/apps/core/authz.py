@@ -59,10 +59,23 @@ PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT, ROLE_GUEST)
 guests (so a low-trust member can contribute artifacts without management
 rights)."""
 
+RELEASE_PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+"""Cut and tag a release — the release half of the CI publish workflow. Granted
+to OIDC/CI ``bot`` identities (the action creates a release and tags its uploaded
+artifacts to it) alongside owners and admins. Guests are excluded: they may
+contribute artifacts (``PUBLISH``) but not cut releases. Renaming or deleting a
+release stays the stricter ``MANAGE`` / ``DELETE`` tiers."""
+
 # Order mirrors the predominant call-site literal ``["guest", "owner", "admin"]``
 # (membership is order-independent, but the parity keeps the claim above honest).
 READ_MEMBER: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN)
 """Any workspace member may read internal (non-public) workspace data."""
+
+READ_MEMBER_OR_BOT: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+"""``READ_MEMBER`` plus the CI/OIDC ``bot``: reading releases is part of the
+publish workflow (the action checks whether a release already exists before
+creating it), so a bot must reach release reads that other internal reads still
+deny it."""
 
 
 @dataclass(frozen=True)
@@ -94,6 +107,10 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "release:manage": MANAGE,
     "sbom:manage": MANAGE,
     "document:manage": MANAGE,
+    # release publishing — the CI/OIDC bot's job (create a release, tag artifacts
+    # to it). Owners and admins keep it; bots gain it; guests stay out.
+    "release:create": RELEASE_PUBLISH,
+    "release:tag": RELEASE_PUBLISH,
     # owner-only deletion of domain resources (#468) — stricter than MANAGE
     "product:delete": DELETE,
     "component:delete": DELETE,
@@ -106,7 +123,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "workspace:read": READ_MEMBER,
     "component:read_internal": READ_MEMBER,
     "product:read": READ_MEMBER,
-    "release:read": READ_MEMBER,
+    "release:read": READ_MEMBER_OR_BOT,
     "document:read": READ_MEMBER,
     "sbom:read": READ_MEMBER,
 }
@@ -140,12 +157,17 @@ def is_valid_scope(scope: str) -> bool:
 # drift from the action vocabulary above.
 SCOPE_PRESETS: dict[str, list[str] | None] = {
     "full": None,
-    "publish": ["artifact:publish"],
-    # READ_MEMBER role-based reads plus the ABAC component:access read path, so a
-    # read-only token can still read gated/public components (can() checks scope
-    # before ABAC).
+    # The CI publish workflow the action performs end to end: upload an artifact,
+    # then check / create / tag its release. Without the release actions a
+    # publish-scoped CI token uploads fine but 403s the moment it cuts a release.
+    "publish": ["artifact:publish", "release:read", "release:create", "release:tag"],
+    # Every read action (``<resource>:read`` / ``read_internal``) plus the ABAC
+    # component:access read path, so a read-only token can still read
+    # gated/public components (can() checks scope before ABAC). Keyed on the verb,
+    # not a tier identity, so a read action moving to a bot-inclusive tier (e.g.
+    # release:read) stays in the read-only preset.
     "read_only": sorted(
-        [action for action, tier in _ROLE_ACTIONS.items() if tier == READ_MEMBER] + list(_ABAC_ACTIONS)
+        [action for action in _ROLE_ACTIONS if action.split(":", 1)[1].startswith("read")] + list(_ABAC_ACTIONS)
     ),
 }
 
