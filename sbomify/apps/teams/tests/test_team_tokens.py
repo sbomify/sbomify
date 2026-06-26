@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken
+from sbomify.apps.core.authz import SCOPE_PRESETS
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 from sbomify.apps.core.utils import number_to_random_token
@@ -118,7 +119,7 @@ class TestTeamTokensView:
             {"description": "CI Token", "scope": "publish"},
         )
         tok = AccessToken.objects.get(user=user, description="CI Token")
-        assert tok.scopes == ["artifact:publish"]
+        assert tok.scopes == SCOPE_PRESETS["publish"]
 
     def test_post_invalid_form_returns_error(self, client: Client, sample_team_with_owner_member):
         """Test that POST with invalid form returns error."""
