@@ -510,6 +510,10 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
             },
             "packages": [],
             "relationships": [],
+            # SPDX-native cross-document links to member SBOMs (#357). Populated
+            # per member below; members that can't be linked natively fall back
+            # to a local stub package + download-URL externalRef.
+            "externalDocumentRefs": [],
         }
 
         # Add document describes relationship for the main package
@@ -561,7 +565,10 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
 
+        from sbomify.apps.sboms.utils import spdx2_member_link
+
         package_index = 0
+        doc_ref_index = 0
         for artifact in members:
             sbom_instance = artifact.sbom
 
@@ -576,6 +583,23 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                 sbom_data = json.loads(sbom_path.read_text())
             except (json.JSONDecodeError, Exception) as e:
                 log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            # SPDX-native cross-document link (#357): for an SPDX 2.x member with a
+            # documentNamespace + content hash, link to its real document instead
+            # of flattening it into a local stub. Mixed/CDX members fall through.
+            link = spdx2_member_link(sbom_instance, sbom_data, f"DocumentRef-{doc_ref_index + 1}")
+            if link is not None:
+                doc_ref_index += 1
+                external_document_ref, related = link
+                sbom["externalDocumentRefs"].append(external_document_ref)
+                sbom["relationships"].append(
+                    {
+                        "spdxElementId": main_package_id,
+                        "relatedSpdxElement": related,
+                        "relationshipType": "CONTAINS",
+                    }
+                )
                 continue
 
             # Handle both CycloneDX and SPDX source SBOMs

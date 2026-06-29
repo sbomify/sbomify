@@ -679,6 +679,48 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None
     )
 
 
+def spdx2_member_link(sbom_instance: Any, sbom_data: dict[str, Any], doc_ref_id: str) -> tuple[dict, str] | None:
+    """Native SPDX 2.x cross-document link for an aggregate member.
+
+    Returns ``(external_document_ref, related_spdx_element)`` for SPDX-native
+    linking, or ``None`` when the member can't be linked natively (not an SPDX 2.x
+    document, or missing its ``documentNamespace`` or content checksum) — the
+    caller then falls back to the download-URL stub.
+
+    The aggregate declares ``external_document_ref`` at the top level and points a
+    CONTAINS relationship at ``related_spdx_element`` (``DocumentRef-x:SPDXRef-y``),
+    mirroring how CycloneDX aggregation links members via externalReference. The
+    checksum is the member's CONTENT hash so referential integrity is verifiable.
+    """
+    if not str(sbom_data.get("spdxVersion", "")).startswith("SPDX-2"):
+        return None
+    namespace = sbom_data.get("documentNamespace")
+    checksum = getattr(sbom_instance, "sha256_hash", None)
+    if not namespace or not checksum:
+        return None
+
+    # The element the member document describes: documentDescribes, else the
+    # SPDXRef-DOCUMENT DESCRIBES relationship, else the document itself.
+    described: str | None = None
+    describes = sbom_data.get("documentDescribes")
+    if isinstance(describes, list) and describes:
+        described = describes[0]
+    if described is None:
+        for rel in sbom_data.get("relationships", []):
+            if rel.get("relationshipType") == "DESCRIBES" and rel.get("spdxElementId") == "SPDXRef-DOCUMENT":
+                described = rel.get("relatedSpdxElement")
+                break
+    if described is None:
+        described = "SPDXRef-DOCUMENT"
+
+    external_document_ref = {
+        "externalDocumentId": doc_ref_id,
+        "spdxDocument": namespace,
+        "checksum": {"algorithm": "SHA256", "checksumValue": checksum},
+    }
+    return external_document_ref, f"{doc_ref_id}:{described}"
+
+
 def create_product_external_references(product: Product, user: Any = None) -> list[Any]:
     """Create external references from product links and documents."""
     cdx16 = _get_cyclonedx_model()
