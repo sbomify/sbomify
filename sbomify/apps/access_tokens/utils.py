@@ -40,8 +40,9 @@ def _emit_token_auth_event(
     source_ip: str | None = None,
     attempted_action: str | None = None,
 ) -> None:
-    """Emit one structured token-auth audit event. Never logs the raw token: success
-    carries the token id, failure a non-reversible fingerprint."""
+    """Emit one structured token-auth audit event. Never logs the raw token: every
+    event carries a non-reversible fingerprint, and events with a resolved DB record
+    (success, DB-row expiry) additionally carry the token id."""
     extra = {
         "event": "token_auth",
         "outcome": outcome,
@@ -289,6 +290,13 @@ def get_user_and_token_record(
     try:
         payload = decode_personal_access_token(token)
     except DecodeError as e:
+        # An OIDC JWT past its exp surfaces here as DecodeError raised from
+        # jwt.ExpiredSignatureError — classify it as an expiry (INFO), not a
+        # generic decode failure (WARNING), matching the DB-row expiry path.
+        if isinstance(e.__cause__, jwt.ExpiredSignatureError):
+            log.info("Rejecting JWT-expired token: %s", e)
+            emit("failure", reason="expired")
+            return None, None
         log.warning(f"Failed to decode token: {str(e)}")
         emit("failure", reason="decode")
         return None, None

@@ -904,3 +904,16 @@ def test_token_auth_audit_team_id_null_for_teamless_token(sample_user, caplog): 
     e = _token_auth_events(caplog)[0]
     assert e.outcome == "success"
     assert e.team_id is None
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_oidc_jwt_expiry_is_expired_not_decode(sample_user, caplog):  # noqa: F811
+    """#1058: an OIDC token past its JWT exp audits as reason=expired (INFO), not decode."""
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+
+    expired_oidc = create_personal_access_token(sample_user, expires_at=time() - 100, token_type=TOKEN_TYPE_OIDC)
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(expired_oidc)
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "expired"
