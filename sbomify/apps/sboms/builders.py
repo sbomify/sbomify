@@ -218,11 +218,13 @@ class BaseSBOMBuilder(ABC):
 
         sbom_artifacts = (
             release.artifacts.filter(sbom__isnull=False)
+            # select_related joins the whole sbom -> component -> team FK chain in
+            # one query; a prefetch_related on the same path would just add a
+            # redundant query.
             .select_related("sbom__component", "sbom__component__team")
             # Stable order so a content-addressed aggregate serializes identically
             # across rebuilds (the cache key is the artifact-set fingerprint).
             .order_by("sbom_id")
-            .prefetch_related("sbom__component__team")
         )
         members = [
             artifact
