@@ -680,9 +680,9 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None
 
 
 _SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
-# Local SPDX 2.x element id ("SPDXRef-" + letters/digits/.-); no ':' so it can't
-# corrupt a "DocumentRef-N:SPDXRef-..." external reference.
-_SPDX_LOCAL_REF_RE = re.compile(r"SPDXRef-[A-Za-z0-9.+-]+\Z")
+# Local SPDX 2.x element id: "SPDXRef-" + letters/digits/./- (the spec's idstring
+# set). No ':' so it can't corrupt a "DocumentRef-N:SPDXRef-..." external reference.
+_SPDX_LOCAL_REF_RE = re.compile(r"SPDXRef-[A-Za-z0-9.-]+\Z")
 
 
 def _is_sha256_hex(value: Any) -> bool:
