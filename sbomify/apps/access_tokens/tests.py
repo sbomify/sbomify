@@ -821,6 +821,8 @@ def test_token_auth_audit_success_event(
     assert e.source_ip == "1.2.3.4"
     assert e.attempted_action == "GET /api/x"
     assert e.token_fingerprint and token_str not in caplog.text
+    # The fields must survive the default console formatter (in the message, not just extra).
+    assert "1.2.3.4" in caplog.text and "GET /api/x" in caplog.text
 
 
 @pytest.mark.django_db

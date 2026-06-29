@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import typing
 from time import time
 from typing import Any
@@ -55,11 +56,15 @@ def _emit_token_auth_event(
         "source_ip": source_ip,
         "attempted_action": attempted_action,
     }
+    # The default console formatter renders only %(message)s and drops `extra`, so
+    # serialize the fields into the message as JSON too — otherwise operators see no
+    # detail in container logs. A structured handler can still consume `extra`.
+    detail = json.dumps({k: v for k, v in extra.items() if k != "event"}, default=str)
     # Expected end-of-life (expired) and success are INFO; genuine rejections WARNING.
     if outcome == "success" or reason == "expired":
-        audit_log.info("token_auth %s", reason or outcome, extra=extra)
+        audit_log.info("token_auth %s", detail, extra=extra)
     else:
-        audit_log.warning("token_auth failure: %s", reason, extra=extra)
+        audit_log.warning("token_auth %s", detail, extra=extra)
 
 
 # Token-type sentinels embedded in the JWT payload so the decoder can
