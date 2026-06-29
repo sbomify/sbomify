@@ -275,15 +275,19 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
     now = timezone.now()
     throttle = settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS
     cutoff = now - timedelta(seconds=throttle)
+    far_future = now + timedelta(seconds=throttle)
     last_used = access_token_record.last_used_at
-    # "Fresh" = stamped within the throttle window [cutoff, now]. NULL, stale
-    # (< cutoff), AND future-dated (clock skew / manual edit, > now) all need a
-    # refresh — otherwise a future value would freeze the field forever.
-    is_fresh = last_used is not None and cutoff <= last_used <= now
+    # "Fresh" = within [cutoff, far_future]: recently stamped, OR stamped slightly
+    # ahead by a concurrent worker whose clock leads ours (tolerate up to one
+    # window of forward skew so we never write an EARLIER time back over a newer
+    # one). Refresh on NULL, stale (< cutoff), or genuinely-far-future
+    # (> now + window, i.e. a broken clock / manual edit that would otherwise
+    # freeze the field forever).
+    is_fresh = last_used is not None and cutoff <= last_used <= far_future
     if not is_fresh:
         updated = (
             AccessToken.objects.filter(pk=access_token_record.pk)
-            .filter(Q(last_used_at__isnull=True) | Q(last_used_at__lt=cutoff) | Q(last_used_at__gt=now))
+            .filter(Q(last_used_at__isnull=True) | Q(last_used_at__lt=cutoff) | Q(last_used_at__gt=far_future))
             .update(last_used_at=now)
         )
         if updated:

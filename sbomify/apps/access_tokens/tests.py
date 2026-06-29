@@ -894,3 +894,24 @@ def test_last_used_at_refreshed_when_future_dated(sample_user, settings):  # noq
 
     record.refresh_from_db()
     assert record.last_used_at < future  # refreshed to ~now, not stuck in the future
+
+
+@pytest.mark.django_db
+def test_last_used_at_not_clobbered_by_slight_future(sample_user, settings):  # noqa: F811
+    """A value slightly ahead of now (a concurrent worker's lead clock, within the
+    throttle window) is left alone — we must never write an earlier time back."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
+    token_str = create_personal_access_token(sample_user)
+    slightly_ahead = timezone.now() + timedelta(seconds=10)  # within the 300s window
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="t", last_used_at=slightly_ahead
+    )
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at == slightly_ahead  # not clobbered with an earlier time
