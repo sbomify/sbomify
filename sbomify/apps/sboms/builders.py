@@ -568,10 +568,16 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         # Build component packages from release artifacts
         members, fetched = self._members_with_files(release)
 
-        from sbomify.apps.sboms.utils import spdx2_member_link
+        from sbomify.apps.sboms.utils import spdx2_inbound_member_dependencies, spdx2_member_link
 
         package_index = 0
         doc_ref_index = 0
+        # Native-linked members, for the inbound-resolve post-pass (#357): each is
+        # (aggregate ref, content digest, parsed member doc); hash_to_related maps a
+        # member's content hash to its aggregate ref so a member's inbound refs can
+        # resolve to OTHER release members by digest.
+        native_members: list[tuple[str, str, dict[str, Any]]] = []
+        hash_to_related: dict[str, str] = {}
         for artifact in members:
             sbom_instance = artifact.sbom
 
@@ -603,6 +609,8 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                         "relationshipType": "CONTAINS",
                     }
                 )
+                native_members.append((related, sbom_instance.sha256_hash, sbom_data))
+                hash_to_related[sbom_instance.sha256_hash] = related
                 continue
 
             # Handle both CycloneDX and SPDX source SBOMs
@@ -658,6 +666,19 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                     "relationshipType": "CONTAINS",
                 }
             )
+
+        # Inbound resolve (#357): preserve a DEPENDS_ON edge for each cross-document
+        # reference a member declares toward ANOTHER release member, resolved by
+        # SHA-256 digest only (no external fetch). Dedup against existing edges.
+        existing_rels = {
+            (r["spdxElementId"], r["relatedSpdxElement"], r["relationshipType"]) for r in sbom["relationships"]
+        }
+        for member_ref, member_digest, member_data in native_members:
+            for edge in spdx2_inbound_member_dependencies(member_data, member_ref, member_digest, hash_to_related):
+                key = (edge["spdxElementId"], edge["relatedSpdxElement"], edge["relationshipType"])
+                if key not in existing_rels:
+                    existing_rels.add(key)
+                    sbom["relationships"].append(edge)
 
         # Convert dict to Pydantic model for consistent serialization
         return spdx23.SPDXDocument.model_validate(sbom)
@@ -852,7 +873,11 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         # Process release artifacts
         members, fetched = self._members_with_files(release)
 
-        from sbomify.apps.sboms.utils import get_download_url_for_sbom, spdx3_member_import
+        from sbomify.apps.sboms.utils import (
+            get_download_url_for_sbom,
+            spdx3_inbound_member_dependency_uris,
+            spdx3_member_import,
+        )
 
         package_index = 0
         all_element_spdx_ids = [org_spdx_id, tool_spdx_id, main_pkg_spdx_id]
@@ -860,6 +885,10 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         # root-element URIs they point at (referenced from the describes edge).
         import_map: list[dict[str, Any]] = []
         external_member_uris: list[str] = []
+        # Native-linked members for the inbound-resolve post-pass (#357):
+        # (root URI, content digest, parsed doc) + a digest -> root-URI map.
+        native3_members: list[tuple[str, str, dict[str, Any]]] = []
+        hash_to_uri: dict[str, str] = {}
 
         for artifact in members:
             sbom_instance = artifact.sbom
@@ -894,6 +923,8 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
                     import_entry, root_uri = link
                     import_map.append(import_entry)
                     external_member_uris.append(root_uri)
+                    native3_members.append((root_uri, sbom_instance.sha256_hash, sbom_data))
+                    hash_to_uri[sbom_instance.sha256_hash] = root_uri
                     continue
 
             component_info = self._extract_component_info_from_sbom(sbom_data, sbom_path.name)
@@ -944,6 +975,30 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
                 }
             )
             all_element_spdx_ids.append(rel_spdx_id)
+
+        # Inbound resolve (#357): a dependsOn relationship for each cross-document
+        # reference a member declares toward ANOTHER release member, resolved by
+        # SHA-256 digest only (the locationHint URL is never fetched). Deduped.
+        dep_index = 0
+        seen_deps: set[tuple[str, str]] = set()
+        for member_uri, member_digest, member_data in native3_members:
+            for target_uri in spdx3_inbound_member_dependency_uris(member_data, member_digest, hash_to_uri):
+                if target_uri == member_uri or (member_uri, target_uri) in seen_deps:
+                    continue
+                seen_deps.add((member_uri, target_uri))
+                dep_index += 1
+                dep_id = f"{doc_namespace}#SPDXRef-Relationship-dependsOn-{dep_index}"
+                graph.append(
+                    {
+                        "type": "Relationship",
+                        "spdxId": dep_id,
+                        "creationInfo": creation_info_ref,
+                        "relationshipType": "dependsOn",
+                        "from": member_uri,
+                        "to": [target_uri],
+                    }
+                )
+                all_element_spdx_ids.append(dep_id)
 
         # SpdxDocument element inside @graph
         doc_element: dict[str, Any] = {

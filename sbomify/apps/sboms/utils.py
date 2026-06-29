@@ -7,7 +7,7 @@ import logging
 import re
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 from uuid import uuid4
 
 from django.conf import settings
@@ -685,7 +685,7 @@ _SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
 _SPDX_LOCAL_REF_RE = re.compile(r"SPDXRef-[A-Za-z0-9.-]+\Z")
 
 
-def _is_sha256_hex(value: Any) -> bool:
+def _is_sha256_hex(value: Any) -> TypeGuard[str]:
     """True iff ``value`` is a lower-case 64-hex SHA-256 digest string."""
     return isinstance(value, str) and bool(_SHA256_HEX_RE.fullmatch(value))
 
@@ -749,6 +749,44 @@ def spdx2_member_link(
     return external_document_ref, f"{doc_ref_id}:{described}"
 
 
+def spdx2_inbound_member_dependencies(
+    member_sbom_data: dict[str, Any], member_ref: str, member_digest: str, hash_to_ref: dict[str, str]
+) -> list[dict[str, str]]:
+    """DEPENDS_ON edges from a member to OTHER release members it references via its
+    own ``externalDocumentRefs`` (#357 inbound resolve).
+
+    INTERNAL, digest-only: an inbound reference is resolved only when its SHA-256
+    checksum equals another loaded release member's content hash (``hash_to_ref``,
+    keyed by ``SBOM.sha256_hash``). The external ``spdxDocument`` URL is NEVER
+    dereferenced (SSRF / ADR-004); unresolvable refs (SHA-1, off-platform docs)
+    are left out. Edges are emitted as DEPENDS_ON — the relationship an external
+    document reference denotes — without parsing the member's full relationship
+    graph.
+    """
+    edges: list[dict[str, str]] = []
+    refs = member_sbom_data.get("externalDocumentRefs")
+    if not isinstance(refs, list):
+        return edges
+    seen: set[str] = set()
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        checksum = ref.get("checksum")
+        if not isinstance(checksum, dict) or checksum.get("algorithm") != "SHA256":
+            continue
+        digest = checksum.get("checksumValue")
+        if not _is_sha256_hex(digest):
+            continue
+        if digest == member_digest or digest in seen:
+            continue
+        target_ref = hash_to_ref.get(digest)
+        if target_ref is None or target_ref == member_ref:
+            continue
+        seen.add(digest)
+        edges.append({"spdxElementId": member_ref, "relatedSpdxElement": target_ref, "relationshipType": "DEPENDS_ON"})
+    return edges
+
+
 def _spdx3_root_element_uri(elements: Any) -> str | None:
     """The root element URI of an SPDX 3.0 member graph: the SpdxDocument's
     rootElement, else a software_Sbom, else the first software_Package.
@@ -802,6 +840,46 @@ def spdx3_member_import(
         "verifiedUsing": [{"type": "Hash", "algorithm": "sha256", "hashValue": checksum}],
     }
     return import_entry, root_uri
+
+
+def spdx3_inbound_member_dependency_uris(
+    member_sbom_data: dict[str, Any], member_digest: str, hash_to_uri: dict[str, str]
+) -> list[str]:
+    """Root URIs of OTHER release members a member references via its own
+    ``SpdxDocument.import`` ExternalMap entries (#357 inbound resolve, SPDX 3.0).
+
+    INTERNAL, digest-only: an import entry resolves only when one of its
+    ``verifiedUsing`` sha256 hashes equals another loaded member's content hash
+    (``hash_to_uri``, keyed by ``SBOM.sha256_hash``). The ``locationHint`` URL is
+    NEVER dereferenced (SSRF / ADR-004); unresolvable entries are skipped.
+    """
+    elements = member_sbom_data.get("@graph", member_sbom_data.get("elements", []))
+    if not isinstance(elements, list):
+        return []
+    targets: list[str] = []
+    seen: set[str] = set()
+    for element in elements:
+        if not isinstance(element, dict) or element.get("type") != "SpdxDocument":
+            continue
+        imports = element.get("import")
+        if not isinstance(imports, list):
+            continue
+        for entry in imports:
+            if not isinstance(entry, dict):
+                continue
+            for hash_obj in entry.get("verifiedUsing") or []:
+                if not isinstance(hash_obj, dict) or hash_obj.get("algorithm") != "sha256":
+                    continue
+                digest = hash_obj.get("hashValue")
+                if not _is_sha256_hex(digest):
+                    continue
+                if digest == member_digest or digest in seen:
+                    continue
+                target_uri = hash_to_uri.get(digest)
+                if target_uri is not None:
+                    seen.add(digest)
+                    targets.append(target_uri)
+    return targets
 
 
 def create_product_external_references(product: Product, user: Any = None) -> list[Any]:
