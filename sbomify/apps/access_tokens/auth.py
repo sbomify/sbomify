@@ -22,7 +22,11 @@ class PersonalAccessTokenAuth(HttpBearer):
         if user is None or access_token_record is None:
             return None
 
-        # Per-token IP allowlist (#1059): a denied IP is an attack signal, so WARNING.
+        # Per-token IP allowlist (#1059). The client IP comes from get_client_ip, which
+        # trusts the X-Real-IP set by the front proxy (Caddy); the allowlist is therefore
+        # only as strong as the proxy's header sanitisation — the same trust boundary every
+        # client-IP consumer in the app already relies on, and the app has no other source
+        # of the peer address. A denied IP is an attack signal, so log at WARNING.
         if not ip_in_allowlist(get_client_ip(request), access_token_record.allowed_ips):
             log.warning("Access token denied: client IP outside allowlist (token id=%s)", access_token_record.pk)
             return None
