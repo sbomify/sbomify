@@ -774,3 +774,109 @@ def test_create_token_form_maps_scope_presets():
     f = CreateAccessTokenForm({"description": "x"})
     assert f.is_valid(), f.errors
     assert f.scopes() is None
+
+
+import contextlib
+import logging as _logging
+
+
+@contextlib.contextmanager
+def _capture_audit(caplog):
+    """Capture the non-propagating sbomify.audit.token_auth logger via caplog's handler."""
+    logger = _logging.getLogger("sbomify.audit.token_auth")
+    logger.addHandler(caplog.handler)
+    old_level = logger.level
+    logger.setLevel(_logging.INFO)
+    try:
+        yield
+    finally:
+        logger.removeHandler(caplog.handler)
+        logger.setLevel(old_level)
+
+
+def _token_auth_events(caplog):
+    return [r for r in caplog.records if getattr(r, "event", None) == "token_auth"]
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_success_event(
+    sample_user,  # noqa: F811
+    sample_team_with_owner_member,  # noqa: F811
+    caplog,
+):
+    """#1058: a successful PAT auth emits a structured success event with IP + action."""
+    token_str = create_personal_access_token(sample_user)
+    rec = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="t",
+        team=sample_team_with_owner_member.team,
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str, source_ip="1.2.3.4", attempted_action="GET /api/x")
+    assert user == sample_user
+    events = _token_auth_events(caplog)
+    assert len(events) == 1
+    e = events[0]
+    assert e.outcome == "success" and e.reason is None
+    assert e.token_id == str(rec.pk)
+    assert e.user_id == str(sample_user.id)
+    assert e.team_id == str(sample_team_with_owner_member.team.id)
+    assert e.source_ip == "1.2.3.4"
+    assert e.attempted_action == "GET /api/x"
+    assert e.token_fingerprint and token_str not in caplog.text
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_decode_failure(caplog):
+    """#1058: an undecodable bearer emits failure(reason=decode) with a fingerprint, no token id."""
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record("not-a-jwt", source_ip="9.9.9.9")
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "decode"
+    assert e.token_id is None and e.token_fingerprint and e.source_ip == "9.9.9.9"
+    assert "not-a-jwt" not in caplog.text
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_inactive_user(sample_user, caplog):  # noqa: F811
+    """#1058: a token whose user is inactive emits failure(reason=user_inactive_or_missing)."""
+    token_str = create_personal_access_token(sample_user)
+    sample_user.is_active = False
+    sample_user.save()
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
+    assert e.user_id == str(sample_user.id)
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_no_token_record(sample_user, caplog):  # noqa: F811
+    """#1058: a valid token with no DB row emits failure(reason=no_token_record)."""
+    token_str = create_personal_access_token(sample_user)
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "no_token_record"
+    assert e.user_id == str(sample_user.id)
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_expired_row(sample_user, caplog):  # noqa: F811
+    """#1058: an expired DB row emits failure(reason=expired)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="e",
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "expired"
