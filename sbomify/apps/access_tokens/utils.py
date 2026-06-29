@@ -291,6 +291,12 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
             .update(last_used_at=now)
         )
         if updated:
-            access_token_record.last_used_at = now  # keep the returned record fresh
+            access_token_record.last_used_at = now  # we wrote it; mirror in memory
+        else:
+            # updated == 0 means a concurrent worker refreshed the row between our
+            # SELECT and this UPDATE. Mirror the persisted value so the returned
+            # record isn't stale. This extra read only happens in that rare race,
+            # never on the common (fresh or we-wrote-it) paths.
+            access_token_record.refresh_from_db(fields=["last_used_at"])
 
     return user, access_token_record

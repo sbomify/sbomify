@@ -795,7 +795,9 @@ OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "6
 # refreshes it. Throttles the per-request write to one UPDATE per token per
 # window so a token hammered in a tight loop doesn't write on every call. The
 # field exists to spot stale/leaked tokens, so minute-level accuracy is enough.
-ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300"))
+# Clamped to >= 0: a negative value would invert the freshness window and make
+# every request rewrite the field.
+ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = max(0, int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300")))
 
 # Localstack and AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
