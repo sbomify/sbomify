@@ -219,6 +219,9 @@ class BaseSBOMBuilder(ABC):
         sbom_artifacts = (
             release.artifacts.filter(sbom__isnull=False)
             .select_related("sbom__component", "sbom__component__team")
+            # Stable order so a content-addressed aggregate serializes identically
+            # across rebuilds (the cache key is the artifact-set fingerprint).
+            .order_by("sbom_id")
             .prefetch_related("sbom__component__team")
         )
         members = [

@@ -291,6 +291,9 @@ class TestSPDXOutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
                 return []
 
@@ -355,6 +358,9 @@ class TestSPDXOutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
                 return []
 
@@ -416,6 +422,9 @@ class TestSPDX30OutputIntegration:
                 return self
 
             def select_related(self, *args):
+                return self
+
+            def order_by(self, *args):
                 return self
 
             def prefetch_related(self, *args):
@@ -499,6 +508,9 @@ class TestSPDX30OutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
                 return []
 
@@ -552,6 +564,9 @@ class TestSPDX30OutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
                 return []
 
@@ -597,6 +612,9 @@ class TestSPDX30OutputIntegration:
                 return self
 
             def select_related(self, *args):
+                return self
+
+            def order_by(self, *args):
                 return self
 
             def prefetch_related(self, *args):
