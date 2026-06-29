@@ -212,3 +212,23 @@ class TestSPDX30Linking:
         out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx").read_bytes())
         contains = [r for r in out["relationships"] if r["relationshipType"] == "CONTAINS"]
         assert any(r["relatedSpdxElement"] == "DocumentRef-1:SPDXRef-DOCUMENT" for r in contains)
+
+    def test_import_entry_validates_as_typed_external_map(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """The emitted import-map entry round-trips through the typed ExternalMap model."""
+        from sbomify.apps.sboms.sbom_format_schemas.spdx_3_0 import ExternalMap
+
+        team = team_with_business_plan
+        product = Product.objects.create(name="P", team=team, is_public=True)
+        release = Release.objects.create(product=product, name="v1.0.0")
+        member = _spdx3_member(team, s3_sboms_mock, "delta", root_uri="https://member.example/d#root", sha="f" * 64)
+        ReleaseArtifact.objects.create(release=release, sbom=member)
+
+        out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx", version="3.0").read_bytes())
+        doc = next(e for e in out["@graph"] if e["type"] == "SpdxDocument")
+        entry = ExternalMap.model_validate(doc["import"][0])
+        assert entry.externalSpdxId == "https://member.example/d#root"
+        assert entry.locationHint
+        assert entry.verifiedUsing[0].algorithm == "sha256"
+        assert entry.verifiedUsing[0].hashValue == "f" * 64
