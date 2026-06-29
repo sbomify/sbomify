@@ -44,7 +44,7 @@ class ControlWithStatusSchema(ControlSchema):
 class StatusUpdateSchema(BaseModel):
     """Schema for updating a single control status."""
 
-    status: Literal["compliant", "partial", "not_implemented", "not_applicable"]
+    status: str = Field(..., description="One of: compliant, partial, not_implemented, not_applicable")
     product_id: str | None = None
     notes: str = ""
 
@@ -53,7 +53,7 @@ class BulkStatusUpdateItemSchema(BaseModel):
     """Schema for a single item in a bulk status update."""
 
     control_id: str
-    status: Literal["compliant", "partial", "not_implemented", "not_applicable"]
+    status: str = Field(..., description="One of: compliant, partial, not_implemented, not_applicable")
     product_id: str | None = None
     notes: str = ""
 
@@ -178,7 +178,7 @@ class ControlEvidenceSchema(BaseModel):
 class CreateEvidenceSchema(BaseModel):
     """Schema for creating evidence on a control."""
 
-    evidence_type: Literal["url", "document", "note"]
+    evidence_type: str = Field(..., description="One of: url, document, note")
     title: str
     url: str = ""
     document_id: str = ""
