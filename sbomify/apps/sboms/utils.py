@@ -680,6 +680,9 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None
 
 
 _SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
+# Local SPDX 2.x element id ("SPDXRef-" + letters/digits/.-); no ':' so it can't
+# corrupt a "DocumentRef-N:SPDXRef-..." external reference.
+_SPDX_LOCAL_REF_RE = re.compile(r"SPDXRef-[A-Za-z0-9.+-]+\Z")
 
 
 def _is_sha256_hex(value: Any) -> bool:
@@ -713,14 +716,16 @@ def spdx2_member_link(
 
     # The element the member document describes: documentDescribes, else the
     # SPDXRef-DOCUMENT DESCRIBES relationship, else the document itself. Member
-    # JSON is untrusted, so only accept a non-empty string at each step.
-    def _nonempty_str(value: Any) -> str | None:
-        return value if isinstance(value, str) and value else None
+    # JSON is untrusted, so accept only a valid local "SPDXRef-..." id at each
+    # step — anything else (non-string, or containing a ':' that would corrupt
+    # the "DocumentRef-N:SPDXRef-..." reference) falls back to SPDXRef-DOCUMENT.
+    def _valid_local_ref(value: Any) -> str | None:
+        return value if isinstance(value, str) and _SPDX_LOCAL_REF_RE.fullmatch(value) else None
 
     described: str | None = None
     describes = sbom_data.get("documentDescribes")
     if isinstance(describes, list) and describes:
-        described = _nonempty_str(describes[0])
+        described = _valid_local_ref(describes[0])
     if described is None:
         relationships = sbom_data.get("relationships")
         if isinstance(relationships, list):
@@ -730,7 +735,7 @@ def spdx2_member_link(
                     and rel.get("relationshipType") == "DESCRIBES"
                     and rel.get("spdxElementId") == "SPDXRef-DOCUMENT"
                 ):
-                    described = _nonempty_str(rel.get("relatedSpdxElement"))
+                    described = _valid_local_ref(rel.get("relatedSpdxElement"))
                     if described is not None:
                         break
     if described is None:

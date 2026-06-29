@@ -194,7 +194,7 @@ class TestSPDX30Linking:
                 "SPDXID": "SPDXRef-DOCUMENT",
                 "name": "m",
                 "documentNamespace": "https://member.example/m",
-                "documentDescribes": [{"not": "a string"}],  # malformed
+                "documentDescribes": ["DocumentRef-9:SPDXRef-x"],  # invalid local id (contains ':')
                 "relationships": "not-a-list",  # malformed
             }
         ).encode()
