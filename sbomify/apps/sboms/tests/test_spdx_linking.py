@@ -361,3 +361,42 @@ class TestSPDX3InboundResolve:
             if e.get("type") == "Relationship" and e.get("relationshipType") == "dependsOn"
         ]
         assert any(e["from"] == a_root and "https://member.example/bbb#root" in e["to"] for e in deps)
+
+
+@pytest.mark.django_db
+class TestAggregateSchemaValidity:
+    """#357 AC: the aggregate is valid SPDX with referential integrity intact."""
+
+    def test_spdx23_aggregate_validates_against_model(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        from sbomify.apps.sboms.sbom_format_schemas import spdx_2_3
+
+        team = team_with_business_plan
+        product = Product.objects.create(name="P", team=team, is_public=True)
+        release = Release.objects.create(product=product, name="v1.0.0")
+        ReleaseArtifact.objects.create(
+            release=release,
+            sbom=_spdx2_member(team, s3_sboms_mock, "alpha", namespace="https://m/alpha",
+                               described="SPDXRef-Package-alpha", sha="a" * 64),
+        )
+        out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx").read_bytes())
+        doc = spdx_2_3.SPDXDocument.model_validate(out)  # raises if the serialized output is invalid
+        assert doc.externalDocumentRefs  # native link survived serialization + revalidation
+
+    def test_spdx3_aggregate_validates_against_model(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        from sbomify.apps.sboms.sbom_format_schemas.spdx_3_0 import SPDX3Document
+
+        team = team_with_business_plan
+        product = Product.objects.create(name="P", team=team, is_public=True)
+        release = Release.objects.create(product=product, name="v1.0.0")
+        ReleaseArtifact.objects.create(
+            release=release,
+            sbom=_spdx3_member(team, s3_sboms_mock, "gamma", root_uri="https://m/g#root", sha="b" * 64),
+        )
+        out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx", version="3.0").read_bytes())
+        SPDX3Document.model_validate(out)  # raises if the JSON-LD aggregate is structurally invalid
+        doc = next(e for e in out["@graph"] if e["type"] == "SpdxDocument")
+        assert doc.get("import")  # import map present and the doc validates
