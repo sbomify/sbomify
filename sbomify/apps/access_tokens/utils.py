@@ -36,7 +36,9 @@ def ip_in_allowlist(client_ip: str | None, allowed_ips: list[str] | None) -> boo
         try:
             if client in ipaddress.ip_network(entry, strict=False):
                 return True
-        except ValueError:
+        except (ValueError, TypeError):
+            # Malformed (bad string) or non-string entry (e.g. a number/null in the
+            # JSON row) — skip it; the allowlist stays fail-closed.
             continue
     return False
 

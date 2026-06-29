@@ -20,6 +20,7 @@ from .utils import (
     decode_personal_access_token,
     get_user_and_token_record,
     get_user_from_personal_access_token,
+    ip_in_allowlist,
 )
 
 
@@ -776,8 +777,6 @@ def test_create_token_form_maps_scope_presets():
     assert f.scopes() is None
 
 
-from .utils import ip_in_allowlist  # noqa: E402
-
 
 @pytest.mark.parametrize(
     "client,allowed,expected",
@@ -792,6 +791,7 @@ from .utils import ip_in_allowlist  # noqa: E402
         ("2001:db9::1", ["2001:db8::/32"], False),  # outside v6 CIDR
         (None, ["203.0.113.0/24"], False),  # allowlist set, no client IP -> deny (fail closed)
         ("1.2.3.4", ["garbage", "1.2.3.0/24"], True),  # malformed entry skipped, later entry matches
+        ("1.2.3.4", [123, None, "1.2.3.0/24"], True),  # non-string entries skipped (fail-closed), no crash
     ],
 )
 def test_ip_in_allowlist(client, allowed, expected):
