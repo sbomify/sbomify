@@ -698,7 +698,8 @@ def spdx2_member_link(
         return None
     namespace = sbom_data.get("documentNamespace")
     checksum = getattr(sbom_instance, "sha256_hash", None)
-    if not namespace or not checksum:
+    # Both go into the SPDX output; reject non-string/empty (member JSON is untrusted).
+    if not (isinstance(namespace, str) and namespace) or not (isinstance(checksum, str) and checksum):
         return None
 
     # The element the member document describes: documentDescribes, else the
@@ -746,12 +747,14 @@ def _spdx3_root_element_uri(elements: Any) -> str | None:
     for element in elements:
         if isinstance(element, dict) and element.get("type") == "SpdxDocument":
             roots = element.get("rootElement")
-            if isinstance(roots, list) and roots:
-                return str(roots[0])
+            if isinstance(roots, list) and roots and isinstance(roots[0], str) and roots[0]:
+                return roots[0]
     for type_name in ("software_Sbom", "software_Package"):
         for element in elements:
-            if isinstance(element, dict) and element.get("type") == type_name and element.get("spdxId"):
-                return str(element["spdxId"])
+            if isinstance(element, dict) and element.get("type") == type_name:
+                spdx_id = element.get("spdxId")
+                if isinstance(spdx_id, str) and spdx_id:
+                    return spdx_id
     return None
 
 
@@ -772,7 +775,7 @@ def spdx3_member_import(
     if not is_spdx3:
         return None
     checksum = getattr(sbom_instance, "sha256_hash", None)
-    if not checksum:
+    if not (isinstance(checksum, str) and checksum):  # goes into verifiedUsing; untrusted
         return None
     elements = sbom_data.get("@graph", sbom_data.get("elements", []))
     root_uri = _spdx3_root_element_uri(elements)
