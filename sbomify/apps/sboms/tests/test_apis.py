@@ -3575,7 +3575,7 @@ def test_cyclonedx_upload_autodetects_cbom_bom_type(
     client = Client()
     url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
     resp = client.post(
-        url, data=open(cbom_path).read(), content_type="application/json",
+        url, data=cbom_path.read_text(), content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert resp.status_code == 201
@@ -3598,7 +3598,7 @@ def test_cyclonedx_upload_non_crypto_stays_sbom(
     client = Client()
     url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
     resp = client.post(
-        url, data=open(path).read(), content_type="application/json",
+        url, data=path.read_text(), content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert resp.status_code == 201
@@ -3644,7 +3644,7 @@ def test_cyclonedx_upload_explicit_sbom_not_reclassified(
     client = Client()
     url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id}) + "?bom_type=sbom"
     resp = client.post(
-        url, data=open(cbom_path).read(), content_type="application/json",
+        url, data=cbom_path.read_text(), content_type="application/json",
         **get_api_headers(sample_access_token),
     )
     assert resp.status_code == 201
