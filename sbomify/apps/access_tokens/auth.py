@@ -8,13 +8,23 @@ from typing import Any
 from django.http import HttpRequest, JsonResponse
 from ninja.security import HttpBearer
 
-from .utils import get_user_and_token_record
+from sbomify import logging
+from sbomify.apps.core.utils import get_client_ip
+
+from .utils import get_user_and_token_record, ip_in_allowlist
+
+log = logging.getLogger(__name__)
 
 
 class PersonalAccessTokenAuth(HttpBearer):
     def authenticate(self, request: HttpRequest, token: str) -> Any | None:
         user, access_token_record = get_user_and_token_record(token)
         if user is None or access_token_record is None:
+            return None
+
+        # Per-token IP allowlist (#1059): a denied IP is an attack signal, so WARNING.
+        if not ip_in_allowlist(get_client_ip(request), access_token_record.allowed_ips):
+            log.warning("Access token denied: client IP outside allowlist (token id=%s)", access_token_record.pk)
             return None
 
         setattr(request, "user", user)

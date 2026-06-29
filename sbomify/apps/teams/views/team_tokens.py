@@ -95,6 +95,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             team_id=team_id,
             expires_at=expires_at,
             scopes=form.scopes(),
+            allowed_ips=form.cleaned_data["allowed_ips"],
         )
         token.save()
 

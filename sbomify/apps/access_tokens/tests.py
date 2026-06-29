@@ -774,3 +774,66 @@ def test_create_token_form_maps_scope_presets():
     f = CreateAccessTokenForm({"description": "x"})
     assert f.is_valid(), f.errors
     assert f.scopes() is None
+
+
+from .utils import ip_in_allowlist  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "client,allowed,expected",
+    [
+        ("1.2.3.4", None, True),  # no allowlist -> unrestricted
+        ("1.2.3.4", [], True),  # empty allowlist -> unrestricted
+        ("203.0.113.5", ["203.0.113.0/24"], True),  # inside v4 CIDR
+        ("203.0.113.5", ["198.51.100.0/24"], False),  # outside CIDR
+        ("203.0.113.5", ["203.0.113.5"], True),  # single v4 IP match
+        ("203.0.113.6", ["203.0.113.5"], False),  # single v4 IP mismatch
+        ("2001:db8::1", ["2001:db8::/32"], True),  # inside v6 CIDR
+        ("2001:db9::1", ["2001:db8::/32"], False),  # outside v6 CIDR
+        (None, ["203.0.113.0/24"], False),  # allowlist set, no client IP -> deny (fail closed)
+        ("1.2.3.4", ["garbage", "1.2.3.0/24"], True),  # malformed entry skipped, later entry matches
+    ],
+)
+def test_ip_in_allowlist(client, allowed, expected):
+    """#1059: IP allowlist matching across v4/v6, CIDR, single IP, and NULL = unrestricted."""
+    assert ip_in_allowlist(client, allowed) is expected
+
+
+@pytest.mark.django_db
+def test_authenticate_enforces_ip_allowlist(sample_user):  # noqa: F811
+    """#1059: a valid token authenticates from an in-allowlist IP and is 401'd from outside."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="ip", allowed_ips=["203.0.113.0/24"]
+    )
+    rf = RequestFactory()
+    auth = PersonalAccessTokenAuth()
+    assert auth.authenticate(rf.get("/api/x", HTTP_X_REAL_IP="203.0.113.9"), token_str) is not None
+    assert auth.authenticate(rf.get("/api/x", HTTP_X_REAL_IP="198.51.100.1"), token_str) is None
+
+
+@pytest.mark.django_db
+def test_authenticate_unrestricted_token_allows_any_ip(sample_user):  # noqa: F811
+    """#1059: a token with no allowlist authenticates from any IP (legacy default)."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="open")
+    rf = RequestFactory()
+    assert PersonalAccessTokenAuth().authenticate(rf.get("/api/x", HTTP_X_REAL_IP="9.9.9.9"), token_str) is not None
+
+
+@pytest.mark.django_db
+def test_create_token_form_allowed_ips_validation():
+    """#1059: the create form validates IP/CIDR entries and persists empty as None."""
+    from sbomify.apps.core.forms import CreateAccessTokenForm
+
+    valid = CreateAccessTokenForm(data={"description": "t", "allowed_ips": "203.0.113.0/24\n2001:db8::/32"})
+    assert valid.is_valid(), valid.errors
+    assert valid.cleaned_data["allowed_ips"] == ["203.0.113.0/24", "2001:db8::/32"]
+
+    empty = CreateAccessTokenForm(data={"description": "t", "allowed_ips": ""})
+    assert empty.is_valid()
+    assert empty.cleaned_data["allowed_ips"] is None
+
+    bad = CreateAccessTokenForm(data={"description": "t", "allowed_ips": "not-an-ip"})
+    assert not bad.is_valid()
+    assert "allowed_ips" in bad.errors

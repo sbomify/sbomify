@@ -102,6 +102,14 @@
                         <i class="fas fa-plus mr-2"></i>Generate
                     </button>
                 </div>
+                <div class="mt-3">
+                    {% with field=create_access_token_form.allowed_ips %}
+                        <label for="{{ field.id_for_label }}" class="tw-form-label">{{ field.label }}</label>
+                        {{ field }}
+                        <p class="tw-form-hint mt-1">{{ field.help_text }}</p>
+                        {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                    {% endwith %}
+                </div>
                 <p class="tw-form-hint mt-2">
                     Give your token a descriptive name, choose its access scope, and choose when it should expire. Narrow scopes and expiry limit the damage if a token is leaked.
                 </p>

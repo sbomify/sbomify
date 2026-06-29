@@ -45,6 +45,16 @@ class AccessToken(models.Model):
             "(default 15 min)."
         ),
     )
+    allowed_ips = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "Optional IP allowlist — a list of IP or CIDR strings (IPv4/IPv6). A request "
+            "whose client IP falls outside the list is rejected even with a valid token. "
+            "NULL/empty = no restriction (legacy default)."
+        ),
+    )
 
     def __str__(self) -> str:
         return f"{self.user_id} - {self.description}"

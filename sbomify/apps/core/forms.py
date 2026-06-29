@@ -52,6 +52,32 @@ class CreateAccessTokenForm(forms.Form):
         widget=forms.Select(attrs={"class": "tw-form-select"}),
     )
 
+    # Optional IP allowlist (#1059): one IP or CIDR per line (or comma-separated).
+    # Empty = no restriction.
+    allowed_ips = forms.CharField(
+        required=False,
+        label="IP allowlist",
+        help_text="Optional. One IP or CIDR per line (IPv4 or IPv6). Empty = no restriction.",
+        widget=forms.Textarea(
+            attrs={"class": "tw-form-textarea", "rows": 3, "placeholder": "203.0.113.0/24\n2001:db8::/32"}
+        ),
+    )
+
+    def clean_allowed_ips(self) -> list[str] | None:
+        """Parse the allowlist into a validated list of IP/CIDR strings, or None if empty."""
+        import ipaddress
+
+        raw = self.cleaned_data.get("allowed_ips", "") or ""
+        entries = [item.strip() for item in raw.replace(",", "\n").splitlines() if item.strip()]
+        if not entries:
+            return None
+        for entry in entries:
+            try:
+                ipaddress.ip_network(entry, strict=False)
+            except ValueError as exc:
+                raise forms.ValidationError(f"Invalid IP or CIDR: {entry}") from exc
+        return entries
+
     def scopes(self) -> list[str] | None:
         """Chosen action scopes, or ``None`` for an unscoped (full) token.
 

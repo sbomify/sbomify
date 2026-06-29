@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import typing
 from time import time
 from typing import Any
@@ -17,6 +18,27 @@ if typing.TYPE_CHECKING:
     from .models import AccessToken
 
 log = logging.getLogger(__name__)
+
+
+def ip_in_allowlist(client_ip: str | None, allowed_ips: list[str] | None) -> bool:
+    """True if the token has no allowlist (unrestricted) or ``client_ip`` falls within
+    one of the allowed IP/CIDR entries. An allowlist with no resolvable client IP
+    fails closed (denies)."""
+    if not allowed_ips:
+        return True
+    if not client_ip:
+        return False
+    try:
+        client = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+    for entry in allowed_ips:
+        try:
+            if client in ipaddress.ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 # Token-type sentinels embedded in the JWT payload so the decoder can
