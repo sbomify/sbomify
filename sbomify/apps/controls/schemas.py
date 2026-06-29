@@ -7,11 +7,11 @@ from pydantic import BaseModel, Field
 
 from sbomify.apps.controls.models import ControlEvidence, ControlStatus
 
-# Valid value sets, sourced from the model TextChoices so the API docs (and the
-# 400 messages keyed off the same choices) cannot drift from what the endpoints
-# actually accept.
-_STATUS_VALUES = ", ".join(choice[0] for choice in ControlStatus.Status.choices)
-_EVIDENCE_TYPE_VALUES = ", ".join(choice[0] for choice in ControlEvidence.EvidenceType.choices)
+# Field-description constants, sourced from the model TextChoices so the API docs
+# (and the 400 messages keyed off the same choices) cannot drift from what the
+# endpoints actually accept. Single constant per field, reused across schemas.
+_STATUS_DESCRIPTION = "One of: " + ", ".join(choice[0] for choice in ControlStatus.Status.choices)
+_EVIDENCE_TYPE_DESCRIPTION = "One of: " + ", ".join(choice[0] for choice in ControlEvidence.EvidenceType.choices)
 
 
 class CatalogSchema(BaseModel):
@@ -52,7 +52,7 @@ class ControlWithStatusSchema(ControlSchema):
 class StatusUpdateSchema(BaseModel):
     """Schema for updating a single control status."""
 
-    status: str = Field(..., description=f"One of: {_STATUS_VALUES}")
+    status: str = Field(..., description=_STATUS_DESCRIPTION)
     product_id: str | None = None
     notes: str = ""
 
@@ -61,7 +61,7 @@ class BulkStatusUpdateItemSchema(BaseModel):
     """Schema for a single item in a bulk status update."""
 
     control_id: str
-    status: str = Field(..., description=f"One of: {_STATUS_VALUES}")
+    status: str = Field(..., description=_STATUS_DESCRIPTION)
     product_id: str | None = None
     notes: str = ""
 
@@ -186,7 +186,7 @@ class ControlEvidenceSchema(BaseModel):
 class CreateEvidenceSchema(BaseModel):
     """Schema for creating evidence on a control."""
 
-    evidence_type: str = Field(..., description=f"One of: {_EVIDENCE_TYPE_VALUES}")
+    evidence_type: str = Field(..., description=_EVIDENCE_TYPE_DESCRIPTION)
     title: str
     url: str = ""
     document_id: str = ""
