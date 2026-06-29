@@ -1808,10 +1808,12 @@ def get_release_sbom_package(
     # member URLs that must stay fresh.
     cache_key: str | None = None
     s3: Any = None
+    # Computed unconditionally so the orphan-GC sweep below can reference it
+    # without a possibly-undefined flow; it's only USED on the cached public path.
+    resolved_version = _resolve_output_version(format_lower, version)
     if release.product.is_public:
         from sbomify.apps.core.object_store import S3Client
 
-        resolved_version = _resolve_output_version(format_lower, version)
         fingerprint = compute_release_aggregate_fingerprint(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
         from botocore.exceptions import BotoCoreError, ClientError
