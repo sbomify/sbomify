@@ -134,6 +134,11 @@
                                     Created
                                     {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
                                 </p>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock-rotate-left text-xs mr-1"></i>
+                                    Last used
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
+                                </p>
                                 {% include 'teams/components/token_expiry.html.j2' with token=token %}
                             </div>
                             <div class="flex-shrink-0">
@@ -165,6 +170,11 @@
                                     <i class="fas fa-clock text-xs mr-1"></i>
                                     Created
                                     {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
+                                </p>
+                                <p class="text-sm text-text-muted m-0">
+                                    <i class="fas fa-clock-rotate-left text-xs mr-1"></i>
+                                    Last used
+                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
                                 </p>
                                 {% include 'teams/components/token_expiry.html.j2' with token=token %}
                             </div>

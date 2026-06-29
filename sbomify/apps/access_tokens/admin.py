@@ -12,7 +12,7 @@ else:
 
 @admin.register(AccessToken)
 class AccessTokenAdmin(_Base):
-    list_display = ["user", "description", "team", "created_at"]
-    list_filter = ["team", "created_at"]
+    list_display = ["user", "description", "team", "created_at", "last_used_at"]
+    list_filter = ["team", "created_at", "last_used_at"]
     search_fields = ["user__email", "user__username", "description"]
     raw_id_fields = ["user", "team"]

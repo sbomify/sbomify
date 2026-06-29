@@ -791,6 +791,12 @@ OIDC_JWKS_CACHE_SECONDS = int(os.environ.get("OIDC_JWKS_CACHE_SECONDS", "3600"))
 # valid" and every exchange fails. 60s matches common JWT clock-skew guidance.
 OIDC_GITHUB_LEEWAY_SECONDS = int(os.environ.get("OIDC_GITHUB_LEEWAY_SECONDS", "60"))
 
+# How stale AccessToken.last_used_at may be before an authenticated request
+# refreshes it. Throttles the per-request write to one UPDATE per token per
+# window so a token hammered in a tight loop doesn't write on every call. The
+# field exists to spot stale/leaked tokens, so minute-level accuracy is enough.
+ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = int(os.environ.get("ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS", "300"))
+
 # Localstack and AWS/S3 related settings
 AWS_REGION = os.environ.get("AWS_REGION", "")
 AWS_ENDPOINT_URL_S3 = os.environ.get("AWS_ENDPOINT_URL_S3", "")

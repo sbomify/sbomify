@@ -9,6 +9,7 @@ import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.utils import timezone
 from jwt.exceptions import DecodeError, InvalidTokenError
 
 from sbomify import logging
@@ -262,5 +263,15 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
             access_token_record.expires_at,
         )
         return None, None
+
+    # Stamp last-used for stale/leaked-token visibility (#1044). Only valid,
+    # non-expired tokens reach here. Throttle to one PK-targeted single-column
+    # UPDATE per token per window so a hammered token isn't a write per request.
+    now = timezone.now()
+    throttle = settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS
+    last_used = access_token_record.last_used_at
+    if last_used is None or (now - last_used).total_seconds() >= throttle:
+        AccessToken.objects.filter(pk=access_token_record.pk).update(last_used_at=now)
+        access_token_record.last_used_at = now  # keep the returned record fresh
 
     return user, access_token_record
