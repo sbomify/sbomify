@@ -75,6 +75,16 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
     return None
 
 
+def _is_cbom(sbom_data: dict[str, Any]) -> bool:
+    """True when a CycloneDX document declares cryptographic-asset components, i.e. it is a CBOM."""
+    components = sbom_data.get("components")
+    if not isinstance(components, list):
+        return False
+    return any(
+        isinstance(c, dict) and (c.get("type") == "cryptographic-asset" or "cryptoProperties" in c) for c in components
+    )
+
+
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     """Check if an IntegrityError is for the SBOM uniqueness constraint.
 
@@ -416,6 +426,11 @@ def sbom_upload_cyclonedx(
 
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
+
+        # Auto-detect CBOM content (#1042): an action-published CBOM arrives with the
+        # default bom_type="sbom"; tag it cbom so the cbom-gated PQC plugin runs.
+        if bom_type == "sbom" and _is_cbom(sbom_data):
+            bom_type = "cbom"
 
         # Extract PURL qualifiers from metadata.component.purl
         cdx_purl = _extract_cdx_purl(payload)
@@ -1106,6 +1121,11 @@ def sbom_upload_file(
 
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
+
+            # Auto-detect CBOM content (#1042): tag a crypto BOM uploaded with the
+            # default bom_type="sbom" as cbom so the cbom-gated PQC plugin runs.
+            if bom_type == "sbom" and _is_cbom(sbom_data):
+                bom_type = "cbom"
 
             # Extract PURL qualifiers from metadata.component.purl
             cdx_purl = _extract_cdx_purl(cdx_payload)
