@@ -300,7 +300,9 @@ def get_user_and_token_record(
         # in-flight credentials immediately, not at TTL expiry — and for any
         # admin-driven user deactivation flow.
         user = get_user_model().objects.get(id=user_id, is_active=True, deleted_at__isnull=True)
-    except get_user_model().DoesNotExist as e:
+    except (get_user_model().DoesNotExist, ValueError, TypeError) as e:
+        # ValueError/TypeError: a missing or non-PK-shaped ``sub`` (e.g. ""/non-numeric
+        # against an integer PK) — fail cleanly with an audit event, never a 500.
         log.warning("No live user found for token (user_id=%s): %s", user_id, str(e))
         emit("failure", reason="user_inactive_or_missing", user_id=user_id)
         return None, None

@@ -1,4 +1,6 @@
+import contextlib
 import json
+import logging
 from time import time
 
 import jwt
@@ -776,17 +778,13 @@ def test_create_token_form_maps_scope_presets():
     assert f.scopes() is None
 
 
-import contextlib
-import logging as _logging
-
-
 @contextlib.contextmanager
 def _capture_audit(caplog):
     """Capture the non-propagating sbomify.audit.token_auth logger via caplog's handler."""
-    logger = _logging.getLogger("sbomify.audit.token_auth")
+    logger = logging.getLogger("sbomify.audit.token_auth")
     logger.addHandler(caplog.handler)
     old_level = logger.level
-    logger.setLevel(_logging.INFO)
+    logger.setLevel(logging.INFO)
     try:
         yield
     finally:
@@ -880,3 +878,16 @@ def test_token_auth_audit_expired_row(sample_user, caplog):  # noqa: F811
     assert user is None
     e = _token_auth_events(caplog)[0]
     assert e.outcome == "failure" and e.reason == "expired"
+
+
+@pytest.mark.django_db
+def test_token_auth_malformed_sub_is_clean_failure(caplog):
+    """#1058/#1065: a token whose sub cannot be a user PK fails cleanly (no 500) and audits."""
+    bad = jwt.encode(
+        {"sub": "not-a-valid-pk", "token_type": "pat"}, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(bad)
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
