@@ -71,7 +71,8 @@ class TestAggregateCache:
         team = team_with_business_plan
         release = _public_release(team, s3_sboms_mock)
         get_release_sbom_package(release, tmp_path, output_format="cyclonedx")  # cold build creates the cache
-        assert len([k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")]) == 1
+        keys_before = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert len(keys_before) == 1
 
         # Add a third member -> new artifact-set hash -> new cache key -> rebuild.
         ReleaseArtifact.objects.create(release=release, sbom=_make_member_sbom(team, s3_sboms_mock, "gamma"))
@@ -79,7 +80,10 @@ class TestAggregateCache:
         rebuilt = get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes()
 
         assert "gamma.json" in s3_sboms_mock.get_calls, "changed set must re-fetch members"
-        assert len([k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")]) == 2
+        # GC: the new fingerprint replaces the old; the orphaned key is reclaimed.
+        keys_after = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
+        assert len(keys_after) == 1
+        assert keys_after != keys_before
         assert b"gamma" in rebuilt
 
     def test_member_visibility_change_busts_cache(
@@ -102,7 +106,8 @@ class TestAggregateCache:
         rebuilt = get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes()
         keys_after = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/")}
         assert keys_after != keys_before, "visibility change must produce a new cache key"
-        assert len(keys_after) == 2
+        # GC reclaims the orphaned key, so only the new one remains.
+        assert len(keys_after) == 1
         # The now-private member is excluded from the rebuilt public aggregate.
         assert rebuilt != first
 
@@ -213,3 +218,53 @@ class TestAggregateCache:
         # The builders use the select_related-loaded artifact.sbom, so they must
         # not issue a per-artifact SBOM.objects.get during aggregation.
         assert get_spy.call_count == 0
+
+    def test_gc_preserves_other_formats(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """GC scopes to the format+version prefix, so busting cyclonedx must not
+        delete the still-valid spdx aggregate (or vice versa)."""
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
+        get_release_sbom_package(release, tmp_path, output_format="spdx")
+        spdx_before = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/") and "spdx-" in k}
+        assert len(spdx_before) == 1
+
+        # Change the artifact set and rebuild ONLY cyclonedx.
+        ReleaseArtifact.objects.create(release=release, sbom=_make_member_sbom(team, s3_sboms_mock, "gamma"))
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")
+
+        cdx_keys = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/") and "cyclonedx-" in k}
+        spdx_after = {k for k in s3_sboms_mock.uploaded_files if k.startswith("aggregates/") and "spdx-" in k}
+        assert len(cdx_keys) == 1, "stale cyclonedx fingerprint should be reclaimed"
+        assert spdx_after == spdx_before, "the spdx aggregate must survive a cyclonedx bust"
+
+    def test_gc_is_best_effort(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock, mocker  # noqa: F811
+    ):
+        """A delete failure during GC must never fail the download — the freshly
+        built aggregate is still served."""
+        team = team_with_business_plan
+        release = _public_release(team, s3_sboms_mock)
+        get_release_sbom_package(release, tmp_path, output_format="cyclonedx")  # cold build -> key K1
+
+        ReleaseArtifact.objects.create(release=release, sbom=_make_member_sbom(team, s3_sboms_mock, "gamma"))
+        mocker.patch.object(s3_sboms_mock, "delete_cached_aggregate", side_effect=Exception("boom"))
+
+        rebuilt = get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes()
+        assert b"gamma" in rebuilt, "download must succeed even when GC delete fails"
+
+    def test_parallel_member_fetch_includes_every_member(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """Members are fetched concurrently; every one must land in the aggregate
+        exactly once (the parallel prefetch must not drop or duplicate members)."""
+        team = team_with_business_plan
+        names = ("alpha", "beta", "gamma", "delta", "epsilon")
+        release = _public_release(team, s3_sboms_mock, member_names=names)
+
+        built = json.loads(get_release_sbom_package(release, tmp_path, output_format="cyclonedx").read_bytes())
+        member_components = [c["name"] for c in built["components"]]
+        assert sorted(member_components) == sorted(f"{release.name}/{n}" for n in names)
+        assert len(member_components) == len(names), "no member dropped or duplicated by the parallel fetch"

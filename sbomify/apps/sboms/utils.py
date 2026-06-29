@@ -1739,6 +1739,20 @@ def get_release_sbom_package(
                 s3.put_cached_aggregate(cache_key, body)
             except Exception as e:
                 log.warning("Aggregate cache write failed for %s (served anyway): %s", cache_key, e)
+            else:
+                # GC orphaned aggregates. When the artifact set or metadata changes
+                # the fingerprint changes, leaving the previous key behind. Sweep
+                # siblings under the SAME format+version prefix and drop all but the
+                # key just written — scoping to format_lower-resolved_version keeps
+                # other formats/versions intact. Best-effort: a sweep failure must
+                # never fail the download.
+                gc_prefix = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-"
+                try:
+                    for stale_key in s3.list_cached_aggregates(gc_prefix):
+                        if stale_key != cache_key:
+                            s3.delete_cached_aggregate(stale_key)
+                except Exception as e:
+                    log.warning("Aggregate cache GC failed for prefix %s: %s", gc_prefix, e)
 
     return sbom_path
 
