@@ -752,32 +752,46 @@ def spdx2_member_link(
 def spdx2_inbound_member_dependencies(
     member_sbom_data: dict[str, Any], member_ref: str, member_digest: str, hash_to_ref: dict[str, str]
 ) -> list[dict[str, str]]:
-    """DEPENDS_ON edges from a member to OTHER release members it references via its
-    own ``externalDocumentRefs`` (#357 inbound resolve).
+    """DEPENDS_ON edges from a member to OTHER release members it actually depends on
+    via cross-document references (#357 inbound resolve).
 
-    INTERNAL, digest-only: an inbound reference is resolved only when its SHA-256
-    checksum equals another loaded release member's content hash (``hash_to_ref``,
-    keyed by ``SBOM.sha256_hash``). The external ``spdxDocument`` URL is NEVER
-    dereferenced (SSRF / ADR-004); unresolvable refs (SHA-1, off-platform docs)
-    are left out. Edges are emitted as DEPENDS_ON — the relationship an external
-    document reference denotes — without parsing the member's full relationship
-    graph.
+    Faithful to SPDX 2.x semantics: an ``externalDocumentRef`` only DECLARES an
+    external document — the dependency is asserted by the member's ``relationships``
+    graph. So an edge is emitted only when the member has a ``DEPENDS_ON``
+    relationship whose ``relatedSpdxElement`` is ``DocumentRef-x:...`` AND that
+    DocumentRef-x resolves, by SHA-256 checksum, to another loaded release member
+    (``hash_to_ref``, keyed by ``SBOM.sha256_hash``).
+
+    INTERNAL, digest-only: the external ``spdxDocument`` URL is NEVER dereferenced
+    (SSRF / ADR-004); unresolvable refs (SHA-1, off-platform docs) are left out.
     """
-    edges: list[dict[str, str]] = []
     refs = member_sbom_data.get("externalDocumentRefs")
-    if not isinstance(refs, list):
-        return edges
-    seen: set[str] = set()
+    relationships = member_sbom_data.get("relationships")
+    if not isinstance(refs, list) or not isinstance(relationships, list):
+        return []
+
+    # externalDocumentId -> SHA-256 digest (SHA-256 only; sbomify stores no SHA-1).
+    docid_to_digest: dict[str, str] = {}
     for ref in refs:
         if not isinstance(ref, dict):
             continue
         checksum = ref.get("checksum")
-        if not isinstance(checksum, dict) or checksum.get("algorithm") != "SHA256":
+        docid = ref.get("externalDocumentId")
+        if isinstance(checksum, dict) and checksum.get("algorithm") == "SHA256" and isinstance(docid, str):
+            digest = checksum.get("checksumValue")
+            if _is_sha256_hex(digest):
+                docid_to_digest[docid] = digest
+
+    edges: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for rel in relationships:
+        if not isinstance(rel, dict) or rel.get("relationshipType") != "DEPENDS_ON":
             continue
-        digest = checksum.get("checksumValue")
-        if not _is_sha256_hex(digest):
+        related = rel.get("relatedSpdxElement")
+        if not isinstance(related, str) or ":" not in related:
             continue
-        if digest == member_digest or digest in seen:
+        digest = docid_to_digest.get(related.split(":", 1)[0])
+        if digest is None or digest == member_digest or digest in seen:
             continue
         target_ref = hash_to_ref.get(digest)
         if target_ref is None or target_ref == member_ref:
@@ -845,19 +859,25 @@ def spdx3_member_import(
 def spdx3_inbound_member_dependency_uris(
     member_sbom_data: dict[str, Any], member_digest: str, hash_to_uri: dict[str, str]
 ) -> list[str]:
-    """Root URIs of OTHER release members a member references via its own
-    ``SpdxDocument.import`` ExternalMap entries (#357 inbound resolve, SPDX 3.0).
+    """Root URIs of OTHER release members a member actually depends on (#357 inbound
+    resolve, SPDX 3.0).
 
-    INTERNAL, digest-only: an import entry resolves only when one of its
-    ``verifiedUsing`` sha256 hashes equals another loaded member's content hash
-    (``hash_to_uri``, keyed by ``SBOM.sha256_hash``). The ``locationHint`` URL is
-    NEVER dereferenced (SSRF / ADR-004); unresolvable entries are skipped.
+    Faithful to SPDX 3.0 semantics: an ``import`` ExternalMap only establishes how
+    an external URI resolves — the dependency is asserted by a ``Relationship``
+    element with ``relationshipType == "dependsOn"``. So a target is returned only
+    when a dependsOn relationship's ``to`` URI is covered by an import entry whose
+    ``verifiedUsing`` sha256 equals another loaded member's content hash
+    (``hash_to_uri``, keyed by ``SBOM.sha256_hash``).
+
+    INTERNAL, digest-only: the ``locationHint`` URL is NEVER dereferenced (SSRF /
+    ADR-004); unresolvable entries are skipped.
     """
     elements = member_sbom_data.get("@graph", member_sbom_data.get("elements", []))
     if not isinstance(elements, list):
         return []
-    targets: list[str] = []
-    seen: set[str] = set()
+
+    # external URI -> SHA-256 digest, from the SpdxDocument import maps.
+    uri_to_digest: dict[str, str] = {}
     for element in elements:
         if not isinstance(element, dict) or element.get("type") != "SpdxDocument":
             continue
@@ -867,18 +887,32 @@ def spdx3_inbound_member_dependency_uris(
         for entry in imports:
             if not isinstance(entry, dict):
                 continue
+            external_id = entry.get("externalSpdxId")
+            if not isinstance(external_id, str):
+                continue
             for hash_obj in entry.get("verifiedUsing") or []:
-                if not isinstance(hash_obj, dict) or hash_obj.get("algorithm") != "sha256":
-                    continue
-                digest = hash_obj.get("hashValue")
-                if not _is_sha256_hex(digest):
-                    continue
-                if digest == member_digest or digest in seen:
-                    continue
-                target_uri = hash_to_uri.get(digest)
-                if target_uri is not None:
-                    seen.add(digest)
-                    targets.append(target_uri)
+                if isinstance(hash_obj, dict) and hash_obj.get("algorithm") == "sha256":
+                    digest = hash_obj.get("hashValue")
+                    if _is_sha256_hex(digest):
+                        uri_to_digest[external_id] = digest
+
+    targets: list[str] = []
+    seen: set[str] = set()
+    for element in elements:
+        if not isinstance(element, dict) or element.get("type") != "Relationship":
+            continue
+        if element.get("relationshipType") != "dependsOn":
+            continue
+        to = element.get("to")
+        to_uris = to if isinstance(to, list) else [to]
+        for uri in to_uris:
+            digest = uri_to_digest.get(uri) if isinstance(uri, str) else None
+            if digest is None or digest == member_digest or digest in seen:
+                continue
+            target_uri = hash_to_uri.get(digest)
+            if target_uri is not None:
+                seen.add(digest)
+                targets.append(target_uri)
     return targets
 
 

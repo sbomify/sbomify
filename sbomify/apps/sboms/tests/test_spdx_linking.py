@@ -254,6 +254,13 @@ def _spdx2_member_referencing(team, s3_mock, name, *, target_digest, algorithm, 
                     "checksum": {"algorithm": algorithm, "checksumValue": target_digest},
                 }
             ],
+            "relationships": [
+                {
+                    "spdxElementId": f"SPDXRef-Package-{name}",
+                    "relatedSpdxElement": "DocumentRef-ext:SPDXRef-Package-target",
+                    "relationshipType": "DEPENDS_ON",
+                }
+            ],
         }
     ).encode()
     s3_mock.uploaded_files[f"{name}.spdx.json"] = body
@@ -323,6 +330,10 @@ class TestSPDX3InboundResolve:
                 "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
                 "@graph": [
                     {"type": "software_Package", "spdxId": a_root, "name": "aaa"},
+                    {
+                        "type": "Relationship", "spdxId": f"{a_root}-rel",
+                        "relationshipType": "dependsOn", "from": a_root, "to": ["https://other/x"],
+                    },
                     {
                         "type": "SpdxDocument", "spdxId": f"{a_root}-doc", "rootElement": [a_root],
                         "import": [
