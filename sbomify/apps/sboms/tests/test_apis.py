@@ -3627,3 +3627,26 @@ def test_sbom_upload_file_autodetects_cbom(
     assert resp.status_code == 201
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "cbom"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_explicit_sbom_not_reclassified(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """An explicit ?bom_type=sbom is honored even for crypto content (#1042)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.6.cdx.json"
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id}) + "?bom_type=sbom"
+    resp = client.post(
+        url, data=open(cbom_path).read(), content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert resp.status_code == 201
+    sbom = SBOM.objects.get(id=resp.json()["id"])
+    assert sbom.bom_type == "sbom"
