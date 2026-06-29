@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from datetime import timedelta
 from time import time
 from typing import Any
 from uuid import uuid4
@@ -9,6 +10,7 @@ import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.db.models import Q
 from django.utils import timezone
 from jwt.exceptions import DecodeError, InvalidTokenError
 
@@ -265,13 +267,22 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
         return None, None
 
     # Stamp last-used for stale/leaked-token visibility (#1044). Only valid,
-    # non-expired tokens reach here. Throttle to one PK-targeted single-column
-    # UPDATE per token per window so a hammered token isn't a write per request.
+    # non-expired tokens reach here. The SELECT value short-circuits the common
+    # case (no round-trip when it's recent), but the throttle is ALSO enforced in
+    # the UPDATE's WHERE so a concurrent worker that already refreshed the row
+    # wins: the conditional update writes at most once per window and the
+    # in-memory record is refreshed only when this request actually wrote it.
     now = timezone.now()
     throttle = settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS
     last_used = access_token_record.last_used_at
     if last_used is None or (now - last_used).total_seconds() >= throttle:
-        AccessToken.objects.filter(pk=access_token_record.pk).update(last_used_at=now)
-        access_token_record.last_used_at = now  # keep the returned record fresh
+        cutoff = now - timedelta(seconds=throttle)
+        updated = (
+            AccessToken.objects.filter(pk=access_token_record.pk)
+            .filter(Q(last_used_at__isnull=True) | Q(last_used_at__lt=cutoff))
+            .update(last_used_at=now)
+        )
+        if updated:
+            access_token_record.last_used_at = now  # keep the returned record fresh
 
     return user, access_token_record

@@ -811,10 +811,12 @@ def test_last_used_at_throttled_within_window(sample_user, settings):  # noqa: F
         user=sample_user, encoded_token=token_str, description="t", last_used_at=recent
     )
 
-    get_user_and_token_record(token_str)
+    _, returned = get_user_and_token_record(token_str)
 
     record.refresh_from_db()
-    assert record.last_used_at == recent  # unchanged — throttled
+    assert record.last_used_at == recent  # unchanged — throttled (no DB write)
+    # The in-memory record is only refreshed when this request actually wrote it.
+    assert returned.last_used_at == recent
 
 
 @pytest.mark.django_db
