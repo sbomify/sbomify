@@ -31,6 +31,14 @@ log = logging.getLogger(__name__)
 TOKEN_TYPE_PAT = "pat"  # nosec B105 — token-type sentinel, not a credential
 TOKEN_TYPE_OIDC = "oidc"  # nosec B105 — token-type sentinel, not a credential
 
+# Forward clock-skew tolerance for last_used_at (#1044). A value up to this far
+# ahead of our clock is treated as a concurrent worker's lead-clock write, not a
+# stale value, so we never write an EARLIER time back over a newer one. Kept
+# SEPARATE from the throttle window so even throttle=0 (write-every-request)
+# still tolerates skew. Only a value beyond this is "broken clock / manual edit"
+# and gets recovered. Matches the 60s OIDC clock-skew convention.
+_LAST_USED_FORWARD_SKEW = timedelta(seconds=60)
+
 
 def create_personal_access_token(
     user: AbstractBaseUser,
@@ -275,14 +283,14 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
     now = timezone.now()
     throttle = settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS
     cutoff = now - timedelta(seconds=throttle)
-    far_future = now + timedelta(seconds=throttle)
+    far_future = now + _LAST_USED_FORWARD_SKEW
     last_used = access_token_record.last_used_at
     # "Fresh" = within [cutoff, far_future]: recently stamped, OR stamped slightly
-    # ahead by a concurrent worker whose clock leads ours (tolerate up to one
-    # window of forward skew so we never write an EARLIER time back over a newer
-    # one). Refresh on NULL, stale (< cutoff), or genuinely-far-future
-    # (> now + window, i.e. a broken clock / manual edit that would otherwise
-    # freeze the field forever).
+    # ahead by a concurrent worker whose clock leads ours (forward-skew tolerance,
+    # so we never write an EARLIER time back over a newer one). The skew bound is
+    # independent of the throttle window, so throttle=0 still tolerates skew.
+    # Refresh on NULL, stale (< cutoff), or genuinely-far-future (> now + skew,
+    # i.e. a broken clock / manual edit that would otherwise freeze the field).
     is_fresh = last_used is not None and cutoff <= last_used <= far_future
     if not is_fresh:
         updated = (

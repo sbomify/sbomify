@@ -915,3 +915,25 @@ def test_last_used_at_not_clobbered_by_slight_future(sample_user, settings):  # 
 
     record.refresh_from_db()
     assert record.last_used_at == slightly_ahead  # not clobbered with an earlier time
+
+
+@pytest.mark.django_db
+def test_last_used_at_skew_tolerated_even_at_zero_throttle(sample_user, settings):  # noqa: F811
+    """Forward-skew tolerance is independent of the throttle window: even with
+    throttle=0 (write-every-request), a slightly-ahead concurrent timestamp is
+    not clobbered with an earlier now."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 0
+    token_str = create_personal_access_token(sample_user)
+    slightly_ahead = timezone.now() + timedelta(seconds=10)  # within the fixed skew tolerance
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="t", last_used_at=slightly_ahead
+    )
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at == slightly_ahead  # not clobbered despite throttle=0
