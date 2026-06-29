@@ -54,6 +54,29 @@ def _cdx_member(team, s3_mock, name):
     )
 
 
+def _spdx3_member(team, s3_mock, name, *, root_uri, sha):
+    """A PUBLIC component whose member SBOM is an SPDX 3.0 JSON-LD document."""
+    component = Component.objects.create(
+        name=f"{name}-comp", team=team, visibility=Component.Visibility.PUBLIC,
+        component_type=Component.ComponentType.BOM,
+    )
+    body = json.dumps(
+        {
+            "@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld",
+            "@graph": [
+                {"type": "software_Package", "spdxId": root_uri, "name": name},
+                {"type": "SpdxDocument", "spdxId": f"{root_uri}-doc", "rootElement": [root_uri]},
+            ],
+        }
+    ).encode()
+    filename = f"{name}.spdx3.json"
+    s3_mock.uploaded_files[filename] = body
+    return SBOM.objects.create(
+        name=name, component=component, format="spdx", version="1.0.0",
+        sbom_filename=filename, sha256_hash=sha,
+    )
+
+
 @pytest.mark.django_db
 class TestSPDX23Linking:
     def test_spdx2_member_linked_via_external_document_ref(
@@ -92,3 +115,34 @@ class TestSPDX23Linking:
 
         assert out.get("externalDocumentRefs", []) == []  # CDX member can't link natively
         assert "beta" in [p["name"] for p in out["packages"]]  # flattened to a local stub
+
+
+@pytest.mark.django_db
+class TestSPDX30Linking:
+    def test_spdx3_member_linked_via_import_map(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        team = team_with_business_plan
+        product = Product.objects.create(name="P", team=team, is_public=True)
+        release = Release.objects.create(product=product, name="v1.0.0")
+        member = _spdx3_member(
+            team, s3_sboms_mock, "gamma", root_uri="https://member.example/g#root", sha="d" * 64
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=member)
+
+        out = json.loads(
+            get_release_sbom_package(release, tmp_path, output_format="spdx", version="3.0").read_bytes()
+        )
+        graph = out["@graph"]
+
+        doc = next(e for e in graph if e["type"] == "SpdxDocument")
+        imports = doc.get("import", [])
+        assert len(imports) == 1
+        assert imports[0]["externalSpdxId"] == "https://member.example/g#root"
+        assert imports[0]["locationHint"]  # download URL present
+        assert imports[0]["verifiedUsing"][0] == {"type": "Hash", "algorithm": "sha256", "hashValue": "d" * 64}
+
+        describes = next(e for e in graph if e["type"] == "Relationship" and e["relationshipType"] == "describes")
+        assert "https://member.example/g#root" in describes["to"]
+        # No local stub package for the natively-linked member.
+        assert "gamma" not in [e.get("name") for e in graph if e["type"] == "software_Package"]

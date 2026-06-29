@@ -863,8 +863,14 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         ]
         fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
 
+        from sbomify.apps.sboms.utils import get_download_url_for_sbom, spdx3_member_import
+
         package_index = 0
         all_element_spdx_ids = [org_spdx_id, tool_spdx_id, main_pkg_spdx_id]
+        # SPDX-native cross-document links (#357): import-map entries + the member
+        # root-element URIs they point at (referenced from the describes edge).
+        import_map: list[dict[str, Any]] = []
+        external_member_uris: list[str] = []
 
         for artifact in members:
             sbom_instance = artifact.sbom
@@ -881,6 +887,25 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             except (json.JSONDecodeError, Exception) as e:
                 log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
                 continue
+
+            # ``sbom_instance`` is the select_related-loaded artifact.sbom, so
+            # re-fetching it per artifact is redundant (#998).
+            try:
+                download_url: str | None = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
+            except Exception as e:
+                log.warning(f"Failed to build download URL for SBOM {sbom_id}: {e}")
+                download_url = None
+
+            # SPDX-native import-map link (#357): for an SPDX 3.0 member with a
+            # content hash, reference its real root element via an import-map
+            # entry instead of flattening it into a local stub package.
+            if download_url:
+                link = spdx3_member_import(sbom_instance, sbom_data, download_url)
+                if link is not None:
+                    import_entry, root_uri = link
+                    import_map.append(import_entry)
+                    external_member_uris.append(root_uri)
+                    continue
 
             component_info = self._extract_component_info_from_sbom(sbom_data, sbom_path.name)
             if component_info is None:
@@ -902,13 +927,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             if version:
                 pkg_element["software_packageVersion"] = str(version)
 
-            # Add external reference to original SBOM. ``sbom_instance`` is the
-            # select_related-loaded artifact.sbom (same row sbom_id points to),
-            # so re-fetching it per artifact is redundant (#998).
-            from sbomify.apps.sboms.utils import get_download_url_for_sbom
-
-            try:
-                download_url = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
+            if download_url:
                 pkg_element["externalRef"] = [
                     {
                         "type": "ExternalRef",
@@ -916,15 +935,13 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
                         "locator": [download_url],
                     }
                 ]
-            except Exception as e:
-                log.warning(f"Failed to add external ref for SBOM {sbom_id}: {e}")
 
             graph.append(pkg_element)
 
-        # Add describes relationship
+        # Add describes relationship (local stub packages + native external URIs)
         component_pkg_ids = [
             sid for sid in all_element_spdx_ids if "#SPDXRef-Package-" in sid and sid != main_pkg_spdx_id
-        ]
+        ] + external_member_uris
         rel_spdx_id = f"{doc_namespace}#SPDXRef-Relationship-describes"
         if component_pkg_ids:
             graph.append(
@@ -940,7 +957,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             all_element_spdx_ids.append(rel_spdx_id)
 
         # SpdxDocument element inside @graph
-        doc_element = {
+        doc_element: dict[str, Any] = {
             "type": "SpdxDocument",
             "spdxId": doc_namespace,
             "creationInfo": creation_info_ref,
@@ -950,6 +967,9 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             "element": all_element_spdx_ids,
             "rootElement": [main_pkg_spdx_id],
         }
+        # Import map: one ExternalMap per natively-linked member (#357).
+        if import_map:
+            doc_element["import"] = import_map
         graph.append(doc_element)
 
         # Build root document with JSON-LD structure

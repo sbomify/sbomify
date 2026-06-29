@@ -679,7 +679,9 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None
     )
 
 
-def spdx2_member_link(sbom_instance: Any, sbom_data: dict[str, Any], doc_ref_id: str) -> tuple[dict, str] | None:
+def spdx2_member_link(
+    sbom_instance: Any, sbom_data: dict[str, Any], doc_ref_id: str
+) -> tuple[dict[str, Any], str] | None:
     """Native SPDX 2.x cross-document link for an aggregate member.
 
     Returns ``(external_document_ref, related_spdx_element)`` for SPDX-native
@@ -719,6 +721,53 @@ def spdx2_member_link(sbom_instance: Any, sbom_data: dict[str, Any], doc_ref_id:
         "checksum": {"algorithm": "SHA256", "checksumValue": checksum},
     }
     return external_document_ref, f"{doc_ref_id}:{described}"
+
+
+def _spdx3_root_element_uri(elements: list[dict[str, Any]]) -> str | None:
+    """The root element URI of an SPDX 3.0 member graph: the SpdxDocument's
+    rootElement, else a software_Sbom, else the first software_Package."""
+    for element in elements:
+        if element.get("type") == "SpdxDocument":
+            roots = element.get("rootElement")
+            if isinstance(roots, list) and roots:
+                return str(roots[0])
+    for type_name in ("software_Sbom", "software_Package"):
+        for element in elements:
+            if element.get("type") == type_name and element.get("spdxId"):
+                return str(element["spdxId"])
+    return None
+
+
+def spdx3_member_import(
+    sbom_instance: Any, sbom_data: dict[str, Any], download_url: str
+) -> tuple[dict[str, Any], str] | None:
+    """Native SPDX 3.0 import-map link for an aggregate member.
+
+    Returns ``(import_entry, root_element_uri)`` for an SPDX-3 member with a
+    content checksum, or ``None`` to fall back to the local stub. The aggregate
+    adds ``import_entry`` to ``SpdxDocument.import`` and references
+    ``root_element_uri`` in its ``describes`` relationship; ``externalSpdxId`` and
+    that referenced URI are identical so the cross-document reference resolves.
+    """
+    is_spdx3 = "@graph" in sbom_data or (
+        str(sbom_data.get("spdxVersion", "")).startswith("SPDX-3.") and "elements" in sbom_data
+    )
+    if not is_spdx3:
+        return None
+    checksum = getattr(sbom_instance, "sha256_hash", None)
+    if not checksum:
+        return None
+    elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+    root_uri = _spdx3_root_element_uri(elements)
+    if not root_uri:
+        return None
+    import_entry = {
+        "type": "ExternalMap",
+        "externalSpdxId": root_uri,
+        "locationHint": download_url,
+        "verifiedUsing": [{"type": "Hash", "algorithm": "sha256", "hashValue": checksum}],
+    }
+    return import_entry, root_uri
 
 
 def create_product_external_references(product: Product, user: Any = None) -> list[Any]:
@@ -1765,7 +1814,12 @@ def get_release_sbom_package(
         user=user,
     )
     sbom = builder(target_folder)
-    body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
+    # CycloneDX + SPDX 2.3 builders return a pydantic model; SPDX 3.0 builders
+    # return a JSON-LD dict (@context/@graph) that has no model_dump_json (#357).
+    if hasattr(sbom, "model_dump_json"):
+        body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
+    else:
+        body = json.dumps(sbom, indent=2).encode()
     sbom_path.write_bytes(body)
 
     # Only cache a COMPLETE build. The builders skip a member on an S3 fetch
