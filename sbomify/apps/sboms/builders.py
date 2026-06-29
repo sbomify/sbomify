@@ -192,9 +192,12 @@ class BaseSBOMBuilder(ABC):
 
         Parallelizes only the S3 I/O; callers still iterate members serially to
         build the aggregate deterministically. ``download_sbom_file`` is safe to
-        run across threads: it constructs a fresh ``S3Client`` per call, writes to
-        a distinct sha256-named file, touches no ORM, and its only shared writes
-        (``temp_files.append`` / ``had_member_fetch_error``) are GIL-atomic.
+        run across threads: it constructs a fresh ``S3Client`` per call, touches
+        no ORM, and its only shared writes (``temp_files.append`` /
+        ``had_member_fetch_error``) are GIL-atomic. Output files are named by
+        ``sbom.sbom_filename``, which is the content sha256, so two members can
+        only collide on a filename when their bytes are identical — a concurrent
+        overwrite then writes the same bytes and the aggregate is unaffected.
         """
         if not sbom_instances:
             return {}
@@ -202,6 +205,29 @@ class BaseSBOMBuilder(ABC):
         with ThreadPoolExecutor(max_workers=workers) as executor:
             results = executor.map(self.download_sbom_file, sbom_instances)
         return {str(sbom.id): result for sbom, result in zip(sbom_instances, results)}
+
+    def _members_with_files(self, release: Any) -> tuple[list[Any], dict[str, tuple[Path, str] | None]]:
+        """Filtered release members paired with their concurrently-fetched files.
+
+        Centralizes the access-control filter (a public release hides non-public
+        members) and the parallel prefetch shared by every release builder, so the
+        rules can't drift between the CycloneDX and SPDX builders. Returns
+        ``(members, {str(sbom.id): (path, id) | None})``.
+        """
+        from sbomify.apps.sboms.models import Component
+
+        sbom_artifacts = (
+            release.artifacts.filter(sbom__isnull=False)
+            .select_related("sbom__component", "sbom__component__team")
+            .prefetch_related("sbom__component__team")
+        )
+        members = [
+            artifact
+            for artifact in sbom_artifacts
+            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+        ]
+        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+        return members, fetched
 
     def select_best_sbom(self, sboms: list[Any]) -> Any:
         """
@@ -351,23 +377,9 @@ class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
         # Build components section from release artifacts
         sbom.components = []
 
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component", "sbom__component__team")
-            .prefetch_related("sbom__component__team")
-        )
-
         component_type_mapping = create_component_type_mapping()
 
-        # Filter members once (access control), then fetch their files concurrently.
-        from sbomify.apps.sboms.models import Component
-
-        members = [
-            artifact
-            for artifact in sbom_artifacts
-            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
-        ]
-        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+        members, fetched = self._members_with_files(release)
 
         for artifact in members:
             sbom_instance = artifact.sbom
@@ -549,21 +561,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         )
 
         # Build component packages from release artifacts
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component", "sbom__component__team")
-            .prefetch_related("sbom__component__team")
-        )
-
-        # Filter members once (access control), then fetch their files concurrently.
-        from sbomify.apps.sboms.models import Component
-
-        members = [
-            artifact
-            for artifact in sbom_artifacts
-            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
-        ]
-        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+        members, fetched = self._members_with_files(release)
 
         from sbomify.apps.sboms.utils import spdx2_member_link
 
@@ -847,21 +845,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         graph.append(main_pkg)
 
         # Process release artifacts
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component", "sbom__component__team")
-            .prefetch_related("sbom__component__team")
-        )
-
-        # Filter members once (access control), then fetch their files concurrently.
-        from sbomify.apps.sboms.models import Component
-
-        members = [
-            artifact
-            for artifact in sbom_artifacts
-            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
-        ]
-        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+        members, fetched = self._members_with_files(release)
 
         from sbomify.apps.sboms.utils import get_download_url_for_sbom, spdx3_member_import
 

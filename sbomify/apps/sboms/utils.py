@@ -708,10 +708,16 @@ def spdx2_member_link(
     if isinstance(describes, list) and describes:
         described = describes[0]
     if described is None:
-        for rel in sbom_data.get("relationships", []):
-            if rel.get("relationshipType") == "DESCRIBES" and rel.get("spdxElementId") == "SPDXRef-DOCUMENT":
-                described = rel.get("relatedSpdxElement")
-                break
+        relationships = sbom_data.get("relationships")
+        if isinstance(relationships, list):
+            for rel in relationships:
+                if (
+                    isinstance(rel, dict)
+                    and rel.get("relationshipType") == "DESCRIBES"
+                    and rel.get("spdxElementId") == "SPDXRef-DOCUMENT"
+                ):
+                    described = rel.get("relatedSpdxElement")
+                    break
     if described is None:
         described = "SPDXRef-DOCUMENT"
 
@@ -723,17 +729,23 @@ def spdx2_member_link(
     return external_document_ref, f"{doc_ref_id}:{described}"
 
 
-def _spdx3_root_element_uri(elements: list[dict[str, Any]]) -> str | None:
+def _spdx3_root_element_uri(elements: Any) -> str | None:
     """The root element URI of an SPDX 3.0 member graph: the SpdxDocument's
-    rootElement, else a software_Sbom, else the first software_Package."""
+    rootElement, else a software_Sbom, else the first software_Package.
+
+    Tolerates malformed input (a non-list ``@graph``, non-dict elements) since
+    member SBOM JSON is untrusted.
+    """
+    if not isinstance(elements, list):
+        return None
     for element in elements:
-        if element.get("type") == "SpdxDocument":
+        if isinstance(element, dict) and element.get("type") == "SpdxDocument":
             roots = element.get("rootElement")
             if isinstance(roots, list) and roots:
                 return str(roots[0])
     for type_name in ("software_Sbom", "software_Package"):
         for element in elements:
-            if element.get("type") == type_name and element.get("spdxId"):
+            if isinstance(element, dict) and element.get("type") == type_name and element.get("spdxId"):
                 return str(element["spdxId"])
     return None
 
