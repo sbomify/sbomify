@@ -3650,3 +3650,38 @@ def test_cyclonedx_upload_explicit_sbom_not_reclassified(
     assert resp.status_code == 201
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "sbom"
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_autodetects_cbom_from_metadata_component(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """CBOM detection fires when only metadata.component is a crypto asset (#1042)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    doc = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "cryptographic-asset",
+                "name": "rsa-2048",
+                "bom-ref": "crypto-1",
+                "cryptoProperties": {"assetType": "algorithm"},
+            }
+        },
+        "components": [{"type": "library", "name": "libfoo", "version": "1.0"}],
+    }
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url, data=json.dumps(doc), content_type="application/json", **get_api_headers(sample_access_token)
+    )
+    assert resp.status_code == 201
+    sbom = SBOM.objects.get(id=resp.json()["id"])
+    assert sbom.bom_type == "cbom"
