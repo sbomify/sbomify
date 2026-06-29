@@ -299,7 +299,8 @@ def get_user_and_token_record(
         # jwt.ExpiredSignatureError — classify it as an expiry (INFO), not a
         # generic decode failure (WARNING), matching the DB-row expiry path.
         if isinstance(e.__cause__, jwt.ExpiredSignatureError):
-            log.info("Rejecting JWT-expired token: %s", e)
+            # decode_personal_access_token already logged the routine expiry; just
+            # record the audit event (also INFO) without duplicating that line.
             emit("failure", reason="expired")
             return None, None
         log.warning(f"Failed to decode token: {str(e)}")
