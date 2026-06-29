@@ -702,11 +702,15 @@ def spdx2_member_link(
         return None
 
     # The element the member document describes: documentDescribes, else the
-    # SPDXRef-DOCUMENT DESCRIBES relationship, else the document itself.
+    # SPDXRef-DOCUMENT DESCRIBES relationship, else the document itself. Member
+    # JSON is untrusted, so only accept a non-empty string at each step.
+    def _nonempty_str(value: Any) -> str | None:
+        return value if isinstance(value, str) and value else None
+
     described: str | None = None
     describes = sbom_data.get("documentDescribes")
     if isinstance(describes, list) and describes:
-        described = describes[0]
+        described = _nonempty_str(describes[0])
     if described is None:
         relationships = sbom_data.get("relationships")
         if isinstance(relationships, list):
@@ -716,8 +720,9 @@ def spdx2_member_link(
                     and rel.get("relationshipType") == "DESCRIBES"
                     and rel.get("spdxElementId") == "SPDXRef-DOCUMENT"
                 ):
-                    described = rel.get("relatedSpdxElement")
-                    break
+                    described = _nonempty_str(rel.get("relatedSpdxElement"))
+                    if described is not None:
+                        break
     if described is None:
         described = "SPDXRef-DOCUMENT"
 

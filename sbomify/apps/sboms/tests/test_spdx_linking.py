@@ -146,3 +146,34 @@ class TestSPDX30Linking:
         assert "https://member.example/g#root" in describes["to"]
         # No local stub package for the natively-linked member.
         assert "gamma" not in [e.get("name") for e in graph if e["type"] == "software_Package"]
+
+    def test_spdx2_malformed_describes_falls_back_to_document(
+        self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
+    ):
+        """A non-string documentDescribes entry must not produce a garbage
+        DocumentRef ref; it falls back to SPDXRef-DOCUMENT."""
+        team = team_with_business_plan
+        product = Product.objects.create(name="P", team=team, is_public=True)
+        release = Release.objects.create(product=product, name="v1.0.0")
+        component = Component.objects.create(
+            name="m-comp", team=team, visibility=Component.Visibility.PUBLIC,
+            component_type=Component.ComponentType.BOM,
+        )
+        body = json.dumps(
+            {
+                "spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT", "name": "m",
+                "documentNamespace": "https://member.example/m",
+                "documentDescribes": [{"not": "a string"}],  # malformed
+                "relationships": "not-a-list",  # malformed
+            }
+        ).encode()
+        s3_sboms_mock.uploaded_files["m.spdx.json"] = body
+        member = SBOM.objects.create(
+            name="m", component=component, format="spdx", version="1.0.0",
+            sbom_filename="m.spdx.json", sha256_hash="e" * 64,
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=member)
+
+        out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx").read_bytes())
+        contains = [r for r in out["relationships"] if r["relationshipType"] == "CONTAINS"]
+        assert any(r["relatedSpdxElement"] == "DocumentRef-1:SPDXRef-DOCUMENT" for r in contains)
