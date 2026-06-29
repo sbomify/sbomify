@@ -268,18 +268,22 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
 
     # Stamp last-used for stale/leaked-token visibility (#1044). Only valid,
     # non-expired tokens reach here. The SELECT value short-circuits the common
-    # case (no round-trip when it's recent), but the throttle is ALSO enforced in
-    # the UPDATE's WHERE so a concurrent worker that already refreshed the row
-    # wins: the conditional update writes at most once per window and the
+    # case (no round-trip when it's genuinely fresh), but the throttle is ALSO
+    # enforced in the UPDATE's WHERE so a concurrent worker that already refreshed
+    # the row wins: the conditional update writes at most once per window and the
     # in-memory record is refreshed only when this request actually wrote it.
     now = timezone.now()
     throttle = settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS
+    cutoff = now - timedelta(seconds=throttle)
     last_used = access_token_record.last_used_at
-    if last_used is None or (now - last_used).total_seconds() >= throttle:
-        cutoff = now - timedelta(seconds=throttle)
+    # "Fresh" = stamped within the throttle window [cutoff, now]. NULL, stale
+    # (< cutoff), AND future-dated (clock skew / manual edit, > now) all need a
+    # refresh — otherwise a future value would freeze the field forever.
+    is_fresh = last_used is not None and cutoff <= last_used <= now
+    if not is_fresh:
         updated = (
             AccessToken.objects.filter(pk=access_token_record.pk)
-            .filter(Q(last_used_at__isnull=True) | Q(last_used_at__lt=cutoff))
+            .filter(Q(last_used_at__isnull=True) | Q(last_used_at__lt=cutoff) | Q(last_used_at__gt=now))
             .update(last_used_at=now)
         )
         if updated:

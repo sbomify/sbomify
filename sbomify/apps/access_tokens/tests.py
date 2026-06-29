@@ -873,3 +873,24 @@ def test_last_used_at_stamped_for_oidc_token(sample_user):  # noqa: F811
 
     record.refresh_from_db()
     assert record.last_used_at is not None
+
+
+@pytest.mark.django_db
+def test_last_used_at_refreshed_when_future_dated(sample_user, settings):  # noqa: F811
+    """A future-dated last_used_at (clock skew / manual edit) is treated as stale
+    and refreshed, not frozen forever."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
+    token_str = create_personal_access_token(sample_user)
+    future = timezone.now() + timedelta(days=1)
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="t", last_used_at=future
+    )
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at < future  # refreshed to ~now, not stuck in the future

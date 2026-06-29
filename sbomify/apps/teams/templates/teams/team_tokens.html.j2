@@ -135,7 +135,7 @@
                                     {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
                                 </p>
                                 <p class="text-sm text-text-muted m-0">
-                                    <i class="fas fa-clock-rotate-left text-xs mr-1"></i>
+                                    <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
                                     Last used
                                     {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
                                 </p>
@@ -172,7 +172,7 @@
                                     {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
                                 </p>
                                 <p class="text-sm text-text-muted m-0">
-                                    <i class="fas fa-clock-rotate-left text-xs mr-1"></i>
+                                    <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
                                     Last used
                                     {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
                                 </p>

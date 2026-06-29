@@ -74,10 +74,6 @@ class TestTeamTokensView:
 
     def test_get_shows_last_used(self, client: Client, sample_team_with_owner_member):
         """The token list surfaces last_used_at: a relative time when set, 'never' when not."""
-        from datetime import timedelta
-
-        from django.utils import timezone
-
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
