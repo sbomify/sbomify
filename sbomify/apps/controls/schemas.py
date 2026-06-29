@@ -5,6 +5,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from sbomify.apps.controls.models import ControlEvidence, ControlStatus
+
+# Valid value sets, sourced from the model TextChoices so the API docs (and the
+# 400 messages keyed off the same choices) cannot drift from what the endpoints
+# actually accept.
+_STATUS_VALUES = ", ".join(choice[0] for choice in ControlStatus.Status.choices)
+_EVIDENCE_TYPE_VALUES = ", ".join(choice[0] for choice in ControlEvidence.EvidenceType.choices)
+
 
 class CatalogSchema(BaseModel):
     """Schema for ControlCatalog API responses."""
@@ -44,7 +52,7 @@ class ControlWithStatusSchema(ControlSchema):
 class StatusUpdateSchema(BaseModel):
     """Schema for updating a single control status."""
 
-    status: str = Field(..., description="One of: compliant, partial, not_implemented, not_applicable")
+    status: str = Field(..., description=f"One of: {_STATUS_VALUES}")
     product_id: str | None = None
     notes: str = ""
 
@@ -53,7 +61,7 @@ class BulkStatusUpdateItemSchema(BaseModel):
     """Schema for a single item in a bulk status update."""
 
     control_id: str
-    status: str = Field(..., description="One of: compliant, partial, not_implemented, not_applicable")
+    status: str = Field(..., description=f"One of: {_STATUS_VALUES}")
     product_id: str | None = None
     notes: str = ""
 
@@ -178,7 +186,7 @@ class ControlEvidenceSchema(BaseModel):
 class CreateEvidenceSchema(BaseModel):
     """Schema for creating evidence on a control."""
 
-    evidence_type: str = Field(..., description="One of: url, document, note")
+    evidence_type: str = Field(..., description=f"One of: {_EVIDENCE_TYPE_VALUES}")
     title: str
     url: str = ""
     document_id: str = ""
