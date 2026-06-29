@@ -679,6 +679,14 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None
     )
 
 
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def _is_sha256_hex(value: Any) -> bool:
+    """True iff ``value`` is a lower-case 64-hex SHA-256 digest string."""
+    return isinstance(value, str) and bool(_SHA256_HEX_RE.fullmatch(value))
+
+
 def spdx2_member_link(
     sbom_instance: Any, sbom_data: dict[str, Any], doc_ref_id: str
 ) -> tuple[dict[str, Any], str] | None:
@@ -698,8 +706,9 @@ def spdx2_member_link(
         return None
     namespace = sbom_data.get("documentNamespace")
     checksum = getattr(sbom_instance, "sha256_hash", None)
-    # Both go into the SPDX output; reject non-string/empty (member JSON is untrusted).
-    if not (isinstance(namespace, str) and namespace) or not (isinstance(checksum, str) and checksum):
+    # namespace goes into the SPDX output (untrusted member JSON); checksum is the
+    # referential-integrity digest, so require a real 64-hex SHA-256.
+    if not (isinstance(namespace, str) and namespace) or not _is_sha256_hex(checksum):
         return None
 
     # The element the member document describes: documentDescribes, else the
@@ -775,7 +784,7 @@ def spdx3_member_import(
     if not is_spdx3:
         return None
     checksum = getattr(sbom_instance, "sha256_hash", None)
-    if not (isinstance(checksum, str) and checksum):  # goes into verifiedUsing; untrusted
+    if not _is_sha256_hex(checksum):  # goes into verifiedUsing as the integrity digest
         return None
     elements = sbom_data.get("@graph", sbom_data.get("elements", []))
     root_uri = _spdx3_root_element_uri(elements)

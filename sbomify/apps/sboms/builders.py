@@ -214,7 +214,7 @@ class BaseSBOMBuilder(ABC):
         rules can't drift between the CycloneDX and SPDX builders. Returns
         ``(members, {str(sbom.id): (path, id) | None})``.
         """
-        from sbomify.apps.sboms.models import Component
+        from sbomify.apps.core.models import Component
 
         sbom_artifacts = (
             release.artifacts.filter(sbom__isnull=False)
