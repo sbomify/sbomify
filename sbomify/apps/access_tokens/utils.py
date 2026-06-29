@@ -49,7 +49,8 @@ def _emit_token_auth_event(
         "token_id": str(record.pk) if record is not None else None,
         "token_fingerprint": _token_fingerprint(token),
         "user_id": user_id,
-        "team_id": str(record.team_id) if record is not None else None,
+        # Keep None (JSON null) for a team-less token rather than the string "None".
+        "team_id": str(record.team_id) if record is not None and record.team_id is not None else None,
         "source_ip": source_ip,
         "attempted_action": attempted_action,
     }

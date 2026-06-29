@@ -891,3 +891,16 @@ def test_token_auth_malformed_sub_is_clean_failure(caplog):
     assert user is None and record is None
     e = _token_auth_events(caplog)[0]
     assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_team_id_null_for_teamless_token(sample_user, caplog):  # noqa: F811
+    """#1058: a token with no team emits team_id as None (JSON null), not the string 'None'."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="no-team")
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user == sample_user
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "success"
+    assert e.team_id is None
