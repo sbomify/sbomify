@@ -10,7 +10,7 @@ from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk import RunReason
 from sbomify.apps.sboms.utils import SBOMDataError
 
-from ..models import SBOM
+from ..models import SBOM, Component
 from .fixtures import sample_component  # noqa: F401
 
 CMD = "sbomify.apps.sboms.management.commands.backfill_cbom_retag"
@@ -131,3 +131,43 @@ def test_skips_on_uniqueness_collision(sample_component, mocker, enqueue):  # no
     sbom_row.refresh_from_db()
     assert sbom_row.bom_type == "sbom"  # flip rolled back on the uniqueness collision
     enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_team_id_restricts_candidates(sample_component, mocker, enqueue):  # noqa: F811
+    """#1069: --team-id only re-tags SBOMs in that workspace."""
+    from sbomify.apps.core.utils import number_to_random_token
+    from sbomify.apps.teams.models import Team
+
+    other_team = Team.objects.create(name="Other")
+    other_team.key = number_to_random_token(other_team.pk)
+    other_team.save()
+    other_component = Component.objects.create(
+        name="other", team=other_team, component_type=Component.ComponentType.BOM
+    )
+    in_scope = _make_sbom(sample_component, "in_scope")
+    out_of_scope = _make_sbom(other_component, "out_of_scope")
+    mocker.patch(f"{CMD}.get_sbom_data", side_effect=lambda sid: (SBOM.objects.get(id=sid), CBOM_DATA))
+
+    call_command("backfill_cbom_retag", "--team-id", str(sample_component.team_id))
+
+    in_scope.refresh_from_db()
+    out_of_scope.refresh_from_db()
+    assert in_scope.bom_type == "cbom"
+    assert out_of_scope.bom_type == "sbom"  # other workspace untouched
+
+
+@pytest.mark.django_db
+def test_limit_caps_scanning(sample_component, mocker, enqueue):  # noqa: F811
+    """#1069: --limit stops after N candidates."""
+    s1 = _make_sbom(sample_component, "s1")
+    s2 = _make_sbom(sample_component, "s2")
+    mocker.patch(f"{CMD}.get_sbom_data", side_effect=lambda sid: (SBOM.objects.get(id=sid), CBOM_DATA))
+
+    call_command("backfill_cbom_retag", "--limit", "1")
+
+    s1.refresh_from_db()
+    s2.refresh_from_db()
+    retagged = [s for s in (s1, s2) if s.bom_type == "cbom"]
+    assert len(retagged) == 1  # capped at one
+    assert enqueue.call_count == 1
