@@ -24,7 +24,7 @@ def _make_sbom(component, name, bom_type="sbom"):
         name=name,
         component=component,
         format="cyclonedx",
-        version=name,  # distinct per row to satisfy the unique (component, version, format, bom_type)
+        version=name,  # distinct per row to satisfy unique (component, version, format, qualifiers, bom_type)
         sbom_filename=f"{name}.json",
         bom_type=bom_type,
     )
