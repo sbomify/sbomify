@@ -824,6 +824,10 @@ def test_throttled_handler_sets_retry_after():
     assert resp.status_code == 429
     assert resp["Retry-After"] == "42"
 
+    # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
+    assert _on_throttled(req, Throttled(wait=0.4))["Retry-After"] == "1"
+    assert _on_throttled(req, Throttled(wait=5.1))["Retry-After"] == "6"
+
     resp_no_wait = _on_throttled(req, Throttled(wait=None))
     assert resp_no_wait.status_code == 429
     assert "Retry-After" not in resp_no_wait

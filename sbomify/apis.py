@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
@@ -155,7 +156,9 @@ def _on_throttled(request: Any, exc: Throttled) -> Any:
     """429 with a Retry-After header (#1060); ninja's default HttpError handler drops exc.wait."""
     response = api.create_response(request, {"detail": "Too many requests."}, status=429)
     if exc.wait is not None:
-        response["Retry-After"] = str(int(exc.wait))
+        # Round up (never below 1s) so a fractional wait doesn't truncate to 0 and
+        # invite clients to retry too early into the throttle.
+        response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
     return response
 
 
