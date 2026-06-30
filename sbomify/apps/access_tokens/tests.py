@@ -831,3 +831,160 @@ def test_throttled_handler_sets_retry_after():
     resp_no_wait = _on_throttled(req, Throttled(wait=None))
     assert resp_no_wait.status_code == 429
     assert "Retry-After" not in resp_no_wait
+
+
+# ---------------------------------------------------------------------------
+# #1044: AccessToken.last_used_at usage tracking
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_last_used_at_stamped_on_use(sample_user):  # noqa: F811
+    """A valid authenticated request stamps last_used_at on the token row."""
+    token_str = create_personal_access_token(sample_user)
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t")
+    assert record.last_used_at is None
+
+    user, returned = get_user_and_token_record(token_str)
+
+    assert user == sample_user
+    record.refresh_from_db()
+    assert record.last_used_at is not None
+    # The in-memory record handed to the caller is also fresh (not stale).
+    assert returned.last_used_at is not None
+
+
+@pytest.mark.django_db
+def test_last_used_at_throttled_within_window(sample_user, settings):  # noqa: F811
+    """A second use inside the throttle window does NOT write again."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
+    token_str = create_personal_access_token(sample_user)
+    recent = timezone.now() - timedelta(seconds=30)  # well inside the 300s window
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t", last_used_at=recent)
+
+    _, returned = get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at == recent  # unchanged — throttled (no DB write)
+    # The in-memory record is only refreshed when this request actually wrote it.
+    assert returned.last_used_at == recent
+
+
+@pytest.mark.django_db
+def test_last_used_at_refreshed_after_window(sample_user, settings):  # noqa: F811
+    """Once last_used_at is older than the window, the next use refreshes it."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
+    token_str = create_personal_access_token(sample_user)
+    stale = timezone.now() - timedelta(seconds=400)  # older than the 300s window
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t", last_used_at=stale)
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at > stale
+
+
+@pytest.mark.django_db
+def test_last_used_at_not_stamped_for_expired_token(sample_user):  # noqa: F811
+    """An expired token is rejected and must NOT be stamped."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    token_str = create_personal_access_token(sample_user)
+    record = AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="expired",
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+
+    user, returned = get_user_and_token_record(token_str)
+
+    assert user is None and returned is None
+    record.refresh_from_db()
+    assert record.last_used_at is None
+
+
+@pytest.mark.django_db
+def test_last_used_at_stamped_for_oidc_token(sample_user):  # noqa: F811
+    """OIDC short-lived tokens flow through the same chokepoint and get stamped."""
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+
+    token_str = create_personal_access_token(sample_user, expires_at=time() + 900, token_type=TOKEN_TYPE_OIDC)
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="oidc")
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at is not None
+
+
+@pytest.mark.django_db
+def test_last_used_at_refreshed_when_future_dated(sample_user, settings):  # noqa: F811
+    """A future-dated last_used_at (clock skew / manual edit) is treated as stale
+    and refreshed, not frozen forever."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
+    token_str = create_personal_access_token(sample_user)
+    future = timezone.now() + timedelta(days=1)
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t", last_used_at=future)
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at < future  # refreshed to ~now, not stuck in the future
+
+
+@pytest.mark.django_db
+def test_last_used_at_not_clobbered_by_slight_future(sample_user, settings):  # noqa: F811
+    """A value slightly ahead of now (a concurrent worker's lead clock, within the
+    throttle window) is left alone — we must never write an earlier time back."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
+    token_str = create_personal_access_token(sample_user)
+    slightly_ahead = timezone.now() + timedelta(seconds=10)  # within the 300s window
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="t", last_used_at=slightly_ahead
+    )
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at == slightly_ahead  # not clobbered with an earlier time
+
+
+@pytest.mark.django_db
+def test_last_used_at_skew_tolerated_even_at_zero_throttle(sample_user, settings):  # noqa: F811
+    """Forward-skew tolerance is independent of the throttle window: even with
+    throttle=0 (write-every-request), a slightly-ahead concurrent timestamp is
+    not clobbered with an earlier now."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 0
+    token_str = create_personal_access_token(sample_user)
+    slightly_ahead = timezone.now() + timedelta(seconds=10)  # within the fixed skew tolerance
+    record = AccessToken.objects.create(
+        user=sample_user, encoded_token=token_str, description="t", last_used_at=slightly_ahead
+    )
+
+    get_user_and_token_record(token_str)
+
+    record.refresh_from_db()
+    assert record.last_used_at == slightly_ahead  # not clobbered despite throttle=0

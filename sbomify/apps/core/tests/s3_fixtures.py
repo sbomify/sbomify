@@ -79,6 +79,20 @@ class MockS3Client:
             raise ValueError("This method is only for SBOMS bucket")
         self.uploaded_files[object_name] = data
 
+    def list_cached_aggregates(self, prefix: str) -> list[str]:
+        """Mock list_cached_aggregates: keys under the prefix (for orphan GC)."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        return [key for key in self.uploaded_files if key.startswith(prefix)]
+
+    def delete_cached_aggregate(self, object_name: str) -> None:
+        """Mock delete_cached_aggregate (for orphan GC)."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        if self.should_raise_error:
+            raise Exception(self.error_message)
+        self.uploaded_files.pop(object_name, None)
+
     def get_document_data(self, object_name: str) -> bytes | None:
         """Mock get_document_data method."""
         if self.bucket_type != "DOCUMENTS":

@@ -95,6 +95,7 @@ class ElementType(str, Enum):
     HASH = "Hash"
     EXTERNAL_REF = "ExternalRef"
     EXTERNAL_IDENTIFIER = "ExternalIdentifier"
+    EXTERNAL_MAP = "ExternalMap"
 
 
 # =============================================================================
@@ -179,6 +180,27 @@ class Hash(BaseModel):
     type: str = "Hash"
     algorithm: str
     hashValue: str
+
+
+class ExternalMap(BaseModel):
+    """SPDX 3.0 ExternalMap — one entry in ``SpdxDocument.import`` that links to an
+    Element defined in another document.
+
+    Spec: https://spdx.github.io/spdx-spec/v3.0.1/model/Core/Classes/ExternalMap/
+
+    ``externalSpdxId`` is the URI of the external Element (it matches the URI used
+    to reference that Element elsewhere in this document); ``locationHint`` says
+    where to fetch the defining document; ``verifiedUsing`` carries integrity
+    hashes for that document.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    type: str = "ExternalMap"
+    externalSpdxId: str
+    locationHint: str | None = None
+    verifiedUsing: list[Hash] | None = None
+    definingArtifact: str | None = None
 
 
 # =============================================================================
