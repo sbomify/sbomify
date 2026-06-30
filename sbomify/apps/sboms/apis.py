@@ -75,6 +75,26 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
     return None
 
 
+def _is_crypto_component(component: Any) -> bool:
+    """A CycloneDX component is a crypto asset if typed as one or carrying cryptoProperties."""
+    return isinstance(component, dict) and (
+        component.get("type") == "cryptographic-asset" or "cryptoProperties" in component
+    )
+
+
+def _is_cbom(sbom_data: dict[str, Any]) -> bool:
+    """True when a CycloneDX document declares cryptographic-asset content (a CBOM).
+
+    Checks both the top-level ``components`` array and ``metadata.component`` (which
+    is itself a Component and may carry the crypto indicators on its own).
+    """
+    components = sbom_data.get("components")
+    if isinstance(components, list) and any(_is_crypto_component(c) for c in components):
+        return True
+    metadata = sbom_data.get("metadata")
+    return isinstance(metadata, dict) and _is_crypto_component(metadata.get("component"))
+
+
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     """Check if an IntegrityError is for the SBOM uniqueness constraint.
 
@@ -416,6 +436,12 @@ def sbom_upload_cyclonedx(
 
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
+
+        # Auto-detect CBOM content (#1042): an action-published CBOM arrives with the
+        # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only when
+        # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
+        if "bom_type" not in request.GET and _is_cbom(sbom_data):
+            bom_type = "cbom"
 
         # Extract PURL qualifiers from metadata.component.purl
         cdx_purl = _extract_cdx_purl(payload)
@@ -1106,6 +1132,12 @@ def sbom_upload_file(
 
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
+
+            # Auto-detect CBOM content (#1042): tag a crypto BOM uploaded with the
+            # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
+            # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
+            if "bom_type" not in request.GET and _is_cbom(sbom_data):
+                bom_type = "cbom"
 
             # Extract PURL qualifiers from metadata.component.purl
             cdx_purl = _extract_cdx_purl(cdx_payload)

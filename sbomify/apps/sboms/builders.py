@@ -34,6 +34,7 @@ import importlib.metadata
 import json
 import logging
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Protocol
@@ -47,6 +48,12 @@ from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_7 as cdx17
 from sbomify.apps.sboms.sbom_format_schemas import spdx_2_3 as spdx23
 
 log = logging.getLogger(__name__)
+
+# Upper bound on concurrent member-SBOM S3 fetches during a cold aggregate build.
+# Each fetch opens its own S3 connection, so this caps the connection fan-out per
+# download. Tune down on small boxes; tune up if release sizes and S3 latency make
+# the fetch the dominant cost.
+MAX_AGGREGATE_FETCH_WORKERS = 8
 
 
 class SBOMFormat(str, Enum):
@@ -179,6 +186,53 @@ class BaseSBOMBuilder(ABC):
             # incomplete so the partial aggregate is not cached (#998).
             self.had_member_fetch_error = True
             return None
+
+    def _prefetch_member_files(self, sbom_instances: list[Any]) -> dict[str, tuple[Path, str] | None]:
+        """Download member SBOM files concurrently, returning {str(sbom.id): result}.
+
+        Parallelizes only the S3 I/O; callers still iterate members serially to
+        build the aggregate deterministically. ``download_sbom_file`` is safe to
+        run across threads: it constructs a fresh ``S3Client`` per call, touches
+        no ORM, and its only shared writes (``temp_files.append`` /
+        ``had_member_fetch_error``) are GIL-atomic. Output files are named by
+        ``sbom.sbom_filename``, which is the content sha256, so two members can
+        only collide on a filename when their bytes are identical — a concurrent
+        overwrite then writes the same bytes and the aggregate is unaffected.
+        """
+        if not sbom_instances:
+            return {}
+        workers = min(len(sbom_instances), MAX_AGGREGATE_FETCH_WORKERS)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = executor.map(self.download_sbom_file, sbom_instances)
+        return {str(sbom.id): result for sbom, result in zip(sbom_instances, results)}
+
+    def _members_with_files(self, release: Any) -> tuple[list[Any], dict[str, tuple[Path, str] | None]]:
+        """Filtered release members paired with their concurrently-fetched files.
+
+        Centralizes the access-control filter (a public release hides non-public
+        members) and the parallel prefetch shared by every release builder, so the
+        rules can't drift between the CycloneDX and SPDX builders. Returns
+        ``(members, {str(sbom.id): (path, id) | None})``.
+        """
+        from sbomify.apps.core.models import Component
+
+        sbom_artifacts = (
+            release.artifacts.filter(sbom__isnull=False)
+            # select_related joins the whole sbom -> component -> team FK chain in
+            # one query; a prefetch_related on the same path would just add a
+            # redundant query.
+            .select_related("sbom__component", "sbom__component__team")
+            # Stable order so a content-addressed aggregate serializes identically
+            # across rebuilds (the cache key is the artifact-set fingerprint).
+            .order_by("sbom_id")
+        )
+        members = [
+            artifact
+            for artifact in sbom_artifacts
+            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+        ]
+        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+        return members, fetched
 
     def select_best_sbom(self, sboms: list[Any]) -> Any:
         """
@@ -328,24 +382,14 @@ class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
         # Build components section from release artifacts
         sbom.components = []
 
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component", "sbom__component__team")
-            .prefetch_related("sbom__component__team")
-        )
-
         component_type_mapping = create_component_type_mapping()
 
-        for artifact in sbom_artifacts:
+        members, fetched = self._members_with_files(release)
+
+        for artifact in members:
             sbom_instance = artifact.sbom
 
-            # Check access controls
-            from sbomify.apps.sboms.models import Component
-
-            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
-                continue
-
-            sbom_result = self.download_sbom_file(sbom_instance)
+            sbom_result = fetched.get(str(sbom_instance.id))
             if sbom_result is None:
                 log.warning(f"SBOM for artifact {artifact.id} not found")
                 continue
@@ -483,6 +527,10 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
             },
             "packages": [],
             "relationships": [],
+            # SPDX-native cross-document links to member SBOMs (#357). Populated
+            # per member below; members that can't be linked natively fall back
+            # to a local stub package + download-URL externalRef.
+            "externalDocumentRefs": [],
         }
 
         # Add document describes relationship for the main package
@@ -518,23 +566,22 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         )
 
         # Build component packages from release artifacts
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component", "sbom__component__team")
-            .prefetch_related("sbom__component__team")
-        )
+        members, fetched = self._members_with_files(release)
+
+        from sbomify.apps.sboms.utils import spdx2_inbound_member_dependencies, spdx2_member_link
 
         package_index = 0
-        for artifact in sbom_artifacts:
+        doc_ref_index = 0
+        # Native-linked members, for the inbound-resolve post-pass (#357): each is
+        # (aggregate ref, content digest, parsed member doc); hash_to_related maps a
+        # member's content hash to its aggregate ref so a member's inbound refs can
+        # resolve to OTHER release members by digest.
+        native_members: list[tuple[str, str, dict[str, Any]]] = []
+        hash_to_related: dict[str, str] = {}
+        for artifact in members:
             sbom_instance = artifact.sbom
 
-            # Check access controls
-            from sbomify.apps.sboms.models import Component
-
-            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
-                continue
-
-            sbom_result = self.download_sbom_file(sbom_instance)
+            sbom_result = fetched.get(str(sbom_instance.id))
             if sbom_result is None:
                 log.warning(f"SBOM for artifact {artifact.id} not found")
                 continue
@@ -545,6 +592,25 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                 sbom_data = json.loads(sbom_path.read_text())
             except (json.JSONDecodeError, Exception) as e:
                 log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
+                continue
+
+            # SPDX-native cross-document link (#357): for an SPDX 2.x member with a
+            # documentNamespace + content hash, link to its real document instead
+            # of flattening it into a local stub. Mixed/CDX members fall through.
+            link = spdx2_member_link(sbom_instance, sbom_data, f"DocumentRef-{doc_ref_index + 1}")
+            if link is not None:
+                doc_ref_index += 1
+                external_document_ref, related = link
+                sbom["externalDocumentRefs"].append(external_document_ref)
+                sbom["relationships"].append(
+                    {
+                        "spdxElementId": main_package_id,
+                        "relatedSpdxElement": related,
+                        "relationshipType": "CONTAINS",
+                    }
+                )
+                native_members.append((related, sbom_instance.sha256_hash, sbom_data))
+                hash_to_related[sbom_instance.sha256_hash] = related
                 continue
 
             # Handle both CycloneDX and SPDX source SBOMs
@@ -600,6 +666,19 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                     "relationshipType": "CONTAINS",
                 }
             )
+
+        # Inbound resolve (#357): preserve a DEPENDS_ON edge for each cross-document
+        # reference a member declares toward ANOTHER release member, resolved by
+        # SHA-256 digest only (no external fetch). Dedup against existing edges.
+        existing_rels = {
+            (r["spdxElementId"], r["relatedSpdxElement"], r["relationshipType"]) for r in sbom["relationships"]
+        }
+        for member_ref, member_digest, member_data in native_members:
+            for edge in spdx2_inbound_member_dependencies(member_data, member_ref, member_digest, hash_to_related):
+                key = (edge["spdxElementId"], edge["relatedSpdxElement"], edge["relationshipType"])
+                if key not in existing_rels:
+                    existing_rels.add(key)
+                    sbom["relationships"].append(edge)
 
         # Convert dict to Pydantic model for consistent serialization
         return spdx23.SPDXDocument.model_validate(sbom)
@@ -792,24 +871,29 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         graph.append(main_pkg)
 
         # Process release artifacts
-        sbom_artifacts = (
-            release.artifacts.filter(sbom__isnull=False)
-            .select_related("sbom__component", "sbom__component__team")
-            .prefetch_related("sbom__component__team")
+        members, fetched = self._members_with_files(release)
+
+        from sbomify.apps.sboms.utils import (
+            get_download_url_for_sbom,
+            spdx3_inbound_member_dependency_uris,
+            spdx3_member_import,
         )
 
         package_index = 0
         all_element_spdx_ids = [org_spdx_id, tool_spdx_id, main_pkg_spdx_id]
+        # SPDX-native cross-document links (#357): import-map entries + the member
+        # root-element URIs they point at (referenced from the describes edge).
+        import_map: list[dict[str, Any]] = []
+        external_member_uris: list[str] = []
+        # Native-linked members for the inbound-resolve post-pass (#357):
+        # (root URI, content digest, parsed doc) + a digest -> root-URI map.
+        native3_members: list[tuple[str, str, dict[str, Any]]] = []
+        hash_to_uri: dict[str, str] = {}
 
-        for artifact in sbom_artifacts:
+        for artifact in members:
             sbom_instance = artifact.sbom
 
-            from sbomify.apps.sboms.models import Component
-
-            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
-                continue
-
-            sbom_result = self.download_sbom_file(sbom_instance)
+            sbom_result = fetched.get(str(sbom_instance.id))
             if sbom_result is None:
                 log.warning(f"SBOM for artifact {artifact.id} not found")
                 continue
@@ -821,6 +905,27 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             except (json.JSONDecodeError, Exception) as e:
                 log.error(f"Failed to read SBOM file {sbom_path.name}: {e}")
                 continue
+
+            # ``sbom_instance`` is the select_related-loaded artifact.sbom, so
+            # re-fetching it per artifact is redundant (#998).
+            try:
+                download_url: str | None = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
+            except Exception as e:
+                log.warning(f"Failed to build download URL for SBOM {sbom_id}: {e}")
+                download_url = None
+
+            # SPDX-native import-map link (#357): for an SPDX 3.0 member with a
+            # content hash, reference its real root element via an import-map
+            # entry instead of flattening it into a local stub package.
+            if download_url:
+                link = spdx3_member_import(sbom_instance, sbom_data, download_url)
+                if link is not None:
+                    import_entry, root_uri = link
+                    import_map.append(import_entry)
+                    external_member_uris.append(root_uri)
+                    native3_members.append((root_uri, sbom_instance.sha256_hash, sbom_data))
+                    hash_to_uri[sbom_instance.sha256_hash] = root_uri
+                    continue
 
             component_info = self._extract_component_info_from_sbom(sbom_data, sbom_path.name)
             if component_info is None:
@@ -842,13 +947,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             if version:
                 pkg_element["software_packageVersion"] = str(version)
 
-            # Add external reference to original SBOM. ``sbom_instance`` is the
-            # select_related-loaded artifact.sbom (same row sbom_id points to),
-            # so re-fetching it per artifact is redundant (#998).
-            from sbomify.apps.sboms.utils import get_download_url_for_sbom
-
-            try:
-                download_url = get_download_url_for_sbom(sbom_instance, self.user, settings.APP_BASE_URL)
+            if download_url:
                 pkg_element["externalRef"] = [
                     {
                         "type": "ExternalRef",
@@ -856,15 +955,13 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
                         "locator": [download_url],
                     }
                 ]
-            except Exception as e:
-                log.warning(f"Failed to add external ref for SBOM {sbom_id}: {e}")
 
             graph.append(pkg_element)
 
-        # Add describes relationship
+        # Add describes relationship (local stub packages + native external URIs)
         component_pkg_ids = [
             sid for sid in all_element_spdx_ids if "#SPDXRef-Package-" in sid and sid != main_pkg_spdx_id
-        ]
+        ] + external_member_uris
         rel_spdx_id = f"{doc_namespace}#SPDXRef-Relationship-describes"
         if component_pkg_ids:
             graph.append(
@@ -879,8 +976,32 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             )
             all_element_spdx_ids.append(rel_spdx_id)
 
+        # Inbound resolve (#357): a dependsOn relationship for each cross-document
+        # reference a member declares toward ANOTHER release member, resolved by
+        # SHA-256 digest only (the locationHint URL is never fetched). Deduped.
+        dep_index = 0
+        seen_deps: set[tuple[str, str]] = set()
+        for member_uri, member_digest, member_data in native3_members:
+            for target_uri in spdx3_inbound_member_dependency_uris(member_data, member_digest, hash_to_uri):
+                if target_uri == member_uri or (member_uri, target_uri) in seen_deps:
+                    continue
+                seen_deps.add((member_uri, target_uri))
+                dep_index += 1
+                dep_id = f"{doc_namespace}#SPDXRef-Relationship-dependsOn-{dep_index}"
+                graph.append(
+                    {
+                        "type": "Relationship",
+                        "spdxId": dep_id,
+                        "creationInfo": creation_info_ref,
+                        "relationshipType": "dependsOn",
+                        "from": member_uri,
+                        "to": [target_uri],
+                    }
+                )
+                all_element_spdx_ids.append(dep_id)
+
         # SpdxDocument element inside @graph
-        doc_element = {
+        doc_element: dict[str, Any] = {
             "type": "SpdxDocument",
             "spdxId": doc_namespace,
             "creationInfo": creation_info_ref,
@@ -890,6 +1011,9 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             "element": all_element_spdx_ids,
             "rootElement": [main_pkg_spdx_id],
         }
+        # Import map: one ExternalMap per natively-linked member (#357).
+        if import_map:
+            doc_element["import"] = import_map
         graph.append(doc_element)
 
         # Build root document with JSON-LD structure

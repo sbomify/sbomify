@@ -72,6 +72,29 @@ class TestTeamTokensView:
         assert response.status_code == 200
         assert b"Scoped Token" in response.content
 
+    def test_get_shows_last_used(self, client: Client, sample_team_with_owner_member):
+        """The token list surfaces last_used_at: a relative time when set, 'never' when not."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        AccessToken.objects.create(
+            user=user, description="Used Token", encoded_token="used_tok", team=team,
+            last_used_at=timezone.now() - timedelta(days=2),
+        )
+        AccessToken.objects.create(
+            user=user, description="Fresh Token", encoded_token="fresh_tok", team=team, last_used_at=None,
+        )
+
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        body = response.content.decode()
+        assert response.status_code == 200
+        assert "Last used" in body
+        # timesince renders the count + unit with a non-breaking space ("2\xa0days"),
+        # then the component appends " ago" — match the stable tail.
+        assert "days ago" in body  # the used token's relative time
+        assert "never" in body  # the unused token's fallback
+
     def test_post_creates_token(self, client: Client, sample_team_with_owner_member):
         """Test that POST creates a new access token scoped to the team."""
         team = sample_team_with_owner_member.team

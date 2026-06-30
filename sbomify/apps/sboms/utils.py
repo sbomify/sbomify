@@ -7,7 +7,7 @@ import logging
 import re
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 from uuid import uuid4
 
 from django.conf import settings
@@ -677,6 +677,243 @@ def create_external_reference(sbom_filename: str, sbom_id: str, user: Any = None
         url=download_url,
         hashes=[cdx16.Hash(alg="SHA-256", content=cdx16.HashContent(filename_hash))],
     )
+
+
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
+# Local SPDX 2.x element id: "SPDXRef-" + letters/digits/./- (the spec's idstring
+# set). No ':' so it can't corrupt a "DocumentRef-N:SPDXRef-..." external reference.
+_SPDX_LOCAL_REF_RE = re.compile(r"SPDXRef-[A-Za-z0-9.-]+\Z")
+
+
+def _is_sha256_hex(value: Any) -> TypeGuard[str]:
+    """True iff ``value`` is a lower-case 64-hex SHA-256 digest string."""
+    return isinstance(value, str) and bool(_SHA256_HEX_RE.fullmatch(value))
+
+
+def spdx2_member_link(
+    sbom_instance: Any, sbom_data: dict[str, Any], doc_ref_id: str
+) -> tuple[dict[str, Any], str] | None:
+    """Native SPDX 2.x cross-document link for an aggregate member.
+
+    Returns ``(external_document_ref, related_spdx_element)`` for SPDX-native
+    linking, or ``None`` when the member can't be linked natively (not an SPDX 2.x
+    document, or missing its ``documentNamespace`` or content checksum) — the
+    caller then falls back to the download-URL stub.
+
+    The aggregate declares ``external_document_ref`` at the top level and points a
+    CONTAINS relationship at ``related_spdx_element`` (``DocumentRef-x:SPDXRef-y``),
+    mirroring how CycloneDX aggregation links members via externalReference. The
+    checksum is the member's CONTENT hash so referential integrity is verifiable.
+    """
+    if not str(sbom_data.get("spdxVersion", "")).startswith("SPDX-2"):
+        return None
+    namespace = sbom_data.get("documentNamespace")
+    checksum = getattr(sbom_instance, "sha256_hash", None)
+    # namespace goes into the SPDX output (untrusted member JSON); checksum is the
+    # referential-integrity digest, so require a real 64-hex SHA-256.
+    if not (isinstance(namespace, str) and namespace) or not _is_sha256_hex(checksum):
+        return None
+
+    # The element the member document describes: documentDescribes, else the
+    # SPDXRef-DOCUMENT DESCRIBES relationship, else the document itself. Member
+    # JSON is untrusted, so accept only a valid local "SPDXRef-..." id at each
+    # step — anything else (non-string, or containing a ':' that would corrupt
+    # the "DocumentRef-N:SPDXRef-..." reference) falls back to SPDXRef-DOCUMENT.
+    def _valid_local_ref(value: Any) -> str | None:
+        return value if isinstance(value, str) and _SPDX_LOCAL_REF_RE.fullmatch(value) else None
+
+    described: str | None = None
+    describes = sbom_data.get("documentDescribes")
+    if isinstance(describes, list) and describes:
+        described = _valid_local_ref(describes[0])
+    if described is None:
+        relationships = sbom_data.get("relationships")
+        if isinstance(relationships, list):
+            for rel in relationships:
+                if (
+                    isinstance(rel, dict)
+                    and rel.get("relationshipType") == "DESCRIBES"
+                    and rel.get("spdxElementId") == "SPDXRef-DOCUMENT"
+                ):
+                    described = _valid_local_ref(rel.get("relatedSpdxElement"))
+                    if described is not None:
+                        break
+    if described is None:
+        described = "SPDXRef-DOCUMENT"
+
+    external_document_ref = {
+        "externalDocumentId": doc_ref_id,
+        "spdxDocument": namespace,
+        "checksum": {"algorithm": "SHA256", "checksumValue": checksum},
+    }
+    return external_document_ref, f"{doc_ref_id}:{described}"
+
+
+def spdx2_inbound_member_dependencies(
+    member_sbom_data: dict[str, Any], member_ref: str, member_digest: str, hash_to_ref: dict[str, str]
+) -> list[dict[str, str]]:
+    """DEPENDS_ON edges from a member to OTHER release members it actually depends on
+    via cross-document references (#357 inbound resolve).
+
+    Faithful to SPDX 2.x semantics: an ``externalDocumentRef`` only DECLARES an
+    external document — the dependency is asserted by the member's ``relationships``
+    graph. So an edge is emitted only when the member has a ``DEPENDS_ON``
+    relationship whose ``relatedSpdxElement`` is ``DocumentRef-x:...`` AND that
+    DocumentRef-x resolves, by SHA-256 checksum, to another loaded release member
+    (``hash_to_ref``, keyed by ``SBOM.sha256_hash``).
+
+    INTERNAL, digest-only: the external ``spdxDocument`` URL is NEVER dereferenced
+    (SSRF / ADR-004); unresolvable refs (SHA-1, off-platform docs) are left out.
+    """
+    refs = member_sbom_data.get("externalDocumentRefs")
+    relationships = member_sbom_data.get("relationships")
+    if not isinstance(refs, list) or not isinstance(relationships, list):
+        return []
+
+    # externalDocumentId -> SHA-256 digest (SHA-256 only; sbomify stores no SHA-1).
+    docid_to_digest: dict[str, str] = {}
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        checksum = ref.get("checksum")
+        docid = ref.get("externalDocumentId")
+        if isinstance(checksum, dict) and checksum.get("algorithm") == "SHA256" and isinstance(docid, str):
+            digest = checksum.get("checksumValue")
+            if _is_sha256_hex(digest):
+                docid_to_digest[docid] = digest
+
+    edges: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for rel in relationships:
+        if not isinstance(rel, dict) or rel.get("relationshipType") != "DEPENDS_ON":
+            continue
+        related = rel.get("relatedSpdxElement")
+        if not isinstance(related, str) or ":" not in related:
+            continue
+        digest = docid_to_digest.get(related.split(":", 1)[0])
+        if digest is None or digest == member_digest or digest in seen:
+            continue
+        target_ref = hash_to_ref.get(digest)
+        if target_ref is None or target_ref == member_ref:
+            continue
+        seen.add(digest)
+        edges.append({"spdxElementId": member_ref, "relatedSpdxElement": target_ref, "relationshipType": "DEPENDS_ON"})
+    return edges
+
+
+def _spdx3_root_element_uri(elements: Any) -> str | None:
+    """The root element URI of an SPDX 3.0 member graph: the SpdxDocument's
+    rootElement, else a software_Sbom, else the first software_Package.
+
+    Tolerates malformed input (a non-list ``@graph``, non-dict elements) since
+    member SBOM JSON is untrusted.
+    """
+    if not isinstance(elements, list):
+        return None
+    for element in elements:
+        if isinstance(element, dict) and element.get("type") == "SpdxDocument":
+            roots = element.get("rootElement")
+            if isinstance(roots, list) and roots and isinstance(roots[0], str) and roots[0]:
+                return roots[0]
+    for type_name in ("software_Sbom", "software_Package"):
+        for element in elements:
+            if isinstance(element, dict) and element.get("type") == type_name:
+                spdx_id = element.get("spdxId")
+                if isinstance(spdx_id, str) and spdx_id:
+                    return spdx_id
+    return None
+
+
+def spdx3_member_import(
+    sbom_instance: Any, sbom_data: dict[str, Any], download_url: str
+) -> tuple[dict[str, Any], str] | None:
+    """Native SPDX 3.0 import-map link for an aggregate member.
+
+    Returns ``(import_entry, root_element_uri)`` for an SPDX-3 member with a
+    content checksum, or ``None`` to fall back to the local stub. The aggregate
+    adds ``import_entry`` to ``SpdxDocument.import`` and references
+    ``root_element_uri`` in its ``describes`` relationship; ``externalSpdxId`` and
+    that referenced URI are identical so the cross-document reference resolves.
+    """
+    is_spdx3 = "@graph" in sbom_data or (
+        str(sbom_data.get("spdxVersion", "")).startswith("SPDX-3.") and "elements" in sbom_data
+    )
+    if not is_spdx3:
+        return None
+    checksum = getattr(sbom_instance, "sha256_hash", None)
+    if not _is_sha256_hex(checksum):  # goes into verifiedUsing as the integrity digest
+        return None
+    elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+    root_uri = _spdx3_root_element_uri(elements)
+    if not root_uri:
+        return None
+    import_entry = {
+        "type": "ExternalMap",
+        "externalSpdxId": root_uri,
+        "locationHint": download_url,
+        "verifiedUsing": [{"type": "Hash", "algorithm": "sha256", "hashValue": checksum}],
+    }
+    return import_entry, root_uri
+
+
+def spdx3_inbound_member_dependency_uris(
+    member_sbom_data: dict[str, Any], member_digest: str, hash_to_uri: dict[str, str]
+) -> list[str]:
+    """Root URIs of OTHER release members a member actually depends on (#357 inbound
+    resolve, SPDX 3.0).
+
+    Faithful to SPDX 3.0 semantics: an ``import`` ExternalMap only establishes how
+    an external URI resolves — the dependency is asserted by a ``Relationship``
+    element with ``relationshipType == "dependsOn"``. So a target is returned only
+    when a dependsOn relationship's ``to`` URI is covered by an import entry whose
+    ``verifiedUsing`` sha256 equals another loaded member's content hash
+    (``hash_to_uri``, keyed by ``SBOM.sha256_hash``).
+
+    INTERNAL, digest-only: the ``locationHint`` URL is NEVER dereferenced (SSRF /
+    ADR-004); unresolvable entries are skipped.
+    """
+    elements = member_sbom_data.get("@graph", member_sbom_data.get("elements", []))
+    if not isinstance(elements, list):
+        return []
+
+    # external URI -> SHA-256 digest, from the SpdxDocument import maps.
+    uri_to_digest: dict[str, str] = {}
+    for element in elements:
+        if not isinstance(element, dict) or element.get("type") != "SpdxDocument":
+            continue
+        imports = element.get("import")
+        if not isinstance(imports, list):
+            continue
+        for entry in imports:
+            if not isinstance(entry, dict):
+                continue
+            external_id = entry.get("externalSpdxId")
+            if not isinstance(external_id, str):
+                continue
+            for hash_obj in entry.get("verifiedUsing") or []:
+                if isinstance(hash_obj, dict) and hash_obj.get("algorithm") == "sha256":
+                    digest = hash_obj.get("hashValue")
+                    if _is_sha256_hex(digest):
+                        uri_to_digest[external_id] = digest
+
+    targets: list[str] = []
+    seen: set[str] = set()
+    for element in elements:
+        if not isinstance(element, dict) or element.get("type") != "Relationship":
+            continue
+        if element.get("relationshipType") != "dependsOn":
+            continue
+        to = element.get("to")
+        to_uris = to if isinstance(to, list) else [to]
+        for uri in to_uris:
+            digest = uri_to_digest.get(uri) if isinstance(uri, str) else None
+            if digest is None or digest == member_digest or digest in seen:
+                continue
+            target_uri = hash_to_uri.get(digest)
+            if target_uri is not None:
+                seen.add(digest)
+                targets.append(target_uri)
+    return targets
 
 
 def create_product_external_references(product: Product, user: Any = None) -> list[Any]:
@@ -1683,10 +1920,12 @@ def get_release_sbom_package(
     # member URLs that must stay fresh.
     cache_key: str | None = None
     s3: Any = None
+    # Computed unconditionally so the orphan-GC sweep below can reference it
+    # without a possibly-undefined flow; it's only USED on the cached public path.
+    resolved_version = _resolve_output_version(format_lower, version)
     if release.product.is_public:
         from sbomify.apps.core.object_store import S3Client
 
-        resolved_version = _resolve_output_version(format_lower, version)
         fingerprint = compute_release_aggregate_fingerprint(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
         from botocore.exceptions import BotoCoreError, ClientError
@@ -1723,7 +1962,12 @@ def get_release_sbom_package(
         user=user,
     )
     sbom = builder(target_folder)
-    body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
+    # CycloneDX + SPDX 2.3 builders return a pydantic model; SPDX 3.0 builders
+    # return a JSON-LD dict (@context/@graph) that has no model_dump_json (#357).
+    if hasattr(sbom, "model_dump_json"):
+        body = sbom.model_dump_json(indent=2, exclude_none=True, exclude_unset=True, by_alias=True).encode()
+    else:
+        body = json.dumps(sbom, indent=2).encode()
     sbom_path.write_bytes(body)
 
     # Only cache a COMPLETE build. The builders skip a member on an S3 fetch
@@ -1739,6 +1983,20 @@ def get_release_sbom_package(
                 s3.put_cached_aggregate(cache_key, body)
             except Exception as e:
                 log.warning("Aggregate cache write failed for %s (served anyway): %s", cache_key, e)
+            else:
+                # GC orphaned aggregates. When the artifact set or metadata changes
+                # the fingerprint changes, leaving the previous key behind. Sweep
+                # siblings under the SAME format+version prefix and drop all but the
+                # key just written — scoping to format_lower-resolved_version keeps
+                # other formats/versions intact. Best-effort: a sweep failure must
+                # never fail the download.
+                gc_prefix = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-"
+                try:
+                    for stale_key in s3.list_cached_aggregates(gc_prefix):
+                        if stale_key != cache_key:
+                            s3.delete_cached_aggregate(stale_key)
+                except Exception as e:
+                    log.warning("Aggregate cache GC failed for prefix %s: %s", gc_prefix, e)
 
     return sbom_path
 
