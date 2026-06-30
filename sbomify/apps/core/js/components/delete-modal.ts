@@ -361,7 +361,14 @@ export function registerDeleteModal() {
                                 document.body.dispatchEvent(new CustomEvent(config.refreshEvent));
                             }
                         } else {
-                            showError('Failed to revoke the selected tokens.');
+                            let detail = 'Failed to revoke the selected tokens.';
+                            try {
+                                const data = (await response.json()) as { detail?: string };
+                                if (data?.detail) detail = data.detail;
+                            } catch {
+                                // Non-JSON body — keep the default message.
+                            }
+                            showError(detail);
                         }
                     } catch {
                         showError('Network error while revoking tokens.');

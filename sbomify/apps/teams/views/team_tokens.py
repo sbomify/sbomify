@@ -134,7 +134,8 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         """
         status_code, team = get_team(request, team_key)
         if status_code != 200:
-            return htmx_error_response(team.get("detail", "Unknown error"))
+            # delete() is called via fetch (JSON), not HTMX -- return a JSON error.
+            return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
 
         user = cast(User, request.user)
         try:
@@ -142,17 +143,18 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         except json.JSONDecodeError:
             return JsonResponse({"detail": "Invalid JSON"}, status=400)
 
-        tokens = AccessToken.objects.filter(user=user)
-        if payload.get("all"):
-            team_id = token_to_number(team.key)
-            tokens = tokens.filter(Q(team_id=team_id) | Q(team__isnull=True))
-        else:
+        # Scope to exactly what this page manages: the caller's tokens in THIS workspace
+        # plus the unscoped legacy ones. Without the team filter, crafted ids could revoke
+        # the caller's tokens in OTHER workspaces -- tokens this page never shows.
+        team_id = token_to_number(team.key)
+        tokens = AccessToken.objects.filter(user=user).filter(Q(team_id=team_id) | Q(team__isnull=True))
+        if not payload.get("all"):
             ids = payload.get("token_ids")
             if not isinstance(ids, list) or not ids:
                 return JsonResponse({"detail": "No tokens selected"}, status=400)
             tokens = tokens.filter(id__in=ids)
-            # Any requested id not in the caller's own set (foreign or nonexistent) ->
-            # reject and delete nothing, same shape as the single-delete 403.
+            # Any requested id not in this page's scoped set (foreign user, other
+            # workspace, or nonexistent) -> reject wholesale, same shape as single-delete.
             if tokens.count() != len(set(ids)):
                 return JsonResponse({"detail": "Not allowed"}, status=403)
 

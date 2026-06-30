@@ -473,3 +473,20 @@ class TestBulkTokenRevocation:
 
         assert resp.status_code == 200
         assert capture.call_count == 2
+
+    def test_cannot_revoke_token_from_another_workspace(self, client: Client, sample_team_with_owner_member):
+        """#1061: an owner/admin can't revoke their own token scoped to a DIFFERENT workspace
+        via this workspace's endpoint (it isn't shown on this page)."""
+        team_a = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        team_b = Team.objects.create(name="Team B")
+        team_b.key = number_to_random_token(team_b.pk)
+        team_b.save()
+        token_b = AccessToken.objects.create(user=user, encoded_token="enc-b", description="b", team=team_b)
+        setup_authenticated_client_session(client, team_a, user)
+
+        resp = client.delete(self._url(team_a), data=json.dumps({"token_ids": [token_b.id]}),
+                             content_type="application/json")
+
+        assert resp.status_code == 403
+        assert AccessToken.objects.filter(id=token_b.id).exists()
