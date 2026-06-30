@@ -7,7 +7,7 @@ unscoped tokens. The authoritative field semantics live in the `AccessToken` mod
 
 ## The model
 
-A token is workspace-scoped, action-scoped, and expiring:
+A token carries workspace scoping, optional action scopes, and an optional expiry:
 
 - **Workspace** (`team`): the token acts only within that workspace. Legacy tokens
   predating workspace scoping have `team = NULL` and are **not** restricted to one
@@ -20,8 +20,9 @@ A token is workspace-scoped, action-scoped, and expiring:
 - **Last seen** (`last_used_at`): stamped on use, throttled (accurate to minutes), for
   spotting stale or leaked tokens.
 
-New PATs created in the UI are workspace-scoped, action-scoped, and 90-day-expiring by
-default.
+New PATs created in the UI are workspace-scoped and 90-day-expiring by default, but the
+access-scope selector defaults to **full** (unscoped) access. Narrow the action scope
+explicitly to limit what the token can do.
 
 ## Best practices
 
