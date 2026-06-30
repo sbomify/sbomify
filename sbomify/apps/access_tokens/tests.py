@@ -1,4 +1,6 @@
+import contextlib
 import json
+import logging
 from time import time
 
 import jwt
@@ -776,61 +778,151 @@ def test_create_token_form_maps_scope_presets():
     assert f.scopes() is None
 
 
-@pytest.mark.django_db
-def test_access_token_rate_throttle_per_token():
-    """#1060: a token is limited per its rate, and two tokens have independent budgets."""
-    from types import SimpleNamespace
+@contextlib.contextmanager
+def _capture_audit(caplog):
+    """Capture the non-propagating sbomify.audit.token_auth logger via caplog's handler."""
+    logger = logging.getLogger("sbomify.audit.token_auth")
+    logger.addHandler(caplog.handler)
+    old_level = logger.level
+    logger.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        logger.removeHandler(caplog.handler)
+        logger.setLevel(old_level)
 
-    from django.core.cache import cache
 
-    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
-
-    cache.clear()
-    rf = RequestFactory()
-    throttle = AccessTokenRateThrottle(rate="2/min")
-
-    def req(pk):
-        r = rf.get("/api/v1/x")
-        r.access_token_record = SimpleNamespace(pk=pk)
-        return r
-
-    assert throttle.allow_request(req(101)) is True
-    assert throttle.allow_request(req(101)) is True
-    assert throttle.allow_request(req(101)) is False  # third request over the 2/min limit
-    assert throttle.allow_request(req(202)) is True  # a different token keeps its own budget
+def _token_auth_events(caplog):
+    return [r for r in caplog.records if getattr(r, "event", None) == "token_auth"]
 
 
 @pytest.mark.django_db
-def test_access_token_rate_throttle_skips_anonymous():
-    """#1060: requests with no resolved token record (session/anonymous) are not throttled."""
-    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+def test_token_auth_audit_success_event(
+    sample_user,  # noqa: F811
+    sample_team_with_owner_member,  # noqa: F811
+    caplog,
+):
+    """#1058: a successful PAT auth emits a structured success event with IP + action."""
+    token_str = create_personal_access_token(sample_user)
+    rec = AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="t",
+        team=sample_team_with_owner_member.team,
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str, source_ip="1.2.3.4", attempted_action="GET /api/x")
+    assert user == sample_user
+    events = _token_auth_events(caplog)
+    assert len(events) == 1
+    e = events[0]
+    assert e.outcome == "success" and e.reason is None
+    assert e.token_id == str(rec.pk)
+    assert e.user_id == str(sample_user.id)
+    assert e.team_id == str(sample_team_with_owner_member.team.id)
+    assert e.source_ip == "1.2.3.4"
+    assert e.attempted_action == "GET /api/x"
+    assert e.token_fingerprint and token_str not in caplog.text
+    # The fields must survive the default console formatter (in the message, not just extra).
+    assert "1.2.3.4" in caplog.text and "GET /api/x" in caplog.text
 
-    rf = RequestFactory()
-    throttle = AccessTokenRateThrottle(rate="1/min")
-    r = rf.get("/api/v1/x")
-    assert throttle.get_cache_key(r) is None
-    assert throttle.allow_request(r) is True
-    assert throttle.allow_request(r) is True
+
+@pytest.mark.django_db
+def test_token_auth_audit_decode_failure(caplog):
+    """#1058: an undecodable bearer emits failure(reason=decode) with a fingerprint, no token id."""
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record("not-a-jwt", source_ip="9.9.9.9")
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "decode"
+    assert e.token_id is None and e.token_fingerprint and e.source_ip == "9.9.9.9"
+    assert "not-a-jwt" not in caplog.text
 
 
-def test_throttled_handler_sets_retry_after():
-    """#1060: the 429 response carries Retry-After from the Throttled wait, and omits it when None."""
-    from ninja.errors import Throttled
+@pytest.mark.django_db
+def test_token_auth_audit_inactive_user(sample_user, caplog):  # noqa: F811
+    """#1058: a token whose user is inactive emits failure(reason=user_inactive_or_missing)."""
+    token_str = create_personal_access_token(sample_user)
+    sample_user.is_active = False
+    sample_user.save()
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
+    assert e.user_id == str(sample_user.id)
 
-    from sbomify.apis import _on_throttled
 
-    req = RequestFactory().get("/api/v1/x")
-    resp = _on_throttled(req, Throttled(wait=42))
-    assert resp.status_code == 429
-    assert resp["Retry-After"] == "42"
+@pytest.mark.django_db
+def test_token_auth_audit_no_token_record(sample_user, caplog):  # noqa: F811
+    """#1058: a valid token with no DB row emits failure(reason=no_token_record)."""
+    token_str = create_personal_access_token(sample_user)
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "no_token_record"
+    assert e.user_id == str(sample_user.id)
 
-    # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
-    assert _on_throttled(req, Throttled(wait=0.4))["Retry-After"] == "1"
-    assert _on_throttled(req, Throttled(wait=5.1))["Retry-After"] == "6"
 
-    resp_no_wait = _on_throttled(req, Throttled(wait=None))
-    assert resp_no_wait.status_code == 429
-    assert "Retry-After" not in resp_no_wait
+@pytest.mark.django_db
+def test_token_auth_audit_expired_row(sample_user, caplog):  # noqa: F811
+    """#1058: an expired DB row emits failure(reason=expired)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="e",
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "expired"
+
+
+@pytest.mark.django_db
+def test_token_auth_malformed_sub_is_clean_failure(caplog):
+    """#1058/#1065: a token whose sub cannot be a user PK fails cleanly (no 500) and audits."""
+    bad = jwt.encode(
+        {"sub": "not-a-valid-pk", "token_type": "pat"}, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(bad)
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_team_id_null_for_teamless_token(sample_user, caplog):  # noqa: F811
+    """#1058: a token with no team emits team_id as None (JSON null), not the string 'None'."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="no-team")
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user == sample_user
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "success"
+    assert e.team_id is None
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_oidc_jwt_expiry_is_expired_not_decode(sample_user, caplog):  # noqa: F811
+    """#1058: an OIDC token past its JWT exp audits as reason=expired (INFO), not decode."""
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+
+    expired_oidc = create_personal_access_token(sample_user, expires_at=time() - 100, token_type=TOKEN_TYPE_OIDC)
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(expired_oidc)
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "expired"
 
 
 # ---------------------------------------------------------------------------
@@ -988,3 +1080,60 @@ def test_last_used_at_skew_tolerated_even_at_zero_throttle(sample_user, settings
 
     record.refresh_from_db()
     assert record.last_used_at == slightly_ahead  # not clobbered despite throttle=0
+
+
+@pytest.mark.django_db
+def test_access_token_rate_throttle_per_token():
+    """#1060: a token is limited per its rate, and two tokens have independent budgets."""
+    from types import SimpleNamespace
+
+    from django.core.cache import cache
+
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    cache.clear()
+    rf = RequestFactory()
+    throttle = AccessTokenRateThrottle(rate="2/min")
+
+    def req(pk):
+        r = rf.get("/api/v1/x")
+        r.access_token_record = SimpleNamespace(pk=pk)
+        return r
+
+    assert throttle.allow_request(req(101)) is True
+    assert throttle.allow_request(req(101)) is True
+    assert throttle.allow_request(req(101)) is False  # third request over the 2/min limit
+    assert throttle.allow_request(req(202)) is True  # a different token keeps its own budget
+
+
+@pytest.mark.django_db
+def test_access_token_rate_throttle_skips_anonymous():
+    """#1060: requests with no resolved token record (session/anonymous) are not throttled."""
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    rf = RequestFactory()
+    throttle = AccessTokenRateThrottle(rate="1/min")
+    r = rf.get("/api/v1/x")
+    assert throttle.get_cache_key(r) is None
+    assert throttle.allow_request(r) is True
+    assert throttle.allow_request(r) is True
+
+
+def test_throttled_handler_sets_retry_after():
+    """#1060: the 429 response carries Retry-After from the Throttled wait, and omits it when None."""
+    from ninja.errors import Throttled
+
+    from sbomify.apis import _on_throttled
+
+    req = RequestFactory().get("/api/v1/x")
+    resp = _on_throttled(req, Throttled(wait=42))
+    assert resp.status_code == 429
+    assert resp["Retry-After"] == "42"
+
+    # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
+    assert _on_throttled(req, Throttled(wait=0.4))["Retry-After"] == "1"
+    assert _on_throttled(req, Throttled(wait=5.1))["Retry-After"] == "6"
+
+    resp_no_wait = _on_throttled(req, Throttled(wait=None))
+    assert resp_no_wait.status_code == 429
+    assert "Retry-After" not in resp_no_wait

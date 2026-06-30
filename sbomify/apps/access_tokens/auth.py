@@ -8,12 +8,16 @@ from typing import Any
 from django.http import HttpRequest, JsonResponse
 from ninja.security import HttpBearer
 
+from sbomify.apps.core.utils import get_client_ip
+
 from .utils import get_user_and_token_record
 
 
 class PersonalAccessTokenAuth(HttpBearer):
     def authenticate(self, request: HttpRequest, token: str) -> Any | None:
-        user, access_token_record = get_user_and_token_record(token)
+        user, access_token_record = get_user_and_token_record(
+            token, source_ip=get_client_ip(request), attempted_action=f"{request.method} {request.path}"
+        )
         if user is None or access_token_record is None:
             return None
 
