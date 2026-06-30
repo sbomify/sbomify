@@ -17,7 +17,7 @@ A token carries workspace scoping, optional action scopes, and an optional expir
   only narrows access; the user's workspace role and the resource's attributes still
   apply. `NULL` means unscoped (full capability).
 - **Expiry** (`expires_at`): new PATs default to 90 days. `NULL` means never expires.
-- **Last seen** (`last_used_at`): stamped on use, throttled (accurate to minutes), for
+- **Last seen** (`last_used_at`): stamped on use, throttled (accurate to within a few minutes), for
   spotting stale or leaked tokens.
 
 New PATs created in the UI are workspace-scoped and 90-day-expiring by default, but the
