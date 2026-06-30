@@ -40,11 +40,14 @@ interface BulkRevokeConfig {
 interface BulkRevokeData {
     selected: number[];
     showBulkModal: boolean;
+    showRevokeAllModal: boolean;
     isLoading: boolean;
     readonly countLabel: string;
     getCsrfToken(): string;
     toggleAll(checked: boolean, ids: number[]): void;
     revokeSelected(): Promise<void>;
+    revokeAll(): Promise<void>;
+    _revoke(body: Record<string, unknown>, label: string, modalKey: 'showBulkModal' | 'showRevokeAllModal'): Promise<void>;
 }
 
 declare global {
@@ -318,6 +321,7 @@ export function registerDeleteModal() {
             return {
                 selected: [],
                 showBulkModal: false,
+                showRevokeAllModal: false,
                 isLoading: false,
                 get countLabel(): string {
                     const n = this.selected.length;
@@ -337,13 +341,20 @@ export function registerDeleteModal() {
                     this.selected = checked ? [...ids] : [];
                 },
                 async revokeSelected(): Promise<void> {
-                    if (this.isLoading || this.selected.length === 0) return;
+                    if (this.selected.length === 0) return;
+                    await this._revoke({ token_ids: this.selected }, this.countLabel, 'showBulkModal');
+                },
+                async revokeAll(): Promise<void> {
+                    await this._revoke({ all: true }, 'all tokens', 'showRevokeAllModal');
+                },
+                async _revoke(body, label, modalKey): Promise<void> {
+                    if (this.isLoading) return;
                     this.isLoading = true;
                     const csrfToken = this.getCsrfToken();
                     if (!csrfToken) {
                         this.isLoading = false;
                         showError('Security error: Missing CSRF token. Please reload the page and try again.');
-                        this.showBulkModal = false;
+                        this[modalKey] = false;
                         return;
                     }
                     try {
@@ -351,11 +362,11 @@ export function registerDeleteModal() {
                             method: 'DELETE',
                             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                             credentials: 'same-origin',
-                            body: JSON.stringify({ token_ids: this.selected }),
+                            body: JSON.stringify(body),
                         });
                         if (response.ok) {
-                            showSuccess(`Revoked ${this.countLabel}`);
-                            this.showBulkModal = false;
+                            showSuccess(`Revoked ${label}`);
+                            this[modalKey] = false;
                             this.selected = [];
                             if (config.refreshEvent) {
                                 document.body.dispatchEvent(new CustomEvent(config.refreshEvent));

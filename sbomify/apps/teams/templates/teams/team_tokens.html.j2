@@ -127,13 +127,18 @@
                                    @change="toggleAll($event.target.checked, [{% for t in access_tokens %}{{ t.id }},{% endfor %}{% for t in unscoped_tokens %}{{ t.id }},{% endfor %}])">
                             Select all
                         </label>
-                        <button type="button"
-                                class="tw-btn-danger tw-btn-sm"
-                                x-show="selected.length"
-                                x-cloak
-                                @click="showBulkModal = true">
-                            Revoke selected (<span x-text="selected.length"></span>)
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="tw-btn-danger tw-btn-sm"
+                                    x-show="selected.length"
+                                    x-cloak
+                                    @click="showBulkModal = true">
+                                Revoke selected (<span x-text="selected.length"></span>)
+                            </button>
+                            <button type="button"
+                                    class="tw-btn-ghost tw-btn-sm text-danger hover:bg-danger/10"
+                                    @click="showRevokeAllModal = true">Revoke all</button>
+                        </div>
                     </div>
                     <div class="space-y-3 ml-11">
                         {% for token in access_tokens %}
@@ -219,6 +224,7 @@
                     </div>
                     {# Bulk-revoke confirm modal #}
                     {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke Tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
+                    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke All Tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
                 </div>
             {% else %}
                 <div class="tw-empty-state py-10">
