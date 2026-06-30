@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from datetime import timedelta
+from functools import partial
 from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse
+from django.db.models import Q
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views import View
@@ -119,3 +122,49 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             "teams/team_tokens.html.j2",
             self._get_team_tokens_context(team, request, {"new_encoded_access_token": access_token_str}),
         )
+
+    def delete(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        """Bulk-revoke the caller's tokens (#1061).
+
+        Owner/admin gate + workspace scoping come from TeamRoleRequiredMixin + get_team.
+        Only the caller's own tokens are ever deleted: an explicit list with any id not
+        owned by the caller is rejected wholesale (mirrors the single-delete 403), and
+        revoke-all targets exactly what this page shows (this team's tokens + the
+        unscoped legacy ones).
+        """
+        status_code, team = get_team(request, team_key)
+        if status_code != 200:
+            return htmx_error_response(team.get("detail", "Unknown error"))
+
+        user = cast(User, request.user)
+        try:
+            payload = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"detail": "Invalid JSON"}, status=400)
+
+        tokens = AccessToken.objects.filter(user=user)
+        if payload.get("all"):
+            team_id = token_to_number(team.key)
+            tokens = tokens.filter(Q(team_id=team_id) | Q(team__isnull=True))
+        else:
+            ids = payload.get("token_ids")
+            if not isinstance(ids, list) or not ids:
+                return JsonResponse({"detail": "No tokens selected"}, status=400)
+            tokens = tokens.filter(id__in=ids)
+            # Any requested id not in the caller's own set (foreign or nonexistent) ->
+            # reject and delete nothing, same shape as the single-delete 403.
+            if tokens.count() != len(set(ids)):
+                return JsonResponse({"detail": "Not allowed"}, status=403)
+
+        # Capture scoped tokens' team keys before deletion for the PostHog event.
+        scoped_team_keys = [token.team.key for token in tokens.select_related("team") if token.team]
+        with transaction.atomic():
+            tokens.delete()
+
+        # Unscoped (team is None) deletions are intentionally not captured, matching
+        # the single-delete convention (workspace-keyed distinct_id). on_commit so a
+        # rollback doesn't emit; partial binds team_key per iteration (no late-binding).
+        for token_team_key in scoped_team_keys:
+            transaction.on_commit(partial(capture_for_request, request, "api_token:deleted", team_key=token_team_key))
+
+        return HttpResponse(status=200)

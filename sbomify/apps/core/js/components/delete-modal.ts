@@ -31,9 +31,26 @@ interface ModalObservers {
     mutationObserver: MutationObserver;
 }
 
+interface BulkRevokeConfig {
+    url: string;
+    csrfToken?: string;
+    refreshEvent?: string;
+}
+
+interface BulkRevokeData {
+    selected: number[];
+    showBulkModal: boolean;
+    isLoading: boolean;
+    readonly countLabel: string;
+    getCsrfToken(): string;
+    toggleAll(checked: boolean, ids: number[]): void;
+    revokeSelected(): Promise<void>;
+}
+
 declare global {
     interface Window {
         getDeleteModalData: (config: DeleteModalConfig) => DeleteModalData;
+        getBulkRevokeData: (config: BulkRevokeConfig) => BulkRevokeData;
         modalFocusTrap: ModalFocusTrap;
         handleTabKey: (event: KeyboardEvent) => void;
         handleModalOpen: (modalElement: HTMLElement, modalId: string) => void;
@@ -291,6 +308,67 @@ export function registerDeleteModal() {
                         this.isLoading = false;
                     }
                 }
+            };
+        };
+    }
+
+    // Bulk token revocation (#1061): one Alpine component over the whole token list.
+    if (!window.getBulkRevokeData) {
+        window.getBulkRevokeData = function (config: BulkRevokeConfig): BulkRevokeData {
+            return {
+                selected: [],
+                showBulkModal: false,
+                isLoading: false,
+                get countLabel(): string {
+                    const n = this.selected.length;
+                    return `${n} token${n === 1 ? '' : 's'}`;
+                },
+                getCsrfToken(): string {
+                    if (config.csrfToken && config.csrfToken.trim()) {
+                        return config.csrfToken.trim();
+                    }
+                    try {
+                        return getCsrfTokenFromModule();
+                    } catch {
+                        return '';
+                    }
+                },
+                toggleAll(checked: boolean, ids: number[]): void {
+                    this.selected = checked ? [...ids] : [];
+                },
+                async revokeSelected(): Promise<void> {
+                    if (this.isLoading || this.selected.length === 0) return;
+                    this.isLoading = true;
+                    const csrfToken = this.getCsrfToken();
+                    if (!csrfToken) {
+                        this.isLoading = false;
+                        showError('Security error: Missing CSRF token. Please reload the page and try again.');
+                        this.showBulkModal = false;
+                        return;
+                    }
+                    try {
+                        const response = await fetch(config.url, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ token_ids: this.selected }),
+                        });
+                        if (response.ok) {
+                            showSuccess(`Revoked ${this.countLabel}`);
+                            this.showBulkModal = false;
+                            this.selected = [];
+                            if (config.refreshEvent) {
+                                document.body.dispatchEvent(new CustomEvent(config.refreshEvent));
+                            }
+                        } else {
+                            showError('Failed to revoke the selected tokens.');
+                        }
+                    } catch {
+                        showError('Network error while revoking tokens.');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
             };
         };
     }

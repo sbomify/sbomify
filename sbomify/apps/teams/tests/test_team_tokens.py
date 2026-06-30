@@ -1,5 +1,6 @@
 """Tests for team tokens view."""
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -382,3 +383,93 @@ class TestTeamTokenExpiry:
 
         content = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key})).content.decode()
         assert "Expired" in content
+
+
+@pytest.mark.django_db
+class TestBulkTokenRevocation:
+    """Bulk revoke + revoke-all on TeamTokensView.delete (#1061)."""
+
+    def _url(self, team):
+        return reverse("teams:team_tokens", kwargs={"team_key": team.key})
+
+    def _tok(self, user, team, desc):
+        return AccessToken.objects.create(user=user, encoded_token=f"enc-{desc}", description=desc, team=team)
+
+    def test_bulk_revoke_selected(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        t1, t2, keep = (self._tok(user, team, d) for d in ("t1", "t2", "keep"))
+
+        resp = client.delete(self._url(team), data=json.dumps({"token_ids": [t1.id, t2.id]}),
+                             content_type="application/json")
+
+        assert resp.status_code == 200
+        assert not AccessToken.objects.filter(id__in=[t1.id, t2.id]).exists()
+        assert AccessToken.objects.filter(id=keep.id).exists()
+
+    def test_revoke_all_includes_unscoped(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        scoped = self._tok(user, team, "scoped")
+        unscoped = AccessToken.objects.create(user=user, encoded_token="enc-leg", description="legacy", team=None)
+
+        resp = client.delete(self._url(team), data=json.dumps({"all": True}), content_type="application/json")
+
+        assert resp.status_code == 200
+        assert not AccessToken.objects.filter(id__in=[scoped.id, unscoped.id]).exists()
+
+    def test_foreign_id_rejected_and_nothing_deleted(self, client: Client, sample_team_with_owner_member, guest_user):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        mine = self._tok(user, team, "mine")
+        theirs = AccessToken.objects.create(user=guest_user, encoded_token="enc-theirs", description="theirs", team=None)
+
+        resp = client.delete(self._url(team), data=json.dumps({"token_ids": [mine.id, theirs.id]}),
+                             content_type="application/json")
+
+        assert resp.status_code == 403
+        # Reject wholesale: neither mine nor theirs is deleted.
+        assert AccessToken.objects.filter(id__in=[mine.id, theirs.id]).count() == 2
+
+    def test_empty_selection_is_400(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        resp = client.delete(self._url(team), data=json.dumps({"token_ids": []}), content_type="application/json")
+        assert resp.status_code == 400
+
+    def test_guest_cannot_bulk_revoke(self, client: Client, sample_team_with_owner_member):
+        from django.contrib.auth import get_user_model
+
+        team = sample_team_with_owner_member.team
+        owner = sample_team_with_owner_member.user
+        mine = self._tok(owner, team, "mine")
+
+        guest = get_user_model().objects.create_user(username="g", email="g@example.com", password="x")
+        Member.objects.create(team=team, user=guest, role="guest")
+        setup_authenticated_client_session(client, team, guest)
+
+        resp = client.delete(self._url(team), data=json.dumps({"token_ids": [mine.id]}),
+                             content_type="application/json")
+        assert resp.status_code == 403
+        assert AccessToken.objects.filter(id=mine.id).exists()
+
+    def test_emits_posthog_per_scoped_token(
+        self, client: Client, sample_team_with_owner_member, mocker, django_capture_on_commit_callbacks
+    ):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        t1, t2 = self._tok(user, team, "t1"), self._tok(user, team, "t2")
+        capture = mocker.patch("sbomify.apps.teams.views.team_tokens.capture_for_request")
+
+        with django_capture_on_commit_callbacks(execute=True):
+            resp = client.delete(self._url(team), data=json.dumps({"token_ids": [t1.id, t2.id]}),
+                                 content_type="application/json")
+
+        assert resp.status_code == 200
+        assert capture.call_count == 2
