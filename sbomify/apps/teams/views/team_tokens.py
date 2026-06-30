@@ -149,7 +149,9 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Scope to exactly what this page manages: the caller's tokens in THIS workspace
         # plus the unscoped legacy ones. Without the team filter, crafted ids could revoke
         # the caller's tokens in OTHER workspaces -- tokens this page never shows.
-        team_id = token_to_number(team.key)
+        # Use the team_key path param (already a valid token) rather than the nullable
+        # team.key DB field, which would 500 on token_to_number if null.
+        team_id = token_to_number(team_key)
         tokens = AccessToken.objects.filter(user=user).filter(Q(team_id=team_id) | Q(team__isnull=True))
         if payload.get("all") is not True:
             ids = payload.get("token_ids")
