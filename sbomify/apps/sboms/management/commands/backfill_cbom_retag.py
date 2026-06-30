@@ -20,7 +20,7 @@ from django.db import IntegrityError
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk import RunReason
 from sbomify.apps.plugins.tasks import enqueue_assessment
-from sbomify.apps.sboms.apis import _is_cbom
+from sbomify.apps.sboms.apis import _is_cbom, _is_duplicate_integrity_error
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data
 
@@ -37,19 +37,24 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         dry_run: bool = options["dry_run"]
+        limit: int | None = options["limit"]
+        # Only sbom-typed CycloneDX rows: other bom_types (vex, aibom, ...) keep their
+        # discriminator even if they happen to carry crypto-asset components. Re-tagged
+        # rows become cbom, so a re-run no longer sees them (idempotent).
         candidates = (
-            SBOM.objects.filter(format="cyclonedx")
-            .exclude(bom_type=SBOM.BomType.CBOM)
+            SBOM.objects.filter(format="cyclonedx", bom_type=SBOM.BomType.SBOM)
             .select_related("component")
             .order_by("id")
         )
         if options["team_id"] is not None:
             candidates = candidates.filter(component__team_id=options["team_id"])
-        if options["limit"] is not None:
-            candidates = candidates[: options["limit"]]
 
         scanned = retagged = enqueued = skipped_run = errors = 0
-        for sbom in candidates:
+        # iterator() avoids caching the whole result set for a large one-off backfill;
+        # limit is applied manually since slicing and iterator() are incompatible.
+        for sbom in candidates.iterator(chunk_size=500):
+            if limit is not None and scanned >= limit:
+                break
             scanned += 1
             try:
                 _, sbom_data = get_sbom_data(sbom.id)
@@ -71,8 +76,11 @@ class Command(BaseCommand):
                 try:
                     sbom.save(update_fields=["bom_type"])
                 except IntegrityError as exc:
-                    # A cbom row with the same (component, version, format, qualifiers)
-                    # already exists — skip rather than abort the batch.
+                    # Only swallow the known uniqueness collision (a cbom row with the
+                    # same component/version/format/qualifiers already exists); re-raise
+                    # any other integrity error so real problems aren't hidden.
+                    if not _is_duplicate_integrity_error(exc):
+                        raise
                     errors += 1
                     self.stderr.write(f"skip {sbom.id}: duplicate cbom artifact ({exc})")
                     continue
