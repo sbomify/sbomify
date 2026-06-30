@@ -34,6 +34,7 @@ import importlib.metadata
 import json
 import logging
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Protocol
@@ -47,6 +48,12 @@ from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_7 as cdx17
 from sbomify.apps.sboms.sbom_format_schemas import spdx_2_3 as spdx23
 
 log = logging.getLogger(__name__)
+
+# Upper bound on concurrent member-SBOM S3 fetches during a cold aggregate build.
+# Each fetch opens its own S3 connection, so this caps the connection fan-out per
+# download. Tune down on small boxes; tune up if release sizes and S3 latency make
+# the fetch the dominant cost.
+MAX_AGGREGATE_FETCH_WORKERS = 8
 
 
 class SBOMFormat(str, Enum):
@@ -179,6 +186,22 @@ class BaseSBOMBuilder(ABC):
             # incomplete so the partial aggregate is not cached (#998).
             self.had_member_fetch_error = True
             return None
+
+    def _prefetch_member_files(self, sbom_instances: list[Any]) -> dict[str, tuple[Path, str] | None]:
+        """Download member SBOM files concurrently, returning {str(sbom.id): result}.
+
+        Parallelizes only the S3 I/O; callers still iterate members serially to
+        build the aggregate deterministically. ``download_sbom_file`` is safe to
+        run across threads: it constructs a fresh ``S3Client`` per call, writes to
+        a distinct sha256-named file, touches no ORM, and its only shared writes
+        (``temp_files.append`` / ``had_member_fetch_error``) are GIL-atomic.
+        """
+        if not sbom_instances:
+            return {}
+        workers = min(len(sbom_instances), MAX_AGGREGATE_FETCH_WORKERS)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            results = executor.map(self.download_sbom_file, sbom_instances)
+        return {str(sbom.id): result for sbom, result in zip(sbom_instances, results)}
 
     def select_best_sbom(self, sboms: list[Any]) -> Any:
         """
@@ -336,16 +359,20 @@ class ReleaseCycloneDXBuilder(BaseCycloneDXBuilder):
 
         component_type_mapping = create_component_type_mapping()
 
-        for artifact in sbom_artifacts:
+        # Filter members once (access control), then fetch their files concurrently.
+        from sbomify.apps.sboms.models import Component
+
+        members = [
+            artifact
+            for artifact in sbom_artifacts
+            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+        ]
+        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+
+        for artifact in members:
             sbom_instance = artifact.sbom
 
-            # Check access controls
-            from sbomify.apps.sboms.models import Component
-
-            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
-                continue
-
-            sbom_result = self.download_sbom_file(sbom_instance)
+            sbom_result = fetched.get(str(sbom_instance.id))
             if sbom_result is None:
                 log.warning(f"SBOM for artifact {artifact.id} not found")
                 continue
@@ -524,17 +551,21 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
             .prefetch_related("sbom__component__team")
         )
 
+        # Filter members once (access control), then fetch their files concurrently.
+        from sbomify.apps.sboms.models import Component
+
+        members = [
+            artifact
+            for artifact in sbom_artifacts
+            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+        ]
+        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+
         package_index = 0
-        for artifact in sbom_artifacts:
+        for artifact in members:
             sbom_instance = artifact.sbom
 
-            # Check access controls
-            from sbomify.apps.sboms.models import Component
-
-            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
-                continue
-
-            sbom_result = self.download_sbom_file(sbom_instance)
+            sbom_result = fetched.get(str(sbom_instance.id))
             if sbom_result is None:
                 log.warning(f"SBOM for artifact {artifact.id} not found")
                 continue
@@ -798,18 +829,23 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
             .prefetch_related("sbom__component__team")
         )
 
+        # Filter members once (access control), then fetch their files concurrently.
+        from sbomify.apps.sboms.models import Component
+
+        members = [
+            artifact
+            for artifact in sbom_artifacts
+            if not (release.product.is_public and artifact.sbom.component.visibility != Component.Visibility.PUBLIC)
+        ]
+        fetched = self._prefetch_member_files([artifact.sbom for artifact in members])
+
         package_index = 0
         all_element_spdx_ids = [org_spdx_id, tool_spdx_id, main_pkg_spdx_id]
 
-        for artifact in sbom_artifacts:
+        for artifact in members:
             sbom_instance = artifact.sbom
 
-            from sbomify.apps.sboms.models import Component
-
-            if release.product.is_public and sbom_instance.component.visibility != Component.Visibility.PUBLIC:
-                continue
-
-            sbom_result = self.download_sbom_file(sbom_instance)
+            sbom_result = fetched.get(str(sbom_instance.id))
             if sbom_result is None:
                 log.warning(f"SBOM for artifact {artifact.id} not found")
                 continue

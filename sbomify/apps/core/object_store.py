@@ -86,6 +86,19 @@ class S3Client:
             raise ValueError("This method is only for SBOMS bucket")
         self.upload_data_as_file(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name, data)
 
+    def list_cached_aggregates(self, prefix: str) -> list[str]:
+        """Return cached-aggregate object keys under ``prefix`` (for orphan GC)."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        bucket = self.s3.Bucket(settings.AWS_SBOMS_STORAGE_BUCKET_NAME)
+        return [obj.key for obj in bucket.objects.filter(Prefix=prefix)]
+
+    def delete_cached_aggregate(self, object_name: str) -> None:
+        """Delete one cached-aggregate object by key (for orphan GC)."""
+        if self.bucket_type != "SBOMS":
+            raise ValueError("This method is only for SBOMS bucket")
+        self.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, object_name)
+
     _HEX_SHA256_RE = re.compile(r"[a-f0-9]{64}\Z")
 
     def _upload_sbom_artifact(self, sbom_id: str, sbom_hash: str, data: bytes, suffix: str) -> str:
