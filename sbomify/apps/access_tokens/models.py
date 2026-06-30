@@ -45,6 +45,16 @@ class AccessToken(models.Model):
             "(default 15 min)."
         ),
     )
+    last_used_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Timestamp of the most recent authenticated request made with this token. "
+            "Throttled, so accurate to within a few minutes (see "
+            "ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS). NULL = never used. Lets operators "
+            "spot stale or leaked tokens to revoke."
+        ),
+    )
 
     def __str__(self) -> str:
         return f"{self.user_id} - {self.description}"

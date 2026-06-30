@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from datetime import timedelta
 from time import time
 from typing import Any
 from uuid import uuid4
@@ -9,6 +10,8 @@ import jwt
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.base_user import AbstractBaseUser
+from django.db.models import Q
+from django.utils import timezone
 from jwt.exceptions import DecodeError, InvalidTokenError
 
 from sbomify import logging
@@ -27,6 +30,14 @@ log = logging.getLogger(__name__)
 # its JWT claims (it'll fail the ``exp`` and ``aud`` checks).
 TOKEN_TYPE_PAT = "pat"  # nosec B105 — token-type sentinel, not a credential
 TOKEN_TYPE_OIDC = "oidc"  # nosec B105 — token-type sentinel, not a credential
+
+# Forward clock-skew tolerance for last_used_at (#1044). A value up to this far
+# ahead of our clock is treated as a concurrent worker's lead-clock write, not a
+# stale value, so we never write an EARLIER time back over a newer one. Kept
+# SEPARATE from the throttle window so even throttle=0 (write-every-request)
+# still tolerates skew. Only a value beyond this is "broken clock / manual edit"
+# and gets recovered. Matches the 60s OIDC clock-skew convention.
+_LAST_USED_FORWARD_SKEW = timedelta(seconds=60)
 
 
 def create_personal_access_token(
@@ -262,5 +273,38 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
             access_token_record.expires_at,
         )
         return None, None
+
+    # Stamp last-used for stale/leaked-token visibility (#1044). Only valid,
+    # non-expired tokens reach here. The SELECT value short-circuits the common
+    # case (no round-trip when it's genuinely fresh), but the throttle is ALSO
+    # enforced in the UPDATE's WHERE so a concurrent worker that already refreshed
+    # the row wins: the conditional update writes at most once per window and the
+    # in-memory record is refreshed only when this request actually wrote it.
+    now = timezone.now()
+    throttle = settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS
+    cutoff = now - timedelta(seconds=throttle)
+    far_future = now + _LAST_USED_FORWARD_SKEW
+    last_used = access_token_record.last_used_at
+    # "Fresh" = within [cutoff, far_future]: recently stamped, OR stamped slightly
+    # ahead by a concurrent worker whose clock leads ours (forward-skew tolerance,
+    # so we never write an EARLIER time back over a newer one). The skew bound is
+    # independent of the throttle window, so throttle=0 still tolerates skew.
+    # Refresh on NULL, stale (< cutoff), or genuinely-far-future (> now + skew,
+    # i.e. a broken clock / manual edit that would otherwise freeze the field).
+    is_fresh = last_used is not None and cutoff <= last_used <= far_future
+    if not is_fresh:
+        updated = (
+            AccessToken.objects.filter(pk=access_token_record.pk)
+            .filter(Q(last_used_at__isnull=True) | Q(last_used_at__lt=cutoff) | Q(last_used_at__gt=far_future))
+            .update(last_used_at=now)
+        )
+        if updated:
+            access_token_record.last_used_at = now  # we wrote it; mirror in memory
+        else:
+            # updated == 0 means a concurrent worker refreshed the row between our
+            # SELECT and this UPDATE. Mirror the persisted value so the returned
+            # record isn't stale. This extra read only happens in that rare race,
+            # never on the common (fresh or we-wrote-it) paths.
+            access_token_record.refresh_from_db(fields=["last_used_at"])
 
     return user, access_token_record
