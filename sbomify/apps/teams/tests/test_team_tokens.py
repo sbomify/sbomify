@@ -80,11 +80,18 @@ class TestTeamTokensView:
         setup_authenticated_client_session(client, team, user)
 
         AccessToken.objects.create(
-            user=user, description="Used Token", encoded_token="used_tok", team=team,
+            user=user,
+            description="Used Token",
+            encoded_token="used_tok",
+            team=team,
             last_used_at=timezone.now() - timedelta(days=2),
         )
         AccessToken.objects.create(
-            user=user, description="Fresh Token", encoded_token="fresh_tok", team=team, last_used_at=None,
+            user=user,
+            description="Fresh Token",
+            encoded_token="fresh_tok",
+            team=team,
+            last_used_at=None,
         )
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
@@ -401,8 +408,9 @@ class TestBulkTokenRevocation:
         setup_authenticated_client_session(client, team, user)
         t1, t2, keep = (self._tok(user, team, d) for d in ("t1", "t2", "keep"))
 
-        resp = client.delete(self._url(team), data=json.dumps({"token_ids": [t1.id, t2.id]}),
-                             content_type="application/json")
+        resp = client.delete(
+            self._url(team), data=json.dumps({"token_ids": [t1.id, t2.id]}), content_type="application/json"
+        )
 
         assert resp.status_code == 200
         assert not AccessToken.objects.filter(id__in=[t1.id, t2.id]).exists()
@@ -425,10 +433,13 @@ class TestBulkTokenRevocation:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
         mine = self._tok(user, team, "mine")
-        theirs = AccessToken.objects.create(user=guest_user, encoded_token="enc-theirs", description="theirs", team=None)
+        theirs = AccessToken.objects.create(
+            user=guest_user, encoded_token="enc-theirs", description="theirs", team=None
+        )
 
-        resp = client.delete(self._url(team), data=json.dumps({"token_ids": [mine.id, theirs.id]}),
-                             content_type="application/json")
+        resp = client.delete(
+            self._url(team), data=json.dumps({"token_ids": [mine.id, theirs.id]}), content_type="application/json"
+        )
 
         assert resp.status_code == 403
         # Reject wholesale: neither mine nor theirs is deleted.
@@ -453,8 +464,9 @@ class TestBulkTokenRevocation:
         Member.objects.create(team=team, user=guest, role="guest")
         setup_authenticated_client_session(client, team, guest)
 
-        resp = client.delete(self._url(team), data=json.dumps({"token_ids": [mine.id]}),
-                             content_type="application/json")
+        resp = client.delete(
+            self._url(team), data=json.dumps({"token_ids": [mine.id]}), content_type="application/json"
+        )
         assert resp.status_code == 403
         assert AccessToken.objects.filter(id=mine.id).exists()
 
@@ -468,8 +480,9 @@ class TestBulkTokenRevocation:
         capture = mocker.patch("sbomify.apps.teams.views.team_tokens.capture_for_request")
 
         with django_capture_on_commit_callbacks(execute=True):
-            resp = client.delete(self._url(team), data=json.dumps({"token_ids": [t1.id, t2.id]}),
-                                 content_type="application/json")
+            resp = client.delete(
+                self._url(team), data=json.dumps({"token_ids": [t1.id, t2.id]}), content_type="application/json"
+            )
 
         assert resp.status_code == 200
         assert capture.call_count == 2
@@ -485,8 +498,9 @@ class TestBulkTokenRevocation:
         token_b = AccessToken.objects.create(user=user, encoded_token="enc-b", description="b", team=team_b)
         setup_authenticated_client_session(client, team_a, user)
 
-        resp = client.delete(self._url(team_a), data=json.dumps({"token_ids": [token_b.id]}),
-                             content_type="application/json")
+        resp = client.delete(
+            self._url(team_a), data=json.dumps({"token_ids": [token_b.id]}), content_type="application/json"
+        )
 
         assert resp.status_code == 403
         assert AccessToken.objects.filter(id=token_b.id).exists()
@@ -497,8 +511,7 @@ class TestBulkTokenRevocation:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        resp = client.delete(self._url(team), data=json.dumps({"token_ids": ["abc"]}),
-                             content_type="application/json")
+        resp = client.delete(self._url(team), data=json.dumps({"token_ids": ["abc"]}), content_type="application/json")
         assert resp.status_code == 400
 
     def test_all_as_non_boolean_does_not_revoke_all(self, client: Client, sample_team_with_owner_member):
@@ -508,8 +521,16 @@ class TestBulkTokenRevocation:
         setup_authenticated_client_session(client, team, user)
         mine = self._tok(user, team, "mine")
 
-        resp = client.delete(self._url(team), data=json.dumps({"all": "true"}),
-                             content_type="application/json")
+        resp = client.delete(self._url(team), data=json.dumps({"all": "true"}), content_type="application/json")
 
         assert resp.status_code == 400  # falls through to the token_ids path, which is absent
         assert AccessToken.objects.filter(id=mine.id).exists()  # nothing revoked
+
+    def test_non_dict_payload_is_400(self, client: Client, sample_team_with_owner_member):
+        """#1061: a JSON body that isn't an object (e.g. a list) is rejected with 400, not a 500."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        resp = client.delete(self._url(team), data="[]", content_type="application/json")
+        assert resp.status_code == 400

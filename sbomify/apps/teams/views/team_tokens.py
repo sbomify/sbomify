@@ -142,6 +142,9 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             payload = json.loads(request.body or "{}")
         except json.JSONDecodeError:
             return JsonResponse({"detail": "Invalid JSON"}, status=400)
+        if not isinstance(payload, dict):
+            # json.loads can return a list/None/str; .get would then 500.
+            return JsonResponse({"detail": "Invalid JSON: expected an object"}, status=400)
 
         # Scope to exactly what this page manages: the caller's tokens in THIS workspace
         # plus the unscoped legacy ones. Without the team filter, crafted ids could revoke
