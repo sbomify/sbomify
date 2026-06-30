@@ -148,10 +148,16 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # the caller's tokens in OTHER workspaces -- tokens this page never shows.
         team_id = token_to_number(team.key)
         tokens = AccessToken.objects.filter(user=user).filter(Q(team_id=team_id) | Q(team__isnull=True))
-        if not payload.get("all"):
+        if payload.get("all") is not True:
             ids = payload.get("token_ids")
-            if not isinstance(ids, list) or not ids:
-                return JsonResponse({"detail": "No tokens selected"}, status=400)
+            # Reject non-int ids (strings would crash the id__in cast) and require a real
+            # boolean for "all" (a truthy string like "false" must not mean revoke-all).
+            if (
+                not isinstance(ids, list)
+                or not ids
+                or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids)
+            ):
+                return JsonResponse({"detail": "token_ids must be a non-empty list of integers"}, status=400)
             tokens = tokens.filter(id__in=ids)
             # Any requested id not in this page's scoped set (foreign user, other
             # workspace, or nonexistent) -> reject wholesale, same shape as single-delete.

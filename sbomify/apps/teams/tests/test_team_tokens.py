@@ -490,3 +490,13 @@ class TestBulkTokenRevocation:
 
         assert resp.status_code == 403
         assert AccessToken.objects.filter(id=token_b.id).exists()
+
+    def test_non_integer_token_ids_is_400(self, client: Client, sample_team_with_owner_member):
+        """#1061: non-integer token_ids are rejected with 400 (not a 500 from the id__in cast)."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        resp = client.delete(self._url(team), data=json.dumps({"token_ids": ["abc"]}),
+                             content_type="application/json")
+        assert resp.status_code == 400
