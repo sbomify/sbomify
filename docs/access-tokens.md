@@ -9,7 +9,10 @@ unscoped tokens. The authoritative field semantics live in the `AccessToken` mod
 
 A token is workspace-scoped, action-scoped, and expiring:
 
-- **Workspace** (`team`): the token acts only within that workspace.
+- **Workspace** (`team`): the token acts only within that workspace. Legacy tokens
+  predating workspace scoping have `team = NULL` and are **not** restricted to one
+  workspace; they work across every workspace the user belongs to. Rotate these (see
+  below) so each token is pinned to a single workspace.
 - **Action scopes** (`scopes`): a list of `can()` actions the token may perform. A scope
   only narrows access; the user's workspace role and the resource's attributes still
   apply. `NULL` means unscoped (full capability).
@@ -49,9 +52,11 @@ durable controls.
 
 ## Rotating a legacy token
 
-Tokens created before token scoping shipped have `scopes = NULL` and `expires_at = NULL`
-(full, never-expiring access). They stay valid until you rotate them; there is no forced
-cutover or auto-expiry, since that would break existing CI. Rotate at your convenience:
+Tokens created before token scoping shipped have `scopes = NULL`, `expires_at = NULL`,
+and often `team = NULL` (full, never-expiring access that is also not pinned to a single
+workspace, so it reaches every workspace the holder belongs to). They stay valid until
+you rotate them; there is no forced cutover or auto-expiry, since that would break
+existing CI. Rotate at your convenience:
 
 1. Create a new token scoped to the specific workspace, with only the action scopes the
    integration needs, and an expiry (the 90-day default is fine).

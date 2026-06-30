@@ -37,3 +37,8 @@ process, involving the following steps:
 - Audit code to find any potential similar problems.
 - Prepare fixes for all releases still under maintenance. These fixes
   will be released as fast as possible to pub.dev where applicable.
+
+## API access tokens
+
+For using and rotating API access tokens safely (scoping, expiry, rotation, and the
+legacy unscoped-token migration), see [docs/access-tokens.md](docs/access-tokens.md).
