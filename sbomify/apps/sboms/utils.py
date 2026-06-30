@@ -2288,8 +2288,10 @@ def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     if _SBOM_UNIQUE_CONSTRAINT in msg:
         return True
 
-    # SQLite: "UNIQUE constraint failed: sboms_sbom.component_id, ..."
-    if "unique constraint failed" in msg and "sboms_sbom.component_id" in msg and "sboms_sbom.version" in msg:
+    # SQLite: "UNIQUE constraint failed: <db_table>.component_id, <db_table>.version, ..."
+    # Derive the table from the model so it can't drift (it's "sboms_sboms", not "sboms_sbom").
+    table = SBOM._meta.db_table
+    if "unique constraint failed" in msg and f"{table}.component_id" in msg and f"{table}.version" in msg:
         return True
 
     return False
