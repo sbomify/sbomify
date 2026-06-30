@@ -500,3 +500,16 @@ class TestBulkTokenRevocation:
         resp = client.delete(self._url(team), data=json.dumps({"token_ids": ["abc"]}),
                              content_type="application/json")
         assert resp.status_code == 400
+
+    def test_all_as_non_boolean_does_not_revoke_all(self, client: Client, sample_team_with_owner_member):
+        """#1061: a truthy non-boolean 'all' (e.g. the string 'true') must NOT trigger revoke-all."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+        mine = self._tok(user, team, "mine")
+
+        resp = client.delete(self._url(team), data=json.dumps({"all": "true"}),
+                             content_type="application/json")
+
+        assert resp.status_code == 400  # falls through to the token_ids path, which is absent
+        assert AccessToken.objects.filter(id=mine.id).exists()  # nothing revoked
