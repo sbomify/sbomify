@@ -115,3 +115,19 @@ def test_continues_past_fetch_error(sample_component, mocker, enqueue):  # noqa:
     crypto.refresh_from_db()
     assert crypto.bom_type == "cbom"  # processed despite the bad row
     enqueue.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_skips_on_uniqueness_collision(sample_component, mocker, enqueue):  # noqa: F811
+    """#1069: flipping sbom->cbom that collides with an existing cbom row is skipped, not fatal."""
+    sbom_row = _make_sbom(sample_component, "crypto")
+    # An existing cbom row sharing (component, version, format, qualifiers) — the flip
+    # would duplicate its unique tuple.
+    _make_sbom(sample_component, "crypto", bom_type="cbom")
+    mocker.patch(f"{CMD}.get_sbom_data", return_value=(sbom_row, CBOM_DATA))
+
+    call_command("backfill_cbom_retag")
+
+    sbom_row.refresh_from_db()
+    assert sbom_row.bom_type == "sbom"  # flip rolled back on the uniqueness collision
+    enqueue.assert_not_called()

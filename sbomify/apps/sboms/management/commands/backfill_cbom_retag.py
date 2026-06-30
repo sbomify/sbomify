@@ -15,7 +15,7 @@ running for the AssessmentRun to materialize. Use --dry-run to preview first.
 from typing import Any
 
 from django.core.management.base import BaseCommand
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk import RunReason
@@ -41,26 +41,23 @@ class Command(BaseCommand):
         # Only sbom-typed CycloneDX rows: other bom_types (vex, aibom, ...) keep their
         # discriminator even if they happen to carry crypto-asset components. Re-tagged
         # rows become cbom, so a re-run no longer sees them (idempotent).
-        candidates = (
-            SBOM.objects.filter(format="cyclonedx", bom_type=SBOM.BomType.SBOM)
-            .select_related("component")
-            .order_by("id")
-        )
+        candidates = SBOM.objects.filter(format="cyclonedx", bom_type=SBOM.BomType.SBOM).order_by("id")
         if options["team_id"] is not None:
             candidates = candidates.filter(component__team_id=options["team_id"])
 
         scanned = retagged = enqueued = skipped_run = errors = 0
-        # iterator() avoids caching the whole result set for a large one-off backfill;
-        # limit is applied manually since slicing and iterator() are incompatible.
-        for sbom in candidates.iterator(chunk_size=500):
+        # Iterate IDs only (the SBOM instance comes from get_sbom_data, which already
+        # fetches it) so there's one DB read per row, not two. iterator() avoids caching
+        # the whole result set; limit is manual since slicing + iterator() are incompatible.
+        for sbom_id in candidates.values_list("id", flat=True).iterator(chunk_size=500):
             if limit is not None and scanned >= limit:
                 break
             scanned += 1
             try:
-                _, sbom_data = get_sbom_data(sbom.id)
+                sbom, sbom_data = get_sbom_data(sbom_id)
             except SBOMDataError as exc:
                 errors += 1
-                self.stderr.write(f"skip {sbom.id}: {exc}")
+                self.stderr.write(f"skip {sbom_id}: {exc}")
                 continue
 
             if not _is_cbom(sbom_data):
@@ -74,7 +71,10 @@ class Command(BaseCommand):
             if sbom.bom_type != SBOM.BomType.CBOM:
                 sbom.bom_type = SBOM.BomType.CBOM
                 try:
-                    sbom.save(update_fields=["bom_type"])
+                    # Savepoint so a uniqueness collision rolls back just this write,
+                    # leaving any surrounding transaction usable.
+                    with transaction.atomic():
+                        sbom.save(update_fields=["bom_type"])
                 except IntegrityError as exc:
                     # Only swallow the known uniqueness collision (a cbom row with the
                     # same component/version/format/qualifiers already exists); re-raise
