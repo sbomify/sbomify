@@ -149,7 +149,7 @@
                                        value="{{ token.id }}"
                                        x-model.number="selected"
                                        class="flex-shrink-0"
-                                       aria-label="Select token">
+                                       aria-label="Select token {{ token.description }}">
                                 <div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
                                     <i class="fas fa-key text-primary/60"></i>
                                 </div>
@@ -187,7 +187,7 @@
                                        value="{{ token.id }}"
                                        x-model.number="selected"
                                        class="flex-shrink-0"
-                                       aria-label="Select token">
+                                       aria-label="Select token {{ token.description }}">
                                 <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
                                     <i class="fas fa-exclamation-circle text-warning"></i>
                                 </div>

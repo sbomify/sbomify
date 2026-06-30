@@ -168,7 +168,9 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return JsonResponse({"detail": "Not allowed"}, status=403)
 
         # Capture scoped tokens' team keys before deletion for the PostHog event.
-        scoped_team_keys = [token.team.key for token in tokens.select_related("team") if token.team]
+        # Team keys of the scoped tokens (one per token, duplicates kept) without
+        # loading model instances.
+        scoped_team_keys = list(tokens.filter(team__isnull=False).values_list("team__key", flat=True))
         with transaction.atomic():
             tokens.delete()
             # Register inside the atomic block so the event is tied to THIS transaction

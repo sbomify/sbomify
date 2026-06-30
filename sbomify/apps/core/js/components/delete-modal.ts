@@ -374,10 +374,12 @@ export function registerDeleteModal() {
                         } else {
                             let detail = 'Failed to revoke the selected tokens.';
                             try {
-                                const data = (await response.json()) as { detail?: string };
-                                if (data?.detail) detail = data.detail;
+                                if ((response.headers.get('Content-Type') || '').includes('application/json')) {
+                                    const data = (await response.json()) as { detail?: string };
+                                    if (data?.detail) detail = data.detail;
+                                }
                             } catch {
-                                // Non-JSON body — keep the default message.
+                                // Non-JSON / unparseable body — keep the default message.
                             }
                             showError(detail);
                         }
