@@ -168,11 +168,13 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         scoped_team_keys = [token.team.key for token in tokens.select_related("team") if token.team]
         with transaction.atomic():
             tokens.delete()
-
-        # Unscoped (team is None) deletions are intentionally not captured, matching
-        # the single-delete convention (workspace-keyed distinct_id). on_commit so a
-        # rollback doesn't emit; partial binds team_key per iteration (no late-binding).
-        for token_team_key in scoped_team_keys:
-            transaction.on_commit(partial(capture_for_request, request, "api_token:deleted", team_key=token_team_key))
+            # Register inside the atomic block so the event is tied to THIS transaction
+            # (registered after it exits, on_commit fires immediately in autocommit mode).
+            # Unscoped (team is None) deletions are intentionally not captured, matching
+            # the single-delete convention; partial binds team_key per iteration.
+            for token_team_key in scoped_team_keys:
+                transaction.on_commit(
+                    partial(capture_for_request, request, "api_token:deleted", team_key=token_team_key)
+                )
 
         return HttpResponse(status=200)
