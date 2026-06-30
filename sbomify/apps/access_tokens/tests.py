@@ -1,4 +1,6 @@
+import contextlib
 import json
+import logging
 from time import time
 
 import jwt
@@ -776,6 +778,153 @@ def test_create_token_form_maps_scope_presets():
     assert f.scopes() is None
 
 
+@contextlib.contextmanager
+def _capture_audit(caplog):
+    """Capture the non-propagating sbomify.audit.token_auth logger via caplog's handler."""
+    logger = logging.getLogger("sbomify.audit.token_auth")
+    logger.addHandler(caplog.handler)
+    old_level = logger.level
+    logger.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        logger.removeHandler(caplog.handler)
+        logger.setLevel(old_level)
+
+
+def _token_auth_events(caplog):
+    return [r for r in caplog.records if getattr(r, "event", None) == "token_auth"]
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_success_event(
+    sample_user,  # noqa: F811
+    sample_team_with_owner_member,  # noqa: F811
+    caplog,
+):
+    """#1058: a successful PAT auth emits a structured success event with IP + action."""
+    token_str = create_personal_access_token(sample_user)
+    rec = AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="t",
+        team=sample_team_with_owner_member.team,
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str, source_ip="1.2.3.4", attempted_action="GET /api/x")
+    assert user == sample_user
+    events = _token_auth_events(caplog)
+    assert len(events) == 1
+    e = events[0]
+    assert e.outcome == "success" and e.reason is None
+    assert e.token_id == str(rec.pk)
+    assert e.user_id == str(sample_user.id)
+    assert e.team_id == str(sample_team_with_owner_member.team.id)
+    assert e.source_ip == "1.2.3.4"
+    assert e.attempted_action == "GET /api/x"
+    assert e.token_fingerprint and token_str not in caplog.text
+    # The fields must survive the default console formatter (in the message, not just extra).
+    assert "1.2.3.4" in caplog.text and "GET /api/x" in caplog.text
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_decode_failure(caplog):
+    """#1058: an undecodable bearer emits failure(reason=decode) with a fingerprint, no token id."""
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record("not-a-jwt", source_ip="9.9.9.9")
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "decode"
+    assert e.token_id is None and e.token_fingerprint and e.source_ip == "9.9.9.9"
+    assert "not-a-jwt" not in caplog.text
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_inactive_user(sample_user, caplog):  # noqa: F811
+    """#1058: a token whose user is inactive emits failure(reason=user_inactive_or_missing)."""
+    token_str = create_personal_access_token(sample_user)
+    sample_user.is_active = False
+    sample_user.save()
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
+    assert e.user_id == str(sample_user.id)
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_no_token_record(sample_user, caplog):  # noqa: F811
+    """#1058: a valid token with no DB row emits failure(reason=no_token_record)."""
+    token_str = create_personal_access_token(sample_user)
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "no_token_record"
+    assert e.user_id == str(sample_user.id)
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_expired_row(sample_user, caplog):  # noqa: F811
+    """#1058: an expired DB row emits failure(reason=expired)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(
+        user=sample_user,
+        encoded_token=token_str,
+        description="e",
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "expired"
+
+
+@pytest.mark.django_db
+def test_token_auth_malformed_sub_is_clean_failure(caplog):
+    """#1058/#1065: a token whose sub cannot be a user PK fails cleanly (no 500) and audits."""
+    bad = jwt.encode(
+        {"sub": "not-a-valid-pk", "token_type": "pat"}, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(bad)
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "user_inactive_or_missing"
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_team_id_null_for_teamless_token(sample_user, caplog):  # noqa: F811
+    """#1058: a token with no team emits team_id as None (JSON null), not the string 'None'."""
+    token_str = create_personal_access_token(sample_user)
+    AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="no-team")
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(token_str)
+    assert user == sample_user
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "success"
+    assert e.team_id is None
+
+
+@pytest.mark.django_db
+def test_token_auth_audit_oidc_jwt_expiry_is_expired_not_decode(sample_user, caplog):  # noqa: F811
+    """#1058: an OIDC token past its JWT exp audits as reason=expired (INFO), not decode."""
+    from sbomify.apps.access_tokens.utils import TOKEN_TYPE_OIDC
+
+    expired_oidc = create_personal_access_token(sample_user, expires_at=time() - 100, token_type=TOKEN_TYPE_OIDC)
+    with _capture_audit(caplog):
+        user, record = get_user_and_token_record(expired_oidc)
+    assert user is None and record is None
+    e = _token_auth_events(caplog)[0]
+    assert e.outcome == "failure" and e.reason == "expired"
+
+
 # ---------------------------------------------------------------------------
 # #1044: AccessToken.last_used_at usage tracking
 # ---------------------------------------------------------------------------
@@ -807,9 +956,7 @@ def test_last_used_at_throttled_within_window(sample_user, settings):  # noqa: F
     settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
     token_str = create_personal_access_token(sample_user)
     recent = timezone.now() - timedelta(seconds=30)  # well inside the 300s window
-    record = AccessToken.objects.create(
-        user=sample_user, encoded_token=token_str, description="t", last_used_at=recent
-    )
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t", last_used_at=recent)
 
     _, returned = get_user_and_token_record(token_str)
 
@@ -829,9 +976,7 @@ def test_last_used_at_refreshed_after_window(sample_user, settings):  # noqa: F8
     settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
     token_str = create_personal_access_token(sample_user)
     stale = timezone.now() - timedelta(seconds=400)  # older than the 300s window
-    record = AccessToken.objects.create(
-        user=sample_user, encoded_token=token_str, description="t", last_used_at=stale
-    )
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t", last_used_at=stale)
 
     get_user_and_token_record(token_str)
 
@@ -886,9 +1031,7 @@ def test_last_used_at_refreshed_when_future_dated(sample_user, settings):  # noq
     settings.ACCESS_TOKEN_LAST_USED_THROTTLE_SECONDS = 300
     token_str = create_personal_access_token(sample_user)
     future = timezone.now() + timedelta(days=1)
-    record = AccessToken.objects.create(
-        user=sample_user, encoded_token=token_str, description="t", last_used_at=future
-    )
+    record = AccessToken.objects.create(user=sample_user, encoded_token=token_str, description="t", last_used_at=future)
 
     get_user_and_token_record(token_str)
 

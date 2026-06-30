@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import typing
 from datetime import timedelta
 from time import time
@@ -20,6 +22,52 @@ if typing.TYPE_CHECKING:
     from .models import AccessToken
 
 log = logging.getLogger(__name__)
+
+# Append-only forensic trail of PAT/OIDC authentication outcomes. Structured
+# logging (not a table): retention is the log pipeline's job, and failure events
+# are unbounded/attacker-driftable. last_used_at stays the queryable "last seen".
+audit_log = logging.getLogger("audit.token_auth")  # -> "sbomify.audit.token_auth"
+
+
+def _token_fingerprint(token: str) -> str:
+    """Non-reversible short fingerprint, for attributing failures without the raw token."""
+    return hashlib.sha256(token.encode()).hexdigest()[:12]
+
+
+def _emit_token_auth_event(
+    outcome: str,
+    *,
+    token: str,
+    reason: str | None = None,
+    record: AccessToken | None = None,
+    user_id: str | None = None,
+    source_ip: str | None = None,
+    attempted_action: str | None = None,
+) -> None:
+    """Emit one structured token-auth audit event. Never logs the raw token: every
+    event carries a non-reversible fingerprint, and events with a resolved DB record
+    (success, DB-row expiry) additionally carry the token id."""
+    extra = {
+        "event": "token_auth",
+        "outcome": outcome,
+        "reason": reason,
+        "token_id": str(record.pk) if record is not None else None,
+        "token_fingerprint": _token_fingerprint(token),
+        "user_id": user_id,
+        # Keep None (JSON null) for a team-less token rather than the string "None".
+        "team_id": str(record.team_id) if record is not None and record.team_id is not None else None,
+        "source_ip": source_ip,
+        "attempted_action": attempted_action,
+    }
+    # The default console formatter renders only %(message)s and drops `extra`, so
+    # serialize the fields into the message as JSON too — otherwise operators see no
+    # detail in container logs. A structured handler can still consume `extra`.
+    detail = json.dumps({k: v for k, v in extra.items() if k != "event"}, default=str)
+    # Expected end-of-life (expired) and success are INFO; genuine rejections WARNING.
+    if outcome == "success" or reason == "expired":
+        audit_log.info("token_auth %s", detail, extra=extra)
+    else:
+        audit_log.warning("token_auth %s", detail, extra=extra)
 
 
 # Token-type sentinels embedded in the JWT payload so the decoder can
@@ -211,7 +259,9 @@ def get_user_from_personal_access_token(token: str) -> AbstractBaseUser | None:
         return None
 
 
-def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, AccessToken | None]:
+def get_user_and_token_record(
+    token: str, *, source_ip: str | None = None, attempted_action: str | None = None
+) -> tuple[AbstractBaseUser | None, AccessToken | None]:
     """Get user and AccessToken DB record from a personal access token.
 
     Rejection points, in evaluation order:
@@ -240,27 +290,53 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
     """
     from .models import AccessToken
 
+    def emit(
+        outcome: str, *, reason: str | None = None, record: AccessToken | None = None, user_id: str | None = None
+    ) -> None:
+        _emit_token_auth_event(
+            outcome,
+            token=token,
+            reason=reason,
+            record=record,
+            user_id=user_id,
+            source_ip=source_ip,
+            attempted_action=attempted_action,
+        )
+
     try:
         payload = decode_personal_access_token(token)
     except DecodeError as e:
+        # An OIDC JWT past its exp surfaces here as DecodeError raised from
+        # jwt.ExpiredSignatureError — classify it as an expiry (INFO), not a
+        # generic decode failure (WARNING), matching the DB-row expiry path.
+        if isinstance(e.__cause__, jwt.ExpiredSignatureError):
+            # decode_personal_access_token already logged the routine expiry; just
+            # record the audit event (also INFO) without duplicating that line.
+            emit("failure", reason="expired")
+            return None, None
         log.warning(f"Failed to decode token: {str(e)}")
+        emit("failure", reason="decode")
         return None, None
 
+    user_id = str(payload.get("sub", ""))
     try:
-        user_id = str(payload["sub"])
         # Filter on liveness too: a soft-deleted or deactivated user must
         # NOT be able to authenticate via a still-DB-persisted token. This
         # matters most for OIDC bot users — deleting the bot has to revoke
         # in-flight credentials immediately, not at TTL expiry — and for any
         # admin-driven user deactivation flow.
         user = get_user_model().objects.get(id=user_id, is_active=True, deleted_at__isnull=True)
-    except get_user_model().DoesNotExist as e:
+    except (get_user_model().DoesNotExist, ValueError, TypeError) as e:
+        # ValueError/TypeError: a missing or non-PK-shaped ``sub`` (e.g. ""/non-numeric
+        # against an integer PK) — fail cleanly with an audit event, never a 500.
         log.warning("No live user found for token (user_id=%s): %s", user_id, str(e))
+        emit("failure", reason="user_inactive_or_missing", user_id=user_id)
         return None, None
 
     access_token_record = AccessToken.objects.filter(user=user, encoded_token=token).select_related("team").first()
     if access_token_record is None:
         log.warning(f"No DB record found for token belonging to user {user_id}")
+        emit("failure", reason="no_token_record", user_id=user_id)
         return None, None
 
     if access_token_record.is_expired:
@@ -272,6 +348,7 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
             access_token_record.pk,
             access_token_record.expires_at,
         )
+        emit("failure", reason="expired", record=access_token_record, user_id=user_id)
         return None, None
 
     # Stamp last-used for stale/leaked-token visibility (#1044). Only valid,
@@ -307,4 +384,5 @@ def get_user_and_token_record(token: str) -> tuple[AbstractBaseUser | None, Acce
             # never on the common (fresh or we-wrote-it) paths.
             access_token_record.refresh_from_db(fields=["last_used_at"])
 
+    emit("success", record=access_token_record, user_id=user_id)
     return user, access_token_record

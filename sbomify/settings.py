@@ -559,6 +559,14 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # Token-auth audit trail (sbomify.audit.*). Pinned to INFO independent of
+        # LOG_LEVEL so the success/expired events stay in the forensic record even
+        # when the general log level is raised to WARNING.
+        "sbomify.audit": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "core": {
             "handlers": ["console"],
             "level": "DEBUG",
