@@ -291,8 +291,14 @@ class TestSPDXOutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
-                return []
+                return self
+
+            def __iter__(self):
+                return iter([])
 
         class MockRelease:
             id = "rel-123"
@@ -355,8 +361,14 @@ class TestSPDXOutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
-                return []
+                return self
+
+            def __iter__(self):
+                return iter([])
 
         class MockRelease:
             id = "rel-456"
@@ -418,8 +430,14 @@ class TestSPDX30OutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
-                return []
+                return self
+
+            def __iter__(self):
+                return iter([])
 
         class MockRelease:
             id = "rel-789"
@@ -499,8 +517,14 @@ class TestSPDX30OutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
-                return []
+                return self
+
+            def __iter__(self):
+                return iter([])
 
         class MockRelease:
             id = "rel-json"
@@ -552,8 +576,14 @@ class TestSPDX30OutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
-                return []
+                return self
+
+            def __iter__(self):
+                return iter([])
 
         class MockRelease:
             id = "rel-ci"
@@ -599,8 +629,14 @@ class TestSPDX30OutputIntegration:
             def select_related(self, *args):
                 return self
 
+            def order_by(self, *args):
+                return self
+
             def prefetch_related(self, *args):
-                return []
+                return self
+
+            def __iter__(self):
+                return iter([])
 
         class MockRelease:
             id = "rel-ref"
