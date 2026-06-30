@@ -1137,3 +1137,54 @@ def test_throttled_handler_sets_retry_after():
     resp_no_wait = _on_throttled(req, Throttled(wait=None))
     assert resp_no_wait.status_code == 429
     assert "Retry-After" not in resp_no_wait
+
+
+@pytest.mark.django_db
+def test_heavy_throttle_independent_budget_and_distinct_key():
+    """#1070: the heavy throttle limits independently and never shares the global window."""
+    from types import SimpleNamespace
+
+    from django.core.cache import cache
+
+    from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
+
+    cache.clear()
+    rf = RequestFactory()
+
+    def req(pk):
+        r = rf.get("/api/v1/x")
+        r.access_token_record = SimpleNamespace(pk=pk)
+        return r
+
+    heavy = AccessTokenHeavyRateThrottle(rate="2/min")
+    glob = AccessTokenRateThrottle(rate="2/min")
+    # Distinct cache key is the central gotcha — a shared key would corrupt both windows.
+    assert glob.get_cache_key(req(7)) != heavy.get_cache_key(req(7))
+    assert heavy.allow_request(req(7)) is True
+    assert heavy.allow_request(req(7)) is True
+    assert heavy.allow_request(req(7)) is False  # heavy limit hit
+    # The global window for the SAME token is untouched by the heavy throttle.
+    assert glob.allow_request(req(7)) is True
+    assert glob.allow_request(req(7)) is True
+
+
+def test_heavy_throttle_skips_anonymous():
+    """#1070: a request with no token record (session/anonymous) is not throttled."""
+    from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle
+
+    r = RequestFactory().get("/api/v1/x")
+    assert AccessTokenHeavyRateThrottle(rate="1/min").get_cache_key(r) is None
+
+
+def test_upload_endpoints_carry_global_and_heavy_throttles():
+    """#1070: the PAT upload endpoints carry BOTH throttles (per-op replaces the global)."""
+    from sbomify.apis import api
+
+    found = {}
+    for _prefix, router in api._routers:
+        for path, pv in router.path_operations.items():
+            if path in ("/artifact/cyclonedx/{component_id}", "/artifact/spdx/{component_id}"):
+                for op in pv.operations:
+                    found[path] = [type(t).__name__ for t in op.throttle_objects]
+    assert found["/artifact/cyclonedx/{component_id}"] == ["AccessTokenRateThrottle", "AccessTokenHeavyRateThrottle"]
+    assert found["/artifact/spdx/{component_id}"] == ["AccessTokenRateThrottle", "AccessTokenHeavyRateThrottle"]

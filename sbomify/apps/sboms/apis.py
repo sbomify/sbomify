@@ -15,6 +15,7 @@ from ninja.security import django_auth
 from pydantic import ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
+from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
 from sbomify.apps.core.apis import get_component_metadata, patch_component_metadata
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import S3Client
@@ -357,6 +358,9 @@ def _public_api_item_access_checks(
     "/artifact/cyclonedx/{component_id}",
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
+    # Per-op throttle REPLACES the global, so pass both: keep the global per-token
+    # limit AND the stricter heavy-upload limit (#1070).
+    throttle=[AccessTokenRateThrottle(), AccessTokenHeavyRateThrottle()],
 )
 def sbom_upload_cyclonedx(
     request: HttpRequest,
@@ -499,6 +503,9 @@ def sbom_upload_cyclonedx(
     "/artifact/spdx/{component_id}",
     response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
     auth=PersonalAccessTokenAuth(),
+    # Per-op throttle REPLACES the global, so pass both: keep the global per-token
+    # limit AND the stricter heavy-upload limit (#1070).
+    throttle=[AccessTokenRateThrottle(), AccessTokenHeavyRateThrottle()],
 )
 def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "sbom") -> tuple[int, dict[str, Any]]:
     """
