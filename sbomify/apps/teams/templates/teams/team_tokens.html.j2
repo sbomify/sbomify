@@ -119,7 +119,7 @@
                 </div>
             </div>
             {% if access_tokens or unscoped_tokens %}
-                <div x-data="getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
+                <div x-data="window.getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
                     {# Bulk-revoke toolbar #}
                     <div class="flex items-center justify-between mb-3 ml-11">
                         <label class="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
