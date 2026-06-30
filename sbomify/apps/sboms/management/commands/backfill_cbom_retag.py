@@ -20,9 +20,8 @@ from django.db import IntegrityError, transaction
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.sdk import RunReason
 from sbomify.apps.plugins.tasks import enqueue_assessment
-from sbomify.apps.sboms.apis import _is_cbom, _is_duplicate_integrity_error
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data
+from sbomify.apps.sboms.utils import SBOMDataError, _is_cbom, _is_duplicate_integrity_error, get_sbom_data
 
 PQC_PLUGIN = "pqc-readiness"
 
