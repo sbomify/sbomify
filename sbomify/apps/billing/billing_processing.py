@@ -196,6 +196,7 @@ def check_billing_limits(resource_type: str) -> Any:
                         # skip the grace check entirely and escape enforcement. Stamp it now so
                         # the grace window starts (persisted — team is select_for_update'd here).
                         failed_at_str = timezone.now().isoformat()
+                        billing_limits = billing_limits.copy()
                         billing_limits["payment_failed_at"] = failed_at_str
                         team.billing_plan_limits = billing_limits
                         team.save(update_fields=["billing_plan_limits"])
@@ -762,8 +763,10 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             billing_limits["last_updated"] = timezone.now().isoformat()
             # Keep the FIRST failure time so the grace period counts down. Stripe retries the
             # invoice, and resetting this to now() on every failed-payment event kept the grace
-            # window from ever expiring.
-            billing_limits.setdefault("payment_failed_at", timezone.now().isoformat())
+            # window from ever expiring. Guard on falsy (not just absent) so a None/"" doesn't
+            # slip through, matching stripe_sync's handling.
+            if not billing_limits.get("payment_failed_at"):
+                billing_limits["payment_failed_at"] = timezone.now().isoformat()
             billing_limits["last_processed_webhook_id"] = webhook_id
             team.billing_plan_limits = billing_limits
             team.save()
