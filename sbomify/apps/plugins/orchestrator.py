@@ -672,6 +672,10 @@ class PluginOrchestrator:
             return False
 
         if run.category == "security":
+            # A scan that errored out (error_count > 0, no by_severity) verified nothing, so it
+            # is not passing — otherwise a broken scanner silently satisfies a dependency gate.
+            if summary.get("error_count", 0) > 0:
+                return False
             by_severity = summary.get("by_severity") or {}
             total_from_severity: int = sum(
                 by_severity.get(sev, 0) for sev in ("critical", "high", "medium", "low", "info", "unknown")
