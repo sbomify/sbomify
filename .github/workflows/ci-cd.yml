@@ -559,6 +559,10 @@ jobs:
           AUGMENT: true
           ENRICH: true
           UPLOAD: true
+          # Also generate a CBOM (cdxgen --include-crypto) for this component, cross-linked
+          # with the SBOM and uploaded as bom_type=cbom. Skipped for SPDX. cdxgen detects
+          # JS/TS + Java crypto, not Python yet, so the Python Stack CBOM is currently sparse.
+          GENERATE_CBOM: true
           OUTPUT_FILE: ${{ matrix.output_file }}
 
       - name: Attest SBOM
@@ -569,13 +573,16 @@ jobs:
   # =========================================================================
   # Publish CBOM (Cryptography Bill of Materials)
   #
-  # Uploads the committed, hand-maintained CycloneDX 1.6 CBOM
-  # (cbom/sbomify-backend.cbom.cdx.json) that inventories sbomify's own
-  # cryptographic usage. No off-the-shelf tool reliably generates a CBOM for
-  # sbomify's Python-via-wrappers stack (cdxgen detects Java/JS only; IBM
-  # CBOMkit keys on direct pyca/cryptography calls, which sbomify rarely makes),
-  # so the CBOM is maintained as code and CI signs + attests + uploads it via
-  # OIDC trusted publishing, exactly like the source SBOMs above.
+  # The Generate SBOMs jobs above now also generate a CBOM via GENERATE_CBOM
+  # (cdxgen --include-crypto), cross-linked with the SBOM and uploaded as
+  # bom_type=cbom on the component. That covers the JS/TS Frontend Stack, but
+  # cdxgen has no Python analyzer, so the Python Stack CBOM it produces is empty.
+  #
+  # These jobs therefore remain the source of the backend CBOM: they upload the
+  # committed, hand-maintained CycloneDX 1.6 CBOM (cbom/sbomify-backend.cbom.cdx.json)
+  # that inventories sbomify's own Python-via-wrappers cryptography, which no
+  # off-the-shelf tool detects (IBM CBOMkit keys on direct pyca/cryptography calls
+  # sbomify rarely makes). Retire this once the action gains Python crypto support.
   #
   # DORMANT until configured: each job runs only when its component repo
   # variable is set. To enable, create a dedicated CBOM component in the
@@ -801,6 +808,10 @@ jobs:
           AUGMENT: true
           ENRICH: true
           UPLOAD: true
+          # Also generate a CBOM (cdxgen --include-crypto) for this component, cross-linked
+          # with the SBOM and uploaded as bom_type=cbom. Skipped for SPDX. cdxgen detects
+          # JS/TS + Java crypto, not Python yet, so the Python Stack CBOM is currently sparse.
+          GENERATE_CBOM: true
           OUTPUT_FILE: ${{ matrix.output_file }}
 
       - name: Attest SBOM
