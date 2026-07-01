@@ -212,7 +212,6 @@ class TestCheckComponentAccess:
         factory = RequestFactory()
         request = factory.get("/")
         request.user = sample_user
-        type(request.user).is_authenticated = PropertyMock(return_value=True)
         request.token_team = other_team  # PAT scoped to a different workspace
 
         result = check_component_access(request, gated_component)
@@ -231,7 +230,6 @@ class TestCheckComponentAccess:
         factory = RequestFactory()
         request = factory.get("/")
         request.user = sample_user
-        type(request.user).is_authenticated = PropertyMock(return_value=True)
         request.token_team = team_with_business_plan  # scoped to the SAME workspace
 
         result = check_component_access(request, gated_component)
