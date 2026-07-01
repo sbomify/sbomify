@@ -583,11 +583,40 @@ def add_artifact_to_release(
                     new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
-    # Create the new artifact (no duplicates found)
-    if sbom:
-        new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
-    else:
-        new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+    # Create the new artifact under the release lock, re-checking for a same-format/type artifact
+    # INSIDE the lock so two concurrent first-adds can't both create a duplicate (the outer check
+    # above is unlocked and can race).
+    with transaction.atomic():
+        Release.objects.select_for_update().get(pk=release.pk)
+        if sbom:
+            if ReleaseArtifact.objects.filter(
+                release=release, sbom__component=sbom.component, sbom__format=sbom.format
+            ).exists():
+                return {
+                    "created": False,
+                    "replaced": False,
+                    "artifact": None,
+                    "error": (
+                        f"Release already contains an SBOM of format {sbom.format} from component {sbom.component.name}"
+                    ),
+                }
+            new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        else:
+            if ReleaseArtifact.objects.filter(
+                release=release,
+                document__component=document.component,
+                document__document_type=document.document_type,
+            ).exists():
+                return {
+                    "created": False,
+                    "replaced": False,
+                    "artifact": None,
+                    "error": (
+                        f"Release already contains a document of type {document.document_type} "
+                        f"from component {document.component.name}"
+                    ),
+                }
+            new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
 
     return {"created": True, "replaced": False, "artifact": new_artifact, "replaced_info": None}
 
