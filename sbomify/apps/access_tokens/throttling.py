@@ -19,6 +19,10 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
     carry no resolved token record and are not throttled by this rule.
     """
 
+    # Distinguishes one throttle's sliding window from another's; subclasses override
+    # it so they never share (and corrupt) the base throttle's counter.
+    cache_key_prefix = "throttle_access_token"
+
     def __init__(self, rate: str | None = None) -> None:
         super().__init__(rate or settings.API_TOKEN_RATE_LIMIT)
 
@@ -26,7 +30,7 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         record = getattr(request, "access_token_record", None)
         if record is None:
             return None
-        return f"throttle_access_token_{record.pk}"
+        return f"{self.cache_key_prefix}_{record.pk}"
 
     def allow_request(self, request: HttpRequest) -> bool:
         allowed = super().allow_request(request)
@@ -52,6 +56,22 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         if current is None or (remaining, reset) < (current[1], current[2]):
             setattr(request, "_access_token_ratelimit", budget)
         return allowed
+
+
+class AccessTokenHeavyRateThrottle(AccessTokenRateThrottle):
+    """Stricter per-token limit for expensive operations (artifact uploads).
+
+    Attached per-operation ALONGSIDE the global AccessTokenRateThrottle (ninja's
+    per-operation throttle replaces, not stacks, the global one, so both must be
+    passed as a list). The distinct ``cache_key_prefix`` keeps its sliding window
+    separate from the global throttle's; a shared key would make both throttles
+    read/write the same window and double-count each other.
+    """
+
+    cache_key_prefix = "throttle_access_token_heavy"
+
+    def __init__(self, rate: str | None = None) -> None:
+        super().__init__(rate or settings.API_TOKEN_HEAVY_RATE_LIMIT)
 
 
 class RateLimitHeadersMiddleware:
