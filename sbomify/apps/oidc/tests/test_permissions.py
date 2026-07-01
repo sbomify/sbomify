@@ -791,3 +791,85 @@ class TestPrivateRepoEndToEnd:
             HTTP_AUTHORIZATION=f"Bearer {sbomify_token}",
         )
         assert forbidden.status_code == 403, forbidden.content
+
+
+@pytest.mark.django_db
+class TestBotReleaseConfinement:
+    """The OIDC bot's component confinement must extend to the release endpoints, not just uploads."""
+
+    def _release_in(self, team, *component):
+        from sbomify.apps.core.models import Product, Release
+
+        product = Product.objects.create(name="prod-conf", team=team)
+        for comp in component:
+            product.components.add(comp)
+        return product, Release.objects.create(product=product, name="v1")
+
+    def test_bot_cannot_tag_unbound_component(
+        self, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        from sbomify.apps.sboms.models import SBOM
+
+        _product, release = self._release_in(team_with_business_plan, bound_component)
+        other_sbom = SBOM.objects.create(
+            name="o", component=other_component, format="cyclonedx", format_version="1.6"
+        )
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"sbom_id": other_sbom.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+
+    def test_bot_cannot_tag_unbound_document(
+        self, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        from sbomify.apps.documents.models import Document
+
+        _product, release = self._release_in(team_with_business_plan, bound_component)
+        other_doc = Document.objects.create(name="od", component=other_component)
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"document_id": other_doc.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+
+    def test_bot_cannot_create_release_on_product_without_its_component(
+        self, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        from sbomify.apps.core.models import Product
+
+        # A product in the same workspace that does NOT contain the bot's bound component.
+        product = Product.objects.create(name="prod-unbound", team=team_with_business_plan)
+        product.components.add(other_component)
+
+        resp = Client().post(
+            "/api/v1/releases",
+            data=json.dumps({"product_id": product.id, "name": "v9"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+
+    def test_bot_can_tag_its_bound_component(self, oidc_sbomify_token, bound_component, team_with_business_plan):
+        """Control: the bot IS allowed to tag its bound component — proving the deny cases above
+        are the confinement check, not a blanket can() denial."""
+        from sbomify.apps.sboms.models import SBOM
+
+        _product, release = self._release_in(team_with_business_plan, bound_component)
+        bound_sbom = SBOM.objects.create(
+            name="b", component=bound_component, format="cyclonedx", format_version="1.6"
+        )
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"sbom_id": bound_sbom.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 201

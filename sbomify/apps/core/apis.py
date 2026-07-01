@@ -2780,6 +2780,17 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
     if not can(request, "release:create", product):
         return 403, {"detail": "You do not have permission to create releases", "error_code": ErrorCode.FORBIDDEN}
 
+    # Confine an OIDC bot to products that contain its bound component. The bot's scopes are
+    # unset (full), so this is the only thing keeping it from creating releases on unrelated
+    # products. Fail closed for OIDC requests (an orphan bot with no binding must be denied,
+    # not treated as a no-op); a plain no-op only for non-OIDC (PAT/session) requests.
+    from sbomify.apps.oidc.permissions import bound_component_id_for_request, request_is_oidc_authed
+
+    if request_is_oidc_authed(request):
+        bound_component_id = bound_component_id_for_request(request)
+        if bound_component_id is None or not product.components.filter(id=bound_component_id).exists():
+            return 403, {"detail": "You do not have permission to create releases", "error_code": ErrorCode.FORBIDDEN}
+
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
         return 400, {
@@ -3404,6 +3415,11 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
             if str(sbom.component.team_id) != str(release.product.team_id):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+            from sbomify.apps.oidc.permissions import is_authorised_for_component
+
+            if not is_authorised_for_component(request, sbom.component):
+                return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
             result = add_artifact_to_release(release, sbom=sbom, allow_replacement=False)
             if result.get("error"):
                 # Return 409 Conflict if artifact already exists (RESTful standard)
@@ -3440,6 +3456,11 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
 
             document = Document.objects.get(pk=payload.document_id)
             if str(document.component.team_id) != str(release.product.team_id):
+                return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+            from sbomify.apps.oidc.permissions import is_authorised_for_component
+
+            if not is_authorised_for_component(request, document.component):
                 return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
             result = add_artifact_to_release(release, document=document, allow_replacement=False)
