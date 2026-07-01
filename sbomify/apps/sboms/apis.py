@@ -30,7 +30,7 @@ from sbomify.apps.core.utils import (
     obj_extract,
 )
 from sbomify.apps.oidc.permissions import is_authorised_for_component
-from sbomify.apps.sboms.utils import verify_download_token
+from sbomify.apps.sboms.utils import _is_cbom, _is_duplicate_integrity_error, verify_download_token
 from sbomify.apps.teams.models import ContactProfile
 
 from .models import SBOM, Component, Product
@@ -61,7 +61,6 @@ log = logging.getLogger(__name__)
 SBOM_MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 
-_SBOM_UNIQUE_CONSTRAINT = "sboms_sbom_unique_component_version_format_qualifiers_bom_type"
 _VALID_BOM_TYPES = {choice[0] for choice in SBOM.BomType.choices}
 
 
@@ -73,59 +72,6 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
             "error_code": ErrorCode.VALIDATION_ERROR,
         }
     return None
-
-
-def _is_crypto_component(component: Any) -> bool:
-    """A CycloneDX component is a crypto asset if typed as one or carrying cryptoProperties."""
-    return isinstance(component, dict) and (
-        component.get("type") == "cryptographic-asset" or "cryptoProperties" in component
-    )
-
-
-def _is_cbom(sbom_data: dict[str, Any]) -> bool:
-    """True when a CycloneDX document declares cryptographic-asset content (a CBOM).
-
-    Checks both the top-level ``components`` array and ``metadata.component`` (which
-    is itself a Component and may carry the crypto indicators on its own).
-    """
-    components = sbom_data.get("components")
-    if isinstance(components, list) and any(_is_crypto_component(c) for c in components):
-        return True
-    metadata = sbom_data.get("metadata")
-    return isinstance(metadata, dict) and _is_crypto_component(metadata.get("component"))
-
-
-def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
-    """Check if an IntegrityError is for the SBOM uniqueness constraint.
-
-    Postgres path: checks diag.constraint_name, then SQLSTATE 23505 with
-    constraint name in the message.
-    SQLite path: checks for "UNIQUE constraint failed" with the relevant columns.
-    """
-    cause = exc.__cause__
-    if cause is not None:
-        # Try PostgreSQL diagnostics first (most precise)
-        diag = getattr(cause, "diag", None)
-        if diag is not None:
-            diag_constraint: str | None = getattr(diag, "constraint_name", None)
-            if diag_constraint == _SBOM_UNIQUE_CONSTRAINT:
-                return True
-
-        pgcode: str | None = getattr(cause, "pgcode", None)
-        if pgcode == "23505":
-            return _SBOM_UNIQUE_CONSTRAINT in str(exc).lower()
-
-    msg = str(exc).lower()
-
-    # Postgres fallback (no __cause__ or missing diag)
-    if _SBOM_UNIQUE_CONSTRAINT in msg:
-        return True
-
-    # SQLite: "UNIQUE constraint failed: sboms_sbom.component_id, ..."
-    if "unique constraint failed" in msg and "sboms_sbom.component_id" in msg and "sboms_sbom.version" in msg:
-        return True
-
-    return False
 
 
 def _cleanup_orphaned_s3_object(filename: str) -> None:
