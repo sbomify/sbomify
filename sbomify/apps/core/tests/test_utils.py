@@ -263,8 +263,8 @@ class TestVerifyItemAccessIsDbAuthoritative:
 
 @pytest.mark.django_db
 def test_release_artifact_replacement_leaves_single_artifact(sample_team_with_owner_member):
-    """Replacement produces exactly one artifact of the format — the atomic delete+create
-    can't leave the release with the old artifact gone and no replacement, nor a duplicate."""
+    """Replacement leaves exactly one artifact of the format (the new one) — no loss, no
+    duplicate."""
     from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
     from sbomify.apps.core.utils import add_artifact_to_release
     from sbomify.apps.sboms.models import SBOM

@@ -476,7 +476,7 @@ def add_artifact_to_release(
         ValueError: If neither or both of sbom and document are provided.
     """
     from sbomify.apps.core.domain.exceptions import PermissionDeniedError
-    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.core.models import Release, ReleaseArtifact
 
     if not sbom and not document:
         raise ValueError("Either sbom or document must be provided")
@@ -533,10 +533,15 @@ def add_artifact_to_release(
                     "new_sbom": sbom.name,
                     "component": sbom.component.name,
                 }
-                # Atomic so a failed create can't leave the release with the old artifact
-                # deleted and no replacement.
+                # Serialize concurrent replacements on this release with a row lock, then
+                # re-delete ALL matching artifacts INSIDE the lock (the row selected above may
+                # be stale if a concurrent replacement committed) before creating — so a failed
+                # create can't leave a gap, and a race can't leave a duplicate.
                 with transaction.atomic():
-                    existing_sbom_artifact.delete()
+                    Release.objects.select_for_update().get(pk=release.pk)
+                    ReleaseArtifact.objects.filter(
+                        release=release, sbom__component=sbom.component, sbom__format=sbom.format
+                    ).delete()
                     new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
@@ -565,10 +570,16 @@ def add_artifact_to_release(
                     "new_document": document.name,
                     "component": document.component.name,
                 }
-                # Atomic so a failed create can't leave the release with the old artifact
-                # deleted and no replacement.
+                # Serialize concurrent replacements on this release with a row lock, then
+                # re-delete ALL matching artifacts INSIDE the lock (the row selected above may
+                # be stale if a concurrent replacement committed) before creating.
                 with transaction.atomic():
-                    existing_doc_artifact.delete()
+                    Release.objects.select_for_update().get(pk=release.pk)
+                    ReleaseArtifact.objects.filter(
+                        release=release,
+                        document__component=document.component,
+                        document__document_type=document.document_type,
+                    ).delete()
                     new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
