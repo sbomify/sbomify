@@ -159,6 +159,18 @@ def check_component_access(
                 requires_access_request=True,
             )
 
+        # A workspace-scoped token must not reach a component outside its workspace, even when
+        # the user's own membership/NDA would otherwise grant gated access (mirror the scope
+        # gate in verify_item_access that the PRIVATE branch below relies on).
+        token_team = getattr(request, "token_team", None)
+        if token_team is not None and team is not None and team.id != token_team.id:
+            return ComponentAccessResult(
+                has_access=False,
+                reason="token_workspace_scope",
+                requires_authentication=True,
+                requires_access_request=False,
+            )
+
         # Check if user has gated access
         has_access, needs_nda_re_sign = _check_gated_access(request.user, team)
         if has_access:

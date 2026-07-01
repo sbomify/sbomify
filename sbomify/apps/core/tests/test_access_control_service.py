@@ -23,7 +23,7 @@ from sbomify.apps.core.services.access_control import (
 from sbomify.apps.documents.access_models import AccessRequest, NDASignature
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import Component
-from sbomify.apps.teams.models import Member
+from sbomify.apps.teams.models import Member, Team
 
 
 @pytest.fixture
@@ -193,6 +193,44 @@ class TestCheckComponentAccess:
         request.user = sample_user
         # Mock is_authenticated property
         type(request.user).is_authenticated = PropertyMock(return_value=True)
+
+        result = check_component_access(request, gated_component)
+
+        assert result.has_access is True
+        assert result.reason == "gated_access_granted"
+
+    def test_gated_component_denied_for_out_of_scope_token(
+        self, sample_user, team_with_business_plan, gated_component
+    ):
+        """A workspace-scoped token must not read a gated component in a DIFFERENT workspace,
+        even when the user's own membership would otherwise grant gated access."""
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
+        other_team = Team.objects.create(name="Other WS", key="otherwsscopekey")
+
+        factory = RequestFactory()
+        request = factory.get("/")
+        request.user = sample_user
+        request.token_team = other_team  # PAT scoped to a different workspace
+
+        result = check_component_access(request, gated_component)
+
+        assert result.has_access is False
+        assert result.reason == "token_workspace_scope"
+
+    def test_gated_component_allowed_for_in_scope_token(
+        self, sample_user, team_with_business_plan, gated_component
+    ):
+        """A token scoped to the component's own workspace still grants gated access."""
+        Member.objects.get_or_create(
+            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
+        )
+
+        factory = RequestFactory()
+        request = factory.get("/")
+        request.user = sample_user
+        request.token_team = team_with_business_plan  # scoped to the SAME workspace
 
         result = check_component_access(request, gated_component)
 
