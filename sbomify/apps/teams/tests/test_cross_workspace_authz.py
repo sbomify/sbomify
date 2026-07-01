@@ -4,6 +4,7 @@ not the actor's session workspace."""
 import pytest
 from django.urls import reverse
 
+from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Invitation, Member, Team
 
 
@@ -11,7 +12,9 @@ from sbomify.apps.teams.models import Invitation, Member, Team
 def attacker(db, django_user_model):
     """Owns their own workspace A; not a member of anyone else's."""
     user = django_user_model.objects.create_user(username="attacker", email="attacker@evil.test", password="pw")
-    team_a = Team.objects.create(name="Attacker WS", key="attackerkey")
+    team_a = Team.objects.create(name="Attacker WS")
+    team_a.key = number_to_random_token(team_a.pk)
+    team_a.save()
     Member.objects.create(user=user, team=team_a, role="owner", is_default_team=True)
     return user, team_a
 
@@ -20,7 +23,9 @@ def attacker(db, django_user_model):
 def victim_team(db, django_user_model):
     """A separate tenant's workspace with an owner; the attacker is NOT a member."""
     owner = django_user_model.objects.create_user(username="victim", email="victim@corp.test", password="pw")
-    team_b = Team.objects.create(name="Victim WS", key="victimkey")
+    team_b = Team.objects.create(name="Victim WS")
+    team_b.key = number_to_random_token(team_b.pk)
+    team_b.save()
     Member.objects.create(user=owner, team=team_b, role="owner", is_default_team=True)
     return team_b, owner
 

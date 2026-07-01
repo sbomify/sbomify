@@ -619,7 +619,7 @@ def delete_invite(request: HttpRequest, invitation_id: int) -> HttpResponse:
     try:
         invitation = Invitation.objects.get(pk=invitation_id)
     except Invitation.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Membership not found"))
+        return error_response(request, HttpResponseNotFound("Invitation not found"))
 
     # Authorize against the invitation's OWN workspace (bare PK -> session is not a valid basis).
     actor_membership = Member.objects.filter(user=cast(User, request.user), team=invitation.team).first()
