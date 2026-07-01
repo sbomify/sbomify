@@ -24,6 +24,10 @@ def _doc_component(team, product, visibility):
 def test_public_product_aggregate_excludes_nonpublic_documents(team_with_business_plan):
     """A public product's aggregate embeds only PUBLIC documents; a private product (authenticated,
     per-user download) embeds all of them."""
+    from sbomify.apps.sboms.utils import _get_cyclonedx_model
+
+    if _get_cyclonedx_model() is None:
+        pytest.skip("CycloneDX schema unavailable; create_product_external_references returns []")
     team = team_with_business_plan
     product = Product.objects.create(name="P", team=team, is_public=True)
     Document.objects.create(name="pub", component=_doc_component(team, product, Component.Visibility.PUBLIC))
