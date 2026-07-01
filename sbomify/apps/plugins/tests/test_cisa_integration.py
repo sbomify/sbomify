@@ -43,6 +43,7 @@ class TestCISAPluginIntegration:
             name="test-component",
             team=team,
             component_type="bom",
+            visibility=Component.Visibility.PUBLIC,
         )
 
     @pytest.fixture
@@ -340,6 +341,7 @@ class TestCISAPluginAPIIntegration(TestCase):
             name="api-test-component",
             team=self.team,
             component_type="bom",
+            visibility=Component.Visibility.PUBLIC,
         )
         RegisteredPlugin.objects.update_or_create(
             name="cisa-minimum-elements-2025",

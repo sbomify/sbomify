@@ -463,7 +463,7 @@ class TestReleaseArtifactSignalHandler:
         # Disconnect the SBOM upload signal so only the ReleaseArtifact handler fires
         post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
         try:
-            component = Component.objects.create(name="c", team=team)
+            component = Component.objects.create(name="c", team=team, visibility=Component.Visibility.PUBLIC)
             sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         finally:
             post_save.connect(trigger_plugin_assessments, sender=SBOM)
@@ -588,7 +588,7 @@ class TestSkippedRunsNotCountedAsPassing:
         team = sample_team_with_owner_member.team
         post_save.disconnect(trigger_plugin_assessments, sender=SBOM)
         try:
-            component = Component.objects.create(name="c", team=team)
+            component = Component.objects.create(name="c", team=team, visibility=Component.Visibility.PUBLIC)
             sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
         finally:
             post_save.connect(trigger_plugin_assessments, sender=SBOM)
