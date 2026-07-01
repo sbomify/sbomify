@@ -106,3 +106,44 @@ def test_past_due_without_failed_at_is_enforced():
     result = view(request)
     assert isinstance(result, HttpResponseForbidden)
     assert "Grace period expired" in result.content.decode()
+
+
+def test_payment_recovery_clears_failure_marker_so_grace_resets():
+    """A recovered payment clears payment_failed_at, so a LATER failure starts a fresh grace
+    window instead of reusing the old (already-expired) timestamp."""
+    BillingPlan.objects.create(key="business", name="Business", max_products=10)
+    old_failure = (timezone.now() - datetime.timedelta(days=10)).isoformat()  # long past grace
+    team = Team.objects.create(
+        name="T",
+        key="test-team-recover",
+        billing_plan="business",
+        billing_plan_limits={
+            "subscription_status": "past_due",
+            "stripe_subscription_id": "sub_rec",
+            "stripe_customer_id": "cus_rec",
+            "payment_failed_at": old_failure,
+        },
+    )
+
+    paid = MagicMock()
+    paid.subscription = "sub_rec"
+    paid.id = "in_paid_1"
+    paid.amount_paid = 1000
+    paid.currency = "usd"
+    with patch("sbomify.apps.billing.billing_processing.email_notifications"):
+        billing_processing.handle_payment_succeeded(paid)
+
+    team.refresh_from_db()
+    assert team.billing_plan_limits["subscription_status"] == "active"
+    assert "payment_failed_at" not in team.billing_plan_limits  # cleared on recovery
+
+    # A new failure now stamps a FRESH timestamp (not the old expired one).
+    failed = MagicMock()
+    failed.subscription = "sub_rec"
+    failed.id = "in_fail_2"
+    with patch("sbomify.apps.billing.billing_processing.email_notifications"):
+        billing_processing.handle_payment_failed(failed)
+
+    team.refresh_from_db()
+    new_failure = datetime.datetime.fromisoformat(team.billing_plan_limits["payment_failed_at"])
+    assert (timezone.now() - new_failure).total_seconds() < 10  # fresh, grace window restarts

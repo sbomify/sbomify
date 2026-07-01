@@ -838,6 +838,11 @@ def handle_payment_succeeded(invoice: Any, event: Any = None) -> None:
             billing_limits = (team.billing_plan_limits or {}).copy()
             billing_limits["subscription_status"] = "active"
             billing_limits["last_updated"] = timezone.now().isoformat()
+            # Payment recovered — clear the failure marker so the grace window resets for any
+            # future failure episode. The "keep first failure time" guard on the failed-payment
+            # webhook would otherwise reuse this stale timestamp and treat the next failure as
+            # already past grace.
+            billing_limits.pop("payment_failed_at", None)
             billing_limits["last_payment_amount"] = invoice.amount_paid / 100.0 if invoice.amount_paid else 0.0
             billing_limits["last_payment_currency"] = invoice.currency
             billing_limits["last_processed_webhook_id"] = webhook_id
