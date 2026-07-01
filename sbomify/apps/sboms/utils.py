@@ -1827,7 +1827,11 @@ def compute_release_aggregate_fingerprint(release: Any) -> str:
     * the release/product METADATA the builder embeds: the product + release
       names (the aggregate's top-level component name) and the product external
       references it renders from product links + identifiers. So a rename or a
-      link/identifier edit also triggers a rebuild.
+      link/identifier edit also triggers a rebuild; and
+    * the PUBLIC documents embedded as external references (each document's
+      content_hash + metadata), so a document add/remove/rename/retype/rehash
+      also triggers a rebuild. Only PUBLIC documents are fed — exactly the set a
+      public aggregate embeds.
 
     Rows are ordered, and every field is length-prefixed (netstring-style) before
     hashing so user-controlled values cannot collide regardless of content — no

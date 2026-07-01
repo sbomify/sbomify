@@ -66,3 +66,21 @@ def test_fingerprint_reacts_to_public_document_changes(team_with_business_plan):
     priv = _doc_component(team, product, Component.Visibility.PRIVATE)
     Document.objects.create(name="p", component=priv, content_hash="hash-priv")
     assert compute_release_aggregate_fingerprint(release) == fp_after_change
+
+
+@pytest.mark.django_db
+def test_public_product_spdx_aggregate_excludes_nonpublic_documents(team_with_business_plan):
+    """The SPDX external-reference builder scopes documents the same way as the CycloneDX one."""
+    from sbomify.apps.sboms.utils import create_product_spdx_external_references
+
+    team = team_with_business_plan
+    product = Product.objects.create(name="Pspdx", team=team, is_public=True)
+    Document.objects.create(name="pub", component=_doc_component(team, product, Component.Visibility.PUBLIC))
+    Document.objects.create(name="priv", component=_doc_component(team, product, Component.Visibility.PRIVATE))
+
+    public_refs = create_product_spdx_external_references(product, user=None)
+    assert len(public_refs) == 1  # only the PUBLIC document
+
+    product.is_public = False
+    product.save()
+    assert len(create_product_spdx_external_references(product, user=None)) == 2
