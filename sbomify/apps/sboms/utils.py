@@ -13,7 +13,6 @@ from uuid import uuid4
 from django.conf import settings
 from django.core import signing
 from django.db import DatabaseError, IntegrityError, OperationalError
-from django.http import HttpRequest
 from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product
@@ -21,7 +20,7 @@ from sbomify.apps.core.models import Component, Product
 # S3Client import moved to function level to support test mocking
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
-from sbomify.apps.teams.models import ContactProfile, Member, Team
+from sbomify.apps.teams.models import ContactProfile
 
 log = logging.getLogger(__name__)
 
@@ -437,51 +436,6 @@ def _get_cyclonedx_model() -> Any:
     except ImportError:
         log.warning("CycloneDX library not available. Some SBOM features may be limited.")
         return None
-
-
-def verify_item_access(
-    request: HttpRequest,
-    item: Team | Product | Component | SBOM,
-    allowed_roles: list[str] | None,
-) -> bool:
-    """
-    Verify if the user has access to the item based on the allowed roles.
-    """
-    if not request.user.is_authenticated:
-        return False
-
-    team_id = None
-    team_key = None
-
-    if isinstance(item, Team):
-        team_id = item.id
-        team_key = item.key
-    elif isinstance(item, (Product, Component)):
-        team_id = item.team_id
-        team_key = item.team.key
-    elif isinstance(item, SBOM):
-        team_id = item.component.team_id
-        team_key = item.component.team.key
-
-    # Check session data first
-    if team_key and "user_teams" in request.session:
-        team_data = request.session["user_teams"].get(team_key)
-        if team_data and "role" in team_data:
-            # If no roles are specified, any role is allowed
-            if allowed_roles is None:
-                return True
-            return team_data["role"] in allowed_roles
-
-    # Fall back to database check
-    if team_id:
-        member = Member.objects.filter(user=request.user, team_id=team_id).first()
-        if member:
-            # If no roles are specified, any role is allowed
-            if allowed_roles is None:
-                return True
-            return member.role in allowed_roles
-
-    return False
 
 
 @contextmanager
