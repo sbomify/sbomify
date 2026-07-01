@@ -4,6 +4,7 @@ import uuid
 from unittest.mock import patch
 
 import pytest
+from django.contrib.auth import get_user_model
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.plugins.apis import (
@@ -13,7 +14,7 @@ from sbomify.apps.plugins.apis import (
 )
 from sbomify.apps.plugins.models import RegisteredPlugin, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 
 
 @pytest.fixture
@@ -29,6 +30,9 @@ def test_team(db) -> Team:
         },
     )
     team = Team.objects.create(name="Config Test Team", billing_plan="business")
+    owner = get_user_model().objects.create_user(username=f"cfg-owner-{team.pk}", email=f"cfg{team.pk}@t.test")
+    Member.objects.create(team=team, user=owner, role="owner")
+    team.owner = owner
     yield team
     team.delete()
 
@@ -46,6 +50,9 @@ def enterprise_team(db) -> Team:
         },
     )
     team = Team.objects.create(name="Enterprise Test Team", billing_plan="enterprise")
+    owner = get_user_model().objects.create_user(username=f"ent-owner-{team.pk}", email=f"ent{team.pk}@t.test")
+    Member.objects.create(team=team, user=owner, role="owner")
+    team.owner = owner
     yield team
     team.delete()
 
@@ -337,7 +344,7 @@ class TestPluginSettingsWithSchema:
         from django.test import RequestFactory
 
         request = RequestFactory().get("/")
-        request.user = type("User", (), {"is_authenticated": True})()
+        request.user = test_team.owner
 
         status_code, data = get_team_plugin_settings(request, test_team.key)
 
@@ -364,7 +371,7 @@ class TestPluginSettingsWithSchema:
         from django.test import RequestFactory
 
         request = RequestFactory().get("/")
-        request.user = type("User", (), {"is_authenticated": True})()
+        request.user = test_team.owner
 
         try:
             status_code, data = get_team_plugin_settings(request, test_team.key)
@@ -405,7 +412,7 @@ class TestViewPostPluginConfig:
         )
 
         request = RequestFactory().post("/")
-        request.user = type("User", (), {"is_authenticated": True})()
+        request.user = enterprise_team.owner
 
         status_code, result = update_team_plugin_settings(request, enterprise_team.key, payload)
 
@@ -426,7 +433,7 @@ class TestViewPostPluginConfig:
         )
 
         request = RequestFactory().post("/")
-        request.user = type("User", (), {"is_authenticated": True})()
+        request.user = test_team.owner
 
         status_code, result = update_team_plugin_settings(request, test_team.key, payload)
 
@@ -442,7 +449,7 @@ class TestViewPostPluginConfig:
         from sbomify.apps.plugins.apis import UpdateTeamPluginSettingsRequest, update_team_plugin_settings
 
         request = RequestFactory().post("/")
-        request.user = type("User", (), {"is_authenticated": True})()
+        request.user = enterprise_team.owner
 
         server_id = str(uuid.uuid4())
         payload = UpdateTeamPluginSettingsRequest(

@@ -1,15 +1,16 @@
 """API endpoints for the plugins framework."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from pydantic import BaseModel
 
+from sbomify.apps.core.models import User
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from .schemas import (
@@ -478,6 +479,11 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
     except Team.DoesNotExist:
         return 404, {"detail": "Team not found"}
 
+    # Authorize against the URL team (see update_team_plugin_settings) rather than trusting the
+    # caller's session-scoped guard.
+    if not Member.objects.filter(user=cast(User, request.user), team=team, role__in=("owner", "admin")).exists():
+        return 403, {"detail": "You don't have permission to view this workspace's plugins"}
+
     # Get or create team plugin settings
     settings, _ = TeamPluginSettings.objects.get_or_create(team=team)
 
@@ -526,6 +532,12 @@ def update_team_plugin_settings(
         team = Team.objects.get(key=team_key)
     except Team.DoesNotExist:
         return 404, {"detail": "Team not found"}
+
+    # Authorize against the URL team. The calling view's TeamRoleRequiredMixin only checks the
+    # actor's role in their SESSION workspace, so without this an owner/admin of workspace A
+    # could rewrite an unrelated workspace B's plugin settings (cross-workspace IDOR).
+    if not Member.objects.filter(user=cast(User, request.user), team=team, role__in=("owner", "admin")).exists():
+        return 403, {"detail": "You don't have permission to manage this workspace's plugins"}
 
     # Validate that all enabled plugins are registered and enabled
     available_plugins = set(RegisteredPlugin.objects.filter(is_enabled=True).values_list("name", flat=True))
