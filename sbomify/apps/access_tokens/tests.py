@@ -1080,3 +1080,60 @@ def test_last_used_at_skew_tolerated_even_at_zero_throttle(sample_user, settings
 
     record.refresh_from_db()
     assert record.last_used_at == slightly_ahead  # not clobbered despite throttle=0
+
+
+@pytest.mark.django_db
+def test_access_token_rate_throttle_per_token():
+    """#1060: a token is limited per its rate, and two tokens have independent budgets."""
+    from types import SimpleNamespace
+
+    from django.core.cache import cache
+
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    cache.clear()
+    rf = RequestFactory()
+    throttle = AccessTokenRateThrottle(rate="2/min")
+
+    def req(pk):
+        r = rf.get("/api/v1/x")
+        r.access_token_record = SimpleNamespace(pk=pk)
+        return r
+
+    assert throttle.allow_request(req(101)) is True
+    assert throttle.allow_request(req(101)) is True
+    assert throttle.allow_request(req(101)) is False  # third request over the 2/min limit
+    assert throttle.allow_request(req(202)) is True  # a different token keeps its own budget
+
+
+@pytest.mark.django_db
+def test_access_token_rate_throttle_skips_anonymous():
+    """#1060: requests with no resolved token record (session/anonymous) are not throttled."""
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    rf = RequestFactory()
+    throttle = AccessTokenRateThrottle(rate="1/min")
+    r = rf.get("/api/v1/x")
+    assert throttle.get_cache_key(r) is None
+    assert throttle.allow_request(r) is True
+    assert throttle.allow_request(r) is True
+
+
+def test_throttled_handler_sets_retry_after():
+    """#1060: the 429 response carries Retry-After from the Throttled wait, and omits it when None."""
+    from ninja.errors import Throttled
+
+    from sbomify.apis import _on_throttled
+
+    req = RequestFactory().get("/api/v1/x")
+    resp = _on_throttled(req, Throttled(wait=42))
+    assert resp.status_code == 429
+    assert resp["Retry-After"] == "42"
+
+    # Fractional waits round UP (never truncate to 0), so clients don't retry too early.
+    assert _on_throttled(req, Throttled(wait=0.4))["Retry-After"] == "1"
+    assert _on_throttled(req, Throttled(wait=5.1))["Retry-After"] == "6"
+
+    resp_no_wait = _on_throttled(req, Throttled(wait=None))
+    assert resp_no_wait.status_code == 429
+    assert "Retry-After" not in resp_no_wait

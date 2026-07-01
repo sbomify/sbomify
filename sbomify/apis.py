@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta
 from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
@@ -5,7 +6,10 @@ from typing import Any
 
 from django.core.serializers.json import DjangoJSONEncoder
 from ninja import NinjaAPI
+from ninja.errors import Throttled
 from ninja.renderers import JSONRenderer
+
+from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
 
 try:
     __version__ = version("sbomify")
@@ -34,6 +38,9 @@ api = NinjaAPI(
     # usable for programmatic clients (which carry no CSRF cookie and cannot be a CSRF
     # vector). See sbomify/apps/core/middleware.py.
     csrf=True,
+    # Per-token API rate limit (#1060): every router inherits this global throttle,
+    # keyed on the AccessToken pk. Session/anonymous requests are exempt.
+    throttle=AccessTokenRateThrottle(),
     renderer=UTCZRenderer(),
     title="sbomify API",
     version=__version__,
@@ -142,6 +149,18 @@ API requests are subject to rate limiting to ensure fair usage and system stabil
         ],
     },
 )
+
+
+@api.exception_handler(Throttled)
+def _on_throttled(request: Any, exc: Throttled) -> Any:
+    """429 with a Retry-After header (#1060); ninja's default HttpError handler drops exc.wait."""
+    response = api.create_response(request, {"detail": "Too many requests."}, status=429)
+    if exc.wait is not None:
+        # Round up (never below 1s) so a fractional wait doesn't truncate to 0 and
+        # invite clients to retry too early into the throttle.
+        response["Retry-After"] = str(max(1, math.ceil(exc.wait)))
+    return response
+
 
 api.add_router("/sboms", "sbomify.apps.sboms.apis.router")
 api.add_router("/documents", "sbomify.apps.documents.apis.router")

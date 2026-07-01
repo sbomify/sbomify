@@ -781,6 +781,11 @@ JWT_ISSUER = os.environ.get("JWT_ISSUER", "sbomify")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "sbomify")
 
+# Per-token API rate limit (#1060): a django-ninja "<count>/<period>" string applied
+# per AccessToken pk. Generous enough for CI bursts while capping a leaked/runaway
+# token; tighten via the env var. Effectively a no-op under DEBUG (DummyCache).
+API_TOKEN_RATE_LIMIT = os.environ.get("API_TOKEN_RATE_LIMIT", "1000/min")
+
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend
 # enforces the ``aud`` claim against it during verification.
