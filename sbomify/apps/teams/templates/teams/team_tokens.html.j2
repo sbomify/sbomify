@@ -119,77 +119,112 @@
                 </div>
             </div>
             {% if access_tokens or unscoped_tokens %}
-                <div class="space-y-3 ml-11">
-                    {% for token in access_tokens %}
-                        <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg border border-border/50"
-                             x-cloak
-                             x-data="{ showDeleteModal: false }">
-                            <div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
-                                <i class="fas fa-key text-primary/60"></i>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
-                                <p class="text-sm text-text-muted m-0">
-                                    <i class="fas fa-clock text-xs mr-1"></i>
-                                    Created
-                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
-                                </p>
-                                <p class="text-sm text-text-muted m-0">
-                                    <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
-                                    Last used
-                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
-                                </p>
-                                {% include 'teams/components/token_expiry.html.j2' with token=token %}
-                            </div>
-                            <div class="flex-shrink-0">
-                                <button type="button"
-                                        class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
-                                        title="Delete token"
-                                        @click="showDeleteModal = true">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                            {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-                            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
+                <div x-data="window.getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">
+                    {# Bulk-revoke toolbar #}
+                    <div class="flex items-center justify-between mb-3 ml-11">
+                        <label class="flex items-center gap-2 text-sm text-text-muted cursor-pointer">
+                            <input type="checkbox"
+                                   @change="toggleAll($event.target.checked, [{% for t in access_tokens %}{{ t.id }},{% endfor %}{% for t in unscoped_tokens %}{{ t.id }},{% endfor %}])">
+                            Select all
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="tw-btn-danger tw-btn-sm"
+                                    x-show="selected.length"
+                                    x-cloak
+                                    @click="showBulkModal = true">
+                                Revoke selected (<span x-text="selected.length"></span>)
+                            </button>
+                            <button type="button"
+                                    class="tw-btn-ghost tw-btn-sm text-danger hover:bg-danger/10"
+                                    @click="showRevokeAllModal = true">Revoke all</button>
                         </div>
-                    {% endfor %}
-                    {% for token in unscoped_tokens %}
-                        <div class="flex items-center gap-4 p-4 bg-warning/5 rounded-lg border border-warning/30"
-                             x-cloak
-                             x-data="{ showDeleteModal: false }">
-                            <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
-                                <i class="fas fa-exclamation-circle text-warning"></i>
+                    </div>
+                    <div class="space-y-3 ml-11">
+                        {% for token in access_tokens %}
+                            <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg border border-border/50"
+                                 x-cloak
+                                 x-data="{ showDeleteModal: false }">
+                                <input type="checkbox"
+                                       value="{{ token.id }}"
+                                       x-model.number="selected"
+                                       class="flex-shrink-0"
+                                       aria-label="Select token {{ token.description }}">
+                                <div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-key text-primary/60"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
+                                    <p class="text-sm text-text-muted m-0">
+                                        <i class="fas fa-clock text-xs mr-1"></i>
+                                        Created
+                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
+                                    </p>
+                                    <p class="text-sm text-text-muted m-0">
+                                        <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
+                                        Last used
+                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
+                                    </p>
+                                    {% include 'teams/components/token_expiry.html.j2' with token=token %}
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <button type="button"
+                                            class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
+                                            title="Delete token"
+                                            @click="showDeleteModal = true">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                {% url 'core:delete_access_token' token_id=token.id as delete_url %}
+                                {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
                             </div>
-                            <div class="flex-1 min-w-0">
-                                <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
-                                <p class="text-sm text-warning m-0">
-                                    <i class="fas fa-globe text-xs mr-1"></i>
-                                    Unscoped — not tied to any workspace. Please replace with a scoped token.
-                                </p>
-                                <p class="text-sm text-text-muted m-0">
-                                    <i class="fas fa-clock text-xs mr-1"></i>
-                                    Created
-                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
-                                </p>
-                                <p class="text-sm text-text-muted m-0">
-                                    <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
-                                    Last used
-                                    {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
-                                </p>
-                                {% include 'teams/components/token_expiry.html.j2' with token=token %}
+                        {% endfor %}
+                        {% for token in unscoped_tokens %}
+                            <div class="flex items-center gap-4 p-4 bg-warning/5 rounded-lg border border-warning/30"
+                                 x-cloak
+                                 x-data="{ showDeleteModal: false }">
+                                <input type="checkbox"
+                                       value="{{ token.id }}"
+                                       x-model.number="selected"
+                                       class="flex-shrink-0"
+                                       aria-label="Select token {{ token.description }}">
+                                <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-exclamation-circle text-warning"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
+                                    <p class="text-sm text-warning m-0">
+                                        <i class="fas fa-globe text-xs mr-1"></i>
+                                        Unscoped — not tied to any workspace. Please replace with a scoped token.
+                                    </p>
+                                    <p class="text-sm text-text-muted m-0">
+                                        <i class="fas fa-clock text-xs mr-1"></i>
+                                        Created
+                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.created_at %}
+                                    </p>
+                                    <p class="text-sm text-text-muted m-0">
+                                        <i class="fas fa-clock-rotate-left text-xs mr-1" aria-hidden="true"></i>
+                                        Last used
+                                        {% include 'core/components/relative_time.html.j2' with timestamp=token.last_used_at fallback='never' %}
+                                    </p>
+                                    {% include 'teams/components/token_expiry.html.j2' with token=token %}
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <button type="button"
+                                            class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
+                                            title="Delete token"
+                                            @click="showDeleteModal = true">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                                {% url 'core:delete_access_token' token_id=token.id as delete_url %}
+                                {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
                             </div>
-                            <div class="flex-shrink-0">
-                                <button type="button"
-                                        class="tw-btn-ghost tw-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
-                                        title="Delete token"
-                                        @click="showDeleteModal = true">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                            {% url 'core:delete_access_token' token_id=token.id as delete_url %}
-                            {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Token' message='Are you sure you want to delete the token' item_name=token.description warning_message='This action cannot be undone. You will need to generate a new token.' confirm_text='Delete Token' hx_url=delete_url hx_method='delete' success_message='Token deleted successfully!' refresh_event='refreshTeamTokens' %}
-                        </div>
-                    {% endfor %}
+                        {% endfor %}
+                    </div>
+                    {# Bulk-revoke confirm modal #}
+                    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showBulkModal' title='Revoke Tokens' message='Are you sure you want to revoke' item_name_expression='countLabel' warning_message='This action cannot be undone. The selected tokens will stop working immediately.' confirm_text='Revoke' confirm_callback='revokeSelected()' %}
+                    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showRevokeAllModal' title='Revoke All Tokens' message='Are you sure you want to revoke' item_name='all tokens in this workspace' warning_message='This action cannot be undone. Every token listed here, including unscoped legacy tokens, will stop working immediately.' confirm_text='Revoke all' confirm_callback='revokeAll()' %}
                 </div>
             {% else %}
                 <div class="tw-empty-state py-10">
