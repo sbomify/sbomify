@@ -1137,3 +1137,59 @@ def test_throttled_handler_sets_retry_after():
     resp_no_wait = _on_throttled(req, Throttled(wait=None))
     assert resp_no_wait.status_code == 429
     assert "Retry-After" not in resp_no_wait
+
+
+def test_throttle_stashes_ratelimit_on_request():
+    """#1076: allow_request records the token's limit/remaining/reset on the request."""
+    from types import SimpleNamespace
+
+    from django.core.cache import cache
+
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    cache.clear()
+    throttle = AccessTokenRateThrottle(rate="5/min")
+    req = RequestFactory().get("/api/v1/x")
+    req.access_token_record = SimpleNamespace(pk=4242)
+
+    assert throttle.allow_request(req) is True
+    limit, remaining, reset = req._ratelimit
+    assert limit == 5
+    assert remaining == 4  # one request consumed
+    assert reset > 0
+
+
+def test_throttle_no_ratelimit_for_anonymous():
+    """#1076: session/anonymous requests carry no token, so no headers are stashed."""
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    throttle = AccessTokenRateThrottle(rate="5/min")
+    req = RequestFactory().get("/api/v1/x")  # no access_token_record
+
+    assert throttle.allow_request(req) is True
+    assert getattr(req, "_ratelimit", None) is None
+
+
+def test_ratelimit_headers_middleware_sets_headers():
+    """#1076: the middleware surfaces the stashed budget as X-RateLimit-* headers."""
+    from django.http import HttpResponse
+
+    from sbomify.apps.access_tokens.throttling import RateLimitHeadersMiddleware
+
+    req = RequestFactory().get("/api/v1/x")
+    req._ratelimit = (100, 97, 1234567890)
+    resp = RateLimitHeadersMiddleware(lambda r: HttpResponse("ok"))(req)
+
+    assert resp["X-RateLimit-Limit"] == "100"
+    assert resp["X-RateLimit-Remaining"] == "97"
+    assert resp["X-RateLimit-Reset"] == "1234567890"
+
+
+def test_ratelimit_headers_middleware_noop_without_stash():
+    """#1076: no stashed budget (web/anonymous) -> no rate-limit headers added."""
+    from django.http import HttpResponse
+
+    from sbomify.apps.access_tokens.throttling import RateLimitHeadersMiddleware
+
+    resp = RateLimitHeadersMiddleware(lambda r: HttpResponse("ok"))(RequestFactory().get("/"))
+    assert "X-RateLimit-Limit" not in resp

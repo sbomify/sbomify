@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from django.conf import settings
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from ninja.throttling import SimpleRateThrottle
 
 
@@ -23,3 +25,43 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         if record is None:
             return None
         return f"throttle_access_token_{record.pk}"
+
+    def allow_request(self, request: HttpRequest) -> bool:
+        allowed = super().allow_request(request)
+        # key is None for session/anonymous requests -> no token budget to report.
+        if getattr(self, "key", None) is None:
+            return allowed
+        # ponytail: reads the shared instance's per-request state right after super();
+        # a concurrent request could clobber it, but these headers are informational.
+        limit = self.num_requests or 0
+        duration = self.duration or 0
+        remaining = max(0, limit - len(self.history))
+        reset = int((self.history[-1] if self.history else self.now) + duration)
+        budget = (limit, remaining, reset)
+        # When several throttles apply (global + heavy), report the strictest budget.
+        current = getattr(request, "_ratelimit", None)
+        if current is None or remaining < current[1]:
+            setattr(request, "_ratelimit", budget)
+        return allowed
+
+
+class RateLimitHeadersMiddleware:
+    """Surface the per-token throttle budget as X-RateLimit-* response headers (#1076).
+
+    ``AccessTokenRateThrottle.allow_request`` stashes ``(limit, remaining, reset)`` on the
+    request for PAT-authenticated API calls; this middleware copies it onto the response so
+    clients can pace themselves instead of only learning the limit from a 429.
+    """
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self.get_response(request)
+        budget = getattr(request, "_ratelimit", None)
+        if budget is not None:
+            limit, remaining, reset = budget
+            response["X-RateLimit-Limit"] = str(limit)
+            response["X-RateLimit-Remaining"] = str(remaining)
+            response["X-RateLimit-Reset"] = str(reset)
+        return response
