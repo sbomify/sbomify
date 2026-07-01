@@ -15,7 +15,7 @@ from typing import Any
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import models
+from django.db import models, transaction
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
@@ -533,8 +533,11 @@ def add_artifact_to_release(
                     "new_sbom": sbom.name,
                     "component": sbom.component.name,
                 }
-                existing_sbom_artifact.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+                # Atomic so a failed create can't leave the release with the old artifact
+                # deleted and no replacement.
+                with transaction.atomic():
+                    existing_sbom_artifact.delete()
+                    new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
     else:  # document
@@ -562,8 +565,11 @@ def add_artifact_to_release(
                     "new_document": document.name,
                     "component": document.component.name,
                 }
-                existing_doc_artifact.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+                # Atomic so a failed create can't leave the release with the old artifact
+                # deleted and no replacement.
+                with transaction.atomic():
+                    existing_doc_artifact.delete()
+                    new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
     # Create the new artifact (no duplicates found)
