@@ -823,6 +823,22 @@ class TestBotReleaseConfinement:
         )
         assert resp.status_code == 403
 
+    def test_bot_cannot_tag_unbound_document(
+        self, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
+    ):
+        from sbomify.apps.documents.models import Document
+
+        _product, release = self._release_in(team_with_business_plan, bound_component)
+        other_doc = Document.objects.create(name="od", component=other_component)
+
+        resp = Client().post(
+            f"/api/v1/releases/{release.id}/artifacts",
+            data=json.dumps({"document_id": other_doc.id}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+
     def test_bot_cannot_create_release_on_product_without_its_component(
         self, oidc_sbomify_token, bound_component, other_component, team_with_business_plan
     ):
