@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from math import ceil
 
@@ -29,17 +30,21 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
 
     def allow_request(self, request: HttpRequest) -> bool:
         allowed = super().allow_request(request)
-        # key is None for session/anonymous requests -> no token budget to report.
-        if getattr(self, "key", None) is None:
-            return allowed
-        # Read the shared throttle instance's per-request state right after super().
-        # A concurrent request on the same instance could clobber it between these two
-        # lines; the headers are informational, so an occasional stale value is acceptable.
-        limit = self.num_requests or 0
+        # Ninja reuses one throttle instance across requests, so its per-request scratch
+        # (self.key/history/now) is unsafe to read here. Compute the budget from local
+        # state and this request's own token instead: get_cache_key() is a pure function
+        # of the request, so a fresh cache read for that key can't be corrupted by a
+        # concurrent request on the shared instance.
+        key = self.get_cache_key(request)
+        if key is None:
+            return allowed  # session/anonymous -> no token budget to report
+        now = time.time()
         duration = self.duration or 0
-        remaining = max(0, limit - len(self.history))
+        limit = self.num_requests or 0
+        history = [ts for ts in self.cache.get(key, []) if ts > now - duration]
+        remaining = max(0, limit - len(history))
         # ceil so the reset is never reported earlier than a slot actually frees.
-        reset = ceil((self.history[-1] if self.history else self.now) + duration)
+        reset = ceil((history[-1] if history else now) + duration)
         budget = (limit, remaining, reset)
         # When several throttles apply (global + heavy), report the one the client hits
         # first: fewest remaining, then soonest reset.
