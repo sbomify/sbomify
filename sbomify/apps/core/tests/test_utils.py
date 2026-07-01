@@ -273,8 +273,12 @@ def test_release_artifact_replacement_leaves_single_artifact(sample_team_with_ow
     component = Component.objects.create(name="comp-replace", team=team)
     product = Product.objects.create(name="prod-replace", team=team)
     release = Release.objects.create(product=product, name="v1")
-    sbom_old = SBOM.objects.create(name="old", component=component, format="cyclonedx", version="1.0", format_version="1.6")
-    sbom_new = SBOM.objects.create(name="new", component=component, format="cyclonedx", version="2.0", format_version="1.6")
+    sbom_old = SBOM.objects.create(
+        name="old", component=component, format="cyclonedx", version="1.0", format_version="1.6"
+    )
+    sbom_new = SBOM.objects.create(
+        name="new", component=component, format="cyclonedx", version="2.0", format_version="1.6"
+    )
 
     add_artifact_to_release(release, sbom=sbom_old)
     result = add_artifact_to_release(release, sbom=sbom_new, allow_replacement=True)
@@ -299,8 +303,12 @@ def test_release_artifact_replacement_rolls_back_on_failure(sample_team_with_own
     component = Component.objects.create(name="comp-rollback", team=team)
     product = Product.objects.create(name="prod-rollback", team=team)
     release = Release.objects.create(product=product, name="v1")
-    sbom_old = SBOM.objects.create(name="old", component=component, format="cyclonedx", version="1.0", format_version="1.6")
-    sbom_new = SBOM.objects.create(name="new", component=component, format="cyclonedx", version="2.0", format_version="1.6")
+    sbom_old = SBOM.objects.create(
+        name="old", component=component, format="cyclonedx", version="1.0", format_version="1.6"
+    )
+    sbom_new = SBOM.objects.create(
+        name="new", component=component, format="cyclonedx", version="2.0", format_version="1.6"
+    )
 
     add_artifact_to_release(release, sbom=sbom_old)
 
