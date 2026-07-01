@@ -4,7 +4,6 @@ shared cache), and the cache fingerprint must react to document changes."""
 import pytest
 
 from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
-from sbomify.apps.core.tests.shared_fixtures import team_with_business_plan  # noqa: F401
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.utils import (
@@ -22,7 +21,7 @@ def _doc_component(team, product, visibility):
 
 
 @pytest.mark.django_db
-def test_public_product_aggregate_excludes_nonpublic_documents(team_with_business_plan):  # noqa: F811
+def test_public_product_aggregate_excludes_nonpublic_documents(team_with_business_plan):
     """A public product's aggregate embeds only PUBLIC documents; a private product (authenticated,
     per-user download) embeds all of them."""
     team = team_with_business_plan
@@ -40,7 +39,7 @@ def test_public_product_aggregate_excludes_nonpublic_documents(team_with_busines
 
 
 @pytest.mark.django_db
-def test_fingerprint_reacts_to_public_document_changes(team_with_business_plan):  # noqa: F811
+def test_fingerprint_reacts_to_public_document_changes(team_with_business_plan):
     """Adding a public document, and changing its content, both bust the aggregate cache key."""
     team = team_with_business_plan
     product = Product.objects.create(name="P2", team=team, is_public=True)

@@ -942,7 +942,7 @@ def create_product_external_references(product: Product, user: Any = None) -> li
     from sbomify.apps.core.models import Component
 
     document_filter: dict[str, Any] = {"component_type": "document", "products": product}
-    if product.is_public:
+    if getattr(product, "is_public", False):
         document_filter["visibility"] = Component.Visibility.PUBLIC
 
     document_components = Component.objects.filter(**document_filter).distinct().prefetch_related("document_set")
@@ -989,7 +989,7 @@ def create_product_spdx_external_references(product: Product, user: Any = None) 
     from sbomify.apps.core.models import Component
 
     document_filter: dict[str, Any] = {"component_type": "document", "products": product}
-    if product.is_public:
+    if getattr(product, "is_public", False):
         document_filter["visibility"] = Component.Visibility.PUBLIC
 
     document_components = Component.objects.filter(**document_filter).distinct().prefetch_related("document_set")
