@@ -22,14 +22,14 @@ from django.http import (
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
-from sbomify.apps.teams.decorators import validate_role_in_current_team
+from sbomify.apps.teams.decorators import validate_role_in_url_team
 from sbomify.apps.teams.forms import InviteUserForm
 from sbomify.apps.teams.models import (
     Invitation,
@@ -156,14 +156,14 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_current_team(["owner", "admin"])
+@validate_role_in_url_team(["owner", "admin"])
 def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
     """Redirect to team settings for unified interface."""
     return redirect("teams:team_settings", team_key=team_key)
 
 
 @login_required
-@validate_role_in_current_team(["owner", "admin"])
+@require_http_methods(["POST", "DELETE"])
 def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
     from sbomify.apps.teams.utils import remove_member_safely
 
@@ -176,10 +176,16 @@ def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
         # Redirect to dashboard if membership not found, as team key is unavailable.
         return redirect("core:dashboard")
 
-    # Check if actor is an admin trying to remove an owner or themselves
-    # We query the actor's membership explicitly to be safe, although session usually has it.
+    # Authorize against the TARGET membership's workspace: this view takes a bare PK, so
+    # the session workspace is not a valid basis. Only owners/admins of that workspace.
     actor_membership = Member.objects.filter(user=user, team=membership.team).first()
-    if actor_membership and actor_membership.role == "admin":
+    if actor_membership is None or actor_membership.role not in ("owner", "admin"):
+        return error_response(
+            request,
+            HttpResponseForbidden("You don't have permission to manage this workspace's members"),
+        )
+
+    if actor_membership.role == "admin":
         # Admins cannot remove owners
         if membership.role == "owner":
             messages.add_message(
@@ -197,10 +203,6 @@ def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
             has_pending_invites = Invitation.objects.filter(email=request.user.email).exists()
 
             if not has_pending_invites:
-                from django.http import HttpResponseForbidden
-
-                from sbomify.apps.core.errors import error_response
-
                 return error_response(
                     request,
                     HttpResponseForbidden(
@@ -223,7 +225,7 @@ def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_current_team(["owner"])
+@validate_role_in_url_team(["owner"])
 def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpResponse:
     team_id = token_to_number(team_key)
     context: dict[str, Any] = {"team_key": team_key}
@@ -614,12 +616,20 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
 
 @login_required
-@validate_role_in_current_team(["owner"])
+@require_http_methods(["POST", "DELETE"])
 def delete_invite(request: HttpRequest, invitation_id: int) -> HttpResponse:
     try:
         invitation = Invitation.objects.get(pk=invitation_id)
     except Invitation.DoesNotExist:
-        return error_response(request, HttpResponseNotFound("Membership not found"))
+        return error_response(request, HttpResponseNotFound("Invitation not found"))
+
+    # Authorize against the invitation's OWN workspace (bare PK -> session is not a valid basis).
+    actor_membership = Member.objects.filter(user=cast(User, request.user), team=invitation.team).first()
+    if actor_membership is None or actor_membership.role != "owner":
+        return error_response(
+            request,
+            HttpResponseForbidden("You don't have permission to manage this workspace's invitations"),
+        )
 
     messages.add_message(request, messages.INFO, f"Invitation for {invitation.email} deleted")
     invitation.delete()
@@ -647,7 +657,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_current_team(["owner", "admin"])
+@validate_role_in_url_team(["owner", "admin"])
 def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
     """
     Redirect /workspace/{team_key}/settings/ to the unified settings interface.
