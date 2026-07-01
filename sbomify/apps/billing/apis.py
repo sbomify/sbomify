@@ -124,11 +124,14 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
 
 def _handle_community_downgrade(team: Team, stripe_client: Any) -> tuple[int, Any]:
     """Handle downgrade to community plan."""
-    customer_id = f"c_{team.key}"
-
     with transaction.atomic():
         team = Team.objects.select_for_update().get(pk=team.pk)
         billing_limits = team.billing_plan_limits or {}
+        # Use the stored Stripe customer id. Web checkout creates a random cus_..., so the
+        # f"c_{team.key}" form only matches the API-created path; hardcoding it made
+        # get_customer 404 for web-checkout teams, the StripeError branch downgraded locally,
+        # and the active subscription was never canceled (continued billing).
+        customer_id = billing_limits.get("stripe_customer_id") or f"c_{team.key}"
 
         try:
             customer = stripe_client.get_customer(customer_id)
