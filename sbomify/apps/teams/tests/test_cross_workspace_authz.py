@@ -63,7 +63,7 @@ def test_cannot_delete_member_in_another_workspace(client, attacker, victim_team
     client.force_login(user)
     _session_as(client, team_a, "owner")
 
-    resp = client.get(reverse("teams:team_membership_delete", kwargs={"membership_id": target.id}))
+    resp = client.delete(reverse("teams:team_membership_delete", kwargs={"membership_id": target.id}))
 
     assert resp.status_code == 403
     assert Member.objects.filter(pk=target.pk).exists()
@@ -78,7 +78,7 @@ def test_cannot_delete_invite_in_another_workspace(client, attacker, victim_team
     client.force_login(user)
     _session_as(client, team_a, "owner")
 
-    resp = client.get(reverse("teams:team_invitation_delete", kwargs={"invitation_id": invite.id}))
+    resp = client.delete(reverse("teams:team_invitation_delete", kwargs={"invitation_id": invite.id}))
 
     assert resp.status_code == 403
     assert Invitation.objects.filter(pk=invite.pk).exists()

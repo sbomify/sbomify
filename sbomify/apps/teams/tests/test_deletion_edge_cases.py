@@ -62,7 +62,7 @@ def test_removal_fallback_when_pending_invites_exist(client, owner, user_with_on
     membership = Member.objects.get(user=user_with_one_team, team=team)
 
     url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
-    response = client.get(url)
+    response = client.delete(url)
 
     assert response.status_code == 302
     assert response.url == reverse("teams:team_settings", kwargs={"team_key": team.key})
@@ -96,7 +96,7 @@ def test_self_removal_fallback_when_pending_invites_exist(client, user_with_one_
     membership = Member.objects.get(user=user_with_one_team, team=team)
 
     url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
-    response = client.get(url)
+    response = client.delete(url)
 
     assert response.status_code == 302
     assert response.url == reverse("core:dashboard")

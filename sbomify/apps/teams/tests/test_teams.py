@@ -739,7 +739,7 @@ def test_delete_membership(
     session["user_teams"] = {membership.team.key: {"role": "admin", "name": membership.team.name}}
     session.save()
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.delete(uri)
     assert response.status_code == 403
 
     # Owner user should be able to delete the membership
@@ -751,7 +751,7 @@ def test_delete_membership(
     session["user_teams"] = {membership.team.key: {"role": "owner", "name": membership.team.name}}
     session.save()
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.delete(uri)
     assert response.status_code == 302
 
     messages = list(get_messages(response.wsgi_request))
@@ -775,7 +775,7 @@ def test_deleting_last_owner_of_team_is_not_allowed(
 
     uri = reverse("teams:team_membership_delete", kwargs={"membership_id": sample_team_with_owner_member.id})
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.delete(uri)
 
     assert response.status_code == HttpResponseRedirect.status_code
     messages = list(get_messages(response.wsgi_request))
@@ -796,7 +796,7 @@ def test_delete_invitation(sample_team_with_owner_member: Member):  # noqa: F811
     assert invitation is not None
     uri = reverse("teams:team_invitation_delete", kwargs={"invitation_id": invitation.id})
 
-    response: HttpResponse = client.get(uri)
+    response: HttpResponse = client.delete(uri)
 
     assert response.status_code == 302
 

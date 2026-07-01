@@ -96,7 +96,7 @@ def test_admin_access_to_delete_member_view(client, admin_user, member_user, tea
     membership = Member.objects.get(user=member_user, team=team)
 
     url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
-    response = client.get(url)
+    response = client.delete(url)
 
     assert response.status_code == 302
     assert not Member.objects.filter(pk=membership.pk).exists()
@@ -108,7 +108,7 @@ def test_admin_cannot_access_delete_owner_via_direct_view(client, admin_user, ow
     membership = Member.objects.get(user=owner, team=team)
 
     url = reverse("teams:team_membership_delete", kwargs={"membership_id": membership.id})
-    response = client.get(url)
+    response = client.delete(url)
 
     assert response.status_code == 302
     assert Member.objects.filter(pk=membership.pk).exists()

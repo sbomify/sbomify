@@ -22,7 +22,7 @@ from django.http import (
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.core.errors import error_response
@@ -163,6 +163,7 @@ def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
 
 
 @login_required
+@require_http_methods(["POST", "DELETE"])
 def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
     from sbomify.apps.teams.utils import remove_member_safely
 
@@ -615,6 +616,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
 
 
 @login_required
+@require_http_methods(["POST", "DELETE"])
 def delete_invite(request: HttpRequest, invitation_id: int) -> HttpResponse:
     try:
         invitation = Invitation.objects.get(pk=invitation_id)
