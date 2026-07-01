@@ -151,6 +151,8 @@ class AssessmentSummary:
     error_count: int = 0
     info_count: int = 0
     by_severity: dict[str, int] | None = None
+    # Security findings cleared by an uploaded VEX (kept but not counted above).
+    suppressed_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Convert summary to dictionary for JSON serialization.

@@ -488,6 +488,17 @@ def sbom_upload_cyclonedx(
         except Exception:
             log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
 
+        # A new VEX changes which findings are suppressed; re-apply it to the
+        # component's existing security scans so the dashboard reflects it without
+        # waiting for a re-scan. Best-effort.
+        if bom_type == SBOM.BomType.VEX.value:
+            try:
+                from sbomify.apps.vulnerability_scanning.vex import reannotate_component_runs
+
+                reannotate_component_runs(component.id)
+            except Exception:
+                log.warning("Failed to re-apply VEX to existing scans", exc_info=True)
+
         return 201, {"id": sbom.id}
 
     except Exception as e:

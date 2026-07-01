@@ -145,6 +145,8 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 .first()
             )
             if latest_scan:
+                # VEX-suppressed findings are already excluded from the stored
+                # summary (applied server-side at scan time / on VEX upload).
                 result_json = latest_scan.result or {}
                 summary = result_json.get("summary", {})
                 by_severity = summary.get("by_severity", {})

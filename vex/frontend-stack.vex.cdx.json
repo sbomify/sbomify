@@ -1,0 +1,59 @@
+{
+  "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-06-23T00:00:00Z",
+    "component": {
+      "bom-ref": "sbomify-frontend-stack",
+      "type": "application",
+      "name": "Frontend Stack",
+      "description": "sbomify's frontend dependency graph (bun.lock). Justifications for High advisories that cannot be cleared by a version bump."
+    },
+    "authors": [
+      {
+        "name": "sbomify maintainers"
+      }
+    ]
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/serialize-javascript@6.0.2",
+      "type": "library",
+      "name": "serialize-javascript",
+      "purl": "pkg:npm/serialize-javascript@6.0.2",
+      "version": "6.0.2"
+    }
+  ],
+  "vulnerabilities": [
+    {
+      "id": "GHSA-5c6j-r48x-rmvq",
+      "description": "serialize-javascript is vulnerable to RCE: RegExp.flags (and Date.prototype.toISOString) are interpolated into the output without escaping, so an attacker who controls an object passed to serialize() can inject JavaScript. Affected <= 7.0.2; fixed in 7.0.3.",
+      "ratings": [
+        {
+          "severity": "high",
+          "method": "CVSSv31",
+          "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+          "score": 8.1
+        }
+      ],
+      "cwes": [
+        96
+      ],
+      "analysis": {
+        "state": "not_affected",
+        "justification": "code_not_present",
+        "response": [
+          "update"
+        ],
+        "detail": "serialize-javascript is a build-time-only transitive dependency (vite-plugin-pwa -> workbox-build@7.4.0 -> @rollup/plugin-terser 0.4.x), used to serialize the terser minifier's worker options during `vite build`. It is not bundled into the production browser assets, so the vulnerable code is not present in the deployed artifact, and the build only serializes sbomify's own trusted terser configuration. @rollup/plugin-terser raised its serialize-javascript floor to ^7.0.3 in 1.0.0, but workbox-build@7.4.0 still pins the 0.4.x line; sbomify adopts the fix once workbox-build updates."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/serialize-javascript@6.0.2"
+        }
+      ]
+    }
+  ]
+}
