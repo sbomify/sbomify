@@ -259,3 +259,66 @@ class TestVerifyItemAccessIsDbAuthoritative:
 
         assert verify_item_access(request, team, ["owner", "admin"]) is False
         assert verify_item_access(request, team, None) is False
+
+
+@pytest.mark.django_db
+def test_release_artifact_replacement_leaves_single_artifact(sample_team_with_owner_member):
+    """Replacement leaves exactly one artifact of the format (the new one) — no loss, no
+    duplicate."""
+    from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+    from sbomify.apps.core.utils import add_artifact_to_release
+    from sbomify.apps.sboms.models import SBOM
+
+    team = sample_team_with_owner_member.team
+    component = Component.objects.create(name="comp-replace", team=team)
+    product = Product.objects.create(name="prod-replace", team=team)
+    release = Release.objects.create(product=product, name="v1")
+    sbom_old = SBOM.objects.create(
+        name="old", component=component, format="cyclonedx", version="1.0", format_version="1.6"
+    )
+    sbom_new = SBOM.objects.create(
+        name="new", component=component, format="cyclonedx", version="2.0", format_version="1.6"
+    )
+
+    add_artifact_to_release(release, sbom=sbom_old)
+    result = add_artifact_to_release(release, sbom=sbom_new, allow_replacement=True)
+
+    assert result["replaced"] is True
+    artifacts = ReleaseArtifact.objects.filter(release=release, sbom__component=component, sbom__format="cyclonedx")
+    assert artifacts.count() == 1
+    assert artifacts.first().sbom_id == sbom_new.id
+
+
+@pytest.mark.django_db
+def test_release_artifact_replacement_rolls_back_on_failure(sample_team_with_owner_member, mocker):
+    """If the create fails mid-replacement, the atomic block rolls back the delete so the old
+    artifact survives rather than being lost."""
+    from django.db import IntegrityError
+
+    from sbomify.apps.core.models import Component, Product, Release, ReleaseArtifact
+    from sbomify.apps.core.utils import add_artifact_to_release
+    from sbomify.apps.sboms.models import SBOM
+
+    team = sample_team_with_owner_member.team
+    component = Component.objects.create(name="comp-rollback", team=team)
+    product = Product.objects.create(name="prod-rollback", team=team)
+    release = Release.objects.create(product=product, name="v1")
+    sbom_old = SBOM.objects.create(
+        name="old", component=component, format="cyclonedx", version="1.0", format_version="1.6"
+    )
+    sbom_new = SBOM.objects.create(
+        name="new", component=component, format="cyclonedx", version="2.0", format_version="1.6"
+    )
+
+    add_artifact_to_release(release, sbom=sbom_old)
+
+    # Force the create() during replacement to raise, after the delete() has run.
+    mocker.patch(
+        "sbomify.apps.core.models.ReleaseArtifact.objects.create",
+        side_effect=IntegrityError("boom"),
+    )
+    with pytest.raises(IntegrityError):
+        add_artifact_to_release(release, sbom=sbom_new, allow_replacement=True)
+
+    # The delete must have rolled back: the old artifact is still there, none lost.
+    assert ReleaseArtifact.objects.filter(release=release, sbom=sbom_old).exists()

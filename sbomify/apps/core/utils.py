@@ -15,7 +15,7 @@ from typing import Any
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import models
+from django.db import models, transaction
 from django.http import HttpRequest
 
 logger = logging.getLogger(__name__)
@@ -476,7 +476,7 @@ def add_artifact_to_release(
         ValueError: If neither or both of sbom and document are provided.
     """
     from sbomify.apps.core.domain.exceptions import PermissionDeniedError
-    from sbomify.apps.core.models import ReleaseArtifact
+    from sbomify.apps.core.models import Release, ReleaseArtifact
 
     if not sbom and not document:
         raise ValueError("Either sbom or document must be provided")
@@ -533,8 +533,16 @@ def add_artifact_to_release(
                     "new_sbom": sbom.name,
                     "component": sbom.component.name,
                 }
-                existing_sbom_artifact.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+                # Serialize concurrent replacements on this release with a row lock, then
+                # re-delete ALL matching artifacts INSIDE the lock (the row selected above may
+                # be stale if a concurrent replacement committed) before creating — so a failed
+                # create can't leave a gap, and a race can't leave a duplicate.
+                with transaction.atomic():
+                    Release.objects.select_for_update().get(pk=release.pk)
+                    ReleaseArtifact.objects.filter(
+                        release=release, sbom__component=sbom.component, sbom__format=sbom.format
+                    ).delete()
+                    new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
     else:  # document
@@ -562,15 +570,53 @@ def add_artifact_to_release(
                     "new_document": document.name,
                     "component": document.component.name,
                 }
-                existing_doc_artifact.delete()
-                new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+                # Serialize concurrent replacements on this release with a row lock, then
+                # re-delete ALL matching artifacts INSIDE the lock (the row selected above may
+                # be stale if a concurrent replacement committed) before creating.
+                with transaction.atomic():
+                    Release.objects.select_for_update().get(pk=release.pk)
+                    ReleaseArtifact.objects.filter(
+                        release=release,
+                        document__component=document.component,
+                        document__document_type=document.document_type,
+                    ).delete()
+                    new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
                 return {"created": False, "replaced": True, "artifact": new_artifact, "replaced_info": replaced_info}
 
-    # Create the new artifact (no duplicates found)
-    if sbom:
-        new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
-    else:
-        new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
+    # Create the new artifact under the release lock, re-checking for a same-format/type artifact
+    # INSIDE the lock so two concurrent first-adds can't both create a duplicate (the outer check
+    # above is unlocked and can race).
+    with transaction.atomic():
+        Release.objects.select_for_update().get(pk=release.pk)
+        if sbom:
+            if ReleaseArtifact.objects.filter(
+                release=release, sbom__component=sbom.component, sbom__format=sbom.format
+            ).exists():
+                return {
+                    "created": False,
+                    "replaced": False,
+                    "artifact": None,
+                    "error": (
+                        f"Release already contains an SBOM of format {sbom.format} from component {sbom.component.name}"
+                    ),
+                }
+            new_artifact = ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        else:
+            if ReleaseArtifact.objects.filter(
+                release=release,
+                document__component=document.component,
+                document__document_type=document.document_type,
+            ).exists():
+                return {
+                    "created": False,
+                    "replaced": False,
+                    "artifact": None,
+                    "error": (
+                        f"Release already contains a document of type {document.document_type} "
+                        f"from component {document.component.name}"
+                    ),
+                }
+            new_artifact = ReleaseArtifact.objects.create(release=release, document=document)
 
     return {"created": True, "replaced": False, "artifact": new_artifact, "replaced_info": None}
 
