@@ -1167,7 +1167,7 @@ def test_throttle_no_ratelimit_for_anonymous():
     req = RequestFactory().get("/api/v1/x")  # no access_token_record
 
     assert throttle.allow_request(req) is True
-    assert getattr(req, "_ratelimit", None) is None
+    assert getattr(req, "_access_token_ratelimit", None) is None
 
 
 def test_ratelimit_headers_middleware_sets_headers():

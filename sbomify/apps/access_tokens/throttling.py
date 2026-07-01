@@ -32,8 +32,9 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         # key is None for session/anonymous requests -> no token budget to report.
         if getattr(self, "key", None) is None:
             return allowed
-        # ponytail: reads the shared instance's per-request state right after super();
-        # a concurrent request could clobber it, but these headers are informational.
+        # Read the shared throttle instance's per-request state right after super().
+        # A concurrent request on the same instance could clobber it between these two
+        # lines; the headers are informational, so an occasional stale value is acceptable.
         limit = self.num_requests or 0
         duration = self.duration or 0
         remaining = max(0, limit - len(self.history))
