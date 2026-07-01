@@ -786,6 +786,11 @@ JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "sbomify")
 # token; tighten via the env var. Effectively a no-op under DEBUG (DummyCache).
 API_TOKEN_RATE_LIMIT = os.environ.get("API_TOKEN_RATE_LIMIT", "1000/min")
 
+# Stricter per-token limit for expensive endpoints (artifact uploads), enforced
+# alongside the global one (#1070). Lower because each call does real work (parse,
+# S3 write, downstream scan/assessment enqueue).
+API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/min")
+
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend
 # enforces the ``aud`` claim against it during verification.
