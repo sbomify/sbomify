@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from math import ceil
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse
@@ -36,12 +37,14 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
         limit = self.num_requests or 0
         duration = self.duration or 0
         remaining = max(0, limit - len(self.history))
-        reset = int((self.history[-1] if self.history else self.now) + duration)
+        # ceil so the reset is never reported earlier than a slot actually frees.
+        reset = ceil((self.history[-1] if self.history else self.now) + duration)
         budget = (limit, remaining, reset)
-        # When several throttles apply (global + heavy), report the strictest budget.
-        current = getattr(request, "_ratelimit", None)
-        if current is None or remaining < current[1]:
-            setattr(request, "_ratelimit", budget)
+        # When several throttles apply (global + heavy), report the one the client hits
+        # first: fewest remaining, then soonest reset.
+        current = getattr(request, "_access_token_ratelimit", None)
+        if current is None or (remaining, reset) < (current[1], current[2]):
+            setattr(request, "_access_token_ratelimit", budget)
         return allowed
 
 
@@ -58,7 +61,7 @@ class RateLimitHeadersMiddleware:
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         response = self.get_response(request)
-        budget = getattr(request, "_ratelimit", None)
+        budget = getattr(request, "_access_token_ratelimit", None)
         if budget is not None:
             limit, remaining, reset = budget
             response["X-RateLimit-Limit"] = str(limit)

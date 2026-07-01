@@ -147,6 +147,7 @@ DJANGO_VITE = {
 # Ensure WhiteNoise is configured
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "sbomify.apps.access_tokens.throttling.RateLimitHeadersMiddleware",
     "sbomify.apps.core.middleware.DynamicHostValidationMiddleware",
     "sbomify.apps.core.middleware.CustomDomainContextMiddleware",
     "sbomify.apps.core.middleware.RealIPMiddleware",

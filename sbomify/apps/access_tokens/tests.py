@@ -1153,7 +1153,7 @@ def test_throttle_stashes_ratelimit_on_request():
     req.access_token_record = SimpleNamespace(pk=4242)
 
     assert throttle.allow_request(req) is True
-    limit, remaining, reset = req._ratelimit
+    limit, remaining, reset = req._access_token_ratelimit
     assert limit == 5
     assert remaining == 4  # one request consumed
     assert reset > 0
@@ -1177,7 +1177,7 @@ def test_ratelimit_headers_middleware_sets_headers():
     from sbomify.apps.access_tokens.throttling import RateLimitHeadersMiddleware
 
     req = RequestFactory().get("/api/v1/x")
-    req._ratelimit = (100, 97, 1234567890)
+    req._access_token_ratelimit = (100, 97, 1234567890)
     resp = RateLimitHeadersMiddleware(lambda r: HttpResponse("ok"))(req)
 
     assert resp["X-RateLimit-Limit"] == "100"
@@ -1193,3 +1193,20 @@ def test_ratelimit_headers_middleware_noop_without_stash():
 
     resp = RateLimitHeadersMiddleware(lambda r: HttpResponse("ok"))(RequestFactory().get("/"))
     assert "X-RateLimit-Limit" not in resp
+
+
+@pytest.mark.django_db
+def test_api_response_carries_ratelimit_headers(sample_product, sample_access_token):  # noqa: F811
+    """#1076: a real PAT-authenticated API request carries the X-RateLimit-* headers end to end."""
+    from django.core.cache import cache
+    from django.urls import reverse
+
+    from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+    cache.clear()
+    resp = Client().get(reverse("api-1:list_products"), **get_api_headers(sample_access_token))
+
+    assert resp.status_code == 200
+    assert int(resp["X-RateLimit-Limit"]) > 0
+    assert int(resp["X-RateLimit-Remaining"]) >= 0
+    assert int(resp["X-RateLimit-Reset"]) > 0
