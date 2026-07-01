@@ -191,25 +191,33 @@ def check_billing_limits(resource_type: str) -> Any:
                 if subscription_status == "past_due":
                     failed_at_str = billing_limits.get("payment_failed_at")
 
-                    if failed_at_str:
-                        try:
-                            failed_at = datetime.datetime.fromisoformat(failed_at_str.replace("Z", "+00:00"))
-                            delta = timezone.now() - failed_at
-                            grace_days = getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3)
-                            grace_period_seconds = grace_days * 24 * 60 * 60
+                    if not failed_at_str:
+                        # A past_due subscription with no recorded failure time would otherwise
+                        # skip the grace check entirely and escape enforcement. Stamp it now so
+                        # the grace window starts (persisted — team is select_for_update'd here).
+                        failed_at_str = timezone.now().isoformat()
+                        billing_limits["payment_failed_at"] = failed_at_str
+                        team.billing_plan_limits = billing_limits
+                        team.save(update_fields=["billing_plan_limits"])
 
-                            if delta.total_seconds() > grace_period_seconds:
-                                msg = (
-                                    "Payment failed. Grace period expired. "
-                                    "Please update payment method to create resources."
-                                )
-                                logger.warning("Blocking resource access: Grace period expired")
-                                return _billing_error_response(request, msg)
+                    try:
+                        failed_at = datetime.datetime.fromisoformat(failed_at_str.replace("Z", "+00:00"))
+                        delta = timezone.now() - failed_at
+                        grace_days = getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3)
+                        grace_period_seconds = grace_days * 24 * 60 * 60
 
-                        except (ValueError, TypeError):
-                            logger.error("Invalid payment_failed_at format")
-                            msg = "Payment failed. Unable to verify grace period. Please contact support."
+                        if delta.total_seconds() > grace_period_seconds:
+                            msg = (
+                                "Payment failed. Grace period expired. "
+                                "Please update payment method to create resources."
+                            )
+                            logger.warning("Blocking resource access: Grace period expired")
                             return _billing_error_response(request, msg)
+
+                    except (ValueError, TypeError):
+                        logger.error("Invalid payment_failed_at format")
+                        msg = "Payment failed. Unable to verify grace period. Please contact support."
+                        return _billing_error_response(request, msg)
 
             try:
                 plan = BillingPlan.objects.get(key=team.billing_plan)
@@ -752,7 +760,10 @@ def handle_payment_failed(invoice: Any, event: Any = None) -> None:
             billing_limits = (team.billing_plan_limits or {}).copy()
             billing_limits["subscription_status"] = "past_due"
             billing_limits["last_updated"] = timezone.now().isoformat()
-            billing_limits["payment_failed_at"] = timezone.now().isoformat()
+            # Keep the FIRST failure time so the grace period counts down. Stripe retries the
+            # invoice, and resetting this to now() on every failed-payment event kept the grace
+            # window from ever expiring.
+            billing_limits.setdefault("payment_failed_at", timezone.now().isoformat())
             billing_limits["last_processed_webhook_id"] = webhook_id
             team.billing_plan_limits = billing_limits
             team.save()
