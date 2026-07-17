@@ -135,6 +135,63 @@
             </div>
         </div>
     {% endif %}
+    {% if controls_summary_list %}
+        <div class="public-section">
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                            <i class="fas fa-list-check text-primary"></i>Compliance Controls
+                        </h4>
+                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
+                            {{ controls_summary_list|length }} framework{{ controls_summary_list|length|pluralize }}
+                        </span>
+                    </div>
+                </div>
+                <div class="p-6">
+                    {% for controls_summary in controls_summary_list %}
+                        {% include 'controls/components/public_controls_catalog.html.j2' %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    {% if global_components %}
+        <!-- Workspace Artifacts Section -->
+        <div class="bg-surface rounded-xl p-8 shadow-md">
+            <div class="mb-6 pb-4 border-b border-border">
+                <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
+                    <i class="fas fa-award text-primary"></i>Organization Compliance Artifacts
+                </h2>
+                <p class="text-sm text-text-muted m-0">
+                    Organization-wide compliance documents, certifications, and security attestations
+                </p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for component in global_components %}
+                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
+                        <div class="flex justify-between items-start mb-3 gap-2">
+                            <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
+                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-warning/15 text-warning">{{ component.component_type_display }}</span>
+                        </div>
+                        <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">
+                            Organization-level compliance artifact available across the entire organization.
+                        </p>
+                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
+                                <i class="fas fa-building"></i>
+                                Organization-Wide
+                            </span>
+                            <a class="tw-btn-primary text-sm py-1.5 px-3"
+                               href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
+                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
