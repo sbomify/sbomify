@@ -9,6 +9,18 @@ itself to Mailjet's template editor — its importer only accepts `.mjml` files,
 not compiled HTML. The footer already uses Mailjet's reserved link tags
 (`[[UNSUB_LINK_EN]]`, `[[PERMALINK]]`), which Mailjet resolves at send time.
 
+**Keep the template Passport-safe.** Mailjet's editor (Passport) is not the
+reference MJML compiler — it only imports the subset of MJML its drag-and-drop
+model can represent. The template therefore inlines every attribute and avoids
+head-level styling and layout tricks. When editing, do not add:
+
+- `mj-attributes` / `mj-class` / `mj-style` (inline attributes on each element instead)
+- `mj-group`, `mj-spacer`, or multi-column layout tricks
+- HTML comments before the `<mjml>` tag
+
+Standard MJML that compiles fine with `mjml` CLI can still be rejected by
+Mailjet's importer if it uses those constructs.
+
 The design matches the transactional email branding in
 `sbomify/apps/core/templates/core/emails/base.html.j2`: dark navy header with the
 white logo and "The Security Artifact Hub" tagline, brand blue (`#4059d0`)
