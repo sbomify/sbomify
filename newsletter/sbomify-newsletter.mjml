@@ -4,15 +4,17 @@
   Compile to email-safe HTML with:
     bunx mjml@5.4.0 newsletter/sbomify-newsletter.mjml -o newsletter/sbomify-newsletter.html
 
-  Placeholders to replace per issue are marked with [[DOUBLE_BRACKETS]].
-  ESP merge tags (unsubscribe, address, web version) are marked with
-  comments — swap them for your provider's syntax (Mailchimp, Listmonk,
-  Buttondown, etc.) before sending.
+  This file imports directly into Mailjet's template editor (upload the .mjml —
+  Mailjet's importer only accepts MJML, not compiled HTML).
+
+  Placeholders to replace per issue are marked with ##HASH_MARKS##. Do not
+  write placeholders in double square brackets — Mailjet reserves that syntax
+  for its link tags (UNSUB_LINK_EN, PERMALINK), which the footer already uses.
 -->
 <mjml>
   <mj-head>
-    <mj-title>sbomify newsletter — [[ISSUE_TITLE]]</mj-title>
-    <mj-preview>[[PREVIEW_TEXT — one enticing sentence shown next to the subject line]]</mj-preview>
+    <mj-title>sbomify newsletter — ##ISSUE_TITLE##</mj-title>
+    <mj-preview>##PREVIEW_TEXT — one enticing sentence shown next to the subject line##</mj-preview>
     <mj-attributes>
       <mj-all font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" />
       <mj-text font-size="16px" line-height="1.6" color="#475569" />
@@ -65,10 +67,10 @@
     <mj-section padding="32px 40px 0">
       <mj-column>
         <mj-text mj-class="muted" padding="0" text-transform="uppercase" letter-spacing="1px">
-          Issue [[NN]] &nbsp;·&nbsp; [[MONTH YEAR]]
+          Issue ##NN## &nbsp;·&nbsp; ##MONTH YEAR##
         </mj-text>
         <mj-text mj-class="h1" padding="12px 0 0">
-          [[ISSUE_TITLE]]
+          ##ISSUE_TITLE##
         </mj-text>
       </mj-column>
     </mj-section>
@@ -80,8 +82,8 @@
           Hi there,
         </mj-text>
         <mj-text padding="16px 0 0">
-          [[INTRO — two or three sentences setting up this issue: what shipped,
-          what's happening in the SBOM/compliance world, and what's below.]]
+          ##INTRO — two or three sentences setting up this issue: what shipped,
+          what's happening in the SBOM/compliance world, and what's below.##
         </mj-text>
       </mj-column>
     </mj-section>
@@ -89,17 +91,17 @@
     <!-- ============ Featured story ============ -->
     <mj-section padding="32px 40px 0">
       <mj-column>
-        <mj-image src="[[FEATURE_IMAGE_URL — 1040×520px recommended]]"
-                  alt="[[FEATURE_IMAGE_ALT]]" border-radius="8px" padding="0" />
+        <mj-image src="##FEATURE_IMAGE_URL — 1040×520px recommended##"
+                  alt="##FEATURE_IMAGE_ALT##" border-radius="8px" padding="0" />
         <mj-text mj-class="h2" padding="24px 0 0">
-          [[FEATURE_HEADLINE]]
+          ##FEATURE_HEADLINE##
         </mj-text>
         <mj-text padding="12px 0 0">
-          [[FEATURE_BODY — a short paragraph on the headline story: a major
-          release, a new integration, a compliance deadline, a customer story.]]
+          ##FEATURE_BODY — a short paragraph on the headline story: a major
+          release, a new integration, a compliance deadline, a customer story.##
         </mj-text>
-        <mj-button href="[[FEATURE_URL]]" align="left" padding="20px 0 0">
-          [[FEATURE_CTA — e.g. Read the announcement]]
+        <mj-button href="##FEATURE_URL##" align="left" padding="20px 0 0">
+          ##FEATURE_CTA — e.g. Read the announcement##
         </mj-button>
       </mj-column>
     </mj-section>
@@ -119,21 +121,21 @@
 
         <!-- Repeat this block per update -->
         <mj-text padding="20px 0 0">
-          <strong style="color: #1e293b;">[[UPDATE_1_TITLE]]</strong><br />
-          [[UPDATE_1_BODY — one or two sentences.]]
-          <a href="[[UPDATE_1_URL]]">Learn more</a>
+          <strong style="color: #1e293b;">##UPDATE_1_TITLE##</strong><br />
+          ##UPDATE_1_BODY — one or two sentences.##
+          <a href="##UPDATE_1_URL##">Learn more</a>
         </mj-text>
 
         <mj-text padding="20px 0 0">
-          <strong style="color: #1e293b;">[[UPDATE_2_TITLE]]</strong><br />
-          [[UPDATE_2_BODY]]
-          <a href="[[UPDATE_2_URL]]">Learn more</a>
+          <strong style="color: #1e293b;">##UPDATE_2_TITLE##</strong><br />
+          ##UPDATE_2_BODY##
+          <a href="##UPDATE_2_URL##">Learn more</a>
         </mj-text>
 
         <mj-text padding="20px 0 0">
-          <strong style="color: #1e293b;">[[UPDATE_3_TITLE]]</strong><br />
-          [[UPDATE_3_BODY]]
-          <a href="[[UPDATE_3_URL]]">Learn more</a>
+          <strong style="color: #1e293b;">##UPDATE_3_TITLE##</strong><br />
+          ##UPDATE_3_BODY##
+          <a href="##UPDATE_3_URL##">Learn more</a>
         </mj-text>
       </mj-column>
     </mj-section>
@@ -145,9 +147,9 @@
           Worth reading
         </mj-text>
         <mj-text padding="12px 0 0">
-          • <a href="[[LINK_1_URL]]">[[LINK_1_TITLE]]</a><br />
-          • <a href="[[LINK_2_URL]]">[[LINK_2_TITLE]]</a><br />
-          • <a href="[[LINK_3_URL]]">[[LINK_3_TITLE]]</a>
+          • <a href="##LINK_1_URL##">##LINK_1_TITLE##</a><br />
+          • <a href="##LINK_2_URL##">##LINK_2_TITLE##</a><br />
+          • <a href="##LINK_3_URL##">##LINK_3_TITLE##</a>
         </mj-text>
       </mj-column>
     </mj-section>
@@ -200,16 +202,16 @@
           <a href="https://app.sbomify.com/support/contact/">Get in touch</a>
         </mj-text>
         <mj-text mj-class="muted" align="center" padding="16px 0 0">
-          © [[YEAR]] sbomify. All rights reserved.
+          © ##YEAR## sbomify. All rights reserved.
         </mj-text>
         <mj-text mj-class="fine-print" align="center" padding="16px 0 0">
           You're receiving this because you subscribed to the sbomify newsletter.
-          <!-- Replace with your ESP's merge tags -->
-          <a href="[[UNSUBSCRIBE_URL]]">Unsubscribe</a> &nbsp;·&nbsp;
-          <a href="[[WEB_VERSION_URL]]">View in browser</a>
+          <!-- Mailjet reserved link tags — keep these as-is -->
+          <a href="[[UNSUB_LINK_EN]]">Unsubscribe</a> &nbsp;·&nbsp;
+          <a href="[[PERMALINK]]">View in browser</a>
         </mj-text>
         <mj-text mj-class="fine-print" align="center" padding="8px 0 0">
-          [[SENDER_POSTAL_ADDRESS — required by CAN-SPAM/GDPR]]
+          ##SENDER_POSTAL_ADDRESS — required by CAN-SPAM/GDPR##
         </mj-text>
       </mj-column>
     </mj-section>
