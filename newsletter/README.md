@@ -24,7 +24,9 @@ Mailjet's importer if it uses those constructs.
 The design matches the transactional email branding in
 `sbomify/apps/core/templates/core/emails/base.html.j2`: dark navy header with the
 white logo and "The Security Artifact Hub" tagline, brand blue (`#4059d0`)
-buttons and links, and the brand gradient (blue → pink → peach) as an accent bar.
+buttons and links, and a solid brand-pink accent divider under the header and
+above the CTA band (a stepped brand-gradient bar isn't representable in
+Passport-safe MJML — see the constraints above).
 
 ## Compiling
 
