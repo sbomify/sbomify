@@ -2,34 +2,109 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "version": 1,
-  "metadata": {"timestamp": "2026-01-01T00:00:00Z", "component": {"type": "application", "name": "demo-app", "version": "1.0"}},
+  "metadata": {
+    "timestamp": "2026-01-01T00:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "demo-app",
+      "version": "1.0"
+    }
+  },
   "components": [
-    {"type": "library", "name": "left-pad", "version": "1.3.0", "bom-ref": "lib-leftpad"},
     {
-      "type": "cryptographic-asset", "name": "RSA-2048", "bom-ref": "crypto-rsa2048",
-      "cryptoProperties": {"assetType": "algorithm", "oid": "1.2.840.113549.1.1.1",
-        "algorithmProperties": {"primitive": "pke", "parameterSetIdentifier": "2048", "classicalSecurityLevel": 112, "nistQuantumSecurityLevel": 0, "cryptoFunctions": ["encrypt", "decrypt"]}}
+      "type": "library",
+      "name": "left-pad",
+      "version": "1.3.0",
+      "bom-ref": "lib-leftpad"
     },
     {
-      "type": "cryptographic-asset", "name": "ECDSA-P256", "bom-ref": "crypto-ecdsa",
-      "cryptoProperties": {"assetType": "algorithm",
-        "algorithmProperties": {"primitive": "signature", "curve": "secp256r1", "nistQuantumSecurityLevel": 0}}
+      "type": "cryptographic-asset",
+      "name": "RSA-2048",
+      "bom-ref": "crypto-rsa2048",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "oid": "1.2.840.113549.1.1.1",
+        "algorithmProperties": {
+          "primitive": "pke",
+          "parameterSetIdentifier": "2048",
+          "classicalSecurityLevel": 112,
+          "nistQuantumSecurityLevel": 0,
+          "cryptoFunctions": [
+            "encrypt",
+            "decrypt"
+          ]
+        }
+      }
     },
     {
-      "type": "cryptographic-asset", "name": "ML-KEM-768", "bom-ref": "crypto-mlkem",
-      "cryptoProperties": {"assetType": "algorithm",
-        "algorithmProperties": {"primitive": "kem", "parameterSetIdentifier": "768", "nistQuantumSecurityLevel": 3}}
+      "type": "cryptographic-asset",
+      "name": "ECDSA-P256",
+      "bom-ref": "crypto-ecdsa",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "signature",
+          "curve": "secp256r1",
+          "nistQuantumSecurityLevel": 0
+        }
+      }
     },
     {
-      "type": "cryptographic-asset", "name": "server-cert", "bom-ref": "crypto-cert",
-      "cryptoProperties": {"assetType": "certificate",
-        "certificateProperties": {"subjectName": "CN=demo.example.com", "issuerName": "CN=Demo CA", "certificateFormat": "X.509"}}
+      "type": "cryptographic-asset",
+      "name": "ML-KEM-768",
+      "bom-ref": "crypto-mlkem",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": {
+          "primitive": "kem",
+          "parameterSetIdentifier": "768",
+          "nistQuantumSecurityLevel": 3
+        }
+      }
     },
     {
-      "type": "cryptographic-asset", "name": "TLS", "bom-ref": "crypto-tls",
-      "cryptoProperties": {"assetType": "protocol",
-        "protocolProperties": {"type": "tls", "version": "1.3"}}
+      "type": "cryptographic-asset",
+      "name": "server-cert",
+      "bom-ref": "crypto-cert",
+      "cryptoProperties": {
+        "assetType": "certificate",
+        "certificateProperties": {
+          "subjectName": "CN=demo.example.com",
+          "issuerName": "CN=Demo CA",
+          "certificateFormat": "X.509"
+        }
+      }
     },
-    {"type": "cryptographic-asset", "name": "broken-entry", "bom-ref": "crypto-broken"}
+    {
+      "type": "cryptographic-asset",
+      "name": "TLS",
+      "bom-ref": "crypto-tls",
+      "cryptoProperties": {
+        "assetType": "protocol",
+        "protocolProperties": {
+          "type": "tls",
+          "version": "1.3",
+          "cipherSuites": [
+            {
+              "name": "TLS_AES_256_GCM_SHA384",
+              "identifiers": [
+                "0x13,0x02"
+              ]
+            },
+            {
+              "name": "TLS_RSA_WITH_3DES_EDE_CBC_SHA",
+              "identifiers": [
+                "0x00,0x0A"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "cryptographic-asset",
+      "name": "broken-entry",
+      "bom-ref": "crypto-broken"
+    }
   ]
 }

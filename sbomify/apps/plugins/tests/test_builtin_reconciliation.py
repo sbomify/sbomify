@@ -74,6 +74,10 @@ class TestBuiltinReconciliation:
             "osv",
             "dependency-track",
             "pqc-readiness",
+            "nist-sp800-131a",
+            "bsi-tr02102",
+            "certificate-lifecycle",
+            "cnsa-2.0",
         }
         assert set(builtins.values_list("name", flat=True)) == expected_names
 

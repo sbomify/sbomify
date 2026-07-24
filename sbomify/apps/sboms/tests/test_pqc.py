@@ -167,3 +167,47 @@ def test_summary_needs_review_for_unclassifiable_algorithm():
 def test_summary_not_assessed_when_no_classifiable_assets():
     summary = assess_inventory(_inv())
     assert summary.overall == "not_assessed"
+
+
+# --- parameterSetIdentifier, primitive, OIDs (classifier identity signals) ----
+
+
+def test_aes_with_parameter_set_256_is_safe():
+    verdict = classify_crypto_asset(_algo("AES", parameter_set="256"))
+    assert verdict.status is PqcStatus.SAFE
+
+
+def test_aes_with_parameter_set_128_stays_review():
+    verdict = classify_crypto_asset(_algo("AES", parameter_set="128"))
+    assert verdict.status is PqcStatus.REVIEW
+
+
+def test_oid_only_assets_classify():
+    cases = {
+        "1.2.840.113549.1.1.1": PqcStatus.VULNERABLE,  # rsaEncryption
+        "1.2.840.10045.2.1": PqcStatus.VULNERABLE,  # ecPublicKey
+        "1.3.101.112": PqcStatus.VULNERABLE,  # Ed25519
+        "2.16.840.1.101.3.4.4.2": PqcStatus.SAFE,  # ML-KEM-768
+        "2.16.840.1.101.3.4.3.18": PqcStatus.SAFE,  # ML-DSA-65
+        "2.16.840.1.101.3.4.3.24": PqcStatus.SAFE,  # SLH-DSA-SHA2-256s
+        "2.16.840.1.101.3.4.1.42": PqcStatus.SAFE,  # aes256-CBC
+        "2.16.840.1.101.3.4.1.2": PqcStatus.REVIEW,  # aes128-CBC
+        "2.16.840.1.101.3.4.2.1": PqcStatus.SAFE,  # SHA-256
+    }
+    for oid, expected in cases.items():
+        asset = CryptoAsset(name=None, bom_ref=None, oid=oid, asset_type="algorithm")
+        assert classify_crypto_asset(asset).status is expected, oid
+
+
+def test_registry_normalized_curve_alone_is_vulnerable():
+    # A bare curve name like "P-256" matches no vulnerable substring, but the
+    # registry identifies it, and every registry curve is Shor-breakable.
+    asset = CryptoAsset(
+        name="some-ec-key",
+        bom_ref=None,
+        oid=None,
+        asset_type="relatedCryptoMaterial",
+        curve="P-256",
+        normalized_curve="nist/P-256",
+    )
+    assert classify_crypto_asset(asset).status is PqcStatus.VULNERABLE

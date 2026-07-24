@@ -42,7 +42,7 @@ def build_product_components_rows(product_id: str) -> dict[str, Any]:
         .values("id", "component_id", "version")
     )
     sbom_by_component = {row["component_id"]: row for row in latest_sboms}
-    sbom_ids = [row["id"] for row in latest_sboms]
+    sbom_ids = [row["id"] for row in sbom_by_component.values()]
 
     runs = (
         AssessmentRun.objects.filter(sbom_id__in=sbom_ids, category="security", status="completed")

@@ -196,3 +196,69 @@ class TestComponentCbomDetailsSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
+class TestWorkspaceCryptoSnapshot:
+    """The workspace cryptography dashboard, populated from persisted PQC runs."""
+
+    def test_workspace_crypto_snapshot(
+        self,
+        authenticated_page: Page,
+        sbom_component_details,
+        snapshot,
+        width: int,
+    ) -> None:
+        import hashlib
+
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+
+        cbom = SBOM.objects.create(
+            id=hashlib.md5(b"e2e-crypto-cbom").hexdigest()[:12],
+            name="crypto-inventory.cdx.json",
+            component=sbom_component_details,
+            format="cyclonedx",
+            format_version="1.6",
+            version="crypto-1",
+            sbom_filename="",
+            bom_type=SBOM.BomType.CBOM,
+        )
+        AssessmentRun.objects.create(
+            sbom=cbom,
+            plugin_name="pqc-readiness",
+            plugin_version="1.0.0",
+            plugin_config_hash="e2e",
+            category="compliance",
+            status="completed",
+            run_reason="manual",
+            result={
+                "metadata": {
+                    "pqc_overall": "at_risk",
+                    "certificates": {"count": 2, "expired": 1, "expiring_soon": 1, "soonest_not_valid_after": None},
+                },
+                "findings": [
+                    {
+                        "title": "RSA-2048 — Quantum-vulnerable",
+                        "metadata": {"pqc_status": "quantum_vulnerable", "asset_name": "RSA-2048"},
+                    },
+                    {
+                        "title": "ECDSA-P256 — Quantum-vulnerable",
+                        "metadata": {"pqc_status": "quantum_vulnerable", "asset_name": "ECDSA-P256"},
+                    },
+                    {
+                        "title": "ML-KEM-768 — Quantum-safe",
+                        "metadata": {"pqc_status": "quantum_safe", "asset_name": "ML-KEM-768"},
+                    },
+                ],
+            },
+        )
+
+        authenticated_page.goto(f"/workspaces/{sbom_component_details.team.key}/crypto/")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())

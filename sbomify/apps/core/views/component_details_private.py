@@ -83,11 +83,18 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         )
         from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
+        # Only BOM components render the security sections; document
+        # components must not pay the artifact/scan queries for template
+        # sections their page never shows.
+        is_bom_component = component.get("component_type") == "bom"
+
         latest_sbom = (
             SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
             .order_by("-created_at")
             .values("id", "version")
             .first()
+            if is_bom_component
+            else None
         )
         latest_sbom_id = latest_sbom["id"] if latest_sbom else None
         latest_scan_result = (
@@ -138,6 +145,14 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         # Parallel severity list so the drill-down's type/severity dropdown can filter by index.
         latest_vuln_severities = [v["severity"] for v in latest_vulns]
 
+        # CBOM issues drill-down: the newest crypto-bearing artifact's
+        # fail/warning compliance findings (newest CBOM, else the newest mixed
+        # SBOM with crypto assets). Pass/info rows are posture, not issues, so
+        # they stay on the CBOM detail page.
+        from sbomify.apps.core.services.component_security import CbomIssuesContext, build_latest_cbom_issues
+
+        cbom_issues = build_latest_cbom_issues(component_id) if is_bom_component else CbomIssuesContext()
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
@@ -153,6 +168,12 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "latest_vuln_severities": latest_vuln_severities,
             "latest_vuln_version": latest_sbom["version"] if latest_sbom else None,
             "latest_vuln_sbom_id": latest_sbom_id,
+            "latest_cbom_issues": cbom_issues.issues,
+            "latest_cbom_issue_terms": cbom_issues.terms,
+            "latest_cbom_issue_severities": cbom_issues.severities,
+            "latest_cbom_version": cbom_issues.artifact_version,
+            "latest_cbom_id": cbom_issues.artifact_id,
+            "latest_cbom_item_type": cbom_issues.artifact_item_type,
             "document_type_subcategories": document_type_subcategories,
             "document_type_subcategories_json": json.dumps(document_type_subcategories),
         }

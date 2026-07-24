@@ -37,6 +37,7 @@ class PluginMetadata:
     category: AssessmentCategory
     scan_mode: ScanMode = ScanMode.ONE_SHOT
     supported_bom_types: list[str] | None = None
+    requires_crypto_assets: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization.

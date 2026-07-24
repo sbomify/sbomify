@@ -10,6 +10,7 @@ from sbomify.apps.sboms.views import (
     SbomDownloadView,
     SbomsTableView,
     SbomVulnerabilitiesView,
+    WorkspaceCryptoView,
 )
 
 app_name = "sboms"
@@ -89,6 +90,11 @@ urlpatterns: list[URLPattern] = [
         "sbom/<str:sbom_id>/crypto-inventory",
         SbomCryptoInventoryView.as_view(),
         name="sbom_crypto_inventory",
+    ),
+    path(
+        "workspaces/<str:team_key>/crypto/",
+        WorkspaceCryptoView.as_view(),
+        name="workspace_crypto",
     ),
     path(
         "component/<str:component_id>/crypto-posture",

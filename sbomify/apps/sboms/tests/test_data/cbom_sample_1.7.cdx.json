@@ -7,12 +7,12 @@
     {
       "type": "cryptographic-asset", "name": "ECDSA-P384", "bom-ref": "c-ecdsa17",
       "cryptoProperties": {"assetType": "algorithm",
-        "algorithmProperties": {"primitive": "signature", "algorithmFamily": "ecdsa", "ellipticCurve": "secp384r1", "nistQuantumSecurityLevel": 0}}
+        "algorithmProperties": {"primitive": "signature", "algorithmFamily": "ECDSA", "ellipticCurve": "nist/P-384", "nistQuantumSecurityLevel": 0}}
     },
     {
       "type": "cryptographic-asset", "name": "ML-DSA-65", "bom-ref": "c-mldsa17",
       "cryptoProperties": {"assetType": "algorithm",
-        "algorithmProperties": {"primitive": "signature", "algorithmFamily": "ml-dsa", "parameterSetIdentifier": "65", "nistQuantumSecurityLevel": 3}}
+        "algorithmProperties": {"primitive": "signature", "algorithmFamily": "ML-DSA", "parameterSetIdentifier": "65", "nistQuantumSecurityLevel": 3}}
     }
   ]
 }

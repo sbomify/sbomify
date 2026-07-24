@@ -17,10 +17,8 @@
     </div>
     {# Vulnerabilities drill-down for the latest SBOM — hidden when the latest scan is clean #}
     {% include "core/components/component_vulnerabilities.html.j2" %}
-    {# Post-Quantum posture — lazy-loaded; collapses when the latest artifact has no crypto assets #}
-    <div hx-get="{% url 'sboms:component_crypto_posture' component_id=component.id %}"
-         hx-trigger="load"
-         hx-swap="outerHTML"></div>
+    {# CBOM issues drill-down for the latest CBOM — hidden when crypto assessments are clean #}
+    {% include "core/components/component_cbom_issues.html.j2" %}
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}

@@ -131,16 +131,23 @@ def _get_base_url(request: HttpRequest) -> str:
 
 
 def _build_sbom_artifact(sbom: SBOM, base_url: str = "") -> TEAArtifact:
-    """Build TEA Artifact from an SBOM."""
+    """Build TEA Artifact from an SBOM-model artifact of any bom_type.
+
+    TEA's artifact-type vocabulary has no dedicated CBOM entry, so a CBOM (or
+    any other xBOM) serves as a generic BOM with its kind named in the format
+    description. A VEX maps to VULNERABILITIES, TEA's type for VDR/VEX content.
+    """
+    artifact_type = TEAArtifactType.VULNERABILITIES if sbom.bom_type == SBOM.BomType.VEX else TEAArtifactType.BOM
+    kind = SBOM.BomType(sbom.bom_type).label if sbom.bom_type in SBOM.BomType.values else "SBOM"
     return TEAArtifact(
         uuid=str(sbom.uuid),
         name=sbom.name,
-        type=TEAArtifactType.BOM,
+        type=artifact_type,
         distribution_ids=None,
         formats=(
             TEAArtifactFormat(
                 media_type=get_artifact_mime_type(sbom.format),
-                description=f"{_format_display_name(sbom.format)} SBOM ({sbom.format_version})",
+                description=f"{_format_display_name(sbom.format)} {kind} ({sbom.format_version})",
                 url=get_download_url_for_sbom(sbom, base_url=base_url or settings.APP_BASE_URL),
                 signature_url=sbom.signature_url,
                 checksums=tuple(_build_checksums(sbom.sha256_hash)),
@@ -256,7 +263,9 @@ def _build_product_release_response(
         # Map component_id -> ComponentRelease.uuid via junction table (public components only)
         artifact_sboms = [
             artifact.sbom
-            for artifact in release.artifacts.filter(sbom__bom_type=SBOM.BomType.SBOM)
+            for artifact in release.artifacts.filter(
+                sbom__bom_type__in=(SBOM.BomType.SBOM, SBOM.BomType.CBOM, SBOM.BomType.VEX)
+            ).select_related("sbom__component")
             if artifact.sbom
             and artifact.sbom.component_id
             and artifact.sbom.component.visibility == Component.Visibility.PUBLIC

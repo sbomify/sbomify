@@ -1018,6 +1018,15 @@ class SBOM(models.Model):
         default=BomType.SBOM,
         help_text="Type of BOM artifact. See ADR-006.",
     )
+    has_crypto_assets = models.BooleanField(
+        null=True,
+        default=None,
+        help_text=(
+            "Whether the document contains cryptographic-asset components, computed at upload. "
+            "None means unknown (rows predating the field); crypto-gated assessments run for "
+            "True and None, and skip dispatch for False."
+        ),
+    )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         qualifiers = self.qualifiers

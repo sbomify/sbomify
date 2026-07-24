@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from sbomify.apps.plugins.builtins.pqc import PqcReadinessPlugin
 from sbomify.apps.plugins.sdk import AssessmentCategory
+from sbomify.apps.sboms.tests.fixtures import sample_component  # noqa: F401
 
 
 def _crypto(name: str, asset_type: str = "algorithm", **algo) -> dict:
@@ -31,12 +34,12 @@ def _assess(doc: dict, tmp_path: Path):
     return PqcReadinessPlugin().assess("test-sbom-id", path)
 
 
-def test_metadata_gates_on_cbom():
+def test_metadata_runs_on_cbom_and_sbom():
     metadata = PqcReadinessPlugin().get_metadata()
     assert metadata.name == "pqc-readiness"
     assert metadata.category is AssessmentCategory.COMPLIANCE
-    # Critical: existing plugins pin ["sbom"], so without this the plugin never runs on a CBOM.
-    assert metadata.supported_bom_types == ["cbom"]
+    # Both types: pure CBOMs and mixed software SBOMs with embedded crypto.
+    assert metadata.supported_bom_types == ["cbom", "sbom"]
 
 
 def test_assess_classifies_each_crypto_asset(tmp_path: Path):
@@ -92,10 +95,14 @@ def test_summary_counts_include_info_and_sum_to_total(tmp_path: Path):
     )
 
 
-def test_assess_empty_cbom_warns(tmp_path: Path):
+@pytest.mark.django_db
+def test_assess_crypto_free_document_is_skipped_not_warned(tmp_path: Path):
+    # The plugin runs on ordinary SBOMs too; a crypto-free document must not
+    # accumulate warning findings, it flags itself skipped.
     result = _assess(_cbom(), tmp_path)
     assert result.summary.total_findings == 1
-    assert result.findings[0].status == "warning"
+    assert result.findings[0].status == "info"
+    assert result.metadata and result.metadata.get("skipped") is True
 
 
 def test_assess_invalid_json_returns_error_not_raise(tmp_path: Path):
@@ -117,3 +124,18 @@ def test_metadata_block_includes_standard_reference(tmp_path: Path):
     result = _assess(_cbom(_crypto("RSA-2048", primitive="pke")), tmp_path)
     assert result.metadata and result.metadata["standard_name"]
     assert result.metadata["pqc_overall"] == "at_risk"
+
+
+def test_assess_crypto_free_explicit_cbom_warns_not_skips(tmp_path: Path):
+    """An artifact deliberately tagged cbom with zero crypto assets is a
+    generator misfire: it keeps a visible warning instead of a filtered skip.
+    The bom_type arrives via the orchestrator-provided SBOMContext."""
+    from sbomify.apps.plugins.sdk.base import SBOMContext
+
+    path = tmp_path / "empty.json"
+    path.write_text(json.dumps(_cbom()), encoding="utf-8")
+
+    result = PqcReadinessPlugin().assess("test-sbom-id", path, context=SBOMContext(bom_type="cbom"))
+
+    assert result.findings[0].status == "warning"
+    assert not (result.metadata or {}).get("skipped")

@@ -72,3 +72,77 @@ def test_posture_does_not_leak_private_to_anonymous(sample_sbom: SBOM, mocker: M
     response = Client().get(_posture_url(sample_sbom.component.id))  # anon, component private
     assert response.status_code == 200
     assert "At risk" not in response.content.decode()
+
+
+def _newer_artifact(base: SBOM, bom_type: str) -> SBOM:
+    return SBOM.objects.create(
+        name=base.name,
+        version="newer",
+        component=base.component,
+        bom_type=bom_type,
+        format=base.format,
+        format_version=base.format_version,
+        sbom_filename=f"{bom_type}.json",
+    )
+
+
+@pytest.mark.django_db
+def test_posture_survives_newer_vex_upload(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """A VEX landing after the CBOM must not displace the posture card."""
+    sample_sbom.bom_type = SBOM.BomType.CBOM
+    sample_sbom.save(update_fields=["bom_type"])
+    _newer_artifact(sample_sbom, SBOM.BomType.VEX)
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    assert response.status_code == 200
+    assert "Post-Quantum Posture" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_posture_prefers_cbom_over_newer_sbom(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    sample_sbom.bom_type = SBOM.BomType.CBOM
+    sample_sbom.save(update_fields=["bom_type"])
+    _newer_artifact(sample_sbom, SBOM.BomType.SBOM)
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Post-Quantum Posture" in html
+    # the card links the CBOM, not the newer plain SBOM
+    assert str(sample_sbom.id) in html
+
+
+@pytest.mark.django_db
+def test_posture_skips_newer_crypto_free_sbom(sample_sbom: SBOM, mocker: MockerFixture):  # noqa: F811
+    """A newer SBOM stamped crypto-free must not displace an older crypto-bearing one."""
+    sample_sbom.has_crypto_assets = True
+    sample_sbom.save(update_fields=["has_crypto_assets"])
+    newer = _newer_artifact(sample_sbom, SBOM.BomType.SBOM)
+    newer.has_crypto_assets = False
+    newer.save(update_fields=["has_crypto_assets"])
+    _mock_s3(mocker, (_DATA / "cbom_sample_1.6.cdx.json").read_bytes())
+
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "Post-Quantum Posture" in html
+    assert str(sample_sbom.id) in html  # the older crypto-bearing artifact drives the card
+
+
+@pytest.mark.django_db
+def test_posture_collapses_without_s3_read_when_all_sboms_crypto_free(
+    sample_sbom: SBOM,
+    mocker: MockerFixture,  # noqa: F811
+):
+    sample_sbom.has_crypto_assets = False
+    sample_sbom.save(update_fields=["has_crypto_assets"])
+    s3 = mocker.patch(_S3_TARGET)
+
+    response = _owner_client(sample_sbom).get(_posture_url(sample_sbom.component.id))
+
+    assert response.status_code == 200
+    assert response.content.decode().strip() == ""
+    s3.return_value.get_sbom_data.assert_not_called()

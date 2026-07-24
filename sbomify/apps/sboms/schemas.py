@@ -111,12 +111,29 @@ class CryptoAssetSchema(Schema):
     mode: str | None = None
     padding: str | None = None
     execution_environment: str | None = None
+    implementation_platform: str | None = None
+    certification_level: list[str] = Field(default_factory=list)
+    normalized_family: str | None = None
+    normalized_curve: str | None = None
+    registry_unrecognized: bool = False
     certificate: dict[str, Any] | None = None
     protocol: dict[str, Any] | None = None
     related_material: dict[str, Any] | None = None
+    certificate_view: dict[str, Any] | None = None
+    protocol_view: dict[str, Any] | None = None
     pqc_status: str | None = None
     pqc_reason: str | None = None
     pqc_data_quality_flag: str | None = None
+    pqc_replacement: str | None = None
+
+
+class CryptoEdgeSchema(Schema):
+    """A cross-reference between two crypto assets, resolved against the inventory."""
+
+    source: str
+    relation: str
+    target: str
+    resolved: bool
 
 
 class CryptoInventorySchema(Schema):
@@ -126,6 +143,7 @@ class CryptoInventorySchema(Schema):
     component_id: str
     count: int
     by_asset_type: dict[str, int]
+    edges: list[CryptoEdgeSchema] = Field(default_factory=list)
     pqc_overall: str
     pqc_counts: dict[str, int]
     assets: list[CryptoAssetSchema]

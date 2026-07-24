@@ -14,10 +14,10 @@ from django.core.cache import cache as django_cache
 
 from sbomify.apps.core.models import Component
 from sbomify.apps.sboms.models import SBOM
+from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as _SEVERITY_RANK
 
 _CACHE_TTL_SECONDS = 60
 _DIGEST_LIMIT = 3
-_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
 
 def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> list[dict[str, Any]]:

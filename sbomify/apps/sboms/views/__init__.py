@@ -6,6 +6,7 @@ from sbomify.apps.sboms.views.sbom_upload_cyclonedx import SbomUploadCycloneDxVi
 from sbomify.apps.sboms.views.sbom_vulnerabilities import SbomVulnerabilitiesView  # noqa: F401
 from sbomify.apps.sboms.views.sboms_table import SbomsTableView  # noqa: F401
 from sbomify.apps.sboms.views.vex_documents import ComponentVexDocumentsView  # noqa: F401
+from sbomify.apps.sboms.views.workspace_crypto import WorkspaceCryptoView  # noqa: F401
 
 __all__ = [
     "ComponentArtifactsView",
@@ -16,4 +17,5 @@ __all__ = [
     "SbomUploadCycloneDxView",
     "SbomVulnerabilitiesView",
     "SbomsTableView",
+    "WorkspaceCryptoView",
 ]

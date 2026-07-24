@@ -2133,3 +2133,42 @@ class TestTEAComponentReleaseCLE:
         url = f"{TEA_URL_PREFIX}/componentRelease/{NONEXISTENT_UUID}/cle?workspace_key={tea_enabled_component.team.key}"
         response = client.get(url)
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestCollectionArtifactTypes:
+    """CBOM and VEX artifacts serve over TEA with the right artifact types."""
+
+    def test_collection_types_cbom_and_vex_artifacts(self, tea_enabled_component, sample_sbom):
+        # The SBOM-save signal links each row into the ComponentRelease junction.
+        SBOM.objects.create(
+            name="crypto-inventory",
+            version=sample_sbom.version,
+            component=tea_enabled_component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="crypto.cbom.json",
+            bom_type=SBOM.BomType.CBOM,
+        )
+        SBOM.objects.create(
+            name="release-vex",
+            version=sample_sbom.version,
+            component=tea_enabled_component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="release.vex.json",
+            bom_type=SBOM.BomType.VEX,
+        )
+        cr = ComponentRelease.objects.get(component=tea_enabled_component, version=sample_sbom.version)
+
+        client = Client()
+        ws = tea_enabled_component.team.key
+        url = f"{TEA_URL_PREFIX}/componentRelease/{cr.uuid}/collection/latest?workspace_key={ws}"
+        response = client.get(url)
+
+        assert response.status_code == 200
+        by_name = {a["name"]: a for a in response.json()["artifacts"]}
+        assert by_name["crypto-inventory"]["type"] == "BOM"
+        assert "CBOM" in by_name["crypto-inventory"]["formats"][0]["description"]
+        assert by_name["release-vex"]["type"] == "VULNERABILITIES"
+        assert sample_sbom.name in by_name  # the plain SBOM still lists

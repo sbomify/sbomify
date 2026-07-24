@@ -3288,18 +3288,23 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
 
 @router.get(
     "/releases/{release_id}/cbom/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def download_release_cbom(request: HttpRequest, release_id: str) -> Any:
+def download_release_cbom(request: HttpRequest, release_id: str, version: str = Query("1.6")) -> Any:  # type: ignore[type-arg]
     """Download the merged CBOM (Cryptography BOM) for a release.
 
     Combines the newest CBOM of each component in the release into a single CycloneDX document, so a
     consumer pulls one crypto BOM per release. Gated exactly like the SBOM and VEX downloads: open
     for a public product, otherwise authenticated with release read access.
+
+    ``version`` selects the output spec: "1.6" (default, 1.7-only vocabulary
+    down-converted for consumer compatibility) or "1.7" (native).
     """
+    if version not in ("1.6", "1.7"):
+        return 400, {"detail": "version must be 1.6 or 1.7", "error_code": ErrorCode.BAD_REQUEST}
     try:
         release = Release.objects.select_related("product", "product__team").get(pk=release_id)
     except Release.DoesNotExist:
@@ -3322,10 +3327,10 @@ def download_release_cbom(request: HttpRequest, release_id: str) -> Any:
     slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
         n=Count("id"), newest=Max("sbom__created_at")
     )
-    cache_key = f"release-cbom:{release.id}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
     document = cache.get(cache_key)
     if document is None:
-        document = build_release_cbom(release) or {"__absent__": True}
+        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}

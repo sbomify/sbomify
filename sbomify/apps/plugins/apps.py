@@ -253,6 +253,97 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # SP 800-131A Transitions Plugin (legacy-algorithm compliance for crypto assets)
+        from .builtins.sp800_131a import Sp800131aPlugin
+
+        _register(
+            "nist-sp800-131a",
+            {
+                "display_name": "Legacy Algorithm Transitions (SP 800-131A)",
+                "description": (
+                    "Checks the cryptographic assets in a CycloneDX document against the NIST "
+                    "SP 800-131A transition schedule. Disallowed algorithms (DES, RC4, MD5, "
+                    "sub-2048-bit RSA, DSA and SHA-1 signature generation) fail; deprecated "
+                    "ones (SHA-1, SHA-224, 112-bit strength) warn with their 2030 sunset."
+                ),
+                "category": "compliance",
+                "version": Sp800131aPlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.sp800_131a.Sp800131aPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # BSI TR-02102 Plugin (crypto mechanisms and key lengths)
+        from .builtins.bsi_tr02102 import BsiTr02102Plugin
+
+        _register(
+            "bsi-tr02102",
+            {
+                "display_name": "Crypto Mechanisms (BSI TR-02102)",
+                "description": (
+                    "Grades cryptographic assets against BSI TR-02102 recommendations: 3000-bit "
+                    "floor for RSA/DH/DSA, 250-bit floor for elliptic curves, block-cipher mode "
+                    "checks, and the TR-02102-2 TLS version ladder. Complements the BSI TR-03183 "
+                    "document check."
+                ),
+                "category": "compliance",
+                "version": BsiTr02102Plugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.bsi_tr02102.BsiTr02102Plugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # Certificate Lifecycle Plugin (expiry and validity-window findings)
+        from .builtins.cert_lifecycle import CertificateLifecyclePlugin
+
+        _register(
+            "certificate-lifecycle",
+            {
+                "display_name": "Certificate Lifecycle",
+                "description": (
+                    "Per-certificate findings for the certificates declared in a CycloneDX "
+                    "document: expired certificates fail, certificates inside the 90-day renewal "
+                    "window or beyond the 398-day CA/Browser Forum validity ceiling warn."
+                ),
+                "category": "compliance",
+                "version": CertificateLifecyclePlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cert_lifecycle.CertificateLifecyclePlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # CNSA 2.0 Plugin (NSS algorithm-suite compliance)
+        from .builtins.cnsa2 import Cnsa2Plugin
+
+        _register(
+            "cnsa-2.0",
+            {
+                "display_name": "CNSA 2.0 Compliance",
+                "description": (
+                    "Grades cryptographic assets against the NSA CNSA 2.0 suite (AES-256, "
+                    "SHA-384/512, ML-KEM-1024, ML-DSA-87, LMS/XMSS). CNSA 1.0 holdovers warn "
+                    "with the transition deadline; algorithms outside the suite fail. Intended "
+                    "for National Security System suppliers."
+                ),
+                "category": "compliance",
+                "version": Cnsa2Plugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cnsa2.Cnsa2Plugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # Reconcile: disable builtin plugins no longer in codebase
         if not registered_builtin_names:
             return

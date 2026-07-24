@@ -443,7 +443,7 @@ class TestCronIteratesUniqueSboms:
         product = Product.objects.create(name="p", team=team)
         component = Component.objects.create(name="c", team=team)
         product.components.add(component)
-        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        sbom = SBOM.objects.create(name="s", component=component, format="cyclonedx", sbom_filename="s.json")
 
         # Use the auto-created latest release (made by update_latest_release_on_sbom_created).
         r1 = Release.get_or_create_latest_release(product)
@@ -768,3 +768,44 @@ class TestDetachReleaseFromRunsTask:
 
         result = detach_release_from_runs_task.fn(sbom_id=str(sbom.id), release_id=str(release.id))
         assert result == {"detached_runs": 0, "synced_plugins": []}
+
+
+@pytest.mark.django_db
+class TestCronSkipsUnassessableSboms:
+    """An SBOM row with no stored artifact can never be scanned; the cron must
+    not re-enqueue it every sweep (failed runs do not count as recent, so such
+    a row would otherwise fail forever)."""
+
+    def test_cron_skips_sbom_without_stored_file(self, sample_team_with_owner_member, monkeypatch):
+        from sbomify.apps.plugins.tasks import _is_paid_team, _run_scheduled_security_scans
+
+        team = sample_team_with_owner_member.team
+        team.billing_plan = "business"
+        team.save()
+
+        _make_dt_plugin()
+        _enable_plugins(team, "dependency-track")
+
+        product = Product.objects.create(name="p", team=team)
+        component = Component.objects.create(name="c", team=team)
+        product.components.add(component)
+        orphan = SBOM.objects.create(name="orphan", component=component, format="cyclonedx", sbom_filename="")
+        release = Release.get_or_create_latest_release(product)
+        ReleaseArtifact.objects.get_or_create(release=release, sbom=orphan)
+
+        captured: list[dict] = []
+        monkeypatch.setattr(
+            "sbomify.apps.plugins.tasks.enqueue_assessment",
+            lambda **kwargs: captured.append(kwargs),
+        )
+
+        stats = _run_scheduled_security_scans(
+            plugin_name="dependency-track",
+            plan_filter=_is_paid_team,
+            skip_hours=1,
+            task_name="test_hourly_dt_scan",
+            only_cyclonedx=True,
+        )
+
+        assert stats["assessments_enqueued"] == 0
+        assert captured == []

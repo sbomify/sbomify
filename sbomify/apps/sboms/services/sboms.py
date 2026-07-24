@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -15,7 +16,7 @@ from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.crypto_inventory import CryptoAsset, derive_crypto_inventory
 from sbomify.apps.sboms.models import SBOM
-from sbomify.apps.sboms.pqc import assess_inventory
+from sbomify.apps.sboms.pqc import assess_inventory, replacement_for
 
 log = logging.getLogger(__name__)
 
@@ -146,6 +147,85 @@ def get_sbom_detail(request: HttpRequest, sbom_id: str) -> ServiceResult[dict[st
     return ServiceResult.success(serialize_sbom(sbom))
 
 
+_WEAK_SUITE_TOKENS = {
+    "NULL": "no encryption or integrity",
+    "ANON": "anonymous key exchange (no authentication)",
+    "ADH": "anonymous key exchange (no authentication)",
+    "AECDH": "anonymous key exchange (no authentication)",
+    "EXPORT": "export-grade key sizes",
+    "EXPORT40": "export-grade key sizes",
+    "EXPORT1024": "export-grade key sizes",
+    "RC4": "RC4 (prohibited by RFC 7465)",
+    "DES": "single DES (56-bit key)",
+    "3DES": "3DES (Sweet32; withdrawn)",
+    "EDE": "3DES (Sweet32; withdrawn)",
+    "MD5": "MD5 MAC (broken)",
+}
+
+
+def _suite_weaknesses(name: str) -> list[str]:
+    tokens = set(re.split(r"[^A-Z0-9]+", name.upper()))
+    return sorted({reason for token, reason in _WEAK_SUITE_TOKENS.items() if token in tokens})
+
+
+def _certificate_view(cert: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Interpreted certificate fields: validity window, expiry countdown, lifecycle states."""
+    if not isinstance(cert, dict):
+        return None
+    from django.utils import timezone as django_timezone
+
+    from sbomify.apps.sboms.crypto_inventory import cert_expiry_state
+
+    days, expired, expiring_soon = cert_expiry_state(cert.get("notValidAfter"), django_timezone.now())
+    states: list[str] = []
+    raw_state = cert.get("certificateState")
+    for item in raw_state if isinstance(raw_state, list) else [raw_state]:
+        if isinstance(item, dict):
+            state = item.get("state") or item.get("name")
+            if isinstance(state, str):
+                states.append(state)
+        elif isinstance(item, str):
+            states.append(item)
+    return {
+        "subject": cert.get("subjectName"),
+        "issuer": cert.get("issuerName"),
+        "serial": cert.get("serialNumber"),
+        "not_before": cert.get("notValidBefore"),
+        "not_after": cert.get("notValidAfter"),
+        "states": states,
+        "days_to_expiry": days,
+        "expired": expired,
+        "expiring_soon": expiring_soon,
+    }
+
+
+def _protocol_view(proto: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Interpreted protocol fields: version deprecation and enumerated cipher suites."""
+    if not isinstance(proto, dict):
+        return None
+    ptype = proto.get("type") if isinstance(proto.get("type"), str) else None
+    version = str(proto.get("version")) if proto.get("version") is not None else None
+    weak_version = None
+    bare = (version or "").lstrip("vV")
+    if ptype and ptype.lower().startswith("ssl"):
+        weak_version = "SSL is deprecated (RFC 7568)"
+    elif ptype and ptype.lower() == "tls" and bare in ("1.0", "1.1"):
+        weak_version = "TLS 1.0/1.1 are deprecated (RFC 8996)"
+    suites: list[dict[str, Any]] = []
+    raw = proto.get("cipherSuites")
+    legacy = proto.get("tlsCipherSuites")  # IBM CBOM 1.0 spelling
+    for entry in (raw if isinstance(raw, list) else []) + (legacy if isinstance(legacy, list) else []):
+        if isinstance(entry, dict):
+            name = entry.get("name") if isinstance(entry.get("name"), str) else None
+            identifiers = [i for i in (entry.get("identifiers") or []) if isinstance(i, str)]
+        elif isinstance(entry, str):
+            name, identifiers = entry, []
+        else:
+            continue
+        suites.append({"name": name, "identifiers": identifiers, "weaknesses": _suite_weaknesses(name) if name else []})
+    return {"type": ptype, "version": version, "weak_version": weak_version, "cipher_suites": suites}
+
+
 def _serialize_crypto_asset(asset: CryptoAsset) -> dict[str, Any]:
     return {
         "name": asset.name,
@@ -162,9 +242,16 @@ def _serialize_crypto_asset(asset: CryptoAsset) -> dict[str, Any]:
         "mode": asset.mode,
         "padding": asset.padding,
         "execution_environment": asset.execution_environment,
+        "implementation_platform": asset.implementation_platform,
+        "certification_level": list(asset.certification_level),
+        "normalized_family": asset.normalized_family,
+        "normalized_curve": asset.normalized_curve,
+        "registry_unrecognized": asset.registry_unrecognized,
         "certificate": asset.certificate,
         "protocol": asset.protocol,
         "related_material": asset.related_material,
+        "certificate_view": _certificate_view(asset.certificate),
+        "protocol_view": _protocol_view(asset.protocol),
     }
 
 
@@ -191,6 +278,18 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
 
     if not sbom.sbom_filename:
         return ServiceResult.failure("SBOM file not found", status_code=404)
+
+    # The artifact is immutable (ADR-004), so the derived inventory is a pure
+    # function of the SBOM id: cache it after the per-request access check.
+    # Only the certificate expiry countdown is time-sensitive, and at day
+    # granularity a bounded TTL cannot change it. Bump the version key when
+    # the derivation shape changes.
+    from django.core.cache import cache as django_cache
+
+    cache_key = f"crypto-inventory:v1:{sbom.id}"
+    cached = django_cache.get(cache_key)
+    if cached is not None:
+        return ServiceResult.success(cached)
 
     try:
         raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
@@ -221,22 +320,27 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
 
     inventory = derive_crypto_inventory(document if isinstance(document, dict) else None)
     summary = assess_inventory(inventory)
-    return ServiceResult.success(
-        {
-            "sbom_id": str(sbom.id),
-            "component_id": str(sbom.component.id),
-            "count": inventory.count,
-            "by_asset_type": inventory.by_asset_type,
-            "pqc_overall": summary.overall,
-            "pqc_counts": summary.counts,
-            "assets": [
-                {
-                    **_serialize_crypto_asset(result.asset),
-                    "pqc_status": result.assessment.status.value,
-                    "pqc_reason": result.assessment.reason,
-                    "pqc_data_quality_flag": result.assessment.data_quality_flag,
-                }
-                for result in summary.results
-            ],
-        }
-    )
+    payload = {
+        "sbom_id": str(sbom.id),
+        "component_id": str(sbom.component.id),
+        "count": inventory.count,
+        "by_asset_type": inventory.by_asset_type,
+        "edges": [
+            {"source": e.source, "relation": e.relation, "target": e.target, "resolved": e.resolved}
+            for e in inventory.edges
+        ],
+        "pqc_overall": summary.overall,
+        "pqc_counts": summary.counts,
+        "assets": [
+            {
+                **_serialize_crypto_asset(result.asset),
+                "pqc_status": result.assessment.status.value,
+                "pqc_reason": result.assessment.reason,
+                "pqc_data_quality_flag": result.assessment.data_quality_flag,
+                "pqc_replacement": replacement_for(result.asset, result.assessment.status),
+            }
+            for result in summary.results
+        ],
+    }
+    django_cache.set(cache_key, payload, 3600)
+    return ServiceResult.success(payload)

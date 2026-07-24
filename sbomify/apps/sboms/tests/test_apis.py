@@ -3792,12 +3792,12 @@ def test_cyclonedx_upload_autodetects_cbom_bom_type(
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
 ):
-    """A CycloneDX doc with cryptographic-asset components is auto-tagged bom_type=cbom (#1042)."""
+    """A pure CycloneDX CBOM (every component a crypto asset) is auto-tagged bom_type=cbom."""
     mocker.patch("boto3.resource")
     mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
-    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.6.cdx.json"
+    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.7.cdx.json"
     client = Client()
     url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
     resp = client.post(
@@ -3809,6 +3809,33 @@ def test_cyclonedx_upload_autodetects_cbom_bom_type(
     assert resp.status_code == 201
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "cbom"
+    assert sbom.has_crypto_assets is True
+
+
+@pytest.mark.django_db
+def test_cyclonedx_upload_mixed_document_stays_sbom(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """A software SBOM with embedded crypto assets keeps bom_type=sbom (both pipelines run on it)."""
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+    SBOM.objects.all().delete()
+
+    mixed_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.6.cdx.json"
+    client = Client()
+    url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    resp = client.post(
+        url,
+        data=mixed_path.read_text(),
+        content_type="application/json",
+        **get_api_headers(sample_access_token),
+    )
+    assert resp.status_code == 201
+    sbom = SBOM.objects.get(id=resp.json()["id"])
+    assert sbom.bom_type == "sbom"
+    assert sbom.has_crypto_assets is True  # mixed doc: crypto present, tag stays sbom
 
 
 @pytest.mark.django_db
@@ -3834,6 +3861,7 @@ def test_cyclonedx_upload_non_crypto_stays_sbom(
     assert resp.status_code == 201
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "sbom"
+    assert sbom.has_crypto_assets is False
 
 
 @pytest.mark.django_db
@@ -3842,12 +3870,12 @@ def test_sbom_upload_file_autodetects_cbom(
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
 ):
-    """File-uploading a CycloneDX CBOM with the default bom_type tags it cbom (#1042)."""
+    """File-uploading a pure CycloneDX CBOM with the default bom_type tags it cbom."""
     mocker.patch("boto3.resource")
     mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
-    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.6.cdx.json"
+    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.7.cdx.json"
     client = Client()
     client.force_login(sample_user)
     url = reverse("api-1:sbom_upload_file", kwargs={"component_id": sample_component.id})
@@ -3865,12 +3893,12 @@ def test_cyclonedx_upload_explicit_sbom_not_reclassified(
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
 ):
-    """An explicit ?bom_type=sbom is honored even for crypto content (#1042)."""
+    """An explicit ?bom_type=sbom is honored even for pure crypto content."""
     mocker.patch("boto3.resource")
     mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
     SBOM.objects.all().delete()
 
-    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.6.cdx.json"
+    cbom_path = pathlib.Path(__file__).parent.resolve() / "test_data/cbom_sample_1.7.cdx.json"
     client = Client()
     url = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id}) + "?bom_type=sbom"
     resp = client.post(

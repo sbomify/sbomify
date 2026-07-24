@@ -46,6 +46,10 @@
                                                         {{ plugin.display_name }}
                                                     </label>
                                                     <span class="tw-badge-secondary text-xs">v{{ plugin.version }}</span>
+                                                    {% for bom_type in plugin.supported_bom_types %}
+                                                        <span class="tw-badge-secondary text-xs uppercase tracking-wide"
+                                                              title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type }}</span>
+                                                    {% endfor %}
                                                     {% if plugin.is_beta %}
                                                         <span class="tw-badge-info text-xs">
                                                             <i class="fas fa-flask mr-1"></i>Beta

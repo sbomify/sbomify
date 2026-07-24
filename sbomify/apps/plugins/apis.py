@@ -467,6 +467,32 @@ class UpdateTeamPluginSettingsRequest(BaseModel):
     plugin_configs: dict[str, Any] | None = None
 
 
+_supported_bom_types_cache: dict[str, tuple[str, ...]] = {}
+
+
+def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
+    """BOM types a plugin declares in its metadata, for the artifact-type badges.
+
+    Resolves through the orchestrator's loader so the badge and dispatch can
+    never disagree. Falls back to ("sbom",) when the class cannot be loaded so
+    a stale registry row never breaks the settings page — but only successful
+    resolutions are cached, so a transient import failure does not pin the
+    fallback for the process lifetime.
+    """
+    cached = _supported_bom_types_cache.get(plugin_class_path)
+    if cached is not None:
+        return cached
+    from .orchestrator import load_plugin_class
+
+    try:
+        supported = load_plugin_class(plugin_class_path)().get_metadata().supported_bom_types
+        result = tuple(supported) if supported else ("sbom",)
+    except Exception:
+        return ("sbom",)
+    _supported_bom_types_cache[plugin_class_path] = result
+    return result
+
+
 def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
     """Get the required plan feature for a plugin.
 
@@ -591,6 +617,7 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
                 "version": p.version,
                 "default_config": p.default_config,
                 "is_beta": p.is_beta,
+                "supported_bom_types": list(_plugin_supported_bom_types(p.plugin_class_path)),
                 "has_access": has_access,
                 "requires_upgrade": required_feature is not None and not has_access,
                 "required_plan": "Business" if required_feature else None,

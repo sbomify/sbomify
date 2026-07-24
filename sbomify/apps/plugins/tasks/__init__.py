@@ -269,8 +269,24 @@ def run_assessment_task(
                     response["assessment_run_id"] = run_id
                 return response
 
-        # If the plugin skipped this artifact (unsupported bom_type), return early
+        # If the plugin skipped this artifact (unsupported bom_type), return early.
+        # A delayed enqueue materialised a PENDING row before the worker ran
+        # (see _create_pending_assessment_run); without cleanup that orphan
+        # reads "Pending" forever on the artifact page. Guard on status so a
+        # row a concurrent retry already progressed is never deleted.
         if assessment_run is None:
+            if _existing_run_id:
+                from .. import models as plugin_models
+                from ..sdk.enums import RunStatus
+
+                deleted, _ = plugin_models.AssessmentRun.objects.filter(
+                    id=_existing_run_id, status=RunStatus.PENDING.value
+                ).delete()
+                if deleted:
+                    logger.info(
+                        f"[TASK_run_assessment] Removed eager pending run {_existing_run_id} "
+                        f"for skipped plugin '{plugin_name}' on SBOM {sbom_id}"
+                    )
             return {
                 "status": "skipped",
                 "plugin_name": plugin_name,
@@ -961,9 +977,15 @@ def enqueue_assessments_for_existing_sboms_task(
             SBOM.objects.filter(
                 component__team=team,
                 component__component_type=Component.ComponentType.BOM,
-                bom_type=SBOM.BomType.SBOM,
+                # CBOMs are first-class assessment targets (the crypto plugins
+                # declare supported_bom_types=["cbom", "sbom"]); enabling a
+                # plugin must backfill them too. Plugins that don't support a
+                # bom_type skip at dispatch.
+                bom_type__in=[SBOM.BomType.SBOM, SBOM.BomType.CBOM],
                 created_at__gte=cutoff_time,
-            ).select_related("component")
+            )
+            .exclude(sbom_filename="")
+            .select_related("component")
         )
         sbom_ids = [sbom.id for sbom in sboms]
 
@@ -1166,6 +1188,9 @@ def _run_scheduled_security_scans(
                 bom_type=SBOM.BomType.SBOM,
                 component__team_id__in=team_ids,
             )
+            # A row with no stored artifact can never be assessed; failed runs
+            # do not count as recent, so without this it re-fails every sweep.
+            .exclude(sbom_filename="")
             .annotate(
                 has_release_artifact=Exists(
                     ReleaseArtifact.objects.filter(

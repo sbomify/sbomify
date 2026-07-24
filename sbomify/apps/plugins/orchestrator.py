@@ -55,6 +55,19 @@ class DependencyStatus(TypedDict, total=False):
     requires_all: DependencyCheckResult
 
 
+def load_plugin_class(plugin_class_path: str) -> type[AssessmentPlugin]:
+    """Resolve a dotted plugin class path to its class.
+
+    The one import path both the orchestrator and the settings API use, so
+    the two can never disagree about how a registry row resolves. Raises
+    ImportError/AttributeError on a broken path; callers pick their policy.
+    """
+    module_path, class_name = plugin_class_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    plugin_class: type[AssessmentPlugin] = getattr(module, class_name)
+    return plugin_class
+
+
 class PluginOrchestratorError(Exception):
     """Exception raised for orchestrator-specific errors."""
 
@@ -124,7 +137,7 @@ class PluginOrchestrator:
                 other orchestration errors occur.
         """
         # Verify SBOM exists and fetch bom_type in a single query (reused later via sbom_id)
-        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type").first()
+        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type", "has_crypto_assets").first()
         if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
@@ -136,6 +149,18 @@ class PluginOrchestrator:
                 f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: "
                 f"bom_type '{sbom_instance_check.bom_type}' not in supported types {supported}"
             )
+            return None
+        # Crypto-gated plugins skip dispatch when upload determined the document
+        # holds no crypto assets. None (pre-field rows) still runs — unknown is
+        # not a reason to skip. An artifact explicitly tagged cbom also always
+        # runs: a CBOM declaring zero crypto assets is a generator misfire the
+        # plugin must surface as a warning, not silently skip.
+        if (
+            metadata.requires_crypto_assets
+            and sbom_instance_check.has_crypto_assets is False
+            and sbom_instance_check.bom_type != "cbom"
+        ):
+            logger.info(f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: document has no crypto assets")
             return None
         config_hash = compute_config_hash(plugin.config)
 
@@ -766,10 +791,7 @@ class PluginOrchestrator:
 
         # Import and instantiate the plugin class
         try:
-            module_path, class_name = registered.plugin_class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            plugin_class = getattr(module, class_name)
-            instance: AssessmentPlugin = plugin_class(config=merged_config)
+            instance: AssessmentPlugin = load_plugin_class(registered.plugin_class_path)(config=merged_config)
             return instance
         except (ImportError, AttributeError) as e:
             raise PluginOrchestratorError(

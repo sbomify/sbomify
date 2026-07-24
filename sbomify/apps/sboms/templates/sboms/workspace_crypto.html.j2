@@ -1,0 +1,137 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% load pqc_extras %}
+{% block title %}Cryptography{% endblock %}
+{% block dashboard_content %}
+    <div class="mb-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <i class="fas fa-lock text-primary text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-text">Cryptography</h1>
+                <p class="text-text-muted text-sm">{{ team.name }} · quantum readiness and migration priority across all components</p>
+            </div>
+        </div>
+    </div>
+    {% if rollup.has_crypto_data %}
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-danger">{{ rollup.verdict_counts.at_risk|default:0 }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">At risk</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-warning">{{ rollup.verdict_counts.needs_review|default:0 }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Needs review</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-success">{{ rollup.verdict_counts.ready|default:0 }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Quantum-ready</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-text-muted">{{ rollup.verdict_counts.no_crypto|default:0 }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">No crypto</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                {% if rollup.certificates.expired %}
+                    <div class="text-2xl font-bold text-danger">{{ rollup.certificates.expired }}</div>
+                    <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Expired certs</div>
+                {% else %}
+                    <div class="text-2xl font-bold {% if rollup.certificates.expiring_soon %}text-severity-high{% else %}text-text{% endif %}">
+                        {{ rollup.certificates.expiring_soon }}
+                    </div>
+                    <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Certs expiring ≤90d</div>
+                {% endif %}
+            </div>
+        </div>
+        {% if rollup.top_vulnerable %}
+            <div class="tw-card mb-6">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text m-0">Migrate first</h4>
+                </div>
+                <div class="p-6">
+                    <div class="flex flex-wrap gap-2">
+                        {% for entry in rollup.top_vulnerable %}
+                            <span class="px-3 py-1.5 text-sm rounded-lg border border-danger/30 bg-danger/10 text-danger">
+                                {{ entry.name }}
+                                <span class="text-xs opacity-75">· {{ entry.components }} component{{ entry.components|pluralize }}</span>
+                            </span>
+                        {% endfor %}
+                    </div>
+                    <p class="text-xs text-text-muted mt-4 mb-0">
+                        CNSA 2.0 sets 2030–2033 transition deadlines for quantum-vulnerable algorithms; EO 14412
+                        directs CBOM minimum-elements guidance by March 2027.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text m-0">Components</h4>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="tw-table w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Component</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Readiness</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Vulnerable</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Review</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Safe</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Certificates</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rollup.rows %}
+                            <tr>
+                                <td class="px-6 py-4">
+                                    {% if row.sbom_id %}
+                                        <a href="{% url 'core:component_item' row.id 'sboms' row.sbom_id %}"
+                                           class="font-medium text-primary hover:underline no-underline">{{ row.name }}</a>
+                                    {% else %}
+                                        <span class="font-medium text-text">{{ row.name }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="tw-badge tw-badge-{{ row.verdict|pqc_overall_variant }}">{{ row.verdict|pqc_overall_label }}</span>
+                                </td>
+                                <td class="px-6 py-4 {% if row.counts.quantum_vulnerable %}text-danger font-semibold{% else %}text-text-muted{% endif %}">
+                                    {{ row.counts.quantum_vulnerable }}
+                                </td>
+                                <td class="px-6 py-4 {% if row.counts.review %}text-warning font-semibold{% else %}text-text-muted{% endif %}">
+                                    {{ row.counts.review }}
+                                </td>
+                                <td class="px-6 py-4 text-text-muted">{{ row.counts.quantum_safe }}</td>
+                                <td class="px-6 py-4">
+                                    {% if row.certificates %}
+                                        {% if row.certificates.expired %}
+                                            <span class="tw-badge tw-badge-danger">{{ row.certificates.expired }} expired</span>
+                                        {% elif row.certificates.expiring_soon %}
+                                            <span class="px-2 py-1 text-xs font-semibold rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">{{ row.certificates.expiring_soon }} expiring</span>
+                                        {% else %}
+                                            <span class="text-text-muted">{{ row.certificates.count }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="tw-card">
+            <div class="p-12 text-center">
+                <div class="w-12 h-12 mx-auto rounded-lg bg-border/40 flex items-center justify-center mb-4">
+                    <i class="fas fa-lock text-text-muted text-lg"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-text mb-2">No crypto data yet</h3>
+                <p class="text-text-muted text-sm mb-0 max-w-md mx-auto">
+                    Upload a CBOM to a component, or enable the PQC readiness plugin so scanned SBOMs with embedded
+                    crypto assets get assessed. Results roll up here per component.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
