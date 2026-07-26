@@ -208,9 +208,7 @@ class TestComponentCbomIssuesTable:
         team = sample_team_with_owner_member.team
         component, _ = self._cbom_with_run(
             team,
-            findings=[
-                {"title": "ML-KEM-768: Quantum-safe", "status": "pass", "severity": "info", "description": "ok"}
-            ],
+            findings=[{"title": "ML-KEM-768: Quantum-safe", "status": "pass", "severity": "info", "description": "ok"}],
         )
 
         response = self._component_page(team, sample_user, component)
@@ -232,3 +230,165 @@ class TestComponentCbomIssuesTable:
 
         assert response.status_code == 200
         assert response.context["latest_cbom_issues"] == []
+
+
+@pytest.mark.django_db
+class TestComponentItemVexAliasEnrichment:
+    """The VEX detail page enriches a suppression's display id/aliases from the
+    component's latest scan (Dependency-Track's CVE vs. OSV's GHSA for the same
+    vulnerability). Regression coverage for the two-phase winner-id query (#1218)
+    that replaced a direct DISTINCT-ON `result` projection — same behavior, cheaper
+    query shape."""
+
+    def setup_method(self):
+        self.client = Client()
+
+    def test_suppression_resolves_alias_from_latest_scan(self, sample_team_with_owner_member, sample_user, mocker):
+        import json
+
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(
+            name="Aliased Component",
+            team=team,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PRIVATE,
+        )
+        sbom = SBOM.objects.create(
+            name="app",
+            version="1.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="app.json",
+            bom_type=SBOM.BomType.SBOM,
+        )
+        # Scanner reports the vuln under a GHSA id, with the CVE as an alias.
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            category="security",
+            status="completed",
+            result={
+                "findings": [
+                    {
+                        "id": "GHSA-xxxx",
+                        "aliases": ["CVE-2021-1"],
+                        "severity": "high",
+                        "component": {"name": "foo", "version": "1.0.0"},
+                    }
+                ]
+            },
+        )
+        vex = SBOM.objects.create(
+            name="app-vex",
+            version="1.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="vex.json",
+            bom_type=SBOM.BomType.VEX,
+            source="manual_upload",
+        )
+        # The hand-authored VEX names only the CVE — the alias-enrichment must
+        # pull "GHSA-xxxx" in from the scanner's finding.
+        vex_doc = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "components": [
+                {
+                    "type": "library",
+                    "name": "foo",
+                    "version": "1.0.0",
+                    "purl": "pkg:npm/foo@1.0.0",
+                    "bom-ref": "pkg:npm/foo@1.0.0",
+                }
+            ],
+            "vulnerabilities": [
+                {
+                    "id": "CVE-2021-1",
+                    "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                    "affects": [{"ref": "pkg:npm/foo@1.0.0"}],
+                }
+            ],
+        }
+        mocker.patch("sbomify.apps.core.object_store.S3Client").return_value.get_sbom_data.return_value = json.dumps(
+            vex_doc
+        ).encode()
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "vex", "item_id": vex.id}
+        )
+        response = self.client.get(url)
+
+        assert response.status_code == 200
+        suppressions = response.context["vex_suppressions"]
+        assert len(suppressions) == 1
+        assert suppressions[0]["id"] == "CVE-2021-1"
+        assert suppressions[0]["aliases"] == ["GHSA-xxxx"]
+
+    def test_sbom_page_merges_provider_counts_by_alias(self, sample_team_with_owner_member, sample_user):
+        """The SBOM detail page's vulnerability summary (Block B's own two-phase
+        winner-id query) merges two providers' findings for the same vulnerability
+        into one count, matching the component page badge."""
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = Component.objects.create(
+            name="Dual Scanned Component",
+            team=team,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PRIVATE,
+        )
+        sbom = SBOM.objects.create(
+            name="app",
+            version="1.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="app.json",
+            bom_type=SBOM.BomType.SBOM,
+        )
+        pkg = {"name": "lodash", "version": "4.17.15", "purl": "pkg:npm/lodash@4.17.15"}
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="dependency-track",
+            category="security",
+            status="completed",
+            result={"findings": [{"id": "CVE-2021-23337", "severity": "high", "component": pkg}]},
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            category="security",
+            status="completed",
+            result={
+                "findings": [
+                    {
+                        "id": "GHSA-35jh-r3h4-6jhm",
+                        "severity": "critical",
+                        "aliases": ["CVE-2021-23337"],
+                        "component": pkg,
+                    }
+                ]
+            },
+        )
+
+        self.client.login(username=sample_user.username, password="test")
+        setup_test_session(self.client, team, sample_user)
+        url = reverse(
+            "core:component_item", kwargs={"component_id": component.id, "item_type": "sboms", "item_id": sbom.id}
+        )
+        response = self.client.get(url)
+
+        assert response.status_code == 200
+        summary = response.context["vulnerability_summary"]
+        assert summary["total"] == 1
+        assert summary["critical"] == 1
+        assert summary["high"] == 0
