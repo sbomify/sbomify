@@ -183,13 +183,23 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     )
                     alias_map: dict[str, list[str]] = {}
                     if latest_sbom_id:
-                        provider_results = list(
+                        # Two-phase DISTINCT ON: picking the winning run ids first
+                        # touches no JSON; only then is `result` fetched for just
+                        # those winners. Projecting `result` directly on the
+                        # DISTINCT ON query forces Postgres to de-TOAST every
+                        # historical rescan's blob before picking a winner — the
+                        # same class of bug #1121 fixed for the SBOM list and
+                        # trends endpoints, still live here (#1218).
+                        winner_ids = list(
                             AssessmentRun.objects.filter(
                                 sbom_id=latest_sbom_id, category="security", status="completed"
                             )
                             .order_by("plugin_name", "-created_at")
                             .distinct("plugin_name")
-                            .values_list("result", flat=True)
+                            .values_list("id", flat=True)
+                        )
+                        provider_results = list(
+                            AssessmentRun.objects.filter(id__in=winner_ids).values_list("result", flat=True)
                         )
                         for finding in merge_findings_by_alias(provider_results)["findings"]:
                             id_set = [i for i in [finding.get("id"), *(finding.get("aliases") or [])] if i]
@@ -231,11 +241,17 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 )
                 from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
-                provider_runs = list(
+                # Two-phase DISTINCT ON — see the VEX alias-enrichment block above
+                # for why: picking winner ids first avoids de-TOASTing every
+                # historical rescan's `result` blob just to discard the losers.
+                winner_ids = list(
                     AssessmentRun.objects.filter(sbom_id=item_id, category="security", status="completed")
                     .order_by("plugin_name", "-created_at")
                     .distinct("plugin_name")
-                    .values_list("plugin_name", "result")
+                    .values_list("id", flat=True)
+                )
+                provider_runs = list(
+                    AssessmentRun.objects.filter(id__in=winner_ids).values_list("plugin_name", "result")
                 )
                 merged = merge_findings_by_alias([result for _, result in provider_runs])
                 rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
