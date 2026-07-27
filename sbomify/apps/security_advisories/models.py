@@ -384,7 +384,9 @@ class AdvisoryVulnerability(models.Model):
     def clean(self) -> None:
         super().clean()
         if self.cve_id and not CVE_ID_RE.match(self.cve_id):
-            raise ValidationError({"cve_id": f"{self.cve_id!r} is not a CVE id (expected CVE-YYYY-NNNN)."})
+            raise ValidationError(
+                {"cve_id": f"{self.cve_id!r} is not a CVE id (expected CVE-<year>-<four or more digits>)."}
+            )
         if not self.cve_id and not self.title.strip():
             raise ValidationError({"title": "A vulnerability needs a CVE id or a title."})
 
@@ -862,7 +864,9 @@ class AdvisoryEvent(models.Model):
     def clean(self) -> None:
         super().clean()
         if self.event_type in self.MESSAGE_EVENT_TYPES and not self.body.strip():
-            raise ValidationError({"body": f"A {self.event_type} event needs a body."})
+            # Plural and the human label: "A update event" reads wrong, and the
+            # raw value is an internal token.
+            raise ValidationError({"body": f"{self.get_event_type_display()} events need a body."})
         if self.event_type == self.EventType.FIELD_CHANGE:
             missing = {"field", "old", "new"} - set(self.payload or {})
             if missing:

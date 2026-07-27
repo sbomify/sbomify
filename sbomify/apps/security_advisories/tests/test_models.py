@@ -631,8 +631,14 @@ def test_portfolio_pin_error_names_the_field_that_was_set(vulnerability, product
 
 
 def test_comment_needs_a_body(advisory) -> None:
-    with pytest.raises(ValidationError, match="needs a body"):
+    with pytest.raises(ValidationError, match="Comment events need a body"):
         AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.COMMENT)
+
+
+def test_update_needs_a_body_and_reads_as_english(advisory) -> None:
+    """The message carries the label, so no event type produces "A update event"."""
+    with pytest.raises(ValidationError, match="Update events need a body"):
+        AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE)
 
 
 def test_field_change_needs_a_typed_payload(advisory) -> None:
