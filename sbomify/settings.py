@@ -203,6 +203,7 @@ INSTALLED_APPS = [
     "sbomify.apps.tea",
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
+    "sbomify.apps.security_advisories",
 ]
 
 
