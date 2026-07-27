@@ -318,6 +318,20 @@ def test_reference_needs_id_or_url(advisory) -> None:
         AdvisoryReference.objects.create(advisory=advisory)
 
 
+def test_invalid_reference_url_rejected(advisory) -> None:
+    """save() runs the field validators, so URLField's own check applies outside
+    a ModelForm too."""
+    with pytest.raises(ValidationError, match="[Ee]nter a valid URL"):
+        AdvisoryReference.objects.create(advisory=advisory, url="not a url at all")
+
+
+def test_invalid_choice_rejected(vulnerability, advisory_product) -> None:
+    with pytest.raises(ValidationError, match="not a valid choice"):
+        AdvisoryProductStatus.objects.create(
+            vulnerability=vulnerability, advisory_product=advisory_product, status="bogus"
+        )
+
+
 def test_whitespace_only_reference_rejected(advisory) -> None:
     """Whitespace would otherwise satisfy both the emptiness check and the
     CheckConstraint."""

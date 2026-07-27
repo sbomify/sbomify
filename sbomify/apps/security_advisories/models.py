@@ -317,7 +317,7 @@ class SecurityAdvisory(models.Model):
             raise ValidationError(errors)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
 
@@ -389,7 +389,7 @@ class AdvisoryVulnerability(models.Model):
             raise ValidationError({"title": "A vulnerability needs a CVE id or a title."})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
 
@@ -455,7 +455,7 @@ class AdvisoryReference(models.Model):
         # Classify on write so readers get a typed field instead of re-parsing the id.
         if self.external_id and self.reference_type == ReferenceType.OTHER:
             self.reference_type = detect_reference_type(self.external_id)
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
 
@@ -507,7 +507,7 @@ class AdvisoryProduct(models.Model):
         product = self.product
         if product is not None and not self.product_name:
             self.product_name = product.name
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
 
@@ -663,7 +663,7 @@ class AdvisoryProductStatus(models.Model):
             raise ValidationError(errors)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
 
@@ -766,7 +766,7 @@ class AdvisoryVersionRange(models.Model):
             pin = getattr(self, pin_field, None)
             if pin and not getattr(self, field):
                 setattr(self, field, pin.version or "")
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
 
@@ -853,7 +853,7 @@ class AdvisoryEvent(models.Model):
     def save(self, *args: Any, **kwargs: Any) -> None:
         if not self._state.adding:
             raise ValidationError("Advisory events are append-only.")
-        self.clean()
+        self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
