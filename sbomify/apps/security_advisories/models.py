@@ -645,21 +645,26 @@ class AdvisoryProductStatus(models.Model):
         if self.source_vex_id and self.source == self.Source.MANUAL:
             errors["source"] = "A manual status cannot cite a source VEX artifact."
 
+        # A release only names something this status covers when the status
+        # resolves to a concrete Product. AdvisoryVersionRange.clean enforces the
+        # same rule for its pins; keep the two in step.
         if self.recommended_release_id:
             from sbomify.apps.core.models import Release
 
+            product_id = (
+                AdvisoryProduct.objects.filter(pk=self.advisory_product_id).values_list("product_id", flat=True).first()
+                if self.advisory_product_id
+                else None
+            )
             if not self.advisory_product_id:
                 errors["recommended_release"] = "A portfolio-wide status cannot recommend a release."
+            elif not product_id:
+                errors["recommended_release"] = "A product with no sbomify record has no releases to recommend."
             else:
-                product_id = (
-                    AdvisoryProduct.objects.filter(pk=self.advisory_product_id)
-                    .values_list("product_id", flat=True)
-                    .first()
-                )
                 owner = (
                     Release.objects.filter(pk=self.recommended_release_id).values_list("product_id", flat=True).first()
                 )
-                if owner and product_id and owner != product_id:
+                if owner and owner != product_id:
                     errors["recommended_release"] = "The recommended release belongs to a different product."
 
         if errors:

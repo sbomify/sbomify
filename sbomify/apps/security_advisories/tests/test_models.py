@@ -495,6 +495,16 @@ def test_portfolio_status_cannot_recommend_a_release(vulnerability, product) -> 
         AdvisoryProductStatus.objects.create(vulnerability=vulnerability, recommended_release=release)
 
 
+def test_name_only_product_cannot_recommend_a_release(advisory, vulnerability, product) -> None:
+    """Same reasoning as the version-range pin: no Product, no releases of its own."""
+    external = AdvisoryProduct.objects.create(advisory=advisory, product_name="Acme Gateway (OEM build)")
+    release = Release.objects.create(product=product, name="1.4.3", version="1.4.3")
+    with pytest.raises(ValidationError, match="no sbomify record"):
+        AdvisoryProductStatus.objects.create(
+            vulnerability=vulnerability, advisory_product=external, recommended_release=release
+        )
+
+
 def test_recommended_release_on_its_own_product_is_accepted(vulnerability, advisory_product, product) -> None:
     release = Release.objects.create(product=product, name="1.4.3", version="1.4.3")
     status = AdvisoryProductStatus.objects.create(
