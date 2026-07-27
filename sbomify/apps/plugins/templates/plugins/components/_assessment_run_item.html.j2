@@ -4,7 +4,7 @@
 {% with run_id=run.id|default:loop_index result=run.result|default_if_none:"" summary=run.result.summary|default_if_none:"" fail_count=run.result.summary.fail_count|default:0 error_count=run.result.summary.error_count|default:0 pass_count=run.result.summary.pass_count|default:0 %}
     {% comment %}has_issues is the explicit-failure signal (fail+error). A run with only warnings (pass_count==0) is shown as "Warnings Only" rather than "Passed" so the per-card badge matches the dashboard summary and BSI's dependency gate (see _is_run_failing and orchestrator._is_passing).
     skipped mirrors _is_run_skipped in plugins/apis.py. A plugin that could not run (Dependency Track handed an SPDX SBOM, PQC handed a document with no crypto assets) reports one info/warning finding and metadata.skipped, which the counters above cannot tell apart from a real warnings-only verdict. Without this the card claims the plugin ran and disagreed with the scanners beside it.{% endcomment %}
-    {% with has_issues=fail_count|add:error_count is_security=run.category|is_security_category skipped=run.result.metadata.skipped %}
+    {% with has_issues=fail_count|add:error_count is_security=run.category|is_security_category skipped=result.metadata.skipped %}
         {# Compute security total from by_severity #}
         {% if is_security and run.result.summary.by_severity %}
             {% with sev=run.result.summary.by_severity security_total=run.result.summary.total_findings|default:0 %}

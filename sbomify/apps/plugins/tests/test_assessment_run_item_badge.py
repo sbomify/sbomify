@@ -71,8 +71,8 @@ class TestSkippedRunBadge:
         assert "Warnings Only" not in html
 
     def test_skipped_run_names_the_reason_without_expanding(self):
-        """"1 findings" says nothing about why the plugin stood down, and the
-        finding that explains it is hidden until the card is expanded."""
+        """A finding count says nothing about why the plugin stood down, and the
+        finding that explains it stays hidden until the card is expanded."""
         run = _run()
         run["result"]["metadata"] = {"skipped": True}
 
@@ -119,6 +119,14 @@ class TestSkippedRunBadge:
         html = _render(_run())
 
         assert "Warnings Only" in html
+        assert "Skipped" not in html
+
+    def test_a_run_with_no_result_still_renders(self):
+        """Pending and running rows carry result=None, which is why the template
+        aliases it before the skipped lookup."""
+        html = _render(_run(status="running", result=None))
+
+        assert "Running" in html
         assert "Skipped" not in html
 
     def test_a_passing_run_is_untouched(self):
