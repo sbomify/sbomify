@@ -57,6 +57,12 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Standardized SBOM discovery via `.well-known/tea` endpoints
 - Enables automated discovery and retrieval of SBOMs across the supply chain
 
+### MCP server (AI agents)
+
+- Query your workspace from AI agents over the [Model Context Protocol](https://modelcontextprotocol.io), served at `/mcp`
+- Authenticated with scoped personal access tokens — the tools an agent is offered follow its token's scopes
+- See [docs/mcp.md](docs/mcp.md) for setup
+
 ## Releases
 
 For information about cutting new releases, see [RELEASE.md](docs/RELEASE.md).
