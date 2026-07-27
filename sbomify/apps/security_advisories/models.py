@@ -590,6 +590,29 @@ class AdvisoryProductStatus(models.Model):
                     if team_id and vex_row["component__team_id"] != team_id:
                         errors["source_vex"] = "source_vex belongs to a different workspace."
 
+        # A manually authored row citing a VEX artifact as its origin is incoherent.
+        # The reverse is legitimate: source_vex is SET_NULL, so deleting the
+        # artifact leaves a vex_import row that remembers how it was written.
+        if self.source_vex_id and self.source == self.Source.MANUAL:
+            errors["source"] = "A manual status cannot cite a source VEX artifact."
+
+        if self.recommended_release_id:
+            from sbomify.apps.core.models import Release
+
+            if not self.advisory_product_id:
+                errors["recommended_release"] = "A portfolio-wide status cannot recommend a release."
+            else:
+                product_id = (
+                    AdvisoryProduct.objects.filter(pk=self.advisory_product_id)
+                    .values_list("product_id", flat=True)
+                    .first()
+                )
+                owner = (
+                    Release.objects.filter(pk=self.recommended_release_id).values_list("product_id", flat=True).first()
+                )
+                if owner and product_id and owner != product_id:
+                    errors["recommended_release"] = "The recommended release belongs to a different product."
+
         if errors:
             raise ValidationError(errors)
 
@@ -674,7 +697,10 @@ class AdvisoryVersionRange(models.Model):
                 .first()
             )
             if status and not status["advisory_product_id"]:
-                errors["introduced_release"] = "A portfolio-wide status cannot pin releases."
+                # Key the error to the pins the caller actually set, so a form
+                # highlights the offending field instead of the first one.
+                for name, _pk in pinned_ids:
+                    errors[name] = "A portfolio-wide status cannot pin releases."
             elif status:
                 from sbomify.apps.core.models import Release
 

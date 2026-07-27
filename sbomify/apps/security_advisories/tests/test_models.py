@@ -356,6 +356,41 @@ def test_source_vex_must_belong_to_the_same_workspace(vulnerability, other_team)
         AdvisoryProductStatus.objects.create(vulnerability=vulnerability, source_vex=vex)
 
 
+def test_manual_status_cannot_cite_a_source_vex(vulnerability, team) -> None:
+    component = Component.objects.create(name="gateway", team=team)
+    vex = SBOM.objects.create(name="gateway-vex", component=component, format="cyclonedx", bom_type=SBOM.BomType.VEX)
+    with pytest.raises(ValidationError, match="manual status cannot cite"):
+        AdvisoryProductStatus.objects.create(
+            vulnerability=vulnerability, source=AdvisoryProductStatus.Source.MANUAL, source_vex=vex
+        )
+
+
+def test_recommended_release_must_belong_to_the_product(vulnerability, advisory_product, team) -> None:
+    other_product = Product.objects.create(name="Acme Relay", team=team)
+    release = Release.objects.create(product=other_product, name="9.9.9", version="9.9.9")
+    with pytest.raises(ValidationError, match="recommended release belongs to a different product"):
+        AdvisoryProductStatus.objects.create(
+            vulnerability=vulnerability, advisory_product=advisory_product, recommended_release=release
+        )
+
+
+def test_portfolio_status_cannot_recommend_a_release(vulnerability, product) -> None:
+    release = Release.objects.create(product=product, name="1.4.3", version="1.4.3")
+    with pytest.raises(ValidationError, match="cannot recommend a release"):
+        AdvisoryProductStatus.objects.create(vulnerability=vulnerability, recommended_release=release)
+
+
+def test_recommended_release_on_its_own_product_is_accepted(vulnerability, advisory_product, product) -> None:
+    release = Release.objects.create(product=product, name="1.4.3", version="1.4.3")
+    status = AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability,
+        advisory_product=advisory_product,
+        status=AdvisoryProductStatus.Status.RESOLVED,
+        recommended_release=release,
+    )
+    assert status.recommended_release_id == release.id
+
+
 def test_vex_import_records_its_source(vulnerability, team) -> None:
     component = Component.objects.create(name="gateway", team=team)
     vex = SBOM.objects.create(name="gateway-vex", component=component, format="cyclonedx", bom_type=SBOM.BomType.VEX)
@@ -437,6 +472,15 @@ def test_portfolio_status_cannot_pin_releases(vulnerability, product) -> None:
     release = Release.objects.create(product=product, name="1.0.0", version="1.0.0")
     with pytest.raises(ValidationError, match="cannot pin releases"):
         AdvisoryVersionRange.objects.create(product_status=portfolio, fixed_release=release)
+
+
+def test_portfolio_pin_error_names_the_field_that_was_set(vulnerability, product) -> None:
+    """A form has to highlight the pin the caller set, not always the first one."""
+    portfolio = AdvisoryProductStatus.objects.create(vulnerability=vulnerability)
+    release = Release.objects.create(product=product, name="1.0.0", version="1.0.0")
+    with pytest.raises(ValidationError) as exc:
+        AdvisoryVersionRange.objects.create(product_status=portfolio, last_affected_release=release)
+    assert set(exc.value.message_dict) == {"last_affected_release"}
 
 
 # --- D16 + append-only: the timeline ------------------------------------------
