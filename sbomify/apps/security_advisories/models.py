@@ -746,19 +746,29 @@ class AdvisoryVersionRange(models.Model):
                 .values("advisory_product_id", "advisory_product__product_id")
                 .first()
             )
-            if status and not status["advisory_product_id"]:
-                # Key the error to the pins the caller actually set, so a form
-                # highlights the offending field instead of the first one.
-                for name, _pk in pinned_ids:
-                    errors[name] = "A portfolio-wide status cannot pin releases."
-            elif status:
-                from sbomify.apps.core.models import Release
-
+            if status:
                 product_id = status["advisory_product__product_id"]
-                for name, pk in pinned_ids:
-                    owner = Release.objects.filter(pk=pk).values_list("product_id", flat=True).first()
-                    if owner and product_id and owner != product_id:
-                        errors[name] = "The pinned release belongs to a different product."
+                if not status["advisory_product_id"]:
+                    reason = "A portfolio-wide status cannot pin releases."
+                elif not product_id:
+                    # ``Release.product`` cascades, so a live pin here was never
+                    # orphaned by a product deletion: it points somewhere else.
+                    reason = "A product with no sbomify record has no releases to pin."
+                else:
+                    reason = ""
+
+                if reason:
+                    # Key the error to the pins the caller actually set, so a form
+                    # highlights the offending field instead of the first one.
+                    for name, _pk in pinned_ids:
+                        errors[name] = reason
+                else:
+                    from sbomify.apps.core.models import Release
+
+                    for name, pk in pinned_ids:
+                        owner = Release.objects.filter(pk=pk).values_list("product_id", flat=True).first()
+                        if owner and owner != product_id:
+                            errors[name] = "The pinned release belongs to a different product."
 
         if errors:
             raise ValidationError(errors)

@@ -9,8 +9,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from sbomify.apps.core.models import Product, Release
-from sbomify.apps.sboms.models import SBOM, Component
+from sbomify.apps.core.models import Component, Product, Release
+from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.security_advisories.models import (
     CVE_ID_RE,
     AdvisoryEvent,
@@ -580,6 +580,25 @@ def test_pin_from_another_product_rejected(status, team) -> None:
     release = Release.objects.create(product=other_product, name="9.9.9", version="9.9.9")
     with pytest.raises(ValidationError, match="different product"):
         AdvisoryVersionRange.objects.create(product_status=status, fixed_release=release)
+
+
+def test_name_only_product_cannot_pin_releases(advisory, vulnerability, product) -> None:
+    """A row naming a product sbomify does not host has no releases of its own.
+
+    ``Release.product`` cascades, so a live pin under a NULL ``product`` is never
+    a leftover from a deleted product — it always points somewhere else.
+    """
+    external = AdvisoryProduct.objects.create(advisory=advisory, product_name="Acme Gateway (OEM build)")
+    name_only_status = AdvisoryProductStatus.objects.create(
+        vulnerability=vulnerability,
+        advisory_product=external,
+        status=AdvisoryProductStatus.Status.EXPLOITABLE,
+        action_statement="Contact the vendor.",
+    )
+    release = Release.objects.create(product=product, name="1.0.0", version="1.0.0")
+    with pytest.raises(ValidationError) as exc:
+        AdvisoryVersionRange.objects.create(product_status=name_only_status, fixed_release=release)
+    assert set(exc.value.message_dict) == {"fixed_release"}
 
 
 def test_portfolio_status_cannot_pin_releases(vulnerability, product) -> None:
