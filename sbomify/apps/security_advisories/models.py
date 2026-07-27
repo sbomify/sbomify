@@ -247,13 +247,19 @@ class SecurityAdvisory(models.Model):
         super().clean()
         errors: dict[str, str] = {}
 
-        if self.status == self.Status.PUBLISHED:
-            if not self.published_at:
-                errors["published_at"] = "A published advisory must record when it was published."
-            if not self.tracking_id:
-                errors["tracking_id"] = "A published advisory must have a tracking id."
+        if self.status == self.Status.PUBLISHED and not self.published_at:
+            errors["published_at"] = "A published advisory must record when it was published."
         if self.published_at and self.status == self.Status.DRAFT:
             errors["status"] = "published_at is set, so the advisory cannot be a draft."
+
+        # The tracking id follows publication rather than the current status: it is
+        # assigned at publish, outlives a withdrawal, and never exists before.
+        # Keying only on PUBLISHED would let a withdrawn advisory lose its id and a
+        # draft hold one, which would also consume a number from the year sequence.
+        if (self.status == self.Status.PUBLISHED or self.published_at) and not self.tracking_id:
+            errors["tracking_id"] = "A published advisory must have a tracking id."
+        if self.status == self.Status.DRAFT and self.tracking_id:
+            errors["tracking_id"] = "A draft has no tracking id; publishing assigns it."
 
         if self.status == self.Status.WITHDRAWN:
             if not self.withdrawn_at:

@@ -187,6 +187,28 @@ def test_tracking_id_unique_per_team(team, advisory) -> None:
         other.save()
 
 
+def test_draft_cannot_hold_a_tracking_id(team) -> None:
+    """Publishing assigns the id. A draft holding one would also burn a number
+    out of that year's sequence."""
+    advisory = SecurityAdvisory(team=team, title="Draft", tracking_id="ACME-SA-2026-0001")
+    with pytest.raises(ValidationError, match="A draft has no tracking id"):
+        advisory.save()
+
+
+def test_withdrawn_advisory_keeps_its_tracking_id(team) -> None:
+    """The id outlives the withdrawal, so a consumer can still resolve it."""
+    advisory = SecurityAdvisory(
+        team=team,
+        title="Withdrawn",
+        status=SecurityAdvisory.Status.WITHDRAWN,
+        published_at=timezone.now(),
+        withdrawn_at=timezone.now(),
+        withdrawal_reason="Superseded.",
+    )
+    with pytest.raises(ValidationError, match="must have a tracking id"):
+        advisory.save()
+
+
 def test_blank_tracking_ids_do_not_collide(team) -> None:
     """The unique constraint is partial, so any number of drafts coexist."""
     SecurityAdvisory.objects.create(team=team, title="Draft one")
