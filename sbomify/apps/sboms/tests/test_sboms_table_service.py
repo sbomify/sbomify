@@ -322,7 +322,7 @@ class TestDeleteSbomFromRequest:
         assert result.status_code == 404
 
 
-def _artifact(name: str, fmt: str, bom_type: str, day: int) -> dict:
+def _artifact(name: str, fmt: str, bom_type: str | None, day: int) -> dict:
     from datetime import datetime, timezone
 
     return {
@@ -376,7 +376,14 @@ class TestSummaryArtifacts:
 
         assert {item["sbom"]["bom_type"] for item in summary} == {"sbom", "vex", "cbom"}
 
-    def test_missing_bom_type_defaults_to_sbom(self):
-        summary = _summary_artifacts([_artifact("legacy", "spdx", None, 27)])
+    def test_missing_bom_type_is_treated_as_sbom(self):
+        """A legacy row carrying no bom_type shares the sbom slot rather than
+        opening one of its own, so it cannot show up alongside its successor."""
+        summary = _summary_artifacts(
+            [
+                _artifact("legacy", "spdx", None, 20),
+                _artifact("current", "spdx", "sbom", 27),
+            ]
+        )
 
-        assert len(summary) == 1
+        assert [item["sbom"]["name"] for item in summary] == ["current"]
