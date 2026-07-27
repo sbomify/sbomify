@@ -235,12 +235,24 @@ class SecurityAdvisory(models.Model):
         token = (prefix or (team.name or "").upper()) or "SA"
         token = re.sub(r"[^A-Z0-9]+", "", token.upper())[:12] or "SA"
         stem = f"{token}-SA-{year}-"
+
+        # Descending order plus a lazy iterator means the first row is normally the
+        # only one fetched, rather than the whole year's ids. The loop continues
+        # only past ids whose tail is not a number, which the allocator never
+        # writes. Zero padding keeps the ordering numeric; a team that somehow
+        # published past 9999 in one year would read a stale maximum and hit the
+        # unique constraint, which fails loudly rather than reusing an id.
         highest = 0
-        existing = cls.objects.filter(team=team, tracking_id__startswith=stem).values_list("tracking_id", flat=True)
-        for value in existing:
+        existing = (
+            cls.objects.filter(team=team, tracking_id__startswith=stem)
+            .order_by("-tracking_id")
+            .values_list("tracking_id", flat=True)
+        )
+        for value in existing.iterator():
             tail = value[len(stem) :]
             if tail.isdigit():
-                highest = max(highest, int(tail))
+                highest = int(tail)
+                break
         return f"{stem}{highest + 1:04d}"
 
     def clean(self) -> None:
@@ -282,8 +294,10 @@ class SecurityAdvisory(models.Model):
                     errors["tracking_id"] = "tracking_id is immutable once assigned."
                 if previous["team_id"] != self.team_id:
                     errors["team"] = "An advisory cannot move between workspaces."
-                if previous["made_public_at"] and not self.made_public_at:
-                    errors["made_public_at"] = "made_public_at is a disclosure record and cannot be cleared."
+                if previous["made_public_at"] and previous["made_public_at"] != self.made_public_at:
+                    # Write-once, not merely non-null: rewriting the timestamp
+                    # would rewrite when disclosure happened.
+                    errors["made_public_at"] = "made_public_at is a disclosure record and cannot be changed."
 
         if errors:
             raise ValidationError(errors)
@@ -732,6 +746,22 @@ class AdvisoryVersionRange(models.Model):
         super().save(*args, **kwargs)
 
 
+class AppendOnlyQuerySet(models.QuerySet["AdvisoryEvent"]):
+    """Rejects the bulk paths that would otherwise walk around ``save``/``delete``.
+
+    ``QuerySet.update()`` and ``QuerySet.delete()`` never call model methods, so
+    guarding only the instance methods would leave the timeline editable through
+    the ORM. Cascades from the advisory still work: Django's collector deletes
+    through its own query, not through this manager.
+    """
+
+    def update(self, **kwargs: Any) -> int:
+        raise ValidationError("Advisory events are append-only.")
+
+    def delete(self) -> Any:
+        raise ValidationError("Advisory events are append-only.")
+
+
 class AdvisoryEvent(models.Model):
     """Append-only timeline: messages and field changes in one ordering.
 
@@ -739,6 +769,8 @@ class AdvisoryEvent(models.Model):
     edits share a table rather than being joined back together at read time. New
     event kinds need no migration.
     """
+
+    objects = AppendOnlyQuerySet.as_manager()
 
     class EventType(models.TextChoices):
         # Internal team discussion. Never leaves the workspace.

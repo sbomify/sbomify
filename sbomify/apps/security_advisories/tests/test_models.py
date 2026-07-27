@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -129,7 +131,16 @@ def test_made_public_at_cannot_be_cleared(make_publishable) -> None:
     advisory = publish(make_publishable, visibility=SecurityAdvisory.Visibility.PUBLIC)
     advisory.visibility = SecurityAdvisory.Visibility.GATED
     advisory.made_public_at = None
-    with pytest.raises(ValidationError, match="cannot be cleared"):
+    with pytest.raises(ValidationError, match="cannot be changed"):
+        advisory.save()
+
+
+def test_made_public_at_cannot_be_rewritten(make_publishable) -> None:
+    """Write-once, not merely non-null: moving the timestamp would rewrite when
+    disclosure happened."""
+    advisory = publish(make_publishable, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    advisory.made_public_at = advisory.made_public_at - timedelta(days=30)
+    with pytest.raises(ValidationError, match="cannot be changed"):
         advisory.save()
 
 
@@ -555,6 +566,19 @@ def test_events_cannot_be_deleted(advisory) -> None:
     )
     with pytest.raises(ValidationError, match="append-only"):
         event.delete()
+
+
+def test_events_cannot_be_bulk_updated(advisory) -> None:
+    """QuerySet.update() never calls save(), so the manager has to refuse it."""
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Investigating.")
+    with pytest.raises(ValidationError, match="append-only"):
+        AdvisoryEvent.objects.filter(advisory=advisory).update(body="Rewritten.")
+
+
+def test_events_cannot_be_bulk_deleted(advisory) -> None:
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Investigating.")
+    with pytest.raises(ValidationError, match="append-only"):
+        AdvisoryEvent.objects.filter(advisory=advisory).delete()
 
 
 def test_comments_are_not_public(advisory) -> None:
