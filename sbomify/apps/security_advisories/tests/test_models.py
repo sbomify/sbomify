@@ -343,6 +343,32 @@ def test_product_name_survives_product_deletion(advisory, product) -> None:
     assert link.product_name == "Acme Gateway"
 
 
+def test_product_row_needs_a_product_or_a_name(advisory) -> None:
+    """Neither leaves a row naming nothing a reader can identify."""
+    with pytest.raises(ValidationError, match="needs a product or a name"):
+        AdvisoryProduct.objects.create(advisory=advisory)
+
+
+def test_product_row_may_carry_a_name_alone(advisory) -> None:
+    """A product retired before sbomify tracked it is still nameable."""
+    link = AdvisoryProduct.objects.create(advisory=advisory, product_name="Legacy Appliance")
+    assert link.product_id is None
+
+
+def test_advisory_cannot_become_a_notice_while_it_names_products(advisory, advisory_product) -> None:
+    advisory.advisory_type = SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE
+    with pytest.raises(ValidationError, match="cannot become a workspace notice"):
+        advisory.save()
+
+
+def test_advisory_becomes_a_notice_once_its_products_are_gone(advisory, advisory_product) -> None:
+    advisory_product.delete()
+    advisory.advisory_type = SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE
+    advisory.save()
+    advisory.refresh_from_db()
+    assert advisory.advisory_type == SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE
+
+
 def test_cross_tenant_product_rejected(advisory, other_team) -> None:
     foreign = Product.objects.create(name="Someone else's", team=other_team)
     with pytest.raises(ValidationError, match="Cross-tenant"):
@@ -719,6 +745,31 @@ def test_vulnerability_recommendation_satisfies_affected(advisory, advisory_prod
         status=AdvisoryProductStatus.Status.EXPLOITABLE,
     )
     assert validate_publishable(advisory) == []
+
+
+def test_publish_validation_query_count_does_not_grow_with_the_graph(
+    advisory, advisory_product, team, django_assert_max_num_queries
+) -> None:
+    """Validation prefetches the status graph, so more products and vulnerabilities
+    do not each cost their own queries."""
+    products = [advisory_product]
+    for name in ("Acme Relay", "Acme Edge", "Acme Core"):
+        product = Product.objects.create(name=name, team=team)
+        products.append(AdvisoryProduct.objects.create(advisory=advisory, product=product))
+
+    for index in range(4):
+        vuln = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id=f"CVE-2026-100{index}")
+        for product_link in products:
+            status = AdvisoryProductStatus.objects.create(
+                vulnerability=vuln,
+                advisory_product=product_link,
+                status=AdvisoryProductStatus.Status.RESOLVED,
+            )
+            AdvisoryVersionRange.objects.create(product_status=status, introduced="1.0.0", fixed="1.4.3")
+
+    # 16 statuses and 16 ranges: products, vulnerabilities, statuses, ranges.
+    with django_assert_max_num_queries(6):
+        assert validate_publishable(advisory) == []
 
 
 def test_advisory_without_a_title_is_not_publishable(make_publishable) -> None:

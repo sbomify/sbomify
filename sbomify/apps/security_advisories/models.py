@@ -287,6 +287,15 @@ class SecurityAdvisory(models.Model):
             if not self.made_public_at:
                 errors["made_public_at"] = "Going public must record when."
 
+        # AdvisoryProduct.clean() stops a product joining a notice; this stops the
+        # advisory turning into a notice underneath products that already exist.
+        if (
+            self.advisory_type == self.AdvisoryType.WORKSPACE_NOTICE
+            and not self._state.adding
+            and AdvisoryProduct.objects.filter(advisory_id=self.pk).exists()
+        ):
+            errors["advisory_type"] = "This advisory names products, so it cannot become a workspace notice."
+
         if not self._state.adding:
             previous = type(self).objects.filter(pk=self.pk).values("team_id", "tracking_id", "made_public_at").first()
             if previous:
@@ -479,6 +488,10 @@ class AdvisoryProduct(models.Model):
             raise ValidationError({"product": "Cross-tenant advisory product rejected."})
         if self.advisory_id and self.advisory.advisory_type == SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE:
             raise ValidationError({"advisory": "A workspace notice names no products."})
+        # Without either, the row names nothing a reader can identify, and publish
+        # validation would still count it as a product.
+        if product is None and not self.product_name.strip():
+            raise ValidationError({"product_name": "A product row needs a product or a name."})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         product = self.product
@@ -848,7 +861,14 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
         problems.append("The advisory needs a title.")
 
     products = list(advisory.products.all())
-    vulnerabilities = list(advisory.vulnerabilities.all())
+    # Prefetch the whole status graph: the per-status checks below would otherwise
+    # query once per status, so an advisory with many products x vulnerabilities
+    # would pay N+1 to validate.
+    vulnerabilities = list(
+        advisory.vulnerabilities.prefetch_related(
+            "product_statuses__advisory_product", "product_statuses__version_ranges"
+        )
+    )
     is_notice = advisory.advisory_type == SecurityAdvisory.AdvisoryType.WORKSPACE_NOTICE
 
     if is_notice and products:
@@ -857,7 +877,7 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
         problems.append("A product advisory needs at least one product.")
 
     for vulnerability in vulnerabilities:
-        statuses = list(vulnerability.product_statuses.select_related("advisory_product").all())
+        statuses = list(vulnerability.product_statuses.all())
         by_product = {status.advisory_product_id for status in statuses}
 
         if is_notice:
@@ -873,10 +893,11 @@ def validate_publishable(advisory: SecurityAdvisory) -> list[str]:
         for status in statuses:
             label = f"{vulnerability} / {status.advisory_product or 'all products'}"
             if status.status == AdvisoryProductStatus.Status.RESOLVED:
+                # ``.all()`` reads the prefetch cache; ``.exclude()`` would re-query.
                 has_fix = (
                     status.recommended_version
                     or status.recommended_release_id
-                    or status.version_ranges.exclude(fixed="").exists()
+                    or any(version_range.fixed for version_range in status.version_ranges.all())
                 )
                 if not has_fix:
                     problems.append(f"{label} is fixed but names no fixed version.")
