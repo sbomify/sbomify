@@ -10,6 +10,7 @@ from django.utils import timezone
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.security_advisories.models import (
+    CVE_ID_RE,
     AdvisoryEvent,
     AdvisoryProduct,
     AdvisoryProductStatus,
@@ -215,6 +216,16 @@ def test_malformed_cve_id_rejected(advisory, bad) -> None:
 def test_cve_id_sequence_may_exceed_four_digits(advisory) -> None:
     vuln = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-1234567")
     assert vuln.cve_id == "CVE-2026-1234567"
+
+
+def test_column_accepts_every_id_the_validator_accepts(advisory) -> None:
+    """The sequence part has no upper bound, so the column must not impose one
+    the validator does not."""
+    long_id = "CVE-2026-" + "1" * 20
+    assert CVE_ID_RE.match(long_id)
+    vuln = AdvisoryVulnerability.objects.create(advisory=advisory, cve_id=long_id)
+    vuln.refresh_from_db()
+    assert vuln.cve_id == long_id
 
 
 def test_cve_unique_per_advisory(advisory, vulnerability) -> None:

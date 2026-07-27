@@ -325,7 +325,10 @@ class AdvisoryVulnerability(models.Model):
     advisory = models.ForeignKey(SecurityAdvisory, on_delete=models.CASCADE, related_name="vulnerabilities")
 
     # Blank for an issue with no CVE assigned (internal finding, embargoed request).
-    cve_id = models.CharField(max_length=20, blank=True, default="")
+    # Wide enough that the column never rejects an id CVE_ID_RE accepts: the
+    # sequence part has no upper bound, and 20 would already truncate an
+    # eleven-digit one.
+    cve_id = models.CharField(max_length=64, blank=True, default="")
     title = models.CharField(max_length=255, blank=True, default="")
     description = models.TextField(blank=True, default="")
     cwe_ids = models.JSONField(default=list, blank=True)
