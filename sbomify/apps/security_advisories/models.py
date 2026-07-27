@@ -486,6 +486,7 @@ class AdvisoryProduct(models.Model):
     )
     product_name = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
         return self.product_name or self.id
@@ -709,6 +710,7 @@ class AdvisoryVersionRange(models.Model):
         "core.Release", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     _PIN_FIELDS = (
         ("introduced", "introduced_release"),

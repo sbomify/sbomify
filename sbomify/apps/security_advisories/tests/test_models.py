@@ -686,6 +686,13 @@ def test_workspace_notice_needs_a_portfolio_status(notice) -> None:
     assert any("portfolio-wide status" in problem for problem in validate_publishable(notice))
 
 
+def test_notice_without_vulnerabilities_is_publishable(notice) -> None:
+    """An infrastructure incident update names no CVE and no product."""
+    assert notice.vulnerabilities.count() == 0
+    assert notice.products.count() == 0
+    assert validate_publishable(notice) == []
+
+
 def test_notice_with_portfolio_status_is_publishable(notice) -> None:
     vuln = AdvisoryVulnerability.objects.create(advisory=notice, cve_id="CVE-2021-44228")
     AdvisoryProductStatus.objects.create(
@@ -818,6 +825,28 @@ def test_deleting_the_team_cascades_advisories(other_team) -> None:
     other_team.delete()
     assert SecurityAdvisory.objects.filter(pk=doomed.pk).count() == 0
     assert AdvisoryVulnerability.objects.count() == 0
+
+
+def test_deleting_the_actor_keeps_the_advisory_and_its_events(advisory) -> None:
+    """Provenance is best-effort: losing the user must not erase the record."""
+    from django.contrib.auth import get_user_model
+
+    # A throwaway user: deleting the shared ``sample_user`` fixture inside a test
+    # collides with its own teardown.
+    author = get_user_model().objects.create_user(username="advisory-author", password="x")  # nosec B106
+    advisory.created_by = author
+    advisory.save()
+    event = AdvisoryEvent.objects.create(
+        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Investigating.", actor=author
+    )
+
+    author.delete()
+
+    advisory.refresh_from_db()
+    event.refresh_from_db()
+    assert advisory.created_by_id is None
+    assert event.actor_id is None
+    assert event.body == "Investigating."
 
 
 def test_deleting_the_source_vex_keeps_the_status(vulnerability, team) -> None:
