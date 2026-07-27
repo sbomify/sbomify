@@ -35,11 +35,18 @@ def _bounded(value: Any, *, limit: int = 1024) -> Any:
     keys and values are as supplier-controlled as a package name. Truncating in
     place keeps the shape an agent expects while bounding how much injected text
     any one field can carry.
+
+    Keys are bounded as well as values: a dict keyed on something taken from the
+    artifact (a package name, a licence id) would otherwise carry unbounded
+    attacker text straight past the value-side cap.
     """
     if isinstance(value, str):
         return untrusted(value, limit=limit)
     if isinstance(value, dict):
-        return {key: _bounded(item, limit=limit) for key, item in value.items()}
+        return {
+            (untrusted(key, limit=limit) if isinstance(key, str) else key): _bounded(item, limit=limit)
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [_bounded(item, limit=limit) for item in value]
     return value
@@ -57,6 +64,27 @@ def _field(entry: Any, key: str, *, limit: int = 512) -> str | None:
     return untrusted(value, limit=limit) if isinstance(value, str) else None
 
 
+def _license_label(entry: dict[str, Any]) -> str | None:
+    """The display label for one CycloneDX ``licenses[]`` entry.
+
+    The nested ``license`` key is optional and, in real-world documents, is
+    sometimes present but null or a bare string. A chained
+    ``entry.get("license", {}).get("id")`` raises AttributeError on those,
+    because the default only applies when the key is *absent* — so a
+    syntactically valid SBOM could crash `get_sbom_packages`.
+    """
+    nested = entry.get("license")
+    if isinstance(nested, dict):
+        label = nested.get("id") or nested.get("name")
+        if isinstance(label, str):
+            return label
+    elif isinstance(nested, str):
+        return nested
+
+    expression = entry.get("expression")
+    return expression if isinstance(expression, str) else None
+
+
 def _extract_packages(payload: dict[str, Any], sbom_format: str) -> list[dict[str, Any]]:
     """Normalise CycloneDX components / SPDX packages into one shape.
 
@@ -69,11 +97,7 @@ def _extract_packages(payload: dict[str, Any], sbom_format: str) -> list[dict[st
         for entry in payload.get("components", []) or []:
             if not isinstance(entry, dict):
                 continue
-            licenses = [
-                lic.get("license", {}).get("id") or lic.get("license", {}).get("name") or lic.get("expression")
-                for lic in entry.get("licenses", []) or []
-                if isinstance(lic, dict)
-            ]
+            licenses = [_license_label(lic) for lic in entry.get("licenses", []) or [] if isinstance(lic, dict)]
             packages.append(
                 {
                     "name": _field(entry, "name"),

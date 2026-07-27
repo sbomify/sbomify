@@ -95,12 +95,13 @@ class TestPurgeSoftDeletedUsers:
         user2.save()
         user2_id = user2.id
 
-        call_count = 0
-
+        # Fail for a specific user rather than "the first one processed":
+        # ``purge_soft_deleted_users`` iterates an unordered queryset, so which
+        # user comes first is up to Postgres. Keying on call order made this
+        # test fail whenever succeed_user happened to be purged first — it got
+        # the simulated failure and survived.
         def mock_hard_delete(user):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+            if user.id == user1.id:
                 raise Exception("Simulated failure")
             user.delete()
             return True
