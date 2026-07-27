@@ -324,6 +324,10 @@ jobs:
           bun run build
 
       - name: Run Frontend Tests
+        # `shell: bash` is required: the default shell is `bash -e` without
+        # pipefail, so `bun test | tee` would report tee's exit status and a
+        # failing test suite would pass silently.
+        shell: bash
         run: |
           echo "## Frontend Test Results" >> $GITHUB_STEP_SUMMARY
           bun test | tee -a $GITHUB_STEP_SUMMARY

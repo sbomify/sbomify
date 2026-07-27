@@ -214,8 +214,9 @@ describe('SBOMs Table', () => {
             registerSbomsTable()
             const factory = mockAlpineData.mock.calls[0][1] as (id: string) => Record<string, unknown>
             const component = factory('comp-1') as Record<string, unknown>
-            // Attach mock $el with closest() returning the mock container
-            component.$el = { closest: () => mockContainer }
+            // Attach mock $el with closest() returning the mock container.
+            // dataset must be present: init() reads pageSize/defaultSort off it.
+            component.$el = { closest: () => mockContainer, dataset: {} }
             return component
         }
 
