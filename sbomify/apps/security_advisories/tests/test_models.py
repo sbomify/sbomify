@@ -158,9 +158,16 @@ def test_re_embargoing_keeps_the_disclosure_record(make_publishable) -> None:
 
 def test_draft_is_never_externally_visible(advisory) -> None:
     advisory.visibility = SecurityAdvisory.Visibility.PUBLIC
-    advisory.made_public_at = timezone.now()
     advisory.save()
     assert advisory.is_externally_visible is False
+
+
+def test_draft_cannot_carry_a_disclosure_timestamp(advisory) -> None:
+    """Otherwise a draft could be backdated, then publishing would freeze that
+    date under the write-once rule."""
+    advisory.made_public_at = timezone.now() - timedelta(days=90)
+    with pytest.raises(ValidationError, match="A draft has not been disclosed"):
+        advisory.save()
 
 
 def test_published_public_advisory_is_externally_visible(make_publishable) -> None:
@@ -309,6 +316,19 @@ def test_explicit_reference_type_is_not_overwritten(advisory) -> None:
 def test_reference_needs_id_or_url(advisory) -> None:
     with pytest.raises(ValidationError, match="identifier or a URL"):
         AdvisoryReference.objects.create(advisory=advisory)
+
+
+def test_whitespace_only_reference_rejected(advisory) -> None:
+    """Whitespace would otherwise satisfy both the emptiness check and the
+    CheckConstraint."""
+    with pytest.raises(ValidationError, match="identifier or a URL"):
+        AdvisoryReference.objects.create(advisory=advisory, external_id="   ", url="  ")
+
+
+def test_reference_id_is_stripped_before_classification(advisory) -> None:
+    reference = AdvisoryReference.objects.create(advisory=advisory, external_id="  CVE-2021-44228  ")
+    assert reference.external_id == "CVE-2021-44228"
+    assert reference.reference_type == ReferenceType.CVE
 
 
 def test_reference_url_only_is_allowed(advisory) -> None:

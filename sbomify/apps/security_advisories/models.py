@@ -286,6 +286,11 @@ class SecurityAdvisory(models.Model):
         if self.visibility == self.Visibility.PUBLIC and self.status != self.Status.DRAFT:
             if not self.made_public_at:
                 errors["made_public_at"] = "Going public must record when."
+        if self.status == self.Status.DRAFT and self.made_public_at:
+            # A draft has disclosed nothing. Allowing one to carry the timestamp
+            # would let it be backdated and then frozen by the write-once rule at
+            # publish, which is the opposite of evidence.
+            errors["made_public_at"] = "A draft has not been disclosed; publishing records when."
 
         # AdvisoryProduct.clean() stops a product joining a notice; this stops the
         # advisory turning into a notice underneath products that already exist.
@@ -435,7 +440,7 @@ class AdvisoryReference(models.Model):
 
     def clean(self) -> None:
         super().clean()
-        if not self.external_id and not self.url:
+        if not self.external_id.strip() and not self.url.strip():
             raise ValidationError({"external_id": "A reference needs an identifier or a URL."})
         if self.vulnerability_id and self.advisory_id:
             owner = AdvisoryVulnerability.objects.filter(pk=self.vulnerability_id).values("advisory_id").first()
@@ -443,6 +448,10 @@ class AdvisoryReference(models.Model):
                 raise ValidationError({"vulnerability": "The vulnerability belongs to a different advisory."})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
+        # Normalise first: whitespace-only values would otherwise satisfy both the
+        # emptiness check and the CheckConstraint, and would break prefix matching.
+        self.external_id = self.external_id.strip()
+        self.url = self.url.strip()
         # Classify on write so readers get a typed field instead of re-parsing the id.
         if self.external_id and self.reference_type == ReferenceType.OTHER:
             self.reference_type = detect_reference_type(self.external_id)
