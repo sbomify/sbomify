@@ -227,6 +227,20 @@ def test_withdrawn_advisory_keeps_its_tracking_id(team) -> None:
         advisory.save()
 
 
+def test_whitespace_tracking_id_does_not_count_as_published(team) -> None:
+    """Whitespace would otherwise satisfy the published check and sit outside the
+    partial unique's blank-draft exemption, so two of them could collide."""
+    advisory = SecurityAdvisory(
+        team=team,
+        title="Published",
+        status=SecurityAdvisory.Status.PUBLISHED,
+        published_at=timezone.now(),
+        tracking_id="   ",
+    )
+    with pytest.raises(ValidationError, match="must have a tracking id"):
+        advisory.save()
+
+
 def test_blank_tracking_ids_do_not_collide(team) -> None:
     """The unique constraint is partial, so any number of drafts coexist."""
     SecurityAdvisory.objects.create(team=team, title="Draft one")
@@ -307,10 +321,27 @@ def test_reference_type_classified_on_save(advisory, vulnerability) -> None:
 
 
 def test_explicit_reference_type_is_not_overwritten(advisory) -> None:
+    """An id no prefix recognises is the only case where the caller's type adds
+    something the id does not already say."""
     reference = AdvisoryReference.objects.create(
         advisory=advisory, external_id="ACME-2026-1", reference_type=ReferenceType.MSRC
     )
     assert reference.reference_type == ReferenceType.MSRC
+
+
+def test_editing_the_id_reclassifies_the_reference(advisory) -> None:
+    reference = AdvisoryReference.objects.create(advisory=advisory, external_id="CVE-2021-44228")
+    reference.external_id = "GHSA-jfh8-c2jp-5v3q"
+    reference.save()
+    reference.refresh_from_db()
+    assert reference.reference_type == ReferenceType.GHSA
+
+
+def test_a_recognised_prefix_beats_a_contradicting_type(advisory) -> None:
+    reference = AdvisoryReference.objects.create(
+        advisory=advisory, external_id="CVE-2021-44228", reference_type=ReferenceType.GHSA
+    )
+    assert reference.reference_type == ReferenceType.CVE
 
 
 def test_reference_needs_id_or_url(advisory) -> None:
@@ -596,7 +627,7 @@ def test_name_only_product_cannot_pin_releases(advisory, vulnerability, product)
     """A row naming a product sbomify does not host has no releases of its own.
 
     ``Release.product`` cascades, so a live pin under a NULL ``product`` is never
-    a leftover from a deleted product — it always points somewhere else.
+    a leftover from a deleted product: it always points somewhere else.
     """
     external = AdvisoryProduct.objects.create(advisory=advisory, product_name="Acme Gateway (OEM build)")
     name_only_status = AdvisoryProductStatus.objects.create(

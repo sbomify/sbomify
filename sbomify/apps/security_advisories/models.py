@@ -201,7 +201,7 @@ class SecurityAdvisory(models.Model):
     description = models.TextField(blank=True, default="")
     severity = models.CharField(max_length=10, choices=Severity.choices, blank=True, default="")
 
-    # [{"name", "organization", "summary", "urls": []}] — credit for reporters.
+    # [{"name", "organization", "summary", "urls": []}]: credit for reporters.
     acknowledgments = models.JSONField(default=list, blank=True)
 
     published_at = models.DateTimeField(null=True, blank=True)
@@ -317,6 +317,10 @@ class SecurityAdvisory(models.Model):
             raise ValidationError(errors)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
+        # Normalise before validating: a whitespace-only id would satisfy the
+        # published check and sit outside the partial unique's blank exemption,
+        # so two of them would collide on nothing a reader can see.
+        self.tracking_id = self.tracking_id.strip()
         self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
@@ -454,9 +458,15 @@ class AdvisoryReference(models.Model):
         # emptiness check and the CheckConstraint, and would break prefix matching.
         self.external_id = self.external_id.strip()
         self.url = self.url.strip()
-        # Classify on write so readers get a typed field instead of re-parsing the id.
-        if self.external_id and self.reference_type == ReferenceType.OTHER:
-            self.reference_type = detect_reference_type(self.external_id)
+        # Classify on write so readers get a typed field instead of re-parsing the
+        # id, and re-classify on every write so editing the id cannot strand the
+        # old type. A recognised prefix settles the question, so the caller's value
+        # survives only for ids no prefix matches, which is the one case where it
+        # says something the id does not.
+        if self.external_id:
+            detected = detect_reference_type(self.external_id)
+            if detected != ReferenceType.OTHER:
+                self.reference_type = detected
         self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 
