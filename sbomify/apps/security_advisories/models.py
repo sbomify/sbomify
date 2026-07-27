@@ -504,6 +504,9 @@ class AdvisoryProduct(models.Model):
             raise ValidationError({"product_name": "A product row needs a product or a name."})
 
     def save(self, *args: Any, **kwargs: Any) -> None:
+        # Normalise before the snapshot: a whitespace-only name would otherwise
+        # skip it and persist as an unreadable row.
+        self.product_name = self.product_name.strip()
         product = self.product
         if product is not None and not self.product_name:
             self.product_name = product.name
@@ -782,7 +785,7 @@ class AppendOnlyQuerySet(models.QuerySet["AdvisoryEvent"]):
     def update(self, **kwargs: Any) -> int:
         raise ValidationError("Advisory events are append-only.")
 
-    def delete(self) -> Any:
+    def delete(self, *args: Any, **kwargs: Any) -> Any:
         raise ValidationError("Advisory events are append-only.")
 
 

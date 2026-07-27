@@ -383,6 +383,17 @@ def test_product_row_needs_a_product_or_a_name(advisory) -> None:
         AdvisoryProduct.objects.create(advisory=advisory)
 
 
+def test_whitespace_product_name_falls_back_to_the_snapshot(advisory, product) -> None:
+    """A blank-looking name must not beat the snapshot and leave an unreadable row."""
+    link = AdvisoryProduct.objects.create(advisory=advisory, product=product, product_name="   ")
+    assert link.product_name == "Acme Gateway"
+
+
+def test_whitespace_product_name_without_a_product_rejected(advisory) -> None:
+    with pytest.raises(ValidationError, match="needs a product or a name"):
+        AdvisoryProduct.objects.create(advisory=advisory, product_name="   ")
+
+
 def test_product_row_may_carry_a_name_alone(advisory) -> None:
     """A product retired before sbomify tracked it is still nameable."""
     link = AdvisoryProduct.objects.create(advisory=advisory, product_name="Legacy Appliance")
