@@ -8,14 +8,14 @@
      @ws:message.window="if (['sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'component_created', 'component_deleted'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-components')), 500); }">
     {# Serialize components data for Alpine.js #}
     {{ components|json_script:"components-data" }}
-    <div class="tw-dashboard-card">
-        <div class="tw-card-header">
-            <h3 class="text-lg font-semibold text-text">All Components</h3>
+    <div class="tw-card">
+        <div class="px-6 py-4 border-b border-border">
+            <h3 class="text-lg font-semibold text-text m-0">All Components</h3>
         </div>
-        <div class="tw-card-body p-0">
+        <div>
             {% if components %}
                 <div class="flex flex-col overflow-hidden">
-                    <div class="tw-data-table-toolbar">
+                    <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3 justify-between">
                         <div class="tw-data-table-toolbar-left">
                             <div class="tw-data-table-search">
                                 <i class="fas fa-search tw-data-table-search-icon"></i>
@@ -201,7 +201,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="tw-data-table-footer">
+                    <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
                         <div class="tw-data-table-info">
                             Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
                             <template x-if="search || typeFilter !== 'all' || visibilityFilter !== 'all'">
