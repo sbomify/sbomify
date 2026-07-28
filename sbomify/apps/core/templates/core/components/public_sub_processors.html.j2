@@ -1,0 +1,69 @@
+{# Public sub-processors — server-rendered #}
+{% if sub_processors %}
+    <div class="public-section">
+        <div class="tw-card">
+            {% include 'core/components/public_section_header.html.j2' with title='Sub-processors' icon='fa-sitemap' %}
+            <div class="px-6 pt-4">
+                <p class="text-text-muted text-sm m-0">Third parties involved in delivering this product.</p>
+            </div>
+            {# Mobile (<md): stacked rows, matching the links section. #}
+            <div class="md:hidden divide-y divide-border/40">
+                {% for processor in sub_processors %}
+                    <div class="px-6 py-4 flex flex-col gap-1">
+                        <div class="text-text font-semibold break-words">{{ processor.name }}</div>
+                        {% if processor.purpose %}<span class="text-text-muted text-xs">{{ processor.purpose }}</span>{% endif %}
+                        {% if processor.location %}
+                            <span class="text-text-muted text-xs">
+                                <i class="fas fa-location-dot mr-1" aria-hidden="true"></i>{{ processor.location }}
+                            </span>
+                        {% endif %}
+                        {% if processor.url %}
+                            <a href="{{ processor.url }}"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="text-primary hover:underline inline-flex items-center gap-1 self-start min-h-10 py-2">
+                                Visit Site
+                                <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {# md+: full table. #}
+            <div class="hidden md:block p-6">
+                <table class="tw-table w-full text-sm">
+                    <thead>
+                        <tr class="bg-border/30">
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Name</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Purpose</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Location</th>
+                            <th class="text-left py-3 px-4 font-medium text-text-muted">Website</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for processor in sub_processors %}
+                            <tr class="border-t border-border/40">
+                                <td class="py-3 px-4 text-text font-semibold">{{ processor.name }}</td>
+                                <td class="py-3 px-4 text-text-muted">{{ processor.purpose|default:"—" }}</td>
+                                <td class="py-3 px-4 text-text-muted">{{ processor.location|default:"—" }}</td>
+                                <td class="py-3 px-4">
+                                    {% if processor.url %}
+                                        <a href="{{ processor.url }}"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-primary hover:underline inline-flex items-center gap-1">
+                                            Visit Site
+                                            <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+                                        </a>
+                                    {% else %}
+                                        <span class="text-text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endif %}

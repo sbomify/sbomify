@@ -155,6 +155,22 @@ def _get_product_links(product_id: str) -> list[Any]:
     ]
 
 
+def _get_sub_processors(product_id: str) -> list[dict[str, Any]]:
+    """Sub-processors attached to this product, workspace-owned but shown per product."""
+    from sbomify.apps.sboms.models import SubProcessor
+
+    return [
+        {
+            "id": processor.id,
+            "name": processor.name,
+            "purpose": processor.purpose,
+            "url": processor.url,
+            "location": processor.location,
+        }
+        for processor in SubProcessor.objects.filter(products__id=product_id).order_by("name")
+    ]
+
+
 class ProductDetailsPublicView(View):
     def get(self, request: HttpRequest, product_id: str) -> HttpResponse:
         # Resolve product by slug (on custom domains) or ID (on main app)
@@ -197,6 +213,7 @@ class ProductDetailsPublicView(View):
         )
         product_identifiers = _get_product_identifiers(resolved_id)
         product_links = _get_product_links(resolved_id)
+        sub_processors = _get_sub_processors(resolved_id)
 
         # Build view all releases URL
         if is_custom_domain:
@@ -260,6 +277,7 @@ class ProductDetailsPublicView(View):
             "public_releases": public_releases,
             "product_identifiers": product_identifiers,
             "product_links": product_links,
+            "sub_processors": sub_processors,
             "view_all_releases_url": view_all_releases_url,
             # Barcode types for identifier rendering
             "barcode_types": BARCODE_TYPES,

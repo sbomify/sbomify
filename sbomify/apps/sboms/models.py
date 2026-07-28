@@ -339,6 +339,54 @@ class ProductIdentifier(models.Model):
         super().save(*args, **kwargs)
 
 
+class SubProcessor(models.Model):
+    """A third party a workspace relies on to deliver its products.
+
+    Trust centres list these because a customer's own compliance obligations
+    flow through to whoever actually processes the data: a cloud host, a CDN, an
+    email provider. Owned by the workspace rather than a product, since the same
+    vendor normally sits behind several of them, and attached to products through
+    an M2M so each product page shows only its own chain.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("sboms").label + "_sub_processors"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["team", "name"], name="sboms_sub_processor_unique_name_per_team"),
+        ]
+        indexes = [models.Index(fields=["team"], name="sboms_subproc_team_idx")]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="sub_processors")
+    name = models.CharField(max_length=255, help_text="The vendor's name, e.g. Amazon Web Services")
+    purpose = models.CharField(max_length=255, blank=True, default="", help_text="What they do for you, e.g. Hosting")
+    url = models.URLField(max_length=500, blank=True, default="", validators=[URLValidator()])
+    # Free text rather than a country list: entries are as specific as the
+    # contract is ("EU (Frankfurt)", "Global edge network"), and a picker would
+    # force a precision the underlying agreement often does not have.
+    location = models.CharField(max_length=255, blank=True, default="", help_text="Where processing happens")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    products = models.ManyToManyField(Product, related_name="sub_processors", blank=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self) -> None:
+        super().clean()
+        if not self.name.strip():
+            raise ValidationError({"name": "A sub-processor needs a name."})
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        self.name = self.name.strip()
+        self.purpose = self.purpose.strip()
+        self.location = self.location.strip()
+        self.full_clean(validate_unique=False, validate_constraints=False)
+        super().save(*args, **kwargs)
+
+
 class ProductLink(models.Model):
     """Model to store various product links like website, support, documentation, etc."""
 
