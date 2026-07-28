@@ -152,7 +152,7 @@
         @apply mx-auto block;
         width: 160px;
         height: auto;
-        aspect-ratio: 571.45 / 105;
+        aspect-ratio: 571.45 / 107;
         fill: currentColor;
         color: var(--sbomify-white);
     }
@@ -1076,7 +1076,7 @@
         .mobile-logo svg {
             height: 32px;
             width: auto;
-            aspect-ratio: 571.45 / 105;
+            aspect-ratio: 571.45 / 107;
             fill: currentColor;
             color: var(--sbomify-gray-900);
         }

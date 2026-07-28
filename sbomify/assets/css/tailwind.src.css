@@ -2008,11 +2008,11 @@ html.no-transitions * {
    them their intrinsic ratio explicitly — without it, `h-auto`/`w-auto`
    sizing can round to the default replaced-element box and clip the mark. */
 .tw-emblem {
-  aspect-ratio: 129.78 / 105;
+  aspect-ratio: 129.78 / 107;
 }
 
 .tw-logo {
-  aspect-ratio: 571.45 / 105;
+  aspect-ratio: 571.45 / 107;
 }
 
 /* Grow-in entrance: bars sweep in, letters follow (opt-in via animate=true) */
@@ -2062,7 +2062,7 @@ html.no-transitions * {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 129.78 / 105;
+  aspect-ratio: 129.78 / 107;
 }
 
 .tw-brand-loader .tw-emblem-bar {
