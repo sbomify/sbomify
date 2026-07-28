@@ -45,7 +45,6 @@
   --animate-slide-in-right: slideInRight 0.3s ease-out;
   --animate-scale-in: scaleIn 0.2s ease-out;
   --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --animate-pulse-soft: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-shake: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 
   @keyframes fadeIn {
@@ -80,19 +79,10 @@
     100% { opacity: 1; transform: scale(1); }
   }
 
-  @keyframes pulseSoft {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
     20%, 40%, 60%, 80% { transform: translateX(4px); }
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
   }
 
   @keyframes shimmer {
@@ -116,6 +106,7 @@
   }
 
   /* Palette — real colours so Tailwind generates all utilities (incl. gradients). Dark defaults; :root.light overrides. */
+  --color-navy: rgb(37 41 63);             /* Brand Navy #25293F - theme-invariant ink */
   --color-primary: rgb(124 140 255);       /* Periwinkle #7C8CFF - interactive accent on dark */
   --color-primary-dark: rgb(66 99 235);    /* Brand Blue #4263EB */
   --color-primary-light: rgb(163 174 255); /* #A3AEFF - for subtle states */
@@ -2016,6 +2007,11 @@ html.no-transitions * {
   vertical-align: -0.2em;
 }
 
+/* Size ladder — the single home for what sm/md/lg mean for loaders */
+.tw-brand-loader.tw-loader-sm { width: 1.25rem; }
+.tw-brand-loader.tw-loader-md { width: 1.75rem; }
+.tw-brand-loader.tw-loader-lg { width: 2.5rem; }
+
 .tw-brand-loader .tw-emblem-bar {
   transform-box: fill-box;
   transform-origin: left center;
@@ -2249,7 +2245,7 @@ html.no-transitions * {
 /* Dark mode adjustments */
 .dark .alpine-tooltip {
   background-color: rgba(255, 255, 255, 0.95);
-  color: #25293F;
+  color: var(--color-navy);
 }
 
 .dark .alpine-tooltip[data-placement="top"]::before {
@@ -5048,12 +5044,6 @@ html.no-transitions * {
   /* Disable gradient animation */
   .tw-btn-gradient {
     animation: none !important;
-  }
-
-  /* Disable spinner animation - show static indicator instead */
-  .tw-spinner {
-    animation: none !important;
-    border-top-color: var(--color-primary);
   }
 
   /* Disable skeleton shimmer */

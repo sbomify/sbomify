@@ -1,11 +1,11 @@
 {% comment %}
   sbomify emblem (bar mark). Fills with currentColor so it adapts to theme.
+  Also the shared bar artwork for the brand loader (loader.html.j2 wraps it).
 
   Parameters:
   - class: extra classes for sizing/colour (e.g. "w-7 h-auto text-text")
-  - animate: set to true for the grow-in entrance on page load
 {% endcomment %}
-<svg class="tw-emblem{% if animate %} tw-logo-in{% endif %}{% if class %} {{ class }}{% endif %}"
+<svg class="tw-emblem{% if class %} {{ class }}{% endif %}"
      viewBox="0 0 129.78 107"
      fill="currentColor"
      aria-hidden="true"

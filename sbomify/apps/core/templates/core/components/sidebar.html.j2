@@ -195,48 +195,28 @@
                 {# Dashboard #}
                 <li>
                     {% url 'core:dashboard' as dashboard_url %}
-                    {% if current_view_name == 'core:dashboard' %}
-                        {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-house" label="Dashboard" active=True %}
-                    {% else %}
-                        {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-house" label="Dashboard" %}
-                    {% endif %}
+                    {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-house" label="Dashboard" match="core:dashboard" %}
                 </li>
                 {# Products #}
                 <li>
                     {% url 'core:products_dashboard' as products_url %}
-                    {% if 'core:product' in current_view_name %}
-                        {% include "core/components/sidebar_link.html.j2" with url=products_url icon="fa-cube" label="Products" active=True %}
-                    {% else %}
-                        {% include "core/components/sidebar_link.html.j2" with url=products_url icon="fa-cube" label="Products" %}
-                    {% endif %}
+                    {% include "core/components/sidebar_link.html.j2" with url=products_url icon="fa-cube" label="Products" match="core:product" %}
                 </li>
                 {# Components #}
                 <li>
                     {% url 'core:components_dashboard' as components_url %}
-                    {% if 'core:component' in current_view_name %}
-                        {% include "core/components/sidebar_link.html.j2" with url=components_url icon="fa-puzzle-piece" label="Components" active=True %}
-                    {% else %}
-                        {% include "core/components/sidebar_link.html.j2" with url=components_url icon="fa-puzzle-piece" label="Components" %}
-                    {% endif %}
+                    {% include "core/components/sidebar_link.html.j2" with url=components_url icon="fa-puzzle-piece" label="Components" match="core:component" %}
                 </li>
                 {# Releases #}
                 <li>
                     {% url 'core:releases_dashboard' as releases_url %}
-                    {% if 'core:release' in current_view_name %}
-                        {% include "core/components/sidebar_link.html.j2" with url=releases_url icon="fa-tag" label="Releases" active=True %}
-                    {% else %}
-                        {% include "core/components/sidebar_link.html.j2" with url=releases_url icon="fa-tag" label="Releases" %}
-                    {% endif %}
+                    {% include "core/components/sidebar_link.html.j2" with url=releases_url icon="fa-tag" label="Releases" match="core:release" %}
                 </li>
                 {# Plugins — visible to owner/admin only #}
                 {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
                     <li>
                         {% url 'plugins:plugins_page' as plugins_url %}
-                        {% if current_view_name == 'plugins:plugins_page' %}
-                            {% include "core/components/sidebar_link.html.j2" with url=plugins_url icon="fa-plug" label="Plugins" active=True %}
-                        {% else %}
-                            {% include "core/components/sidebar_link.html.j2" with url=plugins_url icon="fa-plug" label="Plugins" %}
-                        {% endif %}
+                        {% include "core/components/sidebar_link.html.j2" with url=plugins_url icon="fa-plug" label="Plugins" match="plugins:plugins_page" %}
                     </li>
                 {% endif %}
             </ul>
