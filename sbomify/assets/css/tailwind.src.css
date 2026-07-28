@@ -1461,63 +1461,17 @@ html.no-transitions * {
   text-decoration: none !important;
 }
 
-/* Sidebar link hover state - gradient for expanded items */
+/* Sidebar link hover/focus — flat brand hover */
 .sidebar-link-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
+  background-color: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 .sidebar-link-hover:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-/* Sidebar link hover state - gradient for collapsed items */
-.sidebar-link-hover-collapsed:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-.sidebar-link-hover-collapsed:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-/* Workspace switcher hover state - gradient */
-.workspace-switcher-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-primary) 20%, transparent) !important;
-}
-
-.workspace-switcher-hover:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-}
-
-/* Get Started button - works in both light and dark mode */
-.get-started-btn {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  box-shadow: 0 4px 14px -2px color-mix(in oklab, var(--color-primary) 40%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.1) inset;
-}
-
-.get-started-btn:hover {
-  box-shadow: 0 8px 20px -2px color-mix(in oklab, var(--color-primary) 50%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.15) inset;
-}
-
-:root.light .get-started-btn {
-  box-shadow: 0 4px 14px -2px color-mix(in oklab, var(--color-primary) 35%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.05);
-}
-
-:root.light .get-started-btn:hover {
-  box-shadow: 0 8px 20px -2px color-mix(in oklab, var(--color-primary) 45%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.08);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 40%, transparent);
+  background-color: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 /* Primary action button - works in both light and dark mode */
