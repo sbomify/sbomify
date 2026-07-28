@@ -2,6 +2,9 @@
       x-data="copyableValue({ value: '{{ value|default:''|escapejs }}', hideValue: {{ hide_value|default:''|yesno:"true,false" }}, copyFrom: '{{ copy_from|default:""|escapejs }}', title: '{{ title|default:''|escapejs }}' })"
       @click="copyToClipboard()"
       :title="title || 'Copy to clipboard'">
-    <span x-show="!hideValue && value" x-text="value" x-cloak class="text-text"></span>
+    {% comment %}The value is server-rendered as well as bound: Alpine overwrites it with the same text on init, but without it the value reaches the page only as a JS string, so a public page ships an identifier no crawler or reader can see.{% endcomment %}
+    <span x-show="!hideValue && value" x-text="value" x-cloak class="text-text">
+        {% if not hide_value %}{{ value|default:'' }}{% endif %}
+    </span>
     <i class="fas fa-copy text-text-muted group-hover:text-primary transition-colors"></i>
 </span>
