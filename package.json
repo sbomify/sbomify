@@ -46,7 +46,7 @@
     "jsbarcode": "^3.12.3",
     "license-expressions": "^0.8.0",
     "marked": "^18.0.7",
-    "postcss": "^8.5.23",
+    "postcss": "^8.5.24",
     "signature_pad": "^5.1.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.2",
