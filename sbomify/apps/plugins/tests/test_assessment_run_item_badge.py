@@ -158,3 +158,86 @@ class TestSkippedRunBadge:
 
         assert "2 Issues" in html
         assert "Skipped" not in html
+
+
+def _security_run(**overrides) -> dict:
+    """A security run as the plugins actually emit it, with ``by_severity``.
+
+    ``_run`` omits it, which sends every case above through the compliance
+    branch. Dependency Track fills it in even when it skips (one ``info``), so
+    the card renders through the security branch instead, and that is the path
+    that called the skip "1 Vulnerability".
+    """
+    run = _run(**overrides)
+    run["result"]["summary"]["by_severity"] = {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 1,
+        "unknown": 0,
+    }
+    return run
+
+
+class TestSkippedSecurityRunBadge:
+    """Same rule, security branch: DT handed an SPDX SBOM scanned nothing."""
+
+    def test_skipped_run_reads_as_skipped_not_as_a_vulnerability(self):
+        run = _security_run()
+        run["result"]["metadata"] = {"skipped": True}
+
+        header = _header(run)
+
+        assert "Skipped" in header
+        assert "Vulnerabilit" not in header
+
+    def test_skipped_run_names_the_reason_without_expanding(self):
+        run = _security_run()
+        run["result"]["metadata"] = {"skipped": True}
+
+        header = _header(run)
+
+        assert "Format Not Supported" in header
+        assert "1 findings" not in header
+
+    def test_skipped_run_is_not_coloured_as_a_warning(self):
+        run = _security_run()
+        run["result"]["metadata"] = {"skipped": True}
+
+        assert "tw-collapsible-card--warning" not in _render(run)
+
+    def test_a_real_scan_is_untouched(self):
+        """The case beside it on the same page: OSV reporting real findings."""
+        run = _security_run(plugin_name="osv", plugin_display_name="OSV Vulnerability Scanner")
+        run["result"]["summary"]["total_findings"] = 117
+        run["result"]["summary"]["by_severity"] = {
+            "critical": 7,
+            "high": 32,
+            "medium": 23,
+            "low": 55,
+            "info": 0,
+            "unknown": 0,
+        }
+
+        header = _header(run)
+
+        assert "117 Vulnerabilities" in header
+        assert "Skipped" not in header
+
+    def test_a_clean_scan_is_untouched(self):
+        run = _security_run()
+        run["result"]["summary"]["total_findings"] = 0
+        run["result"]["summary"]["by_severity"] = {
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "info": 0,
+            "unknown": 0,
+        }
+
+        header = _header(run)
+
+        assert "No Vulnerabilities" in header
+        assert "Skipped" not in header
