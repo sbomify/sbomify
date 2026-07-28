@@ -391,6 +391,50 @@ def cleanup_component_release_on_sbom_delete(sender: Any, instance: Any, **kwarg
 
 @receiver(
     m2m_changed,
+    sender="sboms.SubProcessor_products",
+    dispatch_uid="sbomify.core.signals.reject_cross_tenant_sub_processor_links",
+)
+def reject_cross_tenant_sub_processor_links(
+    sender: Any, instance: Any, action: Any, pk_set: Any, reverse: Any, **kwargs: Any
+) -> Any:
+    """Block attaching a sub-processor to a product owned by another workspace.
+
+    The same invariant ``reject_cross_tenant_product_component_links`` enforces
+    below, and it matters more here: sub-processors render on the public trust
+    centre, so a cross-tenant row would publish one workspace's vendor list on
+    another's page.
+
+    ``reverse=False`` is ``processor.products.add(...)`` (instance is the
+    SubProcessor, pk_set holds Product PKs); ``reverse=True`` is
+    ``product.sub_processors.add(...)``.
+    """
+    if action != "pre_add" or not pk_set:
+        return
+
+    from sbomify.apps.sboms.models import Product, SubProcessor
+
+    pk_list = list(pk_set)
+
+    if reverse:
+        product_team_id = instance.team_id
+        team_ids = dict(SubProcessor.objects.filter(pk__in=pk_list).values_list("id", "team_id"))
+    else:
+        product_team_id = None
+        team_ids = dict(Product.objects.filter(pk__in=pk_list).values_list("id", "team_id"))
+
+    for pk in pk_list:
+        other_team_id = team_ids.get(pk)
+        if other_team_id is None:
+            continue
+        owner_team_id = product_team_id if reverse else instance.team_id
+        if other_team_id != owner_team_id:
+            raise ValidationError(
+                f"Cross-tenant SubProcessor link rejected: workspace={owner_team_id}, other={other_team_id}"
+            )
+
+
+@receiver(
+    m2m_changed,
     sender="sboms.ProductComponent",
     dispatch_uid="sbomify.core.signals.reject_cross_tenant_product_component_links",
 )

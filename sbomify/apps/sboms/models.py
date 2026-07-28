@@ -383,6 +383,13 @@ class SubProcessor(models.Model):
         self.name = self.name.strip()
         self.purpose = self.purpose.strip()
         self.location = self.location.strip()
+        self.url = self.url.strip()
+        # Raised before full_clean so the reader gets this instead of Django's
+        # "This field cannot be blank": stripping has already turned a
+        # whitespace-only name into an empty one by the time field validation
+        # sees it, and the generic message does not say what was wrong.
+        if not self.name:
+            raise ValidationError({"name": "A sub-processor needs a name."})
         self.full_clean(validate_unique=False, validate_constraints=False)
         super().save(*args, **kwargs)
 

@@ -155,8 +155,14 @@ def _get_product_links(product_id: str) -> list[Any]:
     ]
 
 
-def _get_sub_processors(product_id: str) -> list[dict[str, Any]]:
-    """Sub-processors attached to this product, workspace-owned but shown per product."""
+def _get_sub_processors(product_id: str, team_id: int) -> list[dict[str, Any]]:
+    """Sub-processors attached to this product, workspace-owned but shown per product.
+
+    Filtered on the owning workspace as well as the product. The M2M guard makes
+    a cross-tenant link impossible to create, but this page is public, so it does
+    not rely on that alone: a row that got there another way still would not
+    render on someone else's trust centre.
+    """
     from sbomify.apps.sboms.models import SubProcessor
 
     return [
@@ -167,7 +173,7 @@ def _get_sub_processors(product_id: str) -> list[dict[str, Any]]:
             "url": processor.url,
             "location": processor.location,
         }
-        for processor in SubProcessor.objects.filter(products__id=product_id).order_by("name")
+        for processor in SubProcessor.objects.filter(products__id=product_id, team_id=team_id).order_by("name")
     ]
 
 
@@ -213,7 +219,7 @@ class ProductDetailsPublicView(View):
         )
         product_identifiers = _get_product_identifiers(resolved_id)
         product_links = _get_product_links(resolved_id)
-        sub_processors = _get_sub_processors(resolved_id)
+        sub_processors = _get_sub_processors(resolved_id, product_obj.team_id)
 
         # Build view all releases URL
         if is_custom_domain:

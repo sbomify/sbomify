@@ -90,6 +90,42 @@ class TestModel:
         assert processor.products.count() == 0
 
 
+class TestTenancy:
+    """These render on a public page, so a cross-tenant row would publish one
+    workspace's vendor list on another's trust centre."""
+
+    @pytest.fixture
+    def other_team_product(self, sample_product):  # noqa: F811
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Team
+
+        team = Team.objects.create(name="other workspace")
+        team.key = number_to_random_token(team.pk)
+        team.save()
+        return Product.objects.create(name="Their product", team=team)
+
+    def test_attaching_across_workspaces_is_rejected(self, processor, other_team_product):
+        # atomic(): raising from a pre_add receiver aborts the implicit
+        # transaction the M2M write opened, and fixture teardown cannot query
+        # until it is closed.
+        with pytest.raises(ValidationError, match="Cross-tenant SubProcessor"), transaction.atomic():
+            processor.products.add(other_team_product)
+
+    def test_the_reverse_direction_is_rejected_too(self, processor, other_team_product):
+        """product.sub_processors.add(...) reaches the same M2M the other way."""
+        with pytest.raises(ValidationError, match="Cross-tenant SubProcessor"), transaction.atomic():
+            other_team_product.sub_processors.add(processor)
+
+    def test_the_public_query_is_scoped_to_the_workspace(self, processor, sample_product):  # noqa: F811
+        """Defence in depth: the page does not rely on the write-time guard alone."""
+        from sbomify.apps.core.views.product_details_public import _get_sub_processors
+
+        processor.products.add(sample_product)
+
+        assert _get_sub_processors(sample_product.id, sample_product.team_id) != []
+        assert _get_sub_processors(sample_product.id, sample_product.team_id + 999) == []
+
+
 class TestPublicPage:
     @staticmethod
     def _get(product):
