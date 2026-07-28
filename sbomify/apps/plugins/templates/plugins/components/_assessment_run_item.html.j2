@@ -1,5 +1,6 @@
 {# Individual assessment run collapsible card - rendered server-side #}
 {% load plugins_extras %}
+{% load advisory_tags %}
 {# Safely compute has_issues - run.result may be None for pending/running assessments #}
 {% with run_id=run.id|default:loop_index result=run.result|default_if_none:"" summary=run.result.summary|default_if_none:"" fail_count=run.result.summary.fail_count|default:0 error_count=run.result.summary.error_count|default:0 pass_count=run.result.summary.pass_count|default:0 %}
     {% comment %}has_issues is the explicit-failure signal (fail+error). A run with only warnings (pass_count==0) is shown as "Warnings Only" rather than "Passed" so the per-card badge matches the dashboard summary and BSI's dependency gate (see _is_run_failing and orchestrator._is_passing).{% endcomment %}
@@ -129,12 +130,19 @@
                                                     </span>
                                                     <div class="flex-1 ml-2">
                                                         <div class="finding-title flex items-center gap-2 flex-wrap">
-                                                            <a href="https://osv.dev/vulnerability/{{ finding.id }}"
-                                                               target="_blank"
-                                                               rel="noopener noreferrer"
-                                                               class="text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                                                <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
-                                                            </a>
+                                                            {% comment %}Not every finding id is an advisory: a plugin's own operational ids (dependency-track:unsupported-format) used to be linked to OSV too, which resolved to nothing.{% endcomment %}
+                                                            {% with finding_url=finding.id|advisory_url %}
+                                                                {% if finding_url %}
+                                                                    <a href="{{ finding_url }}"
+                                                                       target="_blank"
+                                                                       rel="noopener noreferrer"
+                                                                       class="text-primary hover:underline no-underline inline-flex items-center gap-1">
+                                                                        <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
+                                                                    </a>
+                                                                {% else %}
+                                                                    <span class="text-text font-medium">{{ finding.id }}</span>
+                                                                {% endif %}
+                                                            {% endwith %}
                                                             {# Severity badge #}
                                                             {% if finding.severity %}
                                                                 {% if finding.severity == 'critical' %}
@@ -199,19 +207,16 @@
                                                         {% if finding.aliases %}
                                                             <div class="mt-1 flex flex-wrap gap-1">
                                                                 {% for alias in finding.aliases %}
-                                                                    {% if alias|slice:":4" == "CVE-" %}
-                                                                        <a href="https://www.cve.org/CVERecord?id={{ alias }}"
-                                                                           target="_blank"
-                                                                           rel="noopener noreferrer"
-                                                                           class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                    {% elif alias|slice:":5" == "GHSA-" %}
-                                                                        <a href="https://github.com/advisories/{{ alias }}"
-                                                                           target="_blank"
-                                                                           rel="noopener noreferrer"
-                                                                           class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                    {% else %}
-                                                                        <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
-                                                                    {% endif %}
+                                                                    {% with alias_url=alias|advisory_url %}
+                                                                        {% if alias_url %}
+                                                                            <a href="{{ alias_url }}"
+                                                                               target="_blank"
+                                                                               rel="noopener noreferrer"
+                                                                               class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
+                                                                        {% else %}
+                                                                            <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
+                                                                        {% endif %}
+                                                                    {% endwith %}
                                                                 {% endfor %}
                                                             </div>
                                                         {% endif %}
