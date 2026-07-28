@@ -154,7 +154,9 @@
                 </div>
                 {# Save sits at the bottom right, below the fields it applies to. #}
                 <div class="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-border">
-                    <span id="plugin-settings-spinner" class="htmx-indicator">{% include "core/components/brand/loader.html.j2" with class="tw-loader-sm text-primary" %}</span>
+                    <span id="plugin-settings-spinner" class="htmx-indicator">
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm text-primary" %}
+                    </span>
                     <button type="submit" class="tw-btn-primary">
                         <i class="fas fa-save mr-2"></i>Save
                     </button>

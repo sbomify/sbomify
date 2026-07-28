@@ -80,7 +80,9 @@
                     <div class="flex gap-2">
                         <button type="submit" class="tw-btn-primary text-sm" :disabled="saving">
                             <template x-if="saving">
-                                <span>{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}Saving...</span>
+                                <span>
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                                Saving...</span>
                             </template>
                             <template x-if="!saving">
                                 <span><i class="fas fa-check mr-1"></i>Save</span>

@@ -160,7 +160,8 @@
                                 @click="updateMetaData()">
                             <template x-if="isSaving">
                                 <span>
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}Saving Changes...
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
+                                    Saving Changes...
                                 </span>
                             </template>
                             <template x-if="!isSaving">

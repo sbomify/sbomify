@@ -51,7 +51,6 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
-COPY tailwind.config.js ./
 COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./
@@ -103,7 +102,6 @@ COPY package.json ./
 COPY bun.lock ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
-COPY tailwind.config.js ./
 COPY postcss.config.js ./
 COPY eslint.config.js ./
 COPY .prettierrc.js ./

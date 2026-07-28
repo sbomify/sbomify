@@ -345,7 +345,8 @@
                                 <span x-show="!prodPublic">This product is private, so you can assign any component, public or private.</span>
                             </p>
                             <div x-show="availLoading" class="py-6 text-center text-text-muted">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}Loading components…
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
+                                Loading components…
                             </div>
                             <template x-if="!availLoading && avail.length === 0 && !err">
                                 <p class="text-sm text-text-muted">Every component in this workspace is already assigned.</p>
@@ -375,7 +376,9 @@
                                     :disabled="!selectedId || busy"
                                     @click="confirmAssign()">
                                 <span x-show="!busy">Assign</span>
-                                <span x-show="busy">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}Assigning…</span>
+                                <span x-show="busy">
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                                Assigning…</span>
                             </button>
                         </div>
                     </div>
@@ -436,7 +439,9 @@
                                     :disabled="busy"
                                     @click="confirmRemove()">
                                 <span x-show="!busy">Remove</span>
-                                <span x-show="busy">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}Removing…</span>
+                                <span x-show="busy">
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                                Removing…</span>
                             </button>
                         </div>
                     </div>

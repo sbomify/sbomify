@@ -247,7 +247,9 @@
                                             :disabled="importing || (importMode === 'file' && !fileName) || (importMode === 'url' && !oscalUrl)"
                                             @click=" importing = true; error = ''; const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value; const doImport = (body) => { return fetch('/api/v1/controls/catalogs/import-oscal/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }, body: body }).then(r => r.json().then(d => ({ok: r.ok, data: d}))).then(({ok, data}) => { importing = false; if (ok) { window.location.reload(); } else { error = data.detail || 'Import failed'; } }); }; if (importMode === 'file') { const file = $refs.oscalFile.files[0]; if (!file) { error = 'Select a file'; importing = false; return; } file.text().then(text => doImport(text)).catch(e => { importing = false; error = e.message; }); } else { fetch(oscalUrl).then(r => { if (!r.ok) throw new Error('Failed to fetch URL: ' + r.status); return r.text(); }).then(text => doImport(text)).catch(e => { importing = false; error = e.message; }); } ">
                                         <span x-show="!importing">Import Catalog</span>
-                                        <span x-show="importing">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1.5" %}Importing...</span>
+                                        <span x-show="importing">
+                                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1.5" %}
+                                        Importing...</span>
                                     </button>
                                 </div>
                             </div>
