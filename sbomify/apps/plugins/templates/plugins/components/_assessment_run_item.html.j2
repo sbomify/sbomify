@@ -150,11 +150,11 @@
                                                                 {% endif %}
                                                             {% endif %}
                                                             {# CVSS score #}
-                                                            {% if finding.cvss_score %}
+                                                            {% if finding.cvss_score is not None %}
                                                                 <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ finding.cvss_score }}</span>
                                                             {% endif %}
                                                             {# CISA KEV: confirmed exploited in the wild #}
-                                                            {% comment %}EPSS is the likelihood half of the pair: CVSS says how bad, EPSS says how likely. Shown as a percentage because a 0..1 probability reads as noise next to a 0..10 score.{% endcomment %}
+                                                            {% comment %}EPSS is the likelihood half of the pair: CVSS says how bad, EPSS says how likely. Rendered as the raw 0..1 probability to three decimals, which is how FIRST publishes it. Both badges test "is not None" rather than truthiness, because 0.0 is a real score for either and would otherwise vanish.{% endcomment %}
                                                             {% if finding.epss_score is not None %}
                                                                 <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border"
                                                                       title="EPSS: probability of exploitation in the next 30 days">EPSS: {{ finding.epss_score|floatformat:"-3" }}</span>

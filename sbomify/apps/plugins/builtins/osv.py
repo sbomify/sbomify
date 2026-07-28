@@ -455,13 +455,15 @@ class OSVPlugin(AssessmentPlugin):
         If that fails, uses simple heuristics on the vector components.
 
         Note: The heuristic fallback produces approximate scores based on
-        impact metrics only (C/I/A and Scope). It does not account for
+        impact metrics only: C/I/A and Scope for v3, and their v4 renames
+        VC/VI/VA (4.0 having dropped Scope). It does not account for
         exploitability metrics (AV, AC, PR, UI), so scores may differ from
         a full CVSS calculation. This is acceptable because most OSV entries
         include a proper numeric score; the heuristic is a last resort.
 
         Args:
-            cvss_string: CVSS v3 vector string (e.g., "CVSS:3.1/AV:N/...").
+            cvss_string: CVSS v3 or v4 vector string (e.g. "CVSS:3.1/AV:N/..."
+                or "CVSS:4.0/AV:N/...").
 
         Returns:
             Numeric CVSS score or None if the vector cannot be parsed.
