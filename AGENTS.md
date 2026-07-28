@@ -291,6 +291,8 @@ Rules when touching it:
 
 Tests live in `sbomify/apps/mcp/tests/`; extend `test_security.py` whenever a tool is added.
 
+User-facing setup docs live on the website ([content/guides/mcp.md](https://github.com/sbomify/sbomify.com/blob/master/content/guides/mcp.md)); `docs/mcp.md` here is the operator reference. A change to the tool surface needs both.
+
 ### WebSockets
 
 Django Channels with Redis for real-time broadcasting. Routing in `sbomify/apps/core/routing.py`, consumers in `consumers.py`. Service functions call `broadcast_to_workspace()` to push updates that trigger HTMX refreshes.

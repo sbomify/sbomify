@@ -36,7 +36,7 @@ explicitly to limit what the token can do.
    rotation for human passwords; that ruling does not cover API tokens.)
 4. **One token per consumer.** A separate token per CI pipeline or integration shrinks
    the blast radius of a leak and makes `last_used_at` attributable to a single consumer.
-   This applies to AI agents connecting over [MCP](mcp.md) too: give each agent its own
+   This applies to AI agents connecting over [MCP](https://sbomify.com/guides/mcp/) too: give each agent its own
    workspace-scoped token, scoped `read_only` unless it genuinely needs to publish. The
    MCP server filters the tools it advertises to what the token's scopes permit, so a
    narrow token also gives the agent a smaller, clearer surface to work with.
