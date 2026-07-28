@@ -8,10 +8,7 @@
          hx-trigger="load, refreshDocumentsTable from:body"
          hx-swap="innerHTML">
         <div class="text-center py-8">
-            <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"
-                 role="status">
-                <span class="sr-only">Loading...</span>
-            </div>
+            {% include "core/components/brand/loader.html.j2" with class="w-10 mx-auto text-primary" %}
             <p class="mt-3 text-text-muted">Loading documents...</p>
         </div>
     </div>

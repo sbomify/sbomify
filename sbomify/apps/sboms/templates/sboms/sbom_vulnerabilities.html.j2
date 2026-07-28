@@ -70,7 +70,7 @@
             {% endif %}
             {% if is_processing %}
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-spinner fa-spin text-info text-xs"></i>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-info text-xs" %}
                     <span class="font-semibold text-info">Processing</span>
                 </div>
             {% endif %}
@@ -276,7 +276,7 @@
                     {% if is_processing %}
                         <div class="p-4 bg-info/5 border border-info/20 rounded-lg">
                             <h4 class="text-lg font-semibold text-info mb-2 flex items-center gap-2">
-                                <i class="fas fa-spinner fa-spin"></i>
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                                 Processing Vulnerability Scan
                             </h4>
                             <p class="text-text mb-2">

@@ -642,7 +642,7 @@
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
-                        <div class="tw-spinner tw-spinner-sm"></div>
+                        {% include "core/components/brand/loader.html.j2" with class="w-5 mx-auto text-primary" %}
                     </div>
                     <div>
                         <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
@@ -652,7 +652,7 @@
             </div>
             <div class="p-6">
                 <div class="flex items-center justify-center py-8">
-                    <div class="tw-spinner tw-spinner-md"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="w-7 mx-auto text-primary" %}
                     <span class="ml-3 text-text-muted">Loading access requests...</span>
                 </div>
             </div>
@@ -669,7 +669,7 @@
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
-                        <div class="tw-spinner tw-spinner-sm"></div>
+                        {% include "core/components/brand/loader.html.j2" with class="w-5 mx-auto text-primary" %}
                     </div>
                     <div>
                         <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
@@ -679,7 +679,7 @@
             </div>
             <div class="p-6">
                 <div class="flex items-center justify-center py-8">
-                    <div class="tw-spinner tw-spinner-md"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="w-7 mx-auto text-primary" %}
                     <span class="ml-3 text-text-muted">Loading custom domain settings...</span>
                 </div>
             </div>

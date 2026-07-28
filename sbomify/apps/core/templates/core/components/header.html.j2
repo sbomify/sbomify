@@ -145,7 +145,7 @@
                     {# Loading State #}
                     <div id="notifications-loading"
                          class="flex flex-col items-center justify-center py-12 px-4">
-                        <div class="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-3"></div>
+                        {% include "core/components/brand/loader.html.j2" with class="w-12 text-primary mb-3" %}
                         <p class="text-sm text-text-muted">Loading notifications...</p>
                     </div>
                     {# Notifications List #}

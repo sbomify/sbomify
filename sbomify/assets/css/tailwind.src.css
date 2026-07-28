@@ -1081,21 +1081,11 @@ html.no-transitions * {
   color: var(--color-danger);
 }
 
-/* Loading Button State */
+/* Loading Button State — pair with an inline brand loader element
+   (components/tw/button.html.j2 renders one when loading=True) */
 .tw-btn-loading {
   pointer-events: none;
   opacity: 0.8;
-}
-
-.tw-btn-loading::after {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 9999px;
-  animation: spin 0.6s linear infinite;
-  margin-left: 0.5rem;
 }
 
 /* ============================================
@@ -1949,52 +1939,6 @@ html.no-transitions * {
 }
 
 /* ============================================
-   Component Classes - Loading Spinner
-   ============================================ */
-.tw-spinner {
-  display: inline-block;
-  border: 2.5px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 9999px;
-  animation: spin 0.7s linear infinite;
-}
-
-.tw-spinner-sm {
-  width: 1rem;
-  height: 1rem;
-  border-width: 2px;
-}
-
-.tw-spinner-md {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.tw-spinner-lg {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-width: 3px;
-}
-
-/* Dots spinner variant */
-.tw-spinner-dots {
-  display: inline-flex;
-  gap: 0.25rem;
-}
-
-.tw-spinner-dots span {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
-  background-color: var(--color-primary);
-  animation: pulseSoft 1.4s ease-in-out infinite both;
-}
-
-.tw-spinner-dots span:nth-child(1) { animation-delay: -0.32s; }
-.tw-spinner-dots span:nth-child(2) { animation-delay: -0.16s; }
-.tw-spinner-dots span:nth-child(3) { animation-delay: 0s; }
-
-/* ============================================
    Component Classes - Brand Marks
    Emblem / full logo / loader, inlined via
    core/components/brand/*.html.j2 (currentColor fills)
@@ -2063,6 +2007,13 @@ html.no-transitions * {
   width: 100%;
   height: auto;
   aspect-ratio: 129.78 / 107;
+}
+
+/* Icon-sized inline variant: width tracks font-size so it drops into
+   buttons and running text wherever a spinner icon used to sit. */
+.tw-brand-loader.tw-loader-inline {
+  width: 1.3em;
+  vertical-align: -0.2em;
 }
 
 .tw-brand-loader .tw-emblem-bar {

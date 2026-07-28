@@ -276,7 +276,7 @@
                     :disabled="isSaving"
                     class="tw-btn-primary">
                 <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
-                <span x-show="isSaving" x-cloak><i class="fas fa-spinner fa-spin mr-2"></i> Saving...</span>
+                <span x-show="isSaving" x-cloak>{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %} Saving...</span>
             </button>
         </div>
     </div>

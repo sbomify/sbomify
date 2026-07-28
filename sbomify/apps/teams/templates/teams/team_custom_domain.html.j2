@@ -36,7 +36,7 @@
                 Remove Domain
             </button>
             <span x-show="isLoading" class="text-text-muted">
-                <i class="fas fa-spinner fa-spin mr-1"></i> Saving...
+                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %} Saving...
             </span>
         </div>
     </div>

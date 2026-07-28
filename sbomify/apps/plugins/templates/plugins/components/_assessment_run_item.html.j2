@@ -48,7 +48,7 @@
                                 </span>
                             {% elif run.status == 'running' %}
                                 <span class="tw-badge-secondary">
-                                    <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}Running
                                 </span>
                             {% else %}
                                 <span class="tw-badge-secondary">
@@ -271,7 +271,7 @@
                             {% else %}
                                 {# Pending state #}
                                 <div class="text-center text-text-muted py-6">
-                                    <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
                                     <p class="mb-0">Assessment in progress...</p>
                                 </div>
                             {% endif %}
@@ -325,7 +325,7 @@
                             </span>
                         {% elif run.status == 'running' %}
                             <span class="tw-badge-secondary">
-                                <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}Running
                             </span>
                         {% else %}
                             <span class="tw-badge-secondary">
@@ -453,7 +453,7 @@
                         {% else %}
                             {# Pending state #}
                             <div class="text-center text-text-muted py-6">
-                                <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
                                 <p class="mb-0">Assessment in progress...</p>
                             </div>
                         {% endif %}

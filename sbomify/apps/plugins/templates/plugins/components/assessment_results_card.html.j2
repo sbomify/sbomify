@@ -25,7 +25,7 @@
                         </span>
                     {% elif status.overall_status == 'pending' or status.overall_status == 'in_progress' %}
                         <span class="tw-badge-secondary flex items-center gap-1">
-                            <i class="fas fa-sync-alt fa-spin"></i>Processing
+                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}Processing
                         </span>
                     {% else %}
                         <span class="tw-badge-secondary flex items-center gap-1">

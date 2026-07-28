@@ -73,7 +73,7 @@
                                      @cancel-custom-form.window="window.dispatchEvent(new CustomEvent('close-metadata-editor'))"
                                      class="custom-contact-form">
                                     <div class="text-center py-6">
-                                        <i class="fas fa-spinner fa-spin text-text-muted mr-2"></i>
+                                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-text-muted mr-2" %}
                                         <span class="text-text-muted">Loading contact form...</span>
                                     </div>
                                 </div>
@@ -160,7 +160,7 @@
                                 @click="updateMetaData()">
                             <template x-if="isSaving">
                                 <span>
-                                    <i class="fas fa-spinner fa-spin mr-2"></i>Saving Changes...
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}Saving Changes...
                                 </span>
                             </template>
                             <template x-if="!isSaving">

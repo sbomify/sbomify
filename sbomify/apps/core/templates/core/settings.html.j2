@@ -196,8 +196,7 @@
                                                 class="tw-btn-danger"
                                                 @click="deleteToken()"
                                                 :disabled="isDeleting">
-                                            <span x-show="isDeleting"
-                                                  class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                                            <span x-show="isDeleting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
                                             <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
                                         </button>
                                     </div>
