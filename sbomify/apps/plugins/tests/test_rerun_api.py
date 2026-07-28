@@ -46,8 +46,14 @@ def enabled_plugin():
 
 @pytest.fixture
 def owner_client(sample_sbom, sample_user):  # noqa: F811
-    """A logged-in owner of the SBOM's workspace."""
+    """A logged-in owner of the SBOM's workspace, with the plugin enabled.
+
+    The enablement is part of the contract, not scenery: without a settings row
+    the endpoint refuses, the same way every other path reads a missing row as
+    "nothing enabled".
+    """
     team = sample_sbom.component.team
+    TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": ["osv"]})
     Member.objects.get_or_create(user=sample_user, team=team, defaults={"role": "owner"})
     client = Client()
     client.force_login(sample_user)
@@ -117,6 +123,17 @@ class TestRerunIsGated:
     def test_globally_disabled_plugin_is_rejected(self, owner_client, sample_sbom, enabled_plugin, mocker):  # noqa: F811
         enabled_plugin.is_enabled = False
         enabled_plugin.save()
+        send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
+
+        response = owner_client.post(_url(sample_sbom.id))
+
+        assert response.status_code == 400
+        send.assert_not_called()
+
+    def test_a_workspace_with_no_settings_row_is_rejected(self, owner_client, sample_sbom, enabled_plugin, mocker):  # noqa: F811
+        """A missing row means nothing is enabled, matching the task and signal
+        paths, so it must not read as "everything allowed"."""
+        TeamPluginSettings.objects.filter(team=sample_sbom.component.team).delete()
         send = mocker.patch("sbomify.apps.plugins.apis.run_assessment_task.send")
 
         response = owner_client.post(_url(sample_sbom.id))

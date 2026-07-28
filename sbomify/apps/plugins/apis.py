@@ -747,11 +747,17 @@ def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tu
     if not registered.is_enabled:
         return 400, {"detail": f"Plugin '{plugin_name}' is disabled", "error_code": ErrorCode.BAD_REQUEST}
 
-    # A plugin the workspace turned off must not be reachable by URL: the
+    # A plugin the workspace has not enabled must not be reachable by URL: the
     # orchestrator would happily run it, and the result would appear on a card
     # the workspace expects to be empty.
+    #
+    # A missing settings row means "nothing enabled", not "everything allowed".
+    # That is what the rest of the codebase already does: the task layer returns
+    # [] on DoesNotExist ("no plugins to run") and the signal path treats an
+    # empty list as having opted out. Reading it the other way here would let a
+    # re-run start the one thing no other path would.
     settings = TeamPluginSettings.objects.filter(team_id=sbom.component.team_id).first()
-    if settings is not None and not settings.is_plugin_enabled(plugin_name):
+    if settings is None or not settings.is_plugin_enabled(plugin_name):
         return 400, {
             "detail": f"Plugin '{plugin_name}' is not enabled for this workspace",
             "error_code": ErrorCode.BAD_REQUEST,
