@@ -42,9 +42,13 @@ api = NinjaAPI(
     # the other's population: the token one keys on the AccessToken pk and skips
     # anonymous callers, the anonymous one keys on client IP and skips requests
     # that resolved a token. Together they cover every route, including the
-    # auth=None public ones, without decorating each endpoint. A per-operation
-    # throttle replaces these rather than adding to them, so the heavy-upload
-    # routes pass both of theirs explicitly.
+    # auth=None public ones, without decorating each endpoint.
+    #
+    # A per-operation throttle replaces this whole list rather than adding to
+    # it, so any endpoint declaring its own must re-list every global throttle
+    # it still wants. The artifact-upload routes are the example: they pass
+    # AccessTokenRateThrottle alongside AccessTokenHeavyRateThrottle for that
+    # reason, and being PAT-only they have no need of the anonymous one.
     throttle=[AccessTokenRateThrottle(), AnonymousIPRateThrottle()],
     renderer=UTCZRenderer(),
     title="sbomify API",

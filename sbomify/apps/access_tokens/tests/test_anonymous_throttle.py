@@ -56,6 +56,29 @@ class TestKeying:
         assert AnonymousIPRateThrottle.cache_key_prefix != AccessTokenRateThrottle.cache_key_prefix
 
 
+class TestFailureModes:
+    def test_an_unidentifiable_caller_is_still_throttled(self):
+        """A security control that switches itself off when the environment is
+        misconfigured is worse than one that occasionally over-throttles."""
+        throttle = AnonymousIPRateThrottle()
+        request = RequestFactory().get("/api/v1/anything")
+        request.META.pop("REMOTE_ADDR", None)
+
+        assert throttle.get_cache_key(request) is not None
+
+    def test_unidentifiable_callers_share_one_bucket(self):
+        throttle = AnonymousIPRateThrottle(rate="2/min")
+
+        def anonymous():
+            request = RequestFactory().get("/api/v1/anything")
+            request.META.pop("REMOTE_ADDR", None)
+            return request
+
+        allowed = [throttle.allow_request(anonymous()) for _ in range(3)]
+
+        assert allowed == [True, True, False]
+
+
 class TestSpoofing:
     def test_x_real_ip_from_an_untrusted_peer_is_ignored(self):
         """Honouring it unconditionally would let a caller rotate the header to

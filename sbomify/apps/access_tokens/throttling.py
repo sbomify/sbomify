@@ -102,9 +102,13 @@ class AnonymousIPRateThrottle(AccessTokenRateThrottle):
             return None
         from sbomify.apps.core.utils import get_client_ip
 
-        client_ip = get_client_ip(request)
-        if not client_ip:
-            return None
+        # No usable address (REMOTE_ADDR absent under a misconfigured proxy or
+        # ASGI server) must not mean "unlimited". Returning None here would skip
+        # the throttle entirely, so a control meant to bound abuse would switch
+        # itself off exactly when the environment is wrong. Everything
+        # unidentifiable shares one bucket instead: worst case a few callers
+        # contend, which is a far better failure than none being limited.
+        client_ip = get_client_ip(request) or "unknown"
         return f"{self.cache_key_prefix}_{client_ip}"
 
 
