@@ -9,7 +9,7 @@
             <div class="info-panel">
                 <div class="info-content">
                     <div class="brand-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h1 class="info-title">Update Password</h1>
                     <p class="info-tagline">Create a new secure password</p>
@@ -21,7 +21,7 @@
                 <div class="form-card">
                     <!-- Mobile Logo (hidden on desktop) -->
                     <div class="mobile-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h2 class="form-title">Set New Password</h2>
 

@@ -148,11 +148,13 @@
         @apply mb-8;
     }
 
-    .brand-logo img {
-        @apply mx-auto;
+    .brand-logo svg {
+        @apply mx-auto block;
         width: 160px;
         height: auto;
-        filter: brightness(0) invert(1);
+        aspect-ratio: 571.45 / 105;
+        fill: currentColor;
+        color: var(--sbomify-white);
     }
 
     .info-title {
@@ -975,11 +977,11 @@
     }
 
     /* Brand Logo Subtle Float */
-    .brand-logo img {
+    .brand-logo svg {
         transition: transform var(--transition-smooth);
     }
 
-    .brand-logo:hover img {
+    .brand-logo:hover svg {
         transform: scale(1.02);
     }
 
@@ -1071,9 +1073,12 @@
             border-bottom: 1px solid var(--sbomify-gray-200);
         }
 
-        .mobile-logo img {
+        .mobile-logo svg {
             height: 32px;
             width: auto;
+            aspect-ratio: 571.45 / 105;
+            fill: currentColor;
+            color: var(--sbomify-gray-900);
         }
     }
 
@@ -1097,7 +1102,7 @@
             @apply mb-5;
         }
 
-        .mobile-logo img {
+        .mobile-logo svg {
             height: 28px;
         }
 
@@ -1161,5 +1166,54 @@
             animation-iteration-count: 1 !important;
             transition-duration: 0.01ms !important;
         }
+    }
+}
+
+/* ===== ANIMATED BRAND LOGO (inline SVG via components.ftl brandLogo macro) ===== */
+.brand-anim .bar {
+    transform-box: fill-box;
+    transform-origin: left center;
+    animation: brand-bar-grow 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brand-anim .from-right {
+    transform-origin: right center;
+}
+
+.brand-anim .b1 { animation-delay: 0.1s; }
+.brand-anim .b2 { animation-delay: 0.2s; }
+.brand-anim .b3 { animation-delay: 0.3s; }
+.brand-anim .b4 { animation-delay: 0.4s; }
+.brand-anim .b5 { animation-delay: 0.5s; }
+.brand-anim .b6 { animation-delay: 0.6s; }
+.brand-anim .b7 { animation-delay: 0.7s; }
+.brand-anim .b8 { animation-delay: 0.8s; }
+
+.brand-anim .ltr {
+    animation: brand-letter-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.brand-anim .l1 { animation-delay: 0.3s; }
+.brand-anim .l2 { animation-delay: 0.38s; }
+.brand-anim .l3 { animation-delay: 0.46s; }
+.brand-anim .l4 { animation-delay: 0.54s; }
+.brand-anim .l5 { animation-delay: 0.62s; }
+.brand-anim .l6 { animation-delay: 0.7s; }
+.brand-anim .l7 { animation-delay: 0.78s; }
+
+@keyframes brand-bar-grow {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+}
+
+@keyframes brand-letter-in {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .brand-anim .bar,
+    .brand-anim .ltr {
+        animation: none;
     }
 }

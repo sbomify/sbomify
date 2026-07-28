@@ -2004,6 +2004,17 @@ html.no-transitions * {
   display: block;
 }
 
+/* The inline SVGs carry only a viewBox (no width/height attributes), so give
+   them their intrinsic ratio explicitly — without it, `h-auto`/`w-auto`
+   sizing can round to the default replaced-element box and clip the mark. */
+.tw-emblem {
+  aspect-ratio: 129.78 / 105;
+}
+
+.tw-logo {
+  aspect-ratio: 571.45 / 105;
+}
+
 /* Grow-in entrance: bars sweep in, letters follow (opt-in via animate=true) */
 .tw-logo-in .tw-emblem-bar {
   transform-box: fill-box;
@@ -2051,6 +2062,7 @@ html.no-transitions * {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 129.78 / 105;
 }
 
 .tw-brand-loader .tw-emblem-bar {

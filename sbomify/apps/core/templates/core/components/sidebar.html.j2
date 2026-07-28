@@ -196,9 +196,9 @@
                 <li>
                     {% url 'core:dashboard' as dashboard_url %}
                     {% if current_view_name == 'core:dashboard' %}
-                        {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-th-large" label="Dashboard" active=True %}
+                        {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-house" label="Dashboard" active=True %}
                     {% else %}
-                        {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-th-large" label="Dashboard" %}
+                        {% include "core/components/sidebar_link.html.j2" with url=dashboard_url icon="fa-house" label="Dashboard" %}
                     {% endif %}
                 </li>
                 {# Products #}
