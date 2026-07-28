@@ -142,7 +142,7 @@ jobs:
           - name: "Licensing Tests"
             path: "sbomify/apps/licensing/tests/"
           - name: "Access Token Tests"
-            path: "sbomify/apps/access_tokens/tests.py"
+            path: "sbomify/apps/access_tokens/"
           - name: "Notification Tests"
             path: "sbomify/apps/notifications/tests.py"
           - name: "Onboarding Tests"
