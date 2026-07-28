@@ -910,7 +910,7 @@ html.no-transitions * {
 
 .tw-btn-primary:hover {
   background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-  box-shadow: 0 4px 8px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
 }
 
 .tw-btn-primary:active {
