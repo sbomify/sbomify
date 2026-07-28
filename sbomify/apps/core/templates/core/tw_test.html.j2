@@ -896,6 +896,28 @@
                     <p class="text-xs text-text-muted mt-2">Dots</p>
                 </div>
             </div>
+            <div class="flex items-center gap-8 mt-8">
+                <div class="text-center">
+                    {% include "core/components/brand/loader.html.j2" with class="w-5 text-primary" %}
+                    <p class="text-xs text-text-muted mt-2">Brand sm</p>
+                </div>
+                <div class="text-center">
+                    {% include "core/components/brand/loader.html.j2" with class="w-7 text-primary" %}
+                    <p class="text-xs text-text-muted mt-2">Brand md</p>
+                </div>
+                <div class="text-center">
+                    {% include "core/components/brand/loader.html.j2" with class="w-11 text-primary" %}
+                    <p class="text-xs text-text-muted mt-2">Brand lg</p>
+                </div>
+                <div class="text-center">
+                    {% include "core/components/brand/emblem.html.j2" with class="w-11 h-auto text-text mx-auto" %}
+                    <p class="text-xs text-text-muted mt-2">Emblem</p>
+                </div>
+                <div class="text-center">
+                    {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" %}
+                    <p class="text-xs text-text-muted mt-2">Full logo</p>
+                </div>
+            </div>
         </div>
     </div>
     <div id="pagination" class="tw-dashboard-card mb-8">

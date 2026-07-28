@@ -77,13 +77,8 @@
 {% block main %}
     <div class="onboarding-bg min-h-screen flex flex-col items-center justify-center px-4 py-12 sm:py-16">
         <!-- Logo -->
-        <div class="flex items-center justify-center gap-3 mb-10">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-8 w-8"
-                 width="32"
-                 height="32">
-            <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
+        <div class="flex items-center justify-center mb-10">
+            {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
         </div>
         <!-- Step Progress (3 dots without billing, 4 with billing) -->
         <div class="flex items-center gap-2 mb-8">

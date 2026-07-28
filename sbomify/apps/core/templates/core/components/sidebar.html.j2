@@ -22,34 +22,23 @@
        role="navigation"
        aria-label="Main navigation">
     {# Logo Section #}
-    <div class="h-16 flex items-center justify-center relative">
+    <div class="h-16 flex items-center relative">
         {# Collapsed Logo #}
         <a x-show="sidebarCollapsed"
            href="{% url 'core:dashboard' %}"
            @click="sidebarMobileOpen = false"
-           class="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 hover:bg-primary/10 hover:scale-105"
+           class="flex items-center justify-center w-full"
            aria-label="sbomify - Go to dashboard">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-7 w-7"
-                 width="28"
-                 height="28"
-                 onerror="this.src='{% static 'img/sbomify.svg' %}';">
+            {% include "core/components/brand/emblem.html.j2" with class="w-7 h-auto text-text" %}
         </a>
         {# Expanded Logo #}
         <a x-show="!sidebarCollapsed"
            x-cloak
            href="{% url 'core:dashboard' %}"
            @click="sidebarMobileOpen = false"
-           class="flex items-center gap-3 py-2 rounded-xl transition-all duration-200 hover:bg-primary/5"
+           class="flex items-center pl-5"
            aria-label="sbomify - Go to dashboard">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-8 w-8"
-                 width="32"
-                 height="32"
-                 onerror="this.src='{% static 'img/sbomify.svg' %}';">
-            <span class="text-xl font-bold text-text tracking-tight">sbomify</span>
+            {% include "core/components/brand/logo.html.j2" with class="h-6 w-auto text-text" %}
         </a>
         {# Mobile Close Button #}
         <button x-show="!sidebarCollapsed"

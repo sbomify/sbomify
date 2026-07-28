@@ -11,36 +11,36 @@ export default {
       colors: {
         // Brand Primary Colors
         navy: {
-          DEFAULT: '#0F0F2D',
-          light: '#1A1A3E',
+          DEFAULT: '#25293F',
+          light: '#51546B',
         },
         purple: {
-          DEFAULT: '#7B7A9E',
-          light: '#C8C5D8',
+          DEFAULT: '#967CF6',
+          light: '#C7CDFF',
         },
         // Brand Accent Colors
         primary: {
           DEFAULT: 'rgb(var(--color-primary) / <alpha-value>)',
           dark: 'rgb(var(--color-primary-dark) / <alpha-value>)',
-          blue: '#4059D0',
+          blue: '#4263EB',
           pink: '#CC58BB',
-          peach: '#F4B57F',
+          peach: '#F5A623',
         },
         // Semantic Colors (using CSS variables for theming)
         surface: {
           DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
-          dark: '#1A1A3E',
+          dark: '#25293F',
           light: '#ffffff',
         },
         background: {
           DEFAULT: 'rgb(var(--color-background) / <alpha-value>)',
-          dark: '#0F0F2D',
-          light: '#f8fafc',
+          dark: '#151724',
+          light: '#ffffff',
         },
         border: {
           DEFAULT: 'rgb(var(--color-border) / <alpha-value>)',
-          dark: '#2D2D4A',
-          light: '#e2e8f0',
+          dark: '#383C56',
+          light: '#E9EAEC',
         },
         text: {
           DEFAULT: 'rgb(var(--color-text) / <alpha-value>)',
@@ -51,11 +51,11 @@ export default {
         danger: 'rgb(var(--color-danger) / <alpha-value>)',
       },
       fontFamily: {
-        display: ['Agrandir', 'system-ui', 'sans-serif'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Figtree', 'system-ui', 'sans-serif'],
+        sans: ['Figtree', 'system-ui', 'sans-serif'],
       },
       backgroundImage: {
-        'brand-gradient': 'linear-gradient(90deg, #4059D0 0%, #CC58BB 50%, #F4B57F 100%)',
+        'brand-gradient': 'linear-gradient(90deg, #4263EB 0%, #7C8CFF 50%, #967CF6 100%)',
       },
       boxShadow: {
         'card': '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
