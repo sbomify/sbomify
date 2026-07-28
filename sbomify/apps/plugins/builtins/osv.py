@@ -405,14 +405,17 @@ class OSVPlugin(AssessmentPlugin):
         """
         cvss_score: float | None = None
 
-        # 1. Check CVSS v3 severity field
-        for severity_item in vuln.get("severity", []):
-            if severity_item.get("type") == "CVSS_V3":
-                cvss_string = severity_item.get("score", "")
-                score = self._extract_cvss_score(cvss_string)
-                if score is not None:
-                    cvss_score = score
-                    return self._score_to_severity(score), cvss_score
+        # 1. CVSS vector in the severity field. V3 is checked first and V4 only
+        # as a fallback: both encode base score the same way, and preferring V3
+        # keeps a finding's score stable across a rescan once OSV adds a V4
+        # entry to a record that already had V3.
+        for wanted in ("CVSS_V3", "CVSS_V4"):
+            for severity_item in vuln.get("severity", []):
+                if severity_item.get("type") == wanted:
+                    score = self._extract_cvss_score(severity_item.get("score", ""))
+                    if score is not None:
+                        cvss_score = score
+                        return self._score_to_severity(score), cvss_score
 
         # 2. Check database_specific severity in affected ranges
         for affected in vuln.get("affected", []):
@@ -446,7 +449,7 @@ class OSVPlugin(AssessmentPlugin):
         return "medium", None
 
     def _extract_cvss_score(self, cvss_string: str) -> float | None:
-        """Extract numeric CVSS score from a CVSS v3 vector string.
+        """Extract numeric CVSS score from a CVSS v3 or v4 vector string.
 
         Uses a regex to find the base score at the end of the vector.
         If that fails, uses simple heuristics on the vector components.
@@ -463,7 +466,7 @@ class OSVPlugin(AssessmentPlugin):
         Returns:
             Numeric CVSS score or None if the vector cannot be parsed.
         """
-        if not cvss_string or not cvss_string.startswith("CVSS:3"):
+        if not cvss_string or not cvss_string.startswith(("CVSS:3", "CVSS:4")):
             return None
 
         # Try to extract trailing numeric score (some formats append it)
@@ -474,7 +477,18 @@ class OSVPlugin(AssessmentPlugin):
             except ValueError:
                 pass
 
-        # Heuristic scoring based on vector components
+        # Heuristic scoring based on vector components. CVSS 4.0 renamed the
+        # impact metrics to VC/VI/VA and dropped Scope, so the v3 substrings
+        # never match a v4 vector and it would fall through to None.
+        if cvss_string.startswith("CVSS:4"):
+            if "VC:H/VI:H/VA:H" in cvss_string:
+                return 9.0
+            elif any(f"{m}:H" in cvss_string for m in ("VC", "VI", "VA")):
+                return 7.5
+            elif any(f"{m}:L" in cvss_string for m in ("VC", "VI", "VA")):
+                return 4.0
+            return None
+
         if "C:H/I:H/A:H" in cvss_string and "S:C" in cvss_string:
             return 10.0
         elif "C:H/I:H/A:H" in cvss_string:
