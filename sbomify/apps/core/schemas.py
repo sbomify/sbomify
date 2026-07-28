@@ -164,6 +164,32 @@ class ProductLinkSchema(BaseModel):
     created_at: datetime
 
 
+class SubProcessorSchema(BaseModel):
+    """A third party the workspace relies on to deliver its products."""
+
+    id: str
+    name: str
+    purpose: str
+    url: str
+    location: str
+    product_ids: list[str] = Field(default_factory=list)
+
+
+class SubProcessorCreateSchema(BaseModel):
+    """Schema for creating or updating a sub-processor."""
+
+    name: str = Field(..., max_length=255, min_length=1)
+    purpose: str = Field(default="", max_length=255)
+    url: str = Field(default="", max_length=500)
+    location: str = Field(default="", max_length=255)
+
+
+class ProductSubProcessorsSchema(BaseModel):
+    """The set of sub-processors attached to one product."""
+
+    sub_processor_ids: list[str]
+
+
 class ProductLinkCreateSchema(BaseModel):
     """Schema for creating a new product link."""
 

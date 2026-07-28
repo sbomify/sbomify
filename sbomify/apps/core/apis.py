@@ -72,6 +72,7 @@ from .schemas import (
     ProductLinkUpdateSchema,
     ProductPatchSchema,
     ProductResponseSchema,
+    ProductSubProcessorsSchema,
     ProductUpdateSchema,
     ReleaseArtifactAddResponseSchema,
     ReleaseArtifactCreateSchema,
@@ -81,6 +82,8 @@ from .schemas import (
     ReleaseUpdateSchema,
     SBOMReleaseTaggingResponseSchema,
     SBOMReleaseTaggingSchema,
+    SubProcessorCreateSchema,
+    SubProcessorSchema,
 )
 
 log = getLogger(__name__)
@@ -4591,3 +4594,125 @@ def export_user_data_endpoint(request: HttpRequest) -> Any:
             "detail": "Failed to export user data. Please try again later.",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
+
+
+# =============================================================================
+# SUB-PROCESSOR CRUD ENDPOINTS
+# =============================================================================
+
+
+def _sub_processor_payload(processor: Any) -> dict[str, Any]:
+    return {
+        "id": processor.id,
+        "name": processor.name,
+        "purpose": processor.purpose,
+        "url": processor.url,
+        "location": processor.location,
+        "product_ids": [product.id for product in processor.products.all()],
+    }
+
+
+@router.get(
+    "/workspaces/{team_key}/sub-processors",
+    response={200: list[SubProcessorSchema], 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Sub-processors"],
+)
+def list_sub_processors(request: HttpRequest, team_key: str) -> Any:
+    """List the workspace's sub-processors."""
+    from sbomify.apps.sboms.models import SubProcessor
+
+    try:
+        team = Team.objects.get(key=team_key)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Workspace not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not can(request, "workspace:read", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    processors = SubProcessor.objects.filter(team=team).prefetch_related("products").order_by("name")
+    return 200, [_sub_processor_payload(processor) for processor in processors]
+
+
+@router.post(
+    "/workspaces/{team_key}/sub-processors",
+    response={201: SubProcessorSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Sub-processors"],
+)
+def create_sub_processor(request: HttpRequest, team_key: str, payload: SubProcessorCreateSchema) -> Any:
+    """Add a sub-processor to the workspace."""
+    from sbomify.apps.sboms.models import SubProcessor
+
+    try:
+        team = Team.objects.get(key=team_key)
+    except Team.DoesNotExist:
+        return 404, {"detail": "Workspace not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not can(request, "workspace:manage", team):
+        return 403, {"detail": "Only owners and admins can manage sub-processors", "error_code": ErrorCode.FORBIDDEN}
+
+    try:
+        processor = SubProcessor.objects.create(
+            team=team,
+            name=payload.name,
+            purpose=payload.purpose,
+            url=payload.url,
+            location=payload.location,
+        )
+    except DjangoValidationError as exc:
+        return 400, {"detail": "; ".join(exc.messages), "error_code": ErrorCode.VALIDATION_ERROR}
+    except IntegrityError:
+        return 400, {"detail": f"'{payload.name}' is already listed", "error_code": ErrorCode.DUPLICATE_NAME}
+
+    return 201, _sub_processor_payload(processor)
+
+
+@router.delete(
+    "/sub-processors/{sub_processor_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Sub-processors"],
+)
+def delete_sub_processor(request: HttpRequest, sub_processor_id: str) -> Any:
+    """Remove a sub-processor from the workspace, and from every product using it."""
+    from sbomify.apps.sboms.models import SubProcessor
+
+    processor = SubProcessor.objects.filter(pk=sub_processor_id).select_related("team").first()
+    if processor is None:
+        return 404, {"detail": "Sub-processor not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not can(request, "workspace:manage", processor.team):
+        return 403, {"detail": "Only owners and admins can manage sub-processors", "error_code": ErrorCode.FORBIDDEN}
+
+    processor.delete()
+    return 204, None
+
+
+@router.patch(
+    "/products/{product_id}/sub-processors",
+    response={200: ProductSubProcessorsSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    tags=["Sub-processors"],
+)
+def set_product_sub_processors(request: HttpRequest, product_id: str, payload: ProductSubProcessorsSchema) -> Any:
+    """Replace the set of sub-processors attached to a product."""
+    from sbomify.apps.sboms.models import SubProcessor
+
+    try:
+        product = Product.objects.get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not can(request, "product:manage", product):
+        return 403, {"detail": "Only owners and admins can manage sub-processors", "error_code": ErrorCode.FORBIDDEN}
+
+    # Scoped to the product's own workspace, so an id from elsewhere is simply
+    # not found rather than reaching the M2M guard as an exception.
+    requested = set(payload.sub_processor_ids)
+    processors = list(SubProcessor.objects.filter(pk__in=requested, team_id=product.team_id))
+    missing = requested - {processor.id for processor in processors}
+    if missing:
+        return 400, {
+            "detail": f"Unknown sub-processor(s) for this workspace: {', '.join(sorted(missing))}",
+            "error_code": ErrorCode.VALIDATION_ERROR,
+        }
+
+    product.sub_processors.set(processors)
+    return 200, {"sub_processor_ids": [processor.id for processor in processors]}

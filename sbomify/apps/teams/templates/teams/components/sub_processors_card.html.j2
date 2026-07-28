@@ -1,0 +1,109 @@
+{% comment %}Workspace sub-processors. Loads over the API on init rather than from view context, so adding and removing one does not need a page round-trip and the card can live in a tab that may never be opened.{% endcomment %}
+<div class="tw-settings-card mb-6"
+     x-data="{ rows: [], loading: true, err: '', form: { name: '', purpose: '', url: '', location: '' }, busy: false, get csrf() { return (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' }, base: '/api/v1/workspaces/{{ team.key|escapejs }}/sub-processors', async load() { this.loading = true; this.err = ''; try { const r = await fetch(this.base); if (!r.ok) throw new Error('Could not load sub-processors'); this.rows = await r.json(); } catch (e) { this.err = e.message } finally { this.loading = false } }, async add() { if (!this.form.name.trim() || this.busy) return; this.busy = true; this.err = ''; try { const r = await fetch(this.base, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrf }, body: JSON.stringify(this.form) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.detail || 'Could not add that sub-processor'); this.form = { name: '', purpose: '', url: '', location: '' }; await this.load(); } catch (e) { this.err = e.message } finally { this.busy = false } }, async remove(row) { if (this.busy) return; this.busy = true; this.err = ''; try { const r = await fetch('/api/v1/sub-processors/' + row.id, { method: 'DELETE', headers: { 'X-CSRFToken': this.csrf } }); if (!r.ok) throw new Error('Could not remove that sub-processor'); await this.load(); } catch (e) { this.err = e.message } finally { this.busy = false } } }"
+     x-init="load()">
+    <div class="px-6 py-4 border-b border-border">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <i class="fas fa-sitemap text-primary"></i>
+            </div>
+            <div>
+                <h5 class="text-lg font-semibold text-text m-0">Sub-processors</h5>
+                <p class="text-text-muted text-sm m-0">
+                    Third parties that process data on your behalf. Assign them to products to list them on your Trust Center.
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="p-6">
+        <div x-show="err" x-cloak class="tw-alert tw-alert-danger mb-4">
+            <i class="fas fa-circle-exclamation tw-alert-icon"></i>
+            <div class="tw-alert-content">
+                <p class="text-sm m-0" x-text="err"></p>
+            </div>
+        </div>
+        <div x-show="loading" x-cloak class="text-text-muted text-sm mb-4">Loading…</div>
+        <template x-if="!loading && rows.length === 0">
+            <p class="text-text-muted text-sm mb-4">No sub-processors yet.</p>
+        </template>
+        <div x-show="rows.length" x-cloak class="overflow-x-auto mb-6">
+            <table class="tw-table w-full text-sm">
+                <thead>
+                    <tr class="bg-border/30">
+                        <th class="text-left py-2 px-3 font-medium text-text-muted">Name</th>
+                        <th class="text-left py-2 px-3 font-medium text-text-muted">Purpose</th>
+                        <th class="text-left py-2 px-3 font-medium text-text-muted">Location</th>
+                        <th class="text-left py-2 px-3 font-medium text-text-muted">Products</th>
+                        <th class="w-10"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="row in rows" :key="row.id">
+                        <tr class="border-t border-border/40">
+                            <td class="py-2 px-3 text-text font-semibold" x-text="row.name"></td>
+                            <td class="py-2 px-3 text-text-muted" x-text="row.purpose || '—'"></td>
+                            <td class="py-2 px-3 text-text-muted" x-text="row.location || '—'"></td>
+                            <td class="py-2 px-3 text-text-muted" x-text="row.product_ids.length"></td>
+                            <td class="py-2 px-3 text-right">
+                                <button type="button"
+                                        class="text-text-muted hover:text-danger"
+                                        :disabled="busy"
+                                        :title="'Remove ' + row.name"
+                                        @click="remove(row)">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="pt-4 border-t border-border">
+            <h6 class="text-base font-semibold text-text mb-3">Add a sub-processor</h6>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label for="sp-name" class="tw-form-label">Name</label>
+                    <input id="sp-name"
+                           type="text"
+                           x-model="form.name"
+                           class="tw-form-input w-full"
+                           placeholder="Amazon Web Services"
+                           @keydown.enter="add()">
+                </div>
+                <div>
+                    <label for="sp-purpose" class="tw-form-label">Purpose</label>
+                    <input id="sp-purpose"
+                           type="text"
+                           x-model="form.purpose"
+                           class="tw-form-input w-full"
+                           placeholder="Hosting"
+                           @keydown.enter="add()">
+                </div>
+                <div>
+                    <label for="sp-location" class="tw-form-label">Location</label>
+                    <input id="sp-location"
+                           type="text"
+                           x-model="form.location"
+                           class="tw-form-input w-full"
+                           placeholder="EU (Frankfurt)"
+                           @keydown.enter="add()">
+                </div>
+                <div>
+                    <label for="sp-url" class="tw-form-label">Website</label>
+                    <input id="sp-url"
+                           type="url"
+                           x-model="form.url"
+                           class="tw-form-input w-full"
+                           placeholder="https://aws.amazon.com"
+                           @keydown.enter="add()">
+                </div>
+            </div>
+            <button type="button"
+                    class="tw-btn-primary"
+                    :disabled="busy || !form.name.trim()"
+                    @click="add()">
+                <i class="fas fa-plus mr-2"></i>Add sub-processor
+            </button>
+        </div>
+    </div>
+</div>

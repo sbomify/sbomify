@@ -152,3 +152,115 @@ class TestPublicPage:
         content = self._get(sample_product).content.decode()
 
         assert "Sub-processors" not in content
+
+
+class TestApi:
+    """Workspace CRUD and per-product assignment."""
+
+    @pytest.fixture
+    def owner_client(self, sample_product, sample_user):  # noqa: F811
+        from sbomify.apps.teams.models import Member
+
+        team = sample_product.team
+        Member.objects.get_or_create(user=sample_user, team=team, defaults={"role": "owner"})
+        client = Client()
+        client.force_login(sample_user)
+        session = client.session
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session.save()
+        return client
+
+    def test_owner_lists_them(self, owner_client, processor, sample_product):  # noqa: F811
+        response = owner_client.get(f"/api/v1/workspaces/{sample_product.team.key}/sub-processors")
+
+        assert response.status_code == 200
+        assert [row["name"] for row in response.json()] == ["Amazon Web Services"]
+
+    def test_owner_adds_one(self, owner_client, sample_product):  # noqa: F811
+        response = owner_client.post(
+            f"/api/v1/workspaces/{sample_product.team.key}/sub-processors",
+            data={"name": "Cloudflare", "purpose": "CDN"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 201
+        assert SubProcessor.objects.filter(team=sample_product.team, name="Cloudflare").exists()
+
+    def test_a_duplicate_name_is_a_clean_400(self, owner_client, processor, sample_product):  # noqa: F811
+        """The unique constraint would otherwise surface as a 500."""
+        response = owner_client.post(
+            f"/api/v1/workspaces/{sample_product.team.key}/sub-processors",
+            data={"name": "Amazon Web Services"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        assert "already listed" in response.json()["detail"]
+
+    def test_owner_deletes_one(self, owner_client, processor):
+        response = owner_client.delete(f"/api/v1/sub-processors/{processor.id}")
+
+        assert response.status_code == 204
+        assert not SubProcessor.objects.filter(pk=processor.pk).exists()
+
+    def test_assignment_replaces_the_set(self, owner_client, processor, sample_product):  # noqa: F811
+        response = owner_client.patch(
+            f"/api/v1/products/{sample_product.id}/sub-processors",
+            data={"sub_processor_ids": [processor.id]},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert list(sample_product.sub_processors.all()) == [processor]
+
+        cleared = owner_client.patch(
+            f"/api/v1/products/{sample_product.id}/sub-processors",
+            data={"sub_processor_ids": []},
+            content_type="application/json",
+        )
+
+        assert cleared.status_code == 200
+        assert sample_product.sub_processors.count() == 0
+
+    def test_assigning_a_foreign_sub_processor_is_rejected(self, owner_client, sample_product):  # noqa: F811
+        """Caught by the workspace filter, so it never reaches the M2M guard as
+        an exception."""
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Team
+
+        other = Team.objects.create(name="other workspace")
+        other.key = number_to_random_token(other.pk)
+        other.save()
+        foreign = SubProcessor.objects.create(team=other, name="Someone else's vendor")
+
+        response = owner_client.patch(
+            f"/api/v1/products/{sample_product.id}/sub-processors",
+            data={"sub_processor_ids": [foreign.id]},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        assert sample_product.sub_processors.count() == 0
+
+    def test_an_outsider_cannot_read_them(self, processor, sample_product, django_user_model):  # noqa: F811
+        outsider = django_user_model.objects.create_user(username="outsider", password="x")  # noqa: S106
+        client = Client()
+        client.force_login(outsider)
+
+        response = client.get(f"/api/v1/workspaces/{sample_product.team.key}/sub-processors")
+
+        assert response.status_code == 403
+
+    def test_an_outsider_cannot_add_one(self, sample_product, django_user_model):  # noqa: F811
+        outsider = django_user_model.objects.create_user(username="outsider2", password="x")  # noqa: S106
+        client = Client()
+        client.force_login(outsider)
+
+        response = client.post(
+            f"/api/v1/workspaces/{sample_product.team.key}/sub-processors",
+            data={"name": "Sneaky"},
+            content_type="application/json",
+        )
+
+        assert response.status_code == 403
+        assert not SubProcessor.objects.filter(name="Sneaky").exists()
