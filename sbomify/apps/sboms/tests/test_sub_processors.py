@@ -187,7 +187,12 @@ class TestApi:
         assert SubProcessor.objects.filter(team=sample_product.team, name="Cloudflare").exists()
 
     def test_a_duplicate_name_is_a_clean_400(self, owner_client, processor, sample_product):  # noqa: F811
-        """The unique constraint would otherwise surface as a 500."""
+        """The unique constraint would otherwise surface as a 500.
+
+        The endpoint wraps the insert in a savepoint, so the caller can keep
+        using the connection afterwards; the follow-up read below is the part
+        that fails without it.
+        """
         response = owner_client.post(
             f"/api/v1/workspaces/{sample_product.team.key}/sub-processors",
             data={"name": "Amazon Web Services"},
@@ -196,6 +201,10 @@ class TestApi:
 
         assert response.status_code == 400
         assert "already listed" in response.json()["detail"]
+        # The request transaction has to still be usable after the rejection.
+        after = owner_client.get(f"/api/v1/workspaces/{sample_product.team.key}/sub-processors")
+        assert after.status_code == 200
+        assert [row["name"] for row in after.json()] == ["Amazon Web Services"]
 
     def test_owner_deletes_one(self, owner_client, processor):
         response = owner_client.delete(f"/api/v1/sub-processors/{processor.id}")

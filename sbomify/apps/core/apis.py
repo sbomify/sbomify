@@ -4651,13 +4651,19 @@ def create_sub_processor(request: HttpRequest, team_key: str, payload: SubProces
         return 403, {"detail": "Only owners and admins can manage sub-processors", "error_code": ErrorCode.FORBIDDEN}
 
     try:
-        processor = SubProcessor.objects.create(
-            team=team,
-            name=payload.name,
-            purpose=payload.purpose,
-            url=payload.url,
-            location=payload.location,
-        )
+        # atomic() so the unique-constraint violation rolls back a savepoint
+        # rather than the whole request transaction. Catching IntegrityError
+        # does not heal the connection: without this, every query after it
+        # raises TransactionManagementError, which is how a clean 400 turns
+        # into a broken request.
+        with transaction.atomic():
+            processor = SubProcessor.objects.create(
+                team=team,
+                name=payload.name,
+                purpose=payload.purpose,
+                url=payload.url,
+                location=payload.location,
+            )
     except DjangoValidationError as exc:
         return 400, {"detail": "; ".join(exc.messages), "error_code": ErrorCode.VALIDATION_ERROR}
     except IntegrityError:
