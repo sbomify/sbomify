@@ -47,7 +47,10 @@ def prunable_run_ids(
     Returns ids rather than deleting them, so the policy can be counted or
     dry-run without being welded to the deletion.
 
-    One pass over every run, newest first within each (sbom, plugin). Ranking
+    One pass over every run, newest first within each (sbom, plugin). The sort
+    breaks ties on id, because runs created in the same transaction can share a
+    timestamp and an unstable order there would let a newer row rank below an
+    older one and be pruned. Ranking
     against *all* runs rather than only the old ones is what makes the two rules
     compose: a pair whose quota is already filled by recent runs has its older
     ones prunable, while a pair with few runs keeps them however old they are.
@@ -56,10 +59,17 @@ def prunable_run_ids(
     """
     from sbomify.apps.plugins.models import AssessmentRun
 
+    # A quota of 0 would make rank>=0 true for the newest run, contradicting the
+    # guarantee above; a negative floor would push the cutoff into the future
+    # and make everything eligible. Clamp rather than trust the caller, since
+    # both mistakes delete data.
+    keep_per_plugin = max(1, keep_per_plugin)
+    min_age_days = max(0, min_age_days)
+
     cutoff = timezone.now() - timedelta(days=min_age_days)
 
     rows = (
-        AssessmentRun.objects.order_by("sbom_id", "plugin_name", "-created_at")
+        AssessmentRun.objects.order_by("sbom_id", "plugin_name", "-created_at", "-id")
         .values_list("id", "sbom_id", "plugin_name", "created_at")
         .iterator()
     )
@@ -98,11 +108,14 @@ def prune_assessment_runs(
         logger.info(f"[RETENTION] dry run: {len(doomed)} assessment runs would be pruned")
         return len(doomed)
 
+    batch_size = max(1, batch_size)
     removed = 0
     for start in range(0, len(doomed), batch_size):
         batch = doomed[start : start + batch_size]
-        AssessmentRun.objects.filter(id__in=batch).delete()
-        removed += len(batch)
+        # Count what the delete actually removed, not what was asked for: a
+        # concurrent sweep may already have taken some of these rows.
+        _, per_model = AssessmentRun.objects.filter(id__in=batch).delete()
+        removed += per_model.get("plugins.AssessmentRun", 0)
     if removed:
         logger.info(f"[RETENTION] pruned {removed} assessment runs")
     return removed

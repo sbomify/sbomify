@@ -12,14 +12,8 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
-from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.retention import prunable_run_ids, prune_assessment_runs
-from sbomify.apps.sboms.tests.fixtures import (  # noqa: F401
-    sample_component,
-    sample_product,
-    sample_sbom,
-)
 
 pytestmark = pytest.mark.django_db
 
@@ -33,13 +27,13 @@ def _run(sbom, plugin: str, *, days_ago: int) -> AssessmentRun:
 
 
 class TestKeepRule:
-    def test_a_pair_under_quota_keeps_everything_however_old(self, sample_sbom):  # noqa: F811
+    def test_a_pair_under_quota_keeps_everything_however_old(self, sample_sbom):
         for age in (400, 500, 600):
             _run(sample_sbom, "osv", days_ago=age)
 
         assert prunable_run_ids(keep_per_plugin=10, min_age_days=30) == []
 
-    def test_beyond_the_quota_the_oldest_go(self, sample_sbom):  # noqa: F811
+    def test_beyond_the_quota_the_oldest_go(self, sample_sbom):
         for age in range(100, 106):
             _run(sample_sbom, "osv", days_ago=age)
 
@@ -47,7 +41,7 @@ class TestKeepRule:
 
         assert len(doomed) == 3
 
-    def test_the_quota_is_per_plugin_not_per_sbom(self, sample_sbom):  # noqa: F811
+    def test_the_quota_is_per_plugin_not_per_sbom(self, sample_sbom):
         """Otherwise a chatty scanner evicts a quiet one's only run."""
         for age in range(100, 110):
             _run(sample_sbom, "osv", days_ago=age)
@@ -57,7 +51,7 @@ class TestKeepRule:
 
         assert quiet.id not in doomed
 
-    def test_the_newest_run_is_never_prunable(self, sample_sbom):  # noqa: F811
+    def test_the_newest_run_is_never_prunable(self, sample_sbom):
         """Deleting it would empty a card with no newer result to replace it."""
         newest = _run(sample_sbom, "osv", days_ago=100)
         for age in range(101, 120):
@@ -67,14 +61,14 @@ class TestKeepRule:
 
 
 class TestTtlFloor:
-    def test_nothing_recent_is_touched_however_many_there_are(self, sample_sbom):  # noqa: F811
+    def test_nothing_recent_is_touched_however_many_there_are(self, sample_sbom):
         """A retry storm this afternoon must not erase this morning's run."""
         for _ in range(50):
             _run(sample_sbom, "osv", days_ago=1)
 
         assert prunable_run_ids(keep_per_plugin=3, min_age_days=30) == []
 
-    def test_the_two_rules_compose(self, sample_sbom):  # noqa: F811
+    def test_the_two_rules_compose(self, sample_sbom):
         """Recent runs fill the quota, so the old ones become prunable even
         though the recent ones stay."""
         recent = [_run(sample_sbom, "osv", days_ago=1) for _ in range(3)]
@@ -87,7 +81,7 @@ class TestTtlFloor:
 
 
 class TestPruning:
-    def test_it_deletes_and_reports_the_count(self, sample_sbom):  # noqa: F811
+    def test_it_deletes_and_reports_the_count(self, sample_sbom):
         for age in range(100, 106):
             _run(sample_sbom, "osv", days_ago=age)
 
@@ -96,7 +90,7 @@ class TestPruning:
         assert removed == 3
         assert AssessmentRun.objects.count() == 3
 
-    def test_a_dry_run_deletes_nothing(self, sample_sbom):  # noqa: F811
+    def test_a_dry_run_deletes_nothing(self, sample_sbom):
         for age in range(100, 106):
             _run(sample_sbom, "osv", days_ago=age)
 
@@ -105,7 +99,7 @@ class TestPruning:
         assert counted == 3
         assert AssessmentRun.objects.count() == 6
 
-    def test_batching_deletes_everything_it_selected(self, sample_sbom):  # noqa: F811
+    def test_batching_deletes_everything_it_selected(self, sample_sbom):
         """Batched so a first run against a large table holds short locks; the
         batch size must not change the outcome."""
         for age in range(100, 112):
