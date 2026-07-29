@@ -337,3 +337,37 @@ class ContactProfileUpdateSchema(BaseModel):
     website_urls: list[str] | None = None
     contacts: list[ContactProfileContactSchema] | None = None
     is_default: bool | None = None
+
+
+class SupplierSchema(BaseModel):
+    """A vendor the workspace collects artifacts from."""
+
+    id: str
+    name: str
+    contact_name: str = ""
+    contact_email: str = ""
+    website: str = ""
+    notes: str = ""
+    created_at: datetime
+    updated_at: datetime
+
+
+class SupplierCreateSchema(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    contact_name: str = Field(default="", max_length=255)
+    # Not EmailStr: blank is allowed so a vendor can be tracked before anyone
+    # has found a contact for it, and EmailStr rejects "".
+    contact_email: str = Field(default="", max_length=254)
+    website: str = Field(default="", max_length=500)
+    notes: str = ""
+
+
+class SupplierUpdateSchema(BaseModel):
+    """Every field optional. Absent means leave alone, which is what lets one
+    endpoint serve a single-field inline edit and a full form."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    contact_name: str | None = Field(default=None, max_length=255)
+    contact_email: str | None = Field(default=None, max_length=254)
+    website: str | None = Field(default=None, max_length=500)
+    notes: str | None = None

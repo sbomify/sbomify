@@ -789,3 +789,63 @@ class ContactProfileContact(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.entity_id})"
+
+
+class Supplier(models.Model):
+    """A vendor this workspace collects SBOMs and documents FROM.
+
+    Deliberately separate from :class:`ContactEntity` and its ``is_supplier``
+    flag, which is SBOM *metadata*: the party named inside a document as the
+    supplier of the software that document describes. That is a fact about an
+    artifact. This is a party we chase for artifacts, with delivery state of its
+    own. One record cannot mean both without the tracking view answering the
+    wrong question.
+
+    Scoped to the workspace rather than a product because a vendor usually
+    supplies several, so a per-product supplier has no single answer for one
+    that spans them. Which product a given ask concerns belongs on the request,
+    not here.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("teams").label + "_suppliers"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["team", "name"], name="unique_supplier_name_per_team"),
+        ]
+        indexes = [
+            models.Index(fields=["team", "name"], name="teams_supplier_team_name_idx"),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="suppliers")
+    name = models.CharField(max_length=255, help_text="The vendor organization's name")
+    contact_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Who to address at the vendor. Optional: a shared alias often has no person behind it",
+    )
+    contact_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text="Where requests are sent. Blank until known, so a vendor can be tracked before a contact is found",
+    )
+    website = models.URLField(blank=True, default="", max_length=500)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self) -> None:
+        # Names differing only by surrounding whitespace or case read as
+        # duplicates to a human but not to the unique constraint, and a supplier
+        # list is exactly where the same vendor gets entered twice.
+        self.name = (self.name or "").strip()
+        if not self.name:
+            raise ValidationError({"name": "Supplier name is required"})
+        clash = Supplier.objects.filter(team=self.team, name__iexact=self.name).exclude(pk=self.pk)
+        if clash.exists():
+            raise ValidationError({"name": "A supplier with this name already exists in this workspace"})
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.team_id})"
