@@ -795,10 +795,25 @@ def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
     return base_rate
 
 
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+
+# With no DSN the SDK builds a client whose transport is None: every event is
+# dropped silently and is_active() still returns True, so nothing surfaces the
+# misconfiguration. Say so once at startup instead.
+if not _SENTRY_DSN and not DEBUG:
+    logging.getLogger(__name__).warning(
+        "SENTRY_DSN is not set - error reporting is disabled and all events will be discarded."
+    )
+
 sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
+    dsn=_SENTRY_DSN,
     release=get_sbomify_version(),
-    environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
+    # environment is deliberately NOT defaulted here. Passing a literal fallback
+    # overrides the SDK's own behaviour, which is to read SENTRY_ENVIRONMENT and
+    # otherwise use "production". A hardcoded "development" fallback meant every
+    # deployment that did not set SENTRY_ENVIRONMENT tagged its events
+    # "development", so alert rules scoped to production never matched.
+    environment=os.environ.get("SENTRY_ENVIRONMENT") or None,
     integrations=[
         DjangoIntegration(),
         DramatiqIntegration(),
