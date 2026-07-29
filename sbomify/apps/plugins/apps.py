@@ -90,6 +90,28 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # OpenChain Telco SBOM Guide v1.1 Plugin
+        _register(
+            "openchain-telco-1.1",
+            {
+                "display_name": "OpenChain Telco SBOM Guide v1.1",
+                "description": (
+                    "Checks SBOMs against the OpenChain Telco SBOM Guide v1.1, which telco "
+                    "and regulated buyers ask for by name. The Guide mandates SPDX 2.2 or 2.3, "
+                    "so a CycloneDX document cannot conform. Covers the required document and "
+                    "package elements, the recommended package hash and PURL, the DESCRIBES and "
+                    "CONTAINS relationships, and the build information including the CISA SBOM Type."
+                ),
+                "category": "compliance",
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.openchain_telco.OpenChainTelcoPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # FDA Medical Device Cybersecurity 2025 Plugin
         _register(
             "fda-medical-device-2025",
