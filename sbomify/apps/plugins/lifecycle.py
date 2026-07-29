@@ -20,8 +20,15 @@ skipped, and belonging to the plugin whose findings are being compared. A
 skipped or failed run updates nothing at all, which is the honest outcome, since
 it carries no evidence either way.
 
-Resolution is also scoped per plugin. OSV and Dependency Track see different
-things, so OSV's results must not close findings only DT ever reported.
+Resolution also answers to the other scanners. OSV and Dependency Track see
+different things, so a finding closes only when no other plugin's most recent
+real scan still reports it.
+
+The rows are keyed per component rather than per plugin on purpose. "CVE-X
+affects this component" is one fact about the component; splitting it per
+scanner would count the same vulnerability twice in the open-criticals age and
+twice in MTTR, and would make first_seen_at mean "when this scanner noticed"
+rather than "when the component got the problem".
 """
 
 from __future__ import annotations
@@ -31,6 +38,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from sbomify.apps.plugins.sdk.enums import RunStatus
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -43,7 +51,7 @@ def run_scanned(run: Any) -> bool:
     as "nothing found" is what would mark a component remediated because its
     format changed.
     """
-    if getattr(run, "status", None) != "completed":
+    if getattr(run, "status", None) != RunStatus.COMPLETED.value:
         return False
     result = getattr(run, "result", None)
     if not isinstance(result, dict):
@@ -116,13 +124,13 @@ def record_run(run: Any) -> dict[str, int]:
         row.save(update_fields=["last_seen_at", "severity", "resolved_at"])
         seen += 1
 
-    # Only close what this plugin could have reported. OSV and Dependency Track
+    # Only close what no other scanner still reports. OSV and Dependency Track
     # see different things, so one must not resolve the other's findings.
-    plugin_advisories = _advisories_reported_by(component_id, run.plugin_name)
+    peers = _still_reported_by_peers(component_id, run.plugin_name)
     stale = [
         row
         for advisory_id, row in existing.items()
-        if advisory_id not in present and row.resolved_at is None and advisory_id in plugin_advisories
+        if advisory_id not in present and row.resolved_at is None and advisory_id not in peers
     ]
     for row in stale:
         row.resolved_at = now
@@ -135,22 +143,38 @@ def record_run(run: Any) -> dict[str, int]:
     return {"opened": opened, "seen": seen, "resolved": len(stale)}
 
 
-def _advisories_reported_by(component_id: str, plugin_name: str) -> set[str]:
-    """Advisory ids this plugin has ever reported for this component.
+def _still_reported_by_peers(component_id: str, plugin_name: str) -> set[str]:
+    """What the other plugins' most recent real scans still report.
 
-    Without this a scanner that never saw a finding would close it.
+    Anything in here is off limits: some scanner looked recently and the
+    finding was there, so the current plugin dropping it says only that this
+    scanner no longer sees it.
 
-    Deliberately not DISTINCT ON: that is Postgres-only and would not run on
-    SQLite, and the set is bounded anyway now that retention caps runs per
-    (sbom, plugin).
+    Only each peer's newest scanned run counts. Skipped and failed runs are
+    excluded rather than treated as clean, so a peer handed an SPDX SBOM falls
+    back to its last real evidence instead of silently releasing the finding.
+
+    Two phases so the fat ``result`` blob is fetched once per peer instead of
+    once per run: the ids are picked from small columns first. Deliberately not
+    DISTINCT ON, which is Postgres-only.
     """
     from sbomify.apps.plugins.models import AssessmentRun
 
-    runs = AssessmentRun.objects.filter(
-        sbom__component_id=component_id, plugin_name=plugin_name, status="completed"
-    ).values_list("result", flat=True)
+    candidates = (
+        AssessmentRun.objects.filter(sbom__component_id=component_id, status=RunStatus.COMPLETED.value)
+        .exclude(plugin_name=plugin_name)
+        .exclude(result_skipped=True)
+        .order_by("plugin_name", "-created_at", "-id")
+        .values_list("id", "plugin_name")
+    )
+    newest_per_peer: dict[str, Any] = {}
+    for run_id, peer in candidates:
+        newest_per_peer.setdefault(peer, run_id)
+    if not newest_per_peer:
+        return set()
+
     reported: set[str] = set()
-    for result in runs:
+    for result in AssessmentRun.objects.filter(id__in=newest_per_peer.values()).values_list("result", flat=True):
         if isinstance(result, dict):
             reported.update(_advisories(result))
     return reported
