@@ -1334,3 +1334,19 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         task_name="hourly_dt_scan",
         only_cyclonedx=True,
     )
+
+
+@cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
+@dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
+def prune_assessment_runs_task() -> int:
+    """Apply the assessment-run retention policy.
+
+    plugins_assessment_runs is append-only and grows with every scan, retry and
+    scheduled run, which feeds TOAST bloat and the long checkpoints seen on
+    staging. See plugins/retention.py for the two rules.
+    """
+    from sbomify.apps.plugins.retention import prune_assessment_runs
+
+    removed = prune_assessment_runs()
+    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
+    return removed

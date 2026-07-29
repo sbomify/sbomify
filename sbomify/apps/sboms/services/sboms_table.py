@@ -25,8 +25,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     Rows with no completed security run get ``vuln = None``.
     """
     from sbomify.apps.vulnerability_scanning.utils import (
-        RESULT_SUMMARY_ANNOTATIONS,
-        RESULT_SUMMARY_FIELDS,
+        RESULT_SUMMARY_COLUMNS,
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
@@ -43,8 +42,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
             AssessmentRun.objects.filter(sbom_id__in=sbom_ids, category="security", status="completed")
             .order_by("sbom_id", "-created_at")
             .distinct("sbom_id")
-            .annotate(**RESULT_SUMMARY_ANNOTATIONS)
-            .values("sbom_id", *RESULT_SUMMARY_FIELDS)
+            .values("sbom_id", *RESULT_SUMMARY_COLUMNS)
         )
         counts_by_sbom = {
             str(row["sbom_id"]): extract_severity_counts(reconstruct_result_summary(row)) for row in latest_summaries

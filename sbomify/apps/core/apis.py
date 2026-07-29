@@ -4191,7 +4191,6 @@ def list_component_sboms(
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
         from sbomify.apps.vulnerability_scanning.utils import (
-            RESULT_SUMMARY_ANNOTATIONS,
             reconstruct_result_summary,
         )
 
@@ -4283,7 +4282,6 @@ def list_component_sboms(
             latest_runs = list(
                 AssessmentRun.objects.filter(id__in=winner_ids)
                 .defer("result")
-                .annotate(**RESULT_SUMMARY_ANNOTATIONS)
                 # id__in has undefined row order; keep the per-SBOM plugin lists
                 # stable across requests.
                 .order_by("sbom_id", "plugin_name")
