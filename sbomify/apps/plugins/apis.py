@@ -122,29 +122,46 @@ def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
 
 
 def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None) -> Any:
-    """A copy of the run's result with per-finding KEV flags stamped in.
+    """A copy of the run's result with the read-time finding flags stamped in.
 
-    The stored blob is never mutated; the flag is response-time data from the
-    cached CISA feed. Non-security runs and empty catalogs pass through as-is.
+    Two flags, both derived rather than stored: ``kev`` from the cached CISA
+    feed, and ``malicious`` from evidence already inside the finding. Deriving
+    them here means every run ever recorded carries them without a rescan.
+
+    The stored blob is never mutated. Non-security runs pass through as-is.
     """
     result = run.result
-    if not kev_ids or run.category != "security" or not isinstance(result, dict):
+    if run.category != "security" or not isinstance(result, dict):
         return result
     findings = result.get("findings")
     if not isinstance(findings, list):
         return result
-    from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
 
-    # Build a new findings list only once a KEV match is actually found — the
-    # common case (no matches) returns the original result with no allocation.
+    from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
+    from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
+
+    # Build a new findings list only once a match is actually found — the common
+    # case (no matches) returns the original result with no allocation.
     stamped: list[Any] | None = None
-    for i, finding in enumerate(findings):
-        if isinstance(finding, dict) and finding_in_kev(finding, kev_ids):
-            if stamped is None:
-                stamped = list(findings)
-            stamped[i] = {**finding, "kev": True}
+    if kev_ids:
+        for i, finding in enumerate(findings):
+            if isinstance(finding, dict) and finding_in_kev(finding, kev_ids):
+                if stamped is None:
+                    stamped = list(findings)
+                stamped[i] = {**finding, "kev": True}
+
+    findings_out, malicious_count = stamp_malicious(stamped if stamped is not None else findings)
+    if findings_out is not (stamped if stamped is not None else findings):
+        stamped = findings_out
+
     if stamped is None:
         return result
+
+    # Surfaced on the summary so dashboards and posture cards can split the
+    # class out without walking every finding again.
+    summary = result.get("summary")
+    if malicious_count and isinstance(summary, dict):
+        return {**result, "findings": stamped, "summary": {**summary, "malicious_count": malicious_count}}
     return {**result, "findings": stamped}
 
 
