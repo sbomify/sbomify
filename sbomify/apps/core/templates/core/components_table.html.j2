@@ -146,7 +146,7 @@
                                                 <template x-if="component.freshness && component.freshness.is_stale">
                                                     <span class="tw-badge-secondary mt-1 text-danger"
                                                           :title="'SBOM is ' + Math.abs(component.freshness.expires_in_days) + ' days past the ' + component.freshness.window_days + '-day freshness window'">
-                                                        <i class="fas fa-hourglass-end mr-1"></i>Stale
+                                                        <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
                                                     </span>
                                                 </template>
                                                 {# Mobile: Show type #}

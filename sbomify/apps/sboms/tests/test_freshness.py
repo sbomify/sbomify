@@ -136,3 +136,26 @@ class TestListAnnotation:
         queryset = with_latest_sbom(Component.objects.filter(pk=sample_component.pk))
 
         assert queryset.first().latest_sbom_at is None
+
+
+class TestZeroWindow:
+    """0 is storable in a PositiveIntegerField, so it has to mean something
+    definite rather than being swallowed as "unset"."""
+
+    def test_a_zero_workspace_window_is_a_real_policy(self, sample_component):  # noqa: F811
+        sample_component.team.sbom_freshness_days = 0
+        sample_component.team.save()
+
+        assert window_days(sample_component) == 0
+
+    def test_a_zero_component_override_beats_a_set_workspace_default(self, sample_component):  # noqa: F811
+        sample_component.team.sbom_freshness_days = 90
+        sample_component.team.save()
+        sample_component.sbom_freshness_days = 0
+
+        assert window_days(sample_component) == 0
+
+    def test_a_zero_window_expires_immediately(self):
+        state = freshness_state(timezone.now() - timedelta(hours=1), 0)
+
+        assert state["is_stale"] is True

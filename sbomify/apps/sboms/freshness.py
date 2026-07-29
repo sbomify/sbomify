@@ -34,13 +34,17 @@ from django.utils import timezone
 
 def window_days(component: Any) -> int | None:
     """The freshness window that applies, or None when no policy is set."""
+    # `is not None` rather than truthiness: the field is a PositiveIntegerField,
+    # so 0 is storable and means "expires immediately". Treating it as unset
+    # would silently ignore a configured value and make an override of 0
+    # fail to round-trip.
     override = getattr(component, "sbom_freshness_days", None)
-    if override:
+    if override is not None:
         return int(override)
 
     team = getattr(component, "team", None)
     default = getattr(team, "sbom_freshness_days", None) if team is not None else None
-    return int(default) if default else None
+    return int(default) if default is not None else None
 
 
 def freshness_state(latest_sbom_at: Any, window: int | None) -> dict[str, Any] | None:
@@ -50,7 +54,7 @@ def freshness_state(latest_sbom_at: Any, window: int | None) -> dict[str, Any] |
     stale component, and reporting one as stale would be a false alarm on a
     component nobody has uploaded to.
     """
-    if not window or latest_sbom_at is None:
+    if window is None or latest_sbom_at is None:
         return None
 
     remaining_days = window - (timezone.now() - latest_sbom_at).total_seconds() / 86400
