@@ -255,3 +255,83 @@ def test_the_supplier_list_page_renders(client: Client, sample_team_with_owner_m
 
     assert response.status_code == 200
     assert "Acme Components" in response.content.decode()
+
+
+class TestTheUrlWorkspaceIsWhatGetsAuthorized:
+    """The page authorizes against the workspace in the URL, not the one in the
+    session. TeamRoleRequiredMixin reads ``session["current_team"]``, so a view
+    that then resolves the URL's workspace by membership alone lets an owner of
+    one workspace act on another where they are only a guest.
+    """
+
+    def _setup(self, client: Client, sample_team_with_owner_member) -> Team:
+        session_team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        other = _other_team("Someone Else's Workspace")
+        Member.objects.create(team=other, user=user, role="guest")
+        # Session says the workspace they own; the URL will say the other one.
+        setup_authenticated_client_session(client, session_team, user)
+        return other
+
+    def test_a_guest_elsewhere_cannot_read_that_workspaces_suppliers(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        other = self._setup(client, sample_team_with_owner_member)
+        create_supplier(other, {"name": "Their Vendor"})
+
+        response = client.get(reverse("teams:suppliers", kwargs={"team_key": other.key}))
+
+        assert response.status_code == 403
+        assert "Their Vendor" not in response.content.decode()
+
+    def test_a_guest_elsewhere_cannot_add_to_that_workspace(self, client: Client, sample_team_with_owner_member):
+        other = self._setup(client, sample_team_with_owner_member)
+
+        client.post(reverse("teams:suppliers", kwargs={"team_key": other.key}), {"name": "Injected"})
+
+        assert not Supplier.objects.filter(team=other, name="Injected").exists()
+
+    def test_a_guest_elsewhere_cannot_delete_from_that_workspace(self, client: Client, sample_team_with_owner_member):
+        other = self._setup(client, sample_team_with_owner_member)
+        supplier = create_supplier(other, {"name": "Their Vendor"}).value
+
+        client.post(
+            reverse("teams:suppliers", kwargs={"team_key": other.key}),
+            {"action": "delete", "supplier_id": supplier.id},
+        )
+
+        assert Supplier.objects.filter(pk=supplier.pk).exists()
+
+    def test_a_non_member_cannot_reach_another_workspace(self, client: Client, sample_team_with_owner_member):
+        session_team = sample_team_with_owner_member.team
+        stranger = _other_team("Unrelated Workspace")
+        setup_authenticated_client_session(client, session_team, sample_team_with_owner_member.user)
+
+        response = client.get(reverse("teams:suppliers", kwargs={"team_key": stranger.key}))
+
+        assert response.status_code in (403, 404)
+
+
+class TestTheDatabaseHoldsTheInvariant:
+    """clean() reports the case-insensitive rule; the constraint has to enforce
+    it. Two concurrent inserts of "Acme" and "ACME" both clear full_clean, so a
+    case-sensitive constraint lets both commit."""
+
+    def test_a_case_variant_is_rejected_at_the_database(self, sample_team):
+        from django.db import IntegrityError, transaction
+
+        Supplier.objects.create(team=sample_team, name="Acme")
+
+        # Straight to the DB, skipping clean(), which is exactly what the losing
+        # side of the race does. The savepoint is what the service layer wraps
+        # the real insert in: without it the IntegrityError leaves the
+        # transaction unusable and teardown fails instead of the assertion.
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Supplier.objects.create(team=sample_team, name="ACME")
+
+    def test_another_workspace_may_still_use_the_name(self, sample_team):
+        Supplier.objects.create(team=sample_team, name="Acme")
+
+        other = Supplier.objects.create(team=_other_team(), name="ACME")
+
+        assert other.pk is not None

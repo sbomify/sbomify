@@ -9,6 +9,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinLengthValidator, RegexValidator
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -811,7 +812,12 @@ class Supplier(models.Model):
         db_table = apps.get_app_config("teams").label + "_suppliers"
         ordering = ["name"]
         constraints = [
-            models.UniqueConstraint(fields=["team", "name"], name="unique_supplier_name_per_team"),
+            # On Lower(name), not the raw column. clean() rejects a case variant
+            # but two concurrent inserts of "Acme" and "ACME" both pass it and
+            # both commit, because a case-sensitive constraint does not consider
+            # them equal. The database has to hold the invariant clean() only
+            # reports on.
+            models.UniqueConstraint(Lower("name"), "team", name="unique_supplier_name_per_team"),
         ]
         indexes = [
             models.Index(fields=["team", "name"], name="teams_supplier_team_name_idx"),

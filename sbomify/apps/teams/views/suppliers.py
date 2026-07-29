@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.views import View
 
@@ -31,6 +31,12 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     Owners and admins only. The list names who the workspace is chasing for
     artifacts, which is not something a Trust Center guest should see.
+
+    The role is checked against the workspace **in the URL**, not the one in the
+    session. ``TeamRoleRequiredMixin`` reads ``session["current_team"]``, so on
+    its own it answers a question about a different workspace than the one being
+    acted on: an owner of A visiting B's URL clears the mixin on A's role. The
+    mixin stays as a cheap first gate and ``_team`` is the authority.
     """
 
     allowed_roles = ["owner", "admin"]
@@ -40,7 +46,10 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def _team(self, request: HttpRequest, team_key: str) -> Team | None:
         user = cast(User, request.user)
         membership = (
-            Member.objects.filter(user=user, team__key=team_key).select_related("team").only("team", "role").first()
+            Member.objects.filter(user=user, team__key=team_key, role__in=self.allowed_roles)
+            .select_related("team")
+            .only("team", "role")
+            .first()
         )
         return membership.team if membership else None
 
@@ -55,7 +64,7 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         team = self._team(request, team_key)
         if team is None:
-            return htmx_error_response("Workspace not found")
+            return HttpResponseForbidden("You don't have access to this workspace's suppliers")
 
         search = request.GET.get("search", "")
         # The search box swaps only the rows, so a keystroke does not rebuild
@@ -73,7 +82,7 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         team = self._team(request, team_key)
         if team is None:
-            return htmx_error_response("Workspace not found")
+            return HttpResponseForbidden("You don't have access to this workspace's suppliers")
 
         data: dict[str, Any] = {
             "name": request.POST.get("name", ""),
