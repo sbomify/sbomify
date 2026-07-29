@@ -14,13 +14,20 @@ from django.utils import timezone
 
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.plugins.retention import prunable_run_ids, prune_assessment_runs
+from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
 pytestmark = pytest.mark.django_db
 
 
 def _run(sbom, plugin: str, *, days_ago: int) -> AssessmentRun:
     run = AssessmentRun.objects.create(
-        sbom=sbom, plugin_name=plugin, plugin_version="1.0.0", category="security", status="completed"
+        sbom=sbom,
+        plugin_name=plugin,
+        plugin_version="1.0.0",
+        plugin_config_hash="0" * 64,
+        category="security",
+        run_reason=RunReason.MANUAL.value,
+        status=RunStatus.COMPLETED.value,
     )
     AssessmentRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(days=days_ago))
     return run
