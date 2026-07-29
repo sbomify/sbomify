@@ -371,6 +371,11 @@ class OpenChainTelcoPlugin(AssessmentPlugin):
             )
         )
 
+        # A bare substring match, deliberately. "SBOM Type: Build" is only the
+        # recommended syntax; the Guide then says it requires no particular
+        # format, "only ... that at least one of the words 'Design', 'Source',
+        # 'Build', 'Analyzed', 'Deployed', 'Runtime' is present, regardless of
+        # the case". Demanding the label would fail documents the Guide accepts.
         has_type = any(t in comment.lower() for t in _CISA_SBOM_TYPES)
         findings.append(
             self._finding(
