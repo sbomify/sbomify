@@ -255,3 +255,44 @@ def test_metadata_matches_the_registered_name():
 
     assert metadata.name == "openchain-telco-1.1"
     assert metadata.category.value == "compliance"
+
+
+class TestMalformedInput:
+    """A non-conformant document must be reported, not crash the assessment."""
+
+    def test_a_non_dict_creation_info_does_not_crash(self, plugin, tmp_path):
+        document = _conformant() | {"creationInfo": "not an object"}
+
+        result = _run(plugin, document, tmp_path)
+
+        statuses = _by_slug(result)
+        assert statuses["creator"] == "fail"
+        assert statuses["created"] == "fail"
+        assert result.summary.error_count == 0
+
+    def test_a_null_creation_info_does_not_crash(self, plugin, tmp_path):
+        document = _conformant() | {"creationInfo": None}
+
+        assert _by_slug(_run(plugin, document, tmp_path))["creator"] == "fail"
+
+
+class TestRemediationPointsAtTheRightPlace:
+    def test_top_level_fields_are_named_as_top_level(self, plugin, tmp_path):
+        """Most §3.2 document elements are top-level keys; only Creator and
+        Created live under creationInfo."""
+        document = _conformant()
+        del document["dataLicense"]
+
+        result = _run(plugin, document, tmp_path)
+        finding = next(f for f in result.findings if f.id.endswith("data-license"))
+
+        assert "top-level" in finding.remediation
+
+    def test_creation_info_fields_are_named_as_such(self, plugin, tmp_path):
+        document = _conformant()
+        document["creationInfo"]["creators"] = []
+
+        result = _run(plugin, document, tmp_path)
+        finding = next(f for f in result.findings if f.id.endswith(":creator"))
+
+        assert "document creation information" in finding.remediation

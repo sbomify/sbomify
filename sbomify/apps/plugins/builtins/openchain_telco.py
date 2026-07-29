@@ -54,6 +54,18 @@ _CISA_SBOM_TYPES = ("design", "source", "build", "analyzed", "deployed", "runtim
 _SUPPORTED_SPDX_VERSIONS = ("SPDX-2.2", "SPDX-2.3")
 
 
+# Most of §3.2's required document elements are top-level SPDX keys; only
+# Creator and Created live under creationInfo. Saying "in the document creation
+# information" for all of them sends the reader to the wrong place.
+_CREATION_INFO_FIELDS = {"creator", "created"}
+
+
+def _where_to_fix(slug: str, field: str) -> str:
+    if slug in _CREATION_INFO_FIELDS:
+        return f"Populate {field} in the document creation information."
+    return f"Populate the top-level {field} key."
+
+
 class OpenChainTelcoPlugin(AssessmentPlugin):
     """OpenChain Telco SBOM Guide v1.1 conformance checks."""
 
@@ -165,7 +177,11 @@ class OpenChainTelcoPlugin(AssessmentPlugin):
         )
 
     def _document_creation(self, sbom: dict[str, Any]) -> list[Finding]:
-        creation_info = sbom.get("creationInfo") or {}
+        # A malformed document can carry any JSON type here. Calling .get on a
+        # non-dict would raise and lose the assessment entirely, when the point
+        # of the check is to report the document as non-conformant.
+        raw_creation_info = sbom.get("creationInfo")
+        creation_info = raw_creation_info if isinstance(raw_creation_info, dict) else {}
         required = {
             "spdx-version": ("SPDXVersion", sbom.get("spdxVersion")),
             "data-license": ("DataLicense", sbom.get("dataLicense")),
@@ -185,7 +201,7 @@ class OpenChainTelcoPlugin(AssessmentPlugin):
                     field,
                     "pass" if present else "fail",
                     f"{field} is present." if present else f"{field} is required by §3.2 and is missing.",
-                    "" if present else f"Populate {field} in the document creation information.",
+                    "" if present else _where_to_fix(slug, field),
                 )
             )
         return findings
@@ -301,7 +317,11 @@ class OpenChainTelcoPlugin(AssessmentPlugin):
         )
 
     def _build_information(self, sbom: dict[str, Any]) -> list[Finding]:
-        creation_info = sbom.get("creationInfo") or {}
+        # A malformed document can carry any JSON type here. Calling .get on a
+        # non-dict would raise and lose the assessment entirely, when the point
+        # of the check is to report the document as non-conformant.
+        raw_creation_info = sbom.get("creationInfo")
+        creation_info = raw_creation_info if isinstance(raw_creation_info, dict) else {}
         creators = [str(c) for c in (creation_info.get("creators") or [])]
         comment = str(creation_info.get("creatorComment") or "")
         findings = []
