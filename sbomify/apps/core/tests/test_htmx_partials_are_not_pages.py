@@ -51,3 +51,13 @@ def test_the_plugins_page_still_asks_for_the_fragment():
 
     assert "plugins:plugins_summary" in source
     assert "hx-get" in source
+
+
+@pytest.mark.parametrize("header", ["false", "1", "yes", ""])
+def test_a_non_true_hx_request_header_does_not_bypass_the_guard(client: Client, sample_team_with_owner_member, header):
+    """A bare truthiness check would let HX-Request: false through."""
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
+
+    response = client.get(reverse("plugins:plugins_summary"), HTTP_HX_REQUEST=header)
+
+    assert response.status_code == 404

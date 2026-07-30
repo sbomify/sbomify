@@ -163,7 +163,9 @@ def _reject_direct_navigation(request: HttpRequest) -> None:
     links them as pages — they are only ever swapped into a host page by
     hx-get — so "no such page" is the honest answer.
     """
-    if not request.headers.get("HX-Request"):
+    # Compared against the literal "true", matching HtmxMessagesMiddleware: a
+    # bare truthiness check would let HX-Request: false through the guard.
+    if request.headers.get("HX-Request") != "true":
         raise Http404("This view renders a fragment and is not a page.")
 
 
