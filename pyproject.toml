@@ -113,7 +113,7 @@ default-groups = [
 
 override-dependencies = [
     "cryptography>=49.0.0",
-    "pillow>=12.2.0",
+    "pillow>=12.3.0",
     "pygments>=2.20.0",
     "rfc3161-client>=1.0.6",
 ]
