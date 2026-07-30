@@ -41,7 +41,7 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <code class="text-primary bg-primary/5 px-2 py-0.5 rounded">{{ identifier.value }}</code>
+                                    {% include 'core/components/copyable_value.html.j2' with value=identifier.value title="Copy "|add:identifier.value %}
                                 </td>
                                 <td class="text-center">
                                     {% if identifier.identifier_type in barcode_types %}

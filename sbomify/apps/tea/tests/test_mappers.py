@@ -144,8 +144,15 @@ class TestPurlSchemaValidation:
             ProductIdentifierCreateSchema(identifier_type="purl", value="not-a-purl")
 
     def test_create_schema_non_purl_unchanged(self):
-        schema = ProductIdentifierCreateSchema(identifier_type="cpe", value="cpe:2.3:a:vendor:product")
-        assert schema.value == "cpe:2.3:a:vendor:product"
+        """A CPE keeps its value: only PURLs get their version stripped.
+
+        The CPE has to be well-formed now that the schema validates it. The
+        previous fixture, ``cpe:2.3:a:vendor:product``, stops after five fields
+        and the 2.3 binding requires all thirteen.
+        """
+        cpe = "cpe:2.3:a:vendor:product:1.0:*:*:*:*:*:*:*"
+        schema = ProductIdentifierCreateSchema(identifier_type="cpe", value=cpe)
+        assert schema.value == cpe
 
     def test_schema_preserves_url_encoding(self):
         schema = ProductIdentifierCreateSchema(identifier_type="purl", value="pkg:pypi/my%2Fpackage@1.0.0")
