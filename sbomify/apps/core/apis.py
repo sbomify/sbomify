@@ -32,6 +32,7 @@ from sbomify.apps.core.queries import (
 )
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
+from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
@@ -343,6 +344,12 @@ def _build_component_response(
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
+    # None when the workspace has set no window, or the component has no SBOM
+    # yet: neither is a stale component, and automation should be able to tell
+    # "not stale" from "no policy" without guessing.
+    from sbomify.apps.sboms.freshness import component_freshness
+
+    response["freshness"] = component_freshness(component)
     return response
 
 
@@ -1617,7 +1624,7 @@ def list_components(
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
+        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):

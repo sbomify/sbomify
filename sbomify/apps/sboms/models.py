@@ -555,6 +555,13 @@ class Component(models.Model):
         blank=True,
         help_text="Gating mode for gated components (only applies when visibility=gated)",
     )
+    sbom_freshness_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Overrides the workspace freshness window for this component. Empty inherits the workspace setting."
+        ),
+    )
     nda_document = models.ForeignKey(
         "documents.Document",
         on_delete=models.SET_NULL,

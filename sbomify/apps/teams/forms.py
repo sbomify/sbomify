@@ -78,7 +78,7 @@ class TeamBrandingForm(forms.Form):
 
 
 class TeamGeneralSettingsForm(forms.Form):
-    """Form for updating workspace general settings (name)."""
+    """Form for updating workspace general settings (name, freshness window)."""
 
     name = forms.CharField(
         max_length=255,
@@ -88,6 +88,20 @@ class TeamGeneralSettingsForm(forms.Form):
             attrs={
                 "class": "form-control",
                 "placeholder": "Enter workspace name",
+            }
+        ),
+    )
+    # Blank is a real value here and means "no policy", so the field cannot be
+    # required and an empty submission has to clear a previously set window
+    # rather than leave it standing.
+    sbom_freshness_days = forms.IntegerField(
+        required=False,
+        min_value=0,
+        max_value=3650,
+        widget=forms.NumberInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "No freshness policy",
             }
         ),
     )

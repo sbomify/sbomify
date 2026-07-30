@@ -213,3 +213,8 @@ screencasts/output/screenshots/
 # VSCode settings
 .vscode/
 issue-902-comparison.png
+
+# Claude Code: per-user settings and ephemeral worktrees. Shared skills under
+# .claude/skills/ are checked in.
+.claude/settings.local.json
+.claude/worktrees/

@@ -66,7 +66,7 @@ def test_public_release_page_shows_vuln_posture(sample_team_with_owner_member):
     match = re.search(r'<script id="vuln-posture-data"[^>]*>(.*?)</script>', html, re.DOTALL)
     assert match is not None
     posture = json.loads(match.group(1))
-    assert posture["counts"] == {"critical": 0, "high": 1, "medium": 0, "low": 0, "unknown": 0, "total": 1}
+    assert posture["counts"] == {"critical": 0, "high": 1, "medium": 0, "low": 0, "unknown": 0, "total": 1, "malicious": 0}
     assert posture["suppressed_count"] == 1
     by_id = {f["id"]: f for f in posture["findings"]}
     assert by_id["CVE-2026-1"]["suppressed"] is False

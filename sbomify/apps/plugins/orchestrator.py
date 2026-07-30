@@ -324,6 +324,21 @@ class PluginOrchestrator:
                 ]
             )
 
+            # Fold the run into the component's vulnerability lifecycle. The
+            # stored run stays immutable (ADR-004); this is a separate index
+            # over it. A failure here must not lose a scan result that already
+            # succeeded, so it is logged rather than raised.
+            if assessment_run.category == AssessmentCategory.SECURITY.value:
+                try:
+                    from sbomify.apps.plugins.lifecycle import record_run
+
+                    record_run(assessment_run)
+                except Exception:
+                    logger.warning(
+                        f"[PLUGIN] lifecycle update failed for run {assessment_run.id}; keeping the scan result",
+                        exc_info=True,
+                    )
+
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
             # SBOM at run-completion time are the releases the result covers.

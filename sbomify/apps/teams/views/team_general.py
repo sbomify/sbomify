@@ -36,7 +36,9 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
-        form = TeamGeneralSettingsForm(initial={"name": team.name})
+        form = TeamGeneralSettingsForm(
+            initial={"name": team.name, "sbom_freshness_days": team.sbom_freshness_days},
+        )
 
         membership = Member.objects.filter(user=user, team__key=team_key).first()
         is_default_team = membership.is_default_team if membership else False
@@ -59,10 +61,10 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         elif action == "delete_workspace" or action == "delete":
             return self._delete_workspace(request, team_key)
 
-        return self._update_name(request, team_key)
+        return self._update_general(request, team_key)
 
-    def _update_name(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """Update the workspace name."""
+    def _update_general(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        """Update the workspace name and freshness window."""
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
@@ -72,12 +74,17 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(form.errors.as_text())
 
         new_name = form.cleaned_data["name"]
+        # None is the cleared state, so this writes through rather than skipping
+        # a falsy value: 0 is a valid window and an emptied field has to unset
+        # the policy.
+        freshness_days = form.cleaned_data["sbom_freshness_days"]
 
         try:
             with transaction.atomic():
                 team_obj = Team.objects.select_for_update().get(key=team_key)
                 team_obj.name = new_name
-                team_obj.save(update_fields=["name"])
+                team_obj.sbom_freshness_days = freshness_days
+                team_obj.save(update_fields=["name", "sbom_freshness_days"])
 
             refresh_current_team_session(request, team_obj)
 

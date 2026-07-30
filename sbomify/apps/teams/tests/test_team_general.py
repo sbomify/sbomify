@@ -229,3 +229,82 @@ class TestTeamGeneralView:
         team.refresh_from_db()
         assert team.name == original_name
 
+
+    def test_setting_the_freshness_window(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        """The only way to turn the freshness feature on."""
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = client.post(
+            reverse("teams:team_general", kwargs={"team_key": team.key}),
+            {"name": team.name, "sbom_freshness_days": "90"},
+        )
+
+        assert response.status_code == 200
+        team.refresh_from_db()
+        assert team.sbom_freshness_days == 90
+
+    def test_clearing_the_freshness_window_removes_the_policy(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        """An emptied field has to unset the window rather than leave the old
+        one standing, otherwise a policy can be set but never withdrawn."""
+        team = sample_team_with_owner_member.team
+        team.sbom_freshness_days = 90
+        team.save(update_fields=["sbom_freshness_days"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = client.post(
+            reverse("teams:team_general", kwargs={"team_key": team.key}),
+            {"name": team.name, "sbom_freshness_days": ""},
+        )
+
+        assert response.status_code == 200
+        team.refresh_from_db()
+        assert team.sbom_freshness_days is None
+
+    def test_a_zero_day_window_is_stored_not_treated_as_unset(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        """0 means every SBOM is stale immediately, which is a real policy and
+        must not collapse into "no policy"."""
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = client.post(
+            reverse("teams:team_general", kwargs={"team_key": team.key}),
+            {"name": team.name, "sbom_freshness_days": "0"},
+        )
+
+        assert response.status_code == 200
+        team.refresh_from_db()
+        assert team.sbom_freshness_days == 0
+
+    def test_a_negative_window_is_rejected(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        client.post(
+            reverse("teams:team_general", kwargs={"team_key": team.key}),
+            {"name": team.name, "sbom_freshness_days": "-5"},
+        )
+
+        team.refresh_from_db()
+        assert team.sbom_freshness_days is None
+
+    def test_the_window_round_trips_to_the_form(
+        self, client: Client, sample_team_with_owner_member
+    ):
+        team = sample_team_with_owner_member.team
+        team.sbom_freshness_days = 45
+        team.save(update_fields=["sbom_freshness_days"])
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        response = client.get(reverse("teams:team_general", kwargs={"team_key": team.key}))
+
+        assert response.status_code == 200
+        assert 'data-freshness-days="45"' in response.content.decode()
