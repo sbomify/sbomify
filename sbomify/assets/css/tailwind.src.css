@@ -26,8 +26,8 @@
    ============================================ */
 @theme {
   /* Fonts */
-  --font-display: 'Agrandir', system-ui, sans-serif;
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Figtree', system-ui, sans-serif;
+  --font-sans: 'Figtree', system-ui, sans-serif;
 
   /* Enhanced Shadows */
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -45,7 +45,6 @@
   --animate-slide-in-right: slideInRight 0.3s ease-out;
   --animate-scale-in: scaleIn 0.2s ease-out;
   --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --animate-pulse-soft: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-shake: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
 
   @keyframes fadeIn {
@@ -80,19 +79,10 @@
     100% { opacity: 1; transform: scale(1); }
   }
 
-  @keyframes pulseSoft {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-  }
-
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
     20%, 40%, 60%, 80% { transform: translateX(4px); }
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
   }
 
   @keyframes shimmer {
@@ -116,36 +106,37 @@
   }
 
   /* Palette — real colours so Tailwind generates all utilities (incl. gradients). Dark defaults; :root.light overrides. */
-  --color-primary: rgb(79 102 220);        /* Bright Blue var(--color-primary) - more vibrant */
-  --color-primary-dark: rgb(64 89 208);    /* Brand Blue var(--color-primary-dark) */
-  --color-primary-light: rgb(115 135 235); /* Light Blue #7387EB - for subtle states */
-  --color-primary-lighter: rgb(147 162 242); /* Very Light Blue - for backgrounds */
-  --color-background: rgb(10 10 35);       /* Deep Navy #0A0A23 - darker for more contrast */
-  --color-surface: rgb(18 18 50);          /* Navy Surface #121232 - cards & panels */
-  --color-surface-elevated: rgb(28 28 65); /* Elevated #1C1C41 - modals, dropdowns */
-  --color-surface-hover: rgb(35 35 80);    /* Hover state #232350 */
-  --color-border: rgb(45 45 85);           /* #2D2D55 - subtle but visible */
-  --color-border-light: rgb(65 65 110);    /* #41416E - for hover/focus states */
-  --color-border-focus: rgb(79 102 220);   /* Primary color for focus rings */
+  --color-navy: rgb(37 41 63);             /* Brand Navy #25293F - theme-invariant ink */
+  --color-primary: rgb(124 140 255);       /* Periwinkle #7C8CFF - interactive accent on dark */
+  --color-primary-dark: rgb(66 99 235);    /* Brand Blue #4263EB */
+  --color-primary-light: rgb(163 174 255); /* #A3AEFF - for subtle states */
+  --color-primary-lighter: rgb(199 205 255); /* #C7CDFF - for backgrounds */
+  --color-background: rgb(21 23 36);       /* Deep Navy #151724 - darkest layer */
+  --color-surface: rgb(30 33 50);          /* Navy Surface #1E2132 - cards & panels */
+  --color-surface-elevated: rgb(37 41 63); /* Brand Navy #25293F - modals, dropdowns */
+  --color-surface-hover: rgb(46 50 74);    /* Hover state #2E324A */
+  --color-border: rgb(56 60 86);           /* #383C56 - subtle but visible */
+  --color-border-light: rgb(81 84 107);    /* Navy-80 #51546B - for hover/focus states */
+  --color-border-focus: rgb(124 140 255);  /* Primary color for focus rings */
   --color-text: rgb(255 255 255);          /* Pure white #FFFFFF - maximum readability */
-  --color-text-secondary: rgb(226 232 240); /* var(--color-border) - bright secondary text */
-  --color-text-muted: rgb(180 190 210);    /* #B4BED2 - muted but clearly readable */
-  --color-text-disabled: rgb(120 130 150); /* #788296 - disabled states */
-  --color-success: rgb(52 211 153);        /* Emerald #34D399 - more vibrant */
-  --color-success-dark: rgb(16 185 129);   /* var(--color-success) */
-  --color-success-light: rgb(110 231 183); /* #6EE7B7 - for backgrounds */
-  --color-warning: rgb(251 191 36);        /* Amber #FBBF24 - golden */
-  --color-warning-dark: rgb(245 158 11);   /* var(--color-warning) */
-  --color-warning-light: rgb(252 211 77);  /* #FCD34D - for backgrounds */
-  --color-danger: rgb(248 113 113);        /* Red #F87171 - softer red */
-  --color-danger-dark: rgb(239 68 68);     /* var(--color-danger) */
-  --color-danger-light: rgb(254 178 178);  /* #FEB2B2 - for backgrounds */
-  --color-info: rgb(96 165 250);           /* Blue #60A5FA - sky blue */
-  --color-info-dark: rgb(59 130 246);      /* var(--color-info) */
-  --color-info-light: rgb(147 197 253);    /* #93C5FD - for backgrounds */
-  --color-accent: rgb(192 132 252);        /* Purple #C084FC */
-  --color-accent-pink: rgb(244 114 182);   /* Pink #F472B6 */
-  --color-accent-orange: rgb(251 146 60);  /* Orange #FB923C */
+  --color-text-secondary: rgb(211 212 217); /* Navy-20 #D3D4D9 - bright secondary text */
+  --color-text-muted: rgb(168 169 178);    /* Navy-40 #A8A9B2 - muted but clearly readable */
+  --color-text-disabled: rgb(124 127 140); /* Navy-60 #7C7F8C - disabled states */
+  --color-success: rgb(54 197 143);        /* #36C58F - brand green lifted for dark */
+  --color-success-dark: rgb(31 169 113);   /* Brand Green #1FA971 */
+  --color-success-light: rgb(134 226 189); /* #86E2BD - for backgrounds */
+  --color-warning: rgb(247 181 70);        /* #F7B546 - brand amber lifted for dark */
+  --color-warning-dark: rgb(245 166 35);   /* Brand Amber #F5A623 */
+  --color-warning-light: rgb(250 208 130); /* #FAD082 - for backgrounds */
+  --color-danger: rgb(240 104 108);        /* #F0686C - brand red lifted for dark */
+  --color-danger-dark: rgb(229 72 77);     /* Brand Red #E5484D */
+  --color-danger-light: rgb(247 165 168);  /* #F7A5A8 - for backgrounds */
+  --color-info: rgb(108 183 240);          /* Sky #6CB7F0 */
+  --color-info-dark: rgb(66 99 235);       /* Brand Blue #4263EB */
+  --color-info-light: rgb(170 213 247);    /* #AAD5F7 - for backgrounds */
+  --color-accent: rgb(150 124 246);        /* Purple #967CF6 */
+  --color-accent-pink: rgb(204 88 187);    /* Pink #CC58BB */
+  --color-accent-orange: rgb(247 181 70);  /* Amber #F7B546 */
   --color-gray-50: rgb(248 250 252);    /* var(--color-gray-50) */
   --color-gray-100: rgb(241 245 249);   /* var(--color-gray-100) */
   --color-gray-200: rgb(226 232 240);   /* var(--color-border) */
@@ -200,13 +191,13 @@
   /* Dark Mode Shadows (more dramatic with subtle glow) */
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-card: 0 2px 8px -2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.03);
-  --shadow-card-hover: 0 8px 25px -5px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(79 102 220 / 0.1);
+  --shadow-card-hover: 0 8px 25px -5px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(124 140 255 / 0.1);
   --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.3);
   --shadow-xl: 0 20px 40px -10px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.05);
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.3);
-  --shadow-glow-primary: 0 0 20px rgb(79 102 220 / 0.25), 0 0 40px rgb(79 102 220 / 0.1);
-  --shadow-glow-success: 0 0 15px rgb(52 211 153 / 0.3);
-  --shadow-glow-danger: 0 0 15px rgb(248 113 113 / 0.3);
+  --shadow-glow-primary: 0 0 20px rgb(124 140 255 / 0.25), 0 0 40px rgb(124 140 255 / 0.1);
+  --shadow-glow-success: 0 0 15px rgb(54 197 143 / 0.3);
+  --shadow-glow-danger: 0 0 15px rgb(240 104 108 / 0.3);
 
   /* ===== EXTENDED COLOR PALETTE ===== */
 
@@ -223,50 +214,50 @@
 
 /* Light Theme Override */
 :root.light {
-  /* Primary (slightly darker for light backgrounds) */
-  --color-primary: rgb(64 89 208);
-  --color-primary-dark: rgb(51 71 166);
-  --color-primary-light: rgb(99 121 224);
-  --color-primary-lighter: rgb(199 210 254);
+  /* Primary — brand navy ink (buttons, links, focus) */
+  --color-primary: rgb(37 41 63);          /* Brand Navy #25293F */
+  --color-primary-dark: rgb(26 29 46);     /* #1A1D2E - hover/pressed */
+  --color-primary-light: rgb(81 84 107);   /* Navy-80 #51546B */
+  --color-primary-lighter: rgb(211 212 217); /* Navy-20 #D3D4D9 */
 
   /* Backgrounds */
-  --color-background: rgb(248 250 252);    /* var(--color-gray-50) - off-white */
-  --color-surface: rgb(255 255 255);       /* Pure white */
+  --color-background: rgb(255 255 255);    /* Pure white */
+  --color-surface: rgb(255 255 255);       /* Pure white - panels delineated by borders */
   --color-surface-elevated: rgb(255 255 255);
-  --color-surface-hover: rgb(241 245 249); /* var(--color-gray-100) */
+  --color-surface-hover: rgb(238 240 244); /* Mist Soft #EEF0F4 */
 
   /* Borders */
-  --color-border: rgb(226 232 240);        /* var(--color-border) */
-  --color-border-light: rgb(241 245 249);  /* var(--color-gray-100) */
-  --color-border-focus: rgb(64 89 208);
+  --color-border: rgb(233 234 236);        /* Navy-10 #E9EAEC */
+  --color-border-light: rgb(238 240 244);  /* Mist Soft #EEF0F4 */
+  --color-border-focus: rgb(37 41 63);
 
   /* Text */
-  --color-text: rgb(15 23 42);             /* var(--color-text) - near black */
-  --color-text-secondary: rgb(51 65 85);   /* var(--color-gray-700) */
-  --color-text-muted: rgb(100 116 139);    /* var(--color-text-muted) */
-  --color-text-disabled: rgb(148 163 184); /* var(--color-gray-400) */
+  --color-text: rgb(37 41 63);             /* Brand Navy #25293F - ink */
+  --color-text-secondary: rgb(81 84 107);  /* Navy-80 #51546B */
+  --color-text-muted: rgb(110 113 128);    /* Navy-55 #6E7180 */
+  --color-text-disabled: rgb(168 169 178); /* Navy-40 #A8A9B2 */
 
-  /* Status Colors (darker for light backgrounds) */
-  --color-success: rgb(22 163 74);
-  --color-success-dark: rgb(21 128 61);
-  --color-success-light: rgb(220 252 231);
+  /* Status Colors */
+  --color-success: rgb(31 169 113);        /* Brand Green #1FA971 */
+  --color-success-dark: rgb(23 138 91);    /* #178A5B */
+  --color-success-light: rgb(231 246 239); /* Tint #E7F6EF */
 
-  --color-warning: rgb(234 179 8);
-  --color-warning-dark: rgb(202 138 4);
-  --color-warning-light: rgb(254 249 195);
+  --color-warning: rgb(245 166 35);        /* Brand Amber #F5A623 */
+  --color-warning-dark: rgb(216 140 15);   /* #D88C0F */
+  --color-warning-light: rgb(253 243 225); /* Tint #FDF3E1 */
 
-  --color-danger: rgb(220 38 38);
-  --color-danger-dark: rgb(185 28 28);
-  --color-danger-light: rgb(254 226 226);
+  --color-danger: rgb(229 72 77);          /* Brand Red #E5484D */
+  --color-danger-dark: rgb(197 52 57);     /* #C53439 */
+  --color-danger-light: rgb(252 234 235);  /* Tint #FCEAEB */
 
-  --color-info: rgb(37 99 235);
-  --color-info-dark: rgb(29 78 216);
-  --color-info-light: rgb(219 234 254);
+  --color-info: rgb(66 99 235);            /* Brand Blue #4263EB */
+  --color-info-dark: rgb(52 80 196);       /* #3450C4 */
+  --color-info-light: rgb(234 238 253);    /* Tint #EAEEFD */
 
   /* Accent Colors */
-  --color-accent: rgb(147 51 234);
-  --color-accent-pink: rgb(219 39 119);
-  --color-accent-orange: rgb(234 88 12);
+  --color-accent: rgb(150 124 246);        /* Purple #967CF6 */
+  --color-accent-pink: rgb(204 88 187);    /* Pink #CC58BB */
+  --color-accent-orange: rgb(245 166 35);  /* Brand Amber #F5A623 */
 
   /* Light Mode Shadows (subtler) */
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -275,9 +266,9 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
-  --shadow-glow-primary: 0 0 20px rgb(64 89 208 / 0.15);
-  --shadow-glow-success: 0 0 15px rgb(22 163 74 / 0.15);
-  --shadow-glow-danger: 0 0 15px rgb(220 38 38 / 0.15);
+  --shadow-glow-primary: 0 0 20px rgb(37 41 63 / 0.15);
+  --shadow-glow-success: 0 0 15px rgb(31 169 113 / 0.15);
+  --shadow-glow-danger: 0 0 15px rgb(229 72 77 / 0.15);
 
   /* ===== EXTENDED COLOR PALETTE ===== */
 
@@ -904,13 +895,13 @@ html.no-transitions * {
 .tw-btn-primary {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: white;
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
+  border: solid var(--color-primary) 0.5px;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.2);
 }
 
 .tw-btn-primary:hover {
   background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-primary) 40%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
 }
 
 .tw-btn-primary:active {
@@ -1081,21 +1072,11 @@ html.no-transitions * {
   color: var(--color-danger);
 }
 
-/* Loading Button State */
+/* Loading Button State — pair with an inline brand loader element
+   (components/tw/button.html.j2 renders one when loading=True) */
 .tw-btn-loading {
   pointer-events: none;
   opacity: 0.8;
-}
-
-.tw-btn-loading::after {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 9999px;
-  animation: spin 0.6s linear infinite;
-  margin-left: 0.5rem;
 }
 
 /* ============================================
@@ -1461,63 +1442,17 @@ html.no-transitions * {
   text-decoration: none !important;
 }
 
-/* Sidebar link hover state - gradient for expanded items */
+/* Sidebar link hover/focus — flat brand hover */
 .sidebar-link-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
+  background-color: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 .sidebar-link-hover:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-/* Sidebar link hover state - gradient for collapsed items */
-.sidebar-link-hover-collapsed:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-.sidebar-link-hover-collapsed:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-/* Workspace switcher hover state - gradient */
-.workspace-switcher-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-primary) 20%, transparent) !important;
-}
-
-.workspace-switcher-hover:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-}
-
-/* Get Started button - works in both light and dark mode */
-.get-started-btn {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  box-shadow: 0 4px 14px -2px color-mix(in oklab, var(--color-primary) 40%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.1) inset;
-}
-
-.get-started-btn:hover {
-  box-shadow: 0 8px 20px -2px color-mix(in oklab, var(--color-primary) 50%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.15) inset;
-}
-
-:root.light .get-started-btn {
-  box-shadow: 0 4px 14px -2px color-mix(in oklab, var(--color-primary) 35%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.05);
-}
-
-:root.light .get-started-btn:hover {
-  box-shadow: 0 8px 20px -2px color-mix(in oklab, var(--color-primary) 45%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.08);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 40%, transparent);
+  background-color: var(--color-surface-hover);
+  color: var(--color-text);
 }
 
 /* Primary action button - works in both light and dark mode */
@@ -1995,50 +1930,126 @@ html.no-transitions * {
 }
 
 /* ============================================
-   Component Classes - Loading Spinner
+   Component Classes - Brand Marks
+   Emblem / full logo / loader, inlined via
+   core/components/brand/*.html.j2 (currentColor fills)
    ============================================ */
-.tw-spinner {
+.tw-emblem,
+.tw-logo {
+  display: block;
+}
+
+/* The inline SVGs carry only a viewBox (no width/height attributes), so give
+   them their intrinsic ratio explicitly — without it, `h-auto`/`w-auto`
+   sizing can round to the default replaced-element box and clip the mark. */
+.tw-emblem {
+  aspect-ratio: 129.78 / 107;
+}
+
+.tw-logo {
+  aspect-ratio: 571.45 / 107;
+}
+
+/* Grow-in entrance: bars sweep in, letters follow (opt-in via animate=true) */
+.tw-logo-in .tw-emblem-bar {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: logoBarGrow 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tw-logo-in .tw-emblem-bar.from-right { transform-origin: right center; }
+.tw-logo-in .b1 { animation-delay: 0.1s; }
+.tw-logo-in .b2 { animation-delay: 0.2s; }
+.tw-logo-in .b3 { animation-delay: 0.3s; }
+.tw-logo-in .b4 { animation-delay: 0.4s; }
+.tw-logo-in .b5 { animation-delay: 0.5s; }
+.tw-logo-in .b6 { animation-delay: 0.6s; }
+.tw-logo-in .b7 { animation-delay: 0.7s; }
+.tw-logo-in .b8 { animation-delay: 0.8s; }
+.tw-logo-in .tw-logo-letter {
+  animation: logoLetterIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tw-logo-in .l1 { animation-delay: 0.3s; }
+.tw-logo-in .l2 { animation-delay: 0.38s; }
+.tw-logo-in .l3 { animation-delay: 0.46s; }
+.tw-logo-in .l4 { animation-delay: 0.54s; }
+.tw-logo-in .l5 { animation-delay: 0.62s; }
+.tw-logo-in .l6 { animation-delay: 0.7s; }
+.tw-logo-in .l7 { animation-delay: 0.78s; }
+
+@keyframes logoBarGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes logoLetterIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Loader: bars converge continuously. --d is the slow creep while the mark is
+   on show; --te is the exit translation (bar width plus creep), both signed in
+   the bar's direction of travel. */
+.tw-brand-loader {
   display: inline-block;
-  border: 2.5px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 9999px;
-  animation: spin 0.7s linear infinite;
 }
 
-.tw-spinner-sm {
-  width: 1rem;
-  height: 1rem;
-  border-width: 2px;
+.tw-brand-loader svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 129.78 / 107;
 }
 
-.tw-spinner-md {
-  width: 1.5rem;
-  height: 1.5rem;
+/* Icon-sized inline variant: width tracks font-size so it drops into
+   buttons and running text wherever a spinner icon used to sit. */
+.tw-brand-loader.tw-loader-inline {
+  width: 1.3em;
+  vertical-align: -0.2em;
 }
 
-.tw-spinner-lg {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-width: 3px;
+/* Size ladder — the single home for what sm/md/lg mean for loaders */
+.tw-brand-loader.tw-loader-sm { width: 1.25rem; }
+.tw-brand-loader.tw-loader-md { width: 1.75rem; }
+.tw-brand-loader.tw-loader-lg { width: 2.5rem; }
+
+.tw-brand-loader .tw-emblem-bar {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: loaderConverge 1.8s linear infinite both;
+}
+.tw-brand-loader .tw-emblem-bar.from-right { transform-origin: right center; }
+.tw-brand-loader .b1 { animation-delay: 0s; --d: 2px; --te: 42.6px; }
+.tw-brand-loader .b2 { animation-delay: 0.05s; --d: -2px; --te: -84.9px; }
+.tw-brand-loader .b3 { animation-delay: 0.1s; --d: 9.6px; --te: 73.45px; }
+.tw-brand-loader .b4 { animation-delay: 0.15s; --d: 2px; --te: 85.35px; }
+.tw-brand-loader .b5 { animation-delay: 0.2s; --d: -9.6px; --te: -92.95px; }
+.tw-brand-loader .b6 { animation-delay: 0.25s; --d: -2px; --te: -65.85px; }
+.tw-brand-loader .b7 { animation-delay: 0.3s; --d: 2px; --te: 84.9px; }
+.tw-brand-loader .b8 { animation-delay: 0.35s; --d: -2px; --te: -42.6px; }
+
+@keyframes loaderConverge {
+  0% { transform: translateX(0) scaleX(0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  23.3% { transform: translateX(0) scaleX(1); animation-timing-function: cubic-bezier(0.55, 0, 0.85, 0.55); }
+  51.1% { transform: translateX(var(--d)) scaleX(1); animation-timing-function: cubic-bezier(0.5, 0.15, 0.8, 0); }
+  74.4% { transform: translateX(var(--te)) scaleX(0); }
+  100% { transform: translateX(var(--te)) scaleX(0); }
 }
 
-/* Dots spinner variant */
-.tw-spinner-dots {
-  display: inline-flex;
-  gap: 0.25rem;
+@keyframes loaderBarFade {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
 }
 
-.tw-spinner-dots span {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
-  background-color: var(--color-primary);
-  animation: pulseSoft 1.4s ease-in-out infinite both;
+/* Vestibular-safe fallback: no spatial motion, gentle uniform fade instead */
+@media (prefers-reduced-motion: reduce) {
+  .tw-logo-in .tw-emblem-bar,
+  .tw-logo-in .tw-logo-letter {
+    animation: none;
+  }
+  .tw-brand-loader .tw-emblem-bar {
+    animation: loaderBarFade 2s ease-in-out infinite;
+  }
 }
-
-.tw-spinner-dots span:nth-child(1) { animation-delay: -0.32s; }
-.tw-spinner-dots span:nth-child(2) { animation-delay: -0.16s; }
-.tw-spinner-dots span:nth-child(3) { animation-delay: 0s; }
 
 /* ============================================
    Component Classes - Modal
@@ -2234,7 +2245,7 @@ html.no-transitions * {
 /* Dark mode adjustments */
 .dark .alpine-tooltip {
   background-color: rgba(255, 255, 255, 0.95);
-  color: #0F0F2D;
+  color: var(--color-navy);
 }
 
 .dark .alpine-tooltip[data-placement="top"]::before {
@@ -5033,12 +5044,6 @@ html.no-transitions * {
   /* Disable gradient animation */
   .tw-btn-gradient {
     animation: none !important;
-  }
-
-  /* Disable spinner animation - show static indicator instead */
-  .tw-spinner {
-    animation: none !important;
-    border-top-color: var(--color-primary);
   }
 
   /* Disable skeleton shimmer */

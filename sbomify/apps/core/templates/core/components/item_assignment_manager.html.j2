@@ -36,7 +36,7 @@
                          @drop.prevent="onDrop($event, 'assigned')">
                         <div x-show="isLoading"
                              class="flex items-center justify-center gap-2 py-8 text-text-muted">
-                            <i class="fas fa-spinner fa-spin"></i>
+                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                             <span>Loading...</span>
                         </div>
                         <div x-show="!isLoading" class="space-y-1">
@@ -113,7 +113,7 @@
                          @drop.prevent="onDrop($event, 'available')">
                         <div x-show="isLoading"
                              class="flex items-center justify-center gap-2 py-8 text-text-muted">
-                            <i class="fas fa-spinner fa-spin"></i>
+                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                             <span>Loading...</span>
                         </div>
                         <div x-show="!isLoading" class="space-y-1">

@@ -198,7 +198,7 @@ Keycloak uses the theme specified in `theme.properties`:
 
 ### Updating Branding
 
-1. Replace `login/resources/img/sbomify.svg` with your logo
+1. Update the inline logo SVG in the `brandLogo` macro in `login/components.ftl`
 2. Update CSS color variables in `.src.css`
 3. Rebuild CSS with `bun run build`
 
