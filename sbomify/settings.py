@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import asyncio
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -28,6 +29,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.sentry_config import resolve_environment, should_warn_missing_dsn
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -799,21 +801,17 @@ _SENTRY_DSN = os.environ.get("SENTRY_DSN")
 
 # With no DSN the SDK builds a client whose transport is None: every event is
 # dropped silently and is_active() still returns True, so nothing surfaces the
-# misconfiguration. Say so once at startup instead.
-if not _SENTRY_DSN and not DEBUG:
-    logging.getLogger(__name__).warning(
-        "SENTRY_DSN is not set - error reporting is disabled and all events will be discarded."
-    )
+# misconfiguration. Say so once at startup instead. Written to stderr directly
+# because Django applies LOGGING later in django.setup(), so a logger call here
+# would bypass the configured handlers and formatters.
+if should_warn_missing_dsn(_SENTRY_DSN, debug=DEBUG):
+    sys.stderr.write("SENTRY_DSN is not set - error reporting is disabled and all events will be discarded.\n")
+    sys.stderr.flush()
 
 sentry_sdk.init(
     dsn=_SENTRY_DSN,
     release=get_sbomify_version(),
-    # environment is deliberately NOT defaulted here. Passing a literal fallback
-    # overrides the SDK's own behaviour, which is to read SENTRY_ENVIRONMENT and
-    # otherwise use "production". A hardcoded "development" fallback meant every
-    # deployment that did not set SENTRY_ENVIRONMENT tagged its events
-    # "development", so alert rules scoped to production never matched.
-    environment=os.environ.get("SENTRY_ENVIRONMENT") or None,
+    environment=resolve_environment(debug=DEBUG),
     integrations=[
         DjangoIntegration(),
         DramatiqIntegration(),
