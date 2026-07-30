@@ -58,3 +58,27 @@ def test_a_version_collision_is_still_a_conflict(client: Client, sample_product,
     )
 
     assert clash.status_code == 400
+
+
+def test_an_unrelated_integrity_error_is_not_rewritten(
+    client: Client, sample_product, sample_team_with_owner_member, monkeypatch
+):
+    """Idempotence is scoped to a name collision. Anything else — a foreign key,
+    a NOT NULL, a constraint added later — must surface as itself rather than
+    being dressed up as a duplicate."""
+    from django.db import IntegrityError
+
+    from sbomify.apps.core.models import Release as ReleaseModel
+
+    setup_authenticated_client_session(client, sample_team_with_owner_member.team, sample_team_with_owner_member.user)
+
+    def boom(*args, **kwargs):
+        raise IntegrityError('null value in column "product_id" violates not-null constraint')
+
+    monkeypatch.setattr(ReleaseModel.objects, "create", boom)
+
+    response = _create(client, sample_product)
+
+    # The generic handler reports it; it is not a 200 and not a duplicate 400.
+    assert response.status_code == 400
+    assert "already exists" not in response.json()["detail"]

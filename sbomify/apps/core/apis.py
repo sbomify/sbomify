@@ -2787,6 +2787,34 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 _RELEASE_VERSION_CONSTRAINT = "unique_product_version_when_not_empty"
 
 
+def _is_release_name_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, name) uniqueness violation.
+
+    Detected positively rather than as "not the version constraint": an
+    unrelated IntegrityError (a foreign key, a NOT NULL, a constraint added
+    later) must surface as itself, not be rewritten into a name collision.
+
+    ``unique_together`` leaves the constraint auto-named, so unlike the version
+    case there is no fixed name to match. Both drivers do name the columns, so
+    this requires a uniqueness violation mentioning both.
+    """
+    cause = exc.__cause__
+    msg = str(exc).lower()
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    if not is_unique:
+        return False
+
+    diag_constraint = ""
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None:
+            diag_constraint = (getattr(diag, "constraint_name", None) or "").lower()
+
+    haystack = f"{msg} {diag_constraint}"
+    table = Release._meta.db_table.lower()
+    return "product_id" in haystack and "name" in haystack and (table in haystack or "product_id" in haystack)
+
+
 def _is_release_version_conflict(exc: IntegrityError) -> bool:
     """Whether this IntegrityError is the (product, version) constraint.
 
@@ -2905,14 +2933,25 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         # that one is identified by constraint name and never swallowed. Only it
         # needs identifying: for the name case the row's existence is a better
         # authority than any message, so the decisive branch does no parsing.
-        if not _is_release_version_conflict(e):
-            existing = Release.objects.filter(product=product, name=payload.name).first()
-            if existing is not None:
-                return 200, _build_release_response(request, existing, include_artifacts=True)
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        if _is_release_version_conflict(e):
+            return 400, {
+                "detail": "A release with this version already exists for this product",
+                "error_code": ErrorCode.DUPLICATE_NAME,
+            }
+        if not _is_release_name_conflict(e):
+            # Not a uniqueness violation we recognise: a foreign key, a NOT
+            # NULL, a constraint added later. Report it as itself rather than
+            # dressing it up as a duplicate. Re-raising would escape the sibling
+            # except Exception below and 500, so this mirrors that branch.
+            log.error(f"Unexpected IntegrityError creating release: {e}")
+            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        existing = Release.objects.filter(product=product, name=payload.name).first()
+        if existing is not None:
+            return 200, _build_release_response(request, existing, include_artifacts=True)
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
