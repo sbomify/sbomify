@@ -44,7 +44,7 @@
                     </label>
                 </form>
                 <div x-show="isLoading" class="loading-spinner">
-                    <i class="fas fa-spinner fa-spin"></i>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                 </div>
             </div>
             {% if not hide_copy %}

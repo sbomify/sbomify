@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import asyncio
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -28,6 +29,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.sentry_config import resolve_environment, should_warn_missing_dsn
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -795,10 +797,21 @@ def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
     return base_rate
 
 
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+
+# With no DSN the SDK builds a client whose transport is None: every event is
+# dropped silently and is_active() still returns True, so nothing surfaces the
+# misconfiguration. Say so once at startup instead. Written to stderr directly
+# because Django applies LOGGING later in django.setup(), so a logger call here
+# would bypass the configured handlers and formatters.
+if should_warn_missing_dsn(_SENTRY_DSN, debug=DEBUG):
+    sys.stderr.write("SENTRY_DSN is not set - error reporting is disabled and all events will be discarded.\n")
+    sys.stderr.flush()
+
 sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
+    dsn=_SENTRY_DSN,
     release=get_sbomify_version(),
-    environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
+    environment=resolve_environment(debug=DEBUG),
     integrations=[
         DjangoIntegration(),
         DramatiqIntegration(),

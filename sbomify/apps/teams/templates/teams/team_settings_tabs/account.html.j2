@@ -158,7 +158,7 @@
                                 class="tw-btn-danger"
                                 @click="deleteAccount()"
                                 :disabled="!canConfirm || isDeleting">
-                            <span x-show="isDeleting" class="tw-spinner tw-spinner-sm"></span>
+                            <span x-show="isDeleting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
                             <i x-show="!isDeleting" class="fas fa-trash"></i>
                             <span x-text="isDeleting ? 'Deleting...' : 'Delete My Account'"></span>
                         </button>

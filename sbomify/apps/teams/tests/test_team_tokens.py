@@ -209,7 +209,7 @@ class TestTeamTokensView:
         assert "Token B" not in content
 
     def test_unscoped_tokens_shown_with_warning(self, client: Client, sample_team_with_owner_member):
-        """Create unscoped token, verify deprecation warning in response."""
+        """Create unscoped token, verify the banner flags it."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
@@ -224,6 +224,21 @@ class TestTeamTokensView:
         assert "Legacy Token" in content
         assert "Unscoped" in content
         assert "Unscoped tokens detected" in content
+
+    def test_banner_promises_no_cutover(self, client: Client, sample_team_with_owner_member):
+        """docs/access-tokens.md says these stay valid until you rotate them, so
+        the banner must not announce a removal nobody has scheduled."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        AccessToken.objects.create(user=user, description="Legacy Token", encoded_token="legacy_token", team=None)
+
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        content = response.content.decode()
+
+        assert "deprecated" not in content.lower()
+        assert "no forced cutover" in content
 
     def test_legacy_member_role_is_forbidden(self, client: Client, sample_team_with_owner_member):
         """Legacy ``role="member"`` is now rejected by the tokens view.
