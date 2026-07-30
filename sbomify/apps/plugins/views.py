@@ -3,7 +3,7 @@
 from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
@@ -155,6 +155,20 @@ class PluginsPageView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return render(request, "plugins/plugins_page.html.j2")
 
 
+def _reject_direct_navigation(request: HttpRequest) -> None:
+    """404 a non-HTMX GET.
+
+    These views render fragments that extend no base template, so a direct
+    visit serves a naked partial: no head, no title, no CSS, no nav. Nothing
+    links them as pages — they are only ever swapped into a host page by
+    hx-get — so "no such page" is the honest answer.
+    """
+    # Compared against the literal "true", matching HtmxMessagesMiddleware: a
+    # bare truthiness check would let HX-Request: false through the guard.
+    if request.headers.get("HX-Request") != "true":
+        raise Http404("This view renders a fragment and is not a page.")
+
+
 class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """HTMX partial: returns the plugin summary bar with counts."""
 
@@ -162,6 +176,7 @@ class PluginsSummaryView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Return the summary bar partial."""
+        _reject_direct_navigation(request)
         team_data = request.session.get("current_team", {})
         team_key = team_data.get("key", "")
 
