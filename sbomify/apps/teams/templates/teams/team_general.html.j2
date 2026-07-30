@@ -4,8 +4,9 @@
 <div id="team-general-content"
      class="tw-settings-card"
      data-team-name="{{ team.name }}"
+     data-freshness-days="{{ team.sbom_freshness_days|default_if_none:'' }}"
      x-cloak
-     x-data="teamGeneral($el.dataset.teamName)">
+     x-data="teamGeneral($el.dataset.teamName, $el.dataset.freshnessDays)">
     {# Card Header #}
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
@@ -48,6 +49,34 @@
                            maxlength="255"
                            required>
                     <p class="tw-form-hint">Maximum 255 characters</p>
+                </div>
+            </div>
+            {# SBOM Freshness Section #}
+            <div class="mb-6 pt-6 border-t border-border">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-hourglass-half text-text-muted text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-base font-semibold text-text m-0">SBOM Freshness</h6>
+                        <p class="text-text-muted text-sm m-0">How long an SBOM stays current before its component is flagged stale</p>
+                    </div>
+                </div>
+                <div class="max-w-md ml-11">
+                    <label for="sbom-freshness-days" class="tw-form-label">Freshness window</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number"
+                               id="sbom-freshness-days"
+                               name="sbom_freshness_days"
+                               class="tw-form-input"
+                               x-model="localFreshness"
+                               placeholder="No freshness policy"
+                               min="0"
+                               max="3650"
+                               step="1">
+                        <span class="text-text-muted text-sm whitespace-nowrap">days</span>
+                    </div>
+                    <p class="tw-form-hint">Leave empty for no policy. Individual components can override this.</p>
                 </div>
             </div>
         </form>

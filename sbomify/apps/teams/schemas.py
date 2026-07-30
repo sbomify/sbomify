@@ -83,6 +83,9 @@ class TeamSchema(BaseModel):
     custom_domain_validated: bool = False
     custom_domain_verification_failures: int = 0
     custom_domain_last_checked_at: datetime | None = None
+    # None means the workspace has set no freshness policy, which is distinct
+    # from a window of 0.
+    sbom_freshness_days: int | None = None
     members: list[MemberSchema]
     invitations: list[InvitationSchema]
 

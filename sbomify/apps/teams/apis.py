@@ -102,6 +102,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
         custom_domain_verification_failures=team.custom_domain_verification_failures,
         custom_domain_last_checked_at=team.custom_domain_last_checked_at,
         can_set_private=team.can_be_private(),
+        sbom_freshness_days=team.sbom_freshness_days,
         members=members_data,
         invitations=invitations_data,
     )

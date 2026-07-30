@@ -192,6 +192,13 @@ class Team(models.Model):
         ],
     )
     name = models.CharField(max_length=255)
+    sbom_freshness_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Days an SBOM stays current before its component is flagged stale. Empty means no freshness policy."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     branding_info = models.JSONField(default=dict)
     has_completed_wizard = models.BooleanField(default=False)
