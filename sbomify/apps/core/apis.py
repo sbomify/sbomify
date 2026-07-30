@@ -2791,9 +2791,65 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 # =============================================================================
 
 
+_RELEASE_VERSION_CONSTRAINT = "unique_product_version_when_not_empty"
+
+
+def _is_release_name_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, name) uniqueness violation.
+
+    Detected positively rather than as "not the version constraint": an
+    unrelated IntegrityError (a foreign key, a NOT NULL, a constraint added
+    later) must surface as itself, not be rewritten into a name collision.
+
+    ``unique_together`` leaves the constraint auto-named, so unlike the version
+    case there is no fixed name to match. Both drivers do name the columns, so
+    this requires a uniqueness violation mentioning both.
+    """
+    cause = exc.__cause__
+    msg = str(exc).lower()
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    if not is_unique:
+        return False
+
+    diag_constraint = ""
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None:
+            diag_constraint = (getattr(diag, "constraint_name", None) or "").lower()
+
+    haystack = f"{msg} {diag_constraint}"
+    table = Release._meta.db_table.lower()
+    return "product_id" in haystack and "name" in haystack and (table in haystack or "product_id" in haystack)
+
+
+def _is_release_version_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, version) constraint.
+
+    Prefers the driver's constraint name over the message, mirroring
+    ``sboms.utils._is_duplicate_integrity_error``: message text is
+    driver-dependent, and getting this wrong would silently turn a real version
+    conflict into an idempotent 200.
+    """
+    cause = exc.__cause__
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
+            return True
+    # Postgres without diag, and SQLite, both name the constraint in the message.
+    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+
 @router.post(
     "/releases",
-    response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 means the release already existed and is returned as-is; see the
+    # IntegrityError branch for why create is idempotent on a name collision.
+    response={
+        200: ReleaseResponseSchema,
+        201: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
@@ -2874,14 +2930,35 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        # Two CI jobs tagging the same release race here: both read "absent",
+        # both insert, and the loser used to get a 400 that failed its build.
+        # The caller already cleared can() and the OIDC binding above, so it is
+        # entitled to this release; returning the existing row makes create
+        # idempotent and the race harmless.
+        #
+        # A version collision under a *different* name is a genuine conflict, so
+        # that one is identified by constraint name and never swallowed. Only it
+        # needs identifying: for the name case the row's existence is a better
+        # authority than any message, so the decisive branch does no parsing.
+        if _is_release_version_conflict(e):
+            return 400, {
+                "detail": "A release with this version already exists for this product",
+                "error_code": ErrorCode.DUPLICATE_NAME,
+            }
+        if not _is_release_name_conflict(e):
+            # Not a uniqueness violation we recognise: a foreign key, a NOT
+            # NULL, a constraint added later. Report it as itself rather than
+            # dressing it up as a duplicate. Re-raising would escape the sibling
+            # except Exception below and 500, so this mirrors that branch.
+            log.error(f"Unexpected IntegrityError creating release: {e}")
+            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        existing = Release.objects.filter(product=product, name=payload.name).first()
+        if existing is not None:
+            return 200, _build_release_response(request, existing, include_artifacts=True)
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
