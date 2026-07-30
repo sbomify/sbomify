@@ -2784,6 +2784,26 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 # =============================================================================
 
 
+_RELEASE_VERSION_CONSTRAINT = "unique_product_version_when_not_empty"
+
+
+def _is_release_version_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, version) constraint.
+
+    Prefers the driver's constraint name over the message, mirroring
+    ``sboms.utils._is_duplicate_integrity_error``: message text is
+    driver-dependent, and getting this wrong would silently turn a real version
+    conflict into an idempotent 200.
+    """
+    cause = exc.__cause__
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
+            return True
+    # Postgres without diag, and SQLite, both name the constraint in the message.
+    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+
 @router.post(
     "/releases",
     # 200 means the release already existed and is returned as-is; see the
@@ -2879,21 +2899,19 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         # both insert, and the loser used to get a 400 that failed its build.
         # The caller already cleared can() and the OIDC binding above, so it is
         # entitled to this release; returning the existing row makes create
-        # idempotent and the race harmless. Only a name collision qualifies —
-        # a version collision under a different name is a genuine conflict.
-        error_msg = str(e).lower()
-        name_collision = "product_id_name" in error_msg or ("product" in error_msg and "name" in error_msg)
-        if name_collision and "unique_product_version" not in error_msg:
+        # idempotent and the race harmless.
+        #
+        # A version collision under a *different* name is a genuine conflict, so
+        # that one is identified by constraint name and never swallowed. Only it
+        # needs identifying: for the name case the row's existence is a better
+        # authority than any message, so the decisive branch does no parsing.
+        if not _is_release_version_conflict(e):
             existing = Release.objects.filter(product=product, name=payload.name).first()
             if existing is not None:
                 return 200, _build_release_response(request, existing, include_artifacts=True)
-
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif name_collision:
             detail = "A release with this name already exists for this product"
         else:
-            detail = "A release with this name or version already exists for this product"
+            detail = "A release with this version already exists for this product"
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
     except Exception as e:
         log.error(f"Error creating release: {e}")

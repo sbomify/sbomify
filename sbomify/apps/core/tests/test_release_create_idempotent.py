@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 from django.test import Client
+from django.urls import reverse
 
 from sbomify.apps.core.models import Release
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
@@ -17,7 +18,7 @@ pytestmark = pytest.mark.django_db
 
 def _create(client: Client, product, **extra):
     return client.post(
-        "/api/v1/releases",
+        reverse("api-1:create_release"),
         data={"product_id": product.id, "name": "a87242d", **extra},
         content_type="application/json",
     )
@@ -51,7 +52,7 @@ def test_a_version_collision_is_still_a_conflict(client: Client, sample_product,
     _create(client, sample_product, version="1.0.0")
 
     clash = client.post(
-        "/api/v1/releases",
+        reverse("api-1:create_release"),
         data={"product_id": sample_product.id, "name": "different-name", "version": "1.0.0"},
         content_type="application/json",
     )
