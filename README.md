@@ -57,10 +57,6 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Standardized SBOM discovery via `.well-known/tea` endpoints
 - Enables automated discovery and retrieval of SBOMs across the supply chain
 
-## Releases
-
-For information about cutting new releases, see [RELEASE.md](docs/RELEASE.md).
-
 ## Architecture Decision Records (ADRs)
 
 We use Architecture Decision Records (ADRs) to document significant architectural decisions made in this project. ADRs provide context and rationale for decisions, helping current and future contributors understand why certain approaches were chosen.
