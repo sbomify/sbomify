@@ -321,6 +321,8 @@ class ComponentResponseSchema(BaseModel):
     metadata: dict[str, Any]
     sbom_count: int | None = None
     document_count: int | None = None
+    # None when no freshness window is configured or the component has no SBOM.
+    freshness: dict[str, Any] | None = None
 
 
 class ProductComponentLinkSchema(BaseModel):

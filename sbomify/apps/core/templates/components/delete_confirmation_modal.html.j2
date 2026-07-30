@@ -84,7 +84,7 @@
                             @click="{{ confirm_callback }}"
                             {% endif %}>
                         {% if hx_url %}
-                        <i class="fas fa-spinner fa-spin" x-show="isLoading" x-cloak aria-hidden="true"></i>
+                        <span x-show="isLoading" x-cloak>{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
                         <i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
                         <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
                         {% else %}

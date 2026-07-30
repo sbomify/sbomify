@@ -9,7 +9,7 @@ from ninja import NinjaAPI
 from ninja.errors import Throttled
 from ninja.renderers import JSONRenderer
 
-from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle, AnonymousIPRateThrottle
 
 try:
     __version__ = version("sbomify")
@@ -38,9 +38,18 @@ api = NinjaAPI(
     # usable for programmatic clients (which carry no CSRF cookie and cannot be a CSRF
     # vector). See sbomify/apps/core/middleware.py.
     csrf=True,
-    # Per-token API rate limit (#1060): every router inherits this global throttle,
-    # keyed on the AccessToken pk. Session/anonymous requests are exempt.
-    throttle=AccessTokenRateThrottle(),
+    # Two complementary global throttles, because each returns no cache key for
+    # the other's population: the token one keys on the AccessToken pk and skips
+    # anonymous callers, the anonymous one keys on client IP and skips requests
+    # that resolved a token. Together they cover every route, including the
+    # auth=None public ones, without decorating each endpoint.
+    #
+    # A per-operation throttle replaces this whole list rather than adding to
+    # it, so any endpoint declaring its own must re-list every global throttle
+    # it still wants. The artifact-upload routes are the example: they pass
+    # AccessTokenRateThrottle alongside AccessTokenHeavyRateThrottle for that
+    # reason, and being PAT-only they have no need of the anonymous one.
+    throttle=[AccessTokenRateThrottle(), AnonymousIPRateThrottle()],
     renderer=UTCZRenderer(),
     title="sbomify API",
     version=__version__,

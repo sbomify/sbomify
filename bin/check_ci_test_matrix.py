@@ -43,11 +43,17 @@ def main() -> int:
     covered = {group["path"] for group in groups}
     apps = _apps_with_tests()
 
-    problems = [
-        f"  {app}: has tests that no shard runs"
-        for app in apps
-        if not any(path.startswith(f"sbomify/apps/{app}/") for path in covered)
-    ]
+    # Checking the app prefix alone is not enough: an app with both tests.py and
+    # a tests/ directory would pass on a shard covering only one of them, and the
+    # other would never run. Each location has to be reachable from some path.
+    problems = []
+    for app in apps:
+        for location in TEST_LOCATIONS:
+            relative = f"sbomify/apps/{app}/{location}"
+            if not (APPS_DIR / app / location).exists():
+                continue
+            if not any(relative.startswith(path.rstrip("/")) for path in covered):
+                problems.append(f"  {app}: {location} is not run by any shard")
     # A stale path silently collects nothing; a stale ignore silently stops
     # excluding, which is how e2e tests would leak into the Core shard.
     problems += [

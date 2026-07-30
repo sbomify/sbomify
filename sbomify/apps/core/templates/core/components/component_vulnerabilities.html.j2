@@ -1,3 +1,4 @@
+{% load advisory_tags %}
 {# Vulnerabilities drill-down for the latest SBOM. Rendered only when the latest scan has findings. #}
 {% if latest_vulns %}
     {{ latest_vuln_terms|json_script:"latest-vuln-terms" }}
@@ -66,30 +67,18 @@
                                     {% endif %}
                                 </td>
                                 <td class="px-6 py-4">
-                                    {% if vuln.id|slice:":4" == "CVE-" %}
-                                        <a href="https://www.cve.org/CVERecord?id={{ vuln.id }}"
-                                           target="_blank"
-                                           rel="noopener"
-                                           class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                            {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                        </a>
-                                    {% elif vuln.id|slice:":5" == "GHSA-" %}
-                                        <a href="https://github.com/advisories/{{ vuln.id }}"
-                                           target="_blank"
-                                           rel="noopener"
-                                           class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                            {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                        </a>
-                                    {% elif vuln.id == "Unknown" %}
-                                        <span class="font-medium text-text-muted">{{ vuln.id }}</span>
-                                    {% else %}
-                                        <a href="https://osv.dev/vulnerability/{{ vuln.id }}"
-                                           target="_blank"
-                                           rel="noopener"
-                                           class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                            {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                        </a>
-                                    {% endif %}
+                                    {% with vuln_url=vuln.id|advisory_url %}
+                                        {% if vuln_url %}
+                                            <a href="{{ vuln_url }}"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                                                {{ vuln.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                                            </a>
+                                        {% else %}
+                                            <span class="font-medium text-text-muted">{{ vuln.id }}</span>
+                                        {% endif %}
+                                    {% endwith %}
                                     {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
                                 </td>
                                 <td class="px-6 py-4">

@@ -64,6 +64,7 @@ urlpatterns: list[URLPattern] = [
     path("<team_key>/vulnerability-scans", VulnerabilityScansView.as_view(), name="vulnerability_scans"),
     # Contact profiles HTMX endpoints
     path("<team_key>/contact-profiles", views.ContactProfileView.as_view(), name="contact_profiles_list"),
+    path("<team_key>/suppliers", views.SupplierListView.as_view(), name="suppliers"),
     path(
         "<team_key>/contact-profiles/form",
         views.ContactProfileFormView.as_view(),
