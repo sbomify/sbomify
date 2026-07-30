@@ -865,6 +865,11 @@ API_TOKEN_RATE_LIMIT = os.environ.get("API_TOKEN_RATE_LIMIT", "1000/min")
 # S3 write, downstream scan/assessment enqueue).
 API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/min")
 
+# Anonymous/session callers carry no token, so the per-token limits above never
+# apply to them. Keyed per client IP. Generous enough that a human browsing the
+# Trust Center never notices, low enough to blunt scripted enumeration.
+API_ANONYMOUS_RATE_LIMIT = os.environ.get("API_ANONYMOUS_RATE_LIMIT", "120/min")
+
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend
 # enforces the ``aud`` claim against it during verification.
