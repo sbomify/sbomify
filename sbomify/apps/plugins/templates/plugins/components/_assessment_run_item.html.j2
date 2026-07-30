@@ -80,6 +80,7 @@
                                         <i class="fas fa-play-circle mr-1"></i>
                                         {{ run.run_reason|format_run_reason }}
                                     </span>
+                                    {% include 'plugins/components/_rerun_button.html.j2' %}
                                     {% if run.completed_at %}
                                         <span>
                                             <i class="fas fa-calendar-check mr-1"></i>
@@ -362,6 +363,7 @@
                                     <i class="fas fa-play-circle mr-1"></i>
                                     {{ run.run_reason|format_run_reason }}
                                 </span>
+                                {% include 'plugins/components/_rerun_button.html.j2' %}
                                 {% if run.completed_at %}
                                     <span>
                                         <i class="fas fa-calendar-check mr-1"></i>
