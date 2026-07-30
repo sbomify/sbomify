@@ -40,7 +40,7 @@ export default defineConfig({
         name: 'sbomify',
         short_name: 'sbomify',
         description: 'Software Bill of Materials management platform',
-        theme_color: '#2563eb',
+        theme_color: '#25293f',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',

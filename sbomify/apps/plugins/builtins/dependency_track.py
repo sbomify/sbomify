@@ -34,6 +34,23 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _first_float(*candidates: Any) -> float | None:
+    """The first candidate that is a real number, else None.
+
+    DT omits a score entirely, sends null, or sends a string depending on the
+    field and the version, and 0.0 is a legitimate EPSS value, so `or` chaining
+    would silently discard it.
+    """
+    for value in candidates:
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 class DependencyTrackPlugin(AssessmentPlugin):
     """Dependency Track vulnerability scanning plugin.
 
@@ -716,13 +733,15 @@ class DependencyTrackPlugin(AssessmentPlugin):
             if severity not in ("critical", "high", "medium", "low", "info"):
                 severity = "unknown"
 
-            # Extract CVSS score
-            cvss_score = vuln_data.get("cvssV3BaseScore") or vuln_data.get("cvssV2BaseScore")
-            if cvss_score is not None:
-                try:
-                    cvss_score = float(cvss_score)
-                except (ValueError, TypeError):
-                    cvss_score = None
+            # v3 first for continuity with what was already stored, then v4,
+            # then v2. Current DT ingests CVSSv4 and older records carry only v2.
+            cvss_score = _first_float(
+                vuln_data.get("cvssV3BaseScore"),
+                vuln_data.get("cvssV4BaseScore"),
+                vuln_data.get("cvssV2BaseScore"),
+            )
+            epss_score = _first_float(vuln_data.get("epssScore"))
+            epss_percentile = _first_float(vuln_data.get("epssPercentile"))
 
             # Extract component info
             component_name = component_data.get("name", "Unknown Package")
@@ -764,6 +783,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     else "No description",
                     description=vuln_data.get("description", ""),
                     severity=severity,
+                    epss_score=epss_score,
+                    epss_percentile=epss_percentile,
+                    # Without these, finding age never renders for a DT finding;
+                    # the OSV path has always captured them.
+                    published_at=vuln_data.get("published") or None,
+                    modified_at=vuln_data.get("updated") or vuln_data.get("modified") or None,
                     component={
                         "name": component_name,
                         "version": component_version,

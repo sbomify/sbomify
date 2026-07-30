@@ -7,11 +7,14 @@ from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
+from ninja.security import django_auth
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
-from sbomify.apps.access_tokens.auth import optional_auth
+from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
+from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
 from sbomify.apps.core.authz import can
+from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
 from sbomify.logging import getLogger
@@ -23,7 +26,8 @@ from .schemas import (
     AssessmentStatusSummary,
     SBOMAssessmentsResponse,
 )
-from .sdk.enums import RunStatus
+from .sdk.enums import RunReason, RunStatus
+from .tasks import run_assessment_task
 
 logger = getLogger(__name__)
 
@@ -696,3 +700,76 @@ def update_team_plugin_settings(
         "enabled_plugins": settings.enabled_plugins,
         "plugin_configs": settings.plugin_configs,
     }
+
+
+class AssessmentRerunResponse(BaseModel):
+    """Acknowledgement that a re-run was accepted onto the queue."""
+
+    sbom_id: str
+    plugin_name: str
+    status: str
+
+
+@router.post(
+    "/assessments/{sbom_id}/{plugin_name}/rerun",
+    response={
+        202: AssessmentRerunResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    # A re-run enqueues a scan, so it carries the heavy limit as well as the
+    # global per-token one. Passing a per-op throttle replaces the global,
+    # hence both.
+    throttle=[AccessTokenRateThrottle(), AccessTokenHeavyRateThrottle()],
+)
+def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tuple[int, Any]:
+    """Queue a fresh run of one plugin against one SBOM.
+
+    The manual path existed on every layer but the top: ``RunReason.MANUAL``,
+    ``AssessmentRun.triggered_by_user`` and the task's ``triggered_by_user_id``
+    were all in place with nothing able to call them, so recovering from a
+    misconfigured plugin or an outage meant re-uploading the SBOM.
+    """
+    sbom = SBOM.objects.select_related("component__team").filter(id=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+
+    # Re-running writes a new run against the component, so it needs the same
+    # tier as managing it. A read-only member cannot spend the queue.
+    if not can(request, "component:manage", sbom.component):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "is_enabled").first()
+    if registered is None:
+        return 404, {"detail": f"Plugin '{plugin_name}' is not registered", "error_code": ErrorCode.NOT_FOUND}
+    if not registered.is_enabled:
+        return 400, {"detail": f"Plugin '{plugin_name}' is disabled", "error_code": ErrorCode.BAD_REQUEST}
+
+    # A plugin the workspace has not enabled must not be reachable by URL: the
+    # orchestrator would happily run it, and the result would appear on a card
+    # the workspace expects to be empty.
+    #
+    # A missing settings row means "nothing enabled", not "everything allowed".
+    # That is what the rest of the codebase already does: the task layer returns
+    # [] on DoesNotExist ("no plugins to run") and the signal path treats an
+    # empty list as having opted out. Reading it the other way here would let a
+    # re-run start the one thing no other path would.
+    settings = TeamPluginSettings.objects.filter(team_id=sbom.component.team_id).first()
+    if settings is None or not settings.is_plugin_enabled(plugin_name):
+        return 400, {
+            "detail": f"Plugin '{plugin_name}' is not enabled for this workspace",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    user = getattr(request, "user", None)
+    run_assessment_task.send(
+        sbom_id=sbom.id,
+        plugin_name=plugin_name,
+        run_reason=RunReason.MANUAL.value,
+        triggered_by_user_id=user.id if user is not None and user.is_authenticated else None,
+    )
+
+    logger.info(f"[RERUN] Queued {plugin_name} for SBOM {sbom.id}")
+    return 202, {"sbom_id": sbom.id, "plugin_name": plugin_name, "status": "queued"}
