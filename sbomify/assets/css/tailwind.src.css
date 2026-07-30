@@ -2101,6 +2101,17 @@ html.no-transitions * {
   max-width: 56rem;
 }
 
+/* When a <form> wraps the body + footer it must join the content's flex
+   column, otherwise the body can't scroll and a tall form pushes the footer
+   past the 90vh cap. Keeps header + footer pinned, body scrollable. */
+.tw-modal-content > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .tw-modal-header {
   display: flex;
   align-items: center;

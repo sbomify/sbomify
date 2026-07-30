@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Advisories · wireframes</title>
+<style>
+  :root {
+    --paper:#f4f5f6; --surface:#fff; --ink:#16181d; --muted:#6b7280; --faint:#9ca3af;
+    --line:#dce0e5; --line-2:#e9ecef; --fill:#eef0f2; --fill-2:#f6f7f8;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --r:9px; --r-sm:6px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 32px 100px;}
+
+  header.doc{padding:64px 0 8px;}
+  header.doc h1{font-size:2.4rem;font-weight:800;letter-spacing:-.035em;margin:0;}
+  header.doc p{color:var(--muted);margin:10px 0 0;font-size:1.02rem;}
+
+  section{padding:56px 0 0;}
+  section > h2{font-size:1.25rem;font-weight:700;letter-spacing:-.02em;margin:0;}
+  section > .desc{color:var(--muted);font-size:.95rem;margin:5px 0 18px;}
+
+  /* screen frame */
+  .screen{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.03);}
+  .route{font:500 12px var(--mono);color:var(--faint);padding:10px 16px;border-bottom:1px solid var(--line-2);background:var(--fill-2);}
+  .canvas{padding:24px;}
+  .canvas.pad0{padding:0;}
+
+  /* atoms */
+  .ph{background:var(--fill);border-radius:4px;display:inline-block;vertical-align:middle;}
+  .sq{width:40px;height:40px;border:1px solid var(--line);border-radius:10px;background:var(--fill-2);flex:none;}
+  .dots{font-weight:700;letter-spacing:1px;color:var(--muted);}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:600 13px var(--sans);padding:8px 14px;white-space:nowrap;}
+  .btn.pri{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .btn.sm{padding:6px 11px;font-size:12.5px;}
+  .meat{width:30px;height:30px;border:1px solid transparent;border-radius:var(--r-sm);display:inline-grid;place-items:center;color:var(--muted);}
+  .meat.on{border-color:var(--line);background:var(--fill-2);}
+
+  .headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .titlewrap .t{font-size:19px;font-weight:700;letter-spacing:-.01em;}
+  .titlewrap .s{color:var(--muted);font-size:13px;margin-top:2px;}
+  .idrow{display:flex;align-items:center;gap:12px;}
+  .cluster{display:flex;align-items:center;gap:10px;}
+
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 14px;flex-wrap:wrap;}
+  .inputline{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;color:var(--faint);font-size:13px;background:var(--surface);}
+  .selline{display:inline-flex;align-items:center;gap:16px;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;color:var(--muted);font-size:13px;background:var(--surface);}
+  .selline::after{content:"▾";color:var(--faint);font-size:11px;}
+
+  .pill{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font:600 11px var(--sans);color:var(--muted);background:var(--surface);white-space:nowrap;}
+  .pill.solid{background:var(--fill);color:var(--ink);}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px;font:500 11.5px var(--sans);color:var(--muted);background:var(--surface);}
+  .chip::before{content:"";width:9px;height:9px;border-radius:2px;background:var(--faint);}
+
+  /* table */
+  .tbl-wrap{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;position:relative;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{text-align:left;font:600 10.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:11px 16px;border-bottom:1px solid var(--line);background:var(--fill-2);white-space:nowrap;}
+  th.sort::after{content:" ⇅";color:var(--faint);}
+  td{padding:13px 16px;border-bottom:1px solid var(--line-2);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .a-t{font-weight:600;display:block;}
+  .a-id{font:500 11px var(--mono);color:var(--faint);}
+  .sub{font-size:11px;color:var(--faint);}
+  .tfoot{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-top:1px solid var(--line-2);background:var(--fill-2);font-size:12px;color:var(--muted);}
+  .pager{display:flex;gap:5px;}
+  .pg{min-width:26px;height:26px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;font-size:12px;color:var(--muted);background:var(--surface);}
+  .pg.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  /* dropdown */
+  .menu{width:210px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 14px 34px -14px rgba(0,0,0,.35);padding:6px;}
+  .mi{padding:8px 11px;border-radius:6px;font-size:13px;color:var(--ink);}
+  .mdiv{height:1px;background:var(--line-2);margin:6px 4px;}
+  .float{position:absolute;z-index:5;}
+
+  /* modal */
+  .scrim{background:rgba(22,24,29,.28);padding:30px;display:grid;place-items:start center;}
+  .modal{width:100%;max-width:440px;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 30px 60px -24px rgba(0,0,0,.4);}
+  .mh{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line-2);background:var(--fill-2);}
+  .mh .l{display:flex;align-items:center;gap:11px;font-weight:700;font-size:15px;}
+  .mh .k{width:30px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--fill-2);}
+  .mh .x{color:var(--faint);}
+  .mb{padding:18px;display:flex;flex-direction:column;gap:14px;}
+  .mf{display:flex;justify-content:flex-end;gap:9px;padding:13px 18px;border-top:1px solid var(--line-2);background:var(--fill-2);}
+  .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px;}
+  .field label .r{color:#b23b3b;}
+  .box{border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-size:13.5px;color:var(--ink);background:var(--surface);}
+  .box.ph{color:var(--faint);}
+  .box.area{min-height:60px;}
+  .box.sel{display:flex;align-items:center;justify-content:space-between;}
+  .box.sel::after{content:"▾";color:var(--faint);font-size:11px;}
+  .addline{font:600 13px var(--sans);color:var(--muted);}
+  .fhead{display:flex;align-items:center;justify-content:space-between;}
+  .remove{font-size:11.5px;color:var(--faint);}
+  .fhint{font-size:11.5px;color:var(--faint);margin-top:6px;}
+
+  /* detail */
+  .back{font-size:12.5px;color:var(--muted);margin-bottom:16px;}
+  .badges{display:flex;gap:7px;margin-bottom:8px;}
+  .d-title{font-size:19px;font-weight:700;letter-spacing:-.01em;}
+  .d-desc{color:var(--muted);font-size:13px;margin-top:6px;max-width:62ch;}
+  .split{display:flex;gap:34px;margin-top:24px;}
+  .main{flex:1;min-width:0;}
+  .side{width:230px;flex:none;}
+  .tlh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+  .tlh .t{font-size:15px;font-weight:700;}
+  .tlh .c{font-size:12px;color:var(--faint);}
+
+  .trow{display:flex;gap:15px;}
+  .rail{display:flex;flex-direction:column;align-items:center;}
+  .node{width:30px;height:30px;border:1px solid var(--line);border-radius:50%;background:var(--surface);flex:none;}
+  .node.c{border-color:var(--ink);}
+  .line{width:1px;flex:1;background:var(--line);margin:4px 0;min-height:22px;}
+  .tbody{flex:1;min-width:0;padding-bottom:24px;}
+  .tmeta{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .twhen{font-size:11.5px;color:var(--faint);}
+  .tnote{font-size:13px;margin-top:7px;}
+
+  .composer{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;}
+  .composer .ta{padding:11px 13px;color:var(--faint);font-size:13px;}
+  .composer .cbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border-top:1px solid var(--line-2);background:var(--fill-2);}
+
+  .ssec{padding-bottom:18px;}
+  .ssec + .ssec{border-top:1px solid var(--line-2);padding-top:18px;}
+  .sh{font:600 10.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:12px;}
+  .kv{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;}
+  .kv dt{color:var(--muted);}
+  .kv dd{margin:0;}
+  .kv dd.m{font-family:var(--mono);font-size:12px;}
+  .ref{font-size:13px;color:var(--muted);}
+
+  .editrow{display:flex;gap:8px;margin-top:9px;}
+  .statecap{font:600 10.5px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:10px;}
+  footer{margin-top:70px;padding-top:18px;border-top:1px solid var(--line);color:var(--faint);font-size:12.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <h1>Security Advisories</h1>
+    <p>UI wireframes — list, create, detail timeline, inline editors, and action menus.</p>
+  </header>
+
+  <!-- 01 -->
+  <section>
+    <h2>Advisories list</h2>
+    <p class="desc">All advisories with search, status filter, sortable columns and pagination. Each row opens the advisory; the row menu holds actions.</p>
+    <div class="screen">
+      <div class="route">/security-advisories</div>
+      <div class="canvas">
+        <div class="headrow">
+          <div class="idrow"><span class="sq"></span><div class="titlewrap"><div class="t">Security Advisories</div><div class="s">Publish security advisories for your products</div></div></div>
+          <span class="btn pri">+ New Advisory</span>
+        </div>
+        <div class="bar">
+          <div class="cluster"><span class="inputline">⌕ Search advisories…</span><span class="selline">All statuses</span></div>
+          <span class="selline">Show 10 entries</span>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th class="sort">Severity</th><th class="sort">Advisory</th><th>Products</th><th class="sort">Status</th><th class="sort">Updated</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="pill solid">Critical</span></td>
+                <td><span class="a-t">Improper authentication in SAML assertion handling</span><span class="a-id">CVE-2026-4471</span></td>
+                <td><span class="chip">Sign</span></td>
+                <td><span class="pill">Fix in progress</span></td>
+                <td>20 Jul 2026<div class="sub">4 updates</div></td>
+                <td style="text-align:right"><span class="meat on"><span class="dots">⋯</span></span></td>
+              </tr>
+              <tr>
+                <td><span class="pill solid">Medium</span></td>
+                <td><span class="a-t">Weak default TLS ciphers</span><span class="a-id">OSPN-2026-0032</span></td>
+                <td><span class="chip">Mobile Suite</span></td>
+                <td><span class="pill">Identified</span></td>
+                <td>18 Jul 2026<div class="sub">1 update</div></td>
+                <td style="text-align:right"><span class="meat"><span class="dots">⋯</span></span></td>
+              </tr>
+              <tr>
+                <td><span class="pill solid">High</span></td>
+                <td><span class="a-t">Denial of service in provisioning endpoint</span><span class="a-id">CVE-2026-4102</span></td>
+                <td><span class="chip">Digipass</span></td>
+                <td><span class="pill">Investigating</span></td>
+                <td>17 Jul 2026<div class="sub">2 updates</div></td>
+                <td style="text-align:right"><span class="meat"><span class="dots">⋯</span></span></td>
+              </tr>
+              <tr>
+                <td><span class="pill solid">Low</span></td>
+                <td><span class="a-t">Verbose error responses leak stack traces</span><span class="a-id">CVE-2026-3701</span></td>
+                <td><span class="chip">Sign</span></td>
+                <td><span class="pill">Won't fix</span></td>
+                <td>30 Jun 2026<div class="sub">2 updates</div></td>
+                <td style="text-align:right"><span class="meat"><span class="dots">⋯</span></span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="tfoot"><span>Showing 1–4 of 4</span><span class="pager"><span class="pg">‹</span><span class="pg on">1</span><span class="pg">›</span></span></div>
+          <div class="float" style="top:54px;right:16px">
+            <div class="menu">
+              <div class="mi">View in Trust Center</div>
+              <div class="mi">Copy link</div>
+              <div class="mi">Link a VEX</div>
+              <div class="mdiv"></div>
+              <div class="mi">Delete advisory</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 -->
+  <section>
+    <h2>Create advisory</h2>
+    <p class="desc">Title, severity and description. No status field — creating opens the timeline with a first “Identified” update. The CVE / reference is optional and hidden until added.</p>
+    <div class="screen">
+      <div class="route">/security-advisories · New advisory</div>
+      <div class="canvas pad0">
+        <div class="scrim">
+          <div class="modal">
+            <div class="mh"><div class="l"><span class="k"></span> New Advisory</div><span class="x">×</span></div>
+            <div class="mb">
+              <div class="field"><label>Title <span class="r">*</span></label><div class="box ph">e.g. Improper authentication in SAML assertion handling</div></div>
+              <div class="field"><label>Severity</label><div class="box sel">Medium</div></div>
+              <div class="field"><span class="addline">+ Link a CVE or reference</span></div>
+              <div class="field"><label>Description</label><div class="box area ph">Describe the vulnerability…</div><div class="fhint">Optional.</div></div>
+            </div>
+            <div class="mf"><span class="btn">Cancel</span><span class="btn pri">+ Create Advisory</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 -->
+  <section>
+    <h2>Advisory detail</h2>
+    <p class="desc">Update timeline with an always-visible composer at the top, and a details sidebar. Header carries a “View in Trust Center” button and an actions menu.</p>
+    <div class="screen">
+      <div class="route">/security-advisories/OSPN-2026-0034</div>
+      <div class="canvas">
+        <div class="back">← Security advisories</div>
+        <div class="headrow">
+          <div class="idrow" style="align-items:flex-start"><span class="sq"></span>
+            <div>
+              <div class="badges"><span class="pill solid">Critical</span><span class="pill">Fix in progress</span></div>
+              <div class="d-title">Improper authentication in SAML assertion handling</div>
+              <div class="d-desc">A flaw in SAML signature validation allows a crafted assertion to be accepted as valid, letting an attacker authenticate as another user.</div>
+            </div>
+          </div>
+          <div class="cluster"><span class="btn">↗ View in Trust Center</span><span class="meat on"><span class="dots">⋯</span></span></div>
+        </div>
+
+        <div class="split">
+          <div class="main">
+            <div class="tlh"><span class="t">Timeline</span><span class="c">4 updates</span></div>
+
+            <div class="trow">
+              <div class="rail"><span class="node c"></span><span class="line"></span></div>
+              <div class="tbody">
+                <div class="composer">
+                  <div class="ta">Add an update…</div>
+                  <div class="cbar"><span class="box sel" style="padding:6px 10px;min-width:150px">Note only</span><span class="btn pri sm">Post update</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trow">
+              <div class="rail"><span class="node"></span><span class="line"></span></div>
+              <div class="tbody"><div class="tmeta"><span class="pill">Update</span><span class="twhen">20 Jul 2026</span></div><div class="tnote">Advance notice sent to affected customers</div></div>
+            </div>
+            <div class="trow">
+              <div class="rail"><span class="node"></span><span class="line"></span></div>
+              <div class="tbody"><div class="tmeta"><span class="pill">Fix in progress</span><span class="twhen">19 Jul 2026</span></div><div class="tnote">Patch in review, targeting 4.8.3</div></div>
+            </div>
+            <div class="trow">
+              <div class="rail"><span class="node"></span><span class="line"></span></div>
+              <div class="tbody"><div class="tmeta"><span class="pill">Investigating</span><span class="twhen">17 Jul 2026</span></div><div class="tnote">Reproduced on 4.8.x; assessing scope</div></div>
+            </div>
+            <div class="trow">
+              <div class="rail"><span class="node"></span></div>
+              <div class="tbody" style="padding-bottom:0"><div class="tmeta"><span class="pill">Identified</span><span class="twhen">15 Jul 2026</span></div><div class="tnote">Vulnerability identified</div></div>
+            </div>
+          </div>
+
+          <aside class="side">
+            <div class="ssec">
+              <div class="sh">Details</div>
+              <dl style="margin:0">
+                <div class="kv"><dt>Status</dt><dd><span class="pill">Fix in progress</span></dd></div>
+                <div class="kv"><dt>Severity</dt><dd><span class="pill solid">Critical</span></dd></div>
+                <div class="kv"><dt>Type</dt><dd>CVE</dd></div>
+                <div class="kv"><dt>Identifier</dt><dd class="m">CVE-2026-4471</dd></div>
+                <div class="kv"><dt>Created</dt><dd>15 Jul 2026</dd></div>
+                <div class="kv"><dt>Last updated</dt><dd>20 Jul 2026</dd></div>
+              </dl>
+            </div>
+            <div class="ssec"><div class="sh">Affected products</div><span class="chip">Sign</span></div>
+            <div class="ssec"><div class="sh">References</div><span class="ref">↗ CVE-2026-4471 on NVD</span></div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 -->
+  <section>
+    <h2>Menus &amp; inline states</h2>
+    <p class="desc">The header actions menu, and a timeline update being edited in place.</p>
+    <div class="screen">
+      <div class="route">detail · states</div>
+      <div class="canvas">
+        <div class="statecap">Header actions menu</div>
+        <div style="display:flex;justify-content:flex-end;position:relative;min-height:180px;margin-bottom:14px">
+          <div class="cluster"><span class="btn">↗ View in Trust Center</span><span class="meat on"><span class="dots">⋯</span></span></div>
+          <div class="float" style="top:44px;right:0">
+            <div class="menu">
+              <div class="mi">Edit advisory</div>
+              <div class="mi">Copy link</div>
+              <div class="mi">Link a VEX</div>
+              <div class="mdiv"></div>
+              <div class="mi">Delete advisory</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="statecap" style="border-top:1px solid var(--line-2);padding-top:18px">Update — editing in place</div>
+        <div class="trow">
+          <div class="rail"><span class="node"></span></div>
+          <div class="tbody" style="padding-bottom:0">
+            <div class="tmeta"><span class="pill">Fix in progress</span><span class="twhen">19 Jul 2026</span></div>
+            <div class="box area" style="margin-top:8px;min-height:50px">Patch in review, targeting 4.8.3</div>
+            <div class="editrow"><span class="btn pri sm">Save</span><span class="btn sm">Cancel</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 -->
+  <section>
+    <h2>Edit advisory</h2>
+    <p class="desc">Same shape as create, pre-filled. The CVE / reference is shown expanded when one exists.</p>
+    <div class="screen">
+      <div class="route">detail · Edit advisory</div>
+      <div class="canvas pad0">
+        <div class="scrim">
+          <div class="modal">
+            <div class="mh"><div class="l"><span class="k"></span> Edit advisory</div><span class="x">×</span></div>
+            <div class="mb">
+              <div class="field"><label>Title <span class="r">*</span></label><div class="box">Improper authentication in SAML assertion handling</div></div>
+              <div class="field"><label>Severity</label><div class="box sel">Critical</div></div>
+              <div class="field">
+                <div class="fhead"><label style="margin:0">CVE or reference</label><span class="remove">Remove</span></div>
+                <div class="box" style="margin-top:6px">CVE-2026-4471</div>
+              </div>
+              <div class="field"><label>Description</label><div class="box area">A flaw in SAML signature validation allows a crafted assertion to be accepted as valid…</div></div>
+            </div>
+            <div class="mf"><span class="btn">Cancel</span><span class="btn pri">✓ Save changes</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Wireframes — neutral, unbranded. Sample advisories are illustrative.</footer>
+
+</div>
+</body>
+</html>

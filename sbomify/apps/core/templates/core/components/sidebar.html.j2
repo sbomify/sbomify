@@ -212,6 +212,11 @@
                     {% url 'core:releases_dashboard' as releases_url %}
                     {% include "core/components/sidebar_link.html.j2" with url=releases_url icon="fa-tag" label="Releases" match="core:release" %}
                 </li>
+                {# Security Advisories #}
+                <li>
+                    {% url 'core:security_advisories_dashboard' as advisories_url %}
+                    {% include "core/components/sidebar_link.html.j2" with url=advisories_url icon="fa-shield-halved" label="Security Advisories" match="core:security_advisor" %}
+                </li>
                 {# Suppliers — visible to owner/admin only; the list names who we chase for artifacts #}
                 {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
                     <li>
