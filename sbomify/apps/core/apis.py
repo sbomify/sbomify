@@ -2786,7 +2786,15 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 
 @router.post(
     "/releases",
-    response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 means the release already existed and is returned as-is; see the
+    # IntegrityError branch for why create is idempotent on a name collision.
+    response={
+        200: ReleaseResponseSchema,
+        201: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
@@ -2867,10 +2875,22 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
+        # Two CI jobs tagging the same release race here: both read "absent",
+        # both insert, and the loser used to get a 400 that failed its build.
+        # The caller already cleared can() and the OIDC binding above, so it is
+        # entitled to this release; returning the existing row makes create
+        # idempotent and the race harmless. Only a name collision qualifies —
+        # a version collision under a different name is a genuine conflict.
         error_msg = str(e).lower()
+        name_collision = "product_id_name" in error_msg or ("product" in error_msg and "name" in error_msg)
+        if name_collision and "unique_product_version" not in error_msg:
+            existing = Release.objects.filter(product=product, name=payload.name).first()
+            if existing is not None:
+                return 200, _build_release_response(request, existing, include_artifacts=True)
+
         if "unique_product_version" in error_msg:
             detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
+        elif name_collision:
             detail = "A release with this name already exists for this product"
         else:
             detail = "A release with this name or version already exists for this product"
