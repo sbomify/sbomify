@@ -303,6 +303,7 @@ class CustomUserAdmin(UserAdmin):  # type: ignore[type-arg]
     list_display = list(UserAdmin.list_display) + [  # type: ignore[misc]
         "email_verified",
         "email_verified_status",
+        "newsletter_opt_in",
         "last_login_display",
         "social_accounts",
     ]
@@ -312,10 +313,10 @@ class CustomUserAdmin(UserAdmin):  # type: ignore[type-arg]
         "last_login_display",
         "social_accounts",
     ]
-    list_filter = list(UserAdmin.list_filter) + ["last_login", "email_verified", "is_active"]
+    list_filter = list(UserAdmin.list_filter) + ["last_login", "email_verified", "newsletter_opt_in", "is_active"]
     fieldsets = (
         (None, {"fields": ("username", "password")}),
-        ("Personal info", {"fields": ("first_name", "last_name", "email", "email_verified")}),
+        ("Personal info", {"fields": ("first_name", "last_name", "email", "email_verified", "newsletter_opt_in")}),
         ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         ("Important dates", {"fields": ("last_login", "date_joined")}),
         ("Social Accounts", {"fields": ("social_accounts",)}),

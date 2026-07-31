@@ -555,6 +555,13 @@ class Component(models.Model):
         blank=True,
         help_text="Gating mode for gated components (only applies when visibility=gated)",
     )
+    sbom_freshness_days = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Overrides the workspace freshness window for this component. Empty inherits the workspace setting."
+        ),
+    )
     nda_document = models.ForeignKey(
         "documents.Document",
         on_delete=models.SET_NULL,
@@ -1018,6 +1025,15 @@ class SBOM(models.Model):
         default=BomType.SBOM,
         help_text="Type of BOM artifact. See ADR-006.",
     )
+    has_crypto_assets = models.BooleanField(
+        null=True,
+        default=None,
+        help_text=(
+            "Whether the document contains cryptographic-asset components, computed at upload. "
+            "None means unknown (rows predating the field); crypto-gated assessments run for "
+            "True and None, and skip dispatch for False."
+        ),
+    )
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         qualifiers = self.qualifiers
@@ -1054,5 +1070,7 @@ class SBOM(models.Model):
         source_display_map = {
             "api": "API",
             "manual_upload": "Manual Upload",
+            "sbomify-triage": "sbomify Triage",
+            "dependency-track": "Dependency Track",
         }
         return source_display_map.get(self.source or "", self.source or "Unknown")

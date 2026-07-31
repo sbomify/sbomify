@@ -2,6 +2,7 @@
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
+{% load advisory_tags %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
 {% block content %}
     <div class="space-y-6">
@@ -70,7 +71,7 @@
             {% endif %}
             {% if is_processing %}
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-spinner fa-spin text-info text-xs"></i>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-info text-xs" %}
                     <span class="font-semibold text-info">Processing</span>
                 </div>
             {% endif %}
@@ -79,10 +80,7 @@
         <div class="tw-card">
             {# Card Header #}
             <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-bug text-warning"></i>
-                    Scan Results
-                </h4>
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">Scan Results</h4>
             </div>
             {# Card Body #}
             <div class="p-6">
@@ -90,145 +88,146 @@
                     {% if vulnerabilities.results %}
                         {% for result in vulnerabilities.results %}
                             <div class="mb-8 {% if not forloop.last %}pb-8 border-b border-border{% endif %}">
-                                <h5 class="text-base font-semibold text-text mb-4 pb-2 border-b-2 border-border flex items-center gap-2">
-                                    <i class="fas fa-file-code text-text-muted"></i>
-                                    Source: {{ result.source.file_path }}
-                                </h5>
                                 {% if result.packages %}
                                     <div class="overflow-x-auto">
-                                        <table class="w-full">
+                                        <table class="tw-table w-full table-fixed">
                                             <thead>
-                                                <tr class="border-b border-border bg-background/50">
-                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-[20%]">Package</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-[15%]">Version</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-[15%]">Ecosystem</th>
-                                                    <th class="px-4 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-[50%]">
-                                                        Vulnerabilities
-                                                    </th>
+                                                <tr>
+                                                    <th class="w-1/4">Package</th>
+                                                    <th class="w-1/4">Version</th>
+                                                    <th class="w-1/4">Ecosystem</th>
+                                                    <th class="w-1/4">Vulnerabilities</th>
                                                 </tr>
                                             </thead>
-                                            <tbody class="divide-y divide-border">
-                                                {% for pkg_vuln_info in result.packages %}
-                                                    <tr class="align-top">
-                                                        <td class="px-4 py-4">
+                                            {% for pkg_vuln_info in result.packages %}
+                                                <tbody x-data="{ open:
+                                                    {% if forloop.first %}
+                                                        true
+                                                    {% else %}
+                                                        false
+                                                    {% endif %}
+                                                    }">
+                                                    {# Package row stays compact; its vulnerabilities span the full width in the row below. #}
+                                                    <tr class="cursor-pointer" @click="open = !open">
+                                                        <td>
                                                             <span class="font-semibold text-text">{{ pkg_vuln_info.package.name }}</span>
                                                         </td>
-                                                        <td class="px-4 py-4">
+                                                        <td>
                                                             <span class="font-mono text-sm px-2 py-1 bg-background rounded">{{ pkg_vuln_info.package.version }}</span>
                                                         </td>
-                                                        <td class="px-4 py-4">
+                                                        <td>
                                                             <span class="tw-badge-secondary">{{ pkg_vuln_info.package.ecosystem }}</span>
                                                         </td>
-                                                        <td class="px-4 py-4">
+                                                        <td>
                                                             {% if pkg_vuln_info.vulnerabilities %}
-                                                                {% for vuln in pkg_vuln_info.vulnerabilities %}
-                                                                    <div class="p-4 mb-3 bg-surface border border-border rounded-lg hover:shadow-sm transition-shadow {% if forloop.last %}mb-0{% endif %}">
-                                                                        <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
-                                                                            <div class="flex-1">
-                                                                                {# Vulnerability ID with smart links #}
-                                                                                {% if vuln.source == "Dependency Track" %}
-                                                                                    {% if vuln.id|slice:":4" == "CVE-" %}
-                                                                                        <a href="https://www.cve.org/CVERecord?id={{ vuln.id }}"
-                                                                                           target="_blank"
-                                                                                           class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                                        </a>
-                                                                                    {% elif vuln.id|slice:":5" == "GHSA-" %}
-                                                                                        <a href="https://github.com/advisories/{{ vuln.id }}"
-                                                                                           target="_blank"
-                                                                                           class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                                        </a>
-                                                                                    {% else %}
-                                                                                        <span class="text-text font-semibold inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-bug text-xs"></i>{{ vuln.id }}
-                                                                                        </span>
-                                                                                    {% endif %}
-                                                                                {% else %}
-                                                                                    <a href="https://osv.dev/vulnerability/{{ vuln.id }}"
-                                                                                       target="_blank"
-                                                                                       class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                                        <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                                    </a>
-                                                                                {% endif %}
-                                                                                {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
-                                                                            </div>
-                                                                            <div class="flex items-center gap-2">
-                                                                                {# Severity Badge #}
-                                                                                {% if vuln.severity and vuln.severity != 'unknown' %}
-                                                                                    {% if vuln.severity|lower == 'critical' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ vuln.severity|upper }}</span>
-                                                                                    {% elif vuln.severity|lower == 'high' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-warning/10 text-warning border border-warning/30">{{ vuln.severity|upper }}</span>
-                                                                                    {% elif vuln.severity|lower == 'medium' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ vuln.severity|upper }}</span>
-                                                                                    {% elif vuln.severity|lower == 'low' %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ vuln.severity|upper }}</span>
-                                                                                    {% else %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ vuln.severity|upper }}</span>
-                                                                                    {% endif %}
-                                                                                {% else %}
-                                                                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">MEDIUM</span>
-                                                                                {% endif %}
-                                                                                {# CVSS Score #}
-                                                                                {% if vuln.cvss_score %}
-                                                                                    <span class="px-2 py-1 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ vuln.cvss_score }}</span>
-                                                                                {% endif %}
-                                                                            </div>
-                                                                        </div>
-                                                                        {# Summary #}
-                                                                        {% if vuln.summary or vuln.details %}
-                                                                            <p class="text-sm text-text-muted leading-relaxed mb-2">
-                                                                                {{ vuln.summary|default_if_none:vuln.details|truncatewords:50 }}
-                                                                            </p>
-                                                                        {% endif %}
-                                                                        {# References #}
-                                                                        {% if vuln.references and vuln.references|length > 0 %}
-                                                                            <div class="mt-2">
-                                                                                {% if vuln.references|length <= 3 %}
-                                                                                    <span class="text-xs text-text-muted">References:</span>
-                                                                                    {% for ref in vuln.references %}
-                                                                                        {% if ref and ref != "" %}
-                                                                                            <a href="{{ ref }}"
-                                                                                               target="_blank"
-                                                                                               class="inline-flex items-center gap-1 text-xs text-primary hover:underline mr-2">
-                                                                                                <i class="fas fa-external-link-alt"></i>Reference
-                                                                                            </a>
-                                                                                        {% endif %}
-                                                                                    {% endfor %}
-                                                                                {% else %}
-                                                                                    <details class="group">
-                                                                                        <summary class="cursor-pointer text-xs text-text-muted select-none py-1 hover:bg-background rounded inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-chevron-right transition-transform group-open:rotate-90"></i>
-                                                                                            {{ vuln.references|length }} References (click to expand)
-                                                                                        </summary>
-                                                                                        <div class="mt-2 pl-4 border-l-2 border-border">
-                                                                                            {% for ref in vuln.references %}
-                                                                                                {% if ref and ref != "" %}
-                                                                                                    <a href="{{ ref }}"
-                                                                                                       target="_blank"
-                                                                                                       class="block text-xs text-primary hover:underline mb-1">
-                                                                                                        <i class="fas fa-external-link-alt mr-1"></i>{{ ref|truncatechars:60 }}
-                                                                                                    </a>
-                                                                                                {% endif %}
-                                                                                            {% endfor %}
-                                                                                        </div>
-                                                                                    </details>
-                                                                                {% endif %}
-                                                                            </div>
-                                                                        {% endif %}
-                                                                    </div>
-                                                                {% endfor %}
+                                                                <span class="inline-flex items-center gap-2 text-sm font-medium text-text">{{ pkg_vuln_info.vulnerabilities|length }} vulnerabilit{{ pkg_vuln_info.vulnerabilities|length|pluralize:"y,ies" }}<i class="fas fa-chevron-down text-xs text-text-muted transition-transform"
+   :class="open ? 'rotate-180' : ''"
+   aria-hidden="true"></i></span>
                                                             {% else %}
-                                                                <div class="text-center py-4 px-4 bg-success/5 border border-success/20 rounded-lg">
-                                                                    <i class="fas fa-shield-alt text-2xl text-success mb-2"></i>
-                                                                    <div class="text-success text-sm">No vulnerabilities found for this package</div>
-                                                                </div>
+                                                                <span class="inline-flex items-center gap-1 text-success text-sm"><i class="fas fa-shield-alt"></i>None</span>
                                                             {% endif %}
                                                         </td>
                                                     </tr>
-                                                {% endfor %}
-                                            </tbody>
+                                                    {% if pkg_vuln_info.vulnerabilities %}
+                                                        <tr x-show="open" x-cloak>
+                                                            <td colspan="4" class="px-4 pb-5 pt-0">
+                                                                <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                                                                    {% for vuln in pkg_vuln_info.vulnerabilities %}
+                                                                        <div class="p-4 bg-surface border border-border rounded-lg hover:shadow-sm transition-shadow min-w-0">
+                                                                            <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
+                                                                                <div class="flex-1">
+                                                                                    {# Vulnerability ID with smart links #}
+                                                                                    {% with vuln_url=vuln.id|advisory_url %}
+                                                                                        {% if vuln_url %}
+                                                                                            <a href="{{ vuln_url }}"
+                                                                                               target="_blank"
+                                                                                               rel="noopener"
+                                                                                               class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
+                                                                                                <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
+                                                                                            </a>
+                                                                                        {% else %}
+                                                                                            <span class="text-text font-semibold">{{ vuln.id }}</span>
+                                                                                        {% endif %}
+                                                                                    {% endwith %}
+                                                                                    {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
+                                                                                </div>
+                                                                                <div class="flex items-center gap-2">
+                                                                                    {# Severity Badge #}
+                                                                                    {% if vuln.severity and vuln.severity != 'unknown' %}
+                                                                                        {% if vuln.severity|lower == 'critical' %}
+                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ vuln.severity|upper }}</span>
+                                                                                        {% elif vuln.severity|lower == 'high' %}
+                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">{{ vuln.severity|upper }}</span>
+                                                                                        {% elif vuln.severity|lower == 'medium' %}
+                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ vuln.severity|upper }}</span>
+                                                                                        {% elif vuln.severity|lower == 'low' %}
+                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ vuln.severity|upper }}</span>
+                                                                                        {% else %}
+                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ vuln.severity|upper }}</span>
+                                                                                        {% endif %}
+                                                                                    {% else %}
+                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">MEDIUM</span>
+                                                                                    {% endif %}
+                                                                                    {# CVSS Score #}
+                                                                                    {% if vuln.cvss_score %}
+                                                                                        <span class="px-2 py-1 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ vuln.cvss_score }}</span>
+                                                                                    {% endif %}
+                                                                                </div>
+                                                                            </div>
+                                                                            {# Summary. Truncate from the FULL description when present — the scanner's own title can be pre-cut mid-word — so truncatewords always ends on a whole word. #}
+                                                                            {% if vuln.details and ' ' in vuln.details %}
+                                                                                <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">{{ vuln.details|truncatewords:20 }}</p>
+                                                                            {% elif vuln.summary and ' ' in vuln.summary %}
+                                                                                <p class="text-sm text-text-muted leading-relaxed mb-2 break-words">{{ vuln.summary|truncatewords:20 }}</p>
+                                                                            {% else %}
+                                                                                <p class="text-sm text-text-muted mb-2 italic"
+                                                                                   title="No summary provided by the scanner">
+                                                                                    No description provided …
+                                                                                </p>
+                                                                            {% endif %}
+                                                                            {# References #}
+                                                                            {% if vuln.references and vuln.references|length > 0 %}
+                                                                                <div class="mt-2">
+                                                                                    {% if vuln.references|length <= 3 %}
+                                                                                        <span class="text-xs text-text-muted">References:</span>
+                                                                                        {% for ref in vuln.references %}
+                                                                                            {% if ref and ref != "" %}
+                                                                                                <a href="{{ ref }}"
+                                                                                                   target="_blank"
+                                                                                                   class="inline-flex items-center gap-1 text-xs text-primary hover:underline mr-2">
+                                                                                                    <i class="fas fa-external-link-alt"></i>Reference
+                                                                                                </a>
+                                                                                            {% endif %}
+                                                                                        {% endfor %}
+                                                                                    {% else %}
+                                                                                        <details class="group">
+                                                                                            <summary class="cursor-pointer text-xs text-text-muted select-none py-1 hover:bg-background rounded inline-flex items-center gap-1">
+                                                                                                <i class="fas fa-chevron-right transition-transform group-open:rotate-90"></i>
+                                                                                                {{ vuln.references|length }} References (click to expand)
+                                                                                            </summary>
+                                                                                            <div class="mt-2 pl-4 border-l-2 border-border">
+                                                                                                {% for ref in vuln.references %}
+                                                                                                    {% if ref and ref != "" %}
+                                                                                                        <a href="{{ ref }}"
+                                                                                                           target="_blank"
+                                                                                                           class="block text-xs text-primary hover:underline mb-1">
+                                                                                                            <i class="fas fa-external-link-alt mr-1"></i>{{ ref|truncatechars:60 }}
+                                                                                                        </a>
+                                                                                                    {% endif %}
+                                                                                                {% endfor %}
+                                                                                            </div>
+                                                                                        </details>
+                                                                                    {% endif %}
+                                                                                </div>
+                                                                            {% endif %}
+                                                                        </div>
+                                                                    {% endfor %}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    {% endif %}
+                                                </tbody>
+                                            {% endfor %}
                                         </table>
                                     </div>
                                 {% else %}
@@ -266,7 +265,7 @@
                     {% if is_processing %}
                         <div class="p-4 bg-info/5 border border-info/20 rounded-lg">
                             <h4 class="text-lg font-semibold text-info mb-2 flex items-center gap-2">
-                                <i class="fas fa-spinner fa-spin"></i>
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                                 Processing Vulnerability Scan
                             </h4>
                             <p class="text-text mb-2">

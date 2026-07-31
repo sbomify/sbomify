@@ -10,7 +10,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
-from sbomify.apps.core.apis import get_dashboard_summary, get_product, patch_product
+from sbomify.apps.core.apis import get_product, patch_product
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductPatchSchema
 from sbomify.apps.tea.mappers import get_product_tei_urn
@@ -33,12 +33,6 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
-            )
-
-        status_code, dashboard_summary = get_dashboard_summary(request, product_id=product_id)
-        if status_code != 200:
-            return error_response(
-                request, HttpResponse(status=status_code, content=dashboard_summary.get("detail", "Unknown error"))
             )
 
         current_team = request.session.get("current_team", {})
@@ -106,6 +100,16 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         is_admin_or_owner = current_team.get("role") in ("owner", "admin")
 
+        # Components-and-security table + severity rollup, and the releases strip.
+        from sbomify.apps.core.services.product_page import (
+            build_product_components_rows,
+            build_product_releases_summary,
+        )
+
+        components_data = build_product_components_rows(product_id)
+        component_rows = components_data["rows"]
+        releases_summary = build_product_releases_summary(product_id)
+
         return render(
             request,
             "core/product_details_private.html.j2",
@@ -114,7 +118,6 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "cra_assessment": cra_assessment,
                 "has_cra_access": has_cra_access,
                 "current_team": current_team,
-                "dashboard_summary": dashboard_summary,
                 "is_owner": is_owner,
                 "is_admin_or_owner": is_admin_or_owner,
                 "product": product,
@@ -122,6 +125,13 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "team_billing_plan": team_billing_plan,
                 "product_controls": product_controls_list[0] if product_controls_list else None,
                 "product_controls_list": product_controls_list,
+                "component_rows": component_rows,
+                "component_terms": [f"{r['name']}".lower() for r in component_rows],
+                "component_statuses": [r["status"] for r in component_rows],
+                "assigned_component_ids": [r["id"] for r in component_rows],
+                "vuln_rollup": components_data["rollup"],
+                "releases_summary": releases_summary,
+                "identifiers_locked": team_billing_plan not in ("business", "enterprise"),
             },
         )
 

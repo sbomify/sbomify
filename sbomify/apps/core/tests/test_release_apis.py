@@ -124,11 +124,14 @@ def test_create_release_with_custom_dates(
 
 
 @pytest.mark.django_db
-def test_create_release_duplicate_name(
+def test_create_release_duplicate_name_is_idempotent(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test release creation with duplicate name fails."""
+    """Creating the same name twice returns the existing release.
+
+    Idempotent on purpose: two CI jobs tagging the same release race on the
+    insert, and the loser used to get a 400 that failed its build."""
     client = Client()
     url = reverse("api-1:create_release")
 
@@ -148,8 +151,9 @@ def test_create_release_duplicate_name(
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 400
-    assert "already exists" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["name"] == "v1.0.0"
+    assert Release.objects.filter(product=sample_product, name="v1.0.0").count() == 1
 
 
 @pytest.mark.django_db

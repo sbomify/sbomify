@@ -32,6 +32,7 @@ interface Artifact {
     sbom_format?: string;
     sbom_format_version?: string;
     sbom_version?: string;
+    bom_type?: string;
     document_type?: string;
     document_version?: string;
     component_id?: string;
@@ -50,6 +51,7 @@ interface AvailableArtifact {
     version?: string;
     format?: string;
     format_version?: string;
+    bom_type?: string;
     document_type?: string;
     created_at: string;
     component?: {
@@ -292,7 +294,9 @@ export function registerReleaseArtifacts() {
                 }
 
                 if (this.availableTypeFilter) {
-                    filtered = filtered.filter((a: AvailableArtifact) => a.artifact_type === this.availableTypeFilter);
+                    filtered = filtered.filter(
+                        (a: AvailableArtifact) => this.getAvailableArtifactType(a) === this.availableTypeFilter
+                    );
                 }
 
                 if (this.availableComponentFilter) {
@@ -311,8 +315,8 @@ export function registerReleaseArtifacts() {
 
                     switch (sortColumn) {
                         case 'type':
-                            aVal = a.artifact_type || '';
-                            bVal = b.artifact_type || '';
+                            aVal = this.getAvailableArtifactType(a);
+                            bVal = this.getAvailableArtifactType(b);
                             break;
                         case 'name':
                             aVal = a.name.toLowerCase();
@@ -354,7 +358,11 @@ export function registerReleaseArtifacts() {
 
             // Artifact data extraction methods
             getArtifactType(artifact: Artifact): string {
-                if (artifact.sbom || artifact.artifact_type === 'sbom') return 'sbom';
+                if (artifact.sbom || artifact.artifact_type === 'sbom') {
+                    // A VEX is stored as an SBOM row with bom_type='vex'; badge it
+                    // as VEX so it doesn't read as a duplicate SBOM of the component.
+                    return artifact.bom_type === 'vex' ? 'vex' : 'sbom';
+                }
                 if (artifact.document || artifact.artifact_type === 'document') return 'document';
                 return artifact.type || 'unknown';
             },
@@ -463,6 +471,8 @@ export function registerReleaseArtifacts() {
                 switch (type.toLowerCase()) {
                     case 'sbom':
                         return 'fas fa-file-code';
+                    case 'vex':
+                        return 'fas fa-file-contract';
                     case 'document':
                         return 'fas fa-file-alt';
                     default:
@@ -473,6 +483,7 @@ export function registerReleaseArtifacts() {
             getArtifactIconClass(artifact: Artifact): string {
                 const type = this.getArtifactType(artifact);
                 if (type === 'sbom') return 'bg-success/10 text-success';
+                if (type === 'vex') return 'bg-info/10 text-info';
                 if (type === 'document') return 'bg-warning/10 text-warning';
                 return 'bg-surface text-text-muted';
             },
@@ -480,19 +491,31 @@ export function registerReleaseArtifacts() {
             getArtifactBadgeClass(artifact: Artifact): string {
                 const type = this.getArtifactType(artifact);
                 if (type === 'sbom') return 'bg-success/10 text-success border border-success/30';
+                if (type === 'vex') return 'bg-info/10 text-info border border-info/30';
                 if (type === 'document') return 'bg-warning/10 text-warning border border-warning/30';
                 return 'bg-surface text-text-muted border border-border';
             },
 
             // Available artifact methods
+            getAvailableArtifactType(artifact: AvailableArtifact): string {
+                if (artifact.artifact_type === 'sbom') {
+                    return artifact.bom_type === 'vex' ? 'vex' : 'sbom';
+                }
+                return artifact.artifact_type;
+            },
+
             getAvailableTypeIcon(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') return 'fas fa-file-code';
+                if (artifact.artifact_type === 'sbom') {
+                    return artifact.bom_type === 'vex' ? 'fas fa-file-contract' : 'fas fa-file-code';
+                }
                 if (artifact.artifact_type === 'document') return 'fas fa-file-alt';
                 return 'fas fa-file';
             },
 
             getAvailableArtifactIconClass(artifact: AvailableArtifact): string {
-                if (artifact.artifact_type === 'sbom') return 'bg-success/10 text-success';
+                if (artifact.artifact_type === 'sbom') {
+                    return artifact.bom_type === 'vex' ? 'bg-info/10 text-info' : 'bg-success/10 text-success';
+                }
                 if (artifact.artifact_type === 'document') return 'bg-warning/10 text-warning';
                 return 'bg-surface text-text-muted';
             },

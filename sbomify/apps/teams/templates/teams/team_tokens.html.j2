@@ -28,7 +28,7 @@
                 <div class="tw-alert-content">
                     <p class="tw-alert-title">Unscoped tokens detected</p>
                     <p class="text-sm m-0">
-                        You have tokens that are not scoped to any workspace. These tokens grant access to all your workspaces and will be deprecated in a future release. Please create new workspace-scoped tokens and delete the unscoped ones.
+                        These tokens reach every workspace you belong to. They stay valid until you rotate them; there is no forced cutover or auto-expiry. Create a workspace-scoped replacement, move your integration across, then delete the unscoped token.
                     </p>
                 </div>
             </div>
@@ -53,7 +53,7 @@
             </div>
         {% endif %}
         {# Generate New Token Section #}
-        <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
+        <div class="mb-6">
             <div class="flex items-start gap-3 mb-4">
                 <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
                     <i class="fas fa-plus-circle text-text-muted text-sm"></i>
@@ -71,44 +71,52 @@
                   hx-swap="innerHTML"
                   class="ml-11">
                 {% csrf_token %}
-                <div class="flex flex-col sm:flex-row gap-3">
-                    <div class="flex-1">
+                <div class="space-y-4">
+                    {# Token name is the primary field — full width, clearly labelled. #}
+                    <div>
                         {% with field=create_access_token_form.description %}
-                            <label for="{{ field.id_for_label }}" class="sr-only">Token name</label>
+                            <label for="{{ field.id_for_label }}" class="tw-form-label">Token name</label>
                             <input type="text"
                                    id="{{ field.id_for_label }}"
                                    name="{{ field.html_name }}"
-                                   class="tw-form-input"
+                                   class="tw-form-input w-full"
                                    placeholder="e.g., CI/CD Pipeline Token"
                                    value="{{ field.value|default:'' }}">
                             {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
                         {% endwith %}
                     </div>
-                    <div class="sm:w-44">
-                        {% with field=create_access_token_form.scope %}
-                            <label for="{{ field.id_for_label }}" class="sr-only">Access scope</label>
-                            {{ field }}
-                            {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
-                        {% endwith %}
+                    {# Scope and expiry sit side by side in a two-column grid. #}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            {% with field=create_access_token_form.scope %}
+                                <label for="{{ field.id_for_label }}" class="tw-form-label">Access scope</label>
+                                {{ field }}
+                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                            {% endwith %}
+                        </div>
+                        <div>
+                            {% with field=create_access_token_form.expires_in_days %}
+                                <label for="{{ field.id_for_label }}" class="tw-form-label">Expiration</label>
+                                {{ field }}
+                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                            {% endwith %}
+                        </div>
                     </div>
-                    <div class="sm:w-44">
-                        {% with field=create_access_token_form.expires_in_days %}
-                            <label for="{{ field.id_for_label }}" class="sr-only">Expiration</label>
-                            {{ field }}
-                            {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
-                        {% endwith %}
+                    {# Security rationale on the left, the action on the right. #}
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1">
+                        <p class="tw-form-hint m-0">
+                            <i class="fas fa-shield-halved text-xs mr-1 opacity-70"></i>
+                            Narrow scopes and a short expiry limit the damage if a token is leaked.
+                        </p>
+                        <button type="submit" class="tw-btn-primary flex-shrink-0">
+                            <i class="fas fa-plus mr-2"></i>Generate token
+                        </button>
                     </div>
-                    <button type="submit" class="tw-btn-primary flex-shrink-0">
-                        <i class="fas fa-plus mr-2"></i>Generate
-                    </button>
                 </div>
-                <p class="tw-form-hint mt-2">
-                    Give your token a descriptive name, choose its access scope, and choose when it should expire. Narrow scopes and expiry limit the damage if a token is leaked.
-                </p>
             </form>
         </div>
         {# Existing Tokens Section #}
-        <div class="bg-background/50 border border-border rounded-xl p-5">
+        <div class="pt-6 border-t border-border">
             <div class="flex items-start gap-3 mb-4">
                 <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
                     <i class="fas fa-list text-text-muted text-sm"></i>
@@ -133,7 +141,7 @@
                                     x-show="selected.length"
                                     x-cloak
                                     @click="showBulkModal = true">
-                                Revoke selected (<span x-text="selected.length"></span>)
+                                <span x-text="`Revoke selected (${selected.length})`">Revoke selected</span>
                             </button>
                             <button type="button"
                                     class="tw-btn-ghost tw-btn-sm text-danger hover:bg-danger/10"

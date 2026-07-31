@@ -21,6 +21,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_au
 from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
+from sbomify.apps.core.analytics import events
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -31,6 +32,7 @@ from sbomify.apps.core.queries import (
 )
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
+from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
@@ -342,6 +344,12 @@ def _build_component_response(
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
+    # None when the workspace has set no window, or the component has no SBOM
+    # yet: neither is a stale component, and automation should be able to tell
+    # "not stale" from "no policy" without guessing.
+    from sbomify.apps.sboms.freshness import component_freshness
+
+    response["freshness"] = component_freshness(component)
     return response
 
 
@@ -1616,7 +1624,7 @@ def list_components(
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
+        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
@@ -2753,6 +2761,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
                         "sbom_format": artifact.sbom.format,
                         "sbom_format_version": artifact.sbom.format_version,
                         "sbom_version": artifact.sbom.version or "",
+                        "bom_type": artifact.sbom.bom_type,
                         "document_type": None,
                         "document_version": None,
                     }
@@ -2782,9 +2791,65 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 # =============================================================================
 
 
+_RELEASE_VERSION_CONSTRAINT = "unique_product_version_when_not_empty"
+
+
+def _is_release_name_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, name) uniqueness violation.
+
+    Detected positively rather than as "not the version constraint": an
+    unrelated IntegrityError (a foreign key, a NOT NULL, a constraint added
+    later) must surface as itself, not be rewritten into a name collision.
+
+    ``unique_together`` leaves the constraint auto-named, so unlike the version
+    case there is no fixed name to match. Both drivers do name the columns, so
+    this requires a uniqueness violation mentioning both.
+    """
+    cause = exc.__cause__
+    msg = str(exc).lower()
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    if not is_unique:
+        return False
+
+    diag_constraint = ""
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None:
+            diag_constraint = (getattr(diag, "constraint_name", None) or "").lower()
+
+    haystack = f"{msg} {diag_constraint}"
+    table = Release._meta.db_table.lower()
+    return "product_id" in haystack and "name" in haystack and (table in haystack or "product_id" in haystack)
+
+
+def _is_release_version_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, version) constraint.
+
+    Prefers the driver's constraint name over the message, mirroring
+    ``sboms.utils._is_duplicate_integrity_error``: message text is
+    driver-dependent, and getting this wrong would silently turn a real version
+    conflict into an idempotent 200.
+    """
+    cause = exc.__cause__
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
+            return True
+    # Postgres without diag, and SQLite, both name the constraint in the message.
+    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+
 @router.post(
     "/releases",
-    response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 means the release already existed and is returned as-is; see the
+    # IntegrityError branch for why create is idempotent on a name collision.
+    response={
+        200: ReleaseResponseSchema,
+        201: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
@@ -2865,14 +2930,35 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        # Two CI jobs tagging the same release race here: both read "absent",
+        # both insert, and the loser used to get a 400 that failed its build.
+        # The caller already cleared can() and the OIDC binding above, so it is
+        # entitled to this release; returning the existing row makes create
+        # idempotent and the race harmless.
+        #
+        # A version collision under a *different* name is a genuine conflict, so
+        # that one is identified by constraint name and never swallowed. Only it
+        # needs identifying: for the name case the row's existence is a better
+        # authority than any message, so the decisive branch does no parsing.
+        if _is_release_version_conflict(e):
+            return 400, {
+                "detail": "A release with this version already exists for this product",
+                "error_code": ErrorCode.DUPLICATE_NAME,
+            }
+        if not _is_release_name_conflict(e):
+            # Not a uniqueness violation we recognise: a foreign key, a NOT
+            # NULL, a constraint added later. Report it as itself rather than
+            # dressing it up as a duplicate. Re-raising would escape the sibling
+            # except Exception below and 500, so this mirrors that branch.
+            log.error(f"Unexpected IntegrityError creating release: {e}")
+            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        existing = Release.objects.filter(product=product, name=payload.name).first()
+        if existing is not None:
+            return 200, _build_release_response(request, existing, include_artifacts=True)
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3151,7 +3237,7 @@ def download_release(
         - spdx: 2.3 (default)
     """
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product", "product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -3198,6 +3284,18 @@ def download_release(
             response = HttpResponse(sbom_content, content_type="application/json")
             response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
+            # Vendor-scoped, like the release VEX/CBOM downloads: the pull of a
+            # release's merged SBOM is the vendor's value signal.
+            capture_for_request(
+                request,
+                events.RELEASE_SBOM_DOWNLOADED,
+                {
+                    "release_id": str(release.id),
+                    "product_id": str(release.product_id),
+                    "format": format_lower,
+                },
+                team_key=release.product.team.key or "",
+            )
             return response
 
     except ValueError as e:
@@ -3227,7 +3325,7 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     SBOM download: open for a public product, otherwise authenticated with release read access.
     """
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product", "product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -3261,25 +3359,38 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     filename = _download_filename(release.product.name, release.name, ".vex.cdx.json")
     response = HttpResponse(content, content_type="application/json")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Attributed to the vendor workspace: "your release VEX was pulled" is the
+    # value signal, and the consumer may well be anonymous (public Trust Center).
+    capture_for_request(
+        request,
+        events.RELEASE_VEX_DOWNLOADED,
+        {"release_id": str(release.id), "product_id": str(release.product_id)},
+        team_key=release.product.team.key or "",
+    )
     return response
 
 
 @router.get(
     "/releases/{release_id}/cbom/download",
-    response={200: None, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
     auth=None,
     tags=["Releases"],
 )
 @decorate_view(optional_token_auth)
-def download_release_cbom(request: HttpRequest, release_id: str) -> Any:
+def download_release_cbom(request: HttpRequest, release_id: str, version: str = Query("1.6")) -> Any:  # type: ignore[type-arg]
     """Download the merged CBOM (Cryptography BOM) for a release.
 
     Combines the newest CBOM of each component in the release into a single CycloneDX document, so a
     consumer pulls one crypto BOM per release. Gated exactly like the SBOM and VEX downloads: open
     for a public product, otherwise authenticated with release read access.
+
+    ``version`` selects the output spec: "1.6" (default, 1.7-only vocabulary
+    down-converted for consumer compatibility) or "1.7" (native).
     """
+    if version not in ("1.6", "1.7"):
+        return 400, {"detail": "version must be 1.6 or 1.7", "error_code": ErrorCode.BAD_REQUEST}
     try:
-        release = Release.objects.select_related("product").get(pk=release_id)
+        release = Release.objects.select_related("product", "product__team").get(pk=release_id)
     except Release.DoesNotExist:
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
@@ -3300,10 +3411,10 @@ def download_release_cbom(request: HttpRequest, release_id: str) -> Any:
     slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
         n=Count("id"), newest=Max("sbom__created_at")
     )
-    cache_key = f"release-cbom:{release.id}:{slot_state['n']}:{slot_state['newest']}"
+    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
     document = cache.get(cache_key)
     if document is None:
-        document = build_release_cbom(release) or {"__absent__": True}
+        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
         cache.set(cache_key, document, 900)
     if document.get("__absent__"):
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
@@ -3312,6 +3423,12 @@ def download_release_cbom(request: HttpRequest, release_id: str) -> Any:
     filename = _download_filename(release.product.name, release.name, ".cbom.cdx.json")
     response = HttpResponse(content, content_type="application/json")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    capture_for_request(
+        request,
+        events.RELEASE_CBOM_DOWNLOADED,
+        {"release_id": str(release.id), "product_id": str(release.product_id)},
+        team_key=release.product.team.key or "",
+    )
     return response
 
 
@@ -3380,6 +3497,7 @@ def list_release_artifacts(
                         "sbom_format": artifact.sbom.format,
                         "sbom_format_version": artifact.sbom.format_version,
                         "sbom_version": artifact.sbom.version or "",
+                        "bom_type": artifact.sbom.bom_type,
                         "document_type": None,
                         "document_version": None,
                         "component_slug": artifact.sbom.component.slug,
@@ -3449,6 +3567,7 @@ def list_release_artifacts(
                     "format": sbom.format,
                     "format_version": sbom.format_version,
                     "version": sbom.version or "",
+                    "bom_type": sbom.bom_type,
                     "created_at": sbom.created_at.isoformat(),
                 }
             )
@@ -4049,8 +4168,21 @@ def list_component_sboms(
     component_id: str,
     page: int = Query(1),  # type: ignore[type-arg]
     page_size: int = Query(15),  # type: ignore[type-arg]
+    include_all_types: bool = Query(False),  # type: ignore[type-arg]
+    version: str | None = None,
+    format: str | None = None,
 ) -> Any:
-    """List all SBOMs for a specific component with pagination."""
+    """List a component's artifacts with pagination.
+
+    SBOMs only by default; ``include_all_types`` also returns VEX, CBOM and any
+    other bom types so the merged "Artifacts & security" table can list them.
+
+    Optional `version` and `format` query parameters narrow the result to
+    exact matches (no prefix or fuzzy matching — 'v1.2.3' and '1.2.3' are
+    distinct versions). Filters are applied before pagination, so a filtered
+    miss returns an empty first page and a hit returns the newest match first.
+    Omitting both parameters returns the full, unfiltered listing.
+    """
     try:
         component = Component.objects.get(pk=component_id)
     except Component.DoesNotExist:
@@ -4102,9 +4234,14 @@ def list_component_sboms(
         from sbomify.apps.sboms.models import SBOM
 
         try:
-            sboms_queryset = SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM).order_by(
-                "-created_at"
-            )
+            sboms_queryset = SBOM.objects.filter(component_id=component_id)
+            if not include_all_types:
+                sboms_queryset = sboms_queryset.filter(bom_type=SBOM.BomType.SBOM)
+            if version is not None:
+                sboms_queryset = sboms_queryset.filter(version=version)
+            if format is not None:
+                sboms_queryset = sboms_queryset.filter(format=format)
+            sboms_queryset = sboms_queryset.order_by("-created_at")
             # Apply pagination
             paginated_sboms, pagination_meta = _paginate_queryset(sboms_queryset, page, page_size)
         except (DatabaseError, OperationalError) as db_err:
@@ -4137,6 +4274,9 @@ def list_component_sboms(
         from sbomify.apps.plugins.models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
+        from sbomify.apps.vulnerability_scanning.utils import (
+            reconstruct_result_summary,
+        )
 
         # Build response items with vulnerability status, releases, and assessments.
         # Everything below is batched by sbom-id so the cost is constant in
@@ -4202,12 +4342,40 @@ def list_component_sboms(
         runs_by_sbom: dict[str, list[AssessmentRun]] = defaultdict(list)
         plugin_names_seen: set[str] = set()
         try:
-            latest_runs = list(
+            # Two-phase on purpose: the summary annotations extract JSON keys
+            # from ``result``, and computing them on the DISTINCT ON input made
+            # Postgres de-TOAST every historical run's multi-MB blob only to
+            # discard the losers — >100s for a component with hundreds of SBOM
+            # versions. Phase 1 picks the winning run ids touching no JSON;
+            # phase 2 annotates just those winners.
+            #
+            # The ids are materialised deliberately: passed lazily to ``id__in``,
+            # Django strips the subquery's ORDER BY, and DISTINCT ON without its
+            # ORDER BY returns an arbitrary row per group instead of the latest.
+            # The list is bounded by (sboms x plugins), the same magnitude as the
+            # ``sbom_ids`` IN-list already used above.
+            winner_ids = list(
                 AssessmentRun.objects.filter(sbom_id__in=sbom_ids)
-                .order_by("sbom_id", "plugin_name", "-created_at")
+                # -id breaks created_at ties deterministically (newest row wins),
+                # matching vulnerability_trends so both surfaces agree on which
+                # run is "latest" when two share a timestamp.
+                .order_by("sbom_id", "plugin_name", "-created_at", "-id")
                 .distinct("sbom_id", "plugin_name")
+                .values_list("id", flat=True)
+            )
+            latest_runs = list(
+                AssessmentRun.objects.filter(id__in=winner_ids)
+                .defer("result")
+                # id__in has undefined row order; keep the per-SBOM plugin lists
+                # stable across requests.
+                .order_by("sbom_id", "plugin_name")
             )
             for run in latest_runs:
+                # Rebuild the small summary slice from the SQL annotations so the
+                # status helpers below never lazy-load the deferred multi-MB
+                # ``result`` blob — one fat de-TOAST per row was part of what made
+                # this endpoint take tens of seconds.
+                run.result = reconstruct_result_summary(run)
                 runs_by_sbom[str(run.sbom_id)].append(run)
                 plugin_names_seen.add(run.plugin_name)
         except (DatabaseError, OperationalError) as db_err:

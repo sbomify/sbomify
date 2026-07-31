@@ -45,16 +45,16 @@
             <div class="p-0">
                 {% if sboms %}
                     <div class="overflow-x-auto">
-                        <table class="w-full">
+                        <table class="tw-table w-full">
                             <thead>
-                                <tr class="border-b border-border bg-background/50">
+                                <tr>
                                     <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Name</th>
                                     <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Version</th>
                                     <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Visibility</th>
                                     <th class="px-6 py-3 text-center text-xs font-semibold text-text-muted uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-border">
+                            <tbody>
                                 {% for sbom in sboms %}
                                     <tr class="hover:bg-background/50 transition-colors">
                                         <td class="px-6 py-4">

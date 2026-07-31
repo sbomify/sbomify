@@ -16,21 +16,6 @@
                     <p class="text-text-muted text-sm m-0">Customize your workspace's visual identity</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
-                <button x-show="hasUnsavedChanges()"
-                        type="button"
-                        class="tw-btn-secondary tw-btn-sm"
-                        @click="$dispatch('refreshTeamBranding')">
-                    <i class="fas fa-undo mr-2"></i>Cancel
-                </button>
-                <button type="submit"
-                        id="team-branding-save-btn"
-                        form="team-branding-form"
-                        class="tw-btn-primary tw-btn-sm"
-                        :disabled="!hasUnsavedChanges()">
-                    <i class="fas fa-save mr-2"></i>Save Changes
-                </button>
-            </div>
         </div>
     </div>
     {# Card Content #}
@@ -152,28 +137,44 @@
             <div class="bg-background/50 border border-border rounded-xl p-5">
                 <div class="flex items-start gap-3 mb-4">
                     <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-toggle-on text-text-muted text-sm"></i>
+                        <i class="fas fa-eye text-text-muted text-sm"></i>
                     </div>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Display Preferences</h6>
                         <p class="text-text-muted text-sm m-0">Toggle workspace branding on or off</p>
                     </div>
                 </div>
-                <div class="flex items-center justify-between flex-wrap gap-3 ml-11">
-                    <p class="text-text-muted text-sm m-0">
-                        Turn off to use the default sbomify visuals while keeping your custom assets saved.
-                    </p>
-                    <label class="inline-flex items-center cursor-pointer">
+                <div class="ml-11">
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
                         <input type="checkbox"
                                id="branding-enabled-toggle"
                                {% if branding_info.branding_enabled|default_if_none:False %}checked{% endif %}
-                               class="tw-toggle"
+                               class="tw-checkbox"
                                x-model="localBrandingInfo.branding_enabled">
+                        <span class="text-sm font-medium text-text">Enable custom workspace branding</span>
                     </label>
+                    <p class="text-text-muted text-sm mt-2 m-0">
+                        Turn off to use the default sbomify visuals while keeping your custom assets saved.
+                    </p>
                     <input type="hidden"
                            name="branding_enabled"
                            :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
                 </div>
+            </div>
+            {# Cancel/Save at the bottom right, below the fields they apply to. #}
+            <div class="flex items-center justify-end gap-2 mt-6 pt-6 border-t border-border">
+                <button x-show="hasUnsavedChanges()"
+                        type="button"
+                        class="tw-btn-secondary tw-btn-sm"
+                        @click="$dispatch('refreshTeamBranding')">
+                    <i class="fas fa-undo mr-2"></i>Cancel
+                </button>
+                <button type="submit"
+                        id="team-branding-save-btn"
+                        class="tw-btn-primary tw-btn-sm"
+                        :disabled="!hasUnsavedChanges()">
+                    <i class="fas fa-save mr-2"></i>Save Changes
+                </button>
             </div>
         </form>
     </div>

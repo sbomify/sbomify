@@ -5,7 +5,9 @@
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
-    <div class="space-y-6">
+    <div class="space-y-6"
+         x-data="{ compMenu: false, visibility: '{{ component.visibility|escapejs }}' }"
+         @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
         {# Page Header - matches product page pattern #}
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4">
@@ -24,16 +26,95 @@
                         <div class="flex items-center gap-2 text-sm text-text-muted">
                             {% include 'core/components/copyable_value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
                         </div>
+                        {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
+                        {% if component.freshness.is_stale %}
+                            <span class="tw-badge-secondary text-danger"
+                                  title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
+                                <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
+                            </span>
+                        {% endif %}
                     </div>
                     {# Component Type Label #}
                     <p class="text-text-muted text-sm m-0 mt-1">{{ component.component_type_display }} Component</p>
                 </div>
             </div>
-            {# Visibility Toggle #}
-            {% if component.has_crud_permissions %}
-                <div class="flex-shrink-0">
-                    {% url 'core:component_details_public' component.id as component_public_url %}
-                    {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
+            {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
+            {% if component.has_crud_permissions or component.component_type == 'bom' %}
+                <div class="flex-shrink-0 flex items-stretch gap-2">
+                    {% if component.has_crud_permissions %}
+                        {% url 'core:component_details_public' component.id as component_public_url %}
+                        {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
+                    {% endif %}
+                    {# Meatball menu — moves secondary surfaces off the page body (design review p8/p9): upload, metadata, CI/CD integration, trusted publishers all open from here. #}
+                    <div class="relative flex" @keydown.escape.window="compMenu = false">
+                        <button type="button"
+                                class="w-12 min-h-10 h-full rounded-lg border border-border bg-background text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center"
+                                @click="compMenu = !compMenu"
+                                :aria-expanded="compMenu"
+                                aria-haspopup="true"
+                                aria-label="More actions">
+                            <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
+                        </button>
+                        <div x-show="compMenu"
+                             x-cloak
+                             x-transition
+                             @click.outside="compMenu = false"
+                             class="absolute right-0 top-full mt-2 w-60 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40"
+                             role="menu">
+                            {% if component.has_crud_permissions %}
+                                {% block meatball_artifacts %}
+                                    <div class="px-2.5 pt-1.5 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Artifacts</div>
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            @click="compMenu = false; $dispatch('open-upload')">
+                                        <i class="fas fa-upload w-4 text-text-muted" aria-hidden="true"></i>Upload artifact…
+                                    </button>
+                                    <hr class="my-1.5 border-border">
+                                {% endblock %}
+                            {% endif %}
+                            <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Component</div>
+                            {% if component.component_type == 'bom' %}
+                                <button type="button"
+                                        role="menuitem"
+                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        @click="compMenu = false; $dispatch('open-metadata')">
+                                    <i class="fas fa-address-card w-4 text-text-muted" aria-hidden="true"></i>Metadata…
+                                </button>
+                            {% endif %}
+                            {% if component.has_crud_permissions %}
+                                {% if component.component_type == 'bom' %}
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            @click="compMenu = false; $dispatch('open-cicd')">
+                                        <i class="fas fa-gears w-4 text-text-muted" aria-hidden="true"></i>CI/CD integration…
+                                    </button>
+                                {% endif %}
+                                <button type="button"
+                                        role="menuitem"
+                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        @click="compMenu = false; $dispatch('open-trusted-publishers')">
+                                    <i class="fas fa-shield-halved w-4 text-text-muted" aria-hidden="true"></i>Trusted publishers…
+                                </button>
+                                {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
+                                <button type="button"
+                                        role="menuitem"
+                                        x-show="visibility === 'public' || visibility === 'gated'"
+                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        @click="compMenu = false; $dispatch('copy-url')">
+                                    <i class="fas fa-link w-4 text-text-muted" aria-hidden="true"></i>Copy public URL
+                                </button>
+                                <button type="button"
+                                        role="menuitem"
+                                        x-show="visibility === 'public' || visibility === 'gated'"
+                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        @click="compMenu = false; $dispatch('copy-badge')">
+                                    <i class="fas fa-certificate w-4 text-text-muted" aria-hidden="true"></i>Copy badge
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             {% endif %}
         </div>
@@ -68,6 +149,30 @@
                     </span>
                 </span>
             </div>
+            {# Latest-scan vulnerability summary (design review / mock). #}
+            {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low %}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_summary.critical or vuln_summary.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
+                    <i class="fas fa-triangle-exclamation text-xs {% if vuln_summary.critical or vuln_summary.high %}text-danger{% else %}text-warning{% endif %}"></i>
+                    {% if vuln_summary.critical %}
+                        <span class="font-semibold text-danger">{{ vuln_summary.critical }} Critical</span>
+                    {% endif %}
+                    {% if vuln_summary.high %}
+                        {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
+                        <span class="font-semibold text-severity-high">{{ vuln_summary.high }} High</span>
+                    {% endif %}
+                    {% if vuln_summary.medium %}
+                        {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
+                        <span class="font-semibold text-info">{{ vuln_summary.medium }} Medium</span>
+                    {% endif %}
+                    {% if vuln_summary.low %}
+                        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
+                            <span class="text-text-muted">·</span>
+                        {% endif %}
+                        <span class="font-semibold text-text-muted">{{ vuln_summary.low }} Low</span>
+                    {% endif %}
+                    <span class="text-text-muted">· latest scan</span>
+                </div>
+            {% endif %}
         </div>
         {% block header_after_meta %}{% endblock %}
         {% block content_after_header %}{% endblock %}

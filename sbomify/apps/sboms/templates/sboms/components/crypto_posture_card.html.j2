@@ -30,10 +30,18 @@ nothing (placeholder collapses) when the latest artifact has no crypto assets.
                 <div class="text-xs text-success uppercase tracking-wide mt-1">Quantum-safe</div>
             </div>
         </div>
-        <a href="{% url 'core:component_item' component_id 'sboms' sbom_id %}"
-           class="text-sm text-primary hover:underline inline-flex items-center gap-1">
-            View {{ posture.count }} cryptographic asset{{ posture.count|pluralize }}
-            <i class="fas fa-arrow-right text-xs"></i>
-        </a>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <a href="{% url 'core:component_item' component_id 'sboms' sbom_id %}"
+               class="text-sm text-primary hover:underline inline-flex items-center gap-1">
+                View {{ posture.count }} cryptographic asset{{ posture.count|pluralize }}
+                <i class="fas fa-arrow-right text-xs"></i>
+            </a>
+            {% if posture.by_asset_type.certificate %}
+                <span class="px-2 py-1 text-xs font-medium rounded bg-border/40 text-text-muted inline-flex items-center gap-1">
+                    <i class="fas fa-certificate text-xs" aria-hidden="true"></i>
+                    {{ posture.by_asset_type.certificate }} certificate{{ posture.by_asset_type.certificate|pluralize }}
+                </span>
+            {% endif %}
+        </div>
     </div>
 </section>

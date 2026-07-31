@@ -8,6 +8,7 @@ interface Sbom {
   format_version: string
   version: string
   created_at: string
+  bom_type?: string
 }
 
 interface Release {
@@ -52,7 +53,7 @@ interface SbomItem {
   assessments?: AssessmentsData | null
 }
 
-type SortColumn = 'name' | 'format' | 'version' | 'created_at'
+type SortColumn = 'name' | 'format' | 'version' | 'created_at' | 'type'
 type SortDirection = 'asc' | 'desc'
 
 export function registerSbomsTable() {
@@ -64,6 +65,7 @@ export function registerSbomsTable() {
       componentId,
       allSboms: parseJsonScript<SbomItem[]>('sboms-data') || [],
       search: '',
+      typeFilter: 'all',
       sortColumn: 'created_at' as SortColumn,
       sortDirection: 'desc' as SortDirection,
       currentPage: 1,
@@ -72,10 +74,23 @@ export function registerSbomsTable() {
 
       init(): void {
         const alpineThis = this as typeof this & { $el: HTMLElement }
+        // The compact card renders 5 per page; the full "View all" page keeps 10.
+        const configuredPageSize = parseInt(alpineThis.$el.dataset.pageSize || '', 10)
+        if (!Number.isNaN(configuredPageSize) && configuredPageSize > 0) {
+          this.pageSize = configuredPageSize
+        }
+        // The compact card groups by type (BOMs before VEX); the full page stays newest-first.
+        if (alpineThis.$el.dataset.defaultSort === 'type') {
+          this.sortColumn = 'type'
+          this.sortDirection = 'asc'
+        }
         containerRef = alpineThis.$el.closest<HTMLElement>('#sboms-table-container')
         if (!containerRef) return
         afterSettleHandler = () => {
           this.allSboms = parseJsonScript<SbomItem[]>('sboms-data') || []
+          if (this.typeFilter !== 'all' && !this.bomTypes.includes(this.typeFilter)) {
+            this.typeFilter = 'all'
+          }
           if (this.currentPage > this.totalPages && this.totalPages > 0) {
             this.currentPage = this.totalPages
           }
@@ -91,6 +106,10 @@ export function registerSbomsTable() {
         }
       },
 
+      get bomTypes(): string[] {
+        return [...new Set(this.allSboms.map(item => item.sbom.bom_type || 'sbom'))].sort()
+      },
+
       get filteredData(): SbomItem[] {
         let data = [...this.allSboms]
         if (this.search) {
@@ -102,6 +121,9 @@ export function registerSbomsTable() {
               item.sbom.format.toLowerCase().includes(s)
           )
         }
+        if (this.typeFilter !== 'all') {
+          data = data.filter(item => (item.sbom.bom_type || 'sbom') === this.typeFilter)
+        }
         return data
       },
 
@@ -111,6 +133,20 @@ export function registerSbomsTable() {
           let bVal: string | number
 
           switch (this.sortColumn) {
+            case 'type': {
+              // BOMs lead (SBOM first), VEX trails; newest-first within a group.
+              const rank = (item: SbomItem) => {
+                const bomType = item.sbom.bom_type || 'sbom'
+                return bomType === 'sbom' ? 0 : bomType === 'vex' ? 2 : 1
+              }
+              aVal = rank(a)
+              bVal = rank(b)
+              if (aVal === bVal) {
+                aVal = new Date(b.sbom.created_at).getTime()
+                bVal = new Date(a.sbom.created_at).getTime()
+              }
+              break
+            }
             case 'name':
               aVal = a.sbom.name.toLowerCase()
               bVal = b.sbom.name.toLowerCase()
@@ -154,24 +190,6 @@ export function registerSbomsTable() {
         return Math.min(this.currentPage * this.pageSize, this.filteredData.length)
       },
 
-      get visiblePages(): (number | string)[] {
-        const pages: (number | string)[] = []
-        const total = this.totalPages
-        const current = this.currentPage
-
-        if (total <= 7) {
-          for (let i = 1; i <= total; i++) pages.push(i)
-        } else {
-          pages.push(1)
-          if (current > 3) pages.push('...')
-          for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-            pages.push(i)
-          }
-          if (current < total - 2) pages.push('...')
-          pages.push(total)
-        }
-        return pages
-      },
 
       sort(column: SortColumn): void {
         if (this.sortColumn === column) {

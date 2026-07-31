@@ -1,0 +1,54 @@
+{# Trusted publishers — a modal opened from the component header ⋮ menu (open-trusted-publishers window event). #}
+{# The body is the HTMX shell: the section partial loads on page load and swaps in place on create/delete. #}
+<div x-data="{ tpOpen: false }"
+     @open-trusted-publishers.window="tpOpen = true"
+     @keydown.escape.window="if (tpOpen) tpOpen = false">
+    <div x-show="tpOpen"
+         x-cloak
+         class="fixed inset-0 z-[100]"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Trusted publishers">
+        <div x-show="tpOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="tpOpen = false"></div>
+        <div class="tw-modal"
+             x-show="tpOpen"
+             x-trap.noscroll="tpOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop>
+            <div class="tw-modal-content tw-modal-wide">
+                <div class="tw-modal-header">
+                    <h4 class="tw-modal-title flex items-center gap-2">
+                        <i class="fas fa-shield-halved text-primary"></i>Trusted Publishers
+                    </h4>
+                    <button type="button"
+                            class="tw-modal-close"
+                            @click="tpOpen = false"
+                            aria-label="Close">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="tw-modal-body">
+                    <div hx-get="{% url 'oidc:trusted_publishers' component_id=component.id %}"
+                         hx-trigger="load"
+                         hx-swap="outerHTML">
+                        {# placeholder, replaced by the rendered section partial on load #}
+                        <div class="text-text-muted text-sm">Loading trusted publishers…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

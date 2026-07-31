@@ -1,0 +1,158 @@
+<mjml>
+  <mj-head>
+    <mj-title>sbomify newsletter — ##ISSUE_TITLE##</mj-title>
+    <mj-preview>##PREVIEW_TEXT — one enticing sentence shown next to the subject line##</mj-preview>
+  </mj-head>
+  <mj-body background-color="#f8fafc" width="600px">
+
+    <mj-section background-color="#0f172a" padding="24px 24px 8px">
+      <mj-column>
+        <mj-image src="https://app.sbomify.com/static/img/sbomify-white.svg" alt="sbomify" width="221px" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#0f172a" padding="0 24px 20px">
+      <mj-column>
+        <mj-text align="center" color="#cbd5e1" font-size="14px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="0">
+          The Security Artifact Hub
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#4059d0" padding="0">
+      <mj-column>
+        <mj-divider border-width="4px" border-color="#cc58bb" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="32px 40px 0">
+      <mj-column>
+        <mj-text color="#64748b" font-size="14px" line-height="1.6" letter-spacing="1px" text-transform="uppercase" font-family="Helvetica, Arial, sans-serif" padding="0">
+          ISSUE ##NN## &nbsp;·&nbsp; ##MONTH YEAR##
+        </mj-text>
+        <mj-text color="#1e293b" font-size="28px" font-weight="700" line-height="1.25" font-family="Helvetica, Arial, sans-serif" padding="12px 0 0">
+          ##ISSUE_TITLE##
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="8px 40px 0">
+      <mj-column>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="16px 0 0">
+          Hi there,
+        </mj-text>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="16px 0 0">
+          ##INTRO — two or three sentences setting up this issue: what shipped, what's happening in the SBOM/compliance world, and what's below.##
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="32px 40px 0">
+      <mj-column>
+        <mj-image src="##FEATURE_IMAGE_URL##" alt="##FEATURE_IMAGE_ALT##" border-radius="8px" padding="0" />
+        <mj-text color="#4059d0" font-size="20px" font-weight="600" line-height="1.3" font-family="Helvetica, Arial, sans-serif" padding="24px 0 0">
+          ##FEATURE_HEADLINE##
+        </mj-text>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="12px 0 0">
+          ##FEATURE_BODY — a short paragraph on the headline story: a major release, a new integration, a compliance deadline, a customer story.##
+        </mj-text>
+        <mj-button href="##FEATURE_URL##" align="left" background-color="#4059d0" color="#ffffff" font-size="16px" font-weight="500" inner-padding="12px 24px" border-radius="6px" font-family="Helvetica, Arial, sans-serif" padding="20px 0 0">
+          ##FEATURE_CTA##
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="32px 40px 0">
+      <mj-column>
+        <mj-divider border-width="1px" border-color="#e2e8f0" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="32px 40px 0">
+      <mj-column>
+        <mj-text color="#1e293b" font-size="18px" font-weight="600" line-height="1.3" font-family="Helvetica, Arial, sans-serif" padding="0">
+          What's new in sbomify
+        </mj-text>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="20px 0 0">
+          <strong style="color: #1e293b;">##UPDATE_1_TITLE##</strong><br />
+          ##UPDATE_1_BODY## <a href="##UPDATE_1_URL##" style="color: #4059d0;">Learn more</a>
+        </mj-text>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="20px 0 0">
+          <strong style="color: #1e293b;">##UPDATE_2_TITLE##</strong><br />
+          ##UPDATE_2_BODY## <a href="##UPDATE_2_URL##" style="color: #4059d0;">Learn more</a>
+        </mj-text>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="20px 0 0">
+          <strong style="color: #1e293b;">##UPDATE_3_TITLE##</strong><br />
+          ##UPDATE_3_BODY## <a href="##UPDATE_3_URL##" style="color: #4059d0;">Learn more</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="32px 40px 0">
+      <mj-column background-color="#f1f5f9" padding="16px 20px">
+        <mj-text color="#1e293b" font-size="18px" font-weight="600" line-height="1.3" font-family="Helvetica, Arial, sans-serif" padding="0">
+          Worth reading
+        </mj-text>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="12px 0 0">
+          • <a href="##LINK_1_URL##" style="color: #4059d0;">##LINK_1_TITLE##</a><br />
+          • <a href="##LINK_2_URL##" style="color: #4059d0;">##LINK_2_TITLE##</a><br />
+          • <a href="##LINK_3_URL##" style="color: #4059d0;">##LINK_3_TITLE##</a>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="32px 40px 40px">
+      <mj-column>
+        <mj-text color="#475569" font-size="16px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="0">
+          Cheers,<br />
+          <strong style="color: #1e293b;">The sbomify Team</strong>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#4059d0" padding="0">
+      <mj-column>
+        <mj-divider border-width="4px" border-color="#cc58bb" padding="0" />
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#0f172a" padding="32px 40px">
+      <mj-column>
+        <mj-text align="center" color="#ffffff" font-size="18px" font-weight="600" line-height="1.4" font-family="Helvetica, Arial, sans-serif" padding="0">
+          One hub for your SBOMs, VEX, and compliance documents
+        </mj-text>
+        <mj-text align="center" color="#cbd5e1" font-size="14px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="8px 0 0">
+          Upload, analyze, and share security artifacts — stored exactly as received.
+        </mj-text>
+        <mj-button href="https://app.sbomify.com" background-color="#4059d0" color="#ffffff" font-size="16px" font-weight="500" inner-padding="12px 24px" border-radius="6px" font-family="Helvetica, Arial, sans-serif" padding="20px 0 0">
+          Get started for free
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#f1f5f9" padding="24px 40px">
+      <mj-column>
+        <mj-text align="center" color="#64748b" font-size="14px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="0">
+          <a href="https://sbomify.com" style="color: #4059d0;">Website</a> &nbsp;·&nbsp;
+          <a href="https://github.com/sbomify" style="color: #4059d0;">GitHub</a> &nbsp;·&nbsp;
+          <a href="https://sbomify.com/blog/" style="color: #4059d0;">Blog</a>
+        </mj-text>
+        <mj-text align="center" color="#64748b" font-size="14px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="16px 0 0">
+          Questions? We're here to help. <a href="https://app.sbomify.com/support/contact/" style="color: #4059d0;">Get in touch</a>
+        </mj-text>
+        <mj-text align="center" color="#64748b" font-size="14px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="16px 0 0">
+          © ##YEAR## sbomify. All rights reserved.
+        </mj-text>
+        <mj-text align="center" color="#94a3b8" font-size="12px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="16px 0 0">
+          You're receiving this because you subscribed to the sbomify newsletter.
+          <a href="[[UNSUB_LINK_EN]]" style="color: #4059d0;">Unsubscribe</a> &nbsp;·&nbsp;
+          <a href="[[PERMALINK]]" style="color: #4059d0;">View in browser</a>
+        </mj-text>
+        <mj-text align="center" color="#94a3b8" font-size="12px" line-height="1.6" font-family="Helvetica, Arial, sans-serif" padding="8px 0 0">
+          ##SENDER_POSTAL_ADDRESS##
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+  </mj-body>
+</mjml>

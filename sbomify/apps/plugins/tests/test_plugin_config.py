@@ -666,3 +666,44 @@ class TestHourlyDTScanTaskPluginSettings:
         sbom.delete()
         component.delete()
         settings.delete()
+
+
+@pytest.mark.django_db
+class TestPluginBomTypeBadges:
+    """available_plugins carries each plugin's supported BOM types for the badge UI."""
+
+    def test_supported_bom_types_from_plugin_metadata(self, test_team: Team) -> None:
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        request.user = test_team.owner
+
+        status_code, data = get_team_plugin_settings(request, test_team.key)
+
+        assert status_code == 200
+        by_name = {p["name"]: p for p in data["available_plugins"]}
+        assert by_name["pqc-readiness"]["supported_bom_types"] == ["cbom", "sbom"]
+        assert by_name["nist-sp800-131a"]["supported_bom_types"] == ["cbom", "sbom"]
+        assert by_name["ntia-minimum-elements-2021"]["supported_bom_types"] == ["sbom"]
+
+    def test_unloadable_plugin_class_defaults_to_sbom(self, test_team: Team) -> None:
+        from django.test import RequestFactory
+
+        RegisteredPlugin.objects.create(
+            name="ghost-plugin",
+            display_name="Ghost",
+            description="class path points nowhere",
+            category="compliance",
+            version="1.0.0",
+            plugin_class_path="sbomify.apps.plugins.builtins.nope.GhostPlugin",
+            is_enabled=True,
+            is_builtin=False,
+        )
+        request = RequestFactory().get("/")
+        request.user = test_team.owner
+
+        status_code, data = get_team_plugin_settings(request, test_team.key)
+
+        assert status_code == 200
+        ghost = next(p for p in data["available_plugins"] if p["name"] == "ghost-plugin")
+        assert ghost["supported_bom_types"] == ["sbom"]

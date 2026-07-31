@@ -37,6 +37,7 @@ class PluginMetadata:
     category: AssessmentCategory
     scan_mode: ScanMode = ScanMode.ONE_SHOT
     supported_bom_types: list[str] | None = None
+    requires_crypto_assets: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization.
@@ -71,6 +72,8 @@ class Finding:
             None for security findings.
         component: Component identification dict with name, version, purl, ecosystem.
         cvss_score: Numeric CVSS score for vulnerabilities.
+        epss_score: EPSS probability of exploitation in the next 30 days (0..1).
+        epss_percentile: EPSS rank against all scored CVEs (0..1).
         references: URLs to advisories, patches, etc.
         aliases: Cross-references (CVE-xxx, GHSA-xxx, etc.).
         published_at: ISO-8601 timestamp when vulnerability was published.
@@ -100,6 +103,12 @@ class Finding:
 
     # Security-oriented fields
     cvss_score: float | None = None
+    # EPSS is a probability (0..1) that the vulnerability is exploited in the
+    # next 30 days; the percentile ranks it against every scored CVE. Kept
+    # separate from cvss_score because they answer different questions:
+    # how bad if exploited, versus how likely to be.
+    epss_score: float | None = None
+    epss_percentile: float | None = None
     references: list[str] | None = None
     aliases: list[str] | None = None
     published_at: str | None = None
@@ -110,6 +119,12 @@ class Finding:
     analysis_justification: str | None = None
     analysis_response: list[str] | None = None
     analysis_detail: str | None = None
+    # True when a product-scoped (component-wide) suppression was asserted for a
+    # different version of this package than the one now scanned — the decision
+    # still applies but predates the current version and warrants re-review.
+    # None (not False) so to_dict drops it: only stale findings carry the key,
+    # keeping stored results compact on large scans.
+    analysis_stale: bool | None = None
 
     # Common optional fields
     remediation: str | None = None

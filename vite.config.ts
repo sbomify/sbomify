@@ -40,7 +40,7 @@ export default defineConfig({
         name: 'sbomify',
         short_name: 'sbomify',
         description: 'Software Bill of Materials management platform',
-        theme_color: '#2563eb',
+        theme_color: '#25293f',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
@@ -107,6 +107,12 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5170,
+    // fs events don't cross the macOS↔Docker bind mount, so poll for changes.
+    // Without this, Tailwind never re-scans edited templates until a container restart.
+    watch: {
+      usePolling: true,
+      interval: 100,
+    },
     cors: true,
     headers: {
       'Access-Control-Allow-Origin': '*',

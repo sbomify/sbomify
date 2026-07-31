@@ -7,12 +7,17 @@ from django.db.models import OuterRef, Subquery
 from django.http import HttpRequest
 from ninja import Router
 from ninja.decorators import decorate_view
+from ninja.security import django_auth
 from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
-from sbomify.apps.access_tokens.auth import optional_auth
+from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
+from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
 from sbomify.apps.core.authz import can
+from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.teams.models import Member, Team
+from sbomify.logging import getLogger
 
 from .models import AssessmentRun, RegisteredPlugin, TeamPluginSettings
 from .schemas import (
@@ -21,7 +26,10 @@ from .schemas import (
     AssessmentStatusSummary,
     SBOMAssessmentsResponse,
 )
-from .sdk.enums import RunStatus
+from .sdk.enums import RunReason, RunStatus
+from .tasks import run_assessment_task
+
+logger = getLogger(__name__)
 
 router = Router(tags=["plugins"])
 
@@ -117,9 +125,54 @@ def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
     }
 
 
+def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None) -> Any:
+    """A copy of the run's result with the read-time finding flags stamped in.
+
+    Two flags, both derived rather than stored: ``kev`` from the cached CISA
+    feed, and ``malicious`` from evidence already inside the finding. Deriving
+    them here means every run ever recorded carries them without a rescan.
+
+    The stored blob is never mutated. Non-security runs pass through as-is.
+    """
+    result = run.result
+    if run.category != "security" or not isinstance(result, dict):
+        return result
+    findings = result.get("findings")
+    if not isinstance(findings, list):
+        return result
+
+    from sbomify.apps.vulnerability_scanning.kev import finding_in_kev
+    from sbomify.apps.vulnerability_scanning.malicious import stamp_malicious
+
+    # Build a new findings list only once a match is actually found — the common
+    # case (no matches) returns the original result with no allocation.
+    stamped: list[Any] | None = None
+    if kev_ids:
+        for i, finding in enumerate(findings):
+            if isinstance(finding, dict) and finding_in_kev(finding, kev_ids):
+                if stamped is None:
+                    stamped = list(findings)
+                stamped[i] = {**finding, "kev": True}
+
+    findings_out, malicious_count = stamp_malicious(stamped if stamped is not None else findings)
+    if findings_out is not (stamped if stamped is not None else findings):
+        stamped = findings_out
+
+    if stamped is None:
+        return result
+
+    # Surfaced on the summary so dashboards and posture cards can split the
+    # class out without walking every finding again.
+    summary = result.get("summary")
+    if malicious_count and isinstance(summary, dict):
+        return {**result, "findings": stamped, "summary": {**summary, "malicious_count": malicious_count}}
+    return {**result, "findings": stamped}
+
+
 def _run_to_schema(
     run: AssessmentRun,
     display_names: dict[str, str] | None = None,
+    kev_ids: frozenset[str] | None = None,
 ) -> AssessmentRunSchema:
     """Convert an AssessmentRun model to schema.
 
@@ -152,23 +205,44 @@ def _run_to_schema(
     release_ids = [str(rel.id) for rel in releases]
     release_names = [rel.name for rel in releases]
 
-    return AssessmentRunSchema(
-        id=str(run.id),
-        sbom_id=str(run.sbom_id),
-        release_ids=release_ids,
-        release_names=release_names,
-        plugin_name=run.plugin_name,
-        plugin_version=run.plugin_version,
-        plugin_display_name=display_name,
-        category=run.category,
-        run_reason=run.run_reason,
-        status=run.status,
-        started_at=run.started_at,
-        completed_at=run.completed_at,
-        error_message=run.error_message or None,
-        result=run.result,
-        created_at=run.created_at,
-    )
+    fields: dict[str, Any] = {
+        "id": str(run.id),
+        "sbom_id": str(run.sbom_id),
+        "release_ids": release_ids,
+        "release_names": release_names,
+        "plugin_name": run.plugin_name,
+        "plugin_version": run.plugin_version,
+        "plugin_display_name": display_name,
+        "category": run.category,
+        "run_reason": run.run_reason,
+        "status": run.status,
+        "started_at": run.started_at,
+        "completed_at": run.completed_at,
+        "error_message": run.error_message or None,
+        "result": _result_with_kev(run, kev_ids),
+        "created_at": run.created_at,
+    }
+    try:
+        return AssessmentRunSchema(**fields)
+    except PydanticValidationError as e:
+        # A result blob that predates (or drifted from) the current schema must
+        # not fail the whole response — every batch caller serializes many runs,
+        # so one bad row would blank the assessments for the entire SBOM.
+        # Degrade this run to result=None; its status/plugin metadata still show.
+        # Only the result payload gets this treatment: a validation failure on
+        # any other field is a real bug and must surface, not be blamed on the
+        # blob and re-raised from the second construction with a confusing trace.
+        # ``loc`` can be present-but-empty (model-level errors), so guard with
+        # ``or`` rather than a dict default before indexing.
+        if not all((err.get("loc") or (None,))[0] == "result" for err in e.errors()):
+            raise
+        logger.warning(
+            "AssessmentRun %s (plugin %s) has a result that fails schema validation; serialising without it",
+            run.id,
+            run.plugin_name,
+        )
+        fields["result"] = None
+        return AssessmentRunSchema(**fields)
 
 
 def _compute_status_summary(runs: list[AssessmentRun]) -> AssessmentStatusSummary:
@@ -271,11 +345,15 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
     # in a single query so serialization stays O(n) without per-run lookups.
     display_names = _get_plugin_display_names_map({run.plugin_name for run in all_runs})
 
+    from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
+
+    kev_ids = kev_ids_for_serialization() if any(run.category == "security" for run in all_runs) else frozenset()
+
     return SBOMAssessmentsResponse(
         sbom_id=sbom_id,
         status_summary=status_summary,
-        latest_runs=[_run_to_schema(run, display_names) for run in latest_runs],
-        all_runs=[_run_to_schema(run, display_names) for run in all_runs],
+        latest_runs=[_run_to_schema(run, display_names, kev_ids) for run in latest_runs],
+        all_runs=[_run_to_schema(run, display_names, kev_ids) for run in all_runs],
     )
 
 
@@ -410,6 +488,32 @@ class UpdateTeamPluginSettingsRequest(BaseModel):
     plugin_configs: dict[str, Any] | None = None
 
 
+_supported_bom_types_cache: dict[str, tuple[str, ...]] = {}
+
+
+def _plugin_supported_bom_types(plugin_class_path: str) -> tuple[str, ...]:
+    """BOM types a plugin declares in its metadata, for the artifact-type badges.
+
+    Resolves through the orchestrator's loader so the badge and dispatch can
+    never disagree. Falls back to ("sbom",) when the class cannot be loaded so
+    a stale registry row never breaks the settings page — but only successful
+    resolutions are cached, so a transient import failure does not pin the
+    fallback for the process lifetime.
+    """
+    cached = _supported_bom_types_cache.get(plugin_class_path)
+    if cached is not None:
+        return cached
+    from .orchestrator import load_plugin_class
+
+    try:
+        supported = load_plugin_class(plugin_class_path)().get_metadata().supported_bom_types
+        result = tuple(supported) if supported else ("sbom",)
+    except Exception:
+        return ("sbom",)
+    _supported_bom_types_cache[plugin_class_path] = result
+    return result
+
+
 def _get_plugin_plan_requirement(plugin_name: str) -> str | None:
     """Get the required plan feature for a plugin.
 
@@ -534,6 +638,7 @@ def get_team_plugin_settings(request: HttpRequest, team_key: str) -> tuple[int, 
                 "version": p.version,
                 "default_config": p.default_config,
                 "is_beta": p.is_beta,
+                "supported_bom_types": list(_plugin_supported_bom_types(p.plugin_class_path)),
                 "has_access": has_access,
                 "requires_upgrade": required_feature is not None and not has_access,
                 "required_plan": "Business" if required_feature else None,
@@ -612,3 +717,76 @@ def update_team_plugin_settings(
         "enabled_plugins": settings.enabled_plugins,
         "plugin_configs": settings.plugin_configs,
     }
+
+
+class AssessmentRerunResponse(BaseModel):
+    """Acknowledgement that a re-run was accepted onto the queue."""
+
+    sbom_id: str
+    plugin_name: str
+    status: str
+
+
+@router.post(
+    "/assessments/{sbom_id}/{plugin_name}/rerun",
+    response={
+        202: AssessmentRerunResponse,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
+    auth=(PersonalAccessTokenAuth(), django_auth),
+    # A re-run enqueues a scan, so it carries the heavy limit as well as the
+    # global per-token one. Passing a per-op throttle replaces the global,
+    # hence both.
+    throttle=[AccessTokenRateThrottle(), AccessTokenHeavyRateThrottle()],
+)
+def rerun_assessment(request: HttpRequest, sbom_id: str, plugin_name: str) -> tuple[int, Any]:
+    """Queue a fresh run of one plugin against one SBOM.
+
+    The manual path existed on every layer but the top: ``RunReason.MANUAL``,
+    ``AssessmentRun.triggered_by_user`` and the task's ``triggered_by_user_id``
+    were all in place with nothing able to call them, so recovering from a
+    misconfigured plugin or an outage meant re-uploading the SBOM.
+    """
+    sbom = SBOM.objects.select_related("component__team").filter(id=sbom_id).first()
+    if sbom is None:
+        return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
+
+    # Re-running writes a new run against the component, so it needs the same
+    # tier as managing it. A read-only member cannot spend the queue.
+    if not can(request, "component:manage", sbom.component):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
+    registered = RegisteredPlugin.objects.filter(name=plugin_name).only("name", "is_enabled").first()
+    if registered is None:
+        return 404, {"detail": f"Plugin '{plugin_name}' is not registered", "error_code": ErrorCode.NOT_FOUND}
+    if not registered.is_enabled:
+        return 400, {"detail": f"Plugin '{plugin_name}' is disabled", "error_code": ErrorCode.BAD_REQUEST}
+
+    # A plugin the workspace has not enabled must not be reachable by URL: the
+    # orchestrator would happily run it, and the result would appear on a card
+    # the workspace expects to be empty.
+    #
+    # A missing settings row means "nothing enabled", not "everything allowed".
+    # That is what the rest of the codebase already does: the task layer returns
+    # [] on DoesNotExist ("no plugins to run") and the signal path treats an
+    # empty list as having opted out. Reading it the other way here would let a
+    # re-run start the one thing no other path would.
+    settings = TeamPluginSettings.objects.filter(team_id=sbom.component.team_id).first()
+    if settings is None or not settings.is_plugin_enabled(plugin_name):
+        return 400, {
+            "detail": f"Plugin '{plugin_name}' is not enabled for this workspace",
+            "error_code": ErrorCode.BAD_REQUEST,
+        }
+
+    user = getattr(request, "user", None)
+    run_assessment_task.send(
+        sbom_id=sbom.id,
+        plugin_name=plugin_name,
+        run_reason=RunReason.MANUAL.value,
+        triggered_by_user_id=user.id if user is not None and user.is_authenticated else None,
+    )
+
+    logger.info(f"[RERUN] Queued {plugin_name} for SBOM {sbom.id}")
+    return 202, {"sbom_id": sbom.id, "plugin_name": plugin_name, "status": "queued"}

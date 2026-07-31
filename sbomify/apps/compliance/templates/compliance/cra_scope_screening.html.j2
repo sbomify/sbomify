@@ -49,23 +49,20 @@
                 <div class="tw-card"
                      :class="hasDataConnection ? '' : 'ring-1 ring-warning/40'">
                     <label class="flex items-start gap-3 cursor-pointer p-4">
-                        <input type="checkbox"
-                               x-model="hasDataConnection"
-                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-semibold text-text leading-tight">Product has a data connection</span>
                                 <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-success/15 text-success border border-success/30">
                                     Scope inclusion
                                 </span>
-                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_3"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
-                                    <i class="fas fa-book text-[10px]"></i>
-                                    CRA Art 3(1-2), FAQ 1.1/1.3
-                                </a>
                             </div>
+                            <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_3"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="mt-1 text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1">
+                                <i class="fas fa-book text-[10px]"></i>
+                                CRA Art 3(1-2), FAQ 1.1/1.3
+                            </a>
                             <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
                                 Direct or indirect, logical or physical, to a device or network.
                             </p>
@@ -76,91 +73,92 @@
                                 Without a data connection the product is outside CRA scope.
                             </p>
                         </div>
+                        <input type="checkbox"
+                               x-model="hasDataConnection"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                     </label>
                 </div>
                 {# Question 2 — Own use (EXCLUSION) #}
                 <div class="tw-card" :class="isOwnUseOnly ? 'ring-1 ring-warning/40' : ''">
                     <label class="flex items-start gap-3 cursor-pointer p-4">
-                        <input type="checkbox"
-                               x-model="isOwnUseOnly"
-                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-semibold text-text leading-tight">Manufactured exclusively for own use</span>
                                 <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-danger/15 text-danger border border-danger/30">
                                     Scope exclusion
                                 </span>
-                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
-                                    <i class="fas fa-book text-[10px]"></i>
-                                    CRA Art 2(1), Recital 15, FAQ 1.5
-                                </a>
                             </div>
+                            <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="mt-1 text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1">
+                                <i class="fas fa-book text-[10px]"></i>
+                                CRA Art 2(1), Recital 15, FAQ 1.5
+                            </a>
                             <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
                                 The product is not placed on the EU market — it's manufactured and consumed in-house only.
                             </p>
                         </div>
+                        <input type="checkbox"
+                               x-model="isOwnUseOnly"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                     </label>
                 </div>
                 {# Question 3 — Testing version (INFORMATIONAL) #}
                 <div class="tw-card">
                     <label class="flex items-start gap-3 cursor-pointer p-4">
-                        <input type="checkbox"
-                               x-model="isTestingVersion"
-                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-semibold text-text leading-tight">Testing or pre-release version</span>
                                 <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-surface-hover text-text-muted border border-border">
                                     Informational
                                 </span>
-                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_21"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
-                                    <i class="fas fa-book text-[10px]"></i>
-                                    CRA Art 21(1), FAQ 1.6
-                                </a>
                             </div>
+                            <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_21"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="mt-1 text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1">
+                                <i class="fas fa-book text-[10px]"></i>
+                                CRA Art 21(1), FAQ 1.6
+                            </a>
                             <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
                                 Made available for limited testing with a visible non-compliance indicator.
                                 Testing versions stay in scope, but the wizard relaxes several requirements.
                             </p>
                         </div>
+                        <input type="checkbox"
+                               x-model="isTestingVersion"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                     </label>
                 </div>
                 {# Question 4 — Other legislation (EXCLUSION) #}
                 <div class="tw-card"
                      :class="isCoveredByOtherLegislation ? 'ring-1 ring-warning/40' : ''">
                     <label class="flex items-start gap-3 cursor-pointer p-4">
-                        <input type="checkbox"
-                               x-model="isCoveredByOtherLegislation"
-                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-semibold text-text leading-tight">Covered by exempted EU legislation</span>
                                 <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-danger/15 text-danger border border-danger/30">
                                     Scope exclusion
                                 </span>
-                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
-                                    <i class="fas fa-book text-[10px]"></i>
-                                    CRA Art 2(3-5), FAQ 1.9
-                                </a>
                             </div>
+                            <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="mt-1 text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1">
+                                <i class="fas fa-book text-[10px]"></i>
+                                CRA Art 2(3-5), FAQ 1.9
+                            </a>
                             <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
                                 Medical devices (Reg 2017/745, 2017/746), motor vehicles (Reg 2019/2144),
                                 civil aviation (Reg 2018/1139), or marine equipment (Dir 2014/90).
                             </p>
                         </div>
+                        <input type="checkbox"
+                               x-model="isCoveredByOtherLegislation"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                     </label>
-                    <div x-show="isCoveredByOtherLegislation"
-                         x-cloak
-                         class="px-4 pb-4 pl-[2.5rem]">
+                    <div x-show="isCoveredByOtherLegislation" x-cloak class="px-4 pb-4">
                         <label class="tw-form-label text-xs" for="exempted-legislation">Which legislation?</label>
                         <input type="text"
                                id="exempted-legislation"
@@ -172,28 +170,28 @@
                 {# Question 5 — Dual-use (INFORMATIONAL) #}
                 <div class="tw-card">
                     <label class="flex items-start gap-3 cursor-pointer p-4">
-                        <input type="checkbox"
-                               x-model="isDualUse"
-                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 flex-wrap">
                                 <span class="text-sm font-semibold text-text leading-tight">Dual-use (civilian + defence)</span>
                                 <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-full bg-surface-hover text-text-muted border border-border">
                                     Informational
                                 </span>
-                                <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="ml-auto text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0">
-                                    <i class="fas fa-book text-[10px]"></i>
-                                    CRA Art 2(2), FAQ 1.8
-                                </a>
                             </div>
+                            <a href="https://eur-lex.europa.eu/eli/reg/2024/2847/oj/eng#art_2"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="mt-1 text-[11px] text-text-muted hover:text-primary hover:underline inline-flex items-center gap-1">
+                                <i class="fas fa-book text-[10px]"></i>
+                                CRA Art 2(2), FAQ 1.8
+                            </a>
                             <p class="text-sm text-text-muted mt-0.5 m-0 leading-snug">
                                 Dual-use products with civilian and defence applications stay in CRA scope
                                 whenever they're commercially available.
                             </p>
                         </div>
+                        <input type="checkbox"
+                               x-model="isDualUse"
+                               class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
                     </label>
                 </div>
             </div>
@@ -201,7 +199,6 @@
             <div class="tw-card">
                 <div class="p-5">
                     <label class="flex items-center gap-2 mb-1" for="screening-notes">
-                        <i class="fas fa-note-sticky text-text-muted text-xs"></i>
                         <span class="text-sm font-semibold text-text">Supporting notes</span>
                         <span class="text-xs text-text-muted font-normal">(optional)</span>
                     </label>
@@ -265,7 +262,7 @@
                             <i class="fas fa-arrow-right text-xs"></i>
                         </span>
                         <span x-show="isSaving" x-cloak class="inline-flex items-center gap-2">
-                            <i class="fas fa-spinner fa-spin"></i>
+                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                             Saving...
                         </span>
                     </button>

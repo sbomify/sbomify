@@ -71,6 +71,17 @@ by create_modals.html.j2 which should be included in the base template.
                 </div>
                 <i class="fas fa-chevron-right text-text-muted group-hover:text-orange-500 transition-colors"></i>
             </a>
+            <a href="{% url 'sboms:workspace_crypto' current_team.key %}"
+               class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-violet-500/5 hover:border-violet-500/30 transition-all group">
+                <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                    <i class="fas fa-lock text-violet-500"></i>
+                </div>
+                <div class="flex-1">
+                    <span class="text-sm font-medium text-text group-hover:text-violet-500 transition-colors">Crypto Readiness</span>
+                    <p class="text-xs text-text-muted">Quantum readiness across all components</p>
+                </div>
+                <i class="fas fa-chevron-right text-text-muted group-hover:text-violet-500 transition-colors"></i>
+            </a>
             {# Generate Report - placeholder for future feature #}
             <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed">
                 <div class="w-10 h-10 rounded-lg bg-border/50 flex items-center justify-center">

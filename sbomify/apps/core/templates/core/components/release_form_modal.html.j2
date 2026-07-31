@@ -1,0 +1,92 @@
+{# Create/Edit release modal. Must render inside a productReleases Alpine scope. #}
+{# Create/Edit Release Modal #}
+<template x-teleport="body">
+    <div x-show="showModal"
+         x-cloak
+         class="fixed inset-0 z-[100]"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="releaseModalLabel">
+        <div x-show="showModal"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="closeModal()"></div>
+        <div class="tw-modal"
+             x-show="showModal"
+             x-trap.noscroll="showModal"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop
+             @keydown.escape="if(showModal) closeModal()">
+            <div class="tw-modal-content">
+                <div class="tw-modal-header">
+                    <h4 id="releaseModalLabel"
+                        class="tw-modal-title"
+                        x-text="form.id ? 'Edit Release' : 'Create New Release'"></h4>
+                    <button type="button" class="tw-modal-close" @click="closeModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="tw-modal-body space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="tw-form-label">
+                                Release Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text"
+                                   x-model="form.name"
+                                   class="tw-form-input"
+                                   placeholder="e.g., January Release"
+                                   required>
+                        </div>
+                        <div>
+                            <label class="tw-form-label">Version</label>
+                            <input type="text"
+                                   x-model="form.version"
+                                   class="tw-form-input"
+                                   placeholder="e.g., v1.0.0">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="tw-form-label">Description</label>
+                        <textarea x-model="form.description"
+                                  class="tw-form-input"
+                                  rows="2"
+                                  placeholder="Describe what's included in this release..."></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            {% include 'components/date_picker.html.j2' with value_binding='form.created_at' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
+                        </div>
+                        <div>
+                            {% include 'components/date_picker.html.j2' with value_binding='form.released_at' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox"
+                                   x-model="form.is_prerelease"
+                                   class="w-4 h-4 rounded border-border text-primary focus:ring-primary/50">
+                            <span class="text-sm text-text">Mark as pre-release (alpha, beta, RC)</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="tw-modal-footer">
+                    <button type="button" class="tw-btn-ghost" @click="closeModal()">Cancel</button>
+                    <button type="button" class="tw-btn-primary" @click="submitRelease()">
+                        <span x-text="form.id ? 'Update' : 'Create'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>

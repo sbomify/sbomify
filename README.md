@@ -5,6 +5,7 @@
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10952/badge)](https://www.bestpractices.dev/projects/10952)
 [![Slack](https://img.shields.io/badge/Slack-Join%20Community-4A154B?logo=slack)](https://join.slack.com/t/sbomify/shared_invite/zt-3na54pa1f-MXrFWhotmZr0YxXc8sABTw)
 [![CI/CD Pipeline](https://github.com/sbomify/sbomify/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sbomify/sbomify/actions/workflows/ci-cd.yml)
+[![OpenGrep](https://github.com/sbomify/sbomify/actions/workflows/opengrep.yaml/badge.svg)](https://github.com/sbomify/sbomify/actions/workflows/opengrep.yaml)
 
 sbomify is a Software Bill of Materials (SBOM) and document management platform that can be self-hosted or accessed through [app.sbomify.com](https://app.sbomify.com). The platform provides a centralized location to upload and manage your SBOMs and related documentation, allowing you to share them with stakeholders or make them publicly accessible.
 
@@ -55,10 +56,6 @@ For more information, see [sbomify.com](https://sbomify.com).
 - Implements the [Transparency Exchange API](https://github.com/CycloneDX/transparency-exchange-api/) v0.3.0-beta.2
 - Standardized SBOM discovery via `.well-known/tea` endpoints
 - Enables automated discovery and retrieval of SBOMs across the supply chain
-
-## Releases
-
-For information about cutting new releases, see [RELEASE.md](docs/RELEASE.md).
 
 ## Architecture Decision Records (ADRs)
 
@@ -269,7 +266,7 @@ DJANGO_VITE_DEV_SERVER_HOST=http://localhost
 STATIC_URL=/static/
 DEV_JS_SERVER=http://127.0.0.1:5170
 WEBSITE_BASE_URL=http://127.0.0.1:8000
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
+VITE_API_BASE_URL=http://127.0.0.1:8000
 VITE_WEBSITE_BASE_URL=http://127.0.0.1:8000
 ```
 

@@ -336,6 +336,7 @@ SBOM_UPLOADED = _register(
         properties={
             "component_id": "Owning component's ID.",
             "sbom_id": "Uploaded SBOM's ID.",
+            "source": "How it arrived: 'api', 'manual_upload', or another stored source tag.",
         },
     )
 )
@@ -348,6 +349,177 @@ SBOM_DOWNLOADED = _register(
         properties={
             "sbom_id": "Downloaded SBOM's ID.",
             "component_id": "Owning component's ID.",
+        },
+    )
+)
+
+# VEX/CBOM/HBOM rows live in the SBOM table (bom_type discriminates), so their
+# lifecycle events mirror the SBOM ones but ship under their own names — a VEX
+# upload or an in-app triage save must not read as an SBOM upload in funnels.
+
+VEX_UPLOADED = _register(
+    EventSpec(
+        name="vex:uploaded",
+        description=(
+            "A VEX artifact was stored on a component — an import, a Dependency-Track "
+            "triage sync, or an in-app triage save (the source property tells them apart)."
+        ),
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Stored VEX artifact row's ID (VEX rows live in the SBOM table).",
+            "source": "'api', 'manual_upload', 'dependency-track', or 'sbomify-triage'.",
+        },
+    )
+)
+
+CBOM_UPLOADED = _register(
+    EventSpec(
+        name="cbom:uploaded",
+        description="A CBOM (Cryptography BOM) artifact was uploaded to a component.",
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Stored CBOM artifact row's ID (CBOM rows live in the SBOM table).",
+            "source": "How it arrived: 'api', 'manual_upload', or another stored source tag.",
+        },
+    )
+)
+
+HBOM_UPLOADED = _register(
+    EventSpec(
+        name="hbom:uploaded",
+        description="An HBOM (Hardware BOM) artifact was uploaded to a component.",
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Stored HBOM artifact row's ID (HBOM rows live in the SBOM table).",
+            "source": "How it arrived: 'api', 'manual_upload', or another stored source tag.",
+        },
+    )
+)
+
+VEX_DOWNLOADED = _register(
+    EventSpec(
+        name="vex:downloaded",
+        description="A stored VEX artifact was downloaded.",
+        distinct_id_kind="user",
+        properties={
+            "sbom_id": "Downloaded VEX artifact row's ID.",
+            "component_id": "Owning component's ID.",
+        },
+    )
+)
+
+CBOM_DOWNLOADED = _register(
+    EventSpec(
+        name="cbom:downloaded",
+        description="A stored CBOM artifact was downloaded.",
+        distinct_id_kind="user",
+        properties={
+            "sbom_id": "Downloaded CBOM artifact row's ID.",
+            "component_id": "Owning component's ID.",
+        },
+    )
+)
+
+HBOM_DOWNLOADED = _register(
+    EventSpec(
+        name="hbom:downloaded",
+        description="A stored HBOM artifact was downloaded.",
+        distinct_id_kind="user",
+        properties={
+            "sbom_id": "Downloaded HBOM artifact row's ID.",
+            "component_id": "Owning component's ID.",
+        },
+    )
+)
+
+SBOM_DELETED = _register(
+    EventSpec(
+        name="sbom:deleted",
+        description="An SBOM artifact was deleted from a component.",
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Deleted SBOM's ID.",
+            "source": "How the artifact had arrived (its stored source tag).",
+        },
+    )
+)
+
+VEX_DELETED = _register(
+    EventSpec(
+        name="vex:deleted",
+        description="A VEX artifact was deleted from a component (retracts its suppressions).",
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Deleted VEX artifact row's ID.",
+            "source": "How the artifact had arrived (its stored source tag).",
+        },
+    )
+)
+
+CBOM_DELETED = _register(
+    EventSpec(
+        name="cbom:deleted",
+        description="A CBOM artifact was deleted from a component.",
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Deleted CBOM artifact row's ID.",
+            "source": "How the artifact had arrived (its stored source tag).",
+        },
+    )
+)
+
+HBOM_DELETED = _register(
+    EventSpec(
+        name="hbom:deleted",
+        description="An HBOM artifact was deleted from a component.",
+        distinct_id_kind="workspace",
+        properties={
+            "component_id": "Owning component's ID.",
+            "sbom_id": "Deleted HBOM artifact row's ID.",
+            "source": "How the artifact had arrived (its stored source tag).",
+        },
+    )
+)
+
+RELEASE_SBOM_DOWNLOADED = _register(
+    EventSpec(
+        name="release_sbom:downloaded",
+        description="The merged release-level SBOM was downloaded (Trust Center or API).",
+        distinct_id_kind="workspace",
+        properties={
+            "release_id": "The release's ID.",
+            "product_id": "Owning product's ID.",
+            "format": "Requested output format: 'cyclonedx' or 'spdx'.",
+        },
+    )
+)
+
+RELEASE_VEX_DOWNLOADED = _register(
+    EventSpec(
+        name="release_vex:downloaded",
+        description="The merged release-level VEX was downloaded (Trust Center or API).",
+        distinct_id_kind="workspace",
+        properties={
+            "release_id": "The release's ID.",
+            "product_id": "Owning product's ID.",
+        },
+    )
+)
+
+RELEASE_CBOM_DOWNLOADED = _register(
+    EventSpec(
+        name="release_cbom:downloaded",
+        description="The merged release-level CBOM was downloaded (Trust Center or API).",
+        distinct_id_kind="workspace",
+        properties={
+            "release_id": "The release's ID.",
+            "product_id": "Owning product's ID.",
         },
     )
 )

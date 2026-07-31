@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { getCsrfTokenFromSources, parseCsrfFromCookie } from '../../core/js/test-utils'
+import { bomTypeLabel, buildUploadEndpoint, validateUploadFile } from './sbom-upload-helpers'
 
 const MAX_SBOM_SIZE = 100 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = ['application/json', 'text/plain'];
@@ -244,12 +245,33 @@ describe('SBOM Upload Business Logic', () => {
 
     describe('Upload Workflow', () => {
         test('should construct correct API endpoint', () => {
-            const buildEndpoint = (componentId: string): string => {
-                return `/api/v1/sboms/upload-file/${componentId}`
-            }
+            // No bom_type for plain SBOMs — its presence disables server-side CBOM auto-detection.
+            expect(buildUploadEndpoint('comp-123', 'sbom')).toBe('/api/v1/sboms/upload-file/comp-123')
+            expect(buildUploadEndpoint('my-component', 'vex')).toBe('/api/v1/sboms/upload-file/my-component?bom_type=vex')
+        })
 
-            expect(buildEndpoint('comp-123')).toBe('/api/v1/sboms/upload-file/comp-123')
-            expect(buildEndpoint('my-component')).toBe('/api/v1/sboms/upload-file/my-component')
+        test('should label the artifact type for user-facing messages', () => {
+            expect(bomTypeLabel('sbom')).toBe('SBOM')
+            expect(bomTypeLabel('vex')).toBe('VEX')
+        })
+
+        test('should reject SPDX files when uploading a VEX', () => {
+            const spdxFile = createMockFile('doc.spdx', 1024, 'application/json')
+            const spdxJsonFile = createMockFile('doc.spdx.json', 1024, 'application/json')
+            const cdxFile = createMockFile('doc.vex.cdx.json', 1024, 'application/json')
+
+            expect(validateUploadFile(spdxFile, 'vex')).toContain('SPDX files are SBOM-only')
+            expect(validateUploadFile(spdxJsonFile, 'vex')).toContain('SPDX files are SBOM-only')
+            expect(validateUploadFile(cdxFile, 'vex')).toBeNull()
+            expect(validateUploadFile(spdxFile, 'sbom')).toBeNull()
+            expect(validateUploadFile(spdxJsonFile, 'sbom')).toBeNull()
+        })
+
+        test('should name the selected type in the invalid-file message', () => {
+            const badFile = createMockFile('archive.tar', 1024, 'application/x-tar')
+
+            expect(validateUploadFile(badFile, 'vex')).toBe('Please select a valid VEX file (.json, .cdx, .xml)')
+            expect(validateUploadFile(badFile, 'sbom')).toBe('Please select a valid SBOM file (.json, .spdx, .cdx)')
         })
 
         test('should build FormData correctly', () => {

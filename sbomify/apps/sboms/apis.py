@@ -31,7 +31,12 @@ from sbomify.apps.core.utils import (
     obj_extract,
 )
 from sbomify.apps.oidc.permissions import is_authorised_for_component
-from sbomify.apps.sboms.utils import _is_cbom, _is_duplicate_integrity_error, verify_download_token
+from sbomify.apps.sboms.utils import (
+    _contains_crypto_assets,
+    _is_cbom,
+    _is_duplicate_integrity_error,
+    verify_download_token,
+)
 from sbomify.apps.teams.models import ContactProfile
 
 from .models import SBOM, Component, Product
@@ -73,6 +78,81 @@ def _validate_bom_type(bom_type: str) -> tuple[int, dict[str, Any]] | None:
             "error_code": ErrorCode.VALIDATION_ERROR,
         }
     return None
+
+
+def _store_external_vex(
+    component: Component,
+    document: dict[str, Any],
+    file_content: bytes,
+    sha256_hash: str,
+    vex_format: str,
+    source: str,
+) -> tuple[int, dict[str, Any]]:
+    """Store a non-JSON-CycloneDX VEX document as a ``bom_type=vex`` artifact.
+
+    Handles OpenVEX, CSAF, and CycloneDX *XML* (all routed here because their
+    bytes cannot round-trip the JSON CycloneDX schema validation).
+
+    The raw bytes are stored unmodified (ADR-004); only the identifying
+    metadata is read out. Like CycloneDX VEX, no duplicate check applies —
+    VEX documents are re-issued continuously and the latest wins by
+    ``created_at``.
+    """
+    from sbomify.apps.vulnerability_scanning.vex_formats import (
+        VEX_FORMAT_CSAF,
+        VEX_FORMAT_OPENVEX,
+        openvex_context,
+    )
+
+    if vex_format == VEX_FORMAT_OPENVEX:
+        context = openvex_context(document) or ""
+        _, separator, suffix = context.rpartition("/ns/")
+        # v0.0.1 documents use the bare namespace with no version suffix.
+        format_version = suffix if separator else "v0.0.1"
+        raw_version = document.get("version")
+    elif vex_format == VEX_FORMAT_CSAF:
+        raw_meta = document.get("document")
+        meta = raw_meta if isinstance(raw_meta, dict) else {}
+        format_version = str(meta.get("csaf_version") or "")
+        tracking = meta.get("tracking")
+        raw_version = tracking.get("version") if isinstance(tracking, dict) else None
+    else:
+        # CycloneDX delivered as XML: stored verbatim like the other external
+        # formats — the partial XML-to-dict conversion cannot round-trip the
+        # JSON schema validation the JSON path applies.
+        format_version = str(document.get("specVersion") or "")
+        raw_version = document.get("version")
+    # Explicit None-check: a falsy-but-present version (e.g. 0) is still a version.
+    version = "" if raw_version is None else str(raw_version)
+
+    s3 = S3Client("SBOMS")
+    filename = s3.upload_sbom(file_content)
+
+    sbom = SBOM(
+        name=component.name,
+        component=component,
+        format=vex_format,
+        format_version=format_version[:20],
+        version=version,
+        source=source,
+        sbom_filename=filename,
+        sha256_hash=sha256_hash,
+        bom_type=SBOM.BomType.VEX.value,
+    )
+    try:
+        with transaction.atomic():
+            sbom.save()
+    except IntegrityError:
+        _cleanup_orphaned_s3_object(filename)
+        raise
+
+    # The row is committed; a broadcast hiccup must not fail the upload.
+    try:
+        _broadcast_sbom_uploaded(component, sbom)
+    except Exception:
+        log.warning("Failed to broadcast SBOM upload notification", exc_info=True)
+    schedule_vex_reapply(component.id)
+    return 201, {"id": sbom.id}
 
 
 def _cleanup_orphaned_s3_object(filename: str) -> None:
@@ -391,11 +471,14 @@ def sbom_upload_cyclonedx(
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
 
-        # Auto-detect CBOM content (#1042): an action-published CBOM arrives with the
-        # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only when
-        # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
-        if "bom_type" not in request.GET and _is_cbom(sbom_data):
+        # Auto-detect CBOM content: an action-published CBOM arrives with the
+        # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
+        # when the caller left the type as the default — an explicit bom_type
+        # (e.g. the delegated /artifact/vex/ path passing "vex") is honored so
+        # a crypto-heavy VEX is never re-tagged cbom.
+        if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET and _is_cbom(sbom_data):
             bom_type = "cbom"
+        sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
 
         # Extract PURL qualifiers from metadata.component.purl
         cdx_purl = _extract_cdx_purl(payload)
@@ -460,8 +543,78 @@ def sbom_upload_cyclonedx(
 
         return 201, {"id": sbom.id}
 
-    except Exception as e:
-        log.error(f"Error processing CycloneDX BOM upload: {str(e)}")
+    except Exception:
+        log.exception("Error processing CycloneDX BOM upload")
+        return 400, {"detail": "Invalid request"}
+
+
+@router.post(
+    "/artifact/vex/{component_id}",
+    response={201: SBOMUploadRequest, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+    auth=PersonalAccessTokenAuth(),
+    throttle=[AccessTokenRateThrottle(), AccessTokenHeavyRateThrottle()],
+)
+def vex_artifact_upload(request: HttpRequest, component_id: str) -> tuple[int, dict[str, Any]]:
+    """Upload a VEX document in any supported format for a component.
+
+    The format is detected from the content: CycloneDX *JSON* VEX is delegated to
+    the CycloneDX artifact flow (schema validation included); CycloneDX XML,
+    OpenVEX, and CSAF VEX are stored as received without JSON-schema validation.
+    Anything else is rejected.
+    """
+    from sbomify.apps.vulnerability_scanning.vex_formats import (
+        VEX_FORMAT_CYCLONEDX,
+        detect_vex_format,
+    )
+
+    try:
+        from sbomify.apps.vulnerability_scanning.vex_formats import looks_like_xml, parse_vex_bytes
+
+        # Same ceiling as the file-upload endpoint: Content-Length fails fast
+        # before the body is read, len() backstops chunked/absent headers.
+        max_size_mb = SBOM_MAX_UPLOAD_SIZE // (1024 * 1024)
+        declared = request.headers.get("Content-Length")
+        if declared and declared.isdigit() and int(declared) > SBOM_MAX_UPLOAD_SIZE:
+            return 400, {"detail": f"Document exceeds the {max_size_mb}MB limit"}
+        if len(request.body) > SBOM_MAX_UPLOAD_SIZE:
+            return 400, {"detail": f"Document exceeds the {max_size_mb}MB limit"}
+
+        document = parse_vex_bytes(request.body)
+        if document is None:
+            return 400, {"detail": "Invalid VEX: not a JSON or CycloneDX XML document"}
+
+        vex_format = detect_vex_format(document)
+        # The session upload flow treats any document with specVersion as
+        # CycloneDX even without the bomFormat marker; stay equally lenient
+        # here and let the CycloneDX schema validation give the real verdict.
+        if vex_format is None and isinstance(document, dict) and "specVersion" in document:
+            vex_format = VEX_FORMAT_CYCLONEDX
+        if vex_format is None:
+            return 400, {
+                "detail": "Unrecognized VEX format. Must be CycloneDX, OpenVEX, or CSAF (csaf_vex).",
+                "error_code": ErrorCode.VALIDATION_ERROR,
+            }
+        is_xml = looks_like_xml(request.body)
+        if vex_format == VEX_FORMAT_CYCLONEDX and not is_xml:
+            return sbom_upload_cyclonedx(request, component_id, bom_type=SBOM.BomType.VEX.value)
+
+        component = Component.objects.filter(id=component_id).first()
+        if component is None:
+            return 404, {"detail": "Component not found"}
+        if not can(request, "artifact:publish", component):
+            return 403, {"detail": "Forbidden"}
+        # A VEX rewrites the workspace's stored vulnerability posture, so it takes
+        # the stricter publish tier (guests are excluded).
+        if not can(request, "artifact:publish_vex", component):
+            return 403, {"detail": "Forbidden"}
+        if not is_authorised_for_component(request, component):
+            return 403, {"detail": "Forbidden"}
+
+        sha256_hash = hashlib.sha256(request.body).hexdigest()
+        return _store_external_vex(component, document, request.body, sha256_hash, vex_format, source="api")
+
+    except Exception:
+        log.exception("Error processing VEX upload")
         return 400, {"detail": "Invalid request"}
 
 
@@ -556,6 +709,10 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         sbom_dict["format"] = sbom_format
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
+        # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so the
+        # crypto-gated plugins skip these artifacts instead of treating the
+        # unstamped NULL as "maybe crypto".
+        sbom_dict["has_crypto_assets"] = False
         sbom_dict["format_version"] = spdx_version  # Already extracted from validation
         sbom_dict["sha256_hash"] = sha256_hash
 
@@ -735,7 +892,13 @@ def get_sbom(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
 
 @router.get(
     "/{sbom_id}/crypto-inventory",
-    response={200: CryptoInventorySchema, 403: ErrorResponse, 404: ErrorResponse},
+    response={
+        200: CryptoInventorySchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        503: ErrorResponse,
+    },
     auth=None,  # Allow unauthenticated access for public SBOMs
 )
 @decorate_view(optional_auth)
@@ -750,6 +913,62 @@ def get_sbom_crypto_inventory(request: HttpRequest, sbom_id: str) -> tuple[int, 
         return result.status_code or 400, {"detail": result.error or "Invalid request"}
 
     return 200, result.value or {}
+
+
+@router.get(
+    "/{sbom_id}/crypto-inventory/cipher-suites.csv",
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 503: ErrorResponse},
+    auth=None,  # Same gate as the JSON inventory: open for public SBOMs
+)
+@decorate_view(optional_auth)
+def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> Any:
+    """Protocol and cipher-suite inventory as CSV.
+
+    One row per cipher suite (plus one per deprecated protocol version) with
+    weakness flags — the inventory-of-suites-and-protocols evidence PCI DSS
+    4.x requirement 12.3.3 asks to keep and review.
+    """
+    import csv
+    import io
+
+    def csv_safe(value: str) -> str:
+        # Cell values come from the uploaded document. Neutralize spreadsheet
+        # formula triggers so opening the export in Excel/Sheets can never
+        # execute attacker-authored formulas (CSV injection).
+        return f"'{value}" if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
+
+    result = get_crypto_inventory(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
+    inventory = result.value or {}
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["protocol", "type", "version", "cipher_suite", "identifiers", "weak", "weaknesses"])
+    for asset in inventory.get("assets", []):
+        view = asset.get("protocol_view")
+        if not view:
+            continue
+        base = [
+            csv_safe(asset.get("name") or ""),
+            csv_safe(view.get("type") or ""),
+            csv_safe(view.get("version") or ""),
+        ]
+        if view.get("weak_version"):
+            writer.writerow(base + ["", "", "yes", view["weak_version"]])
+        for suite in view.get("cipher_suites", []):
+            writer.writerow(
+                base
+                + [
+                    csv_safe(suite.get("name") or ""),
+                    csv_safe(" ".join(suite.get("identifiers") or [])),
+                    "yes" if suite.get("weaknesses") else "no",
+                    "; ".join(suite.get("weaknesses") or []),
+                ]
+            )
+    response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="cipher-suite-inventory-{sbom_id}.csv"'
+    return response
 
 
 @router.get(
@@ -972,6 +1191,30 @@ def sbom_upload_file(
         file_content = bytes(buffer)
         sha256_hash = sha256.hexdigest()
 
+        # VEX arrives in three formats and two encodings (JSON, CycloneDX XML);
+        # OpenVEX, CSAF, and XML-encoded CycloneDX are stored verbatim here,
+        # while JSON CycloneDX VEX continues through the schema-validating
+        # CycloneDX branch below.
+        if bom_type == SBOM.BomType.VEX.value:
+            from sbomify.apps.vulnerability_scanning.vex_formats import (
+                VEX_FORMAT_CSAF,
+                VEX_FORMAT_CYCLONEDX,
+                VEX_FORMAT_OPENVEX,
+                detect_vex_format,
+                looks_like_xml,
+                parse_vex_bytes,
+            )
+
+            document = parse_vex_bytes(file_content)
+            if document is None:
+                return 400, {"detail": "Invalid VEX: not a JSON or CycloneDX XML document"}
+            vex_format = detect_vex_format(document)
+            is_xml = looks_like_xml(file_content)
+            if vex_format in (VEX_FORMAT_OPENVEX, VEX_FORMAT_CSAF) or (is_xml and vex_format == VEX_FORMAT_CYCLONEDX):
+                return _store_external_vex(
+                    component, document, file_content, sha256_hash, vex_format, source="manual_upload"
+                )
+
         try:
             sbom_data = json.loads(file_content.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -1019,6 +1262,10 @@ def sbom_upload_file(
             sbom_dict["format"] = sbom_format
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
+            # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so
+            # the crypto-gated plugins skip instead of treating NULL as
+            # "maybe crypto".
+            sbom_dict["has_crypto_assets"] = False
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
             sbom_dict["sha256_hash"] = sha256_hash
 
@@ -1106,11 +1353,12 @@ def sbom_upload_file(
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
 
-            # Auto-detect CBOM content (#1042): tag a crypto BOM uploaded with the
+            # Auto-detect CBOM content: tag a crypto BOM uploaded with the
             # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
             # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
             if "bom_type" not in request.GET and _is_cbom(sbom_data):
                 bom_type = "cbom"
+            sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
 
             # Extract PURL qualifiers from metadata.component.purl
             cdx_purl = _extract_cdx_purl(cdx_payload)

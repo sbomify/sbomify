@@ -53,7 +53,7 @@ class TestListView:
             reverse("oidc:trusted_publishers", kwargs={"component_id": component.id})
         )
         assert response.status_code == 200
-        assert b"Trusted Publishers" in response.content
+        assert b"trusted-publishers-section" in response.content
         assert b"No trusted publishers yet" in response.content
         # Quick check the help block is in there too
         assert b"id-token: write" in response.content

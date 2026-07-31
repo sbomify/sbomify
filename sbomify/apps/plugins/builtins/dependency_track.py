@@ -34,6 +34,23 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _first_float(*candidates: Any) -> float | None:
+    """The first candidate that is a real number, else None.
+
+    DT omits a score entirely, sends null, or sends a string depending on the
+    field and the version, and 0.0 is a legitimate EPSS value, so `or` chaining
+    would silently discard it.
+    """
+    for value in candidates:
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
 class DependencyTrackPlugin(AssessmentPlugin):
     """Dependency Track vulnerability scanning plugin.
 
@@ -507,6 +524,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
         vulnerabilities_response = client.get_project_vulnerabilities(version_uuid)
         vulnerabilities = vulnerabilities_response.get("content", [])
 
+        # Opt-in: pull DT's triage decisions back as a VEX so analysts'
+        # judgments made in DT reach sbomify without a manual export/upload.
+        # Off by default — the hosted DT is a scanner backend, not a VEX
+        # source. Best-effort when on: a failure must never fail the scan.
+        self._sync_triage_vex_safely(client, version_row)
+
         now = dj_timezone.now()
         version_row.last_metrics_sync = now
         version_row.save(update_fields=["last_metrics_sync", "updated_at"])
@@ -562,6 +585,130 @@ class DependencyTrackPlugin(AssessmentPlugin):
             },
         )
 
+    # DT analysis states that represent an actual audit decision. IN_TRIAGE
+    # (and vulnerabilities with no analysis at all) mean "not judged yet" —
+    # nothing worth publishing as a VEX.
+    _VEX_DECISION_STATES = {"not_affected", "false_positive", "resolved", "exploitable"}
+
+    def _sync_triage_vex_safely(self, client: Any, version_row: Any) -> None:
+        """Best-effort wrapper around :meth:`_sync_triage_vex` — a sync failure
+        must never fail the scan.
+
+        Opt-in via the plugin config flag ``sync_triage_vex`` (default off):
+        the hosted DT is a scanner backend, not a VEX source, so sbomify does
+        not read analysis decisions out of it unless a workspace explicitly
+        turns the sync on (bring-your-own-DT, where the analyst triages in DT
+        and wants those decisions back). When enabled, the DT API key must
+        hold the VULNERABILITY_ANALYSIS permission; a 403 is server
+        configuration that repeats identically on every scan, so it logs one
+        actionable line instead of a traceback."""
+        if not self.config.get("sync_triage_vex"):
+            return
+
+        from sbomify.apps.vulnerability_scanning.clients import DependencyTrackAPIError
+
+        version_uuid = str(version_row.dt_project_version_uuid)
+        try:
+            self._sync_triage_vex(client, version_row)
+        except DependencyTrackAPIError as e:
+            if e.status_code == 403:
+                logger.warning(
+                    "[DT] VEX triage sync skipped for project %s: the DT API key lacks the "
+                    "VULNERABILITY_ANALYSIS permission (403). Grant it to enable triage sync.",
+                    version_uuid,
+                )
+            else:
+                logger.warning("[DT] VEX triage sync failed for project %s", version_uuid, exc_info=True)
+        except Exception:
+            logger.warning("[DT] VEX triage sync failed for project %s", version_uuid, exc_info=True)
+
+    def _sync_triage_vex(self, client: Any, version_row: Any) -> None:
+        """Store DT's triage decisions as the component's VEX artifact.
+
+        Exports the project's CycloneDX VEX from Dependency Track and, when it
+        carries at least one audit decision, saves it as a new bom_type=vex
+        artifact on the component (as received, per ADR-004). Content is
+        deduplicated against the component's newest VEX ignoring the volatile
+        export fields (serialNumber, doc version, metadata.timestamp), so the
+        hourly scan cron doesn't mint identical VEX rows. A new VEX enqueues
+        the same re-apply used by manual VEX uploads, which re-annotates the
+        stored scans and re-points release VEX pins.
+
+        Requires the DT API key to hold the VULNERABILITY_ANALYSIS permission;
+        callers treat any failure as non-fatal.
+        """
+        version_uuid = str(version_row.dt_project_version_uuid)
+        raw = client.get_project_vex(version_uuid)
+        try:
+            doc = json.loads(raw)
+        except (TypeError, ValueError):
+            logger.warning("[DT] VEX export for project %s is not valid JSON; skipping sync", version_uuid)
+            return
+        if not isinstance(doc, dict):
+            return
+
+        decided = [
+            v
+            for v in (doc.get("vulnerabilities") or [])
+            if isinstance(v, dict)
+            and str((v.get("analysis") or {}).get("state") or "").lower() in self._VEX_DECISION_STATES
+        ]
+        if not decided:
+            return
+
+        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.sboms.models import SBOM as SBOMModel
+        from sbomify.apps.sboms.services.sboms import schedule_vex_reapply
+
+        component = version_row.sbom.component
+        normalized = self._normalized_vex(doc)
+        s3 = S3Client("SBOMS")
+
+        newest = (
+            SBOMModel.objects.filter(component=component, bom_type=SBOMModel.BomType.VEX.value)
+            .order_by("-created_at")
+            .first()
+        )
+        if newest is not None and newest.sbom_filename:
+            try:
+                existing_bytes = s3.get_sbom_data(newest.sbom_filename)
+                if existing_bytes and self._normalized_vex(json.loads(existing_bytes)) == normalized:
+                    return
+            except Exception:
+                logger.debug("[DT] Could not load existing VEX %s for dedup; storing fresh", newest.id, exc_info=True)
+
+        # Store the raw response bytes so the artifact is byte-for-byte what
+        # Dependency Track produced — sbomify never rewrites security artifacts.
+        filename = s3.upload_sbom(raw)
+        metadata_component = (doc.get("metadata") or {}).get("component") or {}
+        vex = SBOMModel.objects.create(
+            component=component,
+            bom_type=SBOMModel.BomType.VEX.value,
+            name=metadata_component.get("name") or f"{component.name}-vex",
+            version=dj_timezone.now().strftime("dt-triage-%Y%m%d%H%M%S"),
+            format="cyclonedx",
+            format_version=str(doc.get("specVersion") or ""),
+            sbom_filename=filename,
+            source="dependency-track",
+        )
+        logger.info(
+            "[DT] Synced triage VEX %s for component %s (%d decided statements)",
+            vex.id,
+            component.id,
+            len(decided),
+        )
+        schedule_vex_reapply(str(component.id))
+
+    @staticmethod
+    def _normalized_vex(doc: dict[str, Any]) -> str:
+        """Serialise a VEX document ignoring per-export volatile fields."""
+        clean = json.loads(json.dumps(doc))
+        clean.pop("serialNumber", None)
+        clean.pop("version", None)
+        if isinstance(clean.get("metadata"), dict):
+            clean["metadata"].pop("timestamp", None)
+        return json.dumps(clean, sort_keys=True)
+
     def _convert_dt_findings(self, vulnerabilities: list[dict[str, Any]]) -> list[Finding]:
         """Convert DT vulnerability data to Finding objects.
 
@@ -586,13 +733,15 @@ class DependencyTrackPlugin(AssessmentPlugin):
             if severity not in ("critical", "high", "medium", "low", "info"):
                 severity = "unknown"
 
-            # Extract CVSS score
-            cvss_score = vuln_data.get("cvssV3BaseScore") or vuln_data.get("cvssV2BaseScore")
-            if cvss_score is not None:
-                try:
-                    cvss_score = float(cvss_score)
-                except (ValueError, TypeError):
-                    cvss_score = None
+            # v3 first for continuity with what was already stored, then v4,
+            # then v2. Current DT ingests CVSSv4 and older records carry only v2.
+            cvss_score = _first_float(
+                vuln_data.get("cvssV3BaseScore"),
+                vuln_data.get("cvssV4BaseScore"),
+                vuln_data.get("cvssV2BaseScore"),
+            )
+            epss_score = _first_float(vuln_data.get("epssScore"))
+            epss_percentile = _first_float(vuln_data.get("epssPercentile"))
 
             # Extract component info
             component_name = component_data.get("name", "Unknown Package")
@@ -634,6 +783,12 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     else "No description",
                     description=vuln_data.get("description", ""),
                     severity=severity,
+                    epss_score=epss_score,
+                    epss_percentile=epss_percentile,
+                    # Without these, finding age never renders for a DT finding;
+                    # the OSV path has always captured them.
+                    published_at=vuln_data.get("published") or None,
+                    modified_at=vuln_data.get("updated") or vuln_data.get("modified") or None,
                     component={
                         "name": component_name,
                         "version": component_version,

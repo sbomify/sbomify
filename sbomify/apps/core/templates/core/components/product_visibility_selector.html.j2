@@ -1,0 +1,29 @@
+{# Product visibility dropdown — Private/Public, matching the component page's selector. #}
+{# Expects: item_id, is_public. Dispatches public-status-changed like the legacy toggle. #}
+<div x-data="{ vis: '{{ is_public|yesno:'true,false' }}', initial: '{{ is_public|yesno:'true,false' }}', isLoading: false, afterRequest(event) { this.isLoading = false; try { const response = JSON.parse(event.detail.xhr.response); if ('is_public' in response) { this.vis = response.is_public ? 'true' : 'false'; this.initial = this.vis; window.dispatchEvent(new CustomEvent('public-status-changed', { detail: { itemType: 'product', itemId: '{{ item_id|escapejs }}', isPublic: response.is_public } })); } else { this.vis = this.initial; } } catch (err) { this.vis = this.initial; } } }"
+     class="inline-flex items-center gap-3 flex-wrap px-3 py-2 bg-background border border-border rounded-lg">
+    <div class="relative" :class="{ 'opacity-50': isLoading }">
+        <form hx-post="{% url 'core:toggle_public_status' 'product' item_id %}"
+              hx-trigger="change"
+              hx-swap="none"
+              @htmx:before-request="isLoading = true"
+              @htmx:after-request="afterRequest($event)">
+            {% csrf_token %}
+            <select class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 pr-8"
+                    name="is_public"
+                    x-model="vis"
+                    :disabled="isLoading"
+                    aria-label="Product visibility">
+                <option value="false">Private</option>
+                <option value="true">Public</option>
+            </select>
+        </form>
+    </div>
+    <div x-show="isLoading" x-cloak class="text-text-muted">
+        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+    </div>
+    <span class="text-text-muted cursor-help"
+          x-tooltip="'Public products are visible to anyone with the link'">
+        <i class="fas fa-info-circle"></i>
+    </span>
+</div>

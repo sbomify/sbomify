@@ -205,3 +205,151 @@ def test_download_release_cbom_private_requires_auth(sample_team_with_owner_memb
     _product, release, _c1, _c2 = _release_with_components(team, is_public=False)
     resp = Client().get(reverse("api-1:download_release_cbom", kwargs={"release_id": release.id}))
     assert resp.status_code == 403
+
+
+def _lineage_docs() -> dict[str, bytes]:
+    legacy = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.4",
+        "components": [
+            {
+                "type": "crypto-asset",
+                "bom-ref": "legacy/aes",
+                "name": "AES",
+                "cryptoProperties": {
+                    "assetType": "algorithm",
+                    "algorithmProperties": {
+                        "variant": "AES-128-GCM",
+                        "implementationLevel": "softwarePlainRam",
+                        "certificationLevel": "none",
+                    },
+                    "classicalSecurityLevel": 128,
+                    "nistQuantumSecurityLevel": 1,
+                },
+            },
+            {
+                "type": "crypto-asset",
+                "bom-ref": "legacy/keystore",
+                "name": "app-keystore",
+                "cryptoProperties": {"assetType": "relatedCryptoMaterial"},
+            },
+        ],
+    }
+    modern = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.7",
+        "components": [
+            {
+                "type": "cryptographic-asset",
+                "bom-ref": "modern/ecdsa",
+                "name": "ECDSA-P384",
+                "cryptoProperties": {
+                    "assetType": "algorithm",
+                    "algorithmProperties": {"algorithmFamily": "ECDSA", "ellipticCurve": "nist/P-384"},
+                },
+            }
+        ],
+    }
+    return {"legacy.cbom.json": json.dumps(legacy).encode(), "modern.cbom.json": json.dumps(modern).encode()}
+
+
+@pytest.mark.django_db
+def test_build_release_cbom_normalizes_lineages_for_1_6(sample_team_with_owner_member, mocker):
+    """Legacy spellings lift to the 1.6 shape; 1.7-only vocabulary down-converts or drops."""
+    team = sample_team_with_owner_member.team
+    _product, release, c1, c2 = _release_with_components(team, is_public=True)
+    ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c1, "legacy.cbom.json"))
+    ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c2, "modern.cbom.json"))
+    _mock_s3(mocker, _lineage_docs())
+
+    merged = build_release_cbom(release)
+
+    assert merged is not None and merged["specVersion"] == "1.6"
+    by_ref = {c["bom-ref"]: c for c in merged["components"]}
+    aes = by_ref["legacy/aes"]
+    assert aes["type"] == "cryptographic-asset"  # legacy type lifted
+    algo = aes["cryptoProperties"]["algorithmProperties"]
+    assert algo["parameterSetIdentifier"] == "AES-128-GCM"  # variant renamed
+    assert algo["executionEnvironment"] == "software-plain-ram"  # legacy camelCase re-cased to the spec enum
+    assert algo["certificationLevel"] == ["none"]  # bare string -> array
+    assert algo["classicalSecurityLevel"] == 128  # root levels moved inside
+    assert "classicalSecurityLevel" not in aes["cryptoProperties"]
+    assert by_ref["legacy/keystore"]["cryptoProperties"]["assetType"] == "related-crypto-material"
+    ecdsa_algo = by_ref["modern/ecdsa"]["cryptoProperties"]["algorithmProperties"]
+    assert ecdsa_algo["curve"] == "nist/P-384"  # ellipticCurve down-converted
+    assert "algorithmFamily" not in ecdsa_algo  # no 1.6 home -> dropped with log
+    from sbomify.apps.sboms.apis import validate_cyclonedx_sbom
+
+    assert validate_cyclonedx_sbom(merged)[1] == "1.6"  # the whole document schema-validates
+
+
+@pytest.mark.django_db
+def test_build_release_cbom_1_7_keeps_registry_vocabulary(sample_team_with_owner_member, mocker):
+    team = sample_team_with_owner_member.team
+    _product, release, c1, c2 = _release_with_components(team, is_public=True)
+    ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c1, "legacy.cbom.json"))
+    ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c2, "modern.cbom.json"))
+    _mock_s3(mocker, _lineage_docs())
+
+    merged = build_release_cbom(release, spec_version="1.7")
+
+    assert merged is not None and merged["specVersion"] == "1.7"
+    by_ref = {c["bom-ref"]: c for c in merged["components"]}
+    ecdsa_algo = by_ref["modern/ecdsa"]["cryptoProperties"]["algorithmProperties"]
+    assert ecdsa_algo["algorithmFamily"] == "ECDSA"  # kept for native 1.7
+    assert ecdsa_algo["ellipticCurve"] == "nist/P-384"
+    # legacy lifting happens for every target version
+    assert by_ref["legacy/aes"]["cryptoProperties"]["algorithmProperties"]["parameterSetIdentifier"] == "AES-128-GCM"
+    from sbomify.apps.sboms.apis import validate_cyclonedx_sbom
+
+    assert validate_cyclonedx_sbom(merged)[1] == "1.7"  # the whole document schema-validates
+
+
+@pytest.mark.django_db
+def test_download_release_cbom_version_param(sample_team_with_owner_member, mocker):
+    team = sample_team_with_owner_member.team
+    _product, release, c1, _c2 = _release_with_components(team, is_public=True)
+    ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c1, "modern.cbom.json"))
+    _mock_s3(mocker, _lineage_docs())
+    cache.clear()
+    url = reverse("api-1:download_release_cbom", kwargs={"release_id": release.id})
+
+    default = Client().get(url)
+    assert default.status_code == 200
+    assert json.loads(default.content)["specVersion"] == "1.6"
+
+    native = Client().get(url + "?version=1.7")
+    assert native.status_code == 200
+    assert json.loads(native.content)["specVersion"] == "1.7"
+
+    assert Client().get(url + "?version=2.0").status_code == 400
+
+
+@pytest.mark.django_db
+def test_build_release_cbom_lifts_metadata_component_asset(sample_team_with_owner_member, mocker):
+    """A pure CBOM whose sole crypto asset lives in metadata.component must
+    contribute it to the merged deliverable, mirroring derive_crypto_inventory."""
+    team = sample_team_with_owner_member.team
+    _product, release, c1, _c2 = _release_with_components(team, is_public=True)
+    ReleaseArtifact.objects.create(release=release, sbom=_cbom_sbom(c1, "meta-only.cbom.json"))
+    doc = json.dumps(
+        {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "metadata": {
+                "component": {
+                    "type": "cryptographic-asset",
+                    "bom-ref": "crypto/meta-asset",
+                    "name": "meta-asset",
+                    "cryptoProperties": {"assetType": "algorithm"},
+                }
+            },
+            "components": [],
+        }
+    ).encode()
+    _mock_s3(mocker, {"meta-only.cbom.json": doc})
+
+    merged = build_release_cbom(release)
+
+    assert merged is not None
+    assert {c["bom-ref"] for c in merged["components"]} == {"crypto/meta-asset"}

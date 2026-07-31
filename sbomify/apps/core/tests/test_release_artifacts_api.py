@@ -54,6 +54,31 @@ class TestReleaseArtifactsAPI(TestCase):
         # Add SBOM to release as artifact
         self.release_artifact = ReleaseArtifact.objects.create(release=self.release, sbom=self.sbom)
 
+    def test_bom_type_survives_response_serialisation(self):
+        """bom_type must reach the client through the response schema.
+
+        Regression guard: the payload dicts carried bom_type but the Ninja
+        response schemas silently stripped it, so VEX artifacts rendered as
+        duplicate SBOMs. Goes through the full HTTP stack on purpose — calling
+        the view function directly bypasses schema serialisation and cannot
+        catch a stripped field.
+        """
+        vex = SBOM.objects.create(
+            name="test-vex",
+            version="v1",
+            format="cyclonedx",
+            format_version="1.6",
+            component=self.component,
+            bom_type=SBOM.BomType.VEX,
+        )
+        ReleaseArtifact.objects.create(release=self.release, sbom=vex)
+
+        response = Client().get(f"/api/v1/releases/{self.release.id}/artifacts?mode=existing")
+        assert response.status_code == 200
+        by_name = {item["artifact_name"]: item for item in response.json()["items"]}
+        assert by_name["test-vex"]["bom_type"] == "vex"
+        assert by_name["test-sbom"]["bom_type"] == "sbom"
+
     def test_sbom_version_returns_actual_version_not_format_version(self):
         """Test that sbom_version returns actual version not format version."""
         # Clear existing artifacts from the release

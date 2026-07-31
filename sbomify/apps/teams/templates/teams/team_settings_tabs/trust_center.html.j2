@@ -28,7 +28,8 @@
                        type="checkbox"
                        name="is_public"
                        value="true"
-                       class="tw-toggle"
+                       aria-label="Make workspace publicly visible"
+                       class="tw-checkbox"
                        {% if team.is_public %}checked{% endif %}
                        {% if not is_owner %}disabled{% endif %}
                        onchange="this.form.submit()">
@@ -179,7 +180,8 @@
                            type="checkbox"
                            name="tea_enabled"
                            value="true"
-                           class="tw-toggle"
+                           aria-label="Enable Transparency Exchange API"
+                           class="tw-checkbox"
                            {% if team_obj.tea_enabled %}checked{% endif %}
                            {% if not is_owner %}disabled{% endif %}
                            onchange="this.form.submit()">
@@ -296,7 +298,8 @@
                            type="checkbox"
                            name="security_txt_enabled"
                            value="true"
-                           class="tw-toggle"
+                           aria-label="Enable security.txt"
+                           class="tw-checkbox"
                            {% if security_txt_config.enabled %}checked{% endif %}
                            {% if not is_owner %}disabled{% endif %}
                            x-model="securityTxtEnabled">
@@ -639,7 +642,7 @@
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
-                        <div class="tw-spinner tw-spinner-sm"></div>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
                     </div>
                     <div>
                         <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
@@ -649,7 +652,7 @@
             </div>
             <div class="p-6">
                 <div class="flex items-center justify-center py-8">
-                    <div class="tw-spinner tw-spinner-md"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
                     <span class="ml-3 text-text-muted">Loading access requests...</span>
                 </div>
             </div>
@@ -666,7 +669,7 @@
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
-                        <div class="tw-spinner tw-spinner-sm"></div>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
                     </div>
                     <div>
                         <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
@@ -676,7 +679,7 @@
             </div>
             <div class="p-6">
                 <div class="flex items-center justify-center py-8">
-                    <div class="tw-spinner tw-spinner-md"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
                     <span class="ml-3 text-text-muted">Loading custom domain settings...</span>
                 </div>
             </div>

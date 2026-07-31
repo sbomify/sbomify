@@ -1,12 +1,23 @@
-<div class="flex flex-col items-center justify-center py-12 px-4 text-center{% if class %} {{ class }}{% endif %}">
+<div class="flex flex-col items-center justify-center {% if compact %}py-8{% else %}py-12{% endif %} px-4 text-center{% if class %} {{ class }}{% endif %}">
     <div class="w-16 h-16 rounded-full bg-text-muted/10 flex items-center justify-center mb-4">
         <i class="{{ icon|default:'fas fa-inbox' }} text-2xl text-text-muted"
            aria-hidden="true"></i>
     </div>
     <h3 class="text-lg font-semibold text-text mb-1">{{ title }}</h3>
     {% if message %}<p class="text-sm text-text-muted max-w-sm mb-4">{{ message }}</p>{% endif %}
-    {% if action_text and action_url %}
-        <a href="{{ action_url }}"
-           class="tw-btn tw-btn-{{ action_variant|default:'primary' }}">{{ action_text }}</a>
-    {% endif %}
+    <div class="flex items-center justify-center gap-3 flex-wrap">
+        {% if action_text and action_url %}
+            <a href="{{ action_url }}"
+               class="tw-btn tw-btn-{{ action_variant|default:'primary' }}">{{ action_text }}</a>
+            {% comment %}action_click renders inside @click verbatim — pass template-literal Alpine expressions only, never user input.{% endcomment %}
+        {% elif action_text and action_click %}
+            <button type="button"
+                    class="tw-btn tw-btn-{{ action_variant|default:'primary' }}"
+                    @click="{{ action_click }}">{{ action_text }}</button>
+        {% endif %}
+        {% if secondary_text and secondary_url %}
+            <a href="{{ secondary_url }}"
+               class="text-sm text-text-muted underline underline-offset-4 hover:text-text">{{ secondary_text }}</a>
+        {% endif %}
+    </div>
 </div>

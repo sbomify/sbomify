@@ -46,7 +46,7 @@ function getSeverityColors(severity: string): {
         iconBg: 'bg-danger/20',
         accent: 'border-l-danger',
         btnBg: 'bg-danger/10 text-danger',
-        btnHover: 'hover:bg-danger hover:text-white'
+        btnHover: 'hover:bg-danger/25'
       };
     case 'warning':
       return {
@@ -55,7 +55,7 @@ function getSeverityColors(severity: string): {
         iconBg: 'bg-warning/20',
         accent: 'border-l-warning',
         btnBg: 'bg-warning/10 text-warning',
-        btnHover: 'hover:bg-warning hover:text-white'
+        btnHover: 'hover:bg-warning/25'
       };
     case 'info':
       return {
@@ -64,7 +64,7 @@ function getSeverityColors(severity: string): {
         iconBg: 'bg-info/20',
         accent: 'border-l-info',
         btnBg: 'bg-info/10 text-info',
-        btnHover: 'hover:bg-info hover:text-white'
+        btnHover: 'hover:bg-info/25'
       };
     default:
       return {
@@ -73,7 +73,7 @@ function getSeverityColors(severity: string): {
         iconBg: 'bg-border/30',
         accent: 'border-l-border',
         btnBg: 'bg-primary/10 text-primary',
-        btnHover: 'hover:bg-primary hover:text-white'
+        btnHover: 'hover:bg-primary/20'
       };
   }
 }

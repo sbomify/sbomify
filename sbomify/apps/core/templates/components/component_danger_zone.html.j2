@@ -1,20 +1,21 @@
 {% load static %}
-<div x-cloak x-data="dangerZone()">
+<div x-cloak
+     x-data="dangerZone()"
+     @delete-component.window="showDeleteModal = true">
     <div class="tw-dangerzone-card">
-        <div class="tw-card-header cursor-pointer select-none"
+        <div class="tw-card-header cursor-pointer select-none flex items-center justify-between"
              role="button"
              tabindex="0"
              :aria-expanded="isExpanded"
              @click="toggle()"
              @keydown.enter.prevent="toggle()"
              @keydown.space.prevent="toggle()">
-            <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
             <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-                Danger Zone
-                <i class="fas fa-chevron-down ml-auto text-sm transition-transform duration-200"
-                   :class="isExpanded ? '' : '-rotate-90'"
-                   aria-hidden="true"></i>
+                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>Danger Zone
             </h4>
+            <i class="fas fa-chevron-down text-danger transition-transform duration-200"
+               :class="isExpanded ? 'rotate-180' : ''"
+               aria-hidden="true"></i>
         </div>
         <div class="tw-card-body" x-show="isExpanded" x-collapse>
             {% if is_owner %}

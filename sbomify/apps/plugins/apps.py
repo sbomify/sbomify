@@ -90,6 +90,28 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # OpenChain Telco SBOM Guide v1.1 Plugin
+        _register(
+            "openchain-telco-1.1",
+            {
+                "display_name": "OpenChain Telco SBOM Guide v1.1",
+                "description": (
+                    "Checks SBOMs against the OpenChain Telco SBOM Guide v1.1, which telco "
+                    "and regulated buyers ask for by name. The Guide mandates SPDX 2.2 or 2.3, "
+                    "so a CycloneDX document cannot conform. Covers the required document and "
+                    "package elements, the recommended package hash and PURL, the DESCRIBES and "
+                    "CONTAINS relationships, and the build information including the CISA SBOM Type."
+                ),
+                "category": "compliance",
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.openchain_telco.OpenChainTelcoPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # FDA Medical Device Cybersecurity 2025 Plugin
         _register(
             "fda-medical-device-2025",
@@ -246,6 +268,97 @@ class PluginsConfig(AppConfig):
                 "category": "compliance",
                 "version": PqcReadinessPlugin.VERSION,
                 "plugin_class_path": "sbomify.apps.plugins.builtins.pqc.PqcReadinessPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # SP 800-131A Transitions Plugin (legacy-algorithm compliance for crypto assets)
+        from .builtins.sp800_131a import Sp800131aPlugin
+
+        _register(
+            "nist-sp800-131a",
+            {
+                "display_name": "Legacy Algorithm Transitions (SP 800-131A)",
+                "description": (
+                    "Checks the cryptographic assets in a CycloneDX document against the NIST "
+                    "SP 800-131A transition schedule. Disallowed algorithms (DES, RC4, MD5, "
+                    "sub-2048-bit RSA, DSA and SHA-1 signature generation) fail; deprecated "
+                    "ones (SHA-1, SHA-224, 112-bit strength) warn with their 2030 sunset."
+                ),
+                "category": "compliance",
+                "version": Sp800131aPlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.sp800_131a.Sp800131aPlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # BSI TR-02102 Plugin (crypto mechanisms and key lengths)
+        from .builtins.bsi_tr02102 import BsiTr02102Plugin
+
+        _register(
+            "bsi-tr02102",
+            {
+                "display_name": "Crypto Mechanisms (BSI TR-02102)",
+                "description": (
+                    "Grades cryptographic assets against BSI TR-02102 recommendations: 3000-bit "
+                    "floor for RSA/DH/DSA, 250-bit floor for elliptic curves, block-cipher mode "
+                    "checks, and the TR-02102-2 TLS version ladder. Complements the BSI TR-03183 "
+                    "document check."
+                ),
+                "category": "compliance",
+                "version": BsiTr02102Plugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.bsi_tr02102.BsiTr02102Plugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # Certificate Lifecycle Plugin (expiry and validity-window findings)
+        from .builtins.cert_lifecycle import CertificateLifecyclePlugin
+
+        _register(
+            "certificate-lifecycle",
+            {
+                "display_name": "Certificate Lifecycle",
+                "description": (
+                    "Per-certificate findings for the certificates declared in a CycloneDX "
+                    "document: expired certificates fail, certificates inside the 90-day renewal "
+                    "window or beyond the 398-day CA/Browser Forum validity ceiling warn."
+                ),
+                "category": "compliance",
+                "version": CertificateLifecyclePlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cert_lifecycle.CertificateLifecyclePlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
+        # CNSA 2.0 Plugin (NSS algorithm-suite compliance)
+        from .builtins.cnsa2 import Cnsa2Plugin
+
+        _register(
+            "cnsa-2.0",
+            {
+                "display_name": "CNSA 2.0 Compliance",
+                "description": (
+                    "Grades cryptographic assets against the NSA CNSA 2.0 suite (AES-256, "
+                    "SHA-384/512, ML-KEM-1024, ML-DSA-87, LMS/XMSS). CNSA 1.0 holdovers warn "
+                    "with the transition deadline; algorithms outside the suite fail. Intended "
+                    "for National Security System suppliers."
+                ),
+                "category": "compliance",
+                "version": Cnsa2Plugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.cnsa2.Cnsa2Plugin",
                 "is_enabled": True,
                 "is_beta": True,
                 "is_builtin": True,

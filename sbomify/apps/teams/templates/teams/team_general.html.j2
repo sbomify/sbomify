@@ -4,34 +4,18 @@
 <div id="team-general-content"
      class="tw-settings-card"
      data-team-name="{{ team.name }}"
+     data-freshness-days="{{ team.sbom_freshness_days|default_if_none:'' }}"
      x-cloak
-     x-data="teamGeneral($el.dataset.teamName)">
+     x-data="teamGeneral($el.dataset.teamName, $el.dataset.freshnessDays)">
     {# Card Header #}
     <div class="px-6 py-4 border-b border-border">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-sliders-h text-primary"></i>
-                </div>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">General Settings</h5>
-                    <p class="text-text-muted text-sm m-0">Manage your workspace's basic information</p>
-                </div>
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <i class="fas fa-sliders-h text-primary"></i>
             </div>
-            <div class="flex items-center gap-2">
-                <button x-show="hasUnsavedChanges()"
-                        type="button"
-                        class="tw-btn-secondary tw-btn-sm"
-                        @click="$dispatch('refreshTeamGeneral')">
-                    <i class="fas fa-undo mr-2"></i>Cancel
-                </button>
-                <button type="submit"
-                        id="team-general-save-btn"
-                        form="team-general-form"
-                        class="tw-btn-primary tw-btn-sm"
-                        :disabled="!hasUnsavedChanges()">
-                    <i class="fas fa-save mr-2"></i>Save Changes
-                </button>
+            <div>
+                <h5 class="text-lg font-semibold text-text m-0">General Settings</h5>
+                <p class="text-text-muted text-sm m-0">Manage your workspace's basic information</p>
             </div>
         </div>
     </div>
@@ -44,7 +28,7 @@
               hx-swap="none">
             {% csrf_token %}
             {# Workspace Name Section #}
-            <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
+            <div class="mb-6">
                 <div class="flex items-start gap-3 mb-4">
                     <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
                         <i class="fas fa-building text-text-muted text-sm"></i>
@@ -67,9 +51,37 @@
                     <p class="tw-form-hint">Maximum 255 characters</p>
                 </div>
             </div>
+            {# SBOM Freshness Section #}
+            <div class="mb-6 pt-6 border-t border-border">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-hourglass-half text-text-muted text-sm"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-base font-semibold text-text m-0">SBOM Freshness</h6>
+                        <p class="text-text-muted text-sm m-0">How long an SBOM stays current before its component is flagged stale</p>
+                    </div>
+                </div>
+                <div class="max-w-md ml-11">
+                    <label for="sbom-freshness-days" class="tw-form-label">Freshness window</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number"
+                               id="sbom-freshness-days"
+                               name="sbom_freshness_days"
+                               class="tw-form-input"
+                               x-model="localFreshness"
+                               placeholder="No freshness policy"
+                               min="0"
+                               max="3650"
+                               step="1">
+                        <span class="text-text-muted text-sm whitespace-nowrap">days</span>
+                    </div>
+                    <p class="tw-form-hint">Leave empty for no policy. Individual components can override this.</p>
+                </div>
+            </div>
         </form>
         {# Default Workspace Section #}
-        <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
+        <div class="pt-6 border-t border-border">
             <div class="flex items-start gap-3 mb-4">
                 <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
                     <i class="fas fa-star text-text-muted text-sm"></i>
@@ -103,6 +115,22 @@
                     </form>
                 {% endif %}
             </div>
+        </div>
+        {# Cancel/Save sit at the bottom right, below the fields and above the danger zone. #}
+        <div class="flex items-center justify-end gap-2 mb-6">
+            <button x-show="hasUnsavedChanges()"
+                    type="button"
+                    class="tw-btn-secondary tw-btn-sm"
+                    @click="$dispatch('refreshTeamGeneral')">
+                <i class="fas fa-undo mr-2"></i>Cancel
+            </button>
+            <button type="submit"
+                    id="team-general-save-btn"
+                    form="team-general-form"
+                    class="tw-btn-primary tw-btn-sm"
+                    :disabled="!hasUnsavedChanges()">
+                <i class="fas fa-save mr-2"></i>Save Changes
+            </button>
         </div>
         {# Danger Zone #}
         {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.apis import _build_item_response, get_component
@@ -25,6 +26,9 @@ from sbomify.apps.plugins.public_assessment_utils import get_sbom_passing_assess
 from sbomify.apps.sboms.services.sboms import get_sbom_detail
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.logging import getLogger
+
+logger = getLogger(__name__)
 
 
 class ComponentItemPublicView(View):
@@ -44,7 +48,7 @@ class ComponentItemPublicView(View):
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
 
-        if item_type == "sboms":
+        if item_type in ("sboms", "vex", "cbom"):
             result = get_sbom_detail(request, item_id)
             if not result.ok:
                 return error_response(
@@ -114,7 +118,10 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, component_id: str, item_type: str, item_id: str) -> HttpResponse:
         # Fetch the component for context (needed for title and other template elements)
-        status_code, component = get_component(request, component_id)
+        # return_instance gives the access-checked model in one query; the
+        # template reads attributes/methods off it directly. Error responses
+        # are dicts regardless of the flag.
+        status_code, component = get_component(request, component_id, return_instance=True)
         if status_code != 200:
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
@@ -122,8 +129,16 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
         vulnerability_summary = None
         assessment_runs = None
+        vex_suppressions = None
+        vex_suppression_terms: list[str] = []
+        vex_suppression_states: list[str] = []
 
-        if item_type == "sboms":
+        # VEX and CBOM artifacts are SBOM-backed rows served under their own paths.
+        is_vex = item_type == "vex"
+        is_cbom = item_type == "cbom"
+        is_sbom_backed = item_type in ("sboms", "vex", "cbom")
+
+        if is_sbom_backed:
             result = get_sbom_detail(request, item_id)
             if not result.ok:
                 return error_response(
@@ -131,6 +146,78 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                     HttpResponse(status=result.status_code or 400, content=result.error or "Unknown error"),
                 )
             item = result.value
+
+            from sbomify.apps.sboms.models import SBOM
+            from sbomify.apps.vulnerability_scanning.vex import vex_suppression_rows
+
+            sbom_row = SBOM.objects.filter(pk=item_id).only("id", "bom_type", "sbom_filename").first()
+            actual_bom_type = sbom_row.bom_type if sbom_row else None
+            # Keep the URL canonical: a VEX opens under /vex/, a CBOM under /cbom/,
+            # everything else under /sboms/. Redirect a mismatched path.
+            canonical_type = {SBOM.BomType.VEX.value: "vex", SBOM.BomType.CBOM.value: "cbom"}.get(
+                actual_bom_type or "", "sboms"
+            )
+            if item_type != canonical_type:
+                return HttpResponseRedirect(
+                    reverse("core:component_item", args=[component_id, canonical_type, item_id])
+                )
+
+            # For a VEX artifact, list exactly which vulnerabilities it suppresses.
+            if actual_bom_type == SBOM.BomType.VEX:
+                vex_suppressions = vex_suppression_rows(sbom_row)
+
+                # A VEX statement usually names one id; the component's scanners
+                # know the full alias set (OSV publishes the GHSA↔CVE mapping),
+                # so enrich each row from the merged scan findings.
+                if vex_suppressions:
+                    from sbomify.apps.vulnerability_scanning.utils import merge_findings_by_alias
+
+                    # Scope to the artifact's own component — the URL segment is
+                    # only canonical after the redirect above.
+                    own_component_id = item.get("component_id") or component_id  # type: ignore[union-attr]
+                    latest_sbom_id = (
+                        SBOM.objects.filter(component_id=own_component_id, bom_type=SBOM.BomType.SBOM)
+                        .order_by("-created_at")
+                        .values_list("id", flat=True)
+                        .first()
+                    )
+                    alias_map: dict[str, list[str]] = {}
+                    if latest_sbom_id:
+                        # Two-phase DISTINCT ON: picking the winning run ids first
+                        # touches no JSON; only then is `result` fetched for just
+                        # those winners. Projecting `result` directly on the
+                        # DISTINCT ON query forces Postgres to de-TOAST every
+                        # historical rescan's blob before picking a winner — the
+                        # same class of bug #1121 fixed for the SBOM list and
+                        # trends endpoints, still live here (#1218).
+                        winner_ids = list(
+                            AssessmentRun.objects.filter(
+                                sbom_id=latest_sbom_id, category="security", status="completed"
+                            )
+                            .order_by("plugin_name", "-created_at")
+                            .distinct("plugin_name")
+                            .values_list("id", flat=True)
+                        )
+                        provider_results = list(
+                            AssessmentRun.objects.filter(id__in=winner_ids).values_list("result", flat=True)
+                        )
+                        for finding in merge_findings_by_alias(provider_results)["findings"]:
+                            id_set = [i for i in [finding.get("id"), *(finding.get("aliases") or [])] if i]
+                            for advisory_id in id_set:
+                                alias_map[str(advisory_id).lower()] = [str(i) for i in id_set]
+                    for row in vex_suppressions:
+                        known = {row["id"], *row["aliases"]}
+                        for advisory_id in list(known):
+                            known.update(alias_map.get(advisory_id.lower(), []))
+                        display_id = next((i for i in sorted(known) if i.upper().startswith("CVE-")), row["id"])
+                        row["id"] = display_id
+                        row["aliases"] = sorted(i for i in known if i != display_id)
+
+                vex_suppression_terms = [
+                    f"{r['id']} {' '.join(r['aliases'])} {r['package']} {r['state']} {r['justification']}".lower()
+                    for r in vex_suppressions
+                ]
+                vex_suppression_states = [r["state"] for r in vex_suppressions]
             # Get latest vulnerability scan for this SBOM from AssessmentRun
             component_id_from_item = item.get("component_id") or component_id  # type: ignore[union-attr]
             latest_scan = (
@@ -145,18 +232,49 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 .first()
             )
             if latest_scan:
-                # VEX-suppressed findings are already excluded from the stored
-                # summary (applied server-side at scan time / on VEX upload).
-                result_json = latest_scan.result or {}
-                summary = result_json.get("summary", {})
-                by_severity = summary.get("by_severity", {})
+                # Actionable counts from every provider's latest run, merged by
+                # alias and filtered through the component's VEX — the same math
+                # as the component page badge, so the numbers agree everywhere.
+                from sbomify.apps.vulnerability_scanning.utils import (
+                    extract_finding_rows,
+                    merge_findings_by_alias,
+                )
+                from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
+
+                # Two-phase DISTINCT ON — see the VEX alias-enrichment block above
+                # for why: picking winner ids first avoids de-TOASTing every
+                # historical rescan's `result` blob just to discard the losers.
+                winner_ids = list(
+                    AssessmentRun.objects.filter(sbom_id=item_id, category="security", status="completed")
+                    .order_by("plugin_name", "-created_at")
+                    .distinct("plugin_name")
+                    .values_list("id", flat=True)
+                )
+                provider_runs = list(
+                    AssessmentRun.objects.filter(id__in=winner_ids).values_list("plugin_name", "result")
+                )
+                merged = merge_findings_by_alias([result for _, result in provider_runs])
+                rows = extract_finding_rows(merged, load_vex_suppressions(component_id_from_item))
+                if rows:
+                    counts = {
+                        "total": len(rows),
+                        "critical": sum(1 for row in rows if row["severity"] == "critical"),
+                        "high": sum(1 for row in rows if row["severity"] == "high"),
+                        "medium": sum(1 for row in rows if row["severity"] == "medium"),
+                        "low": sum(1 for row in rows if row["severity"] == "low"),
+                    }
+                else:
+                    # Summary-only results (no findings list) still carry counts.
+                    from sbomify.apps.vulnerability_scanning.utils import extract_severity_counts
+
+                    counts = max(
+                        (extract_severity_counts(result) for _, result in provider_runs),
+                        key=lambda c: c["total"],
+                        default={"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
+                    )
                 vulnerability_summary = {
-                    "total": summary.get("total_findings", 0),
-                    "critical": by_severity.get("critical", 0),
-                    "high": by_severity.get("high", 0),
-                    "medium": by_severity.get("medium", 0),
-                    "low": by_severity.get("low", 0),
-                    "provider": latest_scan.plugin_name,
+                    **counts,
+                    "provider": ", ".join(sorted({name for name, _ in provider_runs})),
                     "scan_date": latest_scan.created_at,
                 }
 
@@ -169,7 +287,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 # Use mode='json' to ensure datetime objects are serialized as ISO strings
                 assessment_runs = assessment_response.model_dump(mode="json")
             except Exception:
-                # If assessment fetch fails, continue without it
+                # Degrade to no assessments section rather than failing the page,
+                # but leave a trace — a silent None here hides real data problems.
+                logger.exception("Failed to fetch assessments for SBOM %s; rendering without them", item_id)
                 assessment_runs = None
 
         elif item_type == "documents":
@@ -184,6 +304,13 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         else:
             return error_response(request, HttpResponseNotFound("Unknown component type"))
 
+        from sbomify.apps.core.authz import can
+
+        can_triage = can(request, "artifact:publish_vex", component)
+        # Same tier the rerun endpoint enforces, so the button is only offered
+        # to a caller the API would actually accept.
+        can_rerun = can(request, "component:manage", component)
+
         return render(
             request,
             "core/component_item.html.j2",
@@ -195,5 +322,14 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "component_id": component_id,
                 "vulnerability_summary": vulnerability_summary,
                 "assessment_runs": assessment_runs,
+                "vex_suppressions": vex_suppressions,
+                "vex_suppression_terms": vex_suppression_terms,
+                "vex_suppression_states": vex_suppression_states,
+                "is_vex": is_vex,
+                "is_cbom": is_cbom,
+                "is_sbom_backed": is_sbom_backed,
+                "can_triage": can_triage,
+                "can_rerun": can_rerun,
+                "team_key": component.team.key,
             },
         )

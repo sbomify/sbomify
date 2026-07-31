@@ -185,31 +185,7 @@
                     <span>(filtered from <strong x-text="allDocuments.length"></strong> total)</span>
                 </template>
             </div>
-            <nav class="tw-pagination" x-show="totalPages > 1">
-                <button class="tw-pagination-btn tw-pagination-btn-nav"
-                        :disabled="currentPage === 1"
-                        @click="goToPage(currentPage - 1)"
-                        aria-label="Previous page">
-                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                </button>
-                <template x-for="page in visiblePages" :key="page">
-                    <template x-if="page === '...'">
-                        <span class="tw-pagination-ellipsis">...</span>
-                    </template>
-                    <template x-if="page !== '...'">
-                        <button class="tw-pagination-btn"
-                                :class="{ 'tw-pagination-btn-active': currentPage === page }"
-                                @click="goToPage(page)"
-                                x-text="page"></button>
-                    </template>
-                </template>
-                <button class="tw-pagination-btn tw-pagination-btn-nav"
-                        :disabled="currentPage === totalPages"
-                        @click="goToPage(currentPage + 1)"
-                        aria-label="Next page">
-                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                </button>
-            </nav>
+            {% include "components/tw/table_pager.html.j2" %}
         </div>
     </div>
 {% endif %}

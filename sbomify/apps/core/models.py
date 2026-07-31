@@ -38,6 +38,11 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False)
     """Whether the user's email has been verified."""
 
+    newsletter_opt_in = models.BooleanField(
+        default=True,
+        help_text="Whether the user is subscribed to the sbomify newsletter.",
+    )
+
     deleted_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -386,12 +391,12 @@ class Release(models.Model):
         # Add latest SBOMs by format
         latest_sboms = component.get_latest_sboms_by_format()
         for format_name, sbom in latest_sboms.items():
-            ReleaseArtifact.objects.create(release=self, sbom=sbom)
+            ReleaseArtifact.objects.create(release=self, sbom=sbom, auto_pinned=True)
 
         # Add latest Documents by type
         latest_documents = component.get_latest_documents_by_type()
         for doc_type, document in latest_documents.items():
-            ReleaseArtifact.objects.create(release=self, document=document)
+            ReleaseArtifact.objects.create(release=self, document=document, auto_pinned=True)
 
     def add_artifact_to_latest_release(self, artifact: Any) -> None:
         """Add or update an artifact in the latest release.
@@ -422,8 +427,11 @@ class Release(models.Model):
                 ).delete()
                 replaced = deleted > 0
 
-                # Add the new SBOM
-                ReleaseArtifact.objects.create(release=self, sbom=artifact)
+                # Add the new SBOM. Latest-release maintenance is sbomify-managed,
+                # so the pin is marked auto — for VEX slots this keeps
+                # refresh_vex_pins free to re-point it (there are no true
+                # manual pins on latest releases; the API rejects them).
+                ReleaseArtifact.objects.create(release=self, sbom=artifact, auto_pinned=True)
 
             elif hasattr(artifact, "document_type"):  # Document
                 # Remove any existing Document of the same type from the same component
@@ -433,7 +441,7 @@ class Release(models.Model):
                 replaced = deleted > 0
 
                 # Add the new Document
-                ReleaseArtifact.objects.create(release=self, document=artifact)
+                ReleaseArtifact.objects.create(release=self, document=artifact, auto_pinned=True)
         finally:
             _suppress_collection_signals.reset(token)
 
@@ -653,6 +661,16 @@ class ReleaseArtifact(models.Model):
         null=True,
         blank=True,
         help_text="Document artifact included in this release",
+    )
+
+    auto_pinned = models.BooleanField(
+        default=False,
+        help_text=(
+            "Pinned automatically by sbomify (latest-release maintenance, or "
+            "newest-VEX tracking on other releases). Only auto-pinned VEX pins "
+            "are ever re-pointed when a newer VEX appears; a manually pinned "
+            "artifact is never replaced automatically."
+        ),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -1,5 +1,4 @@
 version: 2
-enable-beta-ecosystems: true
 updates:
   # Maintain dependencies for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -10,20 +9,25 @@ updates:
       github-actions:
         patterns:
           - "*"
-  - package-ecosystem: 'npm'
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "daily"
     groups:
-      npm:
+      bun:
         patterns:
           - "*"
-  - package-ecosystem: 'pip'
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"
     groups:
-      pip:
+      uv:
         patterns:
           - "*"
   - package-ecosystem: "docker"

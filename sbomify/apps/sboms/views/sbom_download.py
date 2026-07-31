@@ -1,4 +1,5 @@
 import logging
+import re
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotFound
 from django.views import View
@@ -90,8 +91,13 @@ class SbomDownloadView(View):
                 return error_response(request, HttpResponseNotFound("SBOM file not found in storage"))
 
             response = HttpResponse(sbom_data, content_type="application/json")
-            response["Content-Disposition"] = "attachment; filename=" + sbom.name
+            # sbom.name is user-controlled: reduce it to an ASCII-safe slug and
+            # quote it so a name with CR/LF/quotes can't break or inject the
+            # header (same approach as the release download filename).
+            safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", sbom.name).strip("-.") or "sbom"
+            response["Content-Disposition"] = f'attachment; filename="{safe_name}"'
 
+            from sbomify.apps.core.analytics import events
             from sbomify.apps.core.posthog_service import capture, get_distinct_id, is_enabled
 
             if is_enabled():
@@ -99,9 +105,16 @@ class SbomDownloadView(View):
                 if distinct_id != "anonymous":
                     team_obj = getattr(component, "team", None)
                     team_key = team_obj.key if team_obj else ""
+                    # VEX/CBOM/HBOM rows share this download path; each ships
+                    # under its own event.
+                    event = {
+                        "vex": events.VEX_DOWNLOADED,
+                        "cbom": events.CBOM_DOWNLOADED,
+                        "hbom": events.HBOM_DOWNLOADED,
+                    }.get(sbom.bom_type, events.SBOM_DOWNLOADED)
                     capture(
                         distinct_id,
-                        "sbom:downloaded",
+                        event,
                         {"sbom_id": sbom_id, "component_id": str(component.id)},
                         groups={"workspace": team_key} if team_key else None,
                         request=request,

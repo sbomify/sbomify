@@ -68,12 +68,17 @@ class TestBuiltinReconciliation:
         builtins = RegisteredPlugin.objects.filter(is_builtin=True)
         expected_names = {
             "ntia-minimum-elements-2021",
+            "openchain-telco-1.1",
             "fda-medical-device-2025",
             "bsi-tr03183-v2.1-compliance",
             "sbom-verification",
             "osv",
             "dependency-track",
             "pqc-readiness",
+            "nist-sp800-131a",
+            "bsi-tr02102",
+            "certificate-lifecycle",
+            "cnsa-2.0",
         }
         assert set(builtins.values_list("name", flat=True)) == expected_names
 

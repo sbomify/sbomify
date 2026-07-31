@@ -1,6 +1,6 @@
 [project]
 name = "sbomify"
-version = "26.7.0"
+version = "26.7.1"
 description = "sbomify - the security artifact hub"
 authors = [{ name = "sbomify", email = "hello@sbomify.com" }]
 requires-python = ">=3.13,<4"
@@ -65,6 +65,8 @@ dependencies = [
     # WeasyPrint (libpango, libjpeg, libopenjp2, libffi) are added in
     # the Dockerfile's python-common-code stage.
     "weasyprint>=68.0,<70",
+    "defusedxml>=0.7.1",
+    "defusedcsv>=3.0.0",
 ]
 
 [project.urls]
@@ -90,6 +92,7 @@ dev = [
     "types-gunicorn>=25.1.0,<27",
     "types-channels>=4.3.0,<5",
     "types-requests>=2.32.0,<3",
+    "types-defusedxml>=0.7.0.20260504",
 ]
 test = [
     "pytest>=9.0.3,<10",
@@ -110,7 +113,7 @@ default-groups = [
 
 override-dependencies = [
     "cryptography>=49.0.0",
-    "pillow>=12.2.0",
+    "pillow>=12.3.0",
     "pygments>=2.20.0",
     "rfc3161-client>=1.0.6",
 ]
@@ -259,7 +262,7 @@ django_settings_module = "sbomify.settings"
 
 # Packages with inline types but no py.typed marker
 [[tool.mypy.overrides]]
-module = ["django_redis.*", "django_vite.*", "ruid.*"]
+module = ["django_redis.*", "django_vite.*", "ruid.*", "defusedcsv", "defusedcsv.*"]
 follow_untyped_imports = true
 
 # Packages with no/minimal types and no stubs on PyPI

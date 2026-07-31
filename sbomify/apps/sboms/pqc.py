@@ -115,31 +115,112 @@ _PQC_REVIEW_SUBSTRINGS = (
 )
 
 
+# OID -> identity words fed into the haystack, so an OID-only asset classifies
+# through the same rules as a named one. PQC arcs verified against NIST CSOR
+# (sigAlgs 17-19 ML-DSA, 20-31 SLH-DSA, kems 1-3 ML-KEM); classical identifiers
+# per RFC 8017, RFC 3279, RFC 5758, and RFC 8410.
+_OID_WORDS: dict[str, str] = {
+    "1.2.840.113549.1.1.1": "rsa",
+    "1.2.840.113549.1.1.10": "rsa pss",
+    "1.2.840.113549.1.1.11": "rsa sha-256",
+    "1.2.840.113549.1.3.1": "diffie hellman",
+    "1.2.840.10046.2.1": "diffie hellman",
+    "1.2.840.10040.4.1": "dsa",
+    "1.2.840.10045.2.1": "ec",
+    "1.2.840.10045.4.3.1": "ecdsa sha-224",
+    "1.2.840.10045.4.3.2": "ecdsa sha-256",
+    "1.2.840.10045.4.3.3": "ecdsa sha-384",
+    "1.2.840.10045.4.3.4": "ecdsa sha-512",
+    "1.3.101.110": "x25519",
+    "1.3.101.111": "x448",
+    "1.3.101.112": "ed25519",
+    "1.3.101.113": "ed448",
+    "2.16.840.1.101.3.4.2.1": "sha-256",
+    "2.16.840.1.101.3.4.2.2": "sha-384",
+    "2.16.840.1.101.3.4.2.3": "sha-512",
+    "2.16.840.1.101.3.4.4.1": "ml-kem",
+    "2.16.840.1.101.3.4.4.2": "ml-kem",
+    "2.16.840.1.101.3.4.4.3": "ml-kem",
+}
+_SIG_ALGS_ARC = "2.16.840.1.101.3.4.3."
+_AES_ARC = "2.16.840.1.101.3.4.1."
+
+
+def _oid_words(oid: str | None) -> str:
+    """Identity words for a recognized algorithm OID, else empty."""
+    if not oid:
+        return ""
+    exact = _OID_WORDS.get(oid)
+    if exact:
+        return exact
+    if oid.startswith(_SIG_ALGS_ARC):
+        tail = oid[len(_SIG_ALGS_ARC) :]
+        if tail in {"17", "18", "19"}:
+            return "ml-dsa"
+        if tail.isdigit() and 20 <= int(tail) <= 31:
+            return "slh-dsa"
+    if oid.startswith(_AES_ARC):
+        tail = oid[len(_AES_ARC) :]
+        if tail.isdigit():
+            arc = int(tail)
+            if 1 <= arc <= 8:
+                return "aes 128"
+            if 21 <= arc <= 28:
+                return "aes 192"
+            if 41 <= arc <= 48:
+                return "aes 256"
+        return "aes"
+    return ""
+
+
 def _haystack(asset: CryptoAsset) -> str:
-    parts = [asset.name, asset.algorithm_family, asset.curve]
-    return " ".join(p for p in parts if isinstance(p, str)).lower()
+    parts = [
+        asset.name,
+        asset.algorithm_family,
+        asset.curve,
+        asset.parameter_set,
+        asset.primitive,
+        asset.normalized_family,
+        asset.normalized_curve,
+        _oid_words(asset.oid),
+    ]
+    return " ".join(p for p in parts if isinstance(p, str) and p).lower()
 
 
 def _tokens(haystack: str) -> set[str]:
     return set(re.split(r"[^a-z0-9]+", haystack))
 
 
+def asset_identity_haystack(asset: CryptoAsset) -> str:
+    """Lowercased identity words for an asset (name, family, curve, params, OID).
+
+    Shared with other classifiers so OID resolution and field precedence stay
+    in one place.
+    """
+    return _haystack(asset)
+
+
+def identity_tokens(haystack: str) -> set[str]:
+    """Whole tokens of an identity haystack, for short names like "des" or "dh"."""
+    return _tokens(haystack)
+
+
 def _classify_symmetric_or_hash(hay: str) -> tuple[PqcStatus, str, str] | None:
     """Symmetric ciphers and hashes (Grover-weakened, not Shor-broken), or None."""
     if "md5" in hay or re.search(r"sha-?1(?![0-9])", hay):
-        return PqcStatus.REVIEW, "broken-hash", "Classically broken (collisions) — remediate regardless of quantum"
+        return PqcStatus.REVIEW, "broken-hash", "Classically broken (collisions); remediate regardless of quantum"
     if any(t in hay for t in ("3des", "triple-des", "tripledes", "tdea", "des-ede", "des3")):
-        return PqcStatus.REVIEW, "3DES", "Withdrawn (SP 800-67); legacy decrypt only — review usage"
+        return PqcStatus.REVIEW, "3DES", "Withdrawn (SP 800-67); legacy decrypt only, review usage"
     if "aes" in hay:
         if "256" in hay or "192" in hay:
             return PqcStatus.SAFE, "AES", "Grover-resistant at >=192-bit keys"
         if "128" in hay:
-            return PqcStatus.REVIEW, "AES-128", "~64-bit post-Grover; below the CNSA 2.0 256-bit bar — review"
-        return PqcStatus.REVIEW, "AES", "Key size unspecified — AES-128 and AES-256 differ; review"
+            return PqcStatus.REVIEW, "AES-128", "~64-bit post-Grover; below the CNSA 2.0 256-bit bar, review"
+        return PqcStatus.REVIEW, "AES", "Key size unspecified; AES-128 and AES-256 differ, review"
     if "chacha" in hay:
         return PqcStatus.SAFE, "ChaCha20", "256-bit stream cipher, Grover-resistant"
     if re.search(r"\bdes\b", hay):
-        return PqcStatus.REVIEW, "DES", "56-bit — broken; remediate"
+        return PqcStatus.REVIEW, "DES", "56-bit, broken; remediate"
     if any(t in hay for t in ("sha-512", "sha512", "sha-384", "sha384", "sha3-512", "sha3-384", "shake256")):
         return PqcStatus.SAFE, "SHA-2/3", "Grover-resistant digest (>=384-bit)"
     if any(t in hay for t in ("sha-256", "sha256", "sha3-256", "shake128", "sha-224", "sha224")):
@@ -148,13 +229,17 @@ def _classify_symmetric_or_hash(hay: str) -> tuple[PqcStatus, str, str] | None:
     return None
 
 
-def _classify_identity(hay: str, tokens: set[str]) -> tuple[PqcStatus, str | None, str, bool]:
+def _classify_identity(
+    hay: str, tokens: set[str], has_registry_curve: bool = False
+) -> tuple[PqcStatus, str | None, str, bool]:
     """Return ``(status, family, reason, is_pqc_safe_family)`` from algorithm identity."""
     if any(s in hay for s in _PQC_SAFE_SUBSTRINGS):
         return PqcStatus.SAFE, "PQC", "Standardized post-quantum algorithm (FIPS 203/204/205)", True
     if any(s in hay for s in _PQC_REVIEW_SUBSTRINGS):
-        return PqcStatus.REVIEW, "PQC-candidate", "Selected/stateful PQC, not a finalized FIPS standard — review", False
-    if any(s in hay for s in _VULNERABLE_SUBSTRINGS) or (tokens & _VULNERABLE_TOKENS):
+        return PqcStatus.REVIEW, "PQC-candidate", "Selected/stateful PQC, not a finalized FIPS standard; review", False
+    # Any registry-identified elliptic curve implies EC crypto, whatever the
+    # asset is called — every curve in the registry is Shor-breakable.
+    if any(s in hay for s in _VULNERABLE_SUBSTRINGS) or (tokens & _VULNERABLE_TOKENS) or has_registry_curve:
         return (
             PqcStatus.VULNERABLE,
             "classical-asymmetric",
@@ -178,7 +263,7 @@ def classify_crypto_asset(asset: CryptoAsset) -> PqcAssessment:
     """
     hay = _haystack(asset)
     tokens = _tokens(hay)
-    status, family, reason, is_pqc_safe = _classify_identity(hay, tokens)
+    status, family, reason, is_pqc_safe = _classify_identity(hay, tokens, asset.normalized_curve is not None)
 
     level = asset.nist_quantum_security_level
 
@@ -186,18 +271,39 @@ def classify_crypto_asset(asset: CryptoAsset) -> PqcAssessment:
         return PqcAssessment(
             status=PqcStatus.REVIEW,
             family=family,
-            reason="Declares a NIST PQC security category but the algorithm is unrecognized — review",
+            reason="Declares a NIST PQC security category but the algorithm is unrecognized; review",
         )
 
     data_quality_flag = None
     if status is PqcStatus.VULNERABLE and level is not None and level >= 1:
         data_quality_flag = (
-            f"Declares nistQuantumSecurityLevel {level} on a quantum-vulnerable algorithm — likely mislabeled"
+            f"Declares nistQuantumSecurityLevel {level} on a quantum-vulnerable algorithm; likely mislabeled"
         )
     elif status is PqcStatus.SAFE and is_pqc_safe and level == 0:
-        data_quality_flag = "PQC algorithm declares nistQuantumSecurityLevel 0 — likely mislabeled"
+        data_quality_flag = "PQC algorithm declares nistQuantumSecurityLevel 0; likely mislabeled"
 
     return PqcAssessment(status=status, family=family, reason=reason, data_quality_flag=data_quality_flag)
+
+
+_SIGNATURE_HINTS = ("ecdsa", "eddsa", "ed25519", "ed448", "dsa", "signature")
+_KEY_ESTABLISHMENT_HINTS = ("ecdh", "x25519", "x448", "diffie", "hellman", "ffdh", "kem", "pke", "ecies", "mqv")
+
+
+def replacement_for(asset: CryptoAsset, status: PqcStatus) -> str | None:
+    """NIST-standardized migration target for a quantum-vulnerable asset.
+
+    Signature use maps to ML-DSA (FIPS 204) / SLH-DSA (FIPS 205); key
+    establishment to ML-KEM (FIPS 203); ambiguous identities get both.
+    """
+    if status is not PqcStatus.VULNERABLE:
+        return None
+    hay = _haystack(asset)
+    tokens = _tokens(hay)
+    if any(h in hay for h in _SIGNATURE_HINTS):
+        return "ML-DSA (FIPS 204) or SLH-DSA (FIPS 205)"
+    if any(h in hay for h in _KEY_ESTABLISHMENT_HINTS) or (tokens & {"dh", "dhe"}):
+        return "ML-KEM (FIPS 203)"
+    return "ML-KEM (FIPS 203) for key establishment; ML-DSA (FIPS 204) or SLH-DSA (FIPS 205) for signatures"
 
 
 def assess_inventory(inventory: CryptoInventory) -> PqcSummary:

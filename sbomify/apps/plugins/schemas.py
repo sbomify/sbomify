@@ -20,6 +20,21 @@ class FindingSchema(BaseModel):
     aliases: list[str] | None = None
     remediation: str | None = None
     metadata: dict[str, Any] | None = None
+    # VEX triage annotations (set by annotate_findings_with_vex on stored results)
+    analysis_state: str | None = None
+    analysis_justification: str | None = None
+    analysis_detail: str | None = None
+    # A product-scoped suppression asserted for a different version of this
+    # package than the one now scanned — still applied, but flagged for re-review.
+    # Optional (None) so only stale findings carry it, matching the stored result.
+    analysis_stale: bool | None = None
+    # In CISA's Known Exploited Vulnerabilities catalog; stamped at serialization
+    # time from the cached KEV feed, never stored.
+    kev: bool = False
+    # Stamped read-time beside kev. Without it declared here django-ninja
+    # serialises against the schema and drops the field, so the badge would
+    # never render however correct the classification was.
+    malicious: bool = False
 
     @field_validator("aliases", mode="before")
     @classmethod
@@ -52,6 +67,9 @@ class AssessmentSummarySchema(BaseModel):
     error_count: int = 0
     by_severity: dict[str, int] | None = None
     suppressed_count: int = 0
+    # Counted beside the severity buckets, not inside them: a malicious package
+    # is a different decision class rather than a slice of the same axis.
+    malicious_count: int = 0
 
 
 class AssessmentResultSchema(BaseModel):

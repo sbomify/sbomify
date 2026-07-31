@@ -1,0 +1,36 @@
+name: Build Newsletter
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile MJML template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Compile newsletter template
+        run: |
+          mkdir -p dist/newsletter
+          bunx mjml@5.4.0 newsletter/sbomify-newsletter.mjml \
+            -o dist/newsletter/sbomify-newsletter.html
+          cp newsletter/sbomify-newsletter.mjml dist/newsletter/
+
+          echo "## Newsletter Build" >> $GITHUB_STEP_SUMMARY
+          echo "Compiled \`newsletter/sbomify-newsletter.mjml\` to email-ready HTML." >> $GITHUB_STEP_SUMMARY
+          echo "Download the \`newsletter\` artifact from this run. Upload the \`.mjml\` file to Mailjet (its template import only accepts MJML); the \`.html\` is for previewing or non-Mailjet use." >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload newsletter artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: newsletter
+          path: dist/newsletter/
+          if-no-files-found: error

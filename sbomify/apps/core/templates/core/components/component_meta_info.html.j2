@@ -1,21 +1,66 @@
-<div x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
-    {% if component.has_crud_permissions %}
-        true
-    {% else %}
-        false
-    {% endif %}
-    })" @metadata-saved="refreshDisplay()" @close-metadata-editor.window="isEditing = false">
-    <!-- Display Mode -->
-    <template x-if="!isEditing">
-        <div class="component-meta-info-display-container"
-             @edit-metadata="isEditing = true">
-            {% include 'core/components/component_meta_info_display.html.j2' %}
+{# Component metadata — a modal opened from the component header ⋮ menu (open-metadata window event), not a body card. #}
+<div x-data="{ metaOpen: false }"
+     @open-metadata.window="metaOpen = true"
+     @keydown.escape.window="if (metaOpen) metaOpen = false">
+    <div x-show="metaOpen"
+         x-cloak
+         class="fixed inset-0 z-[100]"
+         role="dialog"
+         aria-modal="true"
+         aria-label="Component metadata">
+        <div x-show="metaOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="metaOpen = false"></div>
+        <div class="tw-modal"
+             x-show="metaOpen"
+             x-trap.noscroll="metaOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop>
+            <div class="tw-modal-content tw-modal-wide">
+                <div class="tw-modal-header">
+                    <h4 class="tw-modal-title flex items-center gap-2">
+                        <i class="fas fa-address-card text-primary"></i>Component Metadata
+                    </h4>
+                    <button type="button"
+                            class="tw-modal-close"
+                            @click="metaOpen = false"
+                            aria-label="Close">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="tw-modal-body" x-data="componentMetaInfoWrapper({ componentId: '{{ component.id }}', teamKey: '{{ request.session.current_team.key }}', allowEdit:
+                    {% if component.has_crud_permissions %}
+                        true
+                    {% else %}
+                        false
+                    {% endif %}
+                    })" @metadata-saved="refreshDisplay()" @close-metadata-editor.window="isEditing = false" @edit-metadata.window="isEditing = true">
+                    <!-- Display Mode -->
+                    <template x-if="!isEditing">
+                        <div class="component-meta-info-display-container"
+                             @edit-metadata="isEditing = true">
+                            {% include 'core/components/component_meta_info_display.html.j2' %}
+                        </div>
+                    </template>
+                    <!-- Edit Mode -->
+                    <template x-if="isEditing">
+                        <div class="component-meta-info-editor-container">
+                            {% include 'core/components/component_meta_info_editor.html.j2' %}
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
-    </template>
-    <!-- Edit Mode -->
-    <template x-if="isEditing">
-        <div class="component-meta-info-editor-container">
-            {% include 'core/components/component_meta_info_editor.html.j2' %}
-        </div>
-    </template>
+    </div>
 </div>

@@ -6,35 +6,35 @@
     <style>
         .onboarding-bg {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgb(var(--color-primary) / 0.08) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, rgb(var(--color-primary) / 0.04) 0%, transparent 50%),
-                rgb(var(--color-background));
+                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 8%, transparent) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 4%, transparent) 0%, transparent 50%),
+                var(--color-background);
         }
         :root.light .onboarding-bg {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgb(var(--color-primary) / 0.06) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, rgb(var(--color-primary) / 0.03) 0%, transparent 50%),
-                rgb(var(--color-background));
+                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 6%, transparent) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 3%, transparent) 0%, transparent 50%),
+                var(--color-background);
         }
         .step-dot {
             width: 8px;
             height: 8px;
             border-radius: 9999px;
-            background-color: rgb(var(--color-border));
+            background-color: var(--color-border);
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .step-dot.active {
             width: 28px;
-            background-color: rgb(var(--color-primary));
+            background-color: var(--color-primary);
         }
         .step-dot.completed {
-            background-color: rgb(var(--color-success));
+            background-color: var(--color-success);
         }
         .onboarding-card {
-            border: 1px solid rgb(var(--color-border) / 0.6);
+            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px rgb(var(--color-border) / 0.3);
+                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
         }
         :root.dark .onboarding-card {
             box-shadow:
@@ -45,23 +45,23 @@
             animation: success-pulse 2s ease-out 0.8s;
         }
         @keyframes success-pulse {
-            0% { box-shadow: 0 0 0 0 rgb(var(--color-success) / 0.4); }
-            70% { box-shadow: 0 0 0 16px rgb(var(--color-success) / 0); }
-            100% { box-shadow: 0 0 0 0 rgb(var(--color-success) / 0); }
+            0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 40%, transparent); }
+            70% { box-shadow: 0 0 0 16px color-mix(in oklab, var(--color-success) 0%, transparent); }
+            100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 0%, transparent); }
         }
         .plan-card {
-            border: 1px solid rgb(var(--color-border) / 0.6);
+            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px rgb(var(--color-border) / 0.3);
+                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
             transition: all 0.2s ease;
         }
         .plan-card:hover,
         .plan-card.selected {
-            border-color: rgb(var(--color-primary));
+            border-color: var(--color-primary);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 2px rgb(var(--color-primary) / 0.3);
+                0 0 0 2px color-mix(in oklab, var(--color-primary) 30%, transparent);
         }
         :root.dark .plan-card {
             box-shadow:
@@ -77,13 +77,8 @@
 {% block main %}
     <div class="onboarding-bg min-h-screen flex flex-col items-center justify-center px-4 py-12 sm:py-16">
         <!-- Logo -->
-        <div class="flex items-center justify-center gap-3 mb-10">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-8 w-8"
-                 width="32"
-                 height="32">
-            <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
+        <div class="flex items-center justify-center mb-10">
+            {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
         </div>
         <!-- Step Progress (3 dots without billing, 4 with billing) -->
         <div class="flex items-center gap-2 mb-8">
@@ -307,7 +302,7 @@
                                         <i class="fas fa-arrow-right text-xs"></i>
                                     </span>
                                     <span x-show="isSubmitting" x-cloak class="flex items-center gap-2">
-                                        <i class="fas fa-circle-notch animate-spin"></i>
+                                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                                         Creating...
                                     </span>
                                 </button>
@@ -338,10 +333,10 @@
                                     <i class="fas fa-check text-success text-3xl"></i>
                                 </div>
                             </div>
-                            <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Your workspace is ready!</h1>
-                            <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">
-                                <strong class="text-text font-medium">{{ company_name }}</strong> is set up. Let's explore what sbomify can do for you.
-                            </p>
+                            <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">
+                                {{ company_name|default:"Your workspace" }} is set up
+                            </h1>
+                            <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">Let's explore what sbomify can do for you.</p>
                         </div>
                         <!-- Onboarding checklist -->
                         <div class="rounded-xl border border-border/50 divide-y divide-border/50 mb-8">
@@ -353,11 +348,7 @@
                             </div>
                             <div class="flex items-center gap-3 px-4 py-3">
                                 <div class="w-5 h-5 rounded-full border-2 border-primary shrink-0"></div>
-                                <span class="text-sm text-text">Explore with a sample product</span>
-                            </div>
-                            <div class="flex items-center gap-3 px-4 py-3">
-                                <div class="w-5 h-5 rounded-full border-2 border-border shrink-0"></div>
-                                <span class="text-sm text-text-muted">See your first security insights</span>
+                                <span class="text-sm text-text">See your first security insights</span>
                             </div>
                         </div>
                         <!-- Actions -->

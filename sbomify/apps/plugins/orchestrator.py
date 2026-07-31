@@ -55,6 +55,19 @@ class DependencyStatus(TypedDict, total=False):
     requires_all: DependencyCheckResult
 
 
+def load_plugin_class(plugin_class_path: str) -> type[AssessmentPlugin]:
+    """Resolve a dotted plugin class path to its class.
+
+    The one import path both the orchestrator and the settings API use, so
+    the two can never disagree about how a registry row resolves. Raises
+    ImportError/AttributeError on a broken path; callers pick their policy.
+    """
+    module_path, class_name = plugin_class_path.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    plugin_class: type[AssessmentPlugin] = getattr(module, class_name)
+    return plugin_class
+
+
 class PluginOrchestratorError(Exception):
     """Exception raised for orchestrator-specific errors."""
 
@@ -124,7 +137,7 @@ class PluginOrchestrator:
                 other orchestration errors occur.
         """
         # Verify SBOM exists and fetch bom_type in a single query (reused later via sbom_id)
-        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type").first()
+        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type", "has_crypto_assets").first()
         if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
@@ -136,6 +149,18 @@ class PluginOrchestrator:
                 f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: "
                 f"bom_type '{sbom_instance_check.bom_type}' not in supported types {supported}"
             )
+            return None
+        # Crypto-gated plugins skip dispatch when upload determined the document
+        # holds no crypto assets. None (pre-field rows) still runs — unknown is
+        # not a reason to skip. An artifact explicitly tagged cbom also always
+        # runs: a CBOM declaring zero crypto assets is a generator misfire the
+        # plugin must surface as a warning, not silently skip.
+        if (
+            metadata.requires_crypto_assets
+            and sbom_instance_check.has_crypto_assets is False
+            and sbom_instance_check.bom_type != "cbom"
+        ):
+            logger.info(f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: document has no crypto assets")
             return None
         config_hash = compute_config_hash(plugin.config)
 
@@ -252,17 +277,33 @@ class PluginOrchestrator:
             # Best-effort: the scan result is already complete, so a VEX problem
             # (missing S3 object, transient storage error) must never fail the run.
             if result.category == AssessmentCategory.SECURITY:
-                try:
-                    from sbomify.apps.vulnerability_scanning.vex import (
-                        annotate_findings_with_vex,
-                        resolve_vex_statements_for_sbom,
-                    )
+                from sbomify.apps.vulnerability_scanning.vex import (
+                    VexArtifactUnreadable,
+                    annotate_findings_with_vex,
+                    resolve_vex_statements_for_sbom,
+                    strict_vex_reads,
+                )
 
-                    component_id = assessment_run.sbom.component_id
+                component_id = assessment_run.sbom.component_id
+                try:
                     if component_id:
-                        annotate_findings_with_vex(
-                            result, resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
-                        )
+                        with strict_vex_reads():
+                            annotate_findings_with_vex(
+                                result, resolve_vex_statements_for_sbom(component_id, assessment_run.sbom_id)
+                            )
+                except VexArtifactUnreadable:
+                    # A VEX artifact exists but its object could not be read: do not
+                    # silently store an under-suppressed result. Log loud and enqueue
+                    # a reapply so the run self-corrects once storage recovers.
+                    logger.error(
+                        f"[PLUGIN] VEX artifact unreadable for run {assessment_run.id}; "
+                        f"scan stored un-suppressed, scheduling reapply",
+                        exc_info=True,
+                    )
+                    if component_id:
+                        from sbomify.apps.sboms.services.sboms import schedule_vex_reapply
+
+                        schedule_vex_reapply(component_id)
                 except Exception:
                     logger.warning(
                         f"[PLUGIN] VEX annotation failed for run {assessment_run.id}; keeping the scan result",
@@ -282,6 +323,21 @@ class PluginOrchestrator:
                     "completed_at",
                 ]
             )
+
+            # Fold the run into the component's vulnerability lifecycle. The
+            # stored run stays immutable (ADR-004); this is a separate index
+            # over it. A failure here must not lose a scan result that already
+            # succeeded, so it is logged rather than raised.
+            if assessment_run.category == AssessmentCategory.SECURITY.value:
+                try:
+                    from sbomify.apps.plugins.lifecycle import record_run
+
+                    record_run(assessment_run)
+                except Exception:
+                    logger.warning(
+                        f"[PLUGIN] lifecycle update failed for run {assessment_run.id}; keeping the scan result",
+                        exc_info=True,
+                    )
 
             # Populate the releases M2M from the CURRENT ReleaseArtifact state.
             # This is the source-of-truth moment: whichever releases link to this
@@ -750,10 +806,7 @@ class PluginOrchestrator:
 
         # Import and instantiate the plugin class
         try:
-            module_path, class_name = registered.plugin_class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            plugin_class = getattr(module, class_name)
-            instance: AssessmentPlugin = plugin_class(config=merged_config)
+            instance: AssessmentPlugin = load_plugin_class(registered.plugin_class_path)(config=merged_config)
             return instance
         except (ImportError, AttributeError) as e:
             raise PluginOrchestratorError(

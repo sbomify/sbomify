@@ -52,9 +52,37 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         has_crud_permissions = current_team.get("role") in ["owner", "admin"]
 
+        from django.utils import timezone
+
+        from sbomify.apps.core.services.dashboard_page import build_dashboard_context
+
+        hour = timezone.localtime().hour
+        daypart = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
+        greeting = f"Good {daypart}"
+        first_name = getattr(request.user, "first_name", "")
+        if first_name:
+            greeting += f", {first_name}"
+
         context = {
             "current_team": current_team,
             "has_crud_permissions": has_crud_permissions,
+            "greeting": greeting,
+            "dashboard": build_dashboard_context(team.id) if team else {"is_first_visit": True},
         }
+
+        # Onboarding checklist progress — computed uncached so it reflects a newly
+        # created product/component immediately (the dashboard digest is cached).
+        if team and context["dashboard"].get("is_first_visit"):
+            from sbomify.apps.core.models import Component, Product
+
+            first_component = Component.objects.filter(team_id=team.id).first()
+            has_product = Product.objects.filter(team_id=team.id).exists()
+            context["onboarding"] = {
+                "has_product": has_product,
+                "has_component": first_component is not None,
+                "first_component": first_component,
+                "first_component_id": first_component.id if first_component else None,
+                "done_count": (1 if has_product else 0) + (1 if first_component else 0),
+            }
 
         return render(request, "core/dashboard.html.j2", context)

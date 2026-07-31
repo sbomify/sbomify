@@ -18,6 +18,7 @@ _OVERALL_DISPLAY = {
     "needs_review": ("Needs review", "warning"),
     "ready": ("Quantum-ready", "success"),
     "not_assessed": ("Not assessed", "secondary"),
+    "no_crypto": ("No crypto", "secondary"),
 }
 
 

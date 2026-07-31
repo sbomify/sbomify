@@ -37,12 +37,21 @@ from sbomify.apps.teams.schemas import (
     ContactProfileUpdateSchema,
     InvitationSchema,
     MemberSchema,
+    SupplierCreateSchema,
+    SupplierSchema,
+    SupplierUpdateSchema,
     TeamDomainSchema,
     TeamPatchSchema,
     TeamSchema,
     TeamUpdateSchema,
     UpdateTeamBrandingSchema,
     UserSchema,
+)
+from sbomify.apps.teams.services.suppliers import (
+    create_supplier,
+    delete_supplier,
+    list_suppliers,
+    update_supplier,
 )
 from sbomify.logging import getLogger
 
@@ -102,6 +111,7 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
         custom_domain_verification_failures=team.custom_domain_verification_failures,
         custom_domain_last_checked_at=team.custom_domain_last_checked_at,
         can_set_private=team.can_be_private(),
+        sbom_freshness_days=team.sbom_freshness_days,
         members=members_data,
         invitations=invitations_data,
     )
@@ -196,6 +206,9 @@ def update_team_branding_field(
         logger.warning(f"User {user.username} is not owner of team {team_key}")
         return 403, {"detail": "Only allowed for owners"}
 
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
@@ -271,6 +284,9 @@ def update_team_branding(
         logger.warning(f"User {user.username} is not owner of team {team_key}")
         return 403, {"detail": "Only allowed for owners"}
 
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
     # TODO: has to be a separate model
     branding_data = _normalize_branding_payload(team.branding_info)
     branding_info = BrandingInfo(**branding_data).model_dump()
@@ -343,6 +359,9 @@ def upload_branding_file(
 
     if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only allowed for owners"}
+
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
@@ -741,6 +760,10 @@ def get_contact_profile(
     if error:
         return error
 
+    assert team is not None  # guaranteed when error is None
+    if not can(request, "workspace:read", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
     # Allow all team members to view contact profiles (for use in component metadata)
     try:
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
@@ -767,6 +790,10 @@ def create_contact_profile(request: HttpRequest, team_key: str, payload: Contact
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
 
     assert team is not None  # guaranteed when error is None
+    # can() also enforces token workspace/action scope — the membership role
+    # check above alone would let a token scoped to another workspace write here.
+    if not can(request, "workspace:manage", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -861,6 +888,8 @@ def update_contact_profile(
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
 
     assert team is not None  # guaranteed when error is None
+    if not can(request, "workspace:manage", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         profile = ContactProfile.objects.prefetch_related("entities", "entities__contacts").get(
@@ -973,6 +1002,10 @@ def delete_contact_profile(request: HttpRequest, team_key: str, profile_id: str)
     if not _user_can_manage_profiles(role):
         return 403, {"detail": "Only owners and admins can manage contact profiles"}
 
+    assert team is not None  # guaranteed when error is None
+    if not can(request, "workspace:manage", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
     try:
         profile = ContactProfile.objects.get(team=team, pk=profile_id)
     except ContactProfile.DoesNotExist:
@@ -1006,6 +1039,9 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
     # Check if user is owner
     if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team information"}
+
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1052,6 +1088,9 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
     # Check if user is owner
     if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team information"}
+
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1109,6 +1148,9 @@ def update_team_domain(request: HttpRequest, team_key: str, payload: TeamDomainS
     # Check if user is owner
     if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
+
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     # Feature gating: Check billing plan
     from sbomify.apps.billing.models import BillingPlan
@@ -1188,6 +1230,9 @@ def delete_team_domain(request: HttpRequest, team_key: str) -> tuple[int, Any]:
     if not Member.objects.filter(user=user, team=team, role="owner").exists():
         return 403, {"detail": "Only owners can update team domain"}
 
+    if not can(request, "workspace:administer", team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+
     # Store domain for cache invalidation
     old_domain = team.custom_domain
 
@@ -1210,14 +1255,34 @@ def list_teams(request: HttpRequest) -> tuple[int, Any]:
     user = cast(User, request.user)
 
     all_memberships = Member.objects.filter(user=user)
+
+    # A workspace-scoped token must only see its bound workspace. Every other
+    # endpoint resolves to the token's team (via can()/_get_user_team_id), so
+    # listing all of the user's workspaces here lets scoped-token clients bind
+    # to a workspace the token can't actually act on.
+    token_team = getattr(request, "token_team", None)
+    if token_team is not None:
+        all_memberships = all_memberships.filter(team=token_team)
+
     if not all_memberships.exists():
         return 200, []
 
-    memberships = (
-        all_memberships.exclude(role="guest").select_related("team").order_by("team__created_at", "team__id").all()
+    memberships = list(
+        all_memberships.exclude(role="guest").select_related("team").order_by("team__created_at", "team__id")
     )
     if not memberships:
         return 403, {"detail": "Guest members can only access public pages"}
+
+    # Route token-authenticated listings through can() so a narrow
+    # action-scoped token (e.g. publish-only) can't enumerate workspaces its
+    # scopes don't grant it to read. One check covers the whole listing: the
+    # token's action-scope gate is team-independent, workspace binding was
+    # already applied to the queryset above, and workspace:read's role tier
+    # admits every remaining membership. Sessions carry no token and skip this.
+    if getattr(request, "access_token_record", None) is not None and not can(
+        request, "workspace:read", memberships[0].team
+    ):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
     return 200, [_build_team_response(request, membership.team) for membership in memberships]
 
@@ -1346,3 +1411,105 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
     else:
         logger.warning(f"On-demand TLS denied: {domain_normalized} (not found in allowed domains)")
         return 404, None
+
+
+def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:
+    """Resolve the workspace for a supplier call, or the error to return.
+
+    Every supplier endpoint needs the same three answers — does the workspace
+    exist, is the caller a non-guest member, does the action clear ``can()`` —
+    and getting one of them wrong on one endpoint is how a scoping hole opens.
+    """
+    try:
+        team = Team.objects.get(pk=token_to_number(team_key))
+    except (ValueError, Team.DoesNotExist):
+        return 404, {"detail": "Workspace not found"}
+
+    user = cast(User, request.user)
+    membership = Member.objects.filter(user=user, team=team).only("role").first()
+    if not membership or membership.role == "guest":
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+    if not can(request, action, team):
+        return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
+    return 200, team
+
+
+def _supplier_payload(supplier: Any) -> dict[str, Any]:
+    return {
+        "id": supplier.id,
+        "name": supplier.name,
+        "contact_name": supplier.contact_name,
+        "contact_email": supplier.contact_email,
+        "website": supplier.website,
+        "notes": supplier.notes,
+        "created_at": supplier.created_at,
+        "updated_at": supplier.updated_at,
+    }
+
+
+@router.get(
+    "/{team_key}/suppliers",
+    response={200: list[SupplierSchema], 403: ErrorResponse, 404: ErrorResponse},
+)
+def list_workspace_suppliers(request: HttpRequest, team_key: str, search: str = "") -> tuple[int, Any]:
+    """List the vendors this workspace collects artifacts from."""
+    status_code, team = _supplier_team(request, team_key, "workspace:read")
+    if status_code != 200:
+        return status_code, team
+
+    result = list_suppliers(team, search)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error}
+    return 200, [_supplier_payload(s) for s in (result.value or [])]
+
+
+@router.post(
+    "/{team_key}/suppliers",
+    response={201: SupplierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+)
+def create_workspace_supplier(request: HttpRequest, team_key: str, payload: SupplierCreateSchema) -> tuple[int, Any]:
+    """Add a vendor to the workspace's supplier list."""
+    status_code, team = _supplier_team(request, team_key, "workspace:manage")
+    if status_code != 200:
+        return status_code, team
+
+    result = create_supplier(team, payload.model_dump())
+    if not result.ok or result.value is None:
+        return result.status_code or 400, {"detail": result.error}
+    return 201, _supplier_payload(result.value)
+
+
+@router.patch(
+    "/{team_key}/suppliers/{supplier_id}",
+    response={200: SupplierSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse},
+)
+def update_workspace_supplier(
+    request: HttpRequest, team_key: str, supplier_id: str, payload: SupplierUpdateSchema
+) -> tuple[int, Any]:
+    """Change a vendor's details."""
+    status_code, team = _supplier_team(request, team_key, "workspace:manage")
+    if status_code != 200:
+        return status_code, team
+
+    # exclude_unset so an absent key means "leave alone" rather than "clear":
+    # sending the whole object back would otherwise be the only safe edit.
+    result = update_supplier(team, supplier_id, payload.model_dump(exclude_unset=True))
+    if not result.ok or result.value is None:
+        return result.status_code or 400, {"detail": result.error}
+    return 200, _supplier_payload(result.value)
+
+
+@router.delete(
+    "/{team_key}/suppliers/{supplier_id}",
+    response={204: None, 403: ErrorResponse, 404: ErrorResponse},
+)
+def delete_workspace_supplier(request: HttpRequest, team_key: str, supplier_id: str) -> tuple[int, Any]:
+    """Remove a vendor from the workspace's supplier list."""
+    status_code, team = _supplier_team(request, team_key, "workspace:manage")
+    if status_code != 200:
+        return status_code, team
+
+    result = delete_supplier(team, supplier_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error}
+    return 204, None

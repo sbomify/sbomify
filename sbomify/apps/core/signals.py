@@ -20,17 +20,31 @@ def update_latest_release_on_sbom_created(sender: Any, instance: Any, created: A
 
     _update_latest_release_for_sbom(instance)
 
-    # Track every SBOM upload for retention analytics
+    # Track every artifact upload for retention analytics. VEX/CBOM/HBOM rows
+    # live in the same table; each ships under its own event so a VEX import or
+    # an in-app triage save never reads as an SBOM upload in funnels.
+    from sbomify.apps.core.analytics import events
     from sbomify.apps.core.posthog_service import capture
 
+    event = {
+        "vex": events.VEX_UPLOADED,
+        "cbom": events.CBOM_UPLOADED,
+        "hbom": events.HBOM_UPLOADED,
+    }.get(instance.bom_type, events.SBOM_UPLOADED)
     team = getattr(instance.component, "team", None) if instance.component else None
     team_key = team.key if team else ""
     component_id = getattr(instance.component, "id", "")
     sbom_id = instance.id
+    source = instance.source or ""
     groups = {"workspace": team_key} if team_key else None
     distinct_id = team_key or "system"
     transaction.on_commit(
-        lambda: capture(distinct_id, "sbom:uploaded", {"component_id": component_id, "sbom_id": sbom_id}, groups=groups)
+        lambda: capture(
+            distinct_id,
+            event,
+            {"component_id": component_id, "sbom_id": sbom_id, "source": source},
+            groups=groups,
+        )
     )
 
 
@@ -38,6 +52,14 @@ def _update_latest_release_for_sbom(sbom_instance: Any) -> Any:
     """Internal function to update latest release for SBOM with proper error handling."""
     # Import here to avoid circular imports
     from sbomify.apps.core.models import Component, Release
+
+    # In-app triage VEX is a component-level overlay, never a release artifact:
+    # pinning it would evict the imported (DT/manual) VEX from the release slot.
+    from sbomify.apps.sboms.models import SBOM
+    from sbomify.apps.vulnerability_scanning.vex import TRIAGE_SOURCE
+
+    if sbom_instance.bom_type == SBOM.BomType.VEX.value and sbom_instance.source == TRIAGE_SOURCE:
+        return
 
     try:
         # Get all products that contain this SBOM's component
@@ -216,6 +238,51 @@ def bump_collection_version_on_artifact_added(sender: Any, instance: Any, create
         pass
     except Exception:
         logger.error("Error bumping collection version for release %s", instance.release_id, exc_info=True)
+
+
+@receiver(post_save, sender="core.ReleaseArtifact")
+def pin_latest_vex_on_sbom_artifact_added(sender: Any, instance: Any, created: Any, **kwargs: Any) -> Any:
+    """When a component's SBOM is pinned to a release, pin its newest VEX too.
+
+    Covers every path that attaches SBOM artifacts (the Add Artifact dialog,
+    the GitHub action's release tagging, latest-release maintenance) so a
+    release carries the component's exploitability statements without a manual
+    pin. A *manually* pinned VEX is a deliberate snapshot: it evicts any auto
+    pin for the same component and is never replaced automatically. Acts only
+    on bom_type='sbom' and manual bom_type='vex' rows — the auto pin this
+    creates matches neither branch, so it can't recurse.
+    """
+    if not created or not instance.sbom_id:
+        return
+
+    from sbomify.apps.core.models import _suppress_collection_signals
+
+    # Bulk operations (refresh_latest_artifacts, add_artifact_to_latest_release)
+    # manage every artifact slot themselves, VEX included; auto-pinning here
+    # mid-bulk would race their own VEX create into a (release, sbom) unique
+    # violation and abort the surrounding transaction.
+    if _suppress_collection_signals.get(False):
+        return
+
+    try:
+        from sbomify.apps.core.services.vex_pins import ensure_latest_vex_pinned
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.select_related("component").filter(id=instance.sbom_id).first()
+        if sbom is None:
+            return
+        if sbom.bom_type == SBOM.BomType.SBOM.value:
+            ensure_latest_vex_pinned(instance.release, sbom.component)
+        elif sbom.bom_type == SBOM.BomType.VEX.value and not instance.auto_pinned:
+            # A hand-pinned VEX supersedes whatever sbomify auto-pinned for
+            # this component on this release.
+            instance.release.artifacts.filter(
+                sbom__component=sbom.component,
+                sbom__bom_type=SBOM.BomType.VEX.value,
+                auto_pinned=True,
+            ).exclude(pk=instance.pk).delete()
+    except Exception:
+        logger.error("Error auto-pinning VEX for release %s", instance.release_id, exc_info=True)
 
 
 @receiver(post_delete, sender="core.ReleaseArtifact")

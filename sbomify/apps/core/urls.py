@@ -164,12 +164,12 @@ urlpatterns = [
     # Tailwind CSS test page
     # path("tailwind-test/", views.TailwindTestView.as_view(), name="tailwind_test"),
     re_path(
-        r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
+        r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom)/(?P<item_id>[^/]+)/$",
         views.ComponentItemView.as_view(),
         name="component_item",
     ),
     re_path(
-        r"^public/components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents)/(?P<item_id>[^/]+)/$",
+        r"^public/components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom)/(?P<item_id>[^/]+)/$",
         views.ComponentItemPublicView.as_view(),
         name="component_item_public",
     ),

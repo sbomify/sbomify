@@ -1,13 +1,14 @@
 {% comment %}
-    Trusted Publishers section for a Component's settings.
+    Trusted Publishers section for a Component.
 
     Rendered both:
-      * inline on first page load (via the hx-get='load' container in the
-        component_details_private templates)
+      * on page load, into the trusted-publishers modal body (the hx-get='load'
+        shell in core/components/trusted_publishers_modal.html.j2)
       * as an HTMX swap target after create/delete
 
     The whole section is the swap target (id="trusted-publishers-section")
-    so create + delete + form errors all land back into the same shell.
+    so create + delete + form errors all land back into the same shell. The
+    modal owns the title and chrome, so this renders bare content.
 
     NOTE: this file is rendered by Django's template engine despite the
     ``.html.j2`` extension (sbomify-wide convention — see CLAUDE.md).
@@ -17,23 +18,13 @@
     proper would tolerate multi-line ``{# ... #}`` — we don't have that
     parser here.
 {% endcomment %}
-<section id="trusted-publishers-section" class="tw-card">
-<header class="tw-card-header">
-<div class="flex items-start gap-3">
-<span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 flex-shrink-0">
-<i class="fas fa-shield-halved text-primary"></i>
-</span>
-<div>
-<h4 class="text-lg font-semibold text-text m-0">Trusted Publishers</h4>
-<p class="text-sm text-text-muted m-0 mt-1">
+<section id="trusted-publishers-section">
+<div class="space-y-4">
+<p class="text-sm text-text-muted m-0">
 Authorise a GitHub repository to push SBOMs and documents to this
 component without long-lived secrets. Tokens are issued from the
 workflow's OIDC identity and are valid for 15 minutes.
 </p>
-</div>
-</div>
-</header>
-<div class="tw-card-body space-y-6">
 {% if bindings %}
 <div class="overflow-x-auto">
 <table class="tw-table">
@@ -97,16 +88,17 @@ repo_id={{ binding.repository_id }}
 </table>
 </div>
 {% else %}
-<div class="tw-empty-state">
-<i class="fas fa-shield-halved text-3xl text-text-muted opacity-50"></i>
-<p class="text-sm font-medium text-text mt-3 mb-1">No trusted publishers yet</p>
-<p class="text-xs text-text-muted">
-Add a GitHub repository below to let its Actions workflow push to this
-component using OIDC — no long-lived API tokens required.
+<div class="flex items-center gap-4 p-4 rounded-lg border border-dashed border-border bg-background/40">
+<i class="fas fa-shield-halved text-2xl text-text-muted opacity-50"></i>
+<div>
+<p class="text-sm font-medium text-text m-0">No trusted publishers yet</p>
+<p class="text-xs text-text-muted m-0 mt-0.5">
+Add a repository below — its workflow authenticates with OIDC, no long-lived API tokens required.
 </p>
 </div>
+</div>
 {% endif %}
-<div class="border-t border-border pt-6">
+<div class="pt-1">
 <form method="post" hx-post="{% url 'oidc:trusted_publishers' component_id=component.id %}" hx-target="#trusted-publishers-section" hx-swap="outerHTML" class="space-y-3">
 {% csrf_token %}
 <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-start">

@@ -70,6 +70,89 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
                 }
             # Add more document types with subcategories here as needed
 
+        # Latest-scan vulnerability summary for the header badge: the newest SBOM's
+        # most recent completed security run (VEX-suppressed findings already
+        # excluded). Tied to the newest SBOM so it matches the top artifacts row,
+        # rather than whichever run happened to complete last.
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+        from sbomify.apps.vulnerability_scanning.utils import (
+            extract_finding_rows,
+            extract_severity_counts,
+            merge_findings_by_alias,
+        )
+        from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
+
+        # Only BOM components render the security sections; document
+        # components must not pay the artifact/scan queries for template
+        # sections their page never shows.
+        is_bom_component = component.get("component_type") == "bom"
+
+        latest_sbom = (
+            SBOM.objects.filter(component_id=component_id, bom_type=SBOM.BomType.SBOM)
+            .order_by("-created_at")
+            .values("id", "version")
+            .first()
+            if is_bom_component
+            else None
+        )
+        latest_sbom_id = latest_sbom["id"] if latest_sbom else None
+        latest_scan_result = (
+            (
+                AssessmentRun.objects.filter(sbom_id=latest_sbom_id, category="security", status="completed")
+                .order_by("-created_at")
+                .values_list("result", flat=True)
+                .first()
+            )
+            if latest_sbom_id
+            else None
+        )
+        # Flat, severity-sorted findings for the latest SBOM's drill-down table,
+        # merged across every provider's latest run so aliases auto-resolve (OSV
+        # carries the GHSA↔CVE mapping the DT run lacks). The component's VEX
+        # resolves each finding's status live, even when the stored scan predates
+        # the VEX upload.
+        latest_vulns: list[dict[str, Any]] = []
+        if latest_scan_result:
+            provider_results = list(
+                AssessmentRun.objects.filter(sbom_id=latest_sbom_id, category="security", status="completed")
+                .order_by("plugin_name", "-created_at")
+                .distinct("plugin_name")
+                .values_list("result", flat=True)
+            )
+            vex_statements = load_vex_suppressions(component_id)
+            latest_vulns = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
+
+        # The header badge counts the same merged, VEX-filtered view the table
+        # shows — counting a single run would disagree with the rows (e.g. OSV
+        # rates a finding high where DT said medium).
+        vuln_summary = None
+        if latest_vulns:
+            vuln_summary = {
+                "total": len(latest_vulns),
+                "critical": sum(1 for v in latest_vulns if v["severity"] == "critical"),
+                "high": sum(1 for v in latest_vulns if v["severity"] == "high"),
+                "medium": sum(1 for v in latest_vulns if v["severity"] == "medium"),
+                "low": sum(1 for v in latest_vulns if v["severity"] == "low"),
+            }
+        elif latest_scan_result:
+            vuln_summary = extract_severity_counts(latest_scan_result)
+        # Lowercased "advisory package ecosystem" haystack per finding, so the
+        # drill-down's search box can filter client-side without re-fetching.
+        latest_vuln_terms = [
+            f"{v['id']} {' '.join(v['aliases'])} {v['package']} {v['ecosystem']}".lower() for v in latest_vulns
+        ]
+        # Parallel severity list so the drill-down's type/severity dropdown can filter by index.
+        latest_vuln_severities = [v["severity"] for v in latest_vulns]
+
+        # CBOM issues drill-down: the newest crypto-bearing artifact's
+        # fail/warning compliance findings (newest CBOM, else the newest mixed
+        # SBOM with crypto assets). Pass/info rows are posture, not issues, so
+        # they stay on the CBOM detail page.
+        from sbomify.apps.core.services.component_security import CbomIssuesContext, build_latest_cbom_issues
+
+        cbom_issues = build_latest_cbom_issues(component_id) if is_bom_component else CbomIssuesContext()
+
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
@@ -79,6 +162,18 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "company_nda_id": company_nda_id,
             "gated_visibility_allowed": gated_visibility_allowed,
             "team_key": team_key,
+            "vuln_summary": vuln_summary,
+            "latest_vulns": latest_vulns,
+            "latest_vuln_terms": latest_vuln_terms,
+            "latest_vuln_severities": latest_vuln_severities,
+            "latest_vuln_version": latest_sbom["version"] if latest_sbom else None,
+            "latest_vuln_sbom_id": latest_sbom_id,
+            "latest_cbom_issues": cbom_issues.issues,
+            "latest_cbom_issue_terms": cbom_issues.terms,
+            "latest_cbom_issue_severities": cbom_issues.severities,
+            "latest_cbom_version": cbom_issues.artifact_version,
+            "latest_cbom_id": cbom_issues.artifact_id,
+            "latest_cbom_item_type": cbom_issues.artifact_item_type,
             "document_type_subcategories": document_type_subcategories,
             "document_type_subcategories_json": json.dumps(document_type_subcategories),
         }

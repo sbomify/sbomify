@@ -61,22 +61,22 @@
                     Organization-wide compliance documents, certifications, and security attestations
                 </p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {% for component in global_components %}
-                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
-                        <div class="flex justify-between items-start mb-3 gap-2">
-                            <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
+                    <div class="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
+                        <div class="flex justify-between items-start gap-2">
+                            <h3 class="text-base font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
                             <span class="tw-chip-neutral whitespace-nowrap">{{ component.component_type_display }}</span>
                         </div>
-                        <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">
+                        <p class="text-sm text-text-muted leading-relaxed line-clamp-1 min-h-[1.25rem] m-0">
                             Organization-level compliance artifact available across the entire organization.
                         </p>
-                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border/40">
+                        <div class="flex justify-between items-center">
                             <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
                                 <i class="fas fa-building" aria-hidden="true"></i>
                                 Organization-Wide
                             </span>
-                            <a class="tw-btn-primary text-sm min-h-10 py-2 px-3 inline-flex items-center"
+                            <a class="text-primary text-sm font-semibold inline-flex items-center hover:underline"
                                href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
                                 View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
                             </a>
@@ -107,17 +107,17 @@
                     </div>
                 </div>
             {% endif %}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {% for product in products %}
-                    <div class="bg-card border border-border rounded-xl p-5 h-full flex flex-col transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
-                        <div class="flex justify-between items-start mb-3 gap-2">
-                            <h3 class="text-lg font-semibold text-text m-0 leading-tight flex-1">{{ product.name }}</h3>
+                    <div class="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
+                        <div class="flex justify-between items-start gap-2">
+                            <h3 class="text-base font-semibold text-text m-0 leading-tight flex-1">{{ product.name }}</h3>
                             <span class="tw-chip-neutral whitespace-nowrap">{{ product.component_count }} Component{{ product.component_count|pluralize }}</span>
                         </div>
-                        {% if product.description %}
-                            <p class="text-sm text-text-muted leading-relaxed flex-grow mb-3">{{ product.description }}</p>
-                        {% endif %}
-                        <div class="flex justify-between items-center mt-auto pt-3 border-t border-border/40">
+                        <p class="text-sm text-text-muted leading-relaxed line-clamp-1 min-h-[1.25rem] m-0">
+                            {{ product.description|default:'' }}
+                        </p>
+                        <div class="flex justify-between items-center">
                             <div class="flex items-center gap-1 flex-wrap">
                                 {% if product.passing_assessments %}
                                     {% for assessment in product.passing_assessments %}
@@ -125,7 +125,7 @@
                                     {% endfor %}
                                 {% endif %}
                             </div>
-                            <a class="tw-btn-primary text-sm min-h-10 py-2 px-3 inline-flex items-center"
+                            <a class="text-primary text-sm font-semibold inline-flex items-center hover:underline"
                                href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
                                 View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
                             </a>

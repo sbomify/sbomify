@@ -5,7 +5,7 @@ from typing import Generator
 import pytest
 from django.utils import timezone
 
-from sbomify.apps.core.models import Component, Product, Release
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Product, Release
 from sbomify.apps.core.tests.e2e.factories import *  # noqa: F403
 from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
@@ -197,3 +197,113 @@ def document_component_details(component_factory, product_factory, document_fact
     document_factory(component, name="simple-document.pdf", version="1.0.0")
 
     return component
+
+
+@pytest.fixture
+def trust_center_product(product_factory, component_factory, sbom_factory, document_factory, team_with_business_plan):
+    """Realistic trust-center product: SBOM + doc + identifiers + links + releases."""
+    team_with_business_plan.is_public = True
+    team_with_business_plan.save()
+
+    name = "UX Review Product"
+    _id = hashlib.md5(name.encode()).hexdigest()[:12]
+    product = product_factory(name=name, _id=_id, is_public=True)
+
+    bom = component_factory(
+        "Backend API",
+        Component.ComponentType.BOM,
+        product=product,
+        visibility=Component.Visibility.PUBLIC,
+    )
+    sbom_factory(bom, name="backend-api-sbom.json", version="2.4.1")
+
+    doc = component_factory(
+        "Compliance Pack",
+        Component.ComponentType.DOCUMENT,
+        product=product,
+        visibility=Component.Visibility.PUBLIC,
+    )
+    document_factory(doc, name="soc2-report.pdf", version="2025")
+
+    ProductIdentifier.objects.bulk_create(
+        [
+            ProductIdentifier(
+                product=product,
+                identifier_type=ProductIdentifier.IdentifierType.SKU,
+                value="SKU-UX-001",
+                team=product.team,
+            ),
+            ProductIdentifier(
+                product=product,
+                identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
+                value="0123456789012",
+                team=product.team,
+            ),
+            ProductIdentifier(
+                product=product,
+                identifier_type=ProductIdentifier.IdentifierType.CPE,
+                value="cpe:2.3:a:test:product:1.0.0:*:*:*:*:*:*:*",
+                team=product.team,
+            ),
+        ]
+    )
+
+    ProductLink.objects.bulk_create(
+        [
+            ProductLink(
+                product=product,
+                link_type=ProductLink.LinkType.WEBSITE,
+                title="Product Website",
+                url="https://example.com",
+                team=product.team,
+            ),
+            ProductLink(
+                product=product,
+                link_type=ProductLink.LinkType.REPOSITORY,
+                title="GitHub Repository",
+                url="https://github.com/example/product",
+                team=product.team,
+            ),
+            ProductLink(
+                product=product,
+                link_type=ProductLink.LinkType.DOCUMENTATION,
+                title="Documentation",
+                url="https://docs.example.com",
+                team=product.team,
+            ),
+        ]
+    )
+
+    # Versioned releases: is_latest=False. The model reserves is_latest for
+    # the auto-managed `latest` synthetic release; `.create()` (not bulk) so
+    # save-time validations and signals run.
+    for name_, description, is_prerelease in [
+        ("v1.0.0", "Initial GA release", False),
+        ("v1.1.0", "Maintenance release", False),
+        ("v2.0.0", "Major update — new dashboard, faster scans", False),
+        ("v2.1.0-beta", "Beta — preview of release-channel feature", True),
+    ]:
+        Release.objects.create(
+            product=product,
+            name=name_,
+            description=description,
+            is_latest=False,
+            is_prerelease=is_prerelease,
+        )
+
+    # The synthetic auto-managed `latest` release already exists: adding the
+    # SBOM and the document above fires the signals that create it. Creating a
+    # second one trips the "A product can only have one latest release" guard,
+    # which is what broke every case built on this fixture. get_or_create so the
+    # fixture still works if it is ever used without artifacts.
+    #
+    # The public views filter it out of release lists; the UX-review pages
+    # exercise both the filtered list rendering and the synthetic-release
+    # download CTA.
+    Release.objects.get_or_create(
+        product=product,
+        name=LATEST_RELEASE_NAME,
+        defaults={"is_latest": True, "is_prerelease": False},
+    )
+
+    yield product

@@ -1,0 +1,92 @@
+---
+name: OpenGrep
+
+# Static analysis (SAST) with OpenGrep — an open-source, registry-free fork of
+# Semgrep. Findings are uploaded as SARIF to the GitHub Security tab
+# (Code Scanning), so this scan is non-blocking and surfaces alerts on PRs.
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  schedule:
+    # Weekly re-scan (Mondays 06:00 UTC) to catch new rules against existing code.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  # OpenGrep release to install (https://github.com/opengrep/opengrep/releases).
+  OPENGREP_VERSION: v1.22.0
+  # SHA-256 of the opengrep_manylinux_x86 asset for OPENGREP_VERSION. The binary
+  # is verified against this before it is made executable, so a tampered/MITM'd
+  # or silently re-uploaded asset fails the build. Update both when bumping.
+  OPENGREP_SHA256: 45bcd58440e397ed52c50e953ccf5948909ea77087c9186fc7d277216f62e319
+
+jobs:
+  opengrep:
+    name: OpenGrep Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # required to upload SARIF to the Security tab
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout OpenGrep rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opengrep/opengrep-rules
+          ref: f1d2b562b414783763fd02a6ed2736eaed622efa  # archived repo, pinned for reproducibility
+          path: .opengrep-rules
+          persist-credentials: false
+
+      - name: Install OpenGrep
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/opengrep" \
+            "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86"
+          # Verify integrity before the binary is ever marked executable.
+          echo "${OPENGREP_SHA256}  ${HOME}/bin/opengrep" | sha256sum -c -
+          chmod +x "$HOME/bin/opengrep"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          "$HOME/bin/opengrep" --version
+
+      - name: Run OpenGrep scan
+        run: |
+          opengrep scan \
+            --config .opengrep-rules/python/lang/security \
+            --config .opengrep-rules/python/django/security \
+            --config .opengrep-rules/javascript/lang/security \
+            --config .opengrep-rules/generic/secrets \
+            --config .opengrep-rules/dockerfile/security \
+            --config .opengrep-rules/bash/curl \
+            --sarif-output=opengrep.sarif \
+            --exclude .opengrep-rules \
+            --exclude sbomify/apps/sboms/tests/test_data \
+            --exclude sbomify/apps/core/tests/e2e/__snapshots__ \
+            --exclude '*/migrations/*' \
+            --exclude keycloak/themes \
+            .
+
+      - name: Upload SARIF to GitHub Security
+        # always() so findings still publish when the scan step reports them, but
+        # skip when there's no SARIF (scan failed early) or the PR is from a fork
+        # (GITHUB_TOKEN is read-only there, so the upload would 403 and turn this
+        # non-blocking scan into a failing check).
+        if: >-
+          always()
+          && hashFiles('opengrep.sarif') != ''
+          && (github.event_name != 'pull_request'
+              || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          sarif_file: opengrep.sarif
+          category: opengrep

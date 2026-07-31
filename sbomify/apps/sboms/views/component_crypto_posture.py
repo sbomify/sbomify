@@ -13,8 +13,12 @@ POSTURE_TEMPLATE = "sboms/components/crypto_posture_card.html.j2"
 class ComponentCryptoPostureView(View):
     """Lazy-loaded (hx-get) component-level post-quantum posture card.
 
-    Shows the overall PQC readiness of the component's most recent artifact, as
-    an at-a-glance signal on the component detail page (private and public).
+    Shows the overall PQC readiness of the component's newest crypto-bearing
+    artifact, as an at-a-glance signal on the component detail page (private
+    and public). The newest CBOM wins; without one, the newest SBOM not known
+    to be crypto-free (``has_crypto_assets`` True, or None for rows predating
+    the flag) — so neither a VEX upload nor a newer crypto-free SBOM displaces
+    an older crypto-bearing artifact, and known-empty rows skip the S3 read.
     Like the per-SBOM card it is an HTMX partial: a single S3 read happens after
     page render, authorization is delegated to ``get_crypto_inventory`` (so no
     private leak on the public page), and any failure or a crypto-free artifact
@@ -22,8 +26,16 @@ class ComponentCryptoPostureView(View):
     """
 
     def get(self, request: HttpRequest, component_id: str) -> HttpResponse:
-        latest_id = (
-            SBOM.objects.filter(component_id=component_id).order_by("-created_at").values_list("id", flat=True).first()
+        from django.db.models import QuerySet
+
+        base = SBOM.objects.filter(component_id=component_id).order_by("-created_at")
+
+        def newest(queryset: QuerySet[SBOM]) -> str | None:
+            first = queryset.values_list("id", flat=True).first()
+            return str(first) if first is not None else None
+
+        latest_id = newest(base.filter(bom_type=SBOM.BomType.CBOM)) or newest(
+            base.filter(bom_type=SBOM.BomType.SBOM).exclude(has_crypto_assets=False)
         )
         if latest_id is None:
             return HttpResponse("")

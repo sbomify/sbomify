@@ -20,16 +20,16 @@ jobs:
     name: Code Quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -121,6 +121,18 @@ jobs:
             ignore: "sbomify/apps/core/tests/e2e"
           - name: "SBOM Tests"
             path: "sbomify/apps/sboms/tests/"
+          - name: "Plugin Tests"
+            path: "sbomify/apps/plugins/tests/"
+          - name: "Compliance Tests"
+            path: "sbomify/apps/compliance/tests/"
+          - name: "Vulnerability Scanning Tests"
+            path: "sbomify/apps/vulnerability_scanning/tests/"
+          - name: "TEA Tests"
+            path: "sbomify/apps/tea/tests/"
+          - name: "OIDC Tests"
+            path: "sbomify/apps/oidc/tests/"
+          - name: "Controls Tests"
+            path: "sbomify/apps/controls/tests/"
           - name: "Team Tests"
             path: "sbomify/apps/teams/tests/"
           - name: "Billing Tests"
@@ -130,11 +142,13 @@ jobs:
           - name: "Licensing Tests"
             path: "sbomify/apps/licensing/tests/"
           - name: "Access Token Tests"
-            path: "sbomify/apps/access_tokens/tests.py"
+            path: "sbomify/apps/access_tokens/"
           - name: "Notification Tests"
             path: "sbomify/apps/notifications/tests.py"
           - name: "Onboarding Tests"
             path: "sbomify/apps/onboarding/tests/"
+          - name: "Security Advisory Tests"
+            path: "sbomify/apps/security_advisories/tests/"
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -145,15 +159,15 @@ jobs:
       DJANGO_TEST: 'true'
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -228,15 +242,15 @@ jobs:
       DJANGO_TEST: 'true'
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: "**/uv.lock"
@@ -308,7 +322,7 @@ jobs:
     name: Frontend Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -324,6 +338,10 @@ jobs:
           bun run build
 
       - name: Run Frontend Tests
+        # `shell: bash` is required: the default shell is `bash -e` without
+        # pipefail, so `bun test | tee` would report tee's exit status and a
+        # failing test suite would pass silently.
+        shell: bash
         run: |
           echo "## Frontend Test Results" >> $GITHUB_STEP_SUMMARY
           bun test | tee -a $GITHUB_STEP_SUMMARY
@@ -344,7 +362,7 @@ jobs:
       packages: write
       attestations: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -353,7 +371,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -361,7 +379,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
           username: sbomifyhub
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -538,7 +556,7 @@ jobs:
             has_product_release: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -566,101 +584,6 @@ jobs:
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
 
-  # =========================================================================
-  # Publish CBOM (Cryptography Bill of Materials)
-  #
-  # Uploads the committed, hand-maintained CycloneDX 1.6 CBOM
-  # (cbom/sbomify-backend.cbom.cdx.json) that inventories sbomify's own
-  # cryptographic usage. No off-the-shelf tool reliably generates a CBOM for
-  # sbomify's Python-via-wrappers stack (cdxgen detects Java/JS only; IBM
-  # CBOMkit keys on direct pyca/cryptography calls, which sbomify rarely makes),
-  # so the CBOM is maintained as code and CI signs + attests + uploads it via
-  # OIDC trusted publishing, exactly like the source SBOMs above.
-  #
-  # DORMANT until configured: each job runs only when its component repo
-  # variable is set. To enable, create a dedicated CBOM component in the
-  # sbomify workspace, give it an OIDC trusted-publishing binding to this repo,
-  # and set repo variable CBOM_COMPONENT_ID_STAGING / CBOM_COMPONENT_ID_PRODUCTION
-  # (optionally CBOM_PRODUCT_RELEASE_ID_* to tag a product release). A dedicated
-  # component is required because the action uploads with the default bom_type
-  # ("sbom"), which would collide with the Python Stack component's package SBOM.
-  # =========================================================================
-  publish-cbom-staging:
-    name: Publish CBOM (staging)
-    needs: [docker-build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.CBOM_COMPONENT_ID_STAGING != ''
-    permissions:
-      id-token: write
-      contents: read
-      attestations: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Determine version
-        id: version
-        uses: ./.github/actions/determine-version
-
-      - name: Upload CBOM
-        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
-        env:
-          API_BASE_URL: 'https://stage.sbomify.com'
-          COMPONENT_ID: ${{ vars.CBOM_COMPONENT_ID_STAGING }}
-          COMPONENT_NAME: 'Cryptography (CBOM)'
-          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
-          SBOM_FILE: 'cbom/sbomify-backend.cbom.cdx.json'
-          PRODUCT_RELEASE: ${{ vars.CBOM_PRODUCT_RELEASE_ID_STAGING != '' && format('["{0}:{1}"]', vars.CBOM_PRODUCT_RELEASE_ID_STAGING, steps.version.outputs.version) || '' }}
-          SBOM_FORMAT: cyclonedx
-          AUGMENT: false
-          ENRICH: false
-          UPLOAD: true
-          OUTPUT_FILE: 'cbom-out.cdx.json'
-
-      - name: Attest CBOM
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
-        with:
-          subject-path: '${{ github.workspace }}/cbom-out.cdx.json'
-
-  publish-cbom-production:
-    name: Publish CBOM (production)
-    needs: [docker-build]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.CBOM_COMPONENT_ID_PRODUCTION != ''
-    permissions:
-      id-token: write
-      contents: read
-      attestations: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Determine version
-        id: version
-        uses: ./.github/actions/determine-version
-
-      - name: Upload CBOM
-        uses: sbomify/sbomify-action@master # scorecard-ignore:pinned-dependencies -- self-dogfooding
-        env:
-          COMPONENT_ID: ${{ vars.CBOM_COMPONENT_ID_PRODUCTION }}
-          COMPONENT_NAME: 'Cryptography (CBOM)'
-          COMPONENT_VERSION: ${{ steps.version.outputs.version }}
-          SBOM_FILE: 'cbom/sbomify-backend.cbom.cdx.json'
-          PRODUCT_RELEASE: ${{ vars.CBOM_PRODUCT_RELEASE_ID_PRODUCTION != '' && format('["{0}:{1}"]', vars.CBOM_PRODUCT_RELEASE_ID_PRODUCTION, steps.version.outputs.version) || '' }}
-          SBOM_FORMAT: cyclonedx
-          AUGMENT: false
-          ENRICH: false
-          UPLOAD: true
-          OUTPUT_FILE: 'cbom-out.cdx.json'
-
-      - name: Attest CBOM
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
-        with:
-          subject-path: '${{ github.workspace }}/cbom-out.cdx.json'
 
   # =========================================================================
   # Generate Container SBOMs (Staging) - master branch only
@@ -692,12 +615,12 @@ jobs:
             has_product_release: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -781,7 +704,7 @@ jobs:
             has_product_release: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -838,12 +761,12 @@ jobs:
             has_product_release: true
     steps:
       - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

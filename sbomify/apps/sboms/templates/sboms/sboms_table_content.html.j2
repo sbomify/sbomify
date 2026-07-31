@@ -14,33 +14,45 @@
             <div class="tw-data-table-toolbar-left">
                 <div class="tw-data-table-search">
                     <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <label for="sboms-search" class="sr-only">Search BOMs</label>
+                    <label for="sboms-search" class="sr-only">Search artifacts</label>
                     <input type="search"
                            id="sboms-search"
                            x-model="search"
                            @input="currentPage = 1"
-                           placeholder="Search BOMs..."
+                           placeholder="Search artifacts..."
                            class="tw-data-table-search-input">
                 </div>
+                <label for="sboms-type-filter" class="sr-only">Filter by type</label>
+                <select id="sboms-type-filter"
+                        x-model="typeFilter"
+                        @change="currentPage = 1"
+                        class="tw-data-table-page-size-select">
+                    <option value="all">All Types</option>
+                    <template x-for="t in bomTypes" :key="t">
+                        <option :value="t" x-text="t.toUpperCase()"></option>
+                    </template>
+                </select>
             </div>
-            <div class="tw-data-table-toolbar-right">
-                <div class="tw-data-table-page-size">
-                    <span>Show</span>
-                    <label for="sboms-per-page" class="sr-only">Entries per page</label>
-                    <select id="sboms-per-page"
-                            x-model.number="pageSize"
-                            @change="currentPage = 1"
-                            class="tw-data-table-page-size-select">
-                        <template x-for="size in pageSizeOptions" :key="size">
-                            <option :value="size" x-text="size"></option>
-                        </template>
-                    </select>
-                    <span>entries</span>
+            {% if full_view %}
+                <div class="tw-data-table-toolbar-right">
+                    <div class="tw-data-table-page-size">
+                        <span>Show</span>
+                        <label for="sboms-per-page" class="sr-only">Entries per page</label>
+                        <select id="sboms-per-page"
+                                x-model.number="pageSize"
+                                @change="currentPage = 1"
+                                class="tw-data-table-page-size-select">
+                            <template x-for="size in pageSizeOptions" :key="size">
+                                <option :value="size" x-text="size"></option>
+                            </template>
+                        </select>
+                        <span>entries</span>
+                    </div>
                 </div>
-            </div>
+            {% endif %}
         </div>
         <div class="tw-data-table-container">
-            <table class="tw-table">
+            <table class="tw-table w-full">
                 <thead>
                     <tr>
                         <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
@@ -55,20 +67,7 @@
                                 </span>
                             </button>
                         </th>
-                        <th class="hidden md:table-cell">Type</th>
-                        <th class="hidden md:table-cell"
-                            :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                            <button type="button"
-                                    class="tw-table-sortable"
-                                    :class="{ 'sorted-asc': sortColumn === 'format' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'format' && sortDirection === 'desc' }"
-                                    @click="sort('format')">
-                                Format
-                                <span class="tw-table-sort-icon" aria-hidden="true">
-                                    <i class="fas fa-caret-up"></i>
-                                    <i class="fas fa-caret-down"></i>
-                                </span>
-                            </button>
-                        </th>
+                        <th>Type</th>
                         <th class="hidden md:table-cell"
                             :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
@@ -82,20 +81,20 @@
                                 </span>
                             </button>
                         </th>
+                        {% if not is_public_view %}<th>Vulnerabilities</th>{% endif %}
                         {% if not is_public_view %}<th class="hidden lg:table-cell">Assessments</th>{% endif %}
                         <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
                                     :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
                                     @click="sort('created_at')">
-                                Created
+                                Uploaded
                                 <span class="tw-table-sort-icon" aria-hidden="true">
                                     <i class="fas fa-caret-up"></i>
                                     <i class="fas fa-caret-down"></i>
                                 </span>
                             </button>
                         </th>
-                        <th class="hidden lg:table-cell">Releases</th>
                         <th class="text-center">Actions</th>
                     </tr>
                 </thead>
@@ -104,7 +103,7 @@
                         <tr class="hover:bg-background/50 transition-colors"
                             x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
                             <td class="break-all">
-                                <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('SBOM_ID', item.sbom.id)"
+                                <a :href="(item.sbom.bom_type === 'vex' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% endif %}' : item.sbom.bom_type === 'cbom' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% endif %}' : '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}').replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
                                 {% comment %}
@@ -121,15 +120,10 @@
                                           :title="item.sbom.version"></span>
                                 </div>
                             </td>
-                            <td class="hidden md:table-cell">
+                            <td>
                                 <span class="tw-badge text-xs"
-                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-warning': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(bomType) }"
+                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-violet': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(bomType) }"
                                       x-text="bomType.toUpperCase()"></span>
-                            </td>
-                            <td class="hidden md:table-cell">
-                                <span class="tw-sbom-format"
-                                      :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
-                                      x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
                             </td>
                             <td class="hidden md:table-cell">
                                 <span class="font-mono text-sm text-text"
@@ -137,8 +131,39 @@
                                       :title="item.sbom.version"></span>
                             </td>
                             {% if not is_public_view %}
+                                <td class="whitespace-nowrap">
+                                    <template x-if="!item.vuln && bomType === 'sbom'">
+                                        <span class="text-text-muted text-sm">Not scanned</span>
+                                    </template>
+                                    <template x-if="!item.vuln && bomType !== 'sbom'">
+                                        <span class="text-text-muted text-sm">—</span>
+                                    </template>
+                                    <template x-if="item.vuln && item.vuln.total === 0">
+                                        <span class="tw-badge-success text-xs">Clean</span>
+                                    </template>
+                                    <template x-if="item.vuln && item.vuln.total > 0">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <template x-if="item.vuln.critical > 0">
+                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-danger/10 text-danger"
+                                                      x-text="item.vuln.critical + ' Critical'"></span>
+                                            </template>
+                                            <template x-if="item.vuln.high > 0">
+                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-severity-high-soft text-severity-high"
+                                                      x-text="item.vuln.high + ' High'"></span>
+                                            </template>
+                                            <template x-if="item.vuln.medium > 0">
+                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-info/10 text-info"
+                                                      x-text="item.vuln.medium + ' Medium'"></span>
+                                            </template>
+                                            <template x-if="item.vuln.low > 0">
+                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-surface text-text-muted border border-border"
+                                                      x-text="item.vuln.low + ' Low'"></span>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </td>
                                 <td class="hidden lg:table-cell">
-                                    <template x-if="item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
+                                    <template x-if="bomType === 'sbom' && item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
                                         <div class="flex flex-wrap items-center gap-1">
                                             <!-- Individual plugin badges (show up to 3) -->
                                             <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
@@ -167,35 +192,22 @@
                                             </template>
                                         </div>
                                     </template>
-                                    <template x-if="item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
+                                    <template x-if="bomType === 'sbom' && item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
                                         <span class="inline-flex items-center gap-1.5 text-info text-sm">
                                             <i class="fas fa-clock fa-pulse"></i>
                                             <span>Checking...</span>
                                         </span>
                                     </template>
-                                    <template x-if="!item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
+                                    <template x-if="bomType !== 'sbom' || !item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
                                         <span class="text-text-muted text-sm">—</span>
                                     </template>
                                 </td>
                             {% endif %}
                             <td class="text-text text-sm whitespace-nowrap">
                                 <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
-                            </td>
-                            <td class="hidden lg:table-cell">
-                                <template x-if="item.releases && item.releases.length > 0">
-                                    <div class="flex flex-wrap gap-1">
-                                        <template x-for="release in item.releases.slice(0, 2)" :key="release.id">
-                                            <span class="tw-badge-secondary text-xs" x-text="release.name"></span>
-                                        </template>
-                                        <template x-if="item.releases.length > 2">
-                                            <span class="tw-badge-secondary text-xs"
-                                                  x-text="'+' + (item.releases.length - 2)"></span>
-                                        </template>
-                                    </div>
-                                </template>
-                                <template x-if="!item.releases || item.releases.length === 0">
-                                    <span class="text-text-muted">—</span>
-                                </template>
+                                <div class="text-xs text-text-muted"
+                                     x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version">
+                                </div>
                             </td>
                             <td>
                                 <div class="flex items-center justify-center gap-1">
@@ -216,7 +228,7 @@
                     </template>
                     <template x-if="paginatedData.length === 0 && search">
                         <tr>
-                            <td colspan="{% if is_public_view %}7{% else %}8{% endif %}"
+                            <td colspan="{% if is_public_view %}5{% else %}7{% endif %}"
                                 class="text-center py-8 text-text-muted">
                                 <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
                                 <p>No BOMs match your search</p>
@@ -228,38 +240,28 @@
                 </tbody>
             </table>
         </div>
-        <div class="tw-data-table-footer">
-            <div class="tw-data-table-info">
-                Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong> entries
-                <template x-if="search">
-                    <span>(filtered from <strong x-text="allSboms.length"></strong> total)</span>
-                </template>
-            </div>
-            <nav class="tw-pagination" x-show="totalPages > 1">
-                <button class="tw-pagination-btn tw-pagination-btn-nav"
+        <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+            <span class="text-sm text-text-muted">
+                Showing <span x-text="startItem"></span> to <span x-text="endItem"></span> of <span x-text="filteredData.length"></span>
+                <template x-if="search"><span>(filtered from <span x-text="allSboms.length"></span> total)</span></template>
+            </span>
+            <div class="flex items-center gap-2" x-show="totalPages > 1">
+                <button type="button"
+                        class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         :disabled="currentPage === 1"
                         @click="goToPage(currentPage - 1)"
                         aria-label="Previous page">
-                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                    <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
                 </button>
-                <template x-for="page in visiblePages" :key="page">
-                    <template x-if="page === '...'">
-                        <span class="tw-pagination-ellipsis">...</span>
-                    </template>
-                    <template x-if="page !== '...'">
-                        <button class="tw-pagination-btn"
-                                :class="{ 'tw-pagination-btn-active': currentPage === page }"
-                                @click="goToPage(page)"
-                                x-text="page"></button>
-                    </template>
-                </template>
-                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
+                <button type="button"
+                        class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
                         :disabled="currentPage === totalPages"
                         @click="goToPage(currentPage + 1)"
                         aria-label="Next page">
-                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
                 </button>
-            </nav>
+            </div>
         </div>
     </div>
 {% endif %}

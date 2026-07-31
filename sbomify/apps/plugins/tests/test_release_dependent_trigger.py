@@ -410,7 +410,7 @@ class TestReleaseArtifactSignalHandler:
         # Create the SBOM before patching so the upload signal does not populate captured.
         team = sample_team_with_owner_member.team
         component = Component.objects.create(name="c", team=team)
-        SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        SBOM.objects.create(name="s", component=component, format="cyclonedx", sbom_filename="s.json")
 
         captured_attach: list[dict] = []
         monkeypatch.setattr(
@@ -542,7 +542,7 @@ class TestBulkBackfillFiltering:
 
         team = sample_team_with_owner_member.team
         component = Component.objects.create(name="c", team=team)
-        SBOM.objects.create(name="s", component=component, format="cyclonedx")
+        SBOM.objects.create(name="s", component=component, format="cyclonedx", sbom_filename="s.json")
 
         captured: list[str] = []
         monkeypatch.setattr(
