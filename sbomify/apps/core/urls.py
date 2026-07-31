@@ -91,6 +91,21 @@ urlpatterns = [
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(
+        "security-advisories/",
+        views.SecurityAdvisoriesDashboardView.as_view(),
+        name="security_advisories_dashboard",
+    ),
+    path(
+        "security-advisories/table/",
+        views.SecurityAdvisoriesTableView.as_view(),
+        name="security_advisories_table",
+    ),
+    path(
+        "security-advisories/<str:advisory_id>/",
+        views.SecurityAdvisoryDetailView.as_view(),
+        name="security_advisory_detail",
+    ),
+    path(
         "public/component/<str:component_id>/",
         views.ComponentDetailsPublicView.as_view(),
         name="component_details_public",

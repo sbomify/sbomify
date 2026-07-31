@@ -1,0 +1,159 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% load static %}
+{% block title %}sbomify Security Advisories{% endblock %}
+{% block dashboard_content %}
+    <div class="space-y-6">
+        {# Page Header #}
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <div class="tw-avatar tw-avatar-lg">
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-text">Security Advisories</h1>
+                    <p class="text-text-muted text-sm">Publish security advisories for your products</p>
+                </div>
+            </div>
+            {% if has_crud_permissions %}
+                <div>
+                    <button type="button"
+                            @click="$dispatch('open-add-advisory-modal')"
+                            class="tw-btn-primary">
+                        <i class="fas fa-plus mr-2"></i>New Advisory
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+        {# Advisories Table #}
+        {% include 'core/security_advisories_table.html.j2' %}
+        {# Add Advisory Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
+        {% if has_crud_permissions %}
+            <div x-data="{ open: false, showRef: false }"
+                 @open-add-advisory-modal.window="open = true; showRef = false">
+                <template x-teleport="body">
+                    <div x-show="open"
+                         x-cloak
+                         class="fixed inset-0 z-[100]"
+                         role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="addAdvisoryModalLabel">
+                        <div x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="tw-modal-overlay"
+                             @click="open = false"></div>
+                        <div class="tw-modal"
+                             x-show="open"
+                             x-trap.noscroll="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             @click.stop
+                             @keydown.escape="if(open) open = false">
+                            <div class="tw-modal-content">
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-shield-halved text-primary"></i>
+                                        </div>
+                                        <h4 id="addAdvisoryModalLabel" class="tw-modal-title">New Advisory</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <form id="addAdvisoryForm"
+                                      method="post"
+                                      action="{% url 'core:security_advisories_dashboard' %}">
+                                    {% csrf_token %}
+                                    <div class="tw-modal-body space-y-4">
+                                        <div>
+                                            <label class="tw-form-label" for="advisoryTitle">
+                                                Title <span class="text-danger">*</span>
+                                            </label>
+                                            <input id="advisoryTitle"
+                                                   name="title"
+                                                   type="text"
+                                                   class="tw-form-input"
+                                                   placeholder="e.g. Improper authentication in SAML assertion handling"
+                                                   required />
+                                        </div>
+                                        <div>
+                                            <label class="tw-form-label" for="advisorySeverity">Severity</label>
+                                            <select id="advisorySeverity" name="severity" class="tw-form-input">
+                                                <option value="critical">Critical</option>
+                                                <option value="high">High</option>
+                                                <option value="medium" selected>Medium</option>
+                                                <option value="low">Low</option>
+                                            </select>
+                                        </div>
+                                        {# CVE / reference is optional — hidden until the user chooses to add it. #}
+                                        <div>
+                                            <button type="button"
+                                                    x-show="!showRef"
+                                                    @click="showRef = true; $nextTick(() => $refs.vulnId.focus())"
+                                                    class="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-dark transition-colors">
+                                                <i class="fas fa-plus text-xs"></i>Link a CVE or reference
+                                            </button>
+                                            <div x-show="showRef" x-cloak class="space-y-1.5">
+                                                <div class="flex items-center justify-between">
+                                                    <label class="tw-form-label !mb-0" for="advisoryVulnId">CVE or reference</label>
+                                                    <button type="button"
+                                                            @click="showRef = false; $refs.vulnId.value = ''"
+                                                            class="text-xs text-text-muted hover:text-text transition-colors">
+                                                        Remove
+                                                    </button>
+                                                </div>
+                                                <input type="hidden" name="type" value="cve" />
+                                                <input id="advisoryVulnId"
+                                                       name="vulnerability_id"
+                                                       x-ref="vulnId"
+                                                       type="text"
+                                                       class="tw-form-input"
+                                                       placeholder="CVE-2026-0000" />
+                                                <p class="text-xs text-text-muted">Optional. Link the CVE or a vendor advisory reference.</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="tw-form-label" for="advisoryDescription">Description</label>
+                                            <textarea id="advisoryDescription"
+                                                      name="description"
+                                                      class="tw-form-input"
+                                                      rows="3"
+                                                      placeholder="Describe the vulnerability..."></textarea>
+                                            <p class="mt-1.5 text-xs text-text-muted">Optional. A brief description of the issue.</p>
+                                        </div>
+                                        {# Reinforce the timeline model: creating the advisory posts its first update. #}
+                                        <div class="flex items-start gap-2.5 rounded-lg bg-info/5 border border-info/20 px-3 py-2.5">
+                                            <i class="fas fa-timeline text-info text-sm mt-0.5"></i>
+                                            <p class="text-xs text-text-muted">
+                                                This opens the advisory with its first update, <span class="font-medium text-text">Vulnerability identified</span>. Post further updates to move it through Investigating, Fix in progress and Resolved.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="tw-modal-footer">
+                                        <button type="button" class="tw-btn-ghost" @click="open = false">Cancel</button>
+                                        <button type="submit" class="tw-btn-primary">
+                                            <i class="fas fa-plus mr-2"></i>Create Advisory
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+{% block scripts %}{% endblock %}
