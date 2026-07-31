@@ -75,8 +75,12 @@ network-copyleft:
   - AGPL-3.0-only
   - AGPL-3.0-or-later
 
-# BUSL-1.1, SSPL-1.0, Commons-Clause and Elastic-2.0's ELv2 are already
-# categorised as custom licences in non_spdx.yaml, so they are not repeated
-# here.
+# Source-available licences that also carry a real SPDX id belong here even
+# when non_spdx.yaml lists them, because get_license_list() emits the SPDX and
+# custom entries separately — omitting the id leaves the SPDX copy
+# uncategorised while the custom copy has a category. Commons-Clause and ELv2
+# have no SPDX id at all, so they stay custom-only.
 proprietary:
   - Elastic-2.0
+  - BUSL-1.1
+  - SSPL-1.0

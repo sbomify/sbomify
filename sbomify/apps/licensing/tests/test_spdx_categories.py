@@ -101,3 +101,17 @@ class TestTheLicenceList:
 
         assert custom
         assert all(x.get("category") for x in custom)
+
+
+def test_a_licence_listed_both_as_spdx_and_custom_is_categorised_on_both():
+    """get_license_list() emits the SPDX and custom entries separately, so an
+    id present in both needs a category in both places or the SPDX copy shows
+    as unclassified beside a classified twin. BUSL-1.1 and SSPL-1.0 are the
+    real cases."""
+    from sbomify.apps.licensing.loader import CUSTOM_SYMBOLS
+
+    dual = [k for k in CUSTOM_SYMBOLS if k in SPDX_SYMBOLS]
+
+    assert dual, "expected some ids in both sets"
+    missing = sorted(k for k in dual if k not in SPDX_CATEGORIES)
+    assert missing == [], f"SPDX copy left uncategorised: {missing}"
