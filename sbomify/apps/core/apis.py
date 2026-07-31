@@ -2872,8 +2872,28 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
 
     if request_is_oidc_authed(request):
         bound_component_id = bound_component_id_for_request(request)
-        if bound_component_id is None or not product.components.filter(id=bound_component_id).exists():
-            return 403, {"detail": "You do not have permission to create releases", "error_code": ErrorCode.FORBIDDEN}
+        # Distinct wording per cause. These two share both a status and a call site with the
+        # role denial above, so one shared message leaves a CI log no way to tell which check
+        # rejected it, and the two have opposite remedies. Naming the component and the product
+        # leaks nothing: the caller supplied the product id and holds the binding for the
+        # component.
+        if bound_component_id is None:
+            return 403, {
+                "detail": (
+                    "This OIDC token has no component binding, so it cannot create releases. "
+                    "Re-create the trusted-publishing binding for the component."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+        if not product.components.filter(id=bound_component_id).exists():
+            return 403, {
+                "detail": (
+                    f"Component {bound_component_id} is not part of product {product.id}, so this "
+                    "OIDC token cannot create releases for it. Add the component to the product, "
+                    "then retry."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
