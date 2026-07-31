@@ -21,8 +21,11 @@ Three infrastructure notes:
    CycloneDX uploads; we wrap ``window.fetch`` via an init script so the existing
    UI records the VEX upload flow.
 2. **S3 short-circuit.** The screencast compose stack runs no S3 service, so a
-   real upload would fail at ``put_object``. We no-op ``upload_data_as_file`` for
-   the recording so the upload-file endpoint succeeds and writes the VEX record.
+   real upload would fail at ``put_object``. We back S3 with an in-memory dict:
+   ``upload_data_as_file`` stores the bytes and ``get_file_data`` returns them.
+   Both halves are needed. No-oping only the put would let the upload succeed
+   while ``build_release_vex`` got nothing back from ``get_sbom_data``, so the
+   Trust Center's "Download latest VEX" link would 404 on camera.
 3. **Re-annotation runs the real engine, fed directly.** In production, uploading
    a VEX enqueues a job that reads the VEX from S3 and re-annotates the stored
    scan. With no S3 the job cannot fetch the bytes, so ``_apply_vex`` runs the
@@ -208,8 +211,24 @@ def _patch_uploads_as_vex(page: Page) -> None:
 
 @pytest.fixture
 def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No-op the S3 put so the upload-file endpoint can succeed end-to-end."""
-    monkeypatch.setattr(S3Client, "upload_data_as_file", lambda *args, **kwargs: None)
+    """Back S3 with a dict so uploads AND downloads work without a bucket.
+
+    No-oping only the put is not enough: ``build_release_vex`` reads each VEX
+    back through ``get_sbom_data``, so the Trust Center's "Download latest VEX"
+    link would 404 and the recording would show a broken button. Every read path
+    funnels through ``get_file_data``, so patching that one method alongside the
+    put covers SBOMs, VEX and documents.
+    """
+    store: dict[tuple[str, str], bytes] = {}
+
+    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
+        store[(bucket_name, object_name)] = data
+
+    def _get(self: S3Client, bucket_name: str, file_path: str) -> bytes | None:
+        return store.get((bucket_name, file_path))
+
+    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
+    monkeypatch.setattr(S3Client, "get_file_data", _get)
 
 
 def _apply_vex(component: Component, release: Release, run: AssessmentRun, document: dict) -> None:
