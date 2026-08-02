@@ -20,6 +20,10 @@ const RECONNECT_BASE_DELAY_MS = 1000; // Start with 1 second
 const RECONNECT_MAX_DELAY_MS = 30000; // Max 30 seconds
 const RECONNECT_MAX_ATTEMPTS = 10; // Give up after 10 attempts
 
+// Terminal verdicts about this client: policy violation (auth), protocol
+// error, unsupported data. Retrying these replays the same rejection.
+const NO_RETRY_CLOSE_CODES = new Set([1002, 1003, 1008]);
+
 interface WebSocketMessage {
     type: string;
     [key: string]: unknown;
@@ -137,12 +141,12 @@ export function registerWebSocketStore(): void {
 
                     // Every close that reaches this handler is the server's or
                     // the network's doing — disconnect() detaches handlers
-                    // before closing. That includes wasClean closes: a graceful
-                    // deploy completes the close handshake, and gating on
-                    // wasClean (or on having been connected before, which a
-                    // refused handshake never was) left tabs permanently silent
-                    // after each backend restart.
-                    if (state.workspaceKey) {
+                    // before closing. That includes wasClean closes: uvicorn
+                    // sends a clean 1012 (service restart, "please retry") on
+                    // shutdown, so gating on wasClean (or on having been
+                    // connected before, which a refused handshake never was)
+                    // left tabs permanently silent after each deploy.
+                    if (state.workspaceKey && !NO_RETRY_CLOSE_CODES.has(event.code)) {
                         this.scheduleReconnect();
                     }
                 };

@@ -181,6 +181,19 @@ describe('WebSocket store reconnection', () => {
         expect(runPendingTimer()).toBe(1000)
     })
 
+    test('does not retry close codes that can never succeed', () => {
+        // 1008 policy violation, 1002 protocol error, 1003 unsupported data:
+        // terminal verdicts about the client, so retrying is a slow no-op loop.
+        for (const code of [1008, 1002, 1003]) {
+            getStore().connect('workspace-key')
+            sockets[sockets.length - 1].open()
+            sockets[sockets.length - 1].drop(true, code)
+
+            expect(pending).toHaveLength(0)
+            getStore().disconnect()
+        }
+    })
+
     test('does not reconnect after a deliberate disconnect', () => {
         const store = getStore()
         store.connect('workspace-key')
