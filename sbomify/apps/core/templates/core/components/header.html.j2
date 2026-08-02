@@ -96,6 +96,21 @@
                                 <i class="fas fa-puzzle-piece w-4 text-center" aria-hidden="true"></i>
                                 Component
                             </button>
+                            {% comment %}A link rather than a dispatch: the advisory modal needs the workspace's products and releases in context, so it lives on the advisories page and ?new=1 opens it on arrival.{% endcomment %}
+                            <a href="{% url 'core:security_advisories_dashboard' %}?new=1"
+                               @click="open = false"
+                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                               role="menuitem">
+                                <i class="fas fa-shield-halved w-4 text-center" aria-hidden="true"></i>
+                                Advisory
+                            </a>
+                            <a href="{% url 'teams:suppliers' current_team.key %}?new=1"
+                               @click="open = false"
+                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                               role="menuitem">
+                                <i class="fas fa-truck-field w-4 text-center" aria-hidden="true"></i>
+                                Supplier
+                            </a>
                         </div>
                     </div>
                 {% endif %}

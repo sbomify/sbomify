@@ -14,21 +14,14 @@
                     <p class="text-text-muted text-sm">Publish security advisories for your products</p>
                 </div>
             </div>
-            {% if has_crud_permissions %}
-                <div>
-                    <button type="button"
-                            @click="$dispatch('open-add-advisory-modal')"
-                            class="tw-btn-primary">
-                        <i class="fas fa-plus mr-2"></i>New Advisory
-                    </button>
-                </div>
-            {% endif %}
         </div>
         {# Advisories Table #}
         {% include 'core/security_advisories_table.html.j2' %}
         {# Add Advisory Modal (Alpine.js) #}
         {% if has_crud_permissions %}
+            {# The header's New menu links here with ?new=1; the param is stripped after opening so a refresh does not reopen the modal. #}
             <div x-data="{ open: false, showRef: false, chosenProducts: [] }"
+                 x-init="if (new URLSearchParams(location.search).has('new')) { open = true; history.replaceState(null, '', location.pathname) }"
                  @open-add-advisory-modal.window="open = true; showRef = false">
                 <template x-teleport="body">
                     <div x-show="open"
