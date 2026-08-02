@@ -1,24 +1,30 @@
-"""Reading advisories for the workspace UI.
+"""Reading and creating advisories for the workspace UI.
 
 The views render a projection rather than model instances, because the list and
 detail pages want a few derived things the model deliberately does not store:
 the display id, the worst severity across an advisory's vulnerabilities, and a
 timeline that merges messages with status changes.
 
-Everything here is read-only. Writes land with the CRUD pass.
+:func:`create_advisory` is the one write: the New Advisory modal's submission,
+which builds the whole initial graph in a transaction.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
 
+from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.security_advisories.models import (
+    CVE_ID_RE,
     AdvisoryEvent,
     AdvisoryProduct,
+    AdvisoryProductStatus,
     AdvisoryReference,
+    AdvisoryVersionRange,
     AdvisoryVulnerability,
     ReferenceType,
     SecurityAdvisory,
@@ -148,6 +154,14 @@ def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str,
     }
 
 
+def _range_display(version_range: AdvisoryVersionRange) -> str:
+    """A range the way a chip reads it: the bare version for a single-release
+    pin, interval notation for a real span."""
+    if version_range.introduced and version_range.introduced == version_range.last_affected:
+        return version_range.introduced
+    return str(version_range)
+
+
 def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
     """A product chip.
 
@@ -158,6 +172,12 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
     """
     product = advisory_product.product
     name = product.name if product else advisory_product.product_name
+    # Deduplicated but order-preserving: two vulnerabilities citing the same
+    # affected release should not print it twice on the chip.
+    affected: dict[str, None] = {}
+    for status in advisory_product.statuses.all():
+        for version_range in status.version_ranges.all():
+            affected.setdefault(_range_display(version_range))
     return {
         # A stable non-null key for x-for. ``id`` is null for an unlinked
         # product, and Alpine rejects that as a key, so two unlinked products
@@ -165,6 +185,7 @@ def _product_projection(advisory_product: AdvisoryProduct) -> dict[str, Any]:
         "key": advisory_product.id,
         "id": product.id if product else None,
         "name": name,
+        "affected_ranges": list(affected),
     }
 
 
@@ -282,7 +303,10 @@ def _base_queryset(team: Any) -> QuerySet[SecurityAdvisory]:
         SecurityAdvisory.objects.filter(team=team)
         .prefetch_related(
             Prefetch("vulnerabilities", queryset=AdvisoryVulnerability.objects.order_by("cve_id")),
-            Prefetch("products", queryset=AdvisoryProduct.objects.select_related("product")),
+            Prefetch(
+                "products",
+                queryset=AdvisoryProduct.objects.select_related("product").prefetch_related("statuses__version_ranges"),
+            ),
             Prefetch("references", queryset=AdvisoryReference.objects.order_by("reference_type")),
             Prefetch("events", queryset=AdvisoryEvent.objects.select_related("actor").order_by("created_at")),
         )
@@ -316,6 +340,109 @@ def get_advisory(team: Any, advisory_id: str) -> ServiceResult[dict[str, Any]]:
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
     return ServiceResult.success(_advisory_projection(advisory, detail=True))
+
+
+def creation_options(team: Any) -> ServiceResult[list[dict[str, Any]]]:
+    """Products and their pinnable releases, for the New Advisory pickers.
+
+    ``latest`` releases are excluded: that pointer re-targets as artifacts
+    arrive, so "affected: latest" would describe different code next month.
+    """
+    releases_by_product: dict[str, list[dict[str, str]]] = {}
+    release_rows = (
+        Release.objects.filter(product__team=team, is_latest=False)
+        .order_by("-created_at")
+        .values("id", "product_id", "name", "version")
+    )
+    for row in release_rows:
+        label = row["version"] or row["name"]
+        releases_by_product.setdefault(row["product_id"], []).append({"id": row["id"], "label": label})
+
+    products = [
+        {"id": product_id, "name": name, "releases": releases_by_product.get(product_id, [])}
+        for product_id, name in Product.objects.filter(team=team).order_by("name").values_list("id", "name")
+    ]
+    return ServiceResult.success(products)
+
+
+@transaction.atomic
+def create_advisory(
+    team: Any,
+    user: Any,
+    *,
+    title: str,
+    severity: str = "",
+    description: str = "",
+    identifier: str = "",
+    products: list[Product] | None = None,
+    affected_releases: list[Release] | None = None,
+) -> ServiceResult[str]:
+    """The New Advisory modal's write: the whole initial graph, atomically.
+
+    One vulnerability row is always created. A CVE identifier becomes its
+    ``cve_id``; any other identifier is stored as an :class:`AdvisoryReference`
+    (a GHSA cannot live in ``cve_id``, which validates strictly) and the
+    vulnerability keeps the advisory's title as its working name — the model's
+    own vocabulary for a finding with no id yet.
+
+    Every product gets an ``in_triage`` status per the vulnerability from
+    birth, which is the shape :func:`~..models.validate_publishable` will
+    demand at publish time. Each affected release becomes a single-version
+    range pinned to that release, so the advisory keeps naming the version
+    after the release row is ever deleted.
+    """
+    advisory = SecurityAdvisory.objects.create(
+        team=team,
+        title=title.strip(),
+        severity=severity,
+        description=description.strip(),
+        created_by=user,
+    )
+
+    identifier = identifier.strip()
+    is_cve = bool(CVE_ID_RE.match(identifier))
+    vulnerability = AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id=identifier if is_cve else "",
+        title="" if is_cve else advisory.title,
+    )
+    if identifier and not is_cve:
+        is_url = identifier.lower().startswith(("http://", "https://"))
+        AdvisoryReference.objects.create(
+            advisory=advisory,
+            external_id="" if is_url else identifier,
+            url=identifier if is_url else "",
+        )
+
+    status_by_product: dict[str, AdvisoryProductStatus] = {}
+    for product in products or []:
+        advisory_product = AdvisoryProduct.objects.create(advisory=advisory, product=product)
+        status_by_product[product.id] = AdvisoryProductStatus.objects.create(
+            vulnerability=vulnerability, advisory_product=advisory_product
+        )
+    for release in affected_releases or []:
+        status = status_by_product.get(release.product_id)
+        if status is None:
+            # A failure result raises nothing, so the atomic block would commit
+            # the half-built advisory without this.
+            transaction.set_rollback(True)
+            return ServiceResult.failure("Affected releases must belong to a selected product.", status_code=400)
+        version = release.version or release.name
+        AdvisoryVersionRange.objects.create(
+            product_status=status,
+            introduced=version,
+            last_affected=version,
+            introduced_release=release,
+            last_affected_release=release,
+        )
+
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
+        actor=user,
+        payload={"to": SecurityAdvisory.RemediationStatus.IDENTIFIED.value},
+    )
+    return ServiceResult.success(advisory.id)
 
 
 def advisory_counts(advisories: list[dict[str, Any]]) -> dict[str, int]:
