@@ -780,6 +780,16 @@ def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
     except (ValueError, TypeError):
         job_rate = base_rate
 
+    # A WebSocket lives for as long as the tab stays open, so sampling it as a
+    # transaction records the connection lifetime as a duration: one socket held
+    # overnight reports as a 12-hour "request" and drags every latency
+    # percentile with it. Drop them rather than rate-limit them, since a
+    # long-lived socket is the healthy case and there is no duration here worth
+    # measuring.
+    asgi_scope = sampling_context.get("asgi_scope") or {}
+    if asgi_scope.get("type") == "websocket":
+        return 0.0
+
     wsgi_environ = sampling_context.get("wsgi_environ")
     if wsgi_environ:
         path = wsgi_environ.get("PATH_INFO", "")
