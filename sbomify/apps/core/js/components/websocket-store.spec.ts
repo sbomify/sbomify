@@ -67,9 +67,26 @@ const { registerWebSocketStore } = await import('./websocket-store')
 /** Timers the store scheduled, so tests can run them without waiting. */
 const pending: { fn: () => void; delay: number }[] = []
 
-const realSetTimeout = globalThis.setTimeout
-const realClearTimeout = globalThis.clearTimeout
+const globals = globalThis as unknown as Record<string, unknown>
+const realGlobals: Record<string, unknown> = {
+    WebSocket: globals.WebSocket,
+    window: globals.window,
+    CustomEvent: globals.CustomEvent,
+    setTimeout: globals.setTimeout,
+    clearTimeout: globals.clearTimeout
+}
 const realRandom = Math.random
+
+function restoreGlobals(): void {
+    for (const [name, value] of Object.entries(realGlobals)) {
+        if (value === undefined) {
+            delete globals[name]
+        } else {
+            globals[name] = value
+        }
+    }
+    Math.random = realRandom
+}
 
 function getStore(): WsStore {
     return stores.ws as WsStore
@@ -113,9 +130,7 @@ describe('WebSocket store reconnection', () => {
     })
 
     afterEach(() => {
-        ;(globalThis as unknown as { setTimeout: unknown }).setTimeout = realSetTimeout
-        ;(globalThis as unknown as { clearTimeout: unknown }).clearTimeout = realClearTimeout
-        Math.random = realRandom
+        restoreGlobals()
     })
 
     test('retries when the very first handshake is refused', () => {
