@@ -74,6 +74,12 @@ class TestCreateAdvisory:
         assert event.payload == {"to": "identified"}
         assert event.actor == user
 
+    def test_lowercase_cve_is_normalised_without_the_form(self, team, user):
+        result = create_advisory(team, user, title="Direct call", identifier="cve-2026-0001")
+
+        vulnerability = SecurityAdvisory.objects.get(pk=result.value).vulnerabilities.get()
+        assert vulnerability.cve_id == "CVE-2026-0001"
+
     def test_non_cve_identifier_becomes_a_reference(self, team, user):
         result = create_advisory(team, user, title="Prototype pollution", identifier="GHSA-abcd-1234-wxyz")
 

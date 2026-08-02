@@ -399,8 +399,12 @@ def create_advisory(
         created_by=user,
     )
 
+    # Normalised here as well as in the form, so a caller passing cve-2026-1
+    # directly gets a CVE rather than a misfiled reference.
     identifier = identifier.strip()
-    is_cve = bool(CVE_ID_RE.match(identifier))
+    is_cve = bool(CVE_ID_RE.match(identifier.upper()))
+    if is_cve:
+        identifier = identifier.upper()
     vulnerability = AdvisoryVulnerability.objects.create(
         advisory=advisory,
         cve_id=identifier if is_cve else "",
