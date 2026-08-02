@@ -62,6 +62,20 @@ export function registerWebSocketStore(): void {
             // Disconnect from any existing connection
             this.disconnect();
 
+            this.openSocket(workspaceKey);
+        },
+
+        /**
+         * Open a socket without tearing down retry state.
+         *
+         * Retries route here rather than through connect(), which resets the
+         * attempt counter as part of its deliberate-disconnect semantics. Going
+         * through connect() zeroed the counter on every retry, so the backoff
+         * never grew past its first step and the attempt budget was never spent.
+         */
+        openSocket(workspaceKey: string): void {
+            const state = this as unknown as WebSocketStoreState;
+
             state.workspaceKey = workspaceKey;
             state.connecting = true;
             state.lastError = null;
@@ -107,7 +121,6 @@ export function registerWebSocketStore(): void {
                 };
 
                 state.socket.onclose = (event: CloseEvent) => {
-                    const wasConnected = state.connected;
                     state.connected = false;
                     state.connecting = false;
                     state.socket = null;
@@ -122,9 +135,14 @@ export function registerWebSocketStore(): void {
                         }
                     }));
 
-                    // Attempt reconnection if this wasn't a clean close
-                    // and we were previously connected or trying to connect
-                    if (!event.wasClean && wasConnected && state.workspaceKey) {
+                    // Every close that reaches this handler is the server's or
+                    // the network's doing — disconnect() detaches handlers
+                    // before closing. That includes wasClean closes: a graceful
+                    // deploy completes the close handshake, and gating on
+                    // wasClean (or on having been connected before, which a
+                    // refused handshake never was) left tabs permanently silent
+                    // after each backend restart.
+                    if (state.workspaceKey) {
                         this.scheduleReconnect();
                     }
                 };
@@ -157,6 +175,13 @@ export function registerWebSocketStore(): void {
             }
 
             if (state.socket) {
+                // Detach first: the close event arrives asynchronously, and a
+                // stale handler firing after connect() has installed a new
+                // socket would null it out and mark the live connection down.
+                state.socket.onopen = null;
+                state.socket.onmessage = null;
+                state.socket.onclose = null;
+                state.socket.onerror = null;
                 state.socket.close(1000, 'Client disconnect');
                 state.socket = null;
             }
@@ -176,6 +201,9 @@ export function registerWebSocketStore(): void {
                 return;
             }
 
+            // The budget now genuinely runs out, which it never did before, so
+            // a tab that sleeps through all ten attempts stays silent. Retrying
+            // on visibilitychange is the upgrade if that turns up in practice.
             if (state.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
                 state.lastError = 'Max reconnection attempts reached';
                 if (DEBUG) {
@@ -193,7 +221,7 @@ export function registerWebSocketStore(): void {
 
             state.reconnectTimer = setTimeout(() => {
                 if (state.workspaceKey) {
-                    this.connect(state.workspaceKey);
+                    this.openSocket(state.workspaceKey);
                 }
             }, delay);
         },
@@ -207,6 +235,7 @@ export function registerWebSocketStore(): void {
         }
     } as WebSocketStoreState & {
         connect: (workspaceKey: string) => void;
+        openSocket: (workspaceKey: string) => void;
         disconnect: () => void;
         scheduleReconnect: () => void;
         isReady: () => boolean;
