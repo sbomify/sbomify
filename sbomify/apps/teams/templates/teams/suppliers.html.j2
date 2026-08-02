@@ -16,6 +16,10 @@
                     <p class="text-text-muted text-sm m-0">The vendors you collect SBOMs and documents from</p>
                 </div>
             </div>
+            {# The page's own entry point: suppliers are reachable by URL only while the feature matures, so there is no New-menu entry to lean on. #}
+            <button type="button" class="tw-btn-primary" @click="add()">
+                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier
+            </button>
         </div>
         {# List #}
         <div class="tw-card">
