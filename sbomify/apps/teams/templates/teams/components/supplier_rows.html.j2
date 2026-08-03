@@ -84,6 +84,9 @@
         {% else %}
             <p class="text-text font-medium m-0">No suppliers yet</p>
             <p class="text-text-muted text-sm m-0 mt-1">Add the vendors you collect SBOMs and documents from.</p>
+            <button type="button" class="tw-btn-primary mt-4" @click="add()">
+                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add your first supplier
+            </button>
         {% endif %}
     </div>
 {% endif %}

@@ -14,21 +14,14 @@
                     <p class="text-text-muted text-sm">Publish security advisories for your products</p>
                 </div>
             </div>
-            {% if has_crud_permissions %}
-                <div>
-                    <button type="button"
-                            @click="$dispatch('open-add-advisory-modal')"
-                            class="tw-btn-primary">
-                        <i class="fas fa-plus mr-2"></i>New Advisory
-                    </button>
-                </div>
-            {% endif %}
         </div>
         {# Advisories Table #}
         {% include 'core/security_advisories_table.html.j2' %}
-        {# Add Advisory Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
+        {# Add Advisory Modal (Alpine.js) #}
         {% if has_crud_permissions %}
-            <div x-data="{ open: false, showRef: false }"
+            {# The header's New menu links here with ?new=1; the param is stripped after opening so a refresh does not reopen the modal. #}
+            <div x-data="{ open: false, showRef: false, chosenProducts: [] }"
+                 x-init="if (new URLSearchParams(location.search).has('new')) { open = true; history.replaceState(null, '', location.pathname) }"
                  @open-add-advisory-modal.window="open = true; showRef = false">
                 <template x-teleport="body">
                     <div x-show="open"
@@ -96,6 +89,57 @@
                                                 <option value="medium" selected>Medium</option>
                                                 <option value="low">Low</option>
                                             </select>
+                                        </div>
+                                        {# Affected products, each unfolding its pinnable releases when checked. #}
+                                        <div>
+                                            <label class="tw-form-label">Affected products</label>
+                                            {% if creation_products %}
+                                                <div class="max-h-48 overflow-y-auto rounded-lg border border-border divide-y divide-border/60">
+                                                    {% for product in creation_products %}
+                                                        <div class="px-3 py-2" data-product-block>
+                                                            <label class="flex items-center gap-2.5 text-sm text-text cursor-pointer">
+                                                                <input type="checkbox"
+                                                                       name="products"
+                                                                       value="{{ product.id }}"
+                                                                       x-model="chosenProducts"
+                                                                       @change="if (!$event.target.checked) $event.target.closest('[data-product-block]').querySelectorAll('input[data-release]').forEach(el => el.checked = false)"
+                                                                       class="tw-checkbox" />
+                                                                <i class="fas fa-cube text-xs text-text-muted" aria-hidden="true"></i>
+                                                                {{ product.name }}
+                                                            </label>
+                                                            {% if product.releases %}
+                                                                <div x-show="chosenProducts.includes('{{ product.id|escapejs }}')"
+                                                                     x-cloak
+                                                                     class="mt-2 ml-6 space-y-1.5">
+                                                                    <p class="text-xs text-text-muted">Affected releases (optional)</p>
+                                                                    <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+                                                                        {% for release in product.releases %}
+                                                                            <label class="inline-flex items-center gap-1.5 text-xs text-text cursor-pointer">
+                                                                                <input type="checkbox"
+                                                                                       name="affected_releases"
+                                                                                       value="{{ release.id }}"
+                                                                                       data-release
+                                                                                       class="tw-checkbox" />
+                                                                                {{ release.label }}
+                                                                            </label>
+                                                                        {% endfor %}
+                                                                    </div>
+                                                                </div>
+                                                            {% endif %}
+                                                        </div>
+                                                    {% endfor %}
+                                                </div>
+                                                <p class="mt-1.5 text-xs text-text-muted">
+                                                    Optional for a draft; publishing a product advisory requires at least one product.
+                                                </p>
+                                            {% else %}
+                                                <p class="text-sm text-text-muted rounded-lg border border-dashed border-border px-3 py-2.5">
+                                                    No products in this workspace yet.
+                                                    <a href="{% url 'core:products_dashboard' %}"
+                                                       class="text-primary hover:underline">Create one</a>
+                                                    to map advisories to it.
+                                                </p>
+                                            {% endif %}
                                         </div>
                                         {# CVE / reference is optional — hidden until the user chooses to add it. #}
                                         <div>

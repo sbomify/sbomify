@@ -3,6 +3,7 @@
 {% block content %}
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
          x-data="{ open: false, form: { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }, add() { this.form = { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }; this.open = true; }, edit(data) { this.form = { supplierId: data.supplierId, name: data.supplierName, contactName: data.supplierContactName, contactEmail: data.supplierContactEmail, website: data.supplierWebsite, notes: data.supplierNotes, }; this.open = true; }, }"
+         x-init="if (new URLSearchParams(location.search).has('new')) { add(); history.replaceState(null, '', location.pathname) }"
          @refresh-suppliers.window="open = false">
         {# Page header #}
         <div class="flex items-start justify-between gap-4 flex-wrap mb-8">
@@ -15,6 +16,7 @@
                     <p class="text-text-muted text-sm m-0">The vendors you collect SBOMs and documents from</p>
                 </div>
             </div>
+            {# The page's own entry point: suppliers are reachable by URL only while the feature matures, so there is no New-menu entry to lean on. #}
             <button type="button" class="tw-btn-primary" @click="add()">
                 <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier
             </button>

@@ -11,9 +11,10 @@ is draft / published / withdrawn, whether anyone outside the workspace can read
 it. An advisory can be resolved and unpublished, or published mid-fix, so
 neither collapses into the other.
 
-Writes still do not persist. Creating advisories, posting updates and linking
-VEX land in the following passes, and the handlers below say so rather than
-pretending otherwise.
+Creation persists: the New Advisory modal maps the advisory onto the workspace's
+products and their releases, and writes the whole initial graph through
+``create_advisory``. Posting updates, editing and linking VEX still land in the
+following passes, and those handlers say so rather than pretending otherwise.
 """
 
 from __future__ import annotations
@@ -27,9 +28,12 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.models import User
+from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
     REMEDIATION_META,
     advisory_counts,
+    create_advisory,
+    creation_options,
     get_advisory,
     list_advisories,
 )
@@ -87,18 +91,41 @@ def _advisories_context(request: HttpRequest) -> dict[str, Any]:
 
 class SecurityAdvisoriesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
-        return render(request, "core/security_advisories_dashboard.html.j2", _advisories_context(request))
+        context = _advisories_context(request)
+        team = _current_team(request)
+        context["creation_products"] = (creation_options(team).value or []) if team else []
+        return render(request, "core/security_advisories_dashboard.html.j2", context)
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        # Creation lands with the CRUD pass. In the real flow this writes the
-        # advisory plus its first status_change event, so nobody sets a status
-        # directly.
-        title = request.POST.get("title", "").strip()
-        messages.info(
-            request,
-            f'Not saved yet: "{title or "advisory"}". Creating advisories is the next pass on this UI.',
+        team = _current_team(request)
+        if team is None:
+            raise Http404("Workspace not found")
+
+        form = AdvisoryCreateForm(team, request.POST)
+        if not form.is_valid():
+            # The modal is closed by the redirect, so errors surface as a toast
+            # rather than inline. First error only: one actionable message
+            # beats a wall of them.
+            first_error = next(iter(form.errors.values()))[0]
+            messages.error(request, f"Advisory not created: {first_error}")
+            return redirect("core:security_advisories_dashboard")
+
+        result = create_advisory(
+            team,
+            cast(User, request.user),
+            title=form.cleaned_data["title"],
+            severity=form.cleaned_data.get("severity") or "",
+            description=form.cleaned_data.get("description") or "",
+            identifier=form.cleaned_data.get("vulnerability_id") or "",
+            products=list(form.cleaned_data.get("products") or []),
+            affected_releases=list(form.cleaned_data.get("affected_releases") or []),
         )
-        return redirect("core:security_advisories_dashboard")
+        if not result.ok or result.value is None:
+            messages.error(request, f"Advisory not created: {result.error or 'unknown error'}")
+            return redirect("core:security_advisories_dashboard")
+
+        messages.success(request, f'Advisory "{form.cleaned_data["title"]}" created.')
+        return redirect("core:security_advisory_detail", advisory_id=result.value)
 
 
 class SecurityAdvisoriesTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
