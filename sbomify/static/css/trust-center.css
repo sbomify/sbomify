@@ -266,6 +266,7 @@
     opacity: 0.75;
 }
 
+
 /* --- Advisory rows -------------------------------------------------------- */
 
 .tc-advisory-list {
@@ -644,9 +645,161 @@
     gap: 1.25rem;
 }
 
+/* The facet groups. On desktop this is just the sidebar's lower half; on a
+   narrow screen it becomes the collapsible part, and .tc-filters-toggle is
+   what opens it. */
+.tc-filters-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Desktop only: the panel is always open, so there is nothing to toggle. */
+.tc-filters-toggle {
+    display: none;
+}
+
+/* The disclosure's state. Visually hidden rather than display:none, so it stays
+   focusable and reachable by keyboard and assistive tech. */
+.tc-filters-state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
 @media (max-width: 900px) {
     .tc-filters {
         position: static;
+        gap: 0.875rem;
+    }
+
+    .tc-filters-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        /* 44px: a comfortable thumb target rather than a pointer one. */
+        min-height: 2.75rem;
+        padding: 0.5rem 0.875rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.625rem;
+        background: var(--bg-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+
+    .tc-filters-toggle > span:first-of-type {
+        margin-right: auto;
+    }
+
+    .tc-filters-toggle i:first-child {
+        font-size: 0.8125rem;
+        color: var(--accent-color);
+    }
+
+    .tc-filters-chevron {
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        transition: transform 0.2s ease;
+    }
+
+
+    .tc-filters-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.25rem;
+        height: 1.25rem;
+        padding: 0 0.375rem;
+        border-radius: 999px;
+        background: var(--accent-color);
+        color: #ffffff;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* The head is the desktop panel's own title; the toggle already says
+       "Filters" on mobile, so only "Clear all" is worth keeping. */
+    .tc-filters-head {
+        border-bottom: 0;
+        padding-bottom: 0;
+        justify-content: flex-end;
+    }
+
+    .tc-filters-title {
+        display: none;
+    }
+
+    .tc-filters-head:not(:has(.tc-filters-clear)) {
+        display: none;
+    }
+
+    /* Collapsed until #tcFiltersOpen is checked. That checkbox sits in the page
+       shell, outside the region HTMX swaps, so the panel keeps its state across
+       filter changes with no script involved. */
+    .tc-filters-body {
+        display: none;
+        padding: 0.25rem 0.875rem 0.875rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.625rem;
+        background: var(--bg-primary);
+    }
+
+    .tc-filters-state:checked ~ #advisoryBrowse .tc-filters-body {
+        display: flex;
+    }
+
+    .tc-filters-state:checked ~ #advisoryBrowse .tc-filters-chevron {
+        transform: rotate(180deg);
+    }
+
+    /* Keyboard users focus the checkbox, not the label, so the ring has to be
+       drawn on the label the checkbox is hidden behind. */
+    .tc-filters-state:focus-visible ~ #advisoryBrowse .tc-filters-toggle {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15);
+    }
+
+    /* Two columns of facets: severity is five short rows that waste a phone's
+       width stacked, and it halves the height of the open panel. */
+    .tc-filter-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.125rem 0.75rem;
+    }
+
+    .tc-filter-heading {
+        grid-column: 1 / -1;
+        margin-top: 0.75rem;
+    }
+
+    .tc-facet {
+        /* Taller rows so a fingertip lands on one checkbox, not between two. */
+        min-height: 2.25rem;
+        margin: 0;
+    }
+
+    .tc-filter-date {
+        grid-column: 1 / -1;
+    }
+
+    .tc-filter-date input {
+        min-height: 2.5rem;
+    }
+
+    .tc-filter-search input {
+        /* 16px stops iOS Safari zooming the viewport on focus. */
+        font-size: 1rem;
     }
 }
 

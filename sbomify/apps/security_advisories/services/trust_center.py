@@ -654,6 +654,23 @@ class AdvisoryQuery:
         """Whether anything narrows the list — drives the "Clear" control."""
         return bool(self.search or self.severities or self.products or self.published_from or self.published_to)
 
+    @property
+    def active_count(self) -> int:
+        """How many filters are on.
+
+        Shown on the mobile toggle, where the panel is collapsed and the count
+        is the only sign that the list is narrowed. Each ticked box counts
+        separately, and the date range counts as one per endpoint, because that
+        is what the reader would have to undo.
+        """
+        return (
+            len(self.severities)
+            + len(self.products)
+            + bool(self.search)
+            + bool(self.published_from)
+            + bool(self.published_to)
+        )
+
 
 def _parse_date(value: str | None) -> date | None:
     """A ``YYYY-MM-DD`` date input value, or None for anything unparseable.

@@ -1022,59 +1022,13 @@
                         {% endif %}
                     </div>
                     <div class="header-actions">
-                        {# Theme Toggle #}
-                        <div class="theme-toggle"
-                             x-data="themeToggle()"
-                             @click.outside="open = false"
-                             @keydown.escape.window="open = false">
-                            <button class="theme-toggle-btn"
-                                    type="button"
-                                    @click="open = !open"
-                                    :aria-expanded="open"
-                                    :title="'Theme: ' + currentLabel">
-                                <i :class="currentIcon"></i>
-                            </button>
-                            <div class="theme-toggle-menu"
-                                 x-show="open"
-                                 x-transition:enter="transition ease-out duration-100"
-                                 x-transition:enter-start="opacity-0 transform scale-95"
-                                 x-transition:enter-end="opacity-100 transform scale-100"
-                                 x-transition:leave="transition ease-in duration-75"
-                                 x-transition:leave-start="opacity-100 transform scale-100"
-                                 x-transition:leave-end="opacity-0 transform scale-95"
-                                 x-cloak>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'light' }"
-                                        @click="setTheme('light')">
-                                    <span class="item-content">
-                                        <i class="fas fa-sun"></i>
-                                        <span>Light</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'light'"></i>
-                                </button>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'dark' }"
-                                        @click="setTheme('dark')">
-                                    <span class="item-content">
-                                        <i class="fas fa-moon"></i>
-                                        <span>Dark</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'dark'"></i>
-                                </button>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'system' }"
-                                        @click="setTheme('system')">
-                                    <span class="item-content">
-                                        <i class="fas fa-desktop"></i>
-                                        <span>System</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'system'"></i>
-                                </button>
-                            </div>
-                        </div>
+                        {% comment %}
+                        Appearance sits in the brand header, top right, on every
+                        public page. The nav row below stays purely navigation —
+                        a lone icon pushed to the far end of it read as stray
+                        rather than placed.
+                        {% endcomment %}
+                        {% include "core/components/trust_center/theme_toggle.html.j2" %}
                         {% if user.is_authenticated %}
                             {% load teams %}
                             {% user_workspaces as available_workspaces %}
