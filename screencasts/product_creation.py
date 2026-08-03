@@ -5,6 +5,8 @@ component → create product → assign all four components → add identifiers
 → add links → edit lifecycle dates.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import Page
 
@@ -89,7 +91,10 @@ def _assign_items(page: Page, names: list[str]) -> None:
     component" opener cannot shadow it.
     """
     for name in names:
-        open_btn = page.get_by_role("button", name="Assign component", exact=True)
+        # A fresh product renders the empty state's "Assign a component";
+        # after the first assignment (each one reloads the page) the header's
+        # "Assign component" takes over. One anchored regex covers both.
+        open_btn = page.get_by_role("button", name=re.compile(r"^Assign (a )?component$"))
         open_btn.wait_for(state="visible", timeout=15_000)
         pace(page, 400)
         hover_and_click(page, open_btn)
