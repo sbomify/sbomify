@@ -772,8 +772,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         team.slug = new_slug
+        # Validate the slug only. A bare full_clean() also flags unrelated fields that are
+        # legitimately empty on most workspaces (branding_info defaults to {}, and
+        # billing_plan/billing_plan_limits are null on community plans), which made every
+        # rename fail with a bare "This field cannot be blank."
+        slug_only_exclude = [field.name for field in Team._meta.fields if field.name != "slug"]
         try:
-            team.full_clean(exclude=["key"])
+            team.full_clean(exclude=slug_only_exclude)
         except ValidationError as e:
             slug_errors = e.message_dict.get("slug", [])
             if slug_errors:
