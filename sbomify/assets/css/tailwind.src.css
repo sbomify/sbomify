@@ -5091,3 +5091,153 @@ html.no-transitions * {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Workspace settings
+   --------------------------------------------------------------------------
+   A masthead with the sections as tabs, and one panel below holding whichever
+   section is open. Each tab is a page, so the active state comes from the URL
+   rather than from script, and nothing is rendered that is not being read.
+   ========================================================================== */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.settings-masthead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-breadcrumb {
+  align-self: flex-start;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  color: rgb(var(--color-primary));
+}
+
+.settings-masthead-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.settings-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: rgb(var(--color-text));
+  margin: 0;
+}
+
+.settings-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  padding: 0.3125rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: color-mix(in oklab, rgb(var(--color-primary)) 10%, transparent);
+  color: rgb(var(--color-primary));
+}
+
+.settings-chip.is-success {
+  background: color-mix(in oklab, rgb(var(--color-success)) 12%, transparent);
+  color: rgb(var(--color-success));
+}
+
+.settings-chip i {
+  font-size: 0.6875rem;
+}
+
+/* --- Tabs ----------------------------------------------------------------- */
+/* A single hairline runs the width of the row, and the active tab sits on a
+   thicker segment of it. The transparent border is reserved on every tab so
+   the row cannot shift by a pixel when the active one changes. */
+
+.settings-tabs {
+  display: flex;
+  gap: 0.25rem;
+  /* Scrolls sideways when the sections outrun the width, but never vertically:
+     overflow-x alone leaves the box vertically scrollable too, so a wheel over
+     the tab row was being swallowed instead of scrolling the page. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border-bottom: 1px solid rgb(var(--color-border));
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 550;
+  white-space: nowrap;
+  color: rgb(var(--color-text-muted));
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.settings-tab:hover {
+  color: rgb(var(--color-text));
+  text-decoration: none;
+}
+
+.settings-tab.is-active {
+  color: rgb(var(--color-primary));
+  border-bottom-color: rgb(var(--color-primary));
+}
+
+.settings-tab i {
+  font-size: 0.8125rem;
+  opacity: 0.85;
+}
+
+.settings-tab-badge {
+  padding: 0.0625rem 0.4375rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, rgb(var(--color-warning)) 15%, transparent);
+  color: rgb(var(--color-warning));
+  font-size: 0.6875rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- The section panel ---------------------------------------------------- */
+
+/* The panel is a plain container, not a surface.
+
+   Each section template already opens with its own .tw-settings-card, and those
+   are the design. Wrapping them in a second card put boxes inside a box;
+   flattening them instead left the page unstructured. So the cards stay as they
+   are and the wrapper adds nothing but a landmark — which also means the cards'
+   edges land on the same gutter as the tab row above them, since both take
+   their width from the page container rather than from a nested padding. */
+.settings-panel {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .settings-title {
+    font-size: 1.5rem;
+  }
+}
