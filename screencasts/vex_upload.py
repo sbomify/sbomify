@@ -172,20 +172,21 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     page.wait_for_load_state("networkidle")
     pace(page, 2500)
 
-    # ── 7. Linger on the VEX Documents card ──────────────────────────────
-    # VEX artifacts have their own card on the component page now. The
-    # Suppresses column names the CVE the statement covers, which is the
-    # payoff the viewer should leave with.
-    heading = page.locator("h4:has-text('VEX Documents')").first
+    # ── 7. Show the VEX row in the Artifacts & security table ────────────
+    # VEX artifacts are rows of the unified artifacts table (Type column,
+    # violet badge), latest-per-type on the component card.
+    heading = page.locator("h4:has-text('artifacts')").first
     heading.wait_for(state="visible", timeout=15_000)
     heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1500)
 
     vex_badge = page.locator("span.tw-badge-violet:text-is('VEX')").first
-    vex_badge.wait_for(state="visible", timeout=10_000)
-    pace(page, 800)
+    vex_badge.wait_for(state="visible", timeout=15_000)
+    vex_badge.hover()
+    pace(page, 2000)
 
-    cve_chip = page.locator("span.tw-badge-info:has-text('CVE-2024-12345')").first
-    cve_chip.wait_for(state="visible", timeout=10_000)
-    cve_chip.hover()
+    # ── 8. Click through to the VEX artifact page ────────────────────────
+    vex_row_link = page.locator("tr:has(span.tw-badge-violet) a").first
+    hover_and_click(page, vex_row_link)
+    page.wait_for_load_state("networkidle")
     pace(page, 3000)
