@@ -573,7 +573,15 @@ AUTH_PASSWORD_VALIDATORS = [
 # through a sync iterator, we want that warning to surface.
 warnings.filterwarnings(
     "ignore",
-    message=r"^StreamingHttpResponse must consume synchronous iterators",
+    # Anchored at both ends and with the periods escaped, so this suppresses
+    # exactly Django's message and nothing that merely begins with it. Note
+    # Django has a sibling warning for the reverse case ("must consume
+    # asynchronous iterators in order to serve them synchronously") which must
+    # keep surfacing.
+    message=(
+        r"^StreamingHttpResponse must consume synchronous iterators in order to "
+        r"serve them asynchronously\. Use an asynchronous iterator instead\.$"
+    ),
     category=Warning,
 )
 
