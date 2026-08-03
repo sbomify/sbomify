@@ -464,10 +464,20 @@ def post_update(team: Any, user: Any, advisory_id: str, *, kind: str, note: str 
     keep the advisory's denormalised ``remediation_status`` in step with it,
     which is the invariant that field's help text promises.
     """
-    advisory = SecurityAdvisory.objects.filter(team=team).filter(Q(id=advisory_id) | Q(tracking_id=advisory_id)).first()
+    # Locked for the read-modify-write below: payload["from"] and the
+    # denormalised status both come from the row as read, so two concurrent
+    # posts without the lock could record the same "from" and lose a
+    # transition.
+    advisory = (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
     if advisory is None:
         return ServiceResult.failure("Advisory not found", status_code=404)
 
+    kind = (kind or "").strip()
     note = note.strip()
     if kind == "update":
         if not note:
