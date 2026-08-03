@@ -424,7 +424,13 @@ def create_advisory(
         status_by_product[product.id] = AdvisoryProductStatus.objects.create(
             vulnerability=vulnerability, advisory_product=advisory_product
         )
+    # Cross-tenant products need no check here: AdvisoryProduct.clean rejects
+    # them, and a foreign release falls out of status_by_product below. The
+    # floating "latest" is the one thing only the form was refusing.
     for release in affected_releases or []:
+        if release.is_latest:
+            transaction.set_rollback(True)
+            return ServiceResult.failure("The floating latest release cannot be pinned as affected.", status_code=400)
         status = status_by_product.get(release.product_id)
         if status is None:
             # A failure result raises nothing, so the atomic block would commit

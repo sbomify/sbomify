@@ -107,6 +107,23 @@ class TestCreateAdvisory:
         assert not result.ok
         assert SecurityAdvisory.objects.count() == 0
 
+    def test_latest_release_rejected_without_the_form(self, team, user, product):
+        floating = Release.objects.create(product=product, name="latest", is_latest=True)
+        result = create_advisory(team, user, title="Pin latest", products=[product], affected_releases=[floating])
+
+        assert not result.ok
+        assert SecurityAdvisory.objects.count() == 0
+
+    def test_foreign_product_rejected_by_the_model_guard(self, team, other_team, user):
+        # The service leans on AdvisoryProduct.clean for tenancy, so a direct
+        # caller with another workspace's product blows up rather than writing.
+        from django.core.exceptions import ValidationError
+
+        foreign = Product.objects.create(name="Not yours", team=other_team)
+        with pytest.raises(ValidationError, match="Cross-tenant"):
+            create_advisory(team, user, title="x", products=[foreign])
+        assert SecurityAdvisory.objects.count() == 0
+
     def test_release_with_no_version_string_falls_back_to_its_name(self, team, user, product):
         legacy = Release.objects.create(product=product, name="spring-drop", version="")
         result = create_advisory(team, user, title="Legacy", products=[product], affected_releases=[legacy])
