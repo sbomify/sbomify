@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -105,7 +105,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         active_tab = request.POST.get("active_tab", "")
         return redirect_to_team_settings(team_key, active_tab if active_tab else None)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, team_key: str, tab: str | None = None) -> HttpResponse:
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return error_response(
@@ -226,11 +226,29 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         }
                     )
 
+        # Which section is on screen, and which the nav offers. Resolved from
+        # the registry so the two cannot disagree — a tab the member may not
+        # open is neither linked nor rendered.
+        from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
+
+        role = request.session.get("current_team", {}).get("role")
+        billing_enabled_flag = is_billing_enabled()
+        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
+        if active_tab is None:
+            return error_response(request, HttpResponse(status=403, content="No settings available"))
+        # A stale or renamed slug resolves to the first section instead of 404ing;
+        # send the browser to the URL that actually rendered so the address bar,
+        # the highlighted tab and the content all agree.
+        if tab is not None and tab != active_tab.key:
+            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+
         return render(
             request,
             "teams/team_settings.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
+                "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
+                "active_tab": active_tab,
                 "team": team_data,
                 "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
                 # Members tab
