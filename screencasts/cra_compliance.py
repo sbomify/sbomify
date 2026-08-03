@@ -120,7 +120,17 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
-    # ── 3. Show the CRA Compliance card ──────────────────────────────────
+    # ── 3. Unfold and show the CRA Compliance card ───────────────────────
+    # The product page keeps its compliance cards in collapsed accordions,
+    # so the card's CTA does not exist on screen until the header is
+    # clicked. Unfolding on camera also shows viewers where the card lives.
+    cra_accordion = page.locator("button:has-text('CRA Compliance')").first
+    cra_accordion.wait_for(state="visible", timeout=15_000)
+    cra_accordion.scroll_into_view_if_needed()
+    pace(page, 800)
+    hover_and_click(page, cra_accordion)
+    pace(page, 800)
+
     # No assessment exists yet, so the card's CTA reads "Start Scope
     # Screening" — the FAQ §1 entry point that gates the whole wizard.
     start_screening_btn = page.locator("a:has-text('Start Scope Screening')").first
