@@ -1,0 +1,31 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}Access token expiring{% endblock %}
+{% block content %}
+    <h1>Access token expiring</h1>
+    <p>
+        The access token <strong>"{{ token.description }}"</strong>
+        {% if team %}in workspace <strong>{{ team.name }}</strong>{% endif %}
+        expires on <strong>{{ expires_on|date:"F d, Y" }}</strong>
+        {% if days_left == 0 %}
+            (today)
+        {% elif days_left == 1 %}
+            (tomorrow)
+        {% else %}
+            ({{ days_left }} days from now)
+        {% endif %}
+        .
+    </p>
+    <p>
+        Anything authenticating with it — CI pipelines included — will start failing with 401s at that point. Create a replacement token and rotate it in before then.
+    </p>
+    {% if team %}
+        <p>
+            <a href="{{ base_url }}{% url 'teams:team_settings' team.key %}#tokens">Manage tokens</a>
+        </p>
+    {% endif %}
+    <p>
+        Cheers,
+        <br>
+        The sbomify Team
+    </p>
+{% endblock %}
