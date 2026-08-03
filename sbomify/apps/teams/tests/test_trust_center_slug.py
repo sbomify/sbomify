@@ -114,23 +114,47 @@ def test_rename_rejects_slug_taken_by_another_workspace(sample_team_with_owner_m
     assert _messages(response), "expected an error message for a duplicate slug"
 
 
-@pytest.mark.django_db
-def test_non_owner_cannot_rename_slug(sample_team_with_owner_member: Member):  # noqa: F811
+def _member_with_role(team: Team, role: str, username: str) -> Member:
     from django.contrib.auth import get_user_model
 
+    user = get_user_model().objects.create_user(username=username, password="x")  # noqa: S106
+    return Member.objects.create(user=user, team=team, role=role)
+
+
+@pytest.mark.django_db
+def test_admin_cannot_rename_slug(sample_team_with_owner_member: Member):  # noqa: F811
+    """Admins reach the handler (allowed_roles) but the rename is owner-only."""
     team = sample_team_with_owner_member.team
     team.slug = "acme"
     team.save()
 
-    member_user = get_user_model().objects.create_user(username="member-user", password="x")  # noqa: S106
-    Member.objects.create(user=member_user, team=team, role="member")
+    admin = _member_with_role(team, "admin", "admin-user")
 
     client = Client()
-    setup_authenticated_client_session(client, team, member_user)
+    setup_authenticated_client_session(client, team, admin.user)
 
     response = _post_slug(client, team, "hijacked")
 
-    # Non-owners are rejected by workspace access control before the handler runs.
+    assert response.status_code == 302
+    team.refresh_from_db()
+    assert team.slug == "acme"
+    assert any("owner" in m.lower() for m in _messages(response))
+
+
+@pytest.mark.django_db
+def test_guest_cannot_rename_slug(sample_team_with_owner_member: Member):  # noqa: F811
+    """Guests are rejected by TeamRoleRequiredMixin before the handler runs."""
+    team = sample_team_with_owner_member.team
+    team.slug = "acme"
+    team.save()
+
+    guest = _member_with_role(team, "guest", "guest-user")
+
+    client = Client()
+    setup_authenticated_client_session(client, team, guest.user)
+
+    response = _post_slug(client, team, "hijacked")
+
     assert response.status_code == 403
     team.refresh_from_db()
     assert team.slug == "acme"
