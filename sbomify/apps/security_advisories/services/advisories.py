@@ -455,6 +455,46 @@ def create_advisory(
     return ServiceResult.success(advisory.id)
 
 
+@transaction.atomic
+def post_update(team: Any, user: Any, advisory_id: str, *, kind: str, note: str = "") -> ServiceResult[str]:
+    """The timeline composer's write: a note, or a status move with commentary.
+
+    ``kind`` is either ``update`` (a note that moves nothing) or a
+    remediation status. Status kinds append the ``status_change`` event and
+    keep the advisory's denormalised ``remediation_status`` in step with it,
+    which is the invariant that field's help text promises.
+    """
+    advisory = SecurityAdvisory.objects.filter(team=team).filter(Q(id=advisory_id) | Q(tracking_id=advisory_id)).first()
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+
+    note = note.strip()
+    if kind == "update":
+        if not note:
+            return ServiceResult.failure("An update needs a note.", status_code=400)
+        AdvisoryEvent.objects.create(
+            advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, actor=user, body=note
+        )
+        return ServiceResult.success(advisory.id)
+
+    if kind not in SecurityAdvisory.RemediationStatus.values:
+        return ServiceResult.failure("Unknown update type.", status_code=400)
+    if kind == advisory.remediation_status:
+        label = REMEDIATION_META.get(kind, {}).get("label", kind)
+        return ServiceResult.failure(f"The advisory is already {label}.", status_code=400)
+
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
+        actor=user,
+        body=note,
+        payload={"from": advisory.remediation_status, "to": kind},
+    )
+    advisory.remediation_status = kind
+    advisory.save(update_fields=["remediation_status", "updated_at"])
+    return ServiceResult.success(advisory.id)
+
+
 def advisory_counts(advisories: list[dict[str, Any]]) -> dict[str, int]:
     """Dashboard tallies, computed from the already-built list.
 

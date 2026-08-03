@@ -11,10 +11,11 @@ is draft / published / withdrawn, whether anyone outside the workspace can read
 it. An advisory can be resolved and unpublished, or published mid-fix, so
 neither collapses into the other.
 
-Creation persists: the New Advisory modal maps the advisory onto the workspace's
-products and their releases, and writes the whole initial graph through
-``create_advisory``. Posting updates, editing and linking VEX still land in the
-following passes, and those handlers say so rather than pretending otherwise.
+Creation and the timeline composer persist: the New Advisory modal writes the
+whole initial graph through ``create_advisory``, and posting an update writes a
+note or a status move through ``post_update``. Editing and linking VEX still
+land in the following passes, and those handlers say so rather than pretending
+otherwise.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     creation_options,
     get_advisory,
     list_advisories,
+    post_update,
 )
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -171,14 +173,22 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
 
         intent = request.POST.get("intent")
         if intent == "edit":
-            note = "Editing an advisory is the next pass on this UI."
+            messages.info(request, "Not saved yet. Editing an advisory is the next pass on this UI.")
         elif intent == "edit_update":
-            note = "Editing a timeline entry is the next pass on this UI."
+            messages.info(request, "Not saved yet. Editing a timeline entry is the next pass on this UI.")
         elif intent == "link_vex":
-            note = "Linking VEX documents is the pass after the CRUD one."
+            messages.info(request, "Not saved yet. Linking VEX documents is the pass after the CRUD one.")
         else:
             kind = request.POST.get("kind", NOTE_ONLY_KIND)
-            label = UPDATE_KINDS.get(kind, UPDATE_KINDS[NOTE_ONLY_KIND])["label"]
-            note = f'Posting the "{label}" update is the next pass on this UI.'
-        messages.info(request, f"Not saved yet. {note}")
+            result = post_update(
+                team, cast(User, request.user), advisory_id, kind=kind, note=request.POST.get("note", "")
+            )
+            if result.ok:
+                if kind == NOTE_ONLY_KIND:
+                    messages.success(request, "Update posted.")
+                else:
+                    label = UPDATE_KINDS.get(kind, UPDATE_KINDS[NOTE_ONLY_KIND])["label"]
+                    messages.success(request, f"Status moved to {label}.")
+            else:
+                messages.error(request, result.error or "Update not posted.")
         return redirect("core:security_advisory_detail", advisory_id=advisory_id)
