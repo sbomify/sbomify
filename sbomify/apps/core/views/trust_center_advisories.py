@@ -13,8 +13,9 @@ list and the detail page cannot disagree about a given advisory.
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.views import View
@@ -49,6 +50,25 @@ def _querystrings(request: HttpRequest, query: Any) -> dict[str, str]:
     return {"without_page": f"{encoded}&" if encoded else ""}
 
 
+def _public_hosts_for(team: Team) -> set[str]:
+    """Every host this workspace may legitimately be redirected to.
+
+    Mirrors the two branches of ``build_custom_domain_url``: a validated custom
+    domain, and the trust-center subdomain. Both are derived from the team rather
+    than from anything on the request, so the set cannot be widened by a visitor.
+    """
+    hosts: set[str] = set()
+    custom_domain = getattr(team, "custom_domain", "")
+    if custom_domain and getattr(team, "custom_domain_validated", False):
+        hosts.add(custom_domain.lower())
+
+    slug = getattr(team, "slug", None)
+    trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+    if slug and trust_center_domain:
+        hosts.add(f"{slug}.{trust_center_domain}".lower())
+    return hosts
+
+
 class _TrustCenterAdvisoryViewBase(View):
     """Shared workspace resolution and branding for the two advisory pages."""
 
@@ -63,9 +83,30 @@ class _TrustCenterAdvisoryViewBase(View):
         return team_or_error, None
 
     def _redirect_if_needed(self, request: HttpRequest, team: Team, path: str) -> HttpResponse | None:
-        if should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request):
-            return HttpResponseRedirect(build_custom_domain_url(team, path, request.is_secure()))
-        return None
+        """Send the reader to this workspace's own public domain, or nowhere.
+
+        The redirect host comes from ``team.custom_domain``, which a workspace
+        owner types in — a stored value that reaches a ``Location`` header. It is
+        meant to be constrained already: ``build_custom_domain_url`` only uses a
+        custom domain once ``custom_domain_validated`` is set. But that guard
+        lives in another module, and "the URL we are about to send you to is
+        safe because of a flag checked elsewhere" is exactly the kind of
+        reasoning that rots when one of the two sides is edited.
+
+        So the built URL is checked here against the hosts this team is actually
+        entitled to, recomputed from the same team. A target that is not one of
+        them is not redirected to at all, rather than trusted because of where it
+        came from.
+        """
+        if not (should_redirect_to_custom_domain(request, team) or should_redirect_to_clean_url(request)):
+            return None
+
+        target = build_custom_domain_url(team, path, request.is_secure())
+        if not target:
+            return None
+        if (urlparse(target).hostname or "").lower() not in _public_hosts_for(team):
+            return None
+        return HttpResponseRedirect(target)
 
     def _base_context(self, request: HttpRequest, team: Team) -> dict[str, Any]:
         return {

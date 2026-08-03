@@ -608,3 +608,53 @@ def test_a_redirect_cannot_be_steered_by_the_advisory_id(team, public_product):
     assert "?" not in captured["path"]
     assert "#" not in captured["path"]
     assert quote(hostile, safe="") in captured["path"]
+
+
+# --- the redirect target -----------------------------------------------------
+#
+# The redirect host comes from team.custom_domain, which an owner types in and
+# which ends up in a Location header. These pin that a target is only followed
+# when it is a host this workspace is actually entitled to.
+
+
+def test_only_a_validated_custom_domain_is_redirected_to(team):
+    from django.test import RequestFactory
+
+    from sbomify.apps.core.views.trust_center_advisories import (
+        TrustCenterAdvisoriesView,
+        _public_hosts_for,
+    )
+
+    team.custom_domain = "evil.example.com"
+    team.custom_domain_validated = False
+    team.save()
+
+    # Not validated, so it is not a host this workspace may be sent to.
+    assert "evil.example.com" not in _public_hosts_for(team)
+
+    request = RequestFactory().get("/")
+    request.user = _AnonymousUser()  # type: ignore[assignment]
+    assert TrustCenterAdvisoriesView()._redirect_if_needed(request, team, "/advisories/") is None
+
+
+def test_a_validated_custom_domain_is_an_allowed_host(team):
+    from sbomify.apps.core.views.trust_center_advisories import _public_hosts_for
+
+    team.custom_domain = "trust.acme.example"
+    team.custom_domain_validated = True
+    team.save()
+
+    assert "trust.acme.example" in _public_hosts_for(team)
+
+
+def test_allowed_hosts_come_from_the_team_not_the_request(team):
+    """A visitor cannot widen the set: nothing in it is read off the request."""
+    from sbomify.apps.core.views.trust_center_advisories import _public_hosts_for
+
+    team.custom_domain = ""
+    team.custom_domain_validated = False
+    team.save()
+
+    # With no custom domain and no TRUST_CENTER_DOMAIN configured in tests,
+    # there is nowhere this workspace may redirect to at all.
+    assert _public_hosts_for(team) == set()
