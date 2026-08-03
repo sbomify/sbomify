@@ -14,6 +14,7 @@ import asyncio
 import logging
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -558,6 +559,31 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+
+
+# WhiteNoiseMiddleware serves static files with a synchronous file iterator, and
+# whitenoise 6.11 offers no async path (the middleware is not async_capable). Under
+# ASGI, StreamingHttpResponse.__aiter__ therefore falls back to consuming it via
+# sync_to_async and warns once per worker process.
+#
+# Harmless for static assets: the bytes are correct and the files are small. Note the
+# fallback calls list() on the iterator, so the body is fully buffered rather than
+# streamed -- fine here, but it is the reason this filter is pinned to this exact
+# message instead of silencing the warning class. If a large response is ever streamed
+# through a sync iterator, we want that warning to surface.
+warnings.filterwarnings(
+    "ignore",
+    # Anchored at both ends and with the periods escaped, so this suppresses
+    # exactly Django's message and nothing that merely begins with it. Note
+    # Django has a sibling warning for the reverse case ("must consume
+    # asynchronous iterators in order to serve them synchronously") which must
+    # keep surfacing.
+    message=(
+        r"^StreamingHttpResponse must consume synchronous iterators in order to "
+        r"serve them asynchronously\. Use an asynchronous iterator instead\.$"
+    ),
+    category=Warning,
+)
 
 
 # Logging config
