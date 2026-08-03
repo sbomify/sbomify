@@ -16,28 +16,52 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
         index, follow
     {% endif %}
 {% endblock %}
-{% block content %}
-    <a class="inline-flex items-center gap-2 text-sm mb-5"
-       href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">
-        <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
-        Security advisories
-    </a>
-    <section class="tc-hero">
-        <div class="flex items-center gap-2 flex-wrap mb-3">
-            <span class="tc-advisory-id">{{ advisory.id }}</span>
-            <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity_label }}</span>
-            {% if advisory.status_label %}
-                <span class="tw-badge tw-badge-{{ advisory.status_variant }}">{{ advisory.status_label }}</span>
-            {% endif %}
-            {% if advisory.is_gated %}
-                <span class="tc-lock-chip">
-                    <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+{% block page_header %}
+    {% comment %}
+    The same masthead the trust-center home uses, so an advisory reads as a page
+    of this site rather than as a card dropped onto it. Identity first (the id a
+    reader quotes), then the title, then the one-line summary, then the facts
+    they check before reading further.
+    {% endcomment %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner tc-masthead-detail">
+            <a class="tc-backlink"
+               href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                Security advisories
+            </a>
+            <div class="tc-detail-eyebrow">
+                <span class="tc-detail-id">{{ advisory.id }}</span>
+                {% if advisory.is_gated %}
+                    <span class="tc-lock-chip">
+                        <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+                    </span>
+                {% endif %}
+                {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
+            </div>
+            <h1 class="tc-detail-title">{{ advisory.title }}</h1>
+            {% if advisory.summary %}<p class="tc-detail-summary">{{ advisory.summary }}</p>{% endif %}
+            <div class="tc-detail-meta">
+                <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity_label }}</span>
+                {% if advisory.status_label %}
+                    <span class="tc-detail-meta-item">
+                        <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                    </span>
+                {% endif %}
+                {% if advisory.cve_ids %}
+                    <span class="tc-detail-meta-item tc-detail-meta-mono">{{ advisory.cve_ids|join:", " }}</span>
+                {% endif %}
+                <span class="tc-detail-meta-item">
+                    <i class="fas fa-bullhorn" aria-hidden="true"></i>Published {{ advisory.published_display|default:"—" }}
                 </span>
-            {% endif %}
+                <span class="tc-detail-meta-item">
+                    <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>Updated {{ advisory.updated_age }}
+                </span>
+            </div>
         </div>
-        <h1 class="tc-hero-title">{{ advisory.title }}</h1>
-        {% if advisory.summary %}<p class="tc-hero-lede">{{ advisory.summary }}</p>{% endif %}
-    </section>
+    </header>
+{% endblock %}
+{% block content %}
     {% if advisory.is_withdrawn %}
         <div class="tw-alert tw-alert-warning mb-5">
             <i class="fas fa-rotate-left tw-alert-icon" aria-hidden="true"></i>

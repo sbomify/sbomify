@@ -1070,6 +1070,97 @@
     }
 }
 
+/* --- Advisory detail masthead --------------------------------------------- */
+/* Shares .tc-masthead with the trust-center home, so an advisory reads as a
+   page of this site. Only the inner rhythm differs: identity, title, summary,
+   then the facts a reader checks before reading on. */
+
+.tc-masthead-detail {
+    padding-top: 1.75rem;
+}
+
+.tc-backlink {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+}
+
+.tc-backlink i {
+    font-size: 0.6875rem;
+    transition: transform 0.15s ease;
+}
+
+.tc-backlink:hover i {
+    transform: translateX(-3px);
+}
+
+.tc-detail-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.875rem;
+}
+
+.tc-detail-id {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+}
+
+/* Sized below the workspace name on the home masthead: an advisory title is a
+   sentence, not a brand, and it has to stay readable at three lines. */
+.tc-detail-title {
+    font-size: clamp(1.5rem, 3vw, 2.125rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+    color: var(--text-primary);
+    margin: 0;
+    max-width: 52rem;
+}
+
+.tc-detail-summary {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 46rem;
+    margin: 0.875rem 0 0;
+}
+
+/* The fact row. Generous gaps so the badges and dates do not read as one
+   run-on line, which is what made the old header feel cramped. */
+.tc-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.tc-detail-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.tc-detail-meta-item i {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.tc-detail-meta-mono {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.75rem;
+}
+
 /* --- Advisory detail ------------------------------------------------------ */
 
 .tc-detail-grid {
@@ -1353,10 +1444,6 @@
 /* --- Responsive ----------------------------------------------------------- */
 
 @media (max-width: 640px) {
-    .tc-hero {
-        padding: 1.75rem 1.25rem;
-    }
-
     .tc-advisory-row {
         flex-direction: column;
         gap: 0.75rem;
