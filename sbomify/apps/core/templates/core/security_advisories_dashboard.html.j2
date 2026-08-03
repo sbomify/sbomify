@@ -119,25 +119,37 @@
                                                         </button>
                                                     </div>
                                                 </div>
-                                                <div class="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border/60">
+                                                <div class="max-h-56 overflow-y-auto rounded-lg border border-border divide-y divide-border/60 select-none">
                                                     <template x-for="(product, index) in products" :key="product.id">
                                                         <div>
                                                             <div class="flex items-center gap-2 px-3 py-2">
                                                                 {% comment %}
-                                                                The handler sits on the label, not the input: a click on
-                                                                either lands here exactly once, and prevent-default stops
-                                                                the browser toggling a box whose state we own. Space on a
-                                                                focused box bubbles here too, so keyboard still works.
+                                                                The row is the control, not a label wrapping a checkbox.
+                                                                A real click on label text makes the browser forward a
+                                                                second click to the nested input, which fired this
+                                                                handler twice and moved the selection to the wrong
+                                                                version. There is no label here to forward, so a click
+                                                                lands exactly once. The box is painted from state and
+                                                                takes no pointer or tab stop of its own; the row carries
+                                                                the role, the checked state and the keyboard handling.
                                                                 {% endcomment %}
-                                                                <label class="flex items-center gap-2.5 text-sm text-text cursor-pointer flex-1 min-w-0"
-                                                                       @click.prevent="toggleProduct(index, $event)">
+                                                                <div class="flex items-center gap-2.5 text-sm text-text cursor-pointer flex-1 min-w-0 select-none"
+                                                                     role="checkbox"
+                                                                     tabindex="0"
+                                                                     :aria-checked="isPartiallySelected(product) ? 'mixed' : (isProductSelected(product.id) ? 'true' : 'false')"
+                                                                     @click="toggleProduct(index, $event)"
+                                                                     @keydown.space.prevent="toggleProduct(index)"
+                                                                     @keydown.enter.prevent="toggleProduct(index)">
                                                                     <input type="checkbox"
-                                                                           class="tw-checkbox shrink-0"
-                                                                           :checked="isProductSelected(product.id)" />
+                                                                           class="tw-checkbox shrink-0 pointer-events-none"
+                                                                           tabindex="-1"
+                                                                           aria-hidden="true"
+                                                                           :checked="isProductSelected(product.id)"
+                                                                           x-effect="$el.indeterminate = isPartiallySelected(product)" />
                                                                     <i class="fas fa-cube text-xs text-text-muted shrink-0"
                                                                        aria-hidden="true"></i>
                                                                     <span class="truncate" x-text="product.name"></span>
-                                                                </label>
+                                                                </div>
                                                                 <button type="button"
                                                                         x-show="product.releases.length"
                                                                         @click="toggleExpanded(product.id)"
@@ -149,9 +161,11 @@
                                                                        aria-hidden="true"></i>
                                                                 </button>
                                                             </div>
-                                                            {# Guarded on releases as well as expansion: a product with no
-                                                               versions has nothing to show, and its toggle is hidden, so
-                                                               this would only ever render an empty panel. #}
+                                                            {% comment %}
+                                                            Guarded on releases as well as expansion: a product with no
+                                                            versions has nothing to show, and its toggle is hidden, so
+                                                            this would only ever render an empty panel.
+                                                            {% endcomment %}
                                                             <div x-show="isExpanded(product.id) && product.releases.length"
                                                                  x-cloak
                                                                  class="px-3 pb-2.5 ml-6">
@@ -162,13 +176,20 @@
                                                                 </button>
                                                                 <div class="flex flex-wrap gap-x-4 gap-y-1.5">
                                                                     <template x-for="(release, rIndex) in product.releases" :key="release.id">
-                                                                        <label class="inline-flex items-center gap-1.5 text-xs text-text cursor-pointer"
-                                                                               @click.prevent="toggleRelease(product, rIndex, $event)">
+                                                                        <div class="inline-flex items-center gap-1.5 text-xs text-text cursor-pointer select-none"
+                                                                             role="checkbox"
+                                                                             tabindex="0"
+                                                                             :aria-checked="isReleaseSelected(release.id) ? 'true' : 'false'"
+                                                                             @click="toggleRelease(product, rIndex, $event)"
+                                                                             @keydown.space.prevent="toggleRelease(product, rIndex)"
+                                                                             @keydown.enter.prevent="toggleRelease(product, rIndex)">
                                                                             <input type="checkbox"
-                                                                                   class="tw-checkbox"
+                                                                                   class="tw-checkbox pointer-events-none"
+                                                                                   tabindex="-1"
+                                                                                   aria-hidden="true"
                                                                                    :checked="isReleaseSelected(release.id)" />
                                                                             <span x-text="release.label"></span>
-                                                                        </label>
+                                                                        </div>
                                                                     </template>
                                                                 </div>
                                                             </div>
@@ -235,7 +256,7 @@
                                         which gave a one-sentence aside the weight of a field. It says the
                                         same thing here, next to the button that does it.
                                         {% endcomment %}
-                                        <p class="text-xs text-text-muted m-0 hidden sm:block">
+                                        <p class="text-xs text-text-muted m-0 hidden sm:block min-w-0 flex-1">
                                             Opens as a draft with its first update, <span class="text-text">Vulnerability identified</span>.
                                         </p>
                                         <div class="flex items-center gap-2">

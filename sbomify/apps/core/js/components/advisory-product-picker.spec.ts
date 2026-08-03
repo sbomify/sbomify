@@ -127,3 +127,32 @@ describe('expanding rows', () => {
         expect(picker.isExpanded('p1')).toBe(false)
     })
 })
+
+describe('the half-ticked parent box', () => {
+    test('an unselected product is never partial', () => {
+        expect(picker.isPartiallySelected(picker.products[0])).toBe(false)
+    })
+
+    test('a product selected with no versions picked is fully ticked, not partial', () => {
+        picker.toggleProduct(0, plain)
+        expect(picker.isProductSelected('p1')).toBe(true)
+        // No versions picked means the whole product is covered.
+        expect(picker.isPartiallySelected(picker.products[0])).toBe(false)
+    })
+
+    test('some but not all versions picked shows partial', () => {
+        picker.toggleRelease(picker.products[0], 0, plain)
+        expect(picker.isPartiallySelected(picker.products[0])).toBe(true)
+    })
+
+    test('every version picked is the whole product again, so not partial', () => {
+        picker.toggleAllVersions(picker.products[0])
+        expect(picker.allVersionsSelected(picker.products[0])).toBe(true)
+        expect(picker.isPartiallySelected(picker.products[0])).toBe(false)
+    })
+
+    test('a product with no versions can never be partial', () => {
+        picker.toggleProduct(2, plain)
+        expect(picker.isPartiallySelected(picker.products[2])).toBe(false)
+    })
+})

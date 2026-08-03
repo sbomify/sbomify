@@ -156,6 +156,21 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             return product.releases.length > 0 && this.selectedReleasesFor(product).length === product.releases.length;
         },
 
+        /**
+         * Whether the product's box should render half-ticked.
+         *
+         * Picking no versions means the advisory covers the product whole, so a
+         * full tick is right. Picking every version is the same claim by a
+         * longer route, so that is a full tick too. Anything between is a
+         * partial claim, and the box should say so rather than implying the
+         * whole product is affected.
+         */
+        isPartiallySelected(product: PickerProduct): boolean {
+            if (!this.isProductSelected(product.id)) return false;
+            const picked = this.selectedReleasesFor(product).length;
+            return picked > 0 && picked < product.releases.length;
+        },
+
         toggleAllVersions(product: PickerProduct): void {
             const selectAll = !this.allVersionsSelected(product);
             product.releases.forEach((release) => this.setRelease(release, selectAll));
