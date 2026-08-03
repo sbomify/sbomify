@@ -69,6 +69,18 @@ _READABLE_STATUSES = (SecurityAdvisory.Status.PUBLISHED, SecurityAdvisory.Status
 # exactly one bucket and the counts add up to the list length.
 SEVERITY_ORDER: tuple[str, ...] = ("critical", "high", "medium", "low", "none")
 
+# Facet labels. Sentence case, not the stored token shouted back: a sidebar of
+# CRITICAL / HIGH / MEDIUM reads as alarm rather than as a filter. "none" is
+# labelled "Unrated" because "None" beside a checkbox reads as "match nothing"
+# rather than "nobody scored this one".
+SEVERITY_LABELS: dict[str, str] = {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low",
+    "none": "Unrated",
+}
+
 SORT_NEWEST = "newest"
 SORT_OLDEST = "oldest"
 SORT_SEVERITY = "severity"
@@ -632,7 +644,7 @@ def _facets(advisories: list[dict[str, Any]], query: AdvisoryQuery) -> dict[str,
         "severity": [
             {
                 "value": value,
-                "label": value.upper(),
+                "label": SEVERITY_LABELS[value],
                 "count": severity_counts.get(value, 0),
                 "checked": value in query.severities,
             }

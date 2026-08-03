@@ -85,21 +85,25 @@ class TrustCenterAdvisoriesView(_TrustCenterAdvisoryViewBase):
 
         query = parse_advisory_query(request.GET)
         payload = browse_public_advisories(request, team, query).value or {}
+        context = {
+            **self._base_context(request, team),
+            **payload,
+            # The pager rebuilds the current URL with one parameter changed, so
+            # it needs everything except the one it is replacing. Prebuilt here
+            # rather than assembled in the template, where dropping a parameter
+            # silently loses a filter.
+            "querystrings": _querystrings(request, query),
+            "search": query.search,
+        }
 
-        return render(
-            request,
-            "core/trust_center_advisories.html.j2",
-            {
-                **self._base_context(request, team),
-                **payload,
-                # The sidebar and pager rebuild the current URL with one
-                # parameter changed, so they need everything except the one they
-                # are replacing. Prebuilt here rather than assembled in the
-                # template, where dropping a parameter silently loses a filter.
-                "querystrings": _querystrings(request, query),
-                "search": query.search,
-            },
-        )
+        # Ticking a facet re-renders only the browse region, so the page does
+        # not flash and the reader keeps their place. The full page is still the
+        # canonical response — the same template is embedded in it, and the form
+        # remains a plain GET form for anyone without JavaScript.
+        if request.headers.get("HX-Request"):
+            return render(request, "core/components/trust_center/advisories_browse.html.j2", context)
+
+        return render(request, "core/trust_center_advisories.html.j2", context)
 
 
 class TrustCenterAdvisoryDetailView(_TrustCenterAdvisoryViewBase):
