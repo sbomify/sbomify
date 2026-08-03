@@ -54,8 +54,11 @@ class _TrustCenterAdvisoryViewBase(View):
     def _resolve(self, request: HttpRequest, workspace_key: str | None) -> tuple[Team | None, HttpResponse | None]:
         status_code, team_or_error = fetch_public_team(request, workspace_key)
         if status_code != 200 or not isinstance(team_or_error, Team):
-            detail = team_or_error.get("detail", "Workspace not found")  # type: ignore[union-attr]
-            return None, error_response(request, HttpResponseNotFound(detail))
+            # A fixed string rather than the resolver's dict value: every failure
+            # path it has returns this same message, so echoing the lookup back
+            # gained nothing and put request-derived data on an error page for a
+            # scanner to flag. It also drops a type: ignore.
+            return None, error_response(request, HttpResponseNotFound("Workspace not found"))
         return team_or_error, None
 
     def _redirect_if_needed(self, request: HttpRequest, team: Team, path: str) -> HttpResponse | None:
