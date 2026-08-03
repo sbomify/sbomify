@@ -5206,41 +5206,16 @@ html.no-transitions * {
 
 /* --- The section panel ---------------------------------------------------- */
 
-/* One card per section, and only one. The panel is the card; the section
-   templates' own .tw-settings-card boxes are flattened below, so their contents
-   become bands inside this card rather than a stack of boxes within a box. */
+/* The panel is a plain container, not a surface.
+
+   Each section template already opens with its own .tw-settings-card, and those
+   are the design. Wrapping them in a second card put boxes inside a box;
+   flattening them instead left the page unstructured. So the cards stay as they
+   are and the wrapper adds nothing but a landmark — which also means the cards'
+   edges land on the same gutter as the tab row above them, since both take
+   their width from the page container rather than from a nested padding. */
 .settings-panel {
   min-width: 0;
-  border: 1px solid rgb(var(--color-border));
-  border-radius: 0.875rem;
-  background: rgb(var(--color-surface));
-  padding: 1.5rem;
-}
-
-/* Inner sections lose their card chrome so the tab shows one card, not many.
-   Done here rather than across nine templates: the change stays in one place
-   and is reversible. Only the card's own direct padding is cancelled, so its
-   contents line up with the panel's edge; anything nested keeps its spacing,
-   which is internal layout rather than the inset. */
-.settings-panel .tw-settings-card {
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  overflow: visible;
-}
-
-.settings-panel .tw-settings-card > .px-6 {
-  padding-left: 0;
-  padding-right: 0;
-}
-
-/* Consecutive sections need to stay distinguishable now that nothing is boxed,
-   so they are separated by a rule instead of by a gap between cards. */
-.settings-panel .tw-settings-card + .tw-settings-card {
-  margin-top: 2rem;
-  padding-top: 2rem;
-  border-top: 1px solid rgb(var(--color-border));
 }
 
 @media (max-width: 640px) {
