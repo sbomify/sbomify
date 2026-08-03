@@ -40,7 +40,7 @@ def workspace_deletion(recording_page: Page) -> None:
     pace(page, 600)
 
     # Scroll to the danger zone and expand it
-    danger_card.scroll_into_view_if_needed()
+    danger_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
     danger_header = danger_card.locator(".tw-card-header")
     hover_and_click(page, danger_header)

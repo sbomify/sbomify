@@ -284,7 +284,7 @@ def oidc_trusted_publishing(
 
     # ── 7. Expand the workflow YAML so the viewer sees the contract ──────
     disclosure = page.locator("#trusted-publishers-section summary:has-text('Configure your GitHub Actions workflow')")
-    disclosure.scroll_into_view_if_needed()
+    disclosure.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
     hover_and_click(page, disclosure)
     pace(page, 2500)
@@ -385,7 +385,7 @@ def oidc_trusted_publishing(
     # security" in the compact view); match the shared word.
     sboms_heading = page.locator("h4:has-text('artifacts')").first
     sboms_heading.wait_for(state="visible", timeout=10_000)
-    sboms_heading.scroll_into_view_if_needed()
+    sboms_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1000)
 
     # The newly-uploaded SBOM carries the metadata-supplied component name.

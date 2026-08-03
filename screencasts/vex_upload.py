@@ -178,7 +178,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     # payoff the viewer should leave with.
     heading = page.locator("h4:has-text('VEX Documents')").first
     heading.wait_for(state="visible", timeout=15_000)
-    heading.scroll_into_view_if_needed()
+    heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1500)
 
     vex_badge = page.locator("span.tw-badge-violet:text-is('VEX')").first

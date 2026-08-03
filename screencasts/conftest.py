@@ -123,12 +123,37 @@ def pace(page: Page, ms: int = 600) -> None:
     page.wait_for_timeout(remaining_ms)
 
 
+def smooth_scroll(page: Page, locator: Locator, pause_ms: int = 1200) -> None:
+    """Smoothly pan an element to the centre of the viewport, then pause.
+
+    Instant ``scrollIntoView`` jumps read as jarring on the recording; a smooth
+    animation plus a pause lets the pan land before the next action (and before
+    any ``bounding_box`` read that follows).
+    """
+    locator.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    pace(page, pause_ms)
+
+
 def hover_and_click(page: Page, locator: Locator, pause_ms: int = 250) -> None:
     """Move cursor visibly to the element center, pause, then click.
 
     This ensures the cursor dot and click ripple are captured by the video
     encoder — without the pause Playwright clicks happen in a single frame.
+    An off-viewport target is smooth-panned into view first; Playwright's own
+    pre-click auto-scroll is an instant jump the camera would catch.
     """
+    scrolled = locator.evaluate(
+        """el => {
+            const r = el.getBoundingClientRect();
+            if (r.top < 0 || r.bottom > window.innerHeight) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        }"""
+    )
+    if scrolled:
+        page.wait_for_timeout(700)
     box = locator.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
@@ -347,13 +372,13 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
     # Attribute selector (not #id) because some plugin slugs contain dots
     # (e.g. bsi-tr03183-v2.1-compliance) which have CSS-special meaning.
     toggle = page.locator(f"[id='plugin-{plugin_slug}']")
-    toggle.scroll_into_view_if_needed()
+    toggle.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
     hover_and_click(page, toggle)
     pace(page, 1200)
 
     save_btn = page.locator("#plugin-settings-form button[type='submit']")
-    save_btn.scroll_into_view_if_needed()
+    save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 500)
     hover_and_click(page, save_btn)
 
@@ -378,7 +403,7 @@ def enable_and_configure_trust_center(page: Page) -> None:
 
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
-    domain_input.scroll_into_view_if_needed()
+    domain_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
 
     hover_and_click(page, domain_input)

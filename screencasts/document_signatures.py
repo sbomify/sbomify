@@ -221,7 +221,7 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     # Library`` slugifies to ``compression-core-library``.
     sbom_link = page.locator("a:has-text('com.piedpiper/compression-core-library')").first
     sbom_link.wait_for(state="visible", timeout=15_000)
-    sbom_link.scroll_into_view_if_needed()
+    sbom_link.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1500)
     hover_and_click(page, sbom_link)
     page.wait_for_load_state("networkidle")
@@ -234,12 +234,12 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     # scroll the badge row into view and pause for the FAQ tie-in.
     sbom_signed_badge = page.locator("span.text-success:has-text('Signed')").first
     sbom_signed_badge.wait_for(state="visible", timeout=15_000)
-    sbom_signed_badge.scroll_into_view_if_needed()
+    sbom_signed_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
 
     provenance_badge = page.locator("span.text-info:has-text('Provenance')").first
     provenance_badge.wait_for(state="visible", timeout=10_000)
-    provenance_badge.scroll_into_view_if_needed()
+    provenance_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
 
     # ── 5. Wait for the SBOM Verification result to render ──────────────
@@ -251,7 +251,7 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     # finishes.
     all_passed = page.locator("span:has-text('All Passed')").first
     all_passed.wait_for(state="visible", timeout=20_000)
-    all_passed.scroll_into_view_if_needed()
+    all_passed.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
 
     # Hover the All Passed pill so the closing frame anchors on the

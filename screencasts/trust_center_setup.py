@@ -55,13 +55,13 @@ def trust_center_setup(recording_page: Page) -> None:
     # ── 3. Enable security.txt (RFC 9116) ─────────────────────────────────
     security_toggle = page.locator("#security-txt-toggle")
     security_toggle.wait_for(state="visible", timeout=10_000)
-    security_toggle.scroll_into_view_if_needed()
+    security_toggle.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
     hover_and_click(page, security_toggle)
     pace(page, 1000)
 
     security_save_btn = page.locator("form:has(#security-txt-toggle) button[type='submit']")
-    security_save_btn.scroll_into_view_if_needed()
+    security_save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 400)
     hover_and_click(page, security_save_btn)
 
@@ -72,7 +72,7 @@ def trust_center_setup(recording_page: Page) -> None:
 
     # ── 4. Upload Company NDA ─────────────────────────────────────────────
     nda_label = page.locator("label[for='company_nda_file']")
-    nda_label.scroll_into_view_if_needed()
+    nda_label.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
 
     pdf_path = Path(tempfile.gettempdir()) / "Pied_Piper_Mutual_NDA_2025.pdf"
@@ -83,7 +83,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 1000)
 
     upload_btn = page.locator("button:has-text('Upload NDA')")
-    upload_btn.scroll_into_view_if_needed()
+    upload_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 500)
     hover_and_click(page, upload_btn)
 
@@ -98,7 +98,7 @@ def trust_center_setup(recording_page: Page) -> None:
     # The custom domain section loads via HTMX after the page reload
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
-    domain_input.scroll_into_view_if_needed()
+    domain_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
 
     hover_and_click(page, domain_input)
@@ -152,7 +152,7 @@ def trust_center_setup(recording_page: Page) -> None:
 
     visibility_select = page.locator("select[name='visibility']")
     visibility_select.wait_for(state="visible", timeout=10_000)
-    visibility_select.scroll_into_view_if_needed()
+    visibility_select.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1000)
 
     # Set to Public

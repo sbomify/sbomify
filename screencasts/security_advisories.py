@@ -100,5 +100,5 @@ def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     page.locator(f"h1:has-text('{OPEN_ADVISORY_TITLE}')").first.wait_for(state="visible", timeout=15_000)
     pace(page, 1500)
     timeline_entry = page.locator("text=Reproduced against 5.1.x").first
-    timeline_entry.scroll_into_view_if_needed()
+    timeline_entry.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
