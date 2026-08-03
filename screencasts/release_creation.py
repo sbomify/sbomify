@@ -96,14 +96,22 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
 
     # Click "Create" button in the modal footer (exact match to avoid other create buttons)
     submit_btn = page.get_by_role("button", name="Create", exact=True)
-    hover_and_click(page, submit_btn)
+    with page.expect_response(
+        lambda r: "/api/v1/releases" in r.url and r.request.method == "POST" and r.status in (200, 201),
+        timeout=10_000,
+    ):
+        hover_and_click(page, submit_btn)
+    pace(page, 800)
 
-    # Wait for modal to close and release to appear in the table
+    # The page normally refreshes when the release_created WebSocket
+    # broadcast lands, but the recording's live server is WSGI so no
+    # socket ever connects — reload explicitly instead.
+    page.reload()
     page.wait_for_load_state("networkidle")
-    pace(page, 1500)
+    pace(page, 1200)
 
     # ── 4. Click into the new release ─────────────────────────────────────
-    release_link = page.locator(f"a.text-primary.font-medium:has-text('{RELEASE_NAME}')")
+    release_link = page.locator(f"a:has-text('{RELEASE_NAME}')").first
     release_link.wait_for(state="visible", timeout=10_000)
     pace(page, 500)
     hover_and_click(page, release_link)
