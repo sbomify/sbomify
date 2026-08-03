@@ -217,30 +217,6 @@
                     {% url 'core:security_advisories_dashboard' as advisories_url %}
                     {% include "core/components/sidebar_link.html.j2" with url=advisories_url icon="fa-shield-halved" label="Security Advisories" match="core:security_advisor" %}
                 </li>
-                {# Suppliers — visible to owner/admin only; the list names who we chase for artifacts #}
-                {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
-                    <li>
-                        {# Collapsed #}
-                        <a x-show="sidebarCollapsed"
-                           href="{% url 'teams:suppliers' request.session.current_team.key %}"
-                           @click="sidebarMobileOpen = false"
-                           aria-label="Suppliers"
-                           {% if current_view_name == 'teams:suppliers' %}aria-current="page"{% endif %}
-                           class="flex items-center justify-center w-full h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'teams:suppliers' %}bg-primary text-white shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover-collapsed{% endif %}">
-                            <i class="fas fa-truck-field text-base" aria-hidden="true"></i>
-                        </a>
-                        {# Expanded #}
-                        <a x-show="!sidebarCollapsed"
-                           x-cloak
-                           href="{% url 'teams:suppliers' request.session.current_team.key %}"
-                           @click="sidebarMobileOpen = false"
-                           {% if current_view_name == 'teams:suppliers' %}aria-current="page"{% endif %}
-                           class="flex items-center gap-3 px-4 h-11 rounded-xl transition-all duration-200 {% if current_view_name == 'teams:suppliers' %}bg-primary text-white font-medium shadow-sm hover:bg-primary-dark{% else %}text-text sidebar-link-hover{% endif %}">
-                            <span class="w-5 flex items-center justify-center shrink-0"><i class="fas fa-truck-field text-base" aria-hidden="true"></i></span>
-                            <span>Suppliers</span>
-                        </a>
-                    </li>
-                {% endif %}
                 {# Plugins — visible to owner/admin only #}
                 {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
                     <li>
