@@ -573,3 +573,38 @@ def test_the_advisory_reports_how_stale_it_is(team, public_product):
 
     result = get_public_advisory(make_request(), team, advisory.id)
     assert result.value["updated_age"] == "1 week ago"
+
+
+def test_a_redirect_cannot_be_steered_by_the_advisory_id(team, public_product):
+    """The id reaches a redirect target before anything has validated it.
+
+    A custom-domain redirect is built before the advisory is looked up, so at
+    that point the id is an arbitrary string off the URL. The path converter
+    already excludes slashes, so no host can be forged, but "?" and "#" would
+    still move where the URL points — so the segment is percent-encoded.
+    """
+    from urllib.parse import quote
+
+    from django.test import RequestFactory
+
+    from sbomify.apps.core.views.trust_center_advisories import TrustCenterAdvisoryDetailView
+
+    view = TrustCenterAdvisoryDetailView()
+    captured: dict[str, str] = {}
+
+    def capture(request, team_arg, path):
+        captured["path"] = path
+        return None
+
+    view._redirect_if_needed = capture  # type: ignore[method-assign]
+
+    request = RequestFactory().get("/")
+    request.user = _AnonymousUser()  # type: ignore[assignment]
+    hostile = "abc?next=evil#frag"
+
+    # The lookup 404s; the redirect path is built first and is what matters here.
+    view.get(request, advisory_id=hostile, workspace_key=team.key)
+
+    assert "?" not in captured["path"]
+    assert "#" not in captured["path"]
+    assert quote(hostile, safe="") in captured["path"]

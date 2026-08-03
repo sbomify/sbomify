@@ -13,6 +13,7 @@ list and the detail page cannot disagree about a given advisory.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
@@ -121,7 +122,13 @@ class TrustCenterAdvisoryDetailView(_TrustCenterAdvisoryViewBase):
         if error is not None or team is None:
             return error  # type: ignore[return-value]
 
-        redirect = self._redirect_if_needed(request, team, f"/advisories/{advisory_id}/")
+        # The id is percent-encoded before it reaches the redirect target. It
+        # arrives straight off the URL and this runs before the advisory is
+        # looked up, so at this point it is an arbitrary string rather than a
+        # known id — and a redirect target is the wrong place to find that out.
+        # The <str:...> converter already excludes slashes, so a host cannot be
+        # forged, but "?" and "#" would still change where the URL points.
+        redirect = self._redirect_if_needed(request, team, f"/advisories/{quote(advisory_id, safe='')}/")
         if redirect is not None:
             return redirect
 
