@@ -31,6 +31,7 @@ import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
 import { registerAccountDangerZone } from './components/account-danger-zone';
 import { registerDatePicker } from './components/date-picker';
+import { advisoryProductPicker } from './components/advisory-product-picker';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
@@ -197,6 +198,7 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('collapsible', collapsible);
     registerAlpineComponent('formState', formState);
     registerAlpineComponent('chartSelector', chartSelector);
+    registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
 }
 
 /**
