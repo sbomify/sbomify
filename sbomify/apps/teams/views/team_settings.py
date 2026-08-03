@@ -14,6 +14,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
+from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import build_custom_domain_url
@@ -235,7 +236,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_enabled_flag = is_billing_enabled()
         active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
         if active_tab is None:
-            return error_response(request, HttpResponse(status=403, content="No settings available"))
+            # The typed domain error rather than a hand-built HttpResponse:
+            # error_response understands it, it carries its own 403, and it keeps
+            # this on the same path as every other permission failure.
+            return error_response(request, PermissionDeniedError("No settings available for this role"))
         # A stale or renamed slug resolves to the first section instead of 404ing;
         # send the browser to the URL that actually rendered so the address bar,
         # the highlighted tab and the content all agree.

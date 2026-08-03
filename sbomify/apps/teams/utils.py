@@ -26,6 +26,10 @@ from .models import Invitation, Member, Team, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts
 
 # Valid tab names for team settings - used for input validation
+# Names still linked to by fragment that have no settings page of their own.
+# Kept as literals so a redirect to one cannot carry a request-derived string.
+FRAGMENT_ONLY_TABS: tuple[str, ...] = ("controls", "integrations")
+
 ALLOWED_TABS = frozenset(
     {
         "general",
@@ -53,8 +57,6 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     Returns:
         HttpResponseRedirect to the team settings page
     """
-    from urllib.parse import quote
-
     from django.shortcuts import redirect
     from django.urls import reverse
 
@@ -67,13 +69,21 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     # index and being bounced by script.
     from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
 
-    if active_tab and active_tab in ALLOWED_TABS and active_tab in TABS_BY_KEY:
+    if active_tab and active_tab in TABS_BY_KEY:
         return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab)
+
     base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
-    if active_tab and active_tab in ALLOWED_TABS:
-        # A tab that is allowed but has no page of its own (controls,
-        # integrations) keeps the old fragment behaviour.
-        return redirect(f"{base_url}#{quote(active_tab)}")
+    # The names still in ALLOWED_TABS with no page of their own keep the old
+    # fragment, so links to them are not broken by the move.
+    #
+    # The fragment is taken from this tuple rather than interpolated from the
+    # argument. Equality proves the two are the same string, but only the
+    # literal is reachable in the URL — so no request-derived value can steer
+    # the redirect, by construction rather than by a validation step a later
+    # edit could drift away from.
+    for known_fragment in FRAGMENT_ONLY_TABS:
+        if active_tab == known_fragment:
+            return redirect(f"{base_url}#{known_fragment}")
     return redirect(base_url)
 
 
