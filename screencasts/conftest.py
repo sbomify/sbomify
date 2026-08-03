@@ -352,7 +352,7 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
     hover_and_click(page, toggle)
     pace(page, 1200)
 
-    save_btn = page.locator("button[type='submit'][form='plugin-settings-form']")
+    save_btn = page.locator("#plugin-settings-form button[type='submit']")
     save_btn.scroll_into_view_if_needed()
     pace(page, 500)
     hover_and_click(page, save_btn)
