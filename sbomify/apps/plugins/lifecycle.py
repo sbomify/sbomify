@@ -94,6 +94,18 @@ def record_run(run: Any) -> dict[str, int]:
     if component_id is None:
         return {"opened": 0, "seen": 0, "resolved": 0}
 
+    # One gate lock on the component row before touching its lifecycle rows.
+    # Two concurrent folds for the same component deadlocked on stage: the
+    # per-row FOR UPDATE below locks in whatever order the planner scans, so
+    # two identical scans can interleave into an AB/BA wait — and two runs
+    # inserting the same new advisory would race the unique constraint. The
+    # caller swallows failures to protect the stored run, so a lost fold left
+    # no trace beyond a warning. Folds are order-dependent by nature; making
+    # them queue here is the semantics, not a cost.
+    from sbomify.apps.core.models import Component
+
+    Component.objects.select_for_update().filter(pk=component_id).first()
+
     now = timezone.now()
     present = _advisories(run.result)
 
