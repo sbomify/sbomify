@@ -50,6 +50,10 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
         "core_custom_domain:product_releases_public": "product_releases",
         "core:release_details_public": "release",
         "core_custom_domain:release_details_public": "release",
+        "core:workspace_advisories_public": "advisories",
+        "core:workspace_advisories_public_current": "advisories",
+        "core:advisory_details_public": "advisory",
+        "core:advisory_details_public_current": "advisory",
     }
 
     # If on custom domain, use custom URL generation with slugs
@@ -102,6 +106,12 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
                 return get_public_path(
                     "document", document_id or "", is_custom_domain=True, slug=document_slug or document_id
                 )
+        elif resource_type == "advisories":
+            return get_public_path("advisories", "", is_custom_domain=True)
+        elif resource_type == "advisory":
+            advisory_id = kwargs.get("advisory_id")
+            if advisory_id:
+                return get_public_path("advisory", advisory_id, is_custom_domain=True)
 
     # Fall back to standard Django URL resolution (uses IDs)
     # Remove slug-related kwargs before passing to reverse

@@ -320,7 +320,7 @@ def test_workspace_public_uses_configurable_description():
     # Custom description should be shown
     assert custom_description in content
     # Default description should not be shown
-    assert "Your centralized hub for transparency and compliance" not in content
+    assert "Security advisories, software bills of materials, and compliance artifacts" not in content
 
 
 @pytest.mark.django_db
@@ -346,7 +346,7 @@ def test_workspace_public_uses_default_description_when_empty():
     content = response.content.decode()
 
     # Default description should be shown
-    assert "Your centralized hub for transparency and compliance" in content
+    assert "Security advisories, software bills of materials, and compliance artifacts" in content
 
 
 @pytest.mark.django_db

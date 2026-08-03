@@ -1,0 +1,251 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load static %}
+{% load django_vite %}
+{% load public_url_tags %}
+{% block title %}Security Advisories · {{ workspace.name }}{% endblock %}
+{% block meta_description %}
+    Security advisories published by {{ workspace.name }}: affected products, versions, severity and remediation status.
+{% endblock %}
+{% block og_title %}{{ workspace.name }} Security Advisories{% endblock %}
+{% block content %}
+    <h1 class="tc-page-title">{{ workspace.name }} Security Advisories</h1>
+    <div class="tc-browse">
+        {% comment %}
+        Sidebar. A plain GET form: this page is the first thing a customer's
+        security team or a crawler reaches, and the filters have to work with no
+        JavaScript. The sort control in the table header opts into this same form
+        with form="advisoryFilters", so changing sort keeps the active filters.
+        {% endcomment %}
+        <form method="get" id="advisoryFilters" class="tc-filters" role="search">
+            <div class="tc-filter-search">
+                <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+                <label for="advisorySearch" class="sr-only">Search advisories</label>
+                <input id="advisorySearch"
+                       type="search"
+                       name="search"
+                       value="{{ query.search }}"
+                       placeholder="Search">
+            </div>
+            <div class="tc-filter-actions">
+                <button type="submit" class="tc-filter-apply">Filter</button>
+                {% if query.is_filtered %}
+                    <a class="tc-filter-clear"
+                       href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">Clear</a>
+                {% else %}
+                    <span class="tc-filter-clear tc-filter-clear-off">Clear</span>
+                {% endif %}
+            </div>
+            <div class="tc-filter-group">
+                <h2 class="tc-filter-heading">Published date</h2>
+                <div class="tc-filter-date">
+                    <label for="publishedFrom">From</label>
+                    <input id="publishedFrom"
+                           type="date"
+                           name="from"
+                           value="{{ query.published_from|date:'Y-m-d' }}">
+                </div>
+                <div class="tc-filter-date">
+                    <label for="publishedTo">To</label>
+                    <input id="publishedTo"
+                           type="date"
+                           name="to"
+                           value="{{ query.published_to|date:'Y-m-d' }}">
+                </div>
+            </div>
+            <div class="tc-filter-group">
+                <h2 class="tc-filter-heading">severity</h2>
+                {% for facet in facets.severity %}
+                    <label class="tc-facet">
+                        <input type="checkbox"
+                               name="severity"
+                               value="{{ facet.value }}"
+                               {% if facet.checked %}checked{% endif %}>
+                        <span class="tc-facet-label">{{ facet.label }}</span>
+                        {% if facet.count %}<span class="tc-facet-count">{{ facet.count }}</span>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+            {% if facets.product %}
+                <div class="tc-filter-group">
+                    <h2 class="tc-filter-heading">product</h2>
+                    {% for facet in facets.product %}
+                        <label class="tc-facet">
+                            <input type="checkbox"
+                                   name="product"
+                                   value="{{ facet.value }}"
+                                   {% if facet.checked %}checked{% endif %}>
+                            <span class="tc-facet-label">{{ facet.label }}</span>
+                            <span class="tc-facet-count">{{ facet.count }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </form>
+        {# ---- Results ------------------------------------------------------- #}
+        <div class="tc-results">
+            <div class="tc-results-bar">
+                <span class="tc-results-count">
+                    {% if total %}
+                        {{ start_index }} - {{ end_index }} of {{ total }}
+                    {% else %}
+                        0 advisories
+                    {% endif %}
+                </span>
+                <div class="tc-pager">
+                    {% if has_prev %}
+                        <a class="tc-pager-btn"
+                           href="?{{ querystrings.without_page }}page={{ prev_page }}"
+                           aria-label="Previous page">
+                            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        </a>
+                    {% else %}
+                        <span class="tc-pager-btn tc-pager-btn-off" aria-hidden="true"><i class="fas fa-chevron-left"></i></span>
+                    {% endif %}
+                    {% if has_next %}
+                        <a class="tc-pager-btn"
+                           href="?{{ querystrings.without_page }}page={{ next_page }}"
+                           aria-label="Next page">
+                            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                        </a>
+                    {% else %}
+                        <span class="tc-pager-btn tc-pager-btn-off" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                    {% endif %}
+                </div>
+                <label for="advisorySort" class="sr-only">Sort advisories</label>
+                <select id="advisorySort"
+                        name="sort"
+                        form="advisoryFilters"
+                        class="tc-sort"
+                        onchange="this.form.requestSubmit()">
+                    {% for option in sort_options %}
+                        <option value="{{ option.value }}"
+                                {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if advisories %}
+                <div class="tc-table-wrap">
+                    <table class="tc-adv-table">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="tc-col-cvss">CVSS</th>
+                                <th scope="col" class="tc-col-summary">Summary</th>
+                                <th scope="col">Versions</th>
+                                <th scope="col">Affected</th>
+                                <th scope="col">Unaffected</th>
+                                <th scope="col" class="tc-col-date">Published</th>
+                                <th scope="col" class="tc-col-date">Updated</th>
+                            </tr>
+                        </thead>
+                        {% comment %}
+                        One <tbody> per advisory: the CVSS, summary and date cells
+                        rowspan the product rows beneath them, which is what makes
+                        a multi-product advisory read as one entry rather than
+                        several unrelated ones.
+                        {% endcomment %}
+                        {% for advisory in advisories %}
+                            <tbody class="tc-adv-group">
+                                {% for row in advisory.affected_rows %}
+                                    <tr>
+                                        {% if forloop.first %}
+                                            <td class="tc-col-cvss" rowspan="{{ advisory.affected_rows|length }}">
+                                                <span class="tc-cvss tc-cvss-{{ advisory.severity|default:'none' }}">{{ advisory.cvss_score|default:"—" }}</span>
+                                            </td>
+                                            <td class="tc-col-summary" rowspan="{{ advisory.affected_rows|length }}">
+                                                <a class="tc-adv-link"
+                                                   href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
+                                                    {% if advisory.cve_ids %}<span class="tc-adv-cve">{{ advisory.cve_ids|join:", " }}</span>{% endif %}
+                                                    {{ advisory.title }}
+                                                </a>
+                                                <div class="tc-adv-tags">
+                                                    <span class="tc-adv-id">{{ advisory.id }}</span>
+                                                    {% if advisory.is_gated %}
+                                                        <span class="tc-lock-chip"
+                                                              title="Restricted — shown because you have access to the affected products">
+                                                            <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+                                                        </span>
+                                                    {% endif %}
+                                                    {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
+                                                    {% if advisory.status_label %}
+                                                        <span class="tc-adv-status">
+                                                            <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                                {% if advisory.withheld_product_count %}
+                                                    <p class="tc-adv-withheld">
+                                                        {{ advisory.withheld_product_count }} further product{{ advisory.withheld_product_count|pluralize }} not shown
+                                                    </p>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                        <td class="tc-col-product">{{ row.product }}</td>
+                                        <td class="tc-col-versions">{{ row.affected }}</td>
+                                        <td class="tc-col-versions">{{ row.unaffected }}</td>
+                                        {% if forloop.first %}
+                                            <td class="tc-col-date" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.published_display|default:"—" }}</td>
+                                            <td class="tc-col-date" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.updated_display|default:"—" }}</td>
+                                        {% endif %}
+                                    </tr>
+                                {% empty %}
+                                    {% comment %}
+                                    A workspace notice names no products, so it has
+                                    no version rows — it still belongs in the index,
+                                    as one row with the version columns empty.
+                                    {% endcomment %}
+                                    <tr>
+                                        <td class="tc-col-cvss">
+                                            <span class="tc-cvss tc-cvss-{{ advisory.severity|default:'none' }}">{{ advisory.cvss_score|default:"—" }}</span>
+                                        </td>
+                                        <td class="tc-col-summary">
+                                            <a class="tc-adv-link"
+                                               href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
+                                                {% if advisory.cve_ids %}<span class="tc-adv-cve">{{ advisory.cve_ids|join:", " }}</span>{% endif %}
+                                                {{ advisory.title }}
+                                            </a>
+                                            <div class="tc-adv-tags">
+                                                <span class="tc-adv-id">{{ advisory.id }}</span>
+                                                {% if advisory.is_gated %}
+                                                    <span class="tc-lock-chip">
+                                                        <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        <td class="tc-col-product">—</td>
+                                        <td class="tc-col-versions">—</td>
+                                        <td class="tc-col-versions">—</td>
+                                        <td class="tc-col-date">{{ advisory.published_display|default:"—" }}</td>
+                                        <td class="tc-col-date">{{ advisory.updated_display|default:"—" }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        {% endfor %}
+                    </table>
+                </div>
+            {% else %}
+                <div class="tc-empty">
+                    <i class="fas fa-shield-halved tc-empty-icon" aria-hidden="true"></i>
+                    <p class="tc-empty-title">
+                        {% if query.is_filtered %}
+                            No advisories match these filters
+                        {% else %}
+                            No published advisories
+                        {% endif %}
+                    </p>
+                    <p class="tc-empty-body">
+                        {% if query.is_filtered %}
+                            Try widening the severity or date range, or clear the filters.
+                        {% else %}
+                            New disclosures appear here as they are released.
+                        {% endif %}
+                    </p>
+                </div>
+            {% endif %}
+            {% include "core/components/trust_center/restricted_notice.html.j2" %}
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+{% endblock %}
