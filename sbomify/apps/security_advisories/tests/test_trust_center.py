@@ -7,9 +7,12 @@ leak would hide in it (internal comments, withheld product names).
 
 from __future__ import annotations
 
+import re
+from datetime import timedelta
 from urllib.parse import urlencode
 
 import pytest
+from django.db import connection
 from django.http import HttpRequest, QueryDict
 from django.utils import timezone
 
@@ -23,6 +26,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryVulnerability,
     SecurityAdvisory,
 )
+from sbomify.apps.security_advisories.services.advisories import REMEDIATION_META
 from sbomify.apps.security_advisories.services.trust_center import (
     browse_public_advisories,
     get_public_advisory,
@@ -465,3 +469,107 @@ def test_a_published_date_range_filters_the_list(team, public_product):
 def test_an_unparseable_date_drops_the_filter_rather_than_raising(team, public_product):
     severities(team, public_product, ["low"])
     assert browse(make_request(), team, **{"from": "not-a-date"})["total"] == 1
+
+
+# --- the timeline ------------------------------------------------------------
+
+
+def timeline_for(team, advisory, request=None):
+    return get_public_advisory(request or make_request(), team, advisory.id).value["timeline"]
+
+
+def backdate(event: AdvisoryEvent, when) -> None:
+    """Move an event in time.
+
+    ``created_at`` is auto_now_add and the manager is append-only, so neither
+    save() nor update() can do this — the test writes the column directly.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE security_advisories_events SET created_at = %s WHERE id = %s", [when, event.id]
+        )
+
+
+def test_each_event_kind_gets_its_own_icon(team, public_product):
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryEvent.objects.create(
+        advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out."
+    )
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
+
+    icons = {entry["kind"]: entry["icon"] for entry in timeline_for(team, advisory)}
+    assert icons["published"] == "fas fa-bullhorn"
+    assert icons["update"] == "fas fa-comment-dots"
+    # No entry falls through to a generic dot.
+    assert "fas fa-circle-info" not in icons.values()
+
+
+def test_a_status_change_borrows_the_icon_of_the_state_it_moved_to(team, public_product):
+    """The rail should read as the remediation story, not as generic churn."""
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
+        payload={"from": "investigating", "to": "resolved"},
+    )
+
+    entry = timeline_for(team, advisory)[0]
+    assert entry["label"] == "Resolved"
+    assert entry["icon"] == REMEDIATION_META["resolved"]["icon"]
+    assert entry["variant"] == "success"
+
+
+def test_the_gap_measures_against_the_previous_entry(team, public_product):
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    first = AdvisoryEvent.objects.create(
+        advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out."
+    )
+    second = AdvisoryEvent.objects.create(
+        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
+    )
+    now = timezone.now()
+    backdate(first, now - timedelta(days=14))
+    backdate(second, now - timedelta(days=3))
+
+    newest, oldest = timeline_for(team, advisory)
+    assert newest["gap"] == "1 week later"
+    assert newest["age"] == "3 days ago"
+    # The oldest entry starts the story; there is nothing behind it to measure.
+    assert oldest["gap"] == ""
+
+
+def test_a_sub_minute_gap_reads_as_words_not_as_zero(team, public_product):
+    """timesince renders "0 minutes" — and joins with a non-breaking space, so a
+    naive check for "0 " never fires and the phrase leaks to the page."""
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED, body="Out.")
+    AdvisoryEvent.objects.create(advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched.")
+
+    newest = timeline_for(team, advisory)[0]
+    assert newest["gap"] == "moments later"
+    assert newest["age"] == "just now"
+    assert "0" not in newest["gap"]
+
+
+def test_a_timeline_entry_carries_both_absolute_and_relative_time(team, public_product):
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    event = AdvisoryEvent.objects.create(
+        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
+    )
+    backdate(event, timezone.now() - timedelta(days=2))
+
+    entry = timeline_for(team, advisory)[0]
+    assert entry["date_display"]
+    assert re.fullmatch(r"\d{2}:\d{2}", entry["time_display"])
+    assert entry["age"] == "2 days ago"
+
+
+def test_the_advisory_reports_how_stale_it_is(team, public_product):
+    advisory = advisory_for(team, public_product, visibility=SecurityAdvisory.Visibility.PUBLIC)
+    event = AdvisoryEvent.objects.create(
+        advisory=advisory, event_type=AdvisoryEvent.EventType.UPDATE, body="Patched."
+    )
+    backdate(event, timezone.now() - timedelta(days=11))
+
+    result = get_public_advisory(make_request(), team, advisory.id)
+    assert result.value["updated_age"] == "1 week ago"

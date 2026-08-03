@@ -206,6 +206,33 @@ def workspace_public_url(context: Any) -> Any:
 
 
 @register.simple_tag(takes_context=True)
+def workspace_advisories_url(context: Any) -> Any:
+    """The trust center's advisory index URL, resolved like the workspace root.
+
+    Mirrors :func:`workspace_public_url` exactly — custom domain first, then the
+    workspace key from ``brand`` or ``workspace`` — so the two nav links can
+    never resolve against different workspaces. Returns "" when no workspace can
+    be determined, which is the signal for the nav not to render at all.
+    """
+    request = context.get("request")
+    if not request:
+        return ""
+
+    if getattr(request, "is_custom_domain", False):
+        return get_public_path("advisories", "", is_custom_domain=True)
+
+    for source in (context.get("brand"), context.get("workspace")):
+        key = source.get("workspace_key") or source.get("key") if isinstance(source, dict) else None
+        if key:
+            try:
+                return reverse("core:workspace_advisories_public", kwargs={"workspace_key": key})
+            except NoReverseMatch:
+                continue
+
+    return ""
+
+
+@register.simple_tag(takes_context=True)
 def trust_center_absolute_url(context: Any, team: Any = None) -> Any:
     """
     Generate the full absolute URL for a workspace's Trust Center.

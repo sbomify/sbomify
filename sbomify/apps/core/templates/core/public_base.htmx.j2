@@ -1125,8 +1125,16 @@
                     {% block header_content %}{% endblock %}
                 </div>
             </header>
+            {% include "core/components/trust_center/nav.html.j2" %}
             {# Main Content #}
             <main class="public-main">
+                {% comment %}
+                Full-bleed page header, outside the content container so a
+                masthead can span the viewport while its text still lines up
+                with the content below. Pages that do not define it lose nothing.
+                {% endcomment %}
+                {% block page_header %}
+                {% endblock %}
                 <div class="public-content-container">
                     {# Breadcrumb Navigation #}
                     {% block breadcrumb %}{% endblock %}
@@ -1138,15 +1146,11 @@
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
-                        <div class="footer-title">
-                            {% if brand.name %}
-                                {{ brand.name }}
-                            {% else %}
-                                sbomify
-                            {% endif %}
-                            Trust Center
-                        </div>
-                        <div class="footer-divider-full"></div>
+                        {% comment %}
+                        The workspace name is already the page's H1 and the
+                        header logo, so repeating it as a footer title said
+                        nothing.
+                        {% endcomment %}
                         <div class="footer-bottom-row">
                             <div class="footer-copyright">
                                 © {% now "Y" %}

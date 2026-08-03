@@ -121,26 +121,52 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
             {% endfor %}
             {% if advisory.timeline %}
                 <div class="tc-panel">
-                    <h2 class="tc-panel-title">Timeline</h2>
-                    <ul class="tc-timeline">
+                    <div class="tc-timeline-header">
+                        <h2 class="tc-panel-title tc-panel-title-flush">Timeline</h2>
+                        <span class="tc-timeline-freshness">
+                            <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
+                            Last updated {{ advisory.updated_age }}
+                        </span>
+                    </div>
+                    <ol class="tc-timeline">
                         {% for entry in advisory.timeline %}
-                            <li class="tc-timeline-item">
+                            <li class="tc-timeline-item {% if forloop.first %}is-latest{% endif %}">
                                 <div class="tc-timeline-rail">
-                                    <span class="tc-timeline-dot">
+                                    <span class="tc-timeline-dot tc-dot-{{ entry.variant }}">
                                         <i class="{{ entry.icon }}" aria-hidden="true"></i>
                                     </span>
                                     {% if not forloop.last %}<span class="tc-timeline-line"></span>{% endif %}
                                 </div>
                                 <div class="tc-timeline-body">
                                     <div class="tc-timeline-head">
-                                        <span class="tw-badge tw-badge-{{ entry.variant }}">{{ entry.label }}</span>
-                                        <span class="tc-advisory-date">{{ entry.date_display }}</span>
+                                        <span class="tc-timeline-label">{{ entry.label }}</span>
+                                        <time class="tc-timeline-when"
+                                              datetime="{{ entry.created_at|date:'c' }}"
+                                              title="{{ entry.created_at|date:'j F Y, H:i e' }}">
+                                            {{ entry.date_display }}
+                                            <span class="tc-timeline-clock">{{ entry.time_display }}</span>
+                                        </time>
                                     </div>
+                                    <p class="tc-timeline-age">
+                                        {{ entry.age }}
+                                        {% comment %}
+                                        The gap to the next older entry. The oldest
+                                        has nothing to measure against, so it says
+                                        so rather than showing a blank.
+                                        {% endcomment %}
+                                        {% if entry.gap %}
+                                            <span class="tc-timeline-gap">
+                                                <i class="fas fa-arrow-turn-up" aria-hidden="true"></i>{{ entry.gap }}
+                                            </span>
+                                        {% else %}
+                                            <span class="tc-timeline-gap">first entry</span>
+                                        {% endif %}
+                                    </p>
                                     {% if entry.note %}<p class="tc-timeline-note">{{ entry.note }}</p>{% endif %}
                                 </div>
                             </li>
                         {% endfor %}
-                    </ul>
+                    </ol>
                 </div>
             {% endif %}
         </div>

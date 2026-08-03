@@ -38,6 +38,7 @@ from math import ceil
 from typing import Any
 
 from django.db.models import Prefetch, Q
+from django.utils.timesince import timesince
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.security_advisories.models import (
@@ -91,6 +92,34 @@ SORT_OPTIONS: dict[str, str] = {
 }
 
 DEFAULT_PER_PAGE = 25
+
+# Timeline icons for the event kinds a visitor may read. A status_change borrows
+# the icon of the state it moved to (see ``_public_event``); these cover the rest,
+# so no entry falls back to a generic dot and the rail is readable without its
+# labels.
+EVENT_META: dict[str, dict[str, str]] = {
+    AdvisoryEvent.EventType.PUBLISHED: {
+        "label": "Published",
+        "variant": "success",
+        "icon": "fas fa-bullhorn",
+    },
+    AdvisoryEvent.EventType.UPDATE: {
+        "label": "Update",
+        "variant": "info",
+        "icon": "fas fa-comment-dots",
+    },
+    AdvisoryEvent.EventType.WITHDRAWN: {
+        "label": "Withdrawn",
+        "variant": "warning",
+        "icon": "fas fa-rotate-left",
+    },
+    AdvisoryEvent.EventType.STATUS_CHANGE: {
+        "label": "Status change",
+        "variant": "secondary",
+        "icon": "fas fa-arrow-right-arrow-left",
+    },
+}
+_DEFAULT_EVENT_META = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle-info"}
 
 # Sort fallback for an advisory with no publication date. Timezone-aware because
 # ``published_at`` is, and comparing the two would otherwise raise.
@@ -267,26 +296,78 @@ def _public_vulnerability(vulnerability: AdvisoryVulnerability) -> dict[str, Any
     }
 
 
-def _public_event(event: AdvisoryEvent) -> dict[str, Any]:
-    """One timeline entry, message and date only.
+def _humanise(delta_from: Any, delta_to: Any = None) -> str:
+    """A coarse, single-unit duration: "3 days", "2 months", or "" for none.
+
+    ``django.utils.timesince`` returns two units ("2 days, 3 hours"), which is
+    more precision than a disclosure timeline wants — the reader is asking "was
+    this recent" and "did they leave it a while", not counting hours. Trimming
+    to the leading unit keeps the entries scannable.
+
+    Returns "" for a sub-minute duration (``timesince`` floors to minutes and
+    renders "0 minutes"), leaving the caller to phrase it — "just now" and
+    "moments later" are the same duration but not the same sentence.
+    """
+    if delta_from is None:
+        return ""
+    # timesince joins its number and unit with a non-breaking space, so a plain
+    # " " comparison silently never matches.
+    rendered = timesince(delta_from, delta_to).replace(" ", " ")
+    leading = rendered.split(",")[0].strip()
+    return "" if leading.startswith("0 ") else leading
+
+
+def _age_phrase(moment: Any) -> str:
+    """How long ago something happened, as a finished phrase."""
+    if moment is None:
+        return ""
+    return f"{humanised} ago" if (humanised := _humanise(moment)) else "just now"
+
+
+def _gap_phrase(earlier: Any, later: Any) -> str:
+    """How long after the previous entry, as a finished phrase.
+
+    Empty when there is no earlier entry to measure against — the oldest event
+    is the start of the story, not a zero-length gap.
+    """
+    if earlier is None or later is None:
+        return ""
+    return f"{humanised} later" if (humanised := _humanise(earlier, later)) else "moments later"
+
+
+def _public_event(event: AdvisoryEvent, *, previous: AdvisoryEvent | None = None) -> dict[str, Any]:
+    """One timeline entry: what happened, when, and how long after the last one.
 
     The workspace timeline renders an actor and a raw payload. Neither belongs on
     a public page: the actor names an employee, and a ``field_change`` payload
     carries the old value, which is the thing an embargo existed to withhold.
     ``_readable_queryset`` has already dropped every event type outside
     ``PUBLIC_EVENT_TYPES``, so this only has to shape what survived.
+
+    ``previous`` is the next *older* event, which is what the gap is measured
+    against — "11 days later" is the number that tells a reader whether a vendor
+    kept them posted or went quiet, and it cannot be read off two absolute dates
+    at a glance.
     """
     payload = event.payload if isinstance(event.payload, dict) else {}
     to_status = payload.get("to") if event.event_type == AdvisoryEvent.EventType.STATUS_CHANGE else None
-    meta = REMEDIATION_META.get(to_status or "", {})
+    # A status change borrows the icon of the state it moved *to*, so the rail
+    # reads as the remediation story. Everything else has its own icon.
+    meta = REMEDIATION_META.get(to_status or "", {}) if to_status else {}
+    fallback = EVENT_META.get(event.event_type, _DEFAULT_EVENT_META)
     return {
         "id": event.id,
         "kind": event.event_type,
-        "label": meta.get("label") or event.get_event_type_display(),
-        "variant": meta.get("variant", "secondary"),
-        "icon": meta.get("icon", "fas fa-circle-info"),
+        "label": meta.get("label") or fallback["label"],
+        "variant": meta.get("variant") or fallback["variant"],
+        "icon": meta.get("icon") or fallback["icon"],
         "note": event.body,
+        # Three complementary readings of the same instant: the date to cite,
+        # the time for same-day ordering, and the relative age to feel.
         "date_display": display_date(event.created_at),
+        "time_display": f"{event.created_at:%H:%M}",
+        "age": _age_phrase(event.created_at),
+        "gap": _gap_phrase(previous.created_at if previous is not None else None, event.created_at),
         "created_at": event.created_at,
     }
 
@@ -433,6 +514,10 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
         "published_display": display_date(advisory.published_at),
         "updated_at": updated_at,
         "updated_display": display_date(updated_at),
+        # "Last updated 11 days ago" is the freshness signal a reader checks
+        # before trusting the status above it.
+        "updated_age": _age_phrase(updated_at),
+        "published_age": _age_phrase(advisory.published_at),
         # The index columns: a score to sort and scan by, and the per-product
         # version rows the advisory spans.
         "cvss_score": _cvss_score(advisory),
@@ -451,7 +536,14 @@ def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail
             }
             for r in advisory.references.all()
         ]
-        projection["timeline"] = [_public_event(e) for e in sorted(events, key=lambda e: e.created_at, reverse=True)]
+        # Newest first, which is what a reader checking "where is this now"
+        # wants. Each entry's gap is measured against the next *older* one, so
+        # the pairing walks the reversed list one step behind.
+        newest_first = sorted(events, key=lambda e: e.created_at, reverse=True)
+        projection["timeline"] = [
+            _public_event(event, previous=newest_first[index + 1] if index + 1 < len(newest_first) else None)
+            for index, event in enumerate(newest_first)
+        ]
         projection["acknowledgments"] = advisory.acknowledgments or []
         projection["statuses"] = _public_statuses(advisory, scope)
     return projection

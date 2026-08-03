@@ -2,7 +2,6 @@
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
-{% load humanize %}
 {% block title %}{{ workspace.name }} Trust Center{% endblock %}
 {% block meta_description %}
     {{ workspace.name }} Trust Center: security advisories, product SBOMs, releases, and organization-wide compliance artifacts.
@@ -11,79 +10,67 @@
 {% block og_description %}
     {{ workspace.name }} Trust Center: security advisories, product SBOMs, releases, and organization-wide compliance artifacts.
 {% endblock %}
+{% block page_header %}
+    {% comment %}
+    A real page header, not a card: it spans the viewport and its text lines
+    up with the content below, so the page reads as one document rather than
+    a stack of boxes.
+    {% endcomment %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner">
+            <p class="tc-eyebrow">
+                <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                Trust Center
+            </p>
+            <h1 class="tc-masthead-title">{{ workspace.name }}</h1>
+            <p class="tc-masthead-lede">
+                {% if brand.trust_center_description %}
+                    {{ brand.trust_center_description }}
+                {% else %}
+                    Security advisories, software bills of materials, and compliance artifacts for everything we ship — published as we publish them.
+                {% endif %}
+            </p>
+            <dl class="tc-stats">
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Advisories</dt>
+                    <dd class="tc-stat-value">
+                        {{ advisories.total }}
+                    </dd>
+                </div>
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Products</dt>
+                    <dd class="tc-stat-value">
+                        {{ products|length }}
+                    </dd>
+                </div>
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Compliance artifacts</dt>
+                    <dd class="tc-stat-value">
+                        {{ global_components|length }}
+                    </dd>
+                </div>
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Latest advisory</dt>
+                    <dd class="tc-stat-value tc-stat-value-date">
+                        {{ advisories.latest_display|default:"—" }}
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    </header>
+{% endblock %}
 {% block content %}
-    {# ---- Hero + posture strip ------------------------------------------- #}
-    <section class="tc-hero">
-        <div class="tc-eyebrow">
-            <span class="tc-eyebrow-dot" aria-hidden="true"></span>
-            Trust Center
-        </div>
-        <h1 class="tc-hero-title">{{ workspace.name }}</h1>
-        <p class="tc-hero-lede">
-            {% if brand.trust_center_description %}
-                {{ brand.trust_center_description }}
-            {% else %}
-                Security advisories, software bills of materials, and compliance artifacts for everything we ship — published as we publish them.
-            {% endif %}
-        </p>
-        <div class="tc-posture">
-            <div class="tc-posture-cell">
-                <span class="tc-posture-value">{{ advisories.total }}</span>
-                <span class="tc-posture-label">
-                    <i class="fas fa-shield-halved" aria-hidden="true"></i>Advisor{{ advisories.total|pluralize:"y,ies" }}
-                </span>
-            </div>
-            <div class="tc-posture-cell">
-                <span class="tc-posture-value">{{ products|length }}</span>
-                <span class="tc-posture-label">
-                    <i class="fas fa-cube" aria-hidden="true"></i>Product{{ products|length|pluralize }}
-                </span>
-            </div>
-            <div class="tc-posture-cell">
-                <span class="tc-posture-value">{{ global_components|length }}</span>
-                <span class="tc-posture-label">
-                    <i class="fas fa-award" aria-hidden="true"></i>Compliance artifact{{ global_components|length|pluralize }}
-                </span>
-            </div>
-            <div class="tc-posture-cell">
-                <span class="tc-posture-value tc-value-quiet">{{ advisories.latest_display|default:"—" }}</span>
-                <span class="tc-posture-label">
-                    <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>Latest advisory
-                </span>
-            </div>
-        </div>
-    </section>
-    {# ---- Section nav ----------------------------------------------------- #}
-    <nav class="tc-nav" aria-label="Trust center sections">
-        <a class="tc-nav-item" href="#advisories">
-            <i class="fas fa-shield-halved" aria-hidden="true"></i>
-            Advisories
-            {% if advisories.total %}<span class="tc-nav-count">{{ advisories.total }}</span>{% endif %}
-        </a>
-        <a class="tc-nav-item" href="#products">
-            <i class="fas fa-cube" aria-hidden="true"></i>
-            Products
-            {% if products %}<span class="tc-nav-count">{{ products|length }}</span>{% endif %}
-        </a>
-        <a class="tc-nav-item" href="#compliance">
-            <i class="fas fa-award" aria-hidden="true"></i>
-            Compliance
-            {% if global_components %}<span class="tc-nav-count">{{ global_components|length }}</span>{% endif %}
-        </a>
-    </nav>
     {# ---- Security advisories -------------------------------------------- #}
     <section class="tc-section" id="advisories">
         <div class="tc-section-head">
-            <div>
-                <h2 class="tc-section-title">
-                    <i class="fas fa-shield-halved" aria-hidden="true"></i>Security advisories
-                </h2>
+            <div class="tc-section-heading">
+                <h2 class="tc-section-title">Security advisories</h2>
                 <p class="tc-section-sub">Vulnerabilities we have disclosed, what they affect, and where the fix is.</p>
             </div>
             {% if advisories.total %}
                 <a class="tc-section-link"
                    href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">
-                    All advisories <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
+                    All advisories <i class="fas fa-arrow-right" aria-hidden="true"></i>
                 </a>
             {% endif %}
         </div>
@@ -111,10 +98,8 @@
     {# ---- Products -------------------------------------------------------- #}
     <section class="tc-section" id="products">
         <div class="tc-section-head">
-            <div>
-                <h2 class="tc-section-title">
-                    <i class="fas fa-cube" aria-hidden="true"></i>Products
-                </h2>
+            <div class="tc-section-heading">
+                <h2 class="tc-section-title">Products</h2>
                 <p class="tc-section-sub">Our products and their software bills of materials.</p>
             </div>
         </div>
@@ -139,7 +124,7 @@
                         <p class="tc-card-desc">{{ product.description|default:"No description provided." }}</p>
                         <div class="tc-card-foot">
                             <span class="tc-card-count">{{ product.component_count }} component{{ product.component_count|pluralize }}</span>
-                            <span class="flex items-center gap-1.5">
+                            <span class="tc-card-foot-right">
                                 {% for assessment in product.passing_assessments %}
                                     {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
                                 {% endfor %}
@@ -160,10 +145,8 @@
     {# ---- Compliance artifacts -------------------------------------------- #}
     <section class="tc-section" id="compliance">
         <div class="tc-section-head">
-            <div>
-                <h2 class="tc-section-title">
-                    <i class="fas fa-award" aria-hidden="true"></i>Compliance artifacts
-                </h2>
+            <div class="tc-section-heading">
+                <h2 class="tc-section-title">Compliance artifacts</h2>
                 <p class="tc-section-sub">Organization-wide certifications, attestations and policy documents.</p>
             </div>
         </div>
@@ -172,15 +155,13 @@
                 {% for component in global_components %}
                     <a class="tc-card"
                        href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
-                        <div class="flex items-start justify-between gap-2">
+                        <div class="tc-card-head">
                             <h3 class="tc-card-title">{{ component.name }}</h3>
-                            <span class="tc-product-chip whitespace-nowrap">{{ component.component_type_display }}</span>
+                            <span class="tc-card-tag">{{ component.component_type_display }}</span>
                         </div>
                         <p class="tc-card-desc">Organization-level artifact, applicable across everything we ship.</p>
                         <div class="tc-card-foot">
-                            <span class="tc-card-count">
-                                <i class="fas fa-building mr-1" aria-hidden="true"></i>Organization-wide
-                            </span>
+                            <span class="tc-card-count">Organization-wide</span>
                             <i class="fas fa-arrow-right tc-card-arrow" aria-hidden="true"></i>
                         </div>
                     </a>
