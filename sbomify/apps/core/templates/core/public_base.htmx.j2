@@ -459,8 +459,12 @@
                 outline-color: var(--accent-color);
             }
 
+            /* One flat colour from below the header all the way to the footer.
+               The page used to fade from --bg-secondary to --bg-tertiary, which
+               put a second, softer edge under every section and made the
+               content area read as a gradient panel rather than as the page. */
             body.public-page {
-                background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+                background: var(--bg-secondary);
                 color: var(--text-primary);
                 min-height: 100vh;
             }
@@ -574,7 +578,7 @@
             .public-main {
                 flex: 1;
                 position: relative;
-                background: var(--bg-secondary);
+                background: transparent;
             }
 
             .public-content-container {
@@ -593,7 +597,10 @@
             to anonymous trust-center visitors.)
 {% endcomment %}
             .public-footer {
-                background: linear-gradient(180deg, var(--bg-secondary, #ffffff) 0%, var(--bg-tertiary, #f8fafc) 100%);
+                /* Transparent, so the body's single colour carries straight
+                   through. The brand ::before bar is what separates the footer
+                   from the content, not a change of background. */
+                background: transparent;
                 margin-top: auto;
                 position: relative;
                 overflow: hidden;
