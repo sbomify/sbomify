@@ -218,12 +218,12 @@ htmx_error_from_exception(error: DomainError)                # converts DomainEr
 
 Key patterns:
 
+- **Design system (mandatory for ALL UI work)**: `docs/design-system.md` is the contract — read it before writing or changing any template, style, or component. The living gallery at `/design-system/` (DEBUG-only, URL name `core:design_system`) renders every component in one view. Use the shared components; never hand-roll UI that exists; never hardcode colors — use the CSS custom-property tokens; new variants extend via the documented parameterization (`--btn-accent` etc.), and every library change ships with a gallery demo.
 - **Tailwind component classes**: `tw-btn-primary`, `tw-badge-success`, `tw-form-input`, `tw-card-*`, `tw-data-table` — defined in `sbomify/assets/css/tailwind.src.css`
-- **Jinja2 component macros**: Reusable UI in `sbomify/apps/core/templates/components/tw/` (button, card, modal, input, badge, etc.)
+- **Jinja2 component macros**: Reusable UI in `sbomify/apps/core/templates/components/tw/` (button, card, modal, input, badge, etc.) — the macro file is the parameter contract
 - **Server data to Alpine.js**: Use `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')` — never client-side fetch
 - **HTMX partials**: Views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
 - **Dark mode**: `.dark` class on `<html>` element (not `[data-bs-theme]`)
-- **Component reference**: The tw-tests page at `/tailwind-test/` is the source of truth for all component patterns
 - **Vite entry points** in `vite.config.ts`: core, sboms, teams, billing, documents, vulnerability_scanning, plugins (plus alerts, djangoMessages, htmxBundle, tailwind). Dev server runs on port **5170**
 
 > **Migration note**: Bootstrap and Tailwind coexist during transition. New components use Tailwind exclusively. Bootstrap is removed once all pages are converted.
