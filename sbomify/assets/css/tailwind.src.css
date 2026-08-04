@@ -758,33 +758,11 @@ html.no-transitions * {
   background: color-mix(in oklab, var(--color-background) 30%, transparent);
 }
 
-/* Dashboard Card - with animated top border */
+/* Dashboard Card */
 .tw-dashboard-card {
   animation: fadeInUp 0.4s ease-out;
   position: relative;
   overflow: hidden;
-}
-
-.tw-dashboard-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.tw-dashboard-card:hover {
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-2px);
-  border-color: var(--color-border-light);
-}
-
-.tw-dashboard-card:hover::before {
-  opacity: 1;
 }
 
 /* Settings Card - with margin bottom */
