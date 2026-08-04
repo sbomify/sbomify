@@ -310,6 +310,35 @@ class TestExportPackageRetention:
 
         assert floor >= date.today() + timedelta(days=365 * 10)
 
+    def test_floor_holds_across_a_span_with_three_leap_days(self, cra_assessment):
+        """Ten calendar years, not 3652 days.
+
+        2015-03-01 to 2025-03-01 crosses 2016, 2020 and 2024, so the span is
+        3653 days and a fixed day count lands on 28 February — a day short of
+        the obligation. The date is passed in rather than derived from today,
+        which also keeps the assertion from turning over at midnight.
+        """
+        from datetime import date
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        cra_assessment.support_period_end = None
+
+        assert CRAExportPackage.retention_floor(cra_assessment, date(2015, 3, 1)) == date(2025, 3, 1)
+
+    def test_floor_from_a_leap_day_rounds_the_safe_way(self, cra_assessment):
+        """29 February has no tenth anniversary, so the floor moves to 1 March.
+
+        Later is safe; 28 February would be a day short of the obligation.
+        """
+        from datetime import date
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        cra_assessment.support_period_end = None
+
+        assert CRAExportPackage.retention_floor(cra_assessment, date(2016, 2, 29)) == date(2026, 3, 1)
+
     def test_floor_is_the_support_period_when_longer(self, cra_assessment):
         from datetime import date, timedelta
 

@@ -462,12 +462,22 @@ class CRAExportPackage(models.Model):
         The later of ten years from ``created`` (defaulting to today) and the
         assessment's declared support period end.
         """
-        from datetime import date, timedelta
+        from datetime import date
 
         base = created or timezone.now().date()
         if hasattr(base, "date"):
             base = base.date()
-        floor = base + timedelta(days=365 * cls.RETENTION_YEARS + 2)  # leap slack keeps it >= ten calendar years
+        # Calendar arithmetic, not a day count. A ten-year span can cross three
+        # leap days (2015-03-01 to 2025-03-01 does), so 365*10 plus two days of
+        # slack lands a day early — and a retention floor that expires early is
+        # a breach, not a rounding error.
+        try:
+            floor = base.replace(year=base.year + cls.RETENTION_YEARS)
+        except ValueError:
+            # 29 February, ten years on from a leap year into one that is not.
+            # Rounding to 1 March keeps the package a day longer than required,
+            # which is the safe direction; 28 February would be a day short.
+            floor = base.replace(year=base.year + cls.RETENTION_YEARS, month=3, day=1)
         support_end = assessment.support_period_end
         if isinstance(support_end, date) and support_end > floor:
             return support_end
