@@ -5,6 +5,7 @@ from typing import Any
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.models import Component, Product
@@ -19,13 +20,30 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     Navigation is the primary job. Someone typing here usually wants to *go*
     somewhere — settings, tokens, the plugins page — so destinations from
-    ``spotlight.py`` lead, and products and components fill the tail.
+    ``spotlight.py`` lead, and the workspace's own records fill the tail.
 
-    The legacy ``products``/``components`` keys are still in the response
-    because the existing dropdown reads them; ``results`` is the flat, ranked
-    list a palette renders. Both describe the same data, so a client can move
-    over without a flag day.
+    ``products``/``components`` are the legacy keys the older dropdown reads
+    and cover assets only. ``results`` is the flat, ranked palette list and is
+    a superset: it also carries navigation destinations, advisories, findings,
+    releases and documents. They are not interchangeable.
     """
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
+        """Answer guests with JSON rather than the mixin's HTML redirect.
+
+        ``GuestAccessBlockedMixin`` bounces guests to the public workspace
+        page, which is right for a page view and wrong for a fetch: the
+        client would parse an HTML document as JSON and surface a generic
+        failure. A guest gets an empty result set in the shape the client
+        expects — still no workspace data, just an answer it can read.
+        """
+        response = super().dispatch(request, *args, **kwargs)
+        if (
+            getattr(response, "status_code", None) in (301, 302)
+            and request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        ):
+            return JsonResponse({"products": [], "components": [], "results": []})
+        return response
 
     def get(self, request: HttpRequest) -> JsonResponse:
         query = request.GET.get("q", "").strip()
@@ -180,7 +198,10 @@ ENTITY_SEARCHES: tuple[tuple[str, str, Any, Any], ...] = (
         "advisories",
         "fa-shield-halved",
         _advisory_rows,
-        lambda row: (f"{row.tracking_id or row.id} · {row.title}", f"/security-advisories/{row.id}/"),
+        lambda row: (
+            f"{row.tracking_id or row.id} · {row.title}",
+            reverse("core:security_advisory_detail", kwargs={"advisory_id": row.id}),
+        ),
     ),
     (
         "findings",
@@ -188,7 +209,7 @@ ENTITY_SEARCHES: tuple[tuple[str, str, Any, Any], ...] = (
         _finding_rows,
         lambda row: (
             f"{row.advisory_id}{f' · {row.severity}' if row.severity else ''} · {row.component.name}",
-            f"/component/{row.component_id}/",
+            reverse("core:component_details", kwargs={"component_id": row.component_id}),
         ),
     ),
     (
@@ -197,14 +218,17 @@ ENTITY_SEARCHES: tuple[tuple[str, str, Any, Any], ...] = (
         _release_rows,
         lambda row: (
             f"{row.version or row.name} · {row.product.name}",
-            f"/product/{row.product_id}/release/{row.id}/",
+            reverse("core:release_details", kwargs={"product_id": row.product_id, "release_id": row.id}),
         ),
     ),
     (
         "documents",
         "fa-file-lines",
         _document_rows,
-        lambda row: (f"{row.name} · {row.component.name}", f"/component/{row.component_id}/"),
+        lambda row: (
+            f"{row.name} · {row.component.name}",
+            reverse("core:component_details", kwargs={"component_id": row.component_id}),
+        ),
     ),
 )
 
@@ -245,7 +269,7 @@ def _asset_results(products: list[dict[str, Any]], components: list[dict[str, An
     rows = [
         {
             "title": product["name"],
-            "url": f"/product/{product['id']}/",
+            "url": reverse("core:product_details", kwargs={"product_id": product["id"]}),
             "section": "assets",
             "section_label": label,
             "icon": "fa-cube",
@@ -256,7 +280,7 @@ def _asset_results(products: list[dict[str, Any]], components: list[dict[str, An
     rows += [
         {
             "title": component["name"],
-            "url": f"/component/{component['id']}/",
+            "url": reverse("core:component_details", kwargs={"component_id": component["id"]}),
             "section": "assets",
             "section_label": label,
             "icon": "fa-puzzle-piece",

@@ -16,7 +16,7 @@
     "     'team_key' is the only one supported today.",
     "",
     "Ordering within a section is by match quality, not by position here.",
-    "Sections themselves are ordered by `section_order` in spotlight.py."
+    "Sections themselves are ordered by `SECTION_ORDER` in spotlight.py."
   ],
   "destinations": [
     {

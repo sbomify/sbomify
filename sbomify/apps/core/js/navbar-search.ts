@@ -3,9 +3,10 @@
  *
  * Navigation first: the endpoint returns a flat, ranked `results` list where
  * app destinations (settings, tokens, wizards) outrank the workspace's own
- * products and components. This renders that list grouped by section, in the
- * order the server ranked it — the client does no re-sorting, so changing
- * priorities is a server-side concern only.
+ * records. Rendering groups that list by section, so a section appears once
+ * even if its members are not contiguous in the ranking — order *within* a
+ * section is the server's, and a section's position follows its best-ranked
+ * member. Nothing is re-scored here; ranking stays a server-side concern.
  *
  * Markup is Tailwind utilities matching the header's own dropdown. The
  * previous `search-result-*` class names pointed at layout.css, which the

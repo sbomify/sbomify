@@ -286,3 +286,60 @@ class TestEntitySearch:
 
         assert results[0]["title"] == "Billing"
         assert results[0]["section"] == "settings"
+
+
+@pytest.mark.django_db
+class TestGuestAccess:
+    """A guest must get JSON, not the mixin's HTML redirect — the client
+    parses this response and would otherwise show a generic failure."""
+
+    def test_a_guest_gets_an_empty_json_payload(self, client, sample_team_with_owner_member, guest_user):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.teams.models import Member
+
+        member = sample_team_with_owner_member
+        Member.objects.create(user=guest_user, team=member.team, role="guest")
+        setup_authenticated_client_session(client, member.team, guest_user)
+
+        response = client.get(
+            reverse("core:search"), {"q": "billing"}, headers={"x-requested-with": "XMLHttpRequest"}
+        )
+
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("application/json")
+        assert response.json() == {"products": [], "components": [], "results": []}
+
+    def test_a_guest_page_request_still_redirects(self, client, sample_team_with_owner_member, guest_user):
+        """Only the fetch path changes; a browser hitting the URL directly
+        keeps the mixin's redirect."""
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.teams.models import Member
+
+        member = sample_team_with_owner_member
+        Member.objects.create(user=guest_user, team=member.team, role="guest")
+        setup_authenticated_client_session(client, member.team, guest_user)
+
+        response = client.get(reverse("core:search"), {"q": "billing"})
+
+        assert response.status_code == 302
+
+
+@pytest.mark.django_db
+class TestUrlsAreReversed:
+    """URLs come from reverse(), so a route change cannot silently produce
+    dead palette links."""
+
+    def test_asset_and_entity_urls_match_the_router(self, client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Product, Release
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        product = Product.objects.create(team=member.team, name="Reversed Product")
+        release = Release.objects.create(product=product, name="Reversed v7.0.0", version="7.0.0")
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        results = client.get(reverse("core:search"), {"q": "Reversed"}).json()["results"]
+        urls = {r["url"] for r in results}
+
+        assert reverse("core:product_details", kwargs={"product_id": product.id}) in urls
+        assert reverse("core:release_details", kwargs={"product_id": product.id, "release_id": release.id}) in urls
