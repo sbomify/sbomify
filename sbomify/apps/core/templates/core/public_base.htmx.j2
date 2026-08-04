@@ -690,8 +690,7 @@
 
             @media (max-width: 768px) {
                 .public-header-container {
-                    flex-wrap: wrap;
-                    justify-content: center;
+                    justify-content: space-between;
                     padding: 0 1rem;
                 }
 
@@ -699,16 +698,18 @@
                     display: none;
                 }
 
+                /* One row: logo on the left, actions on the right. Stacking
+                   them centred pushed the toggle onto its own row and doubled
+                   the header's height on phones. */
                 .brand-section {
-                    flex: 0 0 100%;
-                    order: 1;
-                    margin-bottom: 1rem;
+                    flex: 0 1 auto;
+                    justify-content: flex-start;
+                    text-align: left;
                 }
 
                 .header-actions {
-                    flex: 0 0 100%;
-                    justify-content: center;
-                    order: 2;
+                    flex: 1;
+                    justify-content: flex-end;
                 }
             }
 
@@ -719,10 +720,6 @@
 
                 .public-header-container {
                     padding: 0 0.75rem;
-                }
-
-                .brand-section {
-                    margin-bottom: 0.75rem;
                 }
 
                 .brand-logo {
