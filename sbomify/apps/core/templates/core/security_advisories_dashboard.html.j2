@@ -166,17 +166,30 @@
                                                             versions has nothing to show, and its toggle is hidden, so
                                                             this would only ever render an empty panel.
                                                             {% endcomment %}
+                                                            {% comment %}
+                                                            One version per row, not a wrapping flow. Version labels
+                                                            are build identifiers of wildly uneven length, so packing
+                                                            them by intrinsic width put a different number on every
+                                                            row and left no edge to read down. Two columns aligned
+                                                            them but cost too much width: these identifiers share a
+                                                            long prefix and differ only in the tail, so truncating
+                                                            rendered neighbouring builds identical and you could not
+                                                            tell which one you were about to attach an advisory to.
+                                                            A single column keeps every label whole. truncate stays
+                                                            as a guard for a pathological name, with the full string
+                                                            on hover. Monospace keeps the digits in register.
+                                                            {% endcomment %}
                                                             <div x-show="isExpanded(product.id) && product.releases.length"
                                                                  x-cloak
-                                                                 class="px-3 pb-2.5 ml-6">
+                                                                 class="px-3 pb-2.5 pl-11 bg-muted/30">
                                                                 <button type="button"
                                                                         @click="toggleAllVersions(product)"
                                                                         class="text-xs text-primary hover:underline mb-1.5">
                                                                     <span x-text="allVersionsSelected(product) ? 'Clear versions' : 'Select every version'"></span>
                                                                 </button>
-                                                                <div class="flex flex-wrap gap-x-4 gap-y-1.5">
+                                                                <div class="grid grid-cols-1 gap-y-0.5">
                                                                     <template x-for="(release, rIndex) in product.releases" :key="release.id">
-                                                                        <div class="inline-flex items-center gap-1.5 text-xs text-text cursor-pointer select-none"
+                                                                        <div class="flex items-center gap-2 min-w-0 py-0.5 text-xs text-text cursor-pointer select-none"
                                                                              role="checkbox"
                                                                              tabindex="0"
                                                                              :aria-checked="isReleaseSelected(release.id) ? 'true' : 'false'"
@@ -184,11 +197,13 @@
                                                                              @keydown.space.prevent="toggleRelease(product, rIndex)"
                                                                              @keydown.enter.prevent="toggleRelease(product, rIndex)">
                                                                             <input type="checkbox"
-                                                                                   class="tw-checkbox pointer-events-none"
+                                                                                   class="tw-checkbox shrink-0 pointer-events-none"
                                                                                    tabindex="-1"
                                                                                    aria-hidden="true"
                                                                                    :checked="isReleaseSelected(release.id)" />
-                                                                            <span x-text="release.label"></span>
+                                                                            <span class="truncate font-mono"
+                                                                                  :title="release.label"
+                                                                                  x-text="release.label"></span>
                                                                         </div>
                                                                     </template>
                                                                 </div>
