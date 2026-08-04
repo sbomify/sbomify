@@ -482,9 +482,35 @@ def create_advisory(
     return ServiceResult.success(advisory.id)
 
 
+# Above this, a value is described rather than quoted on the timeline. A
+# rewritten description is the common case and pasting both versions of it
+# would bury every other entry.
+_FIELD_CHANGE_QUOTE_LIMIT = 80
+
+
+def _field_change_body(field: str, old: Any, new: Any) -> str:
+    """What a field_change entry reads as on the timeline."""
+    label = field.replace("_", " ").capitalize()
+
+    def describe(value: Any) -> str | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        return f"“{text}”" if len(text) <= _FIELD_CHANGE_QUOTE_LIMIT else None
+
+    old_text, new_text = describe(old), describe(new)
+    if old_text and new_text:
+        return f"{label} changed from {old_text} to {new_text}."
+    if new_text and not old_text:
+        return f"{label} set to {new_text}."
+    if old_text and not new_text and not str(new or "").strip():
+        return f"{label} cleared."
+    return f"{label} updated."
+
+
 @transaction.atomic
 def update_advisory(
-    team: Any, user: Any, advisory_id: str, *, title: str, severity: str = "", description: str = ""
+    team: Any, user: Any, advisory_id: str, *, title: str, severity: str | None = None, description: str = ""
 ) -> ServiceResult[str]:
     """Edit an advisory's own fields.
 
@@ -504,14 +530,19 @@ def update_advisory(
     title = title.strip()
     if not title:
         return ServiceResult.failure("An advisory needs a title.", status_code=400)
-    if severity and severity not in Severity.values:
-        return ServiceResult.failure("Unknown severity.", status_code=400)
 
-    changes = [
-        (field, getattr(advisory, field), new)
-        for field, new in (("title", title), ("severity", severity), ("description", description.strip()))
-        if getattr(advisory, field) != new
-    ]
+    # ``None`` means the caller did not submit a severity, which is different
+    # from submitting a blank one. A <select> always posts something, so an
+    # advisory saved with no severity would otherwise pick up the first option
+    # whenever anyone edited its title.
+    fields: list[tuple[str, Any]] = [("title", title), ("description", description.strip())]
+    if severity is not None:
+        severity = severity.strip()
+        if severity and severity not in Severity.values:
+            return ServiceResult.failure("Unknown severity.", status_code=400)
+        fields.append(("severity", severity))
+
+    changes = [(field, getattr(advisory, field), new) for field, new in fields if getattr(advisory, field) != new]
     if not changes:
         return ServiceResult.success(advisory.id)
 
@@ -524,6 +555,12 @@ def update_advisory(
             advisory=advisory,
             event_type=AdvisoryEvent.EventType.FIELD_CHANGE,
             actor=user,
+            # The timeline renders an event's body, so a field change with only
+            # a payload showed a "Field change" badge and no text at all. The
+            # body says which field moved; long values are summarised rather
+            # than pasted, since a rewritten description would otherwise bury
+            # every other entry on the page.
+            body=_field_change_body(field, old, new),
             payload={"field": field, "old": old, "new": new},
         )
     return ServiceResult.success(advisory.id)

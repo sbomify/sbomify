@@ -21,6 +21,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
     get_advisory,
     list_advisories,
+    update_advisory,
 )
 
 pytestmark = pytest.mark.django_db
@@ -269,3 +270,108 @@ def test_the_display_id_is_always_a_string(sample_team):
 
     assert isinstance(row["id"], str)
     assert isinstance(row["pk"], str)
+
+
+class TestUpdateAdvisory:
+    def test_each_changed_field_gets_its_own_timeline_entry(self, sample_team, sample_user):
+        """One event per field, so the history answers who changed the severity
+        rather than only recording status moves."""
+        advisory = _advisory(sample_team, title="Old title", severity="low", description="Old body.")
+
+        result = update_advisory(
+            sample_team,
+            sample_user,
+            advisory.id,
+            title="New title",
+            severity="high",
+            description="New body.",
+        )
+
+        assert result.ok, result.error
+        advisory.refresh_from_db()
+        assert (advisory.title, advisory.severity, advisory.description) == ("New title", "high", "New body.")
+        events = AdvisoryEvent.objects.filter(advisory=advisory, event_type=AdvisoryEvent.EventType.FIELD_CHANGE)
+        assert {event.payload["field"] for event in events} == {"title", "severity", "description"}
+
+    def test_a_field_change_entry_says_what_changed(self, sample_team, sample_user):
+        """The timeline renders an event's body. A payload-only event showed a
+        "Field change" badge with no text under it."""
+        advisory = _advisory(sample_team, severity="low")
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity="high")
+
+        event = AdvisoryEvent.objects.get(
+            advisory=advisory, event_type=AdvisoryEvent.EventType.FIELD_CHANGE, payload__field="severity"
+        )
+        assert event.body == "Severity changed from “low” to “high”."
+
+    def test_an_unchanged_field_records_nothing(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, title="Same", severity="high", description="Same body.")
+
+        result = update_advisory(
+            sample_team, sample_user, advisory.id, title="Same", severity="high", description="Same body."
+        )
+
+        assert result.ok
+        assert not AdvisoryEvent.objects.filter(advisory=advisory).exists()
+
+    def test_an_omitted_severity_is_left_alone(self, sample_team, sample_user):
+        """A <select> always posts something, so "not submitted" has to be
+        distinguishable from "submitted blank" or editing a title would set a
+        severity nobody chose."""
+        advisory = _advisory(sample_team, severity="")
+
+        update_advisory(sample_team, sample_user, advisory.id, title="Retitled")
+
+        advisory.refresh_from_db()
+        assert advisory.severity == ""
+
+    def test_a_blank_severity_clears_it(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, severity="high")
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity="")
+
+        advisory.refresh_from_db()
+        assert advisory.severity == ""
+
+    def test_surrounding_whitespace_on_severity_is_tolerated(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, severity="low")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity=" high ")
+
+        assert result.ok, result.error
+        advisory.refresh_from_db()
+        assert advisory.severity == "high"
+
+    def test_an_empty_title_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, title="Keeps its title")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title="   ")
+
+        assert not result.ok
+        assert result.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.title == "Keeps its title"
+
+    def test_an_unknown_severity_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, severity="low")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity="spicy")
+
+        assert not result.ok
+        assert result.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.severity == "low"
+
+    def test_another_workspaces_advisory_is_not_found(self, sample_team, guest_user, sample_user):
+        from sbomify.apps.teams.models import Team
+
+        other = Team.objects.create(name="Someone else")
+        advisory = _advisory(other, title="Not yours")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title="Mine now")
+
+        assert not result.ok
+        assert result.status_code == 404
+        advisory.refresh_from_db()
+        assert advisory.title == "Not yours"
