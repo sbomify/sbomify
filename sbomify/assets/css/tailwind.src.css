@@ -959,7 +959,7 @@ html.no-transitions * {
   color: white;
   background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-pink) 50%, var(--color-accent-orange) 100%);
   background-size: 200% 200%;
-  animation: gradient-shift 3s ease infinite paused;
+  animation: gradient-shift 1s ease infinite paused;
   border: solid var(--color-accent) 0.5px;
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), inset 0 2px 0 rgb(255 255 255 / 0.2);
 }
