@@ -32,13 +32,27 @@ _DATA_FILE = Path(__file__).resolve().parent / "data" / "spotlight_destinations.
 # Sections in the order a person scanning the palette should meet them:
 # where to go, what to make, what to change, what to do. Assets come last —
 # per the brief, surfacing them is the lowest-priority job of this bar.
-SECTION_ORDER = ("navigate", "create", "settings", "actions", "assets")
+SECTION_ORDER = (
+    "navigate",
+    "create",
+    "settings",
+    "actions",
+    "advisories",
+    "findings",
+    "releases",
+    "documents",
+    "assets",
+)
 SECTION_LABELS = {
     "navigate": "Go to",
     "create": "Create",
     "settings": "Settings",
     "actions": "Actions",
-    "assets": "Your data",
+    "advisories": "Advisories",
+    "findings": "Affected components",
+    "releases": "Releases",
+    "documents": "Documents",
+    "assets": "Products & components",
 }
 
 # Score bands. The gaps are wide enough that a section never outranks a

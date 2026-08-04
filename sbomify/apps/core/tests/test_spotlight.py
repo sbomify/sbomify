@@ -201,3 +201,88 @@ class TestRootLevelCoverage:
     def test_a_shorter_title_wins_an_equal_match(self):
         """"plug" should land on Plugins, not Plugin summary."""
         assert self._titles("plug")[0] == "Plugins"
+
+
+@pytest.mark.django_db
+class TestEntitySearch:
+    """The "find my stuff" half: a CVE, a release, a document — the things a
+    person pastes into the bar that are not pages."""
+
+    def _search(self, client, member, q):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        setup_authenticated_client_session(client, member.team, member.user)
+        return client.get(reverse("core:search"), {"q": q}).json()["results"]
+
+    def test_a_cve_finds_the_affected_component(self, client, sample_team_with_owner_member):
+        """"Am I affected?" is what a pasted CVE is really asking."""
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import VulnerabilityLifecycle
+
+        member = sample_team_with_owner_member
+        component = Component.objects.create(team=member.team, name="Gateway")
+        now = timezone.now()
+        VulnerabilityLifecycle.objects.create(
+            component=component, advisory_id="CVE-2021-44228", severity="critical",
+            first_seen_at=now, last_seen_at=now,
+        )
+
+        results = self._search(client, member, "CVE-2021-44228")
+
+        assert results[0]["section"] == "findings"
+        assert "Gateway" in results[0]["title"]
+        assert results[0]["url"] == f"/component/{component.id}/"
+
+    def test_a_resolved_finding_is_not_offered(self, client, sample_team_with_owner_member):
+        """A closed finding is history; leading with it answers the question
+        wrongly."""
+        from django.utils import timezone
+
+        from sbomify.apps.core.models import Component
+        from sbomify.apps.plugins.models import VulnerabilityLifecycle
+
+        member = sample_team_with_owner_member
+        component = Component.objects.create(team=member.team, name="Fixed Gateway")
+        now = timezone.now()
+        VulnerabilityLifecycle.objects.create(
+            component=component, advisory_id="CVE-2020-11111", severity="high",
+            first_seen_at=now, last_seen_at=now, resolved_at=now,
+        )
+
+        assert self._search(client, member, "CVE-2020-11111") == []
+
+    def test_a_release_version_is_findable(self, client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Product, Release
+
+        member = sample_team_with_owner_member
+        product = Product.objects.create(team=member.team, name="Gateway Platform")
+        Release.objects.create(product=product, name="v4.2.0", version="4.2.0")
+
+        results = self._search(client, member, "4.2.0")
+
+        assert any(r["section"] == "releases" and "Gateway Platform" in r["title"] for r in results)
+
+    def test_an_advisory_is_findable_by_its_cve(self, client, sample_team_with_owner_member):
+        from sbomify.apps.security_advisories.models import AdvisoryVulnerability, SecurityAdvisory
+
+        member = sample_team_with_owner_member
+        advisory = SecurityAdvisory.objects.create(team=member.team, title="Auth bypass")
+        AdvisoryVulnerability.objects.create(advisory=advisory, cve_id="CVE-2026-31337")
+
+        results = self._search(client, member, "CVE-2026-31337")
+
+        assert any(r["section"] == "advisories" and "Auth bypass" in r["title"] for r in results)
+
+    def test_entities_never_outrank_a_destination(self, client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Product, Release
+
+        member = sample_team_with_owner_member
+        product = Product.objects.create(team=member.team, name="Zeta")
+        Release.objects.create(product=product, name="billing", version="billing")
+
+        results = self._search(client, member, "billing")
+
+        assert results[0]["title"] == "Billing"
+        assert results[0]["section"] == "settings"
