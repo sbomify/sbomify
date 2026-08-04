@@ -6,6 +6,38 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+# The gallery's index and its section order come from here, so a component can
+# never be demoed without appearing in the index (or listed without a demo).
+GALLERY_SECTIONS: list[dict[str, str]] = [
+    {"id": "colors", "label": "Colour tokens", "group": "Foundations"},
+    {"id": "typography", "label": "Typography", "group": "Foundations"},
+    {"id": "buttons", "label": "Buttons", "group": "Controls"},
+    {"id": "forms", "label": "Form controls", "group": "Controls"},
+    {"id": "search", "label": "Search input", "group": "Controls"},
+    {"id": "file-upload", "label": "File upload", "group": "Controls"},
+    {"id": "date-picker", "label": "Date picker", "group": "Controls"},
+    {"id": "cards", "label": "Cards", "group": "Containers"},
+    {"id": "collapsible", "label": "Collapsible card", "group": "Containers"},
+    {"id": "modals", "label": "Modals", "group": "Containers"},
+    {"id": "empty-states", "label": "Empty states", "group": "Containers"},
+    {"id": "tables", "label": "Tables", "group": "Data"},
+    {"id": "pagination", "label": "Pagination", "group": "Data"},
+    {"id": "stats", "label": "Stat cards", "group": "Data"},
+    {"id": "progress", "label": "Progress", "group": "Data"},
+    {"id": "badges", "label": "Badges", "group": "Data"},
+    {"id": "tags", "label": "Tags", "group": "Data"},
+    {"id": "alerts", "label": "Alerts", "group": "Feedback"},
+    {"id": "toasts", "label": "Toasts", "group": "Feedback"},
+    {"id": "loading", "label": "Loading states", "group": "Feedback"},
+    {"id": "tabs", "label": "Tabs", "group": "Navigation"},
+    {"id": "breadcrumbs", "label": "Breadcrumbs", "group": "Navigation"},
+    {"id": "dropdowns", "label": "Dropdowns", "group": "Navigation"},
+    {"id": "stepper", "label": "Stepper", "group": "Navigation"},
+    {"id": "avatars", "label": "Avatars", "group": "Misc"},
+    {"id": "copy", "label": "Code & tokens", "group": "Misc"},
+    {"id": "tooltip", "label": "Tooltip", "group": "Misc"},
+]
+
 
 class DesignSystemView(LoginRequiredMixin, View):
     """Local-development-only gallery showing every design-system component in a single view.
@@ -19,6 +51,29 @@ class DesignSystemView(LoginRequiredMixin, View):
             raise Http404
         context = {
             "team": request.session.get("current_team", {}),
+            "sections": GALLERY_SECTIONS,
+            "demo_tokens": [
+                "primary",
+                "primary-dark",
+                "primary-light",
+                "accent",
+                "accent-pink",
+                "accent-orange",
+                "success",
+                "warning",
+                "danger",
+                "background",
+                "surface",
+                "surface-elevated",
+                "border",
+                "text",
+                "text-muted",
+            ],
+            "demo_collapsible": [
+                {"id": "links", "label": "Product links"},
+                {"id": "identifiers", "label": "Product identifiers"},
+                {"id": "lifecycle", "label": "Lifecycle"},
+            ],
             "demo_select_options": [
                 {"value": "sbom", "label": "SBOM"},
                 {"value": "document", "label": "Document"},

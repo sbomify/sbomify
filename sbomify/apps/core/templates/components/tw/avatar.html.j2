@@ -1,14 +1,19 @@
-<div class="tw-avatar{% if size %} tw-avatar-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}">
+{% comment %}
+    `tw-avatar` carries no dimensions of its own — the size modifier does — so a
+    size is always emitted. Centring, colour and the image fit come from the base
+    rule and its `img` descendant selector.
+{% endcomment %}
+<div class="tw-avatar tw-avatar-{{ size|default:'md' }}{% if class %} {{ class }}{% endif %}">
     {% if src %}
-        <img src="{{ src }}"
-             alt="{{ alt|default:'' }}"
-             class="tw-avatar-img"
-             width="40"
-             height="40">
+        {% comment %}
+            The intrinsic size is a CLS hint only — `.tw-avatar img` sizes the
+            image to the container, so the size modifier still wins.
+        {% endcomment %}
+        <img src="{{ src }}" alt="{{ alt|default:'' }}" width="40" height="40">
     {% elif initials %}
-        <span class="tw-avatar-initials">{{ initials }}</span>
+        {{ initials }}
     {% else %}
-        <i class="fas fa-user tw-avatar-icon" aria-hidden="true"></i>
+        <i class="fas fa-user" aria-hidden="true"></i>
     {% endif %}
     {% if status %}<span class="tw-avatar-status tw-avatar-status-{{ status }}"></span>{% endif %}
 </div>

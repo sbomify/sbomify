@@ -125,12 +125,12 @@
                                placeholder="my-company"
                                {% if not is_owner %}disabled{% endif %}>
                     </div>
-                    <p class="tw-form-helper mt-2">
+                    <p class="tw-form-hint mt-2">
                         Your Trust Center will be available at:
                         <code class="text-primary"
                               x-text="slug ? (slug + '.{{ trust_center_domain }}') : '...'"></code>
                     </p>
-                    <p class="tw-form-helper">
+                    <p class="tw-form-hint">
                         Lowercase letters, numbers, and hyphens only. Must not start or end with a hyphen. 3–63 characters.
                     </p>
                 </div>
@@ -326,7 +326,7 @@
                                     </option>
                                 {% endfor %}
                             </select>
-                            <p class="tw-form-helper mt-1">
+                            <p class="tw-form-hint mt-1">
                                 Choose who receives vulnerability reports.
                                 Manage contacts in
                                 <a href="{% url 'teams:team_settings' team.key %}#contact-profiles"
@@ -349,7 +349,7 @@
                                        value="{{ security_txt_config.policy_url|default:'' }}"
                                        placeholder="https://example.com/security-policy"
                                        {% if not is_owner %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Vulnerability disclosure policy</p>
+                                <p class="tw-form-hint mt-1">Vulnerability disclosure policy</p>
                             </div>
                             {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
                             <div x-data="{ urls: (() => { let d = JSON.parse(document.getElementById('encryption-urls-data')?.textContent || '[]'); return Array.isArray(d) ? d : []; })() }">
@@ -379,7 +379,7 @@
                                 <input type="hidden"
                                        name="security_txt_encryption_urls"
                                        :value="JSON.stringify(urls)">
-                                <p class="tw-form-helper mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</p>
+                                <p class="tw-form-hint mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</p>
                             </div>
                             <div>
                                 <label for="security_txt_acknowledgments_url" class="tw-form-label">Acknowledgments URL</label>
@@ -390,7 +390,7 @@
                                        value="{{ security_txt_config.acknowledgments_url|default:'' }}"
                                        placeholder="https://example.com/hall-of-fame"
                                        {% if not is_owner %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Security researcher acknowledgments</p>
+                                <p class="tw-form-hint mt-1">Security researcher acknowledgments</p>
                             </div>
                             <div>
                                 <label for="security_txt_hiring_url" class="tw-form-label">Hiring URL</label>
@@ -401,7 +401,7 @@
                                        value="{{ security_txt_config.hiring_url|default:'' }}"
                                        placeholder="https://example.com/security-jobs"
                                        {% if not is_owner %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Security-related job openings</p>
+                                <p class="tw-form-hint mt-1">Security-related job openings</p>
                             </div>
                         </div>
                     </div>
@@ -442,7 +442,7 @@
                                 <input type="hidden"
                                        name="security_txt_preferred_languages"
                                        :value="selected.join(', ')">
-                                <p class="tw-form-helper mt-1">English is selected by default</p>
+                                <p class="tw-form-hint mt-1">English is selected by default</p>
                             </div>
                             <div>
                                 <label class="tw-form-label">Canonical URL</label>
@@ -456,7 +456,7 @@
                                 <input type="hidden"
                                        name="security_txt_canonical_url"
                                        value="{% if trust_center_url %}{{ trust_center_url }}/.well-known/security.txt{% endif %}">
-                                <p class="tw-form-helper mt-1">Automatically set to your Trust Center's security.txt URL</p>
+                                <p class="tw-form-hint mt-1">Automatically set to your Trust Center's security.txt URL</p>
                             </div>
                         </div>
                     </div>
@@ -518,7 +518,7 @@
                               maxlength="500"
                               placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
                               {% if not is_owner %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
-                    <span class="tw-form-helper">Max 500 characters. Leave empty to use the default description.</span>
+                    <span class="tw-form-hint">Max 500 characters. Leave empty to use the default description.</span>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit"

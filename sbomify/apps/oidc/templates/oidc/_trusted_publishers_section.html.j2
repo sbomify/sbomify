@@ -113,7 +113,7 @@ Add a repository below — its workflow authenticates with OIDC, no long-lived A
 {% if form.repository.errors %}
 <p class="tw-form-error">{{ form.repository.errors.0 }}</p>
 {% else %}
-<p class="tw-form-helper">{{ form.repository.help_text }}</p>
+<p class="tw-form-hint">{{ form.repository.help_text }}</p>
 {% endif %}
 </div>
 <button type="submit" class="tw-btn tw-btn-primary md:mt-7">

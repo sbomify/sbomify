@@ -95,11 +95,6 @@
     100% { transform: scale(2); opacity: 0; }
   }
 
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
-  }
-
   /* Palette — real colours so Tailwind generates all utilities (incl. gradients). Dark defaults; :root.light overrides. */
   --color-navy: rgb(37 41 63);             /* Brand Navy #25293F - theme-invariant ink */
   --color-primary: rgb(124 140 255);       /* Periwinkle #7C8CFF - interactive accent on dark */
@@ -1115,7 +1110,27 @@ html.no-transitions * {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-success) 15%, transparent);
 }
 
-.tw-form-helper {
+/* Small-caps label sitting over a value — the documented "labels over data"
+   pattern (docs/design-system.md). */
+.tw-data-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+/* Inline code inside prose: an identifier, path or token mentioned mid-sentence. */
+.tw-code-inline {
+  padding: 0.125rem 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125em;
+  background-color: color-mix(in oklab, var(--color-border) 35%, transparent);
+  color: var(--color-text);
+  border-radius: 0.25rem;
+}
+
+.tw-form-hint {
   display: block;
   font-size: 0.75rem;
   color: var(--color-text-muted);
@@ -1894,9 +1909,13 @@ html.no-transitions * {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 3rem 2rem;
   text-align: center;
   animation: fadeInUp 0.5s ease-out;
+}
+
+.tw-empty-state-compact {
+  padding: 2rem 2rem;
 }
 
 .tw-empty-state-icon {
@@ -1909,7 +1928,6 @@ html.no-transitions * {
   background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%);
   color: var(--color-primary);
   margin-bottom: 1.5rem;
-  animation: float 3s ease-in-out infinite;
 }
 
 .tw-empty-state-title {
@@ -2053,26 +2071,8 @@ html.no-transitions * {
    Component Classes - Modal
    ============================================ */
 .tw-modal-overlay,
-.tw-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(8px);
-  z-index: 100;
-}
-
 /* Modal wrapper - uses flexbox centering approach */
 .tw-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 101;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.tw-modal-container {
   position: fixed;
   inset: 0;
   z-index: 101;
@@ -2431,10 +2431,6 @@ html.no-transitions * {
 }
 
 /* Striped table */
-.tw-table-striped tbody tr:nth-child(even) {
-  background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
-}
-
 /* Data Table Container */
 .tw-data-table {
   display: flex;
@@ -2595,17 +2591,20 @@ html.no-transitions * {
   cursor: pointer;
 }
 
-.tw-pagination-btn:hover:not(:disabled):not(.tw-pagination-btn-active) {
+.tw-pagination-btn:hover:not(:disabled):not([aria-disabled='true']):not(.tw-pagination-btn-active) {
   background-color: var(--color-surface);
   border-color: var(--color-border);
   color: var(--color-text);
 }
 
-.tw-pagination-btn:active:not(:disabled) {
+.tw-pagination-btn:active:not(:disabled):not([aria-disabled='true']) {
   transform: scale(0.95);
 }
 
-.tw-pagination-btn:disabled {
+/* Pagination items are often links, which can never match :disabled — the
+   real state on a link is aria-disabled, so both spell the same look. */
+.tw-pagination-btn:disabled,
+.tw-pagination-btn[aria-disabled='true'] {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -2825,75 +2824,6 @@ html.no-transitions * {
 }
 
 /* Avatar group */
-.tw-avatar-group {
-  display: flex;
-}
-
-.tw-avatar-group .tw-avatar {
-  border: 2px solid var(--color-surface);
-  margin-left: -0.75rem;
-}
-
-.tw-avatar-group .tw-avatar:first-child {
-  margin-left: 0;
-}
-
-/* ============================================
-   Component Classes - Tooltip
-   ============================================ */
-.tw-tooltip {
-  position: relative;
-  display: inline-flex;
-}
-
-.tw-tooltip-content {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.5rem 0.875rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: var(--color-text);
-  color: var(--color-background);
-  border-radius: 0.5rem;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 100;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-}
-
-.tw-tooltip-content::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: var(--color-text);
-}
-
-.tw-tooltip:hover .tw-tooltip-content {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(-2px);
-}
-
-/* Tooltip positions */
-.tw-tooltip-bottom .tw-tooltip-content {
-  bottom: auto;
-  top: calc(100% + 8px);
-}
-
-.tw-tooltip-bottom .tw-tooltip-content::after {
-  top: auto;
-  bottom: 100%;
-  border-top-color: transparent;
-  border-bottom-color: var(--color-text);
-}
-
 /* ============================================
    Component Classes - Progress Bar
    ============================================ */
@@ -3844,96 +3774,6 @@ html.no-transitions * {
 }
 
 /* Outline tags */
-.tw-tag-outline {
-  background-color: transparent;
-  border: 1px solid var(--color-border);
-}
-
-.tw-tag-outline-primary {
-  background-color: transparent;
-  border: 1px solid color-mix(in oklab, var(--color-primary) 50%, transparent);
-  color: var(--color-primary);
-}
-
-/* ============================================
-   Component Classes - Timeline
-   ============================================ */
-.tw-timeline {
-  position: relative;
-  padding-left: 2rem;
-}
-
-.tw-timeline::before {
-  content: '';
-  position: absolute;
-  left: 0.5625rem;
-  top: 0.5rem;
-  bottom: 0.5rem;
-  width: 2px;
-  background: linear-gradient(to bottom, var(--color-border), color-mix(in oklab, var(--color-border) 30%, transparent));
-  border-radius: 9999px;
-}
-
-.tw-timeline-item {
-  position: relative;
-  padding-bottom: 1.75rem;
-}
-
-.tw-timeline-item:last-child {
-  padding-bottom: 0;
-}
-
-.tw-timeline-dot {
-  position: absolute;
-  left: -2rem;
-  top: 0.375rem;
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 9999px;
-  background-color: var(--color-primary);
-  border: 3px solid var(--color-surface);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 20%, transparent);
-  z-index: 1;
-}
-
-.tw-timeline-dot-success {
-  background-color: var(--color-success);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-success) 20%, transparent);
-}
-
-.tw-timeline-dot-warning {
-  background-color: var(--color-warning);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-warning) 20%, transparent);
-}
-
-.tw-timeline-dot-danger {
-  background-color: var(--color-danger);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-danger) 20%, transparent);
-}
-
-.tw-timeline-content {
-  padding-left: 0.5rem;
-}
-
-.tw-timeline-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: 0.25rem;
-}
-
-.tw-timeline-description {
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-}
-
-.tw-timeline-time {
-  font-size: 0.75rem;
-  color: color-mix(in oklab, var(--color-text-muted) 70%, transparent);
-  margin-top: 0.375rem;
-}
-
 /* ============================================
    Component Classes - Stepper
    ============================================ */
@@ -4096,177 +3936,6 @@ html.no-transitions * {
 
 .tw-toast-info {
   --toast-accent: var(--color-primary);
-}
-
-/* ============================================
-   Component Classes - Range Slider
-   ============================================ */
-.tw-range {
-  width: 100%;
-  height: 0.5rem;
-  background-color: var(--color-border);
-  border-radius: 9999px;
-  appearance: none;
-  cursor: pointer;
-  position: relative;
-}
-
-.tw-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 6px color-mix(in oklab, var(--color-primary) 30%, transparent);
-  border: 3px solid white;
-}
-
-.tw-range::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 4px 10px color-mix(in oklab, var(--color-primary) 40%, transparent);
-}
-
-.tw-range::-webkit-slider-thumb:active {
-  transform: scale(1.1);
-}
-
-.tw-range::-moz-range-thumb {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  cursor: pointer;
-  border: 3px solid white;
-}
-
-.tw-range:focus {
-  outline: none;
-}
-
-.tw-range:focus::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-primary) 25%, transparent);
-}
-
-.tw-range-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin-top: 0.5rem;
-}
-
-/* ============================================
-   Component Classes - Notification Badge
-   ============================================ */
-.tw-notification-badge {
-  position: relative;
-  display: inline-flex;
-}
-
-.tw-notification-dot {
-  position: absolute;
-  top: -0.125rem;
-  right: -0.125rem;
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 9999px;
-  background-color: var(--color-danger);
-  border: 2px solid var(--color-surface);
-}
-
-.tw-notification-dot-pulse {
-  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.tw-notification-dot-pulse::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  background-color: var(--color-danger);
-  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.tw-notification-count {
-  position: absolute;
-  top: -0.5rem;
-  right: -0.5rem;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.375rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
-  color: white;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid var(--color-surface);
-  box-shadow: 0 2px 4px color-mix(in oklab, var(--color-danger) 30%, transparent);
-}
-
-/* ============================================
-   Component Classes - List Group
-   ============================================ */
-.tw-list-group {
-  border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
-  overflow: hidden;
-  background-color: var(--color-surface);
-}
-
-.tw-list-group-item {
-  display: flex;
-  align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.tw-list-group-item:last-child {
-  border-bottom: none;
-}
-
-.tw-list-group-item:hover {
-  background-color: color-mix(in oklab, var(--color-primary) 4%, transparent);
-}
-
-.tw-list-group-item-active {
-  background: linear-gradient(90deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%);
-  border-left: 3px solid var(--color-primary);
-}
-
-.tw-list-group-item-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.5rem;
-  background-color: var(--color-background);
-  color: var(--color-text-muted);
-  margin-right: 1rem;
-  flex-shrink: 0;
-}
-
-.tw-list-group-item-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.tw-list-group-item-title {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.tw-list-group-item-description {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  margin-top: 0.125rem;
 }
 
 /* ============================================
@@ -4887,50 +4556,6 @@ html.no-transitions * {
 }
 
 /* ============================================
-   Component Classes - Dividers
-   ============================================ */
-.tw-divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
-  margin: 1.5rem 0;
-}
-
-.tw-divider-solid {
-  background: var(--color-border);
-}
-
-.tw-divider-vertical {
-  width: 1px;
-  height: auto;
-  align-self: stretch;
-  background: linear-gradient(180deg, transparent, var(--color-border), transparent);
-  margin: 0 1.5rem;
-}
-
-.tw-divider-text {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.tw-divider-text::before,
-.tw-divider-text::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-border));
-}
-
-.tw-divider-text::after {
-  background: linear-gradient(90deg, var(--color-border), transparent);
-}
-
-/* ============================================
    Utility Classes
    ============================================ */
 .tw-scrollbar-thin {
@@ -5041,12 +4666,6 @@ html.no-transitions * {
 
   /* Disable skeleton shimmer */
   .tw-skeleton {
-    animation: none !important;
-  }
-
-  /* Disable notification pulse */
-  .tw-notification-dot-pulse,
-  .tw-notification-dot-pulse::before {
     animation: none !important;
   }
 }

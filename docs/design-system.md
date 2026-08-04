@@ -37,25 +37,34 @@ Derive intermediate shades with `color-mix(in oklab, …)` from these — do not
 
 ## Using components
 
-Two layers, used together:
+Two layers, used together.
 
-**Jinja include components** in `sbomify/apps/core/templates/components/tw/` (Django template syntax despite the `.j2` extension). The macro file is the parameter contract; the gallery shows canonical usage. Include pattern:
+**Component tags** — the way pages call the library. `{% load design_system %}`, then containers are block tags and leaves are inline tags, so a card genuinely *contains* library components:
 
 ```jinja
-{% include "components/tw/button.html.j2" with text="Save changes" variant="primary" %}
-{% include "components/tw/card.html.j2" with variant="dashboard" title="Releases" content="<p>…</p>" %}
-{% include "components/tw/select.html.j2" with name="type" label="Artifact type" options=options selected=current %}
+{% load design_system %}
+{% card variant="dashboard" title="Releases" %}
+    {% badge text="3 overdue" variant="danger" %}
+    {% input name="q" label="Search" hint="Name or identifier" %}
+    {% button text="New release" variant="primary" hx_get=new_release_url hx_target="#list" %}
+{% endcard %}
 ```
 
-List-taking components (`select`, `tabs`, `breadcrumb`, `pagination`, `dropdown`) receive their lists from the view context — build them in the service layer/view, not inline.
+Each tag renders the matching template in `sbomify/apps/core/templates/components/tw/`, so the macro file remains the single source of a component's markup **and** its parameter contract; the tag only provides the calling convention. `{% include "components/tw/…" %}` still works and is equivalent for leaves — but a container must use the block tag, because an include cannot wrap content.
+
+Attribute passthrough: a keyword argument prefixed `aria_`, `data_`, `hx_` or `x_` becomes the dashed HTML attribute (`hx_post` → `hx-post`), with its value escaped; `True` renders the bare attribute; `None`/`False` are omitted. Attribute names Python cannot express — Alpine's `@click`, `:class` — go through `attrs` as a raw trusted string, never user input.
+
+Registered tag names are the file names in `components/tw/`, with one alias: `{% breadcrumbs %}` renders `breadcrumb.html.j2` (the name `breadcrumb` is taken by a trust-center-only inclusion tag).
+
+List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown`) receive their lists from the view context — build them in the service layer/view, not inline.
 
 | Component | Use for | Key params |
 | --- | --- | --- |
 | `alert` | Inline notice banners | `variant`, `title`, `message`, `dismissible` |
 | `analytics_consent` | PostHog consent banner (base templates only) | — |
-| `avatar` | User initials/status | `initials`, `size`, `status` |
+| `avatar` | User initials/status | `initials`/`src`, `size` (defaults `md` — the base class has no size of its own), `status` |
 | `badge` | Status labels | `text`, `variant`, `icon`, `pill` |
-| `breadcrumb` | Page trail | `items` (list of `{label, url}`) |
+| `breadcrumbs` | Page trail | `items` (list of `{label, url}`) |
 | `button` / `button_link` | Actions / link styled as button | `text`, `variant`, `size`, `icon`, `loading` / `url` |
 | `card` | Content containers | `variant` (`dashboard`/`danger`/default), `title`, `subtitle`, `content`, `footer_content` |
 | `checkbox` / `radio` / `toggle` | Form controls | `name`, `label`, `checked`, `disabled` |
@@ -67,11 +76,11 @@ List-taking components (`select`, `tabs`, `breadcrumb`, `pagination`, `dropdown`
 | `input` / `textarea` / `select` | Form fields | `name`, `label`, `hint`, `error`, `required` |
 | `modal` | Alpine-driven dialog | `id`, `title`, `content`, `size`, `alpine_show` |
 | `pagination` | Page navigation | `current`, `total`, `page_range`, `base_url` |
-| `progress` | Determinate progress | `value`, `variant`, `size`, `label_text` |
-| `skeleton` / `spinner` | Loading states (prefer the brand loader for spinners) | `type`, `width`, `lines` / `size` |
+| `progress` | Determinate progress | `value`, `variant` (omit for the primary accent), `size`, `label_text` (renders the header row) |
+| `skeleton` / `spinner` | Loading states (prefer the brand loader for spinners) | `type` (`text`/`paragraph`/`avatar`/`button`/`image`), `width`, `lines` / `size` |
 | `table_pager` | Compact Alpine table pager | expects `currentPage`, `totalPages` in scope |
 | `tabs` | Tab lists | `tabs` (list of `{id, label, icon}`), `active`, `variant` |
-| `tag` | Removable/tech tags | `text`, `icon`, `variant`, `removable` |
+| `tag` | Removable/tech tags | `text`, `icon`, `variant` (omit for neutral), `removable` |
 | `toast` / `toast_container` | Notifications (container already in base) | dispatch `toast` event `{type, title, message}` |
 | `token_display` | Masked secrets with copy | `label`, `token`, `masked`, `copyable` |
 
@@ -81,13 +90,21 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 
 | Family | Classes |
 | --- | --- |
-| Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline-*`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
-| Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card` + `tw-card-{header,body,footer}` (the settings card was removed — use `tw-dashboard-card`) |
-| Forms | `tw-form-{label,input,select,error,hint}`, `tw-checkbox`, `tw-radio`, `tw-toggle` (+ `tw-toggle-label`) |
-| Data | `tw-data-table`, `tw-stat-*` (+ `tw-stat-row`, `tw-stat-accent-*`), `tw-progress-*` (+ `tw-progress-header`) |
-| Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*`, `tw-tag-*`, skeleton/`tw-skeleton-*` |
-| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb`, `tw-dropdown` patterns, `tw-icon-btn` |
-| Misc | modal, tooltip, timeline, stepper, accordion, list group, file upload, search input, notification badge, dividers, date/time picker |
+| Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline-{primary,warning,danger}`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
+| Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card` + `tw-card-{header,body,footer}`, `tw-collapsible-card` + `tw-collapsible-*` (the settings card was removed — use `tw-dashboard-card`) |
+| Forms | `tw-form-{label,input,select,textarea,error,hint}`, `tw-checkbox`, `tw-radio`, `tw-toggle` (+ `tw-toggle-label`), `tw-search-input-*`, `tw-file-upload-*`, `tw-date-picker-*`/`tw-calendar-*` |
+| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-stat-*`, `tw-progress-*` (+ `tw-progress-header`) |
+| Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*`, `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
+| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*`, `tw-icon-btn`, `tw-stepper-*` |
+| Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose) |
+| Misc | modal, `alpine-tooltip` (via the `x-tooltip` directive), copy button / token display / code block |
+
+Two names that are easy to get wrong:
+
+- **`tw-table` vs `tw-data-table`** — `tw-table` styles the `<table>` element; `tw-data-table` is the surrounding shell. A `<table class="tw-data-table">` gets no cell padding.
+- **`tw-stat-row`** is the wrapper *inside* a stat card that sits the delta on the value's baseline. Laying out a row of stat cards is the page's job (a grid utility).
+
+Removed in the v2 consolidation — do not reintroduce without three real callers: timeline, list group, range slider, `tw-tooltip` (CSS-hover; use `x-tooltip`), dividers, notification badge, `tw-table-striped`, `tw-tag-outline*`, `tw-avatar-group`, `tw-modal-{backdrop,container}`.
 
 ## Recipes
 
@@ -137,3 +154,6 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 - Raw accent color as text on its own tint (fails contrast)
 - New components or variants defined inside an app template or app CSS instead of the library
 - New UI merged without a gallery demo
+- **Wrapping a colour token in `rgb()`** — the tokens are already `rgb(…)`, so `rgb(var(--color-primary))` is invalid and the whole declaration is silently dropped. Use the token directly, or `color-mix(in oklab, var(--color-primary) 12%, transparent)` for a tint.
+- Referencing a class that does not exist. It fails silently, so it survives review: grep the class in `tailwind.src.css` before shipping it, and remember class names also come from `.ts` files.
+- Styling state on a decorative sibling instead of the element that carries it — a link can never match `:disabled`, so use `[aria-disabled="true"]`.

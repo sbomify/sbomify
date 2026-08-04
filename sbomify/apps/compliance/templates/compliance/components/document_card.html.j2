@@ -13,7 +13,7 @@
                 <span class="tw-badge-warning text-xs">Stale</span>
             </template>
             <template x-if="getDocStatus(doc.key) === 'not_generated'">
-                <span class="tw-badge-neutral text-xs">Not generated</span>
+                <span class="tw-badge-secondary text-xs">Not generated</span>
             </template>
             <button type="button"
                     @click="previewDocument(doc.key, doc.label)"
