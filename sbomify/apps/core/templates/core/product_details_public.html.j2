@@ -44,7 +44,7 @@
             </div>
         {% endif %}
     </div>
-    {% if has_downloadable_content %}
+    {% if has_downloadable_content or has_cbom %}
         <div class="public-section">
             <div class="tw-card">
                 <div class="px-6 py-4 border-b border-border">
@@ -53,28 +53,39 @@
                     </h4>
                 </div>
                 <div class="p-6">
-                    <p class="text-text-muted mb-4">Combined SBOM from the latest release, containing all artifacts for this product.</p>
+                    <p class="text-text-muted mb-4">Combined artifacts from the latest release of this product.</p>
                     <div class="flex gap-3 flex-wrap">
-                        <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                           href="{% url 'core:sbom_download_product' product.id %}"
-                           title="Download combined SBOM as CycloneDX">
-                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt="CycloneDX"
-                                 class="h-5 w-auto dark:brightness-0 dark:invert"
-                                 height="20"
-                                 width="20">
-                            <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                        </a>
-                        <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                           href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
-                           title="Download combined SBOM as SPDX">
-                            <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt="SPDX"
-                                 class="h-5 w-auto dark:brightness-0 dark:invert"
-                                 height="20"
-                                 width="20">
-                            <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                        </a>
+                        {% if has_downloadable_content %}
+                            <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                               href="{% url 'core:sbom_download_product' product.id %}"
+                               title="Download combined SBOM as CycloneDX">
+                                <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                                     alt="CycloneDX"
+                                     class="h-5 w-auto dark:brightness-0 dark:invert"
+                                     height="20"
+                                     width="20">
+                                <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                            </a>
+                            <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                               href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
+                               title="Download combined SBOM as SPDX">
+                                <img src="{% static 'img/spdx-logo.svg' %}"
+                                     alt="SPDX"
+                                     class="h-5 w-auto dark:brightness-0 dark:invert"
+                                     height="20"
+                                     width="20">
+                                <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                            </a>
+                        {% endif %}
+                        {% if has_cbom %}
+                            <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                               href="{% url 'api-1:download_product_cbom' product.id %}"
+                               title="Download CBOM (Cryptography BOM, CycloneDX)">
+                                <i class="fas fa-key text-success" aria-hidden="true"></i>
+                                <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                                <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                            </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
