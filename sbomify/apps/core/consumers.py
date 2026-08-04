@@ -53,13 +53,32 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         # Join workspace group. A broker mid-restart raises here; closing
         # with 1012 (service restart) turns that into an orderly client
         # retry instead of an "Exception in ASGI application" traceback.
+        #
+        # The traceback goes to debug rather than warning: a broker restart
+        # fails every open socket at once, and one stack per connection is the
+        # noise this was written to stop. The warning line still names the
+        # workspace, which is what a reader needs.
         try:
             await self.channel_layer.group_add(self.group_name, self.channel_name)
+        except Exception as exc:
+            logger.warning(f"WebSocket group join failed for workspace {self.workspace_key}: {exc!r}")
+            logger.debug("group_add traceback", exc_info=True)
+            await self.close(code=1012)
+            return
+
+        try:
             await self.accept()
-        except Exception:
-            logger.warning(
-                f"WebSocket join failed for workspace {self.workspace_key}; broker unavailable?", exc_info=True
-            )
+        except Exception as exc:
+            logger.warning(f"WebSocket accept failed for workspace {self.workspace_key}: {exc!r}")
+            logger.debug("accept traceback", exc_info=True)
+            # The group membership was taken and disconnect() never runs for a
+            # socket that was never accepted, so it would sit in the group
+            # until the channel layer expired it, and every broadcast would
+            # keep addressing a channel with nobody on the other end.
+            try:
+                await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            except Exception:
+                logger.debug("group_discard after failed accept also failed", exc_info=True)
             await self.close(code=1012)
             return
 
