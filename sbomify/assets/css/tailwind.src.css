@@ -3283,7 +3283,7 @@ html.no-transitions * {
   border-radius: 0.625rem;
   background-color: color-mix(in oklab, var(--stat-accent, var(--color-primary)) 12%, transparent);
   color: var(--stat-accent, var(--color-primary));
-  margin-bottom: 1rem;
+  margin-bottom: 0.625rem;
 }
 
 .tw-stat-label {
