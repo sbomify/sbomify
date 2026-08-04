@@ -124,7 +124,9 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
 
             vex_statements = load_vex_suppressions(component_id)
             latest_vulns = extract_finding_rows(
-                merge_findings_by_alias(provider_results), vex_statements, kev_ids_for_serialization()
+                merge_findings_by_alias(provider_results),
+                vex_statements=vex_statements,
+                kev_ids=kev_ids_for_serialization(),
             )
 
         # The header badge counts the same merged view the table shows, minus
