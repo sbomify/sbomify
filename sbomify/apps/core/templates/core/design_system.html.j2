@@ -5,7 +5,8 @@
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-text mb-2">sbomify Design System</h1>
         <p class="text-text-muted">
-            Every component and pattern in the app, on one page. This is the source of truth for the sbomify design language — dev-only.
+            Every component and pattern in the app, on one page. This gallery renders the sbomify design language — dev-only.
+            The written contract (rules, tokens, inventory, recipes) lives in <code class="bg-muted px-1 rounded">docs/design-system.md</code>.
         </p>
     </div>
     <div class="tw-dashboard-card mb-8">
@@ -137,9 +138,9 @@
                     <span class="text-sm text-text-muted block mb-2">Progress Bars:</span>
                     {% include "components/tw/progress.html.j2" with value=25 variant="primary" %}
                     <div class="h-2"></div>
-                    {% include "components/tw/progress.html.j2" with value=60 variant="success" label=True %}
+                    {% include "components/tw/progress.html.j2" with value=60 variant="success" label_text="SBOM scan" %}
                     <div class="h-2"></div>
-                    {% include "components/tw/progress.html.j2" with value=85 variant="warning" striped=True %}
+                    {% include "components/tw/progress.html.j2" with value=85 variant="warning" size="sm" %}
                 </div>
             </div>
             <div class="mb-6">
@@ -1111,21 +1112,27 @@
                 </div>
             </div>
             <div>
-                <div class="flex justify-between mb-1">
-                    <span class="text-sm text-text">Striped (Animated)</span>
-                    <span class="text-sm text-text-muted">60%</span>
+                <div class="tw-progress-header">
+                    <span>NTIA compliance</span>
+                    <span class="tw-progress-value">85%</span>
                 </div>
-                <div class="tw-progress tw-progress-striped">
-                    <div class="tw-progress-bar" style="width: 60%"></div>
+                <div class="tw-progress">
+                    <div class="tw-progress-bar" style="width: 85%"></div>
                 </div>
             </div>
             <div>
-                <div class="flex justify-between mb-1">
-                    <span class="text-sm text-text">With Label</span>
+                <div class="tw-progress-header">
+                    <span>Sizes</span>
                 </div>
-                <div class="tw-progress">
-                    <div class="tw-progress-bar" style="width: 85%">
-                        <span class="tw-progress-label">85%</span>
+                <div class="space-y-3">
+                    <div class="tw-progress tw-progress-sm">
+                        <div class="tw-progress-bar" style="width: 60%"></div>
+                    </div>
+                    <div class="tw-progress">
+                        <div class="tw-progress-bar" style="width: 60%"></div>
+                    </div>
+                    <div class="tw-progress tw-progress-lg">
+                        <div class="tw-progress-bar" style="width: 60%"></div>
                     </div>
                 </div>
             </div>
