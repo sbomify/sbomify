@@ -1,0 +1,35 @@
+{% comment %}
+"There is more here than you can see."
+
+A gated trust center that silently hides advisories is indistinguishable from
+one with nothing to hide, so a reader who could get access never asks for it.
+This says how many are withheld and what would change that — and it words the
+prompt from what the reader already is, rather than guessing.
+
+Expects `hidden_count`, `viewer_is_authenticated`, `viewer_has_gated_grant`.
+{% endcomment %}
+{% if hidden_count %}
+    <div class="tc-restricted">
+        <span class="tc-restricted-icon" aria-hidden="true"><i class="fas fa-lock"></i></span>
+        <div class="min-w-0">
+            <p class="tc-restricted-title">
+                {{ hidden_count }} advisor{{ hidden_count|pluralize:"y,ies" }} {{ hidden_count|pluralize:"is,are" }} restricted
+            </p>
+            <p class="tc-restricted-body">
+                {% if not viewer_is_authenticated %}
+                    These are shared with customers who have access to the affected products. Log in to see the ones covered by your access.
+                {% elif not viewer_has_gated_grant %}
+                    These are shared with customers who have been granted access to this workspace. Request access to see the ones that apply to you.
+                {% else %}
+                    These cover products outside your current access. If you believe one applies to you, contact us to extend your access.
+                {% endif %}
+            </p>
+        </div>
+        {% if not viewer_is_authenticated %}
+            <a href="{% url 'core:keycloak_login' %}?next={{ request.path|urlencode }}"
+               class="tw-btn-secondary tw-btn-sm shrink-0">
+                <i class="fas fa-sign-in-alt mr-2" aria-hidden="true"></i>Log in
+            </a>
+        {% endif %}
+    </div>
+{% endif %}

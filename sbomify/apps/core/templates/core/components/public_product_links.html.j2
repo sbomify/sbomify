@@ -1,63 +1,22 @@
-{# Public Product Links — server-rendered #}
-{% load static %}
-{% load utils %}
+{# Public Product Links — a sidebar tc-panel, one row per resource. #}
 {% if product_links %}
-    <div class="public-section">
-        <div class="tw-card">
-            {% include 'core/components/public_section_header.html.j2' with title='Resources & Links' icon='fa-link' %}
-            {# Mobile (<md): stacked rows so URL link isn't pushed off-screen. #}
-            <div class="md:hidden divide-y divide-border/40">
-                {% for link in product_links %}
-                    <div class="px-6 py-4 flex flex-col gap-2">
-                        <span class="self-start px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">
-                            {{ link.link_type_display }}
-                        </span>
-                        <div class="text-text font-semibold break-words">{{ link.title }}</div>
-                        {% if link.description %}<p class="text-text-muted text-xs m-0">{{ link.description }}</p>{% endif %}
-                        <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           class="text-primary hover:underline inline-flex items-center gap-1 self-start min-h-10 py-2">
-                            Visit Link
-                            <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
-                        </a>
-                    </div>
-                {% endfor %}
-            </div>
-            {# md+: full table. #}
-            <div class="hidden md:block p-6">
-                <table class="tw-table w-full text-sm">
-                    <thead>
-                        <tr class="bg-border/30">
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Type</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Title</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">URL</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for link in product_links %}
-                            <tr class="hover:bg-border/10">
-                                <td class="py-3 px-4 align-middle">
-                                    <span class="px-2 py-1 text-xs font-medium rounded bg-border/50 text-text">{{ link.link_type_display }}</span>
-                                </td>
-                                <td class="py-3 px-4 align-middle">
-                                    <div class="text-text font-semibold">{{ link.title }}</div>
-                                    {% if link.description %}<p class="text-text-muted text-xs mt-1 mb-0">{{ link.description }}</p>{% endif %}
-                                </td>
-                                <td class="py-3 px-4 align-middle">
-                                    <a href="{% url 'core:product_link_redirect' link_id=link.id %}"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="text-primary hover:underline inline-flex items-center gap-1">
-                                        Visit Link
-                                        <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <div class="tc-panel">
+        <h2 class="tc-panel-title">Resources &amp; links</h2>
+        <div class="tc-facts">
+            {% for link in product_links %}
+                <div>
+                    <p class="tc-fact-label">{{ link.link_type_display }}</p>
+                    <a class="text-sm break-words"
+                       href="{% url 'core:product_link_redirect' link_id=link.id %}"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        {{ link.title }}
+                        <i class="fas fa-arrow-up-right-from-square text-xs ml-1"
+                           aria-hidden="true"></i>
+                    </a>
+                    {% if link.description %}<p class="text-xs opacity-70 mt-1 mb-0">{{ link.description }}</p>{% endif %}
+                </div>
+            {% endfor %}
         </div>
     </div>
 {% endif %}

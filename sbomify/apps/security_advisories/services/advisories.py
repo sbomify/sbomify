@@ -88,7 +88,7 @@ EVENT_META: dict[str, dict[str, str]] = {
 _UNKNOWN_EVENT = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle"}
 
 
-def _display_id(advisory: SecurityAdvisory) -> str:
+def display_id(advisory: SecurityAdvisory) -> str:
     """The id a human quotes.
 
     ``tracking_id`` is the workspace's own scheme (OSPN-2026-0034 and the like)
@@ -117,14 +117,14 @@ def _advisory_type(vulnerabilities: list[AdvisoryVulnerability], references: lis
     return "other"
 
 
-def _display_date(value: Any) -> str:
+def display_date(value: Any) -> str:
     """A date the way the list renders it: 19 Jul 2026, no leading zero."""
     if value is None:
         return ""
     return f"{value.day} {value:%b %Y}"
 
 
-def _worst_severity(advisory: SecurityAdvisory) -> str:
+def worst_severity(advisory: SecurityAdvisory) -> str:
     """The advisory's severity, falling back to the worst of its vulnerabilities.
 
     An advisory carries its own severity, but it is optional, and an advisory
@@ -214,7 +214,7 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
         # "body" and "created_at" are the model's own names, kept for callers
         # that want the raw values.
         "note": event.body,
-        "date_display": _display_date(event.created_at),
+        "date_display": display_date(event.created_at),
         "body": event.body,
         "payload": payload,
         # Only status_change moves the advisory's remediation status; the rest
@@ -229,7 +229,7 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
 
 
 def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) -> dict[str, Any]:
-    severity = _worst_severity(advisory)
+    severity = worst_severity(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, _UNKNOWN_EVENT)
     events = list(advisory.events.all())
     vulnerabilities = list(advisory.vulnerabilities.all())
@@ -241,7 +241,7 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         # str() because the table's client-side search lowercases this. Both
         # sources are CharFields today so it is already a string, but the cast
         # means a future numeric key cannot break search at runtime.
-        "id": str(_display_id(advisory)),
+        "id": str(display_id(advisory)),
         "pk": str(advisory.id),
         "title": advisory.title,
         "summary": advisory.summary,
@@ -272,14 +272,14 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         "type_label": TYPE_LABELS[advisory_type],
         "updates_count": len(events),
         "created_at": advisory.created_at,
-        "created_display": _display_date(advisory.created_at),
+        "created_display": display_date(advisory.created_at),
         # "Updated" is the newest event of any kind, falling back to the row's
         # own timestamp for an advisory nobody has touched since creating it.
         "updated_at": updated_at,
         # Sortable and displayable forms of the same instant; the table sorts on
         # one and renders the other.
         "updated": updated_at.isoformat() if updated_at else "",
-        "updated_display": _display_date(updated_at),
+        "updated_display": display_date(updated_at),
         "published_at": advisory.published_at,
     }
 
