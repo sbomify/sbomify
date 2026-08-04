@@ -44,7 +44,6 @@
                 <a href="#skeleton" class="text-sm text-primary hover:underline">Skeleton</a>
                 <a href="#range" class="text-sm text-primary hover:underline">Range</a>
                 <a href="#calendar" class="text-sm text-primary hover:underline">Calendar</a>
-                <a href="#tooltip" class="text-sm text-primary hover:underline">Tooltip</a>
                 <a href="#list-group" class="text-sm text-primary hover:underline">List Group</a>
                 <a href="#dividers" class="text-sm text-primary hover:underline">Dividers</a>
                 <a href="#navigation" class="text-sm text-primary hover:underline">Navigation</a>
@@ -2007,70 +2006,6 @@
                             <button class="tw-calendar-today-btn" type="button">Today</button>
                             <button class="tw-calendar-clear-btn" type="button">Clear</button>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="tooltip" class="tw-dashboard-card mb-8">
-        <div class="tw-card-header">
-            <h3 class="text-lg font-semibold text-text">Tooltips & Notifications</h3>
-        </div>
-        <div class="tw-card-body space-y-6">
-            <div>
-                <p class="text-sm font-medium text-text mb-2">Alpine.js Tooltips (Recommended)</p>
-                <p class="text-xs text-text-muted mb-3">
-                    Use x-tooltip directive with string literals. Works anywhere, no x-data required.
-                </p>
-                <div class="flex flex-wrap gap-4">
-                    <button class="tw-btn-secondary" x-tooltip="'Top tooltip (default)'">Top</button>
-                    <button class="tw-btn-secondary" x-tooltip.bottom="'Bottom tooltip'">Bottom</button>
-                    <button class="tw-btn-secondary" x-tooltip.left="'Left tooltip'">Left</button>
-                    <button class="tw-btn-secondary" x-tooltip.right="'Right tooltip'">Right</button>
-                </div>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-text mb-2">Alpine.js Tooltips with Reactive Data</p>
-                <p class="text-xs text-text-muted mb-3">Use within x-data context for dynamic tooltip text.</p>
-                <div class="flex gap-4"
-                     x-data="{ tooltipMsg: 'Dynamic tooltip from x-data!' }">
-                    <button class="tw-btn-primary" x-tooltip="tooltipMsg">Hover for dynamic tooltip</button>
-                </div>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-text mb-2">CSS-Only Tooltips (Legacy)</p>
-                <p class="text-xs text-text-muted mb-3">Pure CSS tooltips using .tw-tooltip wrapper. Limited positioning options.</p>
-                <div class="flex gap-4">
-                    <div class="tw-tooltip">
-                        <button class="tw-btn-secondary">Top (default)</button>
-                        <span class="tw-tooltip-content">Tooltip on top!</span>
-                    </div>
-                    <div class="tw-tooltip tw-tooltip-bottom">
-                        <button class="tw-btn-secondary">Bottom</button>
-                        <span class="tw-tooltip-content">Tooltip on bottom!</span>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <p class="text-sm font-medium text-text mb-2">Notification Badges</p>
-                <div class="flex gap-4">
-                    <div class="tw-notification-badge">
-                        <button class="tw-icon-btn">
-                            <i class="fas fa-bell"></i>
-                        </button>
-                        <span class="tw-notification-count">5</span>
-                    </div>
-                    <div class="tw-notification-badge">
-                        <button class="tw-icon-btn">
-                            <i class="fas fa-envelope"></i>
-                        </button>
-                        <span class="tw-notification-dot"></span>
-                    </div>
-                    <div class="tw-notification-badge">
-                        <button class="tw-icon-btn">
-                            <i class="fas fa-inbox"></i>
-                        </button>
-                        <span class="tw-notification-dot tw-notification-dot-pulse"></span>
                     </div>
                 </div>
             </div>
