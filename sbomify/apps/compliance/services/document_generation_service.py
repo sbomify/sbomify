@@ -347,6 +347,20 @@ def _build_common_context(assessment: CRAAssessment) -> dict[str, Any]:
         "support_period_end": (assessment.support_period_end.isoformat() if assessment.support_period_end else None),
         "manufacturer_name": manufacturer_name,
         "manufacturer_is_placeholder": manufacturer_is_placeholder,
+        # CRA Art. 22/25: the AR's details belong on the accompanying
+        # documentation. ``authorized_rep_required`` lets the DoC warn when
+        # the determination says one is needed but none was captured, rather
+        # than silently omitting a mandatory block.
+        "authorized_rep_required": assessment.requires_authorized_representative,
+        "authorized_rep_name": _sanitize(assessment.authorized_rep_name, escape_markdown=True),
+        "authorized_rep_address": _sanitize(assessment.authorized_rep_address, escape_markdown=True),
+        "authorized_rep_email": _sanitize(assessment.authorized_rep_email),
+        "authorized_rep_mandate_date": (
+            assessment.authorized_rep_mandate_date.isoformat() if assessment.authorized_rep_mandate_date else None
+        ),
+        "authorized_rep_mandate_reference": _sanitize(
+            assessment.authorized_rep_mandate_reference, escape_markdown=True
+        ),
         "manufacturer_address": _sanitize(manufacturer.address, escape_markdown=True) if manufacturer else "",
         "manufacturer_email": _sanitize(manufacturer.email) if manufacturer else "",
         "manufacturer_website": (

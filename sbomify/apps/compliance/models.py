@@ -281,6 +281,34 @@ class CRAAssessment(models.Model):
         ),
     )
 
+    # Step 1 — EU Authorized Representative (CRA Art. 22/25, checklist 7.4).
+    # A manufacturer without an EU establishment must appoint an AR *before*
+    # market placement, and the AR's details belong on the accompanying
+    # documentation. ``is_eu_established`` is nullable on purpose: NULL means
+    # nobody has answered yet, which is a different state from "answered no",
+    # and 7.4.1 asks for the determination to be recorded either way.
+    is_eu_established = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Whether the manufacturer has an EU establishment (checklist 7.4.1). "
+            "False makes an Authorized Representative mandatory; NULL means the "
+            "determination has not been made."
+        ),
+    )
+    authorized_rep_name = models.CharField(max_length=255, blank=True, default="")
+    authorized_rep_address = models.TextField(blank=True, default="")
+    authorized_rep_email = models.EmailField(blank=True, default="")
+    authorized_rep_mandate_date = models.DateField(
+        null=True, blank=True, help_text="Date the written mandate was signed (checklist 7.4.2)."
+    )
+    authorized_rep_mandate_reference = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Reference to the mandate document — contract id, DMS link or file name.",
+    )
+
     # Step 3b — Vulnerability disclosure
     vdp_url = models.URLField(blank=True, default="")
     acknowledgment_timeline_days = models.PositiveIntegerField(null=True, blank=True)
@@ -343,6 +371,59 @@ class CRAAssessment(models.Model):
         related_name="+",
         help_text="User who saved the signature on this assessment.",
     )
+
+    @property
+    def requires_authorized_representative(self) -> bool:
+        """Whether CRA Art. 22 obliges this assessment to name an AR.
+
+        Only an explicit "not EU-established" triggers the obligation; an
+        unanswered determination is surfaced as incomplete rather than
+        silently treated as compliant.
+        """
+        return self.is_eu_established is False
+
+    @property
+    def authorized_rep_is_complete(self) -> bool:
+        """Whether the AR block carries what checklist 7.4.2/7.4.3 asks for."""
+        return all(
+            [
+                self.authorized_rep_name.strip(),
+                self.authorized_rep_address.strip(),
+                self.authorized_rep_email.strip(),
+                self.authorized_rep_mandate_date is not None,
+            ]
+        )
+
+    @property
+    def eu_representation_problems(self) -> list[str]:
+        """Reasons the EU-representation block is not yet compliant.
+
+        Two different failures, deliberately not collapsed. An **unanswered**
+        determination is incomplete evidence (7.4.1) and surfaces on the
+        publish/export path, since blocking the wizard on it would strand
+        every assessment created before the question existed. A **missing AR
+        where one is required** is an Art. 22 breach, and that one blocks.
+        """
+        if self.is_eu_established is None:
+            return ["Record whether the manufacturer is established in the EU (CRA Art. 22, checklist 7.4.1)."]
+        if not self.requires_authorized_representative:
+            return []
+        missing = []
+        if not self.authorized_rep_name.strip():
+            missing.append("name")
+        if not self.authorized_rep_address.strip():
+            missing.append("address")
+        if not self.authorized_rep_email.strip():
+            missing.append("contact email")
+        if self.authorized_rep_mandate_date is None:
+            missing.append("mandate date")
+        if not missing:
+            return []
+        return [
+            "A manufacturer without an EU establishment must appoint an Authorized "
+            "Representative before placing the product on the market (CRA Art. 22). "
+            "Missing: " + ", ".join(missing) + "."
+        ]
 
     @property
     def is_signed(self) -> bool:

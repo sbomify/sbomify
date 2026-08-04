@@ -602,15 +602,23 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
 
 
 # ---- Step 1 fields that can be saved ----
-_STEP_1_TEXT_FIELDS = ("intended_use",)
-_STEP_1_CHAR_FIELDS = ("product_category",)
+_STEP_1_TEXT_FIELDS = ("intended_use", "authorized_rep_address")
+_STEP_1_CHAR_FIELDS = (
+    "product_category",
+    "authorized_rep_name",
+    "authorized_rep_email",
+    "authorized_rep_mandate_reference",
+)
 _STEP_1_BOOL_FIELDS = (
     "is_open_source_steward",
     "is_radio_equipment",
     "processes_personal_data",
     "handles_financial_value",
 )
-_STEP_1_DATE_FIELDS = ("support_period_end",)
+# Tri-state on purpose: NULL means the EU-establishment determination has not
+# been made, which checklist 7.4.1 treats differently from answering "no".
+_STEP_1_NULLABLE_BOOL_FIELDS = ("is_eu_established",)
+_STEP_1_DATE_FIELDS = ("support_period_end", "authorized_rep_mandate_date")
 _STEP_1_JSON_FIELDS = ("target_eu_markets",)
 
 # ---- Step 3b/3c fields ----
@@ -758,19 +766,21 @@ def _save_step_1(
                 )
         assessment.target_eu_markets = markets or []
 
-    if "support_period_end" in data:
-        val = data["support_period_end"]
+    for field in _STEP_1_DATE_FIELDS:
+        if field not in data:
+            continue
+        val = data[field]
         if val is None:
-            assessment.support_period_end = None
+            setattr(assessment, field, None)
+        elif isinstance(val, datetime.date):
+            setattr(assessment, field, val)
         elif isinstance(val, str):
             try:
-                assessment.support_period_end = datetime.date.fromisoformat(val)
+                setattr(assessment, field, datetime.date.fromisoformat(val))
             except ValueError:
-                return ServiceResult.failure("Invalid date format for support_period_end", status_code=400)
-        elif isinstance(val, datetime.date):
-            assessment.support_period_end = val
+                return ServiceResult.failure(f"Invalid date format for {field}", status_code=400)
         else:
-            return ServiceResult.failure("Invalid type for support_period_end", status_code=400)
+            return ServiceResult.failure(f"Invalid type for {field}", status_code=400)
 
     # Harmonised-standard flag (CRA Art 32(2)). Treat an absent key as
     # "unchanged" — the normal PATCH semantic — so a partial save that
@@ -895,10 +905,32 @@ def _save_step_1(
             status_code=400,
         )
 
+    for field in _STEP_1_NULLABLE_BOOL_FIELDS:
+        if field in data:
+            raw = data[field]
+            if raw is not None and not isinstance(raw, bool):
+                return ServiceResult.failure(f"{field} must be a boolean or null", status_code=400)
+            setattr(assessment, field, raw)
+
+    # CRA Art. 22 makes an AR mandatory before market placement for a
+    # manufacturer with no EU establishment, so answering "not established"
+    # and leaving the block empty is a breach the step refuses to record.
+    # An *unanswered* determination is only incomplete evidence, and blocking
+    # on it would strand every assessment created before the question
+    # existed — that one surfaces on the publish/export path instead.
+    if assessment.requires_authorized_representative and (problems := assessment.eu_representation_problems):
+        return ServiceResult.failure(problems[0], status_code=400)
+
     _mark_step_complete(assessment, 1)
     assessment.save(
         update_fields=[
             "product_category",
+            "is_eu_established",
+            "authorized_rep_name",
+            "authorized_rep_address",
+            "authorized_rep_email",
+            "authorized_rep_mandate_date",
+            "authorized_rep_mandate_reference",
             "is_open_source_steward",
             "harmonised_standard_applied",
             "conformity_assessment_procedure",
