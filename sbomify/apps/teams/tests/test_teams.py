@@ -2144,7 +2144,6 @@ def test_team_general_post__updates_session(
 @pytest.mark.django_db
 def test_team_response_omits_oidc_bot_memberships(
     sample_team_with_owner_member: Member,  # noqa: F811
-    authenticated_api_client,  # noqa: F811
 ):
     """OIDC binding bots are not people with access to the workspace.
 
