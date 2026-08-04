@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
+from django.utils import timezone
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.services.results import ServiceResult
@@ -28,6 +30,8 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryVulnerability,
     ReferenceType,
     SecurityAdvisory,
+    Severity,
+    validate_publishable,
 )
 
 # Severity to the badge variant the templates use.
@@ -63,7 +67,7 @@ PUBLICATION_VARIANTS = {"draft": "secondary", "published": "success", "withdrawn
 # Advisory "type" as the list column shows it. Inferred rather than stored,
 # because the model already records the real identifiers and which database
 # issued them is a fact about those, not a separate field to keep in step.
-TYPE_LABELS = {"cve": "CVE", "ghsa": "GHSA", "other": "Other"}
+TYPE_LABELS = {"cve": "CVE", "ghsa": "GHSA", "internal": "Internal", "other": "Other"}
 
 # Timeline entries a reader sees. Internal comments are excluded from the
 # public feed by the model's PUBLIC_EVENT_TYPES; this is the workspace view, so
@@ -88,7 +92,7 @@ EVENT_META: dict[str, dict[str, str]] = {
 _UNKNOWN_EVENT = {"label": "Event", "variant": "secondary", "icon": "fas fa-circle"}
 
 
-def _display_id(advisory: SecurityAdvisory) -> str:
+def display_id(advisory: SecurityAdvisory) -> str:
     """The id a human quotes.
 
     ``tracking_id`` is the workspace's own scheme (OSPN-2026-0034 and the like)
@@ -114,17 +118,22 @@ def _advisory_type(vulnerabilities: list[AdvisoryVulnerability], references: lis
         return "cve"
     if ReferenceType.GHSA in types:
         return "ghsa"
+    # No external identifier anywhere means this is the workspace's own
+    # finding, not some other database's. Saying "Internal" is more useful
+    # than a catch-all that reads like the field failed to populate.
+    if not types:
+        return "internal"
     return "other"
 
 
-def _display_date(value: Any) -> str:
+def display_date(value: Any) -> str:
     """A date the way the list renders it: 19 Jul 2026, no leading zero."""
     if value is None:
         return ""
     return f"{value.day} {value:%b %Y}"
 
 
-def _worst_severity(advisory: SecurityAdvisory) -> str:
+def worst_severity(advisory: SecurityAdvisory) -> str:
     """The advisory's severity, falling back to the worst of its vulnerabilities.
 
     An advisory carries its own severity, but it is optional, and an advisory
@@ -204,17 +213,31 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
     meta = EVENT_META.get(event.event_type, _UNKNOWN_EVENT)
     payload = event.payload if isinstance(event.payload, dict) else {}
     actor = event.actor
+
+    # A status change reads as the state it moved to, not as the words
+    # "Status change" — five entries all labelled the same tell a reader
+    # nothing about what happened. The badge takes the state's own colour
+    # and icon for the same reason.
+    label, variant, icon = meta["label"], meta["variant"], meta["icon"]
+    to_status = payload.get("to")
+    if event.event_type == AdvisoryEvent.EventType.STATUS_CHANGE and to_status in REMEDIATION_META:
+        state_meta = REMEDIATION_META[to_status]
+        label, variant, icon = state_meta["label"], state_meta["variant"], state_meta["icon"]
+
     return {
         "id": event.id,
         "kind": event.event_type,
-        "label": meta["label"],
-        "variant": meta["variant"],
-        "icon": meta["icon"],
+        "label": label,
+        "variant": variant,
+        "icon": icon,
+        # The transition's origin, for a reader who wants the before as well
+        # as the after. Absent on the first change, which came from nowhere.
+        "from_label": REMEDIATION_META.get(payload.get("from", ""), {}).get("label", ""),
         # "note" and "date_display" are what the timeline template binds to;
         # "body" and "created_at" are the model's own names, kept for callers
         # that want the raw values.
         "note": event.body,
-        "date_display": _display_date(event.created_at),
+        "date_display": display_date(event.created_at),
         "body": event.body,
         "payload": payload,
         # Only status_change moves the advisory's remediation status; the rest
@@ -229,7 +252,7 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
 
 
 def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) -> dict[str, Any]:
-    severity = _worst_severity(advisory)
+    severity = worst_severity(advisory)
     remediation = REMEDIATION_META.get(advisory.remediation_status, _UNKNOWN_EVENT)
     events = list(advisory.events.all())
     vulnerabilities = list(advisory.vulnerabilities.all())
@@ -241,7 +264,7 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         # str() because the table's client-side search lowercases this. Both
         # sources are CharFields today so it is already a string, but the cast
         # means a future numeric key cannot break search at runtime.
-        "id": str(_display_id(advisory)),
+        "id": str(display_id(advisory)),
         "pk": str(advisory.id),
         "title": advisory.title,
         "summary": advisory.summary,
@@ -272,14 +295,14 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         "type_label": TYPE_LABELS[advisory_type],
         "updates_count": len(events),
         "created_at": advisory.created_at,
-        "created_display": _display_date(advisory.created_at),
+        "created_display": display_date(advisory.created_at),
         # "Updated" is the newest event of any kind, falling back to the row's
         # own timestamp for an advisory nobody has touched since creating it.
         "updated_at": updated_at,
         # Sortable and displayable forms of the same instant; the table sorts on
         # one and renders the other.
         "updated": updated_at.isoformat() if updated_at else "",
-        "updated_display": _display_date(updated_at),
+        "updated_display": display_date(updated_at),
         "published_at": advisory.published_at,
     }
 
@@ -347,16 +370,23 @@ def creation_options(team: Any) -> ServiceResult[list[dict[str, Any]]]:
 
     ``latest`` releases are excluded: that pointer re-targets as artifacts
     arrive, so "affected: latest" would describe different code next month.
+
+    Newest first, and the date travels with each row. Version strings do not
+    sort into release order on their own — a hand-cut ``0.99-wiz-test`` can
+    postdate a dated build — so without the date on screen a correctly ordered
+    list reads as an unordered one.
     """
     releases_by_product: dict[str, list[dict[str, str]]] = {}
     release_rows = (
         Release.objects.filter(product__team=team, is_latest=False)
         .order_by("-created_at")
-        .values("id", "product_id", "name", "version")
+        .values("id", "product_id", "name", "version", "created_at")
     )
     for row in release_rows:
         label = row["version"] or row["name"]
-        releases_by_product.setdefault(row["product_id"], []).append({"id": row["id"], "label": label})
+        releases_by_product.setdefault(row["product_id"], []).append(
+            {"id": row["id"], "label": label, "created": row["created_at"].strftime("%d %b %Y")}
+        )
 
     products = [
         {"id": product_id, "name": name, "releases": releases_by_product.get(product_id, [])}
@@ -451,6 +481,173 @@ def create_advisory(
         event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
         actor=user,
         payload={"to": SecurityAdvisory.RemediationStatus.IDENTIFIED.value},
+    )
+    return ServiceResult.success(advisory.id)
+
+
+# Above this, a value is described rather than quoted on the timeline. A
+# rewritten description is the common case and pasting both versions of it
+# would bury every other entry.
+_FIELD_CHANGE_QUOTE_LIMIT = 80
+
+
+def _field_change_body(field: str, old: Any, new: Any) -> str:
+    """What a field_change entry reads as on the timeline."""
+    label = field.replace("_", " ").capitalize()
+
+    def describe(value: Any) -> str | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        return f"“{text}”" if len(text) <= _FIELD_CHANGE_QUOTE_LIMIT else None
+
+    old_text, new_text = describe(old), describe(new)
+    if old_text and new_text:
+        return f"{label} changed from {old_text} to {new_text}."
+    if new_text and not old_text:
+        return f"{label} set to {new_text}."
+    if old_text and not new_text and not str(new or "").strip():
+        return f"{label} cleared."
+    return f"{label} updated."
+
+
+@transaction.atomic
+def update_advisory(
+    team: Any, user: Any, advisory_id: str, *, title: str, severity: str | None = None, description: str = ""
+) -> ServiceResult[str]:
+    """Edit an advisory's own fields.
+
+    Field changes land on the timeline as field_change events, one per field,
+    so the append-only history answers "who changed the severity and when"
+    rather than only recording status moves.
+    """
+    advisory = (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+
+    title = title.strip()
+    if not title:
+        return ServiceResult.failure("An advisory needs a title.", status_code=400)
+
+    # ``None`` means the caller did not submit a severity, which is different
+    # from submitting a blank one. A <select> always posts something, so an
+    # advisory saved with no severity would otherwise pick up the first option
+    # whenever anyone edited its title.
+    fields: list[tuple[str, Any]] = [("title", title), ("description", description.strip())]
+    if severity is not None:
+        severity = severity.strip()
+        if severity and severity not in Severity.values:
+            return ServiceResult.failure("Unknown severity.", status_code=400)
+        fields.append(("severity", severity))
+
+    changes = [(field, getattr(advisory, field), new) for field, new in fields if getattr(advisory, field) != new]
+    if not changes:
+        return ServiceResult.success(advisory.id)
+
+    for field, _old, new in changes:
+        setattr(advisory, field, new)
+    advisory.save(update_fields=[field for field, _o, _n in changes] + ["updated_at"])
+
+    for field, old, new in changes:
+        AdvisoryEvent.objects.create(
+            advisory=advisory,
+            event_type=AdvisoryEvent.EventType.FIELD_CHANGE,
+            actor=user,
+            # The timeline renders an event's body, so a field change with only
+            # a payload showed a "Field change" badge and no text at all. The
+            # body says which field moved; long values are summarised rather
+            # than pasted, since a rewritten description would otherwise bury
+            # every other entry on the page.
+            body=_field_change_body(field, old, new),
+            payload={"field": field, "old": old, "new": new},
+        )
+    return ServiceResult.success(advisory.id)
+
+
+# Publishing to "private" is not publishing: the Trust Center excludes private
+# advisories in SQL, so it would move the status and disclose nothing. The two
+# real destinations are a gated (embargoed, signed-NDA) disclosure and a public
+# one; changing visibility afterwards is its own action.
+PUBLISHABLE_VISIBILITIES: dict[str, dict[str, str]] = {
+    SecurityAdvisory.Visibility.PUBLIC.value: {
+        "label": "Public",
+        "help": "Anyone can read it on your Trust Center.",
+    },
+    SecurityAdvisory.Visibility.GATED.value: {
+        "label": "Gated",
+        "help": "Only readers who have signed your NDA and can see an affected product.",
+    },
+}
+
+
+@transaction.atomic
+def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str) -> ServiceResult[str]:
+    """Disclose an advisory: the one write that makes it readable outside the workspace.
+
+    Until this runs an advisory is a draft with private visibility, and the
+    Trust Center filters both out — which is why a workspace could write
+    advisories all day and see nothing published.
+
+    Both axes move together here. Status alone would leave it private and still
+    invisible; visibility alone would expose a draft. The tracking id is
+    allocated now and is immutable afterwards, ``published_at`` records the
+    disclosure, and ``made_public_at`` records it separately for a public one
+    because a gated disclosure is not public disclosure.
+
+    The team row is locked because ``allocate_tracking_id`` counts by reading
+    the highest existing id for the year: two publishes racing would read the
+    same maximum and one would lose to the unique constraint.
+    """
+    if visibility not in PUBLISHABLE_VISIBILITIES:
+        return ServiceResult.failure("Choose whether to publish publicly or to NDA readers.", status_code=400)
+
+    from sbomify.apps.teams.models import Team
+
+    Team.objects.select_for_update().filter(pk=team.pk).first()
+
+    advisory = (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+    if advisory.status != SecurityAdvisory.Status.DRAFT:
+        return ServiceResult.failure("This advisory has already been published.", status_code=409)
+
+    # The graph-wide rules: a product advisory needs products, every
+    # vulnerability needs a status per product, a fixed status names the fix.
+    if problems := validate_publishable(advisory):
+        return ServiceResult.failure(" ".join(problems), status_code=400)
+
+    now = timezone.now()
+    advisory.status = SecurityAdvisory.Status.PUBLISHED
+    advisory.published_at = now
+    advisory.visibility = visibility
+    if visibility == SecurityAdvisory.Visibility.PUBLIC:
+        advisory.made_public_at = now
+    advisory.tracking_id = SecurityAdvisory.allocate_tracking_id(team)
+
+    try:
+        advisory.full_clean()
+    except DjangoValidationError as error:
+        # The model holds the disclosure invariants; surfacing them beats
+        # letting a 500 out of save().
+        return ServiceResult.failure("; ".join(m for messages in error.message_dict.values() for m in messages), 400)
+
+    advisory.save(update_fields=["status", "published_at", "visibility", "made_public_at", "tracking_id", "updated_at"])
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.PUBLISHED,
+        actor=user,
+        body=f"Published as {advisory.tracking_id} ({PUBLISHABLE_VISIBILITIES[visibility]['label'].lower()}).",
+        payload={"visibility": visibility, "tracking_id": advisory.tracking_id},
     )
     return ServiceResult.success(advisory.id)
 

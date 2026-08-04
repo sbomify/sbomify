@@ -1,0 +1,308 @@
+{% load public_url_tags %}
+{% comment %}
+The advisory index: filter sidebar beside the results table.
+
+Rendered whole on a normal request and swapped on its own for an HTMX one, so
+ticking a facet updates the list and the counts beside it without a page flash.
+The facet counts live in this region too, which is why the swap covers the
+sidebar rather than only the table.
+
+Everything is a plain GET form underneath: with JavaScript off the noscript
+submit button applies the same filters, and the URL is the same either way.
+{% endcomment %}
+<div id="advisoryBrowse" class="tc-browse">
+    <form method="get"
+          id="advisoryFilters"
+          class="tc-filters"
+          role="search"
+          hx-get="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
+          hx-include="#advisorySort"
+          hx-target="#advisoryBrowse"
+          hx-swap="outerHTML"
+          hx-push-url="true"
+          hx-trigger="change, input changed delay:350ms from:#advisorySearch">
+        {% comment %}
+        Search first, on both breakpoints. On a phone, typing a CVE is the fast
+        path and should never sit behind a tap; on desktop it reads as the top
+        of the panel either way.
+
+        hx-preserve keeps the live input node across the swap, so a search that
+        fires mid-word does not steal the cursor back to the start.
+        {% endcomment %}
+        <div class="tw-data-table-search tc-filter-search-slot"
+             id="advisorySearchWrap"
+             hx-preserve="true">
+            <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
+            <label for="advisorySearch" class="sr-only">Search advisories</label>
+            <input id="advisorySearch"
+                   type="search"
+                   name="search"
+                   value="{{ query.search }}"
+                   class="tw-data-table-search-input"
+                   placeholder="Search advisories...">
+        </div>
+        {% comment %}
+        Narrow screens get a disclosure instead of a wall of checkboxes: five
+        severities plus a product per line plus a date range pushed the first
+        result most of a screen down.
+
+        It sits directly under the search box, and the source order matches the
+        rendered order at both breakpoints, so tabbing through the panel follows
+        what is on screen rather than a CSS reordering of it. Hidden on desktop,
+        where the panel is always open and there is nothing to toggle.
+
+        The count is the only sign, while collapsed, that the list is narrowed.
+        {% endcomment %}
+        <label class="tc-filters-toggle" for="tcFiltersOpen">
+            <i class="fas fa-sliders" aria-hidden="true"></i>
+            <span>Filters</span>
+            {% if query.active_count %}<span class="tc-filters-badge">{{ query.active_count }}</span>{% endif %}
+            <i class="fas fa-chevron-down tc-filters-chevron" aria-hidden="true"></i>
+        </label>
+        <div class="tc-filters-head">
+            <h2 class="tc-filters-title">Filters</h2>
+            {% if query.is_filtered %}
+                <a class="tc-filters-clear"
+                   href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
+                   hx-get="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
+                   hx-target="#advisoryBrowse"
+                   hx-swap="outerHTML"
+                   hx-push-url="true">Clear all</a>
+            {% endif %}
+        </div>
+        <div id="advisoryFilterBody" class="tc-filters-body">
+            <div class="tc-filter-group">
+                <h3 class="tc-filter-heading">Severity</h3>
+                {% for facet in facets.severity %}
+                    <label class="tc-facet {% if not facet.count and not facet.checked %}tc-facet-empty{% endif %}">
+                        <input type="checkbox"
+                               name="severity"
+                               value="{{ facet.value }}"
+                               {% if facet.checked %}checked{% endif %}>
+                        <span class="tc-facet-dot tc-severity-{{ facet.value }}" aria-hidden="true"></span>
+                        <span class="tc-facet-label">{{ facet.label }}</span>
+                        <span class="tc-facet-count">{{ facet.count }}</span>
+                    </label>
+                {% endfor %}
+            </div>
+            {% if facets.product %}
+                <div class="tc-filter-group">
+                    <h3 class="tc-filter-heading">Product</h3>
+                    {% for facet in facets.product %}
+                        <label class="tc-facet {% if not facet.count and not facet.checked %}tc-facet-empty{% endif %}">
+                            <input type="checkbox"
+                                   name="product"
+                                   value="{{ facet.value }}"
+                                   {% if facet.checked %}checked{% endif %}>
+                            <span class="tc-facet-label">{{ facet.label }}</span>
+                            <span class="tc-facet-count">{{ facet.count }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            <div class="tc-filter-group">
+                <h3 class="tc-filter-heading">Published</h3>
+                <div class="tc-filter-date">
+                    <label for="publishedFrom">From</label>
+                    <input id="publishedFrom"
+                           type="date"
+                           name="from"
+                           value="{{ query.published_from|date:'Y-m-d' }}">
+                </div>
+                <div class="tc-filter-date">
+                    <label for="publishedTo">To</label>
+                    <input id="publishedTo"
+                           type="date"
+                           name="to"
+                           value="{{ query.published_to|date:'Y-m-d' }}">
+                </div>
+            </div>
+        </div>
+        <noscript>
+            <button type="submit" class="tc-filter-apply">Apply filters</button>
+        </noscript>
+    </form>
+    <div class="tc-results">
+        <div class="tc-results-bar">
+            <span class="tc-results-count">
+                {% if total %}
+                    {{ start_index }}–{{ end_index }} of {{ total }}
+                {% else %}
+                    No advisories
+                {% endif %}
+            </span>
+            <div class="tc-pager">
+                {% if has_prev %}
+                    <a class="tc-pager-btn"
+                       href="?{{ querystrings.without_page }}page={{ prev_page }}"
+                       hx-get="?{{ querystrings.without_page }}page={{ prev_page }}"
+                       hx-target="#advisoryBrowse"
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
+                       aria-label="Previous page">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                    </a>
+                {% else %}
+                    <span class="tc-pager-btn tc-pager-btn-off" aria-hidden="true"><i class="fas fa-chevron-left"></i></span>
+                {% endif %}
+                {% if has_next %}
+                    <a class="tc-pager-btn"
+                       href="?{{ querystrings.without_page }}page={{ next_page }}"
+                       hx-get="?{{ querystrings.without_page }}page={{ next_page }}"
+                       hx-target="#advisoryBrowse"
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
+                       aria-label="Next page">
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    </a>
+                {% else %}
+                    <span class="tc-pager-btn tc-pager-btn-off" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+                {% endif %}
+            </div>
+            {% comment %}
+            The select is only form-associated (it sits in the results column,
+            not inside the form), so its change event never bubbles to the form
+            and cannot ride the form's hx-trigger. It carries its own HTMX
+            attributes and pulls the active filters in with hx-include. The
+            form= attribute is what makes the no-JS path work, where it is
+            submitted by the noscript button.
+            {% endcomment %}
+            <label for="advisorySort" class="sr-only">Sort advisories</label>
+            <select id="advisorySort"
+                    name="sort"
+                    form="advisoryFilters"
+                    class="tc-sort"
+                    hx-get="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}"
+                    hx-include="#advisoryFilters"
+                    hx-target="#advisoryBrowse"
+                    hx-swap="outerHTML"
+                    hx-push-url="true"
+                    hx-trigger="change">
+                {% for option in sort_options %}
+                    <option value="{{ option.value }}"
+                            {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% if advisories %}
+            <div class="tc-table-wrap">
+                <table class="tc-adv-table">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="tc-col-cvss">CVSS</th>
+                            <th scope="col" class="tc-col-summary">Summary</th>
+                            <th scope="col">Versions</th>
+                            <th scope="col">Affected</th>
+                            <th scope="col">Unaffected</th>
+                            <th scope="col" class="tc-col-date">Published</th>
+                            <th scope="col" class="tc-col-date">Updated</th>
+                        </tr>
+                    </thead>
+                    {% comment %}
+                    One <tbody> per advisory: the CVSS, summary and date cells
+                    rowspan the product rows beneath them, which is what makes a
+                    multi-product advisory read as one entry rather than several
+                    unrelated ones.
+                    {% endcomment %}
+                    {% for advisory in advisories %}
+                        <tbody class="tc-adv-group">
+                            {% for row in advisory.affected_rows %}
+                                <tr>
+                                    {% if forloop.first %}
+                                        <td class="tc-col-cvss" rowspan="{{ advisory.affected_rows|length }}">
+                                            <span class="tc-cvss tc-cvss-{{ advisory.severity|default:'none' }}">{{ advisory.cvss_score|default:"—" }}</span>
+                                        </td>
+                                        <td class="tc-col-summary" rowspan="{{ advisory.affected_rows|length }}">
+                                            <a class="tc-adv-link"
+                                               href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
+                                                {% if advisory.cve_ids %}<span class="tc-adv-cve">{{ advisory.cve_ids|join:", " }}</span>{% endif %}
+                                                {{ advisory.title }}
+                                            </a>
+                                            <div class="tc-adv-tags">
+                                                <span class="tc-adv-id">{{ advisory.id }}</span>
+                                                {% if advisory.is_gated %}
+                                                    <span class="tc-lock-chip"
+                                                          title="Restricted — shown because you have access to the affected products">
+                                                        <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+                                                    </span>
+                                                {% endif %}
+                                                {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
+                                                {% if advisory.status_label %}
+                                                    <span class="tc-adv-status">
+                                                        <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                            {% if advisory.withheld_product_count %}
+                                                <p class="tc-adv-withheld">
+                                                    {{ advisory.withheld_product_count }} further product{{ advisory.withheld_product_count|pluralize }} not shown
+                                                </p>
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
+                                    <td class="tc-col-product">{{ row.product }}</td>
+                                    <td class="tc-col-versions">{{ row.affected }}</td>
+                                    <td class="tc-col-versions">{{ row.unaffected }}</td>
+                                    {% if forloop.first %}
+                                        <td class="tc-col-date" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.published_display|default:"—" }}</td>
+                                        <td class="tc-col-date" rowspan="{{ advisory.affected_rows|length }}">{{ advisory.updated_display|default:"—" }}</td>
+                                    {% endif %}
+                                </tr>
+                            {% empty %}
+                                {% comment %}
+                                A workspace notice names no products, so it has no
+                                version rows — it still belongs in the index, as one
+                                row with the version columns empty.
+                                {% endcomment %}
+                                <tr>
+                                    <td class="tc-col-cvss">
+                                        <span class="tc-cvss tc-cvss-{{ advisory.severity|default:'none' }}">{{ advisory.cvss_score|default:"—" }}</span>
+                                    </td>
+                                    <td class="tc-col-summary">
+                                        <a class="tc-adv-link"
+                                           href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
+                                            {% if advisory.cve_ids %}<span class="tc-adv-cve">{{ advisory.cve_ids|join:", " }}</span>{% endif %}
+                                            {{ advisory.title }}
+                                        </a>
+                                        <div class="tc-adv-tags">
+                                            <span class="tc-adv-id">{{ advisory.id }}</span>
+                                            {% if advisory.is_gated %}
+                                                <span class="tc-lock-chip">
+                                                    <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="tc-col-product">—</td>
+                                    <td class="tc-col-versions">—</td>
+                                    <td class="tc-col-versions">—</td>
+                                    <td class="tc-col-date">{{ advisory.published_display|default:"—" }}</td>
+                                    <td class="tc-col-date">{{ advisory.updated_display|default:"—" }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    {% endfor %}
+                </table>
+            </div>
+        {% else %}
+            <div class="tc-empty">
+                <i class="fas fa-shield-halved tc-empty-icon" aria-hidden="true"></i>
+                <p class="tc-empty-title">
+                    {% if query.is_filtered %}
+                        No advisories match these filters
+                    {% else %}
+                        No published advisories
+                    {% endif %}
+                </p>
+                <p class="tc-empty-body">
+                    {% if query.is_filtered %}
+                        Try widening the severity or date range, or clear the filters.
+                    {% else %}
+                        New disclosures appear here as they are released.
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+        {% include "core/components/trust_center/restricted_notice.html.j2" %}
+    </div>
+</div>

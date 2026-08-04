@@ -66,6 +66,12 @@ from sbomify.apps.core.views.security_advisories import SecurityAdvisoriesTableV
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailView as SecurityAdvisoryDetailView
 from sbomify.apps.core.views.tailwind_test import TailwindTestView as TailwindTestView
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
+from sbomify.apps.core.views.trust_center_advisories import (
+    TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,
+)
+from sbomify.apps.core.views.trust_center_advisories import (
+    TrustCenterAdvisoryDetailView as TrustCenterAdvisoryDetailView,
+)
 from sbomify.apps.core.views.workspace_public import WorkspacePublicView as WorkspacePublicView
 from sbomify.apps.sboms.utils import get_product_sbom_package
 

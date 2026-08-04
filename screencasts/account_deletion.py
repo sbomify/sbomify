@@ -32,7 +32,7 @@ def account_deletion(recording_page: Page) -> None:
     # Scroll to the Account Danger Zone section and expand it.
     # There are two danger zone cards (workspace + account); target the account one.
     danger_card = page.locator(".tw-dangerzone-card", has_text="Delete Account")
-    danger_card.scroll_into_view_if_needed()
+    danger_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
 
     # Click the header to toggle the collapsible section open

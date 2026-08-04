@@ -95,6 +95,9 @@ urlpatterns: list[URLPattern] = [
         views.TeamTokensView.as_view(),
         name="team_tokens",
     ),
-    # Main team settings (unified interface) - must come after specific patterns
+    # One page per settings section. Declared before the bare <team_key> so the
+    # slug is not swallowed by it.
+    path("<team_key>/settings/<slug:tab>", views.TeamSettingsView.as_view(), name="team_settings_tab"),
+    # Settings index — renders the first section the member may open.
     path("<team_key>", views.TeamSettingsView.as_view(), name="team_settings"),
 ]

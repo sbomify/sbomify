@@ -191,6 +191,10 @@
                                                                 <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
                                                                       title="In CISA's Known Exploited Vulnerabilities catalog">KEV</span>
                                                             {% endif %}
+                                                            {% if finding.euvd %}
+                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/80 text-white"
+                                                                      title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</span>
+                                                            {% endif %}
                                                             {# VEX analysis state #}
                                                             {% if finding.analysis_state %}
                                                                 <span class="px-2 py-0.5 text-xs font-semibold rounded bg-info/10 text-info border border-info/30"

@@ -12,17 +12,15 @@ from conftest import hover_and_click, navigate_to_settings, pace, start_on_dashb
 
 
 def _set_entity_roles(page: Page, *, manufacturer: bool, supplier: bool, author: bool) -> None:
-    """Set entity role checkboxes via Alpine data (template doesn't preserve 'checked')."""
-    page.evaluate(
-        """([mfg, sup, auth]) => {
-        const card = document.querySelector('.entity-card');
-        const data = window.Alpine.$data(card);
-        data.isManufacturer = mfg;
-        data.isSupplier = sup;
-        data.isAuthor = auth;
-    }""",
-        [manufacturer, supplier, author],
-    )
+    """Set the entity role checkboxes.
+
+    Plain formset checkboxes now (entities-0-is_manufacturer and friends);
+    the Alpine state this helper used to drive is gone.
+    """
+    card = page.locator(".entity-card")
+    for field, wanted in (("is_manufacturer", manufacturer), ("is_supplier", supplier), ("is_author", author)):
+        card.locator(f"input[name$='-{field}']").first.set_checked(wanted)
+        pace(page, 250)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -58,9 +56,9 @@ def profile_editing(recording_page: Page) -> None:
     type_text(name_input, "Pied Piper Compliance")
     pace(page, 500)
 
-    # Toggle "Set as default"
-    default_toggle = profile_form.locator("input.tw-toggle")
-    hover_and_click(page, default_toggle)
+    # Tick "Set as default" — a plain checkbox since the toggle conversion.
+    default_checkbox = profile_form.locator("input[name='is_default']")
+    hover_and_click(page, default_checkbox)
     pace(page, 500)
 
     # Click "Add Entity" — the form starts with zero entities (empty state)
@@ -103,7 +101,7 @@ def profile_editing(recording_page: Page) -> None:
 
     # Entity address
     entity_address = editor.locator("textarea[placeholder*='123 Main Street']")
-    entity_address.scroll_into_view_if_needed()
+    entity_address.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     hover_and_click(page, entity_address)
     pace(page, 200)
     type_text(entity_address, "5230 Newell Road, Palo Alto, CA 94303")
@@ -118,7 +116,7 @@ def profile_editing(recording_page: Page) -> None:
 
     # --- Add first contact ---
     add_contact_btn = entity_card.locator("button:has-text('Add Contact')")
-    add_contact_btn.scroll_into_view_if_needed()
+    add_contact_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, add_contact_btn)
     pace(page, 500)
@@ -154,7 +152,7 @@ def profile_editing(recording_page: Page) -> None:
     pace(page, 500)
 
     # --- Add second contact ---
-    add_contact_btn.scroll_into_view_if_needed()
+    add_contact_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, add_contact_btn)
     pace(page, 500)
@@ -181,14 +179,14 @@ def profile_editing(recording_page: Page) -> None:
 
     # --- Done editing entity ---
     done_btn = entity_card.locator("button:has-text('Done')")
-    done_btn.scroll_into_view_if_needed()
+    done_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, done_btn)
     pace(page, 800)
 
     # --- Submit the form ---
     create_btn = page.locator("button[type='submit']:has-text('Create Profile')")
-    create_btn.scroll_into_view_if_needed()
+    create_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, create_btn)
 
