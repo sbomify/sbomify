@@ -233,6 +233,152 @@ class TestComponentCbomIssuesTable:
 
 
 @pytest.mark.django_db
+class TestComponentHbomIssuesTable:
+    """The component page surfaces the newest hardware artifact's structure findings."""
+
+    def setup_method(self):
+        self.client = Client()
+
+    def _component_page(self, team, user, component):
+        self.client.login(username=user.username, password="test")
+        setup_test_session(self.client, team, user)
+        url = reverse("core:component_details", kwargs={"component_id": component.id})
+        return self.client.get(url)
+
+    def _component(self, team, name="Hardware Component"):
+        return Component.objects.create(
+            name=name,
+            team=team,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PRIVATE,
+        )
+
+    def _artifact(self, component, bom_type, **kwargs):
+        from sbomify.apps.sboms.models import SBOM
+
+        return SBOM.objects.create(
+            name=f"board-{bom_type}",
+            version="1.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename=f"{bom_type}.json",
+            bom_type=bom_type,
+            **kwargs,
+        )
+
+    def _run(self, artifact, findings, plugin_name="hbom-structure"):
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        return AssessmentRun.objects.create(
+            sbom=artifact,
+            plugin_name=plugin_name,
+            category="compliance",
+            status="completed",
+            result={"findings": findings},
+        )
+
+    def test_warning_rows_render_and_link_to_the_hbom(self, sample_team_with_owner_member, sample_user):
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = self._component(team)
+        hbom = self._artifact(component, SBOM.BomType.HBOM, has_hardware_components=True)
+        self._run(
+            hbom,
+            findings=[
+                {"title": "COMP_HASH declared on 5 of 5 devices", "status": "pass", "severity": "info"},
+                {
+                    "title": "cdx:device:quantity declared on 2 of 5 devices",
+                    "status": "warning",
+                    "severity": "medium",
+                    "description": "A part number without a count cannot be read as a parts list line.",
+                    "remediation": "Add a cdx:device:quantity property to each device.",
+                },
+            ],
+        )
+
+        response = self._component_page(team, sample_user, component)
+
+        assert response.status_code == 200
+        issues = response.context["latest_hbom_issues"]
+        assert [row["title"] for row in issues] == ["cdx:device:quantity declared on 2 of 5 devices"]
+        assert issues[0]["remediation"] == "Add a cdx:device:quantity property to each device."
+        assert response.context["latest_hbom_id"] == hbom.id
+        assert b"HBOM issues" in response.content
+        detail_url = reverse(
+            "core:component_item",
+            kwargs={"component_id": component.id, "item_type": "hbom", "item_id": hbom.id},
+        )
+        assert detail_url.encode() in response.content
+
+    def test_clean_hbom_renders_no_card(self, sample_team_with_owner_member, sample_user):
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = self._component(team)
+        self._run(
+            self._artifact(component, SBOM.BomType.HBOM, has_hardware_components=True),
+            findings=[{"title": "HBOM_AUTHOR present", "status": "pass", "severity": "info"}],
+        )
+
+        response = self._component_page(team, sample_user, component)
+
+        assert response.status_code == 200
+        assert response.context["latest_hbom_issues"] == []
+        assert b"HBOM issues" not in response.content
+
+    def test_component_without_hardware_artifact_renders_no_card(self, sample_team_with_owner_member, sample_user):
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = self._component(team, name="Software Only")
+        self._artifact(component, SBOM.BomType.SBOM)
+
+        response = self._component_page(team, sample_user, component)
+
+        assert response.status_code == 200
+        assert response.context["latest_hbom_issues"] == []
+        assert response.context["latest_hbom_id"] is None
+        assert b"HBOM issues" not in response.content
+
+    def test_hbom_outranks_a_newer_hardware_bearing_sbom(self, sample_team_with_owner_member, sample_user):
+        """A later software upload must not empty the card — the HBOM still owns the findings."""
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = self._component(team)
+        hbom = self._artifact(component, SBOM.BomType.HBOM, has_hardware_components=True)
+        self._run(hbom, findings=[{"title": "COMP_MANUFACTURER missing", "status": "warning", "severity": "medium"}])
+        self._artifact(component, SBOM.BomType.SBOM, has_hardware_components=True)
+
+        response = self._component_page(team, sample_user, component)
+
+        assert response.status_code == 200
+        assert response.context["latest_hbom_id"] == hbom.id
+        assert [row["title"] for row in response.context["latest_hbom_issues"]] == ["COMP_MANUFACTURER missing"]
+
+    def test_software_compliance_findings_do_not_reach_the_card(self, sample_team_with_owner_member, sample_user):
+        """NTIA scores a mixed hardware-bearing SBOM; none of that describes the parts list."""
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = self._component(team)
+        mixed = self._artifact(component, SBOM.BomType.SBOM, has_hardware_components=True)
+        self._run(
+            mixed,
+            findings=[{"title": "Supplier name missing", "status": "fail", "severity": "high"}],
+            plugin_name="ntia-minimum-elements-2021",
+        )
+
+        response = self._component_page(team, sample_user, component)
+
+        assert response.status_code == 200
+        assert response.context["latest_hbom_issues"] == []
+        assert b"HBOM issues" not in response.content
+
+
+@pytest.mark.django_db
 class TestComponentItemVexAliasEnrichment:
     """The VEX detail page enriches a suppression's display id/aliases from the
     component's latest scan (Dependency-Track's CVE vs. OSV's GHSA for the same
