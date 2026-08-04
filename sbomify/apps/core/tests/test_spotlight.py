@@ -1,0 +1,175 @@
+"""Spotlight destinations: the registry's integrity and the ranking rules.
+
+The registry test is the important one — it fails loudly on a URL name that
+does not resolve, so a typo in the JSON cannot ship as a dead palette entry.
+"""
+
+from __future__ import annotations
+
+import pytest
+from django.urls import reverse
+
+from sbomify.apps.core.spotlight import SECTION_ORDER, load_destinations, search_destinations
+
+
+class TestRegistryIntegrity:
+    def test_every_destination_resolves(self):
+        """A typo'd url_name would 404 a user; fail here instead."""
+        unresolved = [
+            d.url_name
+            for d in load_destinations()
+            if d.resolve(team_key="AAAAAAAA") is None
+        ]
+
+        assert unresolved == []
+
+    def test_every_section_is_known(self):
+        unknown = {d.section for d in load_destinations()} - set(SECTION_ORDER)
+
+        assert unknown == set()
+
+    def test_every_destination_has_keywords(self):
+        """The title is matched separately, so keywords exist to carry the
+        words we do NOT use in the UI. An entry without them is a missed
+        synonym, not a valid minimal entry."""
+        bare = [d.title for d in load_destinations() if not d.keywords]
+
+        assert bare == []
+
+    def test_titles_are_unique_within_a_section(self):
+        seen = {(d.section, d.title) for d in load_destinations()}
+
+        assert len(seen) == len(load_destinations())
+
+    def test_the_registry_is_not_empty(self):
+        assert len(load_destinations()) > 10
+
+
+class TestRanking:
+    def _titles(self, query, **kwargs):
+        kwargs.setdefault("role", "owner")
+        kwargs.setdefault("team_key", "AAAAAAAA")
+        return [r["title"] for r in search_destinations(query, **kwargs)]
+
+    def test_a_title_prefix_leads(self):
+        assert self._titles("plug")[0] == "Plugins"
+
+    def test_a_synonym_finds_the_page_that_does_not_use_the_word(self):
+        """Nothing in the UI says "api key"; someone typing it still wants
+        the tokens tab."""
+        assert "API tokens" in self._titles("api key")
+
+    def test_another_synonym_path(self):
+        assert "Billing" in self._titles("subscription")
+        assert "Branding" in self._titles("logo")
+        assert "Members" in self._titles("invite")
+
+    def test_an_exact_title_beats_a_keyword_match(self):
+        results = self._titles("billing")
+
+        assert results[0] == "Billing"
+
+    def test_an_empty_query_returns_nothing(self):
+        assert search_destinations("") == []
+
+    def test_results_are_stable_across_identical_queries(self):
+        """A palette that reshuffles under the cursor is worse than a
+        slightly worse-ranked one."""
+        assert self._titles("se") == self._titles("se")
+
+    def test_the_limit_is_honoured(self):
+        assert len(search_destinations("e", role="owner", team_key="AAAAAAAA", limit=3)) == 3
+
+
+class TestRoleVisibility:
+    def test_a_guest_does_not_see_admin_destinations(self):
+        titles = [r["title"] for r in search_destinations("token", role="guest", team_key="AAAAAAAA")]
+
+        assert "API tokens" not in titles
+
+    def test_an_owner_sees_owner_only_destinations(self):
+        titles = [r["title"] for r in search_destinations("billing", role="owner", team_key="AAAAAAAA")]
+
+        assert "Billing" in titles
+
+    def test_an_admin_does_not_see_owner_only_destinations(self):
+        titles = [r["title"] for r in search_destinations("billing", role="admin", team_key="AAAAAAAA")]
+
+        assert "Billing" not in titles
+
+    def test_a_blank_role_sees_only_unrestricted_entries(self):
+        """No workspace in session is the safe default: a palette entry is a
+        hint that a feature exists."""
+        titles = [r["title"] for r in search_destinations("workspace", role="", team_key="AAAAAAAA")]
+
+        assert "Workspace settings" not in titles
+        assert "Switch workspace" in titles
+
+
+class TestUrlBuilding:
+    def _find(self, title, **kwargs):
+        kwargs.setdefault("role", "owner")
+        kwargs.setdefault("team_key", "AAAAAAAA")
+        for result in search_destinations(title.lower(), **kwargs):
+            if result["title"] == title:
+                return result
+        return None
+
+    def test_a_fragment_destination_carries_its_tab(self):
+        result = self._find("API tokens")
+
+        assert result is not None
+        assert result["url"].endswith("#tokens")
+
+    def test_a_query_destination_carries_its_param(self):
+        result = self._find("New product")
+
+        assert result is not None
+        assert "new=1" in result["url"]
+
+    def test_a_team_scoped_destination_is_dropped_without_a_workspace(self):
+        """Better a missing row than a link that 500s on reverse()."""
+        titles = [r["title"] for r in search_destinations("supplier", role="owner", team_key="")]
+
+        assert "Suppliers" not in titles
+
+
+@pytest.mark.django_db
+class TestSearchEndpoint:
+    def test_destinations_outrank_a_same_named_product(self, client, sample_team_with_owner_member):
+        """The whole point of the brief: navigation first, assets last."""
+        from sbomify.apps.core.models import Product
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        Product.objects.create(team=member.team, name="Billing")
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        body = client.get(reverse("core:search"), {"q": "billing"}).json()
+
+        assert body["results"][0]["title"] == "Billing"
+        assert body["results"][0]["section"] == "settings"
+        # The product is still findable, just below.
+        assert any(r["section"] == "assets" for r in body["results"])
+
+    def test_the_legacy_keys_still_populate(self, client, sample_team_with_owner_member):
+        from sbomify.apps.core.models import Product
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        Product.objects.create(team=member.team, name="Gateway")
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        body = client.get(reverse("core:search"), {"q": "gateway"}).json()
+
+        assert [p["name"] for p in body["products"]] == ["Gateway"]
+
+    def test_a_short_query_returns_the_empty_shape(self, client, sample_team_with_owner_member):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        body = client.get(reverse("core:search"), {"q": "a"}).json()
+
+        assert body == {"products": [], "components": [], "results": []}
