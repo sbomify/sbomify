@@ -1,10 +1,12 @@
 {% extends "./dashboard_base.html.j2" %}
-{% block title %}Tailwind Components - sbomify{% endblock %}
+{% block title %}Design System - sbomify{% endblock %}
 {% block dashboard_content %}
     {# Toast and Confirmation Modal are already included via base.html.j2 #}
     <div class="mb-8">
-        <h1 class="text-2xl font-bold text-text mb-2">Tailwind CSS Component Library</h1>
-        <p class="text-text-muted">All reusable components converted to Tailwind CSS for the sbomify design system</p>
+        <h1 class="text-2xl font-bold text-text mb-2">sbomify Design System</h1>
+        <p class="text-text-muted">
+            Every component and pattern in the app, on one page. This is the source of truth for the sbomify design language — dev-only.
+        </p>
     </div>
     <div class="tw-dashboard-card mb-8">
         <div class="tw-card-header">
@@ -152,6 +154,66 @@
                     </div>
                 </div>
             </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Select, Checkbox & Radio</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                    {% include "components/tw/select.html.j2" with name="demo-select" label="Artifact type" options=demo_select_options selected="sbom" hint="Pick an artifact type." %}
+                    <div class="space-y-3 md:pt-7">
+                        {% include "components/tw/checkbox.html.j2" with name="demo-check" label="Email me about new advisories" checked=True %}
+                        <div class="flex flex-wrap gap-4">
+                            {% include "components/tw/radio.html.j2" with name="demo-radio" value="cyclonedx" label="CycloneDX" checked=True %}
+                            {% include "components/tw/radio.html.j2" with name="demo-radio" value="spdx" label="SPDX" %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Navigation</h4>
+                <div class="space-y-4 mb-3">
+                    {% include "components/tw/breadcrumb.html.j2" with items=demo_breadcrumbs %}
+                    {% include "components/tw/tabs.html.j2" with tabs=demo_tabs active="overview" %}
+                    {% include "components/tw/pagination.html.j2" with current=2 total=8 page_range=demo_page_range base_url="#" %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Dropdown, Button Link & Modal</h4>
+                <div class="flex flex-wrap items-center gap-3 mb-3"
+                     x-data="{ showDsModal: false }">
+                    {% include "components/tw/dropdown.html.j2" with id="ds-demo-dropdown" trigger_text="Actions" items=demo_dropdown_items %}
+                    {% include "components/tw/button_link.html.j2" with url="#" text="Button Link" variant="secondary" icon="fas fa-external-link-alt" %}
+                    <button type="button"
+                            class="tw-btn tw-btn-primary"
+                            @click="showDsModal = true">Open Modal</button>
+                    {% include "components/tw/modal.html.j2" with id="ds-demo-modal" title="Design System Modal" content='<p class="text-text-muted m-0">Rendered by the modal macro with an Alpine.js trigger.</p>' alpine_show="showDsModal" %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Toasts (static)</h4>
+                <div class="space-y-3 mb-3 max-w-md">
+                    {% include "components/tw/toast.html.j2" with variant="success" title="Saved" message="Your SBOM was uploaded." %}
+                    {% include "components/tw/toast.html.j2" with variant="danger" message="Upload failed. Try again." %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Code Block & Token Display</h4>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
+                    {% include "components/tw/code_block.html.j2" with code=demo_code language="bash" filename="upload-sbom.sh" %}
+                    {% include "components/tw/token_display.html.j2" with label="Access token" token="sbfy_demo_9F2kL8xQvR4tW7zN" %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Empty State</h4>
+                <div class="border border-dashed border-border rounded-lg mb-3">
+                    {% include "components/tw/empty_state.html.j2" with icon="fas fa-cube" title="No components yet" message="Create your first component to start collecting SBOMs and documents." action_text="Add Component" action_url="#" %}
+                </div>
+            </div>
+            <div class="mb-6">
+                <h4 class="font-semibold text-text mb-3">Card Variants (macro)</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                    {% include "components/tw/card.html.j2" with variant="settings" title="Settings Card" subtitle="With icon header" icon="fas fa-gear" content='<p class="text-sm text-text-muted m-0">Body content rendered via the card macro.</p>' %}
+                    {% include "components/tw/card.html.j2" with variant="dashboard" title="Dashboard Card" subtitle="Default body" content='<p class="text-sm text-text-muted m-0">Body content rendered via the card macro.</p>' %}
+                </div>
+            </div>
             <div class="mt-6 pt-6 border-t border-border">
                 <h4 class="font-semibold text-text mb-3">Available Components</h4>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
@@ -181,6 +243,9 @@
                     <code class="bg-muted px-2 py-1 rounded">pagination.html.j2</code>
                     <code class="bg-muted px-2 py-1 rounded">code_block.html.j2</code>
                     <code class="bg-muted px-2 py-1 rounded">token_display.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">confirm_modal.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">toast_container.html.j2</code>
+                    <code class="bg-muted px-2 py-1 rounded">analytics_consent.html.j2</code>
                 </div>
             </div>
         </div>
