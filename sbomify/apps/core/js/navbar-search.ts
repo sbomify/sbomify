@@ -7,10 +7,14 @@
  * order the server ranked it — the client does no re-sorting, so changing
  * priorities is a server-side concern only.
  *
- * Deliberately plain markup: the palette's visual design is a follow-up, and
- * a thin renderer is easier to replace than a clever one. Arrow keys, Enter
- * and Escape work because a palette nobody can drive from the keyboard is not
- * a palette.
+ * Markup is Tailwind utilities matching the header's own dropdown. The
+ * previous `search-result-*` class names pointed at layout.css, which the
+ * Tailwind migration dropped from the pipeline — every rule was dead, which
+ * is why the rows rendered unstyled with the chevron wrapping onto its own
+ * line.
+ *
+ * Arrow keys, Enter and Escape work because a palette nobody can drive from
+ * the keyboard is not a palette.
  */
 
 interface SpotlightResult {
@@ -64,40 +68,44 @@ function groupBySection(results: SpotlightResult[]): { sections: SpotlightResult
 
 function renderResults(results: SpotlightResult[], query: string): string {
   if (!results.length) {
-    return `<div class="search-results-empty"><p class="text-muted mb-0">No results for "${escapeHtml(query)}"</p></div>`;
+    return `<p class="px-4 py-6 text-center text-sm text-text-muted m-0">No results for "${escapeHtml(query)}"</p>`;
   }
 
-  let html = '<div class="search-results-content">';
+  let html = '';
   let index = 0;
 
   for (const section of groupBySection(results).sections) {
-    html += `
-      <div class="search-results-section">
-        <div class="search-results-section-header"><span>${escapeHtml(section[0].section_label)}</span></div>
-        <div class="search-results-list">
-    `;
+    html += `<div class="px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-text-muted">${escapeHtml(
+      section[0].section_label
+    )}</div>`;
     for (const result of section) {
       html += `
-        <a href="${escapeHtml(result.url)}" class="search-result-item" data-index="${index}">
-          <div class="search-result-item-content">
-            <div class="search-result-item-name"><i class="fas ${escapeHtml(result.icon)} me-2"></i>${escapeHtml(result.title)}</div>
-          </div>
-          <i class="fas fa-chevron-right search-result-item-arrow"></i>
+        <a href="${escapeHtml(result.url)}"
+           class="spotlight-item group flex items-center gap-3 px-4 py-2.5 text-sm text-text no-underline transition-colors hover:bg-background"
+           role="option"
+           data-index="${index}">
+          <i class="fas ${escapeHtml(result.icon)} w-4 shrink-0 text-center text-text-muted"></i>
+          <span class="flex-1 min-w-0 truncate">${escapeHtml(result.title)}</span>
+          <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-text-muted opacity-0 group-[.is-active]:opacity-100">enter</span>
         </a>
       `;
       index += 1;
     }
-    html += '</div></div>';
   }
 
-  html += '</div>';
   return html;
 }
 
 function highlightActive(dropdown: HTMLElement): void {
-  dropdown.querySelectorAll('.search-result-item').forEach((el, i) => {
-    el.classList.toggle('is-active', i === activeIndex);
-    if (i === activeIndex) el.scrollIntoView({ block: 'nearest' });
+  dropdown.querySelectorAll('.spotlight-item').forEach((el, i) => {
+    const active = i === activeIndex;
+    // The class drives the "enter" hint via group-[.is-active]; the
+    // background is toggled alongside it so keyboard selection and hover
+    // look identical — Tailwind has no hover-equivalent for "selected".
+    el.classList.toggle('is-active', active);
+    el.classList.toggle('bg-background', active);
+    el.setAttribute('aria-selected', String(active));
+    if (active) el.scrollIntoView({ block: 'nearest' });
   });
 }
 
@@ -134,8 +142,7 @@ async function performSearch(query: string): Promise<void> {
     highlightActive(dropdown);
   } catch {
     if (query !== currentSearchQuery) return;
-    dropdown.innerHTML =
-      '<div class="search-results-empty"><p class="text-danger mb-0">Search is unavailable right now.</p></div>';
+    dropdown.innerHTML = '<p class="px-4 py-6 text-center text-sm text-danger m-0">Search is unavailable right now.</p>';
     dropdown.style.display = 'block';
   }
 }
