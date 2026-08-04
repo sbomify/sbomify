@@ -897,6 +897,23 @@ class TestStep1EuRepresentation:
         assert assessment.authorized_rep_name == "Acme EU Compliance BV"
         assert assessment.authorized_rep_is_complete is True
 
+    def test_step_1_rejects_a_value_longer_than_its_column(self, assessment, sample_user):
+        """A 400, not a 500. The generic 4000-char cap is far above the
+        CharField/EmailField widths these fields land in, so an over-long value
+        used to pass validation and be rejected by the database instead."""
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        result = save_step_data(
+            assessment,
+            1,
+            {"authorized_rep_name": "A" * 300},
+            sample_user,
+        )
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert "255" in (result.error or "")
+
     def test_step_1_refuses_non_eu_without_a_representative(self, assessment, sample_user):
         from sbomify.apps.compliance.services.wizard_service import save_step_data
 

@@ -29,7 +29,7 @@
 {% if authorized_rep_name %}
 ## 2a. Authorised Representative
 
-Appointed under CRA Art. 22 because the manufacturer is not established in the Union.
+{% if authorized_rep_required %}Appointed under CRA Art. 22 because the manufacturer is not established in the Union.{% else %}Appointed by the manufacturer. This assessment does not record an Art. 22 obligation, which arises only for manufacturers established outside the Union.{% endif %}
 
 - **Name:** {{ authorized_rep_name }}
 {% if authorized_rep_address %}

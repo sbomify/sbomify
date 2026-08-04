@@ -354,7 +354,12 @@ def _build_common_context(assessment: CRAAssessment) -> dict[str, Any]:
         "authorized_rep_required": assessment.requires_authorized_representative,
         "authorized_rep_name": _sanitize(assessment.authorized_rep_name, escape_markdown=True),
         "authorized_rep_address": _sanitize(assessment.authorized_rep_address, escape_markdown=True),
-        "authorized_rep_email": _sanitize(assessment.authorized_rep_email),
+        # Escaped like the other AR fields. The nearby manufacturer emails come
+        # from a validated EmailField on the contact profile; this one is typed
+        # into the wizard's Step 1 payload and reaches the document unchecked,
+        # so without escaping a value like ``[x](http://evil)`` renders as a
+        # link in the declaration.
+        "authorized_rep_email": _sanitize(assessment.authorized_rep_email, escape_markdown=True),
         "authorized_rep_mandate_date": (
             assessment.authorized_rep_mandate_date.isoformat() if assessment.authorized_rep_mandate_date else None
         ),

@@ -736,9 +736,16 @@ def _save_step_1(
                 continue
             if not isinstance(raw, str):
                 return ServiceResult.failure(f"{field} must be a string", status_code=400)
-            if len(raw) > _MAX_STEP_1_TEXT_CHARS:
+            # The column's own limit where it has one, the generic cap for the
+            # unbounded text fields. Checking only the generic cap let a value
+            # longer than a CharField's max_length through to save(), where the
+            # database rejected it and the caller got a 500 for what is plainly
+            # bad input. Reading max_length off the field keeps this honest if
+            # a column is later widened.
+            cap = getattr(assessment._meta.get_field(field), "max_length", None) or _MAX_STEP_1_TEXT_CHARS
+            if len(raw) > cap:
                 return ServiceResult.failure(
-                    f"{field} exceeds the {_MAX_STEP_1_TEXT_CHARS}-character cap",
+                    f"{field} exceeds the {cap}-character cap",
                     status_code=400,
                 )
             setattr(assessment, field, raw)
