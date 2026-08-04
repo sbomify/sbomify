@@ -131,17 +131,25 @@
                                       :title="item.sbom.version"></span>
                             </td>
                             {% if not is_public_view %}
+                                {% comment %}
+                                Every branch is gated on bomType, not just on whether a scan record
+                                exists: a record outlives the type it ran against. A hardware BOM
+                                misfiled as sbom gets scanned, matches nothing (hardware carries no
+                                PURLs), and stores a zero-finding run; retagging it to hbom leaves
+                                that run attached, so gating on the record alone would show a green
+                                Clean badge earned by a scan that matched nothing.
+                                {% endcomment %}
                                 <td class="whitespace-nowrap">
                                     <template x-if="!item.vuln && bomType === 'sbom'">
                                         <span class="text-text-muted text-sm">Not scanned</span>
                                     </template>
-                                    <template x-if="!item.vuln && bomType !== 'sbom'">
+                                    <template x-if="bomType !== 'sbom'">
                                         <span class="text-text-muted text-sm">—</span>
                                     </template>
-                                    <template x-if="item.vuln && item.vuln.total === 0">
+                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0">
                                         <span class="tw-badge-success text-xs">Clean</span>
                                     </template>
-                                    <template x-if="item.vuln && item.vuln.total > 0">
+                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total > 0">
                                         <div class="flex items-center gap-1.5 flex-wrap">
                                             <template x-if="item.vuln.critical > 0">
                                                 <span class="px-2 py-0.5 rounded text-xs font-bold bg-danger/10 text-danger"
