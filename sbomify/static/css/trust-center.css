@@ -827,35 +827,46 @@
     font-weight: 500;
 }
 
-.tc-filter-search {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    background: var(--bg-primary);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+/* The webapp's data-table search box placed in a section head (products table
+   on the overview) sits on the heading's baseline row — centre it instead. */
+.tc-section-head .tw-data-table-search {
+    align-self: center;
 }
 
-.tc-filter-search:focus-within {
+/* The same search box slotted into the advisories filter sidebar: the input
+   flexes to the column instead of holding its toolbar min-width, which would
+   overflow the sidebar. */
+.tc-filter-search-slot {
+    width: 100%;
+}
+
+.tc-filter-search-slot .tw-data-table-search-input {
+    width: 100%;
+    min-width: 0;
+}
+
+/* The webapp toolbar's band and divider are declared with color-mix over
+   variables the public theme defines as RGB triplets (see the tw-table note
+   above) — redeclare them in the form these pages use. */
+.tc-panel .tw-data-table-toolbar {
+    background: rgb(var(--color-background) / 0.5);
+    border-bottom: 1px solid rgb(var(--color-border) / 0.7);
+}
+
+/* Same triplet fix for the search input and select the toolbar carries —
+   their borders, surfaces and focus rings all resolve through the webapp's
+   colour variables and silently vanish on the public theme. */
+.public-page .tw-data-table-search-input,
+.public-page .tw-data-table-page-size-select {
+    background-color: rgb(var(--color-surface));
+    border: 1px solid rgb(var(--color-border));
+    color: rgb(var(--color-text));
+}
+
+.public-page .tw-data-table-search-input:focus,
+.public-page .tw-data-table-page-size-select:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15);
-}
-
-.tc-filter-search i {
-    color: var(--text-muted);
-    font-size: 0.8125rem;
-}
-
-.tc-filter-search input {
-    flex: 1;
-    min-width: 0;
-    border: 0;
-    background: transparent;
-    font-size: 0.875rem;
-    color: var(--text-primary);
-    outline: none;
 }
 
 /* Only reachable with JavaScript off, where the filters cannot self-apply. */
@@ -1070,12 +1081,15 @@
    min-width is set so the full column set fits the 1200px content container
    once the 15rem sidebar and its gap are subtracted — the Updated column being
    clipped by default would hide the one date a reader checks for freshness. */
+/* Auto layout, not fixed: the version-range cells are nowrap, and a fixed
+   grid would let a long range run under its neighbour instead of widening
+   the column. The percentage widths on the tc-col-* classes still shape the
+   proportions; tc-table-wrap scrolls sideways when ranges outgrow the page. */
 .tc-adv-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8125rem;
     min-width: 52rem;
-    table-layout: fixed;
 }
 
 .tc-adv-table thead th {
@@ -1119,12 +1133,18 @@
 
 .tc-col-summary {
     width: 26%;
+    /* Auto table layout gives the nowrap version columns whatever they ask
+       for; without a floor the summary is what they take it from. */
+    min-width: 18rem;
 }
 
+/* Version, range and date cells never wrap — a broken "= 2.0" on its own
+   line reads as a different constraint. tc-table-wrap scrolls sideways
+   instead when the ranges outgrow the viewport. */
 .tc-col-product {
     width: 15%;
     color: var(--text-primary);
-    word-break: break-word;
+    white-space: nowrap;
 }
 
 .tc-col-versions {
@@ -1132,7 +1152,7 @@
     font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
     font-size: 0.75rem;
     line-height: 1.6;
-    word-break: break-word;
+    white-space: nowrap;
 }
 
 .tc-col-date {
@@ -1140,6 +1160,7 @@
     font-size: 0.75rem;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 /* The CVSS chip. Colour carries the severity band, and the number carries the
@@ -1389,11 +1410,43 @@
     min-width: 34rem;
 }
 
-/* A table whose columns already collapse responsively (the product releases
-   list hides its date column under md) — the blanket min-width would force a
-   two-column table to scroll sideways on phones for nothing. */
-.tc-table.tc-table-fit {
-    min-width: 0;
+/* A panel whose children manage their own padding (the tw-table data tables
+   and the release artifacts table's search bar and rows each carry their
+   own) — the panel contributes only the border, radius and surface. */
+.tc-panel.tc-panel-flush {
+    padding: 0;
+    overflow: hidden;
+}
+
+/* tw-table's own row divider and header band are declared over the webapp's
+   --color-border / --color-background, which the public pages define as RGB
+   triplets — those declarations silently fail here, leaving rows undivided
+   and the header bare. Redeclare them in the triplet form these pages
+   actually use: the header gets the webapp's soft band and full border, rows
+   a half-strength hairline. The last row's divider would double up against
+   the panel's own bottom border, so it is dropped. */
+.tc-panel .tw-table th {
+    background-color: rgb(var(--color-background));
+    border-bottom: 1px solid rgb(var(--color-border));
+}
+
+.tc-panel .tw-table td {
+    border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+}
+
+.tc-panel .tw-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+/* Pager footer under a flush-panel table. Tailwind's border-border utility
+   resolves --color-border to the public theme's RGB triplet and falls back
+   to currentColor (near-black); declare the hairline in the triplet form. */
+.tc-pager-foot {
+    border-top: 1px solid rgb(var(--color-border) / 0.7);
+}
+
+.tc-panel-flush .tc-panel-title {
+    padding: 1.125rem 1.5rem 0;
 }
 
 .tc-table th {
