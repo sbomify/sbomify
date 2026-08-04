@@ -788,6 +788,14 @@ def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
         return status, result
 
     assert isinstance(result, ProductLookupResult)
+    # _get_product_with_instance only checks access for private products — a
+    # public one is readable by anyone, which is right for the product page and
+    # wrong here. Readiness lists the product's unresolved critical and high
+    # findings by advisory id, which is internal remediation state and not
+    # something being publicly listed makes public.
+    if not can(request, "product:manage", result.instance):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
     readiness = eol_readiness(result.instance)
     payload = asdict(readiness)
     # The derived verdicts are the point of the endpoint; a caller should not

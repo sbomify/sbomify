@@ -73,7 +73,10 @@ class EolReadiness:
                 f"{len(self.unresolved_high)} high finding(s) neither patched nor risk-accepted (checklist 6.1.6)."
             )
         if not self.has_final_sbom:
-            problems.append("No SBOM on the product's latest release to publish as the final one (checklist 6.1.6).")
+            problems.append(
+                "No SBOM on the release chosen as final to publish (checklist 6.1.6). "
+                "The newest versioned release is chosen, not the floating latest pointer."
+            )
         return problems
 
 
@@ -92,8 +95,13 @@ def _final_release(product: Any) -> Any:
     """
     from sbomify.apps.core.models import Release
 
+    # Ordered the way Release itself is ordered: released_at first, created_at
+    # only to break ties. A release row can be created before an earlier-dated
+    # one is published, and sorting on created_at alone would then call the
+    # wrong release final.
     releases = Release.objects.filter(product=product)
-    return releases.filter(is_latest=False).order_by("-created_at").first() or releases.order_by("-created_at").first()
+    newest = ("-released_at", "-created_at")
+    return releases.filter(is_latest=False).order_by(*newest).first() or releases.order_by(*newest).first()
 
 
 def eol_readiness(
@@ -130,9 +138,12 @@ def eol_readiness(
     if not components:
         return readiness
 
-    # A live acceptance keyed by advisory id. Component-scoped, because that
-    # is the scope a triage decision is recorded at.
-    accepted: set[str] = set()
+    # Live acceptances keyed by (component, advisory id). A triage decision is
+    # recorded against one component, so a single set of advisory ids would let
+    # an acceptance on component A clear the same advisory on component B — the
+    # readiness check would then report fewer blockers than there are, which is
+    # the direction that matters here.
+    accepted: set[tuple[str, str]] = set()
     for component in components:
         for statement in current_triage_index(component).values():
             if statement.get("state") != risk_accepted_state:
@@ -140,7 +151,7 @@ def eol_readiness(
             raw = statement.get("accepted_until")
             try:
                 if raw and date.fromisoformat(str(raw)) >= today:
-                    accepted.add((statement.get("id") or "").lower())
+                    accepted.add((str(component.id), (statement.get("id") or "").lower()))
             except ValueError:
                 continue
     readiness.accepted_count = len(accepted)
@@ -149,7 +160,7 @@ def eol_readiness(
         component__in=components, resolved_at__isnull=True, severity__in=("critical", "high")
     ).only("advisory_id", "severity", "component_id", "first_seen_at")
     for row in open_rows:
-        if row.advisory_id.lower() in accepted:
+        if (str(row.component_id), row.advisory_id.lower()) in accepted:
             continue
         entry = {
             "advisory_id": row.advisory_id,

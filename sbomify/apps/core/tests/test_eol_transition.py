@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
+from django.utils import timezone
 
 from sbomify.apps.core.models import Product, Release, ReleaseArtifact
 from sbomify.apps.core.services.eol import (
@@ -211,9 +212,7 @@ class TestApproachingSweep:
         """The case most worth surfacing: a product that quietly passed EOL
         without an announcement."""
         team = sample_team_with_owner_member.team
-        lapsed = Product.objects.create(
-            team=team, name="Long Gone", end_of_life=date.today() - timedelta(days=400)
-        )
+        lapsed = Product.objects.create(team=team, name="Long Gone", end_of_life=date.today() - timedelta(days=400))
 
         assert lapsed in products_approaching_eol(team, within_days=30)
 
@@ -246,3 +245,69 @@ class TestReadinessEndpoint:
         assert body["unresolved_critical"][0]["advisory_id"] == "CVE-2026-200"
         assert body["end_of_life"] == product.end_of_life.isoformat()
         assert "critical" in body["problems"][0]
+
+    def test_a_public_product_does_not_expose_readiness_to_outsiders(self, eol_product, guest_user):
+        """Readiness lists unresolved critical and high findings by advisory id.
+        Making a product public publishes the product, not its open remediation
+        work, and the shared product lookup only enforces access when the
+        product is private."""
+        from django.test import Client
+
+        product, component = eol_product
+        product.is_public = True
+        product.save()
+        _open_finding(component, "CVE-2026-201", "critical")
+
+        client = Client()
+        client.force_login(guest_user)
+        response = client.get(f"/api/v1/products/{product.id}/eol-readiness")
+
+        assert response.status_code == 403
+
+
+class TestAcceptanceScope:
+    def test_an_acceptance_on_one_component_does_not_clear_another(
+        self, eol_product, sample_team_with_owner_member, monkeypatch
+    ):
+        """A triage decision is recorded against a single component, so the same
+        advisory open on a second component is still a blocker. Keying the
+        acceptance set on advisory id alone under-reported blockers, which is
+        the wrong direction for a check that gates retiring a product."""
+        product, first = eol_product
+        second = Component.objects.create(team=sample_team_with_owner_member.team, name="Gateway Bootloader")
+        product.components.add(second)
+        _open_finding(first, "CVE-2026-300", "critical")
+        _open_finding(second, "CVE-2026-300", "critical")
+
+        live = (date.today() + timedelta(days=30)).isoformat()
+        monkeypatch.setattr(
+            "sbomify.apps.vulnerability_scanning.triage.current_triage_index",
+            lambda component: (
+                {("v", "CVE-2026-300"): {"id": "CVE-2026-300", "state": "risk_accepted", "accepted_until": live}}
+                if component.id == first.id
+                else {}
+            ),
+        )
+
+        readiness = eol_readiness(product)
+
+        # Only the unaccepted one blocks.
+        assert [entry["component_id"] for entry in readiness.unresolved_critical] == [str(second.id)]
+
+
+class TestFinalReleaseOrdering:
+    def test_the_release_published_last_wins_over_the_row_created_last(self, eol_product):
+        """Release orders on released_at first. A row can be created before an
+        earlier-dated one is published, so sorting on created_at alone picks the
+        wrong release as final."""
+        from sbomify.apps.core.services.eol import _final_release
+
+        product, _ = eol_product
+        older = Release.objects.create(product=product, name="v1.0.0", version="1.0.0")
+        newer = Release.objects.create(product=product, name="v2.0.0", version="2.0.0")
+        # Created second, released first.
+        now = timezone.now()
+        Release.objects.filter(pk=newer.pk).update(released_at=now - timedelta(days=10))
+        Release.objects.filter(pk=older.pk).update(released_at=now)
+
+        assert _final_release(product).pk == older.pk
