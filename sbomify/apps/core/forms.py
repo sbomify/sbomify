@@ -72,8 +72,13 @@ class CreateAccessTokenForm(forms.Form):
             return cleaned
 
         value = cleaned.get("custom_expiry_value")
-        if not value:
-            self.add_error("custom_expiry_value", "Enter how long the token should last.")
+        if value is None:
+            # Only when the field is genuinely empty. A value the field itself
+            # rejected — a 0, a negative, something non-numeric — is also absent
+            # from cleaned_data, and adding "enter how long" underneath the
+            # field's own message tells the user to do what they just did.
+            if "custom_expiry_value" not in self.errors:
+                self.add_error("custom_expiry_value", "Enter how long the token should last.")
             return cleaned
         hours = value * (self.DAY if cleaned.get("custom_expiry_unit") == "days" else self.HOUR)
         if hours > self.MAX_CUSTOM_HOURS:

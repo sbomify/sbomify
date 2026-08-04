@@ -347,6 +347,21 @@ class TestCreateAccessTokenFormExpiry:
         assert not form.is_valid()
         assert "custom_expiry_value" in form.errors
 
+    def test_a_rejected_value_gets_one_message_not_two(self):
+        """A 0 is caught by the field's own min_value. Adding "enter how long"
+        underneath it tells the user to do the thing they just did."""
+        form = CreateAccessTokenForm(
+            {
+                "description": "CI token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "0",
+                "custom_expiry_unit": "hours",
+            }
+        )
+
+        assert not form.is_valid()
+        assert len(form.errors["custom_expiry_value"]) == 1
+
     def test_a_custom_ttl_beyond_a_year_is_rejected(self):
         """Past a year the row is indistinguishable from "never"; say so
         rather than pretending to honour it."""
