@@ -442,6 +442,9 @@ def build_export_package(
         content_hash=content_hash,
         manifest=manifest,
         created_by=user,
+        # Pinned at creation: the Art. 13(15) floor must survive later
+        # changes to the product's declared support period.
+        retain_until=CRAExportPackage.retention_floor(assessment),
     )
 
     return ServiceResult.success(package)

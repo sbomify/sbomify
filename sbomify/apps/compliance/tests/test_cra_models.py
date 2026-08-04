@@ -280,3 +280,68 @@ class TestCRAExportPackage:
         )
         assert "Export package" in str(pkg)
         assert str(pkg.pk) in str(pkg)
+
+
+@pytest.mark.django_db
+class TestExportPackageRetention:
+    """CRA Art. 13(15): the exported bundle is the durable evidence, so its
+    retention floor is pinned at creation and cleanup must respect it."""
+
+    def _package(self, assessment, **overrides):
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        defaults = dict(
+            assessment=assessment,
+            storage_key="compliance/exports/x/deadbeef.zip",
+            content_hash="0" * 64,
+            manifest={"files": []},
+            retain_until=CRAExportPackage.retention_floor(assessment),
+        )
+        defaults.update(overrides)
+        return CRAExportPackage.objects.create(**defaults)
+
+    def test_floor_is_ten_years_when_support_ends_sooner(self, cra_assessment):
+        from datetime import date, timedelta
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        cra_assessment.support_period_end = date.today() + timedelta(days=365)
+        floor = CRAExportPackage.retention_floor(cra_assessment)
+
+        assert floor >= date.today() + timedelta(days=365 * 10)
+
+    def test_floor_is_the_support_period_when_longer(self, cra_assessment):
+        from datetime import date, timedelta
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        far = date.today() + timedelta(days=365 * 15)
+        cra_assessment.support_period_end = far
+
+        assert CRAExportPackage.retention_floor(cra_assessment) == far
+
+    def test_package_inside_the_floor_is_retained_and_undeletable_by_sweeps(self, cra_assessment):
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        package = self._package(cra_assessment)
+
+        assert package.is_retained is True
+        assert package not in CRAExportPackage.past_retention()
+
+    def test_package_past_the_floor_becomes_sweepable(self, cra_assessment):
+        from datetime import date, timedelta
+
+        package = self._package(cra_assessment, retain_until=date.today() - timedelta(days=1))
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        assert package.is_retained is False
+        assert list(CRAExportPackage.past_retention()) == [package]
+
+    def test_legacy_rows_without_a_floor_are_retained_forever(self, cra_assessment):
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        package = self._package(cra_assessment, retain_until=None)
+
+        assert package.is_retained is True
+        assert package not in CRAExportPackage.past_retention()
