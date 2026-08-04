@@ -105,13 +105,28 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 
 **Accent icon chip:** `background-color: color-mix(in oklab, var(--accent) 12%, transparent); color: var(--accent);`
 
-## Extending the library
+## Creating a new component
 
-Checklist for a new component or variant (all in one PR):
+**The decision rule.** When you need UI that doesn't exist yet:
 
-1. CSS in the matching `Component Classes -` section of `tailwind.src.css`, built from tokens, parameterized if it has variants.
+1. **It exists** → use it (inventory above / gallery).
+2. **It's a variant of an existing family** (new color, size, emphasis) → add a modifier class that sets the family's custom properties. Never fork the base rules.
+3. **It's genuinely new** → build it **in the library**, then consume it from your feature — never define it inside an app template or app-level CSS. Pages may *compose* library components with layout utilities (grid/flex/spacing); the moment you write component-like markup — a styled control, a repeated visual pattern, anything that wants its own class — it belongs to the library, even if today it has one caller.
+4. **You find an existing in-app one-off** that should be shared → promote it: move it into the library, replace the original usage, don't copy it.
+
+**Conventions for new components:**
+
+- **CSS naming**: block `tw-<component>`, parts `tw-<component>-<part>`, modifiers `tw-<component>-<variant|size>` (e.g. `tw-stat-card`, `tw-stat-label`, `tw-stat-accent-danger`). Accent parameterization uses `--<component>-accent`. CSS lives in `tailwind.src.css` under the matching `Component Classes - <Name>` banner, or a new banner section for a new family.
+- **Macro API**: file `components/tw/<component>.html.j2`, snake_case, Django template syntax. Reuse the standard param names — `name`, `label`, `variant`, `size`, `checked`/`disabled`, `class` (extra classes), `attrs` (raw attribute passthrough, rendered `{{ attrs|safe }}`). List-shaped params come from the view context.
+- **Style real elements.** State styling hangs off the actual interactive element (`input.tw-toggle:checked`, `:disabled`, `:focus-visible`) — not decorative siblings that can't carry state. (The toggle shipped broken for exactly this reason.)
+- **Accessibility floor**: correct roles/aria (`role="progressbar"`, `aria-label` on icon-only controls), visible `:focus-visible` ring from the primary token, ≥44px touch targets for primary controls (36px acceptable for compact variants), `prefers-reduced-motion` respected for any animation.
+- **Design-language conformance**: derive every visual decision from the language section above. If the new component needs a pattern the language doesn't cover, extend the language section in the same PR — don't invent silently.
+
+**Ship checklist** (all in one PR):
+
+1. CSS in `tailwind.src.css` per the conventions above, built from tokens, parameterized if it has variants.
 2. A Jinja include in `components/tw/` if it has reusable markup.
-3. A demo in the gallery (`core/design_system.html.j2`) plus an inventory row here.
+3. A demo in the gallery (`core/design_system.html.j2`) plus an inventory row in this document.
 4. Verify in the gallery in **both themes**; run `bun run build`, `uv run djlint … --lint`, and the design-system view tests.
 
 ## Anti-patterns (review blockers)
@@ -120,5 +135,5 @@ Checklist for a new component or variant (all in one PR):
 - Raw hex/rgb values, or Bootstrap classes (`btn`, `card`, `row`) in new work
 - Hover lift/motion on containers; ambient infinite animation outside loading states
 - Raw accent color as text on its own tint (fails contrast)
-- One-off component variants defined inside an app template instead of the library
+- New components or variants defined inside an app template or app CSS instead of the library
 - New UI merged without a gallery demo
