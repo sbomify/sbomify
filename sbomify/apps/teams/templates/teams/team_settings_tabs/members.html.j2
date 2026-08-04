@@ -1,7 +1,7 @@
 {% load teams %}
 {# Incoming workspace invitations for the current user #}
 {% if pending_invitations %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border/40">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -62,7 +62,7 @@
     </div>
 {% endif %}
 {# Workspace Members Card #}
-<div class="tw-settings-card">
+<div class="tw-dashboard-card mb-6">
     <div class="px-6 py-4 border-b border-border/40">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -135,7 +135,7 @@
 {% endif %}
 {# Pending Invitations Card #}
 {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-    <div class="tw-settings-card mt-6">
+    <div class="tw-dashboard-card mb-6 mt-6">
         <div class="px-6 py-4 border-b border-border/40">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">

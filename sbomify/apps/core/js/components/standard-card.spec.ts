@@ -135,14 +135,6 @@ describe('StandardCard Business Logic', () => {
       expect(mockCard.variant).toBe('modal')
     })
 
-    test('should support settings variant', () => {
-      const mockCard = {
-        title: 'Settings',
-        variant: 'settings' as const
-      }
-
-      expect(mockCard.variant).toBe('settings')
-    })
   })
 
   describe('Size and Shadow Support', () => {
@@ -201,9 +193,6 @@ describe('StandardCard Business Logic', () => {
             break
           case 'modal':
             classes.push('modal-card')
-            break
-          case 'settings':
-            classes.push('settings-card')
             break
         }
 
@@ -556,7 +545,7 @@ describe('StandardCard Business Logic', () => {
         defaultExpanded: false,
         infoIcon: 'fas fa-warning',
         storageKey: 'complex-card',
-        variant: 'settings' as const,
+        variant: 'modal' as const,
         size: 'large' as const,
         emphasis: false,
         centerContent: false,
@@ -594,7 +583,7 @@ describe('StandardCard Business Logic', () => {
       expect(hasHeaderActions).toBe(true)
       expect(mockCard.title).toBe('Complex Card')
       expect(mockCard.infoIcon).toBe('fas fa-warning')
-      expect(mockCard.variant).toBe('settings')
+      expect(mockCard.variant).toBe('modal')
       expect(mockCard.size).toBe('large')
       expect(mockCard.noPadding).toBe(true)
       expect(mockCard.shadow).toBe('lg')

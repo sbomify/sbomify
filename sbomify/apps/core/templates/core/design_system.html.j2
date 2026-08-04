@@ -210,7 +210,7 @@
             <div class="mb-6">
                 <h4 class="font-semibold text-text mb-3">Card Variants (macro)</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                    {% include "components/tw/card.html.j2" with variant="settings" title="Settings Card" subtitle="With icon header" icon="fas fa-gear" content='<p class="text-sm text-text-muted m-0">Body content rendered via the card macro.</p>' %}
+                    {% include "components/tw/card.html.j2" with variant="danger" title="Danger Card" subtitle="For destructive actions" content='<p class="text-sm text-text-muted m-0">Body content rendered via the card macro.</p>' %}
                     {% include "components/tw/card.html.j2" with variant="dashboard" title="Dashboard Card" subtitle="Default body" content='<p class="text-sm text-text-muted m-0">Body content rendered via the card macro.</p>' %}
                 </div>
             </div>
@@ -318,16 +318,6 @@
                 </div>
                 <div class="tw-card-footer">
                     <button class="tw-btn-primary tw-btn-sm">Action</button>
-                </div>
-            </div>
-            <div class="tw-settings-card mb-0">
-                <div class="tw-card-header">
-                    <h3 class="text-base font-semibold text-text">Settings Card</h3>
-                </div>
-                <div class="tw-card-body">
-                    <p class="text-text-muted text-sm">
-                        For configuration pages. Use <code class="text-primary text-xs">.tw-settings-card</code>
-                    </p>
                 </div>
             </div>
             <div class="tw-dangerzone-card">

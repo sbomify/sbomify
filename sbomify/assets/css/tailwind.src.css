@@ -722,7 +722,6 @@ html.no-transitions * {
    ============================================ */
 .tw-card,
 .tw-dashboard-card,
-.tw-settings-card,
 .tw-dangerzone-card {
   background-color: var(--color-surface);
   border-radius: 0.75rem;
@@ -731,8 +730,7 @@ html.no-transitions * {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.tw-card:hover,
-.tw-settings-card:hover {
+.tw-card:hover {
   box-shadow: var(--shadow-card-hover);
 }
 
@@ -758,15 +756,6 @@ html.no-transitions * {
   animation: fadeInUp 0.4s ease-out;
   position: relative;
   overflow: hidden;
-}
-
-/* Settings Card - with margin bottom */
-.tw-settings-card {
-  margin-bottom: 1.5rem;
-}
-
-.tw-settings-card:hover {
-  border-color: var(--color-border-light);
 }
 
 /* Danger Zone Card - red accent */
@@ -2458,8 +2447,7 @@ html.no-transitions * {
 
 /* Strip nested border/radius when data table is inside a card */
 .tw-card .tw-data-table,
-.tw-dashboard-card .tw-data-table,
-.tw-settings-card .tw-data-table {
+.tw-dashboard-card .tw-data-table {
   border: none;
   border-radius: 0;
   background-color: transparent;
@@ -5197,7 +5185,7 @@ html.no-transitions * {
 
 /* The panel is a plain container, not a surface.
 
-   Each section template already opens with its own .tw-settings-card, and those
+   Each section template already opens with its own .tw-dashboard-card, and those
    are the design. Wrapping them in a second card put boxes inside a box;
    flattening them instead left the page unstructured. So the cards stay as they
    are and the wrapper adds nothing but a landmark — which also means the cards'

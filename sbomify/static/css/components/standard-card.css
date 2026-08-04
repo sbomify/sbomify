@@ -205,28 +205,6 @@
   padding: 1.5rem;
 }
 
-.settings-card {
-  border: 1px solid var(--surface-border);
-  border-radius: 0.75rem;
-  box-shadow: var(--shadow-md);
-  transition: box-shadow var(--transition-normal);
-  background: var(--surface-card);
-}
-
-.settings-card:hover {
-  box-shadow: var(--shadow-lg);
-}
-
-.settings-card .card-header {
-  background: linear-gradient(135deg, rgb(var(--color-surface-elevated)) 0%, var(--surface-card) 100%);
-  border-bottom: 1px solid var(--surface-border);
-  border-radius: 0.75rem 0.75rem 0 0;
-}
-
-.settings-card .card-body {
-  background: var(--surface-card);
-}
-
 .dangerzone-card {
   border: 2px solid var(--brand-danger) !important;
   border-radius: 0.75rem;

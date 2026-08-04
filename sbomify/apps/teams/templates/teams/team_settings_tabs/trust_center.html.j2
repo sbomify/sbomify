@@ -1,6 +1,6 @@
 {% load public_url_tags %}
 {# Trust Center Availability Section #}
-<div class="tw-settings-card mb-6">
+<div class="tw-dashboard-card mb-6">
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-lg {% if team.is_public %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
@@ -90,7 +90,7 @@
 </div>
 {# Trust Center Slug Section #}
 {% if team.is_public and trust_center_domain %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -147,7 +147,7 @@
 {% endif %}
 {# TEA Section - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg {% if team_obj.tea_enabled %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
@@ -255,7 +255,7 @@
 {% endif %}
 {# Security.txt (RFC 9116) Section #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6"
+    <div class="tw-dashboard-card mb-6"
          x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
@@ -490,7 +490,7 @@
 {% endif %}
 {# Trust Center Description Section #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -533,7 +533,7 @@
 {% endif %}
 {# Company NDA Section #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
@@ -638,7 +638,7 @@
          hx-trigger="load, refreshAccessRequests from:body"
          hx-swap="innerHTML"
          @ws:message.window="if ($event.detail.type === 'access_request_updated') { document.body.dispatchEvent(new CustomEvent('refreshAccessRequests')); }">
-        <div class="tw-settings-card mb-6">
+        <div class="tw-dashboard-card mb-6">
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
@@ -665,7 +665,7 @@
          hx-get="{% url 'teams:team_custom_domain' team.key %}"
          hx-trigger="load, refreshTeamCustomDomain from:body"
          hx-swap="innerHTML">
-        <div class="tw-settings-card">
+        <div class="tw-dashboard-card mb-6">
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
@@ -686,7 +686,7 @@
         </div>
     </div>
 {% else %}
-    <div class="tw-settings-card">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-lg bg-border/30 flex items-center justify-center">

@@ -2,7 +2,7 @@
 {% load widget_tweaks %}
 {# Store team name as JSON in data attribute for safe Alpine.js initialization #}
 <div id="team-general-content"
-     class="tw-settings-card"
+     class="tw-dashboard-card mb-6"
      data-team-name="{{ team.name }}"
      data-freshness-days="{{ team.sbom_freshness_days|default_if_none:'' }}"
      x-cloak
