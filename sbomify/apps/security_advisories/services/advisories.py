@@ -28,6 +28,7 @@ from sbomify.apps.security_advisories.models import (
     AdvisoryVulnerability,
     ReferenceType,
     SecurityAdvisory,
+    Severity,
 )
 
 # Severity to the badge variant the templates use.
@@ -63,7 +64,7 @@ PUBLICATION_VARIANTS = {"draft": "secondary", "published": "success", "withdrawn
 # Advisory "type" as the list column shows it. Inferred rather than stored,
 # because the model already records the real identifiers and which database
 # issued them is a fact about those, not a separate field to keep in step.
-TYPE_LABELS = {"cve": "CVE", "ghsa": "GHSA", "other": "Other"}
+TYPE_LABELS = {"cve": "CVE", "ghsa": "GHSA", "internal": "Internal", "other": "Other"}
 
 # Timeline entries a reader sees. Internal comments are excluded from the
 # public feed by the model's PUBLIC_EVENT_TYPES; this is the workspace view, so
@@ -114,6 +115,11 @@ def _advisory_type(vulnerabilities: list[AdvisoryVulnerability], references: lis
         return "cve"
     if ReferenceType.GHSA in types:
         return "ghsa"
+    # No external identifier anywhere means this is the workspace's own
+    # finding, not some other database's. Saying "Internal" is more useful
+    # than a catch-all that reads like the field failed to populate.
+    if not types:
+        return "internal"
     return "other"
 
 
@@ -204,12 +210,26 @@ def _event_projection(event: AdvisoryEvent) -> dict[str, Any]:
     meta = EVENT_META.get(event.event_type, _UNKNOWN_EVENT)
     payload = event.payload if isinstance(event.payload, dict) else {}
     actor = event.actor
+
+    # A status change reads as the state it moved to, not as the words
+    # "Status change" — five entries all labelled the same tell a reader
+    # nothing about what happened. The badge takes the state's own colour
+    # and icon for the same reason.
+    label, variant, icon = meta["label"], meta["variant"], meta["icon"]
+    to_status = payload.get("to")
+    if event.event_type == AdvisoryEvent.EventType.STATUS_CHANGE and to_status in REMEDIATION_META:
+        state_meta = REMEDIATION_META[to_status]
+        label, variant, icon = state_meta["label"], state_meta["variant"], state_meta["icon"]
+
     return {
         "id": event.id,
         "kind": event.event_type,
-        "label": meta["label"],
-        "variant": meta["variant"],
-        "icon": meta["icon"],
+        "label": label,
+        "variant": variant,
+        "icon": icon,
+        # The transition's origin, for a reader who wants the before as well
+        # as the after. Absent on the first change, which came from nowhere.
+        "from_label": REMEDIATION_META.get(payload.get("from", ""), {}).get("label", ""),
         # "note" and "date_display" are what the timeline template binds to;
         # "body" and "created_at" are the model's own names, kept for callers
         # that want the raw values.
@@ -452,6 +472,53 @@ def create_advisory(
         actor=user,
         payload={"to": SecurityAdvisory.RemediationStatus.IDENTIFIED.value},
     )
+    return ServiceResult.success(advisory.id)
+
+
+@transaction.atomic
+def update_advisory(
+    team: Any, user: Any, advisory_id: str, *, title: str, severity: str = "", description: str = ""
+) -> ServiceResult[str]:
+    """Edit an advisory's own fields.
+
+    Field changes land on the timeline as field_change events, one per field,
+    so the append-only history answers "who changed the severity and when"
+    rather than only recording status moves.
+    """
+    advisory = (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+
+    title = title.strip()
+    if not title:
+        return ServiceResult.failure("An advisory needs a title.", status_code=400)
+    if severity and severity not in Severity.values:
+        return ServiceResult.failure("Unknown severity.", status_code=400)
+
+    changes = [
+        (field, getattr(advisory, field), new)
+        for field, new in (("title", title), ("severity", severity), ("description", description.strip()))
+        if getattr(advisory, field) != new
+    ]
+    if not changes:
+        return ServiceResult.success(advisory.id)
+
+    for field, _old, new in changes:
+        setattr(advisory, field, new)
+    advisory.save(update_fields=[field for field, _o, _n in changes] + ["updated_at"])
+
+    for field, old, new in changes:
+        AdvisoryEvent.objects.create(
+            advisory=advisory,
+            event_type=AdvisoryEvent.EventType.FIELD_CHANGE,
+            actor=user,
+            payload={"field": field, "old": old, "new": new},
+        )
     return ServiceResult.success(advisory.id)
 
 

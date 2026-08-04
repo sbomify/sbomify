@@ -122,8 +122,16 @@ class TestType:
         assert row["type"] == "ghsa"
         assert row["type_label"] == "GHSA"
 
-    def test_anything_else_reads_as_other(self, sample_team):
+    def test_no_external_identifier_reads_as_internal(self, sample_team):
+        """An advisory carrying no CVE and no reference is the workspace's own
+        finding. "Other" read like the field had failed to populate."""
         _advisory(sample_team)
+
+        assert list_advisories(sample_team).value[0]["type"] == "internal"
+
+    def test_an_unrecognised_database_still_reads_as_other(self, sample_team):
+        advisory = _advisory(sample_team)
+        AdvisoryReference.objects.create(advisory=advisory, external_id="VENDOR-2026-1")
 
         assert list_advisories(sample_team).value[0]["type"] == "other"
 

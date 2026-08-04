@@ -2,32 +2,45 @@
 {% load static %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
-    <div class="space-y-8">
+    <div class="space-y-6">
         {# Back link #}
         <a href="{% url 'core:security_advisories_dashboard' %}"
            class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text transition-colors">
             <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
             Security advisories
         </a>
-        {# Header #}
-        <div class="flex items-start justify-between gap-4">
+        {% comment %}Header — same shape as the product and component detail pages: the actions drop below the title on narrow viewports rather than squeezing it.{% endcomment %}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4 min-w-0">
                 <div class="tw-avatar tw-avatar-lg shrink-0">
                     <i class="fas fa-shield-halved"></i>
                 </div>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
-                        <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity|title }}</span>
-                        <span class="tw-badge tw-badge-{{ advisory.status_variant }}">{{ advisory.status_label }}</span>
-                    </div>
-                    <h1 class="text-2xl font-bold text-text">{{ advisory.title }}</h1>
+                {% comment %}Both clamps are line-based, so the cut follows the rendered width and the ellipsis is the browser's — a wide screen shows more of the same title than a narrow one. One disclosure governs both, because a title long enough to clip usually comes with a description long enough to clip too. clipped is only re-measured while collapsed: expanding removes the clamp, so a measurement taken then would report nothing overflowing and the button would vanish mid-use. break-words keeps an unbroken string (a pasted identifier, a hostname) from running under the header actions.{% endcomment %}
+                <div class="flex-1 min-w-0"
+                     x-data="{ expanded: false, clipped: false, measure() { this.clipped = [$refs.title, $refs.summary].some((el) => el && el.scrollHeight > el.clientHeight) } }"
+                     x-init="$nextTick(() => measure())"
+                     @resize.window.debounce="expanded || measure()">
+                    <h1 x-ref="title"
+                        class="text-2xl font-bold text-text break-words"
+                        :class="expanded ? '' : 'line-clamp-1'"
+                        title="{{ advisory.title }}">{{ advisory.title }}</h1>
+                    <p class="text-text-muted text-sm m-0 mt-1">{{ advisory.type_label }} advisory</p>
                     {% if advisory.description %}
-                        <p class="text-text-muted leading-relaxed mt-2 max-w-3xl">{{ advisory.description }}</p>
+                        <p x-ref="summary"
+                           class="text-text-muted leading-relaxed break-words whitespace-pre-line mt-2 max-w-3xl"
+                           :class="expanded ? '' : 'line-clamp-2'">{{ advisory.description }}</p>
                     {% endif %}
+                    <button type="button"
+                            x-show="clipped || expanded"
+                            x-cloak
+                            @click="expanded = !expanded"
+                            class="mt-1 text-sm text-primary hover:underline">
+                        <span x-text="expanded ? 'Show less' : 'Show more'"></span>
+                    </button>
                 </div>
             </div>
             {# Header actions #}
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 shrink-0 flex-wrap">
                 <a href="{% url 'core:workspace_public_current' %}"
                    target="_blank"
                    rel="noopener"
@@ -152,7 +165,14 @@
                         <div class="flex-1 min-w-0 {% if not forloop.last %}pb-8{% endif %}"
                              {% if has_crud_permissions %}@click="if (!editing) editing = true" :class="{ 'cursor-pointer': !editing }"{% endif %}>
                             <div class="flex items-center justify-between gap-3">
-                                <span class="tw-badge tw-badge-{{ u.variant }}">{{ u.label }}</span>
+                                <span class="flex items-center gap-2 min-w-0">
+                                    {% if u.from_label %}
+                                        <span class="text-xs text-text-muted shrink-0">{{ u.from_label }}</span>
+                                        <i class="fas fa-arrow-right text-[10px] text-text-muted shrink-0"
+                                           aria-hidden="true"></i>
+                                    {% endif %}
+                                    <span class="tw-badge tw-badge-{{ u.variant }}">{{ u.label }}</span>
+                                </span>
                                 <div class="flex items-center gap-3 shrink-0">
                                     <span class="text-xs text-text-muted">{{ u.date_display }}</span>
                                     {% if has_crud_permissions %}
@@ -241,6 +261,15 @@
                     <h2 class="text-xs uppercase tracking-wide text-text-muted">Affected products</h2>
                     <div class="flex flex-wrap gap-2">
                         {% comment %}An advisory can name a product this workspace does not track, and keeps naming it after one is deleted. Those have no id, and the url tag would happily build /product/None/ rather than fail, so they render as plain text.{% endcomment %}
+                        {% if not advisory.products %}
+                            <p class="text-sm text-text-muted m-0">
+                                {% if advisory.advisory_type == 'workspace_notice' %}
+                                    A workspace notice names no products.
+                                {% else %}
+                                    No products recorded yet — publishing a product advisory requires at least one.
+                                {% endif %}
+                            </p>
+                        {% endif %}
                         {% for product in advisory.products %}
                             <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/20 text-text-muted border border-border/40">
                                 <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>

@@ -38,6 +38,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     get_advisory,
     list_advisories,
     post_update,
+    update_advisory,
 )
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -172,13 +173,29 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             raise Http404("Advisory not found")
 
         intent = request.POST.get("intent")
-        if intent in ("edit", "edit_update", "link_vex"):
+        if intent == "edit":
+            result = update_advisory(
+                team,
+                cast(User, request.user),
+                advisory_id,
+                title=request.POST.get("title", ""),
+                severity=request.POST.get("severity", ""),
+                description=request.POST.get("description", ""),
+            )
+            if result.ok:
+                messages.success(request, "Advisory updated.")
+            elif result.status_code == 404:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, result.error or "Advisory not updated.")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent in ("edit_update", "link_vex"):
             # Only the stubs pay for the full projection lookup; the real
             # composer path below lets post_update do the one scoped lookup.
             if not get_advisory(team, advisory_id).ok:
                 raise Http404("Advisory not found")
             note = {
-                "edit": "Editing an advisory is the next pass on this UI.",
                 "edit_update": "Editing a timeline entry is the next pass on this UI.",
                 "link_vex": "Linking VEX documents is the pass after the CRUD one.",
             }[intent]
