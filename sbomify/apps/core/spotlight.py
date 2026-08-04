@@ -153,15 +153,16 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
     """Ranked app destinations for a query.
 
     Ties break on the section order, so "Go to" beats "Settings" at equal
-    match quality, and then on title for a stable result across keystrokes —
-    a palette that reshuffles under the cursor is worse than a slightly
-    worse-ranked one.
+    match quality; then on title *length*, because the shorter title is the
+    closer match ("plug" should land on Plugins, not Plugin summary); then
+    alphabetically for a stable result across keystrokes — a palette that
+    reshuffles under the cursor is worse than a slightly worse-ranked one.
     """
     query = (query or "").strip().lower()
     if not query:
         return []
 
-    scored: list[tuple[int, int, str, Destination, str]] = []
+    scored: list[tuple[int, int, int, str, Destination, str]] = []
     for destination in load_destinations():
         if not destination.visible_to(role):
             continue
@@ -172,9 +173,9 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
         if url is None:
             continue
         section_rank = SECTION_ORDER.index(destination.section) if destination.section in SECTION_ORDER else 99
-        scored.append((-score, section_rank, destination.title, destination, url))
+        scored.append((-score, section_rank, len(destination.title), destination.title, destination, url))
 
-    scored.sort(key=lambda row: (row[0], row[1], row[2]))
+    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3]))
     return [
         {
             "title": destination.title,
@@ -184,5 +185,5 @@ def search_destinations(query: str, *, role: str = "", team_key: str = "", limit
             "icon": destination.icon,
             "score": -negative_score,
         }
-        for negative_score, _rank, _title, destination, url in scored[:limit]
+        for negative_score, _rank, _length, _title, destination, url in scored[:limit]
     ]

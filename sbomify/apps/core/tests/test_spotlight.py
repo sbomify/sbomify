@@ -173,3 +173,31 @@ class TestSearchEndpoint:
         body = client.get(reverse("core:search"), {"q": "a"}).json()
 
         assert body == {"products": [], "components": [], "results": []}
+
+
+class TestRootLevelCoverage:
+    """Every root-level page a person can reach by clicking must be reachable
+    by typing — the palette is only a navigation tool if it covers the app."""
+
+    def _titles(self, query):
+        return [r["title"] for r in search_destinations(query, role="owner", team_key="AAAAAAAA")]
+
+    @pytest.mark.parametrize(
+        "query,expected",
+        [
+            ("cra", "CRA Compliance"),
+            ("compliance", "CRA Compliance"),
+            ("trends", "Vulnerability trends"),
+            ("access request", "Access requests"),
+            ("nda requests", "Access requests"),
+            ("my profile", "My account settings"),
+            ("upgrade", "Upgrade plan"),
+            ("enterprise", "Contact enterprise sales"),
+        ],
+    )
+    def test_root_level_pages_are_reachable(self, query, expected):
+        assert expected in self._titles(query)
+
+    def test_a_shorter_title_wins_an_equal_match(self):
+        """"plug" should land on Plugins, not Plugin summary."""
+        assert self._titles("plug")[0] == "Plugins"

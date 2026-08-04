@@ -71,6 +71,63 @@
       "args": ["team_key"],
       "roles": ["owner", "admin"]
     },
+    {
+      "title": "CRA Compliance",
+      "url_name": "compliance:cra_product_list",
+      "section": "navigate",
+      "icon": "fa-scale-balanced",
+      "keywords": ["cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Vulnerability trends",
+      "url_name": "vulnerability_scanning:vulnerability_trends",
+      "section": "navigate",
+      "icon": "fa-chart-line",
+      "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Plugin summary",
+      "url_name": "plugins:plugins_summary",
+      "section": "navigate",
+      "icon": "fa-list-check",
+      "keywords": ["assessment summary", "plugin results", "checks overview"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Access requests",
+      "url_name": "documents:access_request_queue",
+      "section": "navigate",
+      "icon": "fa-user-shield",
+      "keywords": ["nda requests", "gated access", "approve access", "document requests", "pending requests"],
+      "args": ["team_key"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "My account settings",
+      "url_name": "core:settings",
+      "section": "settings",
+      "icon": "fa-user",
+      "keywords": ["my profile", "personal settings", "user settings", "email", "password", "my account"]
+    },
+    {
+      "title": "Upgrade plan",
+      "url_name": "billing:select_plan",
+      "section": "actions",
+      "icon": "fa-arrow-up",
+      "keywords": ["change plan", "upgrade", "downgrade", "pricing", "buy", "subscribe"],
+      "args": ["team_key"],
+      "roles": ["owner"]
+    },
+    {
+      "title": "Contact enterprise sales",
+      "url_name": "billing:enterprise_contact",
+      "section": "actions",
+      "icon": "fa-handshake",
+      "keywords": ["enterprise", "sales", "custom plan", "talk to sales", "quote"],
+      "roles": ["owner"]
+    },
 
     {
       "title": "New product",
