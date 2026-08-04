@@ -1389,6 +1389,13 @@
     min-width: 34rem;
 }
 
+/* A table whose columns already collapse responsively (the product releases
+   list hides its date column under md) — the blanket min-width would force a
+   two-column table to scroll sideways on phones for nothing. */
+.tc-table.tc-table-fit {
+    min-width: 0;
+}
+
 .tc-table th {
     text-align: left;
     padding: 0.5rem 0.75rem;
