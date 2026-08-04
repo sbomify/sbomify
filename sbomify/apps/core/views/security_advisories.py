@@ -74,6 +74,33 @@ def _current_team(request: HttpRequest) -> Team | None:
     return membership.team if membership else None
 
 
+# Roles that may change an advisory, mirroring the has_crud_permissions the
+# templates use to decide whether to render the controls at all.
+_ADVISORY_WRITE_ROLES = ("owner", "admin")
+
+
+def _writable_team(request: HttpRequest) -> Team | None:
+    """The workspace, but only for a member who may change its advisories.
+
+    The templates hide the edit and compose controls behind
+    ``has_crud_permissions``, which is a rendering decision and nothing a
+    handler can rely on — a POST can be crafted without ever loading the page.
+    The role is read from the membership row rather than the session, so a
+    role cached there cannot outlive a demotion.
+    """
+    key = (request.session.get("current_team") or {}).get("key")
+    if not key:
+        return None
+    user = cast(User, request.user)
+    membership = (
+        Member.objects.filter(user=user, team__key=key, role__in=_ADVISORY_WRITE_ROLES)
+        .select_related("team")
+        .only("team", "role")
+        .first()
+    )
+    return membership.team if membership else None
+
+
 def _advisories_context(request: HttpRequest) -> dict[str, Any]:
     current_team = request.session.get("current_team") or {}
     team = _current_team(request)
@@ -100,7 +127,7 @@ class SecurityAdvisoriesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixi
         return render(request, "core/security_advisories_dashboard.html.j2", context)
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        team = _current_team(request)
+        team = _writable_team(request)
         if team is None:
             raise Http404("Workspace not found")
 
@@ -168,7 +195,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         )
 
     def post(self, request: HttpRequest, advisory_id: str) -> HttpResponse:
-        team = _current_team(request)
+        team = _writable_team(request)
         if team is None:
             raise Http404("Advisory not found")
 
@@ -179,7 +206,9 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 cast(User, request.user),
                 advisory_id,
                 title=request.POST.get("title", ""),
-                severity=request.POST.get("severity", ""),
+                # None when the form did not carry the field at all, so a
+                # partial edit cannot silently set a severity nobody chose.
+                severity=request.POST.get("severity"),
                 description=request.POST.get("description", ""),
             )
             if result.ok:

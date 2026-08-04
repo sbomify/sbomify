@@ -34,6 +34,7 @@
                             x-show="clipped || expanded"
                             x-cloak
                             @click="expanded = !expanded"
+                            :aria-expanded="expanded"
                             class="mt-1 text-sm text-primary hover:underline">
                         <span x-text="expanded ? 'Show less' : 'Show more'"></span>
                     </button>
@@ -380,7 +381,9 @@
                                         </div>
                                         <div>
                                             <label class="tw-form-label" for="editSeverity">Severity</label>
+                                            {# An advisory may legitimately carry no severity, and without a blank option the select would silently promote it to the first one on any save. #}
                                             <select id="editSeverity" name="severity" class="tw-form-input">
+                                                <option value="" {% if not advisory.severity %}selected{% endif %}>Not set</option>
                                                 <option value="critical"
                                                         {% if advisory.severity == 'critical' %}selected{% endif %}>
                                                     Critical
