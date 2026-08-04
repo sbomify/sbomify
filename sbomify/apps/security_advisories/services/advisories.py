@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
+from django.utils import timezone
 
 from sbomify.apps.core.models import Product, Release
 from sbomify.apps.core.services.results import ServiceResult
@@ -29,6 +31,7 @@ from sbomify.apps.security_advisories.models import (
     ReferenceType,
     SecurityAdvisory,
     Severity,
+    validate_publishable,
 )
 
 # Severity to the badge variant the templates use.
@@ -563,6 +566,89 @@ def update_advisory(
             body=_field_change_body(field, old, new),
             payload={"field": field, "old": old, "new": new},
         )
+    return ServiceResult.success(advisory.id)
+
+
+# Publishing to "private" is not publishing: the Trust Center excludes private
+# advisories in SQL, so it would move the status and disclose nothing. The two
+# real destinations are a gated (embargoed, signed-NDA) disclosure and a public
+# one; changing visibility afterwards is its own action.
+PUBLISHABLE_VISIBILITIES: dict[str, dict[str, str]] = {
+    SecurityAdvisory.Visibility.PUBLIC.value: {
+        "label": "Public",
+        "help": "Anyone can read it on your Trust Center.",
+    },
+    SecurityAdvisory.Visibility.GATED.value: {
+        "label": "Gated",
+        "help": "Only readers who have signed your NDA and can see an affected product.",
+    },
+}
+
+
+@transaction.atomic
+def publish_advisory(team: Any, user: Any, advisory_id: str, *, visibility: str) -> ServiceResult[str]:
+    """Disclose an advisory: the one write that makes it readable outside the workspace.
+
+    Until this runs an advisory is a draft with private visibility, and the
+    Trust Center filters both out — which is why a workspace could write
+    advisories all day and see nothing published.
+
+    Both axes move together here. Status alone would leave it private and still
+    invisible; visibility alone would expose a draft. The tracking id is
+    allocated now and is immutable afterwards, ``published_at`` records the
+    disclosure, and ``made_public_at`` records it separately for a public one
+    because a gated disclosure is not public disclosure.
+
+    The team row is locked because ``allocate_tracking_id`` counts by reading
+    the highest existing id for the year: two publishes racing would read the
+    same maximum and one would lose to the unique constraint.
+    """
+    if visibility not in PUBLISHABLE_VISIBILITIES:
+        return ServiceResult.failure("Choose whether to publish publicly or to NDA readers.", status_code=400)
+
+    from sbomify.apps.teams.models import Team
+
+    Team.objects.select_for_update().filter(pk=team.pk).first()
+
+    advisory = (
+        SecurityAdvisory.objects.select_for_update()
+        .filter(team=team)
+        .filter(Q(id=advisory_id) | Q(tracking_id=advisory_id))
+        .first()
+    )
+    if advisory is None:
+        return ServiceResult.failure("Advisory not found", status_code=404)
+    if advisory.status != SecurityAdvisory.Status.DRAFT:
+        return ServiceResult.failure("This advisory has already been published.", status_code=409)
+
+    # The graph-wide rules: a product advisory needs products, every
+    # vulnerability needs a status per product, a fixed status names the fix.
+    if problems := validate_publishable(advisory):
+        return ServiceResult.failure(" ".join(problems), status_code=400)
+
+    now = timezone.now()
+    advisory.status = SecurityAdvisory.Status.PUBLISHED
+    advisory.published_at = now
+    advisory.visibility = visibility
+    if visibility == SecurityAdvisory.Visibility.PUBLIC:
+        advisory.made_public_at = now
+    advisory.tracking_id = SecurityAdvisory.allocate_tracking_id(team)
+
+    try:
+        advisory.full_clean()
+    except DjangoValidationError as error:
+        # The model holds the disclosure invariants; surfacing them beats
+        # letting a 500 out of save().
+        return ServiceResult.failure("; ".join(m for messages in error.message_dict.values() for m in messages), 400)
+
+    advisory.save(update_fields=["status", "published_at", "visibility", "made_public_at", "tracking_id", "updated_at"])
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.PUBLISHED,
+        actor=user,
+        body=f"Published as {advisory.tracking_id} ({PUBLISHABLE_VISIBILITIES[visibility]['label'].lower()}).",
+        payload={"visibility": visibility, "tracking_id": advisory.tracking_id},
+    )
     return ServiceResult.success(advisory.id)
 
 

@@ -31,6 +31,7 @@ from django.views import View
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
+    PUBLISHABLE_VISIBILITIES,
     REMEDIATION_META,
     advisory_counts,
     create_advisory,
@@ -38,6 +39,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     get_advisory,
     list_advisories,
     post_update,
+    publish_advisory,
     update_advisory,
 )
 from sbomify.apps.teams.models import Member, Team
@@ -188,6 +190,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 "advisory": advisory,
                 "timeline": advisory["timeline"],
                 "update_kinds": UPDATE_KINDS,
+                "publish_visibilities": PUBLISHABLE_VISIBILITIES,
                 # Real VEX candidates need the linking pass; an empty list renders
                 # the section's own empty state rather than inventing documents.
                 "vex_candidates": [],
@@ -200,6 +203,21 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             raise Http404("Advisory not found")
 
         intent = request.POST.get("intent")
+        if intent == "publish":
+            result = publish_advisory(
+                team,
+                cast(User, request.user),
+                advisory_id,
+                visibility=request.POST.get("visibility", ""),
+            )
+            if result.ok:
+                messages.success(request, "Advisory published.")
+            elif result.status_code == 404:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, result.error or "Advisory not published.")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
         if intent == "edit":
             result = update_advisory(
                 team,

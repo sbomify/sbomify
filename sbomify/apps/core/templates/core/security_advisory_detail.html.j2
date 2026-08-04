@@ -68,6 +68,17 @@
                              role="menu"
                              aria-orientation="vertical"
                              aria-label="Advisory actions">
+                            {% if advisory.publication_status == 'draft' %}
+                                {# Publishing is what puts an advisory on the Trust Center — until it runs, an advisory is a draft with private visibility and both are filtered out there. #}
+                                <button type="button"
+                                        class="tw-dropdown-item"
+                                        role="menuitem"
+                                        @click="open = false; $dispatch('open-publish-advisory-modal')">
+                                    <i class="fas fa-bullhorn w-5 text-center opacity-70" aria-hidden="true"></i>
+                                    Publish advisory
+                                </button>
+                                <div class="tw-dropdown-divider"></div>
+                            {% endif %}
                             <button type="button"
                                     class="tw-dropdown-item"
                                     role="menuitem"
@@ -312,7 +323,97 @@
                 {% endif %}
             </aside>
         </div>
-        {# Edit Advisory Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
+        {% comment %}Publish Advisory Modal. Disclosure is irreversible in the sense that matters — the tracking id is allocated here and immutable, and made_public_at records when disclosure happened — so this asks rather than firing from the menu.{% endcomment %}
+        {% if has_crud_permissions and advisory.publication_status == 'draft' %}
+            <div x-data="{ open: false }"
+                 @open-publish-advisory-modal.window="open = true">
+                <template x-teleport="body">
+                    <div x-show="open"
+                         x-cloak
+                         class="fixed inset-0 z-[100]"
+                         role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="publishAdvisoryModalLabel">
+                        <div x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="tw-modal-overlay"
+                             @click="open = false"></div>
+                        <div class="tw-modal"
+                             x-show="open"
+                             x-trap.noscroll="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             @click.stop
+                             @keydown.escape="if(open) open = false">
+                            <div class="tw-modal-content">
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-bullhorn text-primary"></i>
+                                        </div>
+                                        <h4 id="publishAdvisoryModalLabel" class="tw-modal-title">Publish advisory</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <form method="post"
+                                      action="{% url 'core:security_advisory_detail' advisory.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="intent" value="publish" />
+                                    <div class="tw-modal-body space-y-4">
+                                        {# Clamped like the page header: a pasted identifier for a title would otherwise run past the modal's edge. #}
+                                        <p class="text-sm text-text-muted m-0">
+                                            <strong class="text-text block break-words line-clamp-2"
+                                                    title="{{ advisory.title }}">{{ advisory.title }}</strong>
+                                            becomes readable outside this workspace and is assigned a permanent
+                                            tracking id.
+                                        </p>
+                                        <fieldset class="space-y-2 pt-1">
+                                            <legend class="tw-form-label mb-1">Who can read it</legend>
+                                            {% for value, meta in publish_visibilities.items %}
+                                                <label class="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/40">
+                                                    <input type="radio"
+                                                           name="visibility"
+                                                           value="{{ value }}"
+                                                           class="tw-radio mt-0.5"
+                                                           {% if forloop.first %}checked{% endif %} />
+                                                    <span class="min-w-0">
+                                                        <span class="block text-sm font-medium text-text">{{ meta.label }}</span>
+                                                        <span class="block text-xs text-text-muted">{{ meta.help }}</span>
+                                                    </span>
+                                                </label>
+                                            {% endfor %}
+                                        </fieldset>
+                                    </div>
+                                    <div class="tw-modal-footer">
+                                        <p class="text-xs text-text-muted m-0 mr-auto">The tracking id and the disclosure date are recorded permanently.</p>
+                                        <button type="button" class="tw-btn-secondary" @click="open = false">Cancel</button>
+                                        <button type="submit" class="tw-btn-primary gap-2">
+                                            <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                                            Publish
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        {% endif %}
+        {# Edit Advisory Modal (Alpine.js) #}
         {% if has_crud_permissions %}
             <div x-data="{ open: false, showRef:
                 {% if advisory.vulnerability_id %}

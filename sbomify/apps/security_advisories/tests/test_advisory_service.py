@@ -21,6 +21,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
     get_advisory,
     list_advisories,
+    publish_advisory,
     update_advisory,
 )
 
@@ -375,3 +376,121 @@ class TestUpdateAdvisory:
         assert result.status_code == 404
         advisory.refresh_from_db()
         assert advisory.title == "Not yours"
+
+
+class TestPublishAdvisory:
+    """Publishing is what puts an advisory on the Trust Center: until it runs the
+    advisory is a draft with private visibility, and that page filters out both."""
+
+    def _publishable(self, team, name="Gateway"):
+        from sbomify.apps.core.models import Product
+
+        advisory = _advisory(team)
+        product, _ = Product.objects.get_or_create(team=team, name=name)
+        AdvisoryProduct.objects.create(advisory=advisory, product=product)
+        return advisory
+
+    def test_publishing_public_makes_it_externally_visible(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert result.ok, result.error
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.PUBLISHED
+        assert advisory.visibility == SecurityAdvisory.Visibility.PUBLIC
+        assert advisory.is_externally_visible
+
+    def test_publishing_records_the_disclosure(self, sample_team, sample_user):
+        """published_at is when it left the workspace; made_public_at is when it
+        became public, which a gated disclosure is not."""
+        advisory = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        advisory.refresh_from_db()
+        assert advisory.published_at is not None
+        assert advisory.made_public_at is not None
+
+    def test_a_gated_disclosure_is_not_public_disclosure(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="gated")
+
+        advisory.refresh_from_db()
+        assert advisory.visibility == SecurityAdvisory.Visibility.GATED
+        assert advisory.published_at is not None
+        assert advisory.made_public_at is None
+
+    def test_a_tracking_id_is_allocated_and_sequential(self, sample_team, sample_user):
+        first = self._publishable(sample_team)
+        second = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, first.id, visibility="public")
+        publish_advisory(sample_team, sample_user, second.id, visibility="public")
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        assert first.tracking_id.endswith("-0001")
+        assert second.tracking_id.endswith("-0002")
+        assert first.tracking_id[:-4] == second.tracking_id[:-4]
+
+    def test_publishing_lands_on_the_timeline(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        advisory.refresh_from_db()
+        event = AdvisoryEvent.objects.get(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED)
+        assert advisory.tracking_id in event.body
+        assert event.payload["visibility"] == "public"
+
+    def test_publishing_private_is_refused(self, sample_team, sample_user):
+        """It would move the status and disclose nothing — the Trust Center
+        excludes private advisories in SQL."""
+        advisory = self._publishable(sample_team)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="private")
+
+        assert not result.ok
+        assert result.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
+
+    def test_a_product_advisory_with_no_products_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert "at least one product" in result.error
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
+        assert advisory.tracking_id == ""
+
+    def test_publishing_twice_is_refused(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+        advisory.refresh_from_db()
+        first_id = advisory.tracking_id
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert not result.ok
+        assert result.status_code == 409
+        advisory.refresh_from_db()
+        assert advisory.tracking_id == first_id
+
+    def test_another_workspaces_advisory_is_not_found(self, sample_team, sample_user):
+        from sbomify.apps.teams.models import Team
+
+        other = Team.objects.create(name="Someone else")
+        advisory = _advisory(other)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert not result.ok
+        assert result.status_code == 404
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
