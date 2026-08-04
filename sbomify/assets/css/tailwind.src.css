@@ -897,31 +897,71 @@ html.no-transitions * {
   transform: none !important;
 }
 
+/* Filled buttons — every variant derives from the primary recipe,
+   parameterized by --btn-accent / --btn-accent-dark / --btn-accent-hover / --btn-text */
+.tw-btn-primary,
+.tw-btn-danger,
+.tw-btn-success,
+.tw-btn-warning {
+  background: linear-gradient(135deg, var(--btn-accent) 0%, var(--btn-accent-dark) 100%);
+  color: var(--btn-text, white);
+  border: solid var(--btn-accent) 0.5px;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.2);
+}
+
+.tw-btn-primary:hover,
+.tw-btn-danger:hover,
+.tw-btn-success:hover,
+.tw-btn-warning:hover {
+  background: linear-gradient(135deg, var(--btn-accent-hover) 0%, var(--btn-accent) 100%);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-primary:active,
+.tw-btn-danger:active,
+.tw-btn-success:active,
+.tw-btn-warning:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 4px rgb(0 0 0 / 0.1);
+}
+
 /* Primary Button */
 .tw-btn-primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: white;
-  border: solid var(--color-primary) 0.5px;
-  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.2);
+  --btn-accent: var(--color-primary);
+  --btn-accent-dark: var(--color-primary-dark);
+  --btn-accent-hover: var(--color-primary-light);
 }
 
-.tw-btn-primary:hover {
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+/* Danger Button */
+.tw-btn-danger {
+  --btn-accent: var(--color-danger);
+  --btn-accent-dark: var(--color-danger-dark);
+  --btn-accent-hover: color-mix(in oklab, var(--color-danger) 72%, white);
 }
 
-.tw-btn-primary:active {
-  transform: translateY(0) scale(0.98);
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 4px rgb(0 0 0 / 0.1);
+/* Success Button */
+.tw-btn-success {
+  --btn-accent: var(--color-success);
+  --btn-accent-dark: var(--color-success-dark);
+  --btn-accent-hover: color-mix(in oklab, var(--color-success) 72%, white);
 }
 
-/* Gradient Button */
+/* Warning Button */
+.tw-btn-warning {
+  --btn-accent: var(--color-warning);
+  --btn-accent-dark: var(--color-warning-dark);
+  --btn-accent-hover: color-mix(in oklab, var(--color-warning) 72%, white);
+  --btn-text: rgb(15 23 42);
+}
+
+/* Gradient Button — special CTA; brand gradient fill on the primary base treatment */
 .tw-btn-gradient {
   color: white;
-  background: linear-gradient(135deg, var(--color-primary-dark) 0%, #CC58BB 50%, #F4B57F 100%);
+  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-pink) 50%, var(--color-accent-orange) 100%);
   background-size: 200% 200%;
   animation: gradient-shift 3s ease infinite paused;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.15);
+  border: solid var(--color-accent) 0.5px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), inset 0 2px 0 rgb(255 255 255 / 0.2);
 }
 
 @keyframes gradient-shift {
@@ -931,12 +971,12 @@ html.no-transitions * {
 
 .tw-btn-gradient:hover {
   animation-play-state: running;
-  box-shadow: 0 4px 12px rgb(204 88 187 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.15);
-  transform: translateY(-1px);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-accent-pink) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
 }
 
 .tw-btn-gradient:active {
   transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2), inset 0 2px 4px rgb(0 0 0 / 0.1);
 }
 
 /* Secondary Button */
@@ -950,29 +990,12 @@ html.no-transitions * {
 .tw-btn-secondary:hover {
   background-color: var(--color-surface-elevated);
   border-color: var(--color-border-light);
-  box-shadow: var(--shadow-card);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
 }
 
 .tw-btn-secondary:active {
   transform: translateY(0) scale(0.98);
   box-shadow: var(--shadow-inner);
-}
-
-/* Danger Button */
-.tw-btn-danger {
-  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
-  color: white;
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-danger) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-}
-
-.tw-btn-danger:hover {
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-danger) 40%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-  transform: translateY(-1px);
-}
-
-.tw-btn-danger:active {
-  transform: translateY(0) scale(0.98);
 }
 
 /* Ghost Button */
@@ -990,30 +1013,7 @@ html.no-transitions * {
 
 .tw-btn-ghost:active {
   background-color: color-mix(in oklab, var(--color-border) 30%, transparent);
-}
-
-/* Success Button */
-.tw-btn-success {
-  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-dark) 100%);
-  color: white;
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-success) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-}
-
-.tw-btn-success:hover {
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-success) 40%, transparent);
-  transform: translateY(-1px);
-}
-
-/* Warning Button */
-.tw-btn-warning {
-  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%);
-  color: rgb(15 23 42);
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-warning) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.2);
-}
-
-.tw-btn-warning:hover {
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-warning) 40%, transparent);
-  transform: translateY(-1px);
+  transform: translateY(0) scale(0.98);
 }
 
 /* Button Sizes */
@@ -1031,44 +1031,44 @@ html.no-transitions * {
   border-radius: 0.625rem;
 }
 
-/* Outline Button Variants */
-.tw-btn-outline-primary {
+/* Outline Button Variants — hover fills with the same recipe as the filled buttons */
+.tw-btn-outline-primary,
+.tw-btn-outline-danger,
+.tw-btn-outline-warning {
   background-color: transparent;
-  color: var(--color-primary);
-  border: 1.5px solid var(--color-primary);
+  color: var(--btn-accent);
+  border: 1.5px solid var(--btn-accent);
 }
 
-.tw-btn-outline-primary:hover {
-  background-color: var(--color-primary);
-  color: white;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-primary) 30%, transparent);
-  transform: translateY(-1px);
+.tw-btn-outline-primary:hover,
+.tw-btn-outline-danger:hover,
+.tw-btn-outline-warning:hover {
+  background: linear-gradient(135deg, var(--btn-accent) 0%, var(--btn-accent-dark) 100%);
+  color: var(--btn-text, white);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-outline-primary:active,
+.tw-btn-outline-danger:active,
+.tw-btn-outline-warning:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 4px rgb(0 0 0 / 0.1);
+}
+
+.tw-btn-outline-primary {
+  --btn-accent: var(--color-primary);
+  --btn-accent-dark: var(--color-primary-dark);
 }
 
 .tw-btn-outline-danger {
-  background-color: transparent;
-  color: var(--color-danger);
-  border: 1.5px solid var(--color-danger);
-}
-
-.tw-btn-outline-danger:hover {
-  background-color: var(--color-danger);
-  color: white;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-danger) 30%, transparent);
-  transform: translateY(-1px);
+  --btn-accent: var(--color-danger);
+  --btn-accent-dark: var(--color-danger-dark);
 }
 
 .tw-btn-outline-warning {
-  background-color: transparent;
-  color: var(--color-warning);
-  border: 1.5px solid var(--color-warning);
-}
-
-.tw-btn-outline-warning:hover {
-  background-color: var(--color-warning);
-  color: white;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-warning) 30%, transparent);
-  transform: translateY(-1px);
+  --btn-accent: var(--color-warning);
+  --btn-accent-dark: var(--color-warning-dark);
+  --btn-text: rgb(15 23 42);
 }
 
 /* Cancel Button with Danger Hover */
