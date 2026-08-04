@@ -22,6 +22,7 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from dramatiq_crontab import cron
 
+from sbomify.apps.core.url_utils import get_base_url
 from sbomify.logging import getLogger
 
 if TYPE_CHECKING:
@@ -74,34 +75,41 @@ def warn_expiring_tokens() -> int:
             continue
 
         recipients = _recipients(token)
-        if recipients:
-            from sbomify.apps.access_tokens.notifications import days_until
-
-            days_left = days_until(token.expires_at, now)
-            context = {
-                "token": token,
-                "days_left": days_left,
-                "expires_on": token.expires_at,
-                "team": token.team,
-                "base_url": settings.APP_BASE_URL,
-            }
-            email = EmailMultiAlternatives(
-                subject=f'Access token "{token.description}" expires in {days_left} day{"" if days_left == 1 else "s"}',
-                body=render_to_string("access_tokens/emails/token_expiry_email.txt", context),
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=recipients,
-            )
-            email.attach_alternative(
-                render_to_string("access_tokens/emails/token_expiry_email.html.j2", context), "text/html"
-            )
-            try:
-                email.send()
-                sent += 1
-            except Exception:
-                logger.exception(f"Could not send expiry warning for token {token.id}")
-                continue
-        else:
+        if not recipients:
+            # No threshold is marked here. Marking one would record a warning
+            # that nobody received, and the token would then pass its expiry in
+            # silence even if an address were added the next day.
             logger.warning(f"Token {token.id} nears expiry but has no reachable recipient")
+            continue
+
+        from sbomify.apps.access_tokens.notifications import days_until
+
+        days_left = days_until(token.expires_at, now)
+        context = {
+            "token": token,
+            "days_left": days_left,
+            "expires_on": token.expires_at,
+            "team": token.team,
+            # get_base_url rather than the raw setting: it guarantees a scheme,
+            # and a schemeless APP_BASE_URL would otherwise put a relative link
+            # in an email, where there is no page for it to be relative to.
+            "base_url": get_base_url(),
+        }
+        email = EmailMultiAlternatives(
+            subject=f'Access token "{token.description}" expires in {days_left} day{"" if days_left == 1 else "s"}',
+            body=render_to_string("access_tokens/emails/token_expiry_email.txt", context),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=recipients,
+        )
+        email.attach_alternative(
+            render_to_string("access_tokens/emails/token_expiry_email.html.j2", context), "text/html"
+        )
+        try:
+            email.send()
+            sent += 1
+        except Exception:
+            logger.exception(f"Could not send expiry warning for token {token.id}")
+            continue
 
         # Mark every due threshold, not only the tightest: once the 7-day
         # warning went out, a trailing 14-day one would read as noise.

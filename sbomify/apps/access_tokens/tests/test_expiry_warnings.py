@@ -108,6 +108,30 @@ class TestEmailSweep:
         # The 7-day warning went out; 14 is marked too so it cannot trail in.
         assert {w.threshold_days for w in token.expiry_warnings.all()} == {14, 7}
 
+    def test_no_reachable_recipient_does_not_burn_the_threshold(
+        self, sample_team_with_owner_member: Any
+    ) -> None:
+        """A warning nobody could receive must not count as delivered.
+
+        Marking the threshold anyway would let the token run to expiry in
+        silence even once an address exists.
+        """
+        member = sample_team_with_owner_member
+        member.user.email = ""
+        member.user.save(update_fields=["email"])
+        token = _token(member.user, member.team, days=5)
+
+        assert warn_expiring_tokens.fn() == 0
+        assert mail.outbox == []
+        assert token.expiry_warnings.count() == 0
+
+        # An address arrives before the token expires; the warning still goes out.
+        member.user.email = "owner@example.com"
+        member.user.save(update_fields=["email"])
+
+        assert warn_expiring_tokens.fn() == 1
+        assert [m.to for m in mail.outbox] == [["owner@example.com"]]
+
     def test_the_sweep_is_idempotent(self, sample_team_with_owner_member: Any) -> None:
         member = sample_team_with_owner_member
         _token(member.user, member.team, days=5)
