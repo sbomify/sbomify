@@ -367,16 +367,23 @@ def creation_options(team: Any) -> ServiceResult[list[dict[str, Any]]]:
 
     ``latest`` releases are excluded: that pointer re-targets as artifacts
     arrive, so "affected: latest" would describe different code next month.
+
+    Newest first, and the date travels with each row. Version strings do not
+    sort into release order on their own — a hand-cut ``0.99-wiz-test`` can
+    postdate a dated build — so without the date on screen a correctly ordered
+    list reads as an unordered one.
     """
     releases_by_product: dict[str, list[dict[str, str]]] = {}
     release_rows = (
         Release.objects.filter(product__team=team, is_latest=False)
         .order_by("-created_at")
-        .values("id", "product_id", "name", "version")
+        .values("id", "product_id", "name", "version", "created_at")
     )
     for row in release_rows:
         label = row["version"] or row["name"]
-        releases_by_product.setdefault(row["product_id"], []).append({"id": row["id"], "label": label})
+        releases_by_product.setdefault(row["product_id"], []).append(
+            {"id": row["id"], "label": label, "created": row["created_at"].strftime("%d %b %Y")}
+        )
 
     products = [
         {"id": product_id, "name": name, "releases": releases_by_product.get(product_id, [])}
