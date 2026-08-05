@@ -40,10 +40,14 @@ def test_public_release_page_shows_hbom_download(sample_team_with_owner_member):
     assert resp.status_code == 200
     html = resp.content.decode()
     download_url = reverse("api-1:download_release_hbom", kwargs={"release_id": release.id})
-    # Desktop and mobile blocks both carry the link, so an HBOM-only release is
-    # downloadable at either viewport.
-    assert html.count(download_url) == 2
-    assert "Download Release" in html
+    # Once: the Trust Center release page serves one responsive block. The
+    # private page still carries a separate desktop and mobile block and so
+    # renders the link twice; asserting a bare count here would track whichever
+    # of the two pages was restyled most recently rather than the behaviour.
+    assert html.count(download_url) == 1
+    # The button's own label, not the surrounding panel heading — the heading is
+    # Trust Center copy and has been reworded once already.
+    assert ">HBOM<" in html.replace(" ", "").replace("\n", "")
 
 
 @pytest.mark.django_db

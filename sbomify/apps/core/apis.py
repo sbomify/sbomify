@@ -770,6 +770,44 @@ def get_product(request: HttpRequest, product_id: str) -> Any:
     return status, result.payload
 
 
+@router.get(
+    "/products/{product_id}/eol-readiness",
+    response={200: dict[str, Any], 403: ErrorResponse, 404: ErrorResponse},
+    summary="Whether a product can reach end of life with CRA 6.1.6 satisfied",
+    description="Reports the notice period, the critical and high findings neither patched nor formally "
+    "risk-accepted, and whether a final SBOM and VEX exist to publish.",
+)
+def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
+    """The pre-EOL check (CRA checklist 6.1.5/6.1.6)."""
+    from dataclasses import asdict
+
+    from sbomify.apps.core.services.eol import eol_readiness
+
+    status, result = _get_product_with_instance(request, product_id)
+    if status != 200:
+        return status, result
+
+    assert isinstance(result, ProductLookupResult)
+    # _get_product_with_instance only checks access for private products — a
+    # public one is readable by anyone, which is right for the product page and
+    # wrong here. Readiness lists the product's unresolved critical and high
+    # findings by advisory id, which is internal remediation state and not
+    # something being publicly listed makes public.
+    if not can(request, "product:manage", result.instance):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    readiness = eol_readiness(result.instance)
+    payload = asdict(readiness)
+    # The derived verdicts are the point of the endpoint; a caller should not
+    # have to re-implement the checklist rule to read the answer.
+    payload["is_ready"] = readiness.is_ready
+    payload["blocking_count"] = readiness.blocking_count
+    payload["problems"] = readiness.problems
+    payload["end_of_support"] = readiness.end_of_support.isoformat() if readiness.end_of_support else None
+    payload["end_of_life"] = readiness.end_of_life.isoformat() if readiness.end_of_life else None
+    return 200, payload
+
+
 @router.put(
     "/products/{product_id}",
     response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},

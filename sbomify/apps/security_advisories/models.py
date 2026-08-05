@@ -562,8 +562,13 @@ class AdvisoryProductStatus(models.Model):
     """
 
     class Status(models.TextChoices):
-        """CycloneDX ``analysis.state``. Values match ``triage.TRIAGE_STATES``;
-        labels read the way an advisory reads."""
+        """CycloneDX ``analysis.state``. Values are drawn from
+        ``triage.TRIAGE_STATES``; labels read the way an advisory reads.
+
+        A subset of that vocabulary: ``risk_accepted`` is deliberately absent.
+        It is an internal decision carrying an owner and an expiry, and a
+        published advisory saying a workspace accepted the risk on its own
+        product is a different statement than the triage state means."""
 
         EXPLOITABLE = "exploitable", "Affected"
         NOT_AFFECTED = "not_affected", "Not affected"
