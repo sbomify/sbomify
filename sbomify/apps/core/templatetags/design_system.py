@@ -57,6 +57,7 @@ _LEAF_COMPONENTS = (
     "empty_state",
     "icon_button",
     "input",
+    "loading_state",
     "pagination",
     "progress",
     "radio",

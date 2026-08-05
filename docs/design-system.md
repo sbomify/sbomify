@@ -74,6 +74,7 @@ List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown
 | `empty_state` | No-content placeholder | `icon`, `title`, `message`, `action_text`, `action_url` |
 | `icon_button` | Icon-only actions | `icon`, `label` (aria), `variant` |
 | `input` / `textarea` / `select` | Form fields | `name`, `label`, `hint`, `error`, `required` |
+| `loading_state` | Placeholder for an in-flight HTMX panel | `message`, `size`, `compact` |
 | `modal` | Alpine-driven dialog | `id`, `title`, `content`, `size`, `alpine_show` |
 | `pagination` | Page navigation | `current`, `total`, `page_range`, `base_url` |
 | `progress` | Determinate progress | `value`, `variant` (omit for the primary accent), `size`, `label_text` (renders the header row) |
@@ -93,9 +94,11 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 | Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline-{primary,warning,danger}`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
 | Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card` + `tw-card-{header,body,footer}`, `tw-collapsible-card` + `tw-collapsible-*` (the settings card was removed — use `tw-dashboard-card`) |
 | Forms | `tw-form-{label,input,select,textarea,error,hint}`, `tw-checkbox`, `tw-radio`, `tw-toggle` (+ `tw-toggle-label`), `tw-search-input-*`, `tw-file-upload-*`, `tw-date-picker-*`/`tw-calendar-*` |
-| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-stat-*`, `tw-progress-*` (+ `tw-progress-header`) |
-| Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*`, `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
-| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*`, `tw-icon-btn`, `tw-stepper-*` |
+| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
+| Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*` (+ `tw-badge-severity-{critical,high,medium,low}`), `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
+| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*`, `tw-icon-btn` (+ `-sm`, `-danger`), `tw-stepper-*` |
+| Accent | `tw-icon-chip` (+ `-sm`, `-lg`, `-neutral`, `-success`, `-warning`, `-danger`) — the flat tinted chip behind every icon-beside-a-heading |
+| Layout | `tw-page-header` (+ `-title`, `-subtitle`, `-actions`), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title |
 | Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose) |
 | Misc | modal, `alpine-tooltip` (via the `x-tooltip` directive), copy button / token display / code block |
 
@@ -107,6 +110,8 @@ Two names that are easy to get wrong:
 Removed in the v2 consolidation — do not reintroduce without three real callers: timeline, list group, range slider, `tw-tooltip` (CSS-hover; use `x-tooltip`), dividers, notification badge, `tw-table-striped`, `tw-tag-outline*`, `tw-avatar-group`, `tw-modal-{backdrop,container}`.
 
 ## Recipes
+
+**The three-caller rule.** A pattern earns a place in the library at three or more *distinct* callers. Below that it stays page-local markup composed from library primitives. Patterns rejected under this rule during the v2 consolidation — a metadata chip (1 real caller) and a selectable tile (3 files, three divergent geometries) — are recorded here so they are not re-proposed without new evidence.
 
 **New variant of a parameterized family** — set the accent properties on a modifier class; never restate the base rules:
 

@@ -1,0 +1,13 @@
+{% comment %}
+    The placeholder an HTMX-loaded panel shows while its content is in flight:
+    the brand loader over a line of text. Params: message, size (sm/md/lg,
+    default lg), compact, class, plus attrs / x_* for the Alpine or HTMX
+    condition that controls it.
+{% endcomment %}
+<div class="flex flex-col items-center justify-center {% if compact %}py-6{% else %}py-12{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs|safe }}>
+    {% with loader_size=size|default:"lg" %}
+        {% include "core/components/brand/loader.html.j2" with class="tw-loader-"|add:loader_size|add:" text-primary" %}
+    {% endwith %}
+    {% if message %}<p class="mt-3 text-text-muted">{{ message }}</p>{% endif %}
+</div>

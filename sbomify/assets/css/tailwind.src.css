@@ -725,10 +725,6 @@ html.no-transitions * {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.tw-card:hover {
-  box-shadow: var(--shadow-card-hover);
-}
-
 /* Card sub-components */
 .tw-card-header {
   padding: 1.25rem 1.5rem;
@@ -1552,6 +1548,9 @@ html.no-transitions * {
    Component Classes - Badges
    Base badge class - use with variant classes
    ============================================ */
+/* Every tinted badge is the same three declarations over a different accent, so
+   the accent is the only thing a variant sets. `secondary` and `accent` keep
+   their own rules below because they are not accent-tinted. */
 .tw-badge,
 .tw-badge-primary,
 .tw-badge-secondary,
@@ -1561,7 +1560,11 @@ html.no-transitions * {
 .tw-badge-accent,
 .tw-badge-info,
 .tw-badge-violet,
-.tw-badge-dot {
+.tw-badge-dot,
+.tw-badge-severity-critical,
+.tw-badge-severity-high,
+.tw-badge-severity-medium,
+.tw-badge-severity-low {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
@@ -1570,13 +1573,14 @@ html.no-transitions * {
   border-radius: 9999px;
   letter-spacing: 0.01em;
   transition: all 0.15s;
+  color: var(--badge-accent, var(--color-text-muted));
+  background-color: color-mix(in oklab, var(--badge-accent, var(--color-border)) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--badge-accent, var(--color-border)) 20%, transparent);
 }
 
 /* Badge Variants */
 .tw-badge-primary {
-  color: var(--color-primary);
-  background-color: color-mix(in oklab, var(--color-primary) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-primary) 20%, transparent);
+  --badge-accent: var(--color-primary);
 }
 
 .tw-badge-secondary {
@@ -1586,21 +1590,46 @@ html.no-transitions * {
 }
 
 .tw-badge-success {
-  color: var(--color-success);
-  background-color: color-mix(in oklab, var(--color-success) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-success) 20%, transparent);
+  --badge-accent: var(--color-success);
 }
 
 .tw-badge-warning {
-  color: var(--color-warning);
-  background-color: color-mix(in oklab, var(--color-warning) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-warning) 20%, transparent);
+  --badge-accent: var(--color-warning);
 }
 
 .tw-badge-danger {
-  color: var(--color-danger);
-  background-color: color-mix(in oklab, var(--color-danger) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-danger) 20%, transparent);
+  --badge-accent: var(--color-danger);
+}
+
+/* Severity badges read as a scale, so they are squarer and uppercase — the
+   shape carries the "this is a CVSS band" signal, not just the colour. */
+.tw-badge-severity-critical {
+  --badge-accent: var(--color-severity-critical);
+}
+
+.tw-badge-severity-high {
+  --badge-accent: var(--color-severity-high);
+}
+
+.tw-badge-severity-medium {
+  --badge-accent: var(--color-severity-medium);
+}
+
+.tw-badge-severity-low {
+  --badge-accent: var(--color-severity-low);
+}
+
+.tw-badge-severity-critical,
+.tw-badge-severity-high,
+.tw-badge-severity-medium,
+.tw-badge-severity-low {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Mixed toward the theme text colour rather than the raw accent — amber and
+     cyan on their own 12% tint fail contrast in both themes. */
+  color: color-mix(in oklab, var(--badge-accent) 70%, var(--color-text));
 }
 
 .tw-badge-accent {
@@ -1610,16 +1639,12 @@ html.no-transitions * {
 }
 
 .tw-badge-info {
-  color: var(--color-info);
-  background-color: color-mix(in oklab, var(--color-info) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-info) 20%, transparent);
+  --badge-accent: var(--color-info);
 }
 
 /* Soft violet — attestation artifacts (VEX); distinct from every severity hue. */
 .tw-badge-violet {
-  color: var(--color-accent);
-  background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+  --badge-accent: var(--color-accent);
 }
 
 /* Neutral chip — squared variant for table-like contexts (counts, types).
@@ -2670,6 +2695,17 @@ html.no-transitions * {
   border-radius: 0.375rem;
 }
 
+/* Destructive icon action — the row-level delete/revoke button. */
+.tw-icon-btn-danger {
+  color: var(--color-danger);
+}
+
+.tw-icon-btn-danger:hover {
+  background-color: color-mix(in oklab, var(--color-danger) 12%, transparent);
+  border-color: color-mix(in oklab, var(--color-danger) 30%, transparent);
+  color: var(--color-danger);
+}
+
 .tw-icon-btn-lg {
   width: 3rem;  /* 48px - comfortable for large buttons */
   height: 3rem; /* 48px - comfortable for large buttons */
@@ -3178,6 +3214,124 @@ html.no-transitions * {
 }
 
 /* ============================================
+   Component Classes - Icon Chip
+   ============================================ */
+/* The accent carrier of the design language: a flat 12% tint of the accent with
+   the accent as foreground. Every "icon next to a heading" in the app is one of
+   these — stat cards, section headers, modal headers, empty states.
+   Parameterized via --chip-accent, defaulting to primary. */
+.tw-icon-chip,
+.tw-stat-icon {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: color-mix(in oklab, var(--chip-accent, var(--color-primary)) 12%, transparent);
+  color: var(--chip-accent, var(--color-primary));
+}
+
+.tw-icon-chip-sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+}
+
+.tw-icon-chip-lg {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.125rem;
+  border-radius: 0.625rem;
+}
+
+.tw-icon-chip-neutral {
+  --chip-accent: var(--color-text-muted);
+}
+
+.tw-icon-chip-success {
+  --chip-accent: var(--color-success);
+}
+
+.tw-icon-chip-warning {
+  --chip-accent: var(--color-warning);
+}
+
+.tw-icon-chip-danger {
+  --chip-accent: var(--color-danger);
+}
+
+/* ============================================
+   Component Classes - Page & Section Headers
+   ============================================ */
+/* Page header: title block left, actions right, actions wrapping below the
+   title on narrow screens. The page supplies the content; this owns the layout. */
+.tw-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.tw-page-header-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.tw-page-header-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.tw-page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Section header: a chip, a title and optional subtitle introducing a block
+   inside a card. tw-section-body indents the block to the title's left edge,
+   replacing the hand-written `ml-11`. */
+.tw-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.tw-section-header-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.tw-section-header-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0.125rem 0 0;
+}
+
+.tw-section-body {
+  margin-left: 2.75rem;
+}
+
+@media (width < 40rem) {
+  .tw-section-body {
+    margin-left: 0;
+  }
+}
+
+/* ============================================
    Component Classes - Stat Card
    ============================================ */
 /* Stat Cards — instrument-readout style: tabular numerals, delta on the value
@@ -3193,16 +3347,18 @@ html.no-transitions * {
   box-shadow: var(--shadow-card);
 }
 
-.tw-stat-icon {
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
+/* Compact readout: a centred number over its label, for the dense metric strips
+   above a table. Caller sets the value's colour with a token utility. */
+.tw-stat-card-compact {
+  padding: 0.75rem 1rem;
   align-items: center;
-  justify-content: center;
+  text-align: center;
+}
+
+.tw-stat-icon {
+  /* Same chip as tw-icon-chip, driven by the stat card's per-metric accent. */
+  --chip-accent: var(--stat-accent, var(--color-primary));
   border-radius: 0.625rem;
-  background-color: color-mix(in oklab, var(--stat-accent, var(--color-primary)) 12%, transparent);
-  color: var(--stat-accent, var(--color-primary));
   margin-bottom: 0.375rem;
 }
 
@@ -3398,10 +3554,6 @@ html.no-transitions * {
 
 .tw-collapsible-card--danger {
   border-color: color-mix(in oklab, var(--color-danger) 30%, transparent);
-}
-
-.tw-collapsible-card:hover {
-  box-shadow: var(--shadow-card);
 }
 
 .tw-collapsible-header {

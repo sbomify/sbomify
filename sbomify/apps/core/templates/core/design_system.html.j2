@@ -65,6 +65,46 @@
             <p class="font-mono text-sm text-text m-0">Mono — identifiers, tokens and code (tabular where numeric).</p>
         </div>
     {% endcard %}
+    <h2 id="icon-chips" class="text-xl font-semibold text-text mb-4">Icon chips</h2>
+    {% card class="mb-8" %}
+        <p class="text-sm text-text-muted mb-4">
+            The accent carrier of the design language — a flat 12% tint with the accent as foreground.
+            Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
+        </p>
+        <div class="flex flex-wrap items-center gap-4">
+            <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-key" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip"><i class="fas fa-credit-card" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-cube" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-plus" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-success"><i class="fas fa-check" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-warning"><i class="fas fa-clock" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-danger"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
+        </div>
+    {% endcard %}
+    <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
+    {% card class="mb-8" %}
+        <div class="tw-page-header">
+            <div>
+                <h1 class="tw-page-header-title">Acme Gateway</h1>
+                <p class="tw-page-header-subtitle">Quantum readiness and migration priority across all components</p>
+            </div>
+            <div class="tw-page-header-actions">
+                {% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
+                {% button text="New release" variant="primary" size="sm" %}
+            </div>
+        </div>
+        <hr class="my-6 border-border">
+        <div class="tw-section-header">
+            <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-plus-circle" aria-hidden="true"></i></span>
+            <div>
+                <h3 class="tw-section-header-title">Generate a new token</h3>
+                <p class="tw-section-header-subtitle">Tokens are shown once and cannot be retrieved later.</p>
+            </div>
+        </div>
+        <div class="tw-section-body">
+            {% input name="ds-section-token" label="Token name" placeholder="ci-pipeline" %}
+        </div>
+    {% endcard %}
     {# ── Controls ──────────────────────────────────────────────────────────── #}
     <h2 id="buttons" class="text-xl font-semibold text-text mb-4">Buttons</h2>
     {% card class="mb-8" %}
@@ -94,6 +134,7 @@
             {% button_link text="Link button" url="#buttons" variant="secondary" icon_right="fas fa-arrow-right" %}
             {% icon_button icon="fas fa-pen" label="Edit" %}
             {% icon_button icon="fas fa-trash" label="Delete" variant="danger" %}
+            {% icon_button icon="fas fa-ellipsis-vertical" label="Actions" size="sm" %}
         </div>
     {% endcard %}
     <h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>
@@ -335,6 +376,41 @@
             <span class="tw-stat-value">4</span>
         </div>
     </div>
+    <p class="tw-data-label mb-3">Compact — the dense metric strip above a table</p>
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+        <div class="tw-stat-card tw-stat-card-compact">
+            <span class="tw-stat-value text-danger">3</span>
+            <span class="tw-stat-label mt-1 mb-0">At risk</span>
+        </div>
+        <div class="tw-stat-card tw-stat-card-compact">
+            <span class="tw-stat-value text-warning">7</span>
+            <span class="tw-stat-label mt-1 mb-0">Needs review</span>
+        </div>
+        <div class="tw-stat-card tw-stat-card-compact">
+            <span class="tw-stat-value text-success">41</span>
+            <span class="tw-stat-label mt-1 mb-0">Ready</span>
+        </div>
+        <div class="tw-stat-card tw-stat-card-compact">
+            <span class="tw-stat-value">51</span>
+            <span class="tw-stat-label mt-1 mb-0">Total</span>
+        </div>
+        <div class="tw-stat-card tw-stat-card-compact">
+            <span class="tw-stat-value text-text-muted">—</span>
+            <span class="tw-stat-label mt-1 mb-0">Unscanned</span>
+        </div>
+    </div>
+    <h2 id="severity" class="text-xl font-semibold text-text mb-4">Severity badges</h2>
+    {% card class="mb-8" %}
+        <p class="text-sm text-text-muted mb-4">
+            One class per CVSS band, replacing the five-branch <code class="tw-code-inline">if/elif</code> chains.
+            Squarer and uppercase so the shape carries the "this is a severity" signal, not just the colour.
+        </p>
+        <div class="flex flex-wrap gap-2">
+            {% for severity in demo_severities %}
+                <span class="tw-badge-severity-{{ severity.level }}">{{ severity.label }}</span>
+            {% endfor %}
+        </div>
+    {% endcard %}
     <h2 id="progress" class="text-xl font-semibold text-text mb-4">Progress</h2>
     {% card class="mb-8" %}
         <div class="space-y-4">
@@ -411,6 +487,13 @@
                 {% spinner size="lg" %}
             </div>
             <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners — never a bespoke one.</p>
+        {% endcard %}
+        {% card title="Loading panel" %}
+            {% loading_state message="Loading artifacts…" %}
+            <p class="text-sm text-text-muted m-0">
+                The placeholder an HTMX panel shows while its content is in flight —
+                <code class="tw-code-inline">{% templatetag openblock %} loading_state {% templatetag closeblock %}</code>.
+            </p>
         {% endcard %}
         {% card title="Skeletons" %}
             <div class="flex items-start gap-3">
