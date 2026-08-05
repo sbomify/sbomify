@@ -19,613 +19,614 @@
     </div>
     {# ── Index ─────────────────────────────────────────────────────────────── #}
     {% card variant="dashboard" title="Component index" class="mb-8" %}
-        {% regroup sections by group as section_groups %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
-            {% for group in section_groups %}
-                <div>
-                    <p class="tw-data-label mb-2">{{ group.grouper }}</p>
-                    <ul class="space-y-1">
-                        {% for section in group.list %}
-                            <li>
-                                <a href="#{{ section.id }}"
-                                   class="text-sm text-primary hover:underline">{{ section.label }}</a>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endfor %}
-        </div>
-    {% endcard %}
-    {# ── Foundations ───────────────────────────────────────────────────────── #}
-    <h2 id="colors" class="text-xl font-semibold text-text mb-4">Colour tokens</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            Every colour in the app resolves to one of these. Swatches read the custom property directly,
-            so this grid is the tokens — not a copy of them.
-        </p>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {% for token in demo_tokens %}
-                <div>
-                    <div class="h-12 rounded-lg border border-border"
-                         style="background-color: var(--color-{{ token }})"></div>
-                    <p class="mt-1.5 font-mono text-xs text-text-muted break-all">--color-{{ token }}</p>
-                </div>
-            {% endfor %}
-        </div>
-    {% endcard %}
-    <h2 id="typography" class="text-xl font-semibold text-text mb-4">Typography</h2>
-    {% card class="mb-8" %}
-        <div class="space-y-3">
-            <h1 class="text-3xl font-bold text-text m-0">Heading 1 — Figtree Bold</h1>
-            <h2 class="text-2xl font-semibold text-text m-0">Heading 2 — Figtree Semibold</h2>
-            <h3 class="text-lg font-semibold text-text m-0">Heading 3 — Figtree Semibold</h3>
-            <p class="text-text m-0">Body — the default paragraph size, used for everything that is read rather than scanned.</p>
-            <p class="text-sm text-text-muted m-0">Muted small — secondary detail, hints and timestamps.</p>
-            <p class="tw-data-label m-0">Data label — small caps over a value</p>
-            <p class="font-mono text-sm text-text m-0">Mono — identifiers, tokens and code (tabular where numeric).</p>
-        </div>
-    {% endcard %}
-    <h2 id="icon-chips" class="text-xl font-semibold text-text mb-4">Icon chips</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            The accent carrier of the design language — a flat 12% tint with the accent as foreground.
-            Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
-        </p>
-        <p class="tw-data-label mb-2">Sizes</p>
-        <div class="flex flex-wrap items-center gap-4 mb-5">
-            <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-key" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip"><i class="fas fa-credit-card" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-cube" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-xl"><i class="fas fa-box" aria-hidden="true"></i></span>
-        </div>
-        <p class="tw-data-label mb-2">Accents</p>
-        <div class="flex flex-wrap items-center gap-4 mb-5">
-            <span class="tw-icon-chip"><i class="fas fa-cube" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-plus" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-info"><i class="fas fa-circle-info" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-success"><i class="fas fa-check" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-warning"><i class="fas fa-clock" aria-hidden="true"></i></span>
-            <span class="tw-icon-chip tw-icon-chip-danger"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
-        </div>
-        <p class="tw-data-label mb-2">Circular — the medallion above a destructive confirmation</p>
-        <div class="flex flex-wrap items-center gap-4">
-            <span class="tw-icon-chip tw-icon-chip-xl tw-icon-chip-circle tw-icon-chip-danger">
-                <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
-            </span>
-            <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-circle tw-icon-chip-neutral">
-                <i class="fas fa-inbox" aria-hidden="true"></i>
-            </span>
-        </div>
-    {% endcard %}
-    <h2 id="metric-chips" class="text-xl font-semibold text-text mb-4">Metric chips</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            The stats strip that sits under a page header — a bordered surface pill holding an icon,
-            a muted label and a value.
-        </p>
-        <div class="flex flex-wrap gap-2">
-            <span class="tw-metric-chip">
-                <i class="fas fa-puzzle-piece text-text-muted" aria-hidden="true"></i>
-                <span class="tw-metric-chip-value">12</span>
-                <span class="tw-metric-chip-label">Components</span>
-            </span>
-            <span class="tw-metric-chip">
-                <i class="fas fa-tag text-text-muted" aria-hidden="true"></i>
-                <span class="tw-metric-chip-value">4</span>
-                <span class="tw-metric-chip-label">Releases</span>
-            </span>
-            <span class="tw-metric-chip">
-                <i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
-                <span class="tw-metric-chip-label">Scanned</span>
-                <span class="tw-metric-chip-value">3h ago</span>
-            </span>
-        </div>
-    {% endcard %}
-    <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
-    {% card class="mb-8" %}
-        <div class="tw-page-header">
-            <div class="tw-page-header-lead">
-                <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-box" aria-hidden="true"></i></span>
-                <div>
-                    <h1 class="tw-page-header-title">Acme Gateway</h1>
-                    <p class="tw-page-header-subtitle">Quantum readiness and migration priority across all components</p>
-                </div>
-            </div>
-            <div class="tw-page-header-actions">
-                {% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
-                {% button text="New release" variant="primary" size="sm" %}
-            </div>
-        </div>
-        <p class="text-sm text-text-muted mb-6">
-            <code class="tw-code-inline">tw-page-header-lead</code> holds the mark (an avatar or icon chip) beside the
-            title block; add <code class="tw-code-inline">tw-page-header-flush</code> inside a
-            <code class="tw-code-inline">space-y-*</code> stack that already supplies the rhythm.
-        </p>
-        <hr class="my-6 border-border">
-        <div class="tw-section-header">
-            <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-plus-circle" aria-hidden="true"></i></span>
+    {% regroup sections by group as section_groups %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
+        {% for group in section_groups %}
             <div>
-                <h3 class="tw-section-header-title">Generate a new token</h3>
-                <p class="tw-section-header-subtitle">Tokens are shown once and cannot be retrieved later.</p>
-            </div>
-        </div>
-        <div class="tw-section-body">
-            {% input name="ds-section-token" label="Token name" placeholder="ci-pipeline" %}
-        </div>
-    {% endcard %}
-    {# ── Controls ──────────────────────────────────────────────────────────── #}
-    <h2 id="buttons" class="text-xl font-semibold text-text mb-4">Buttons</h2>
-    {% card class="mb-8" %}
-        <p class="tw-data-label mb-3">Variants</p>
-        <div class="flex flex-wrap gap-2 mb-6">
-            {% button text="Primary" variant="primary" %}
-            {% button text="Secondary" variant="secondary" %}
-            {% button text="Ghost" variant="ghost" %}
-            {% button text="Gradient" variant="gradient" %}
-            {% button text="Success" variant="success" %}
-            {% button text="Warning" variant="warning" %}
-            {% button text="Danger" variant="danger" icon="fas fa-trash" %}
-        </div>
-        <p class="tw-data-label mb-3">Outline</p>
-        <div class="flex flex-wrap gap-2 mb-6">
-            {% button text="Outline primary" variant="outline-primary" %}
-            {% button text="Outline warning" variant="outline-warning" %}
-            {% button text="Outline danger" variant="outline-danger" %}
-        </div>
-        <p class="tw-data-label mb-3">Sizes, states and links</p>
-        <div class="flex flex-wrap items-center gap-2">
-            {% button text="Small" variant="primary" size="sm" %}
-            {% button text="Default" variant="primary" %}
-            {% button text="Large" variant="primary" size="lg" %}
-            {% button text="Loading" variant="primary" loading=True %}
-            {% button text="Disabled" variant="primary" disabled=True %}
-            {% button_link text="Link button" url="#buttons" variant="secondary" icon_right="fas fa-arrow-right" %}
-            {% icon_button icon="fas fa-pen" label="Edit" %}
-            {% icon_button icon="fas fa-trash" label="Delete" variant="danger" %}
-            {% icon_button icon="fas fa-ellipsis-vertical" label="Actions" size="sm" %}
-        </div>
-    {% endcard %}
-    <h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            Every input in the app comes from here — including email, password and number, which are the
-            text input with a <code class="tw-code-inline">type</code>.
-        </p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {% input name="ds-text" label="Text" placeholder="Acme Gateway" hint="Shown under the field." %}
-            {% input name="ds-email" label="Email" type="email" placeholder="you@example.com" %}
-            {% input name="ds-password" label="Password" type="password" value="hunter2" %}
-            {% input name="ds-number" label="Number" type="number" value="42" %}
-            {% input name="ds-required" label="Required" required=True placeholder="Cannot be blank" %}
-            {% input name="ds-error" label="With error" value="not-an-email" error="Enter a valid email address." %}
-            {% input name="ds-disabled" label="Disabled" value="Read only" disabled=True %}
-            {% select name="ds-select" label="Select" options=demo_select_options selected="document" hint="Pick an artifact type." %}
-        </div>
-        <div class="mt-5">
-            {% textarea name="ds-textarea" label="Textarea" rows=3 placeholder="Describe this component…" %}
-        </div>
-        <div class="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
-            {% checkbox name="ds-checkbox" label="Checkbox" checked=True %}
-            {% checkbox name="ds-checkbox-off" label="Unchecked" %}
-            {% checkbox name="ds-checkbox-disabled" label="Disabled" disabled=True %}
-            {% radio name="ds-radio" value="cyclonedx" label="CycloneDX" checked=True %}
-            {% radio name="ds-radio" value="spdx" label="SPDX" %}
-            {% toggle name="ds-toggle" label="Toggle on" checked=True %}
-            {% toggle name="ds-toggle-off" label="Toggle off" %}
-            {% toggle name="ds-toggle-disabled" label="Disabled" disabled=True %}
-        </div>
-    {% endcard %}
-    <h2 id="search" class="text-xl font-semibold text-text mb-4">Search input</h2>
-    {% card class="mb-8" %}
-        <div class="max-w-md" x-data="{ q: 'gateway' }">
-            <div class="tw-search-input">
-                <i class="fas fa-search tw-search-input-icon" aria-hidden="true"></i>
-                <input type="search"
-                       class="tw-form-input"
-                       placeholder="Search products, components…"
-                       x-model="q"
-                       aria-label="Search">
-                <button type="button"
-                        class="tw-search-input-clear"
-                        x-show="q"
-                        @click="q = ''"
-                        aria-label="Clear search">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                </button>
-            </div>
-        </div>
-    {% endcard %}
-    <h2 id="file-upload" class="text-xl font-semibold text-text mb-4">File upload</h2>
-    {% card class="mb-8" %}
-        <div x-data="{ over: false }">
-            <label class="tw-file-upload"
-                   :class="{ 'tw-file-upload-active': over }"
-                   @dragover.prevent="over = true"
-                   @dragleave.prevent="over = false"
-                   @drop.prevent="over = false">
-                <i class="fas fa-cloud-arrow-up tw-file-upload-icon" aria-hidden="true"></i>
-                <span class="tw-file-upload-text">Drop an SBOM here, or click to choose</span>
-                <span class="tw-file-upload-hint">CycloneDX or SPDX, JSON or XML</span>
-                <input type="file" class="sr-only">
-            </label>
-        </div>
-    {% endcard %}
-    <h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
-    {% card class="mb-8" %}
-        <div class="max-w-xs">
-            {% include "components/date_picker.html.j2" with name="ds-date" label="Release date" %}
-        </div>
-    {% endcard %}
-    {# ── Containers ────────────────────────────────────────────────────────── #}
-    <h2 id="cards" class="text-xl font-semibold text-text mb-4">Cards</h2>
-    <p class="text-sm text-text-muted mb-4">
-        Containers sit still — no hover lift, no shadow swap. Cards compose: a card holds library components,
-        it does not hold bespoke markup.
-    </p>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {% card title="Default card" subtitle="Header, body, hairline border" %}
-            <p class="text-sm text-text m-0">The plain container. Use it for anything that is not a dashboard panel.</p>
-        {% endcard %}
-        {% card variant="dashboard" title="Dashboard card" subtitle="The workspace panel" %}
-            {% progress value=72 label_text="NTIA compliance" %}
-        {% endcard %}
-        {% card variant="danger" title="Danger zone" subtitle="Irreversible actions" %}
-            {% button text="Delete product" variant="danger" icon="fas fa-trash" size="sm" %}
-        {% endcard %}
-    </div>
-    <h2 id="collapsible" class="text-xl font-semibold text-text mb-4">Collapsible card</h2>
-    <div class="space-y-3 mb-8" x-data="{ open: 'links' }">
-        {% for row in demo_collapsible %}
-            <div class="tw-collapsible-card">
-                <button type="button"
-                        class="tw-collapsible-header"
-                        @click="open = open === '{{ row.id }}' ? '' : '{{ row.id }}'"
-                        :aria-expanded="open === '{{ row.id }}'">
-                    <span class="tw-collapsible-title">{{ row.label }}</span>
-                    <i class="fas fa-chevron-down tw-collapsible-icon"
-                       :class="{ 'tw-collapsible-icon-open': open === '{{ row.id }}' }"
-                       aria-hidden="true"></i>
-                </button>
-                <div class="tw-collapsible-content" x-show="open === '{{ row.id }}'" x-collapse>
-                    <div class="tw-collapsible-body">
-                        <p class="text-sm text-text-muted m-0">Panel content for {{ row.label|lower }}.</p>
-                    </div>
-                </div>
+                <p class="tw-data-label mb-2">{{ group.grouper }}</p>
+                <ul class="space-y-1">
+                    {% for section in group.list %}
+                        <li>
+                            <a href="#{{ section.id }}" class="text-sm text-primary hover:underline">{{ section.label }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
             </div>
         {% endfor %}
     </div>
-    <h2 id="modals" class="text-xl font-semibold text-text mb-4">Modals</h2>
-    {% card class="mb-8" %}
-        <div x-data="{ open: false }">
-            {% button text="Open modal" variant="primary" attrs='@click="open = true"' %}
-            {% modal id="ds-modal" title="Assign a component" size="md" alpine_show="open" %}
-                {% input name="ds-modal-name" label="Component name" placeholder="acme-gateway-core" %}
-            {% endmodal %}
+{% endcard %}
+{# ── Foundations ───────────────────────────────────────────────────────── #}
+<h2 id="colors" class="text-xl font-semibold text-text mb-4">Colour tokens</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    Every colour in the app resolves to one of these. Swatches read the custom property directly,
+    so this grid is the tokens — not a copy of them.
+</p>
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+    {% for token in demo_tokens %}
+        <div>
+            <div class="h-12 rounded-lg border border-border"
+                 style="background-color: var(--color-{{ token }})"></div>
+            <p class="mt-1.5 font-mono text-xs text-text-muted break-all">--color-{{ token }}</p>
         </div>
-        <p class="text-sm text-text-muted mt-4 mb-0">
-            The app-wide confirm dialog is already in the base template — dispatch
-            <code class="tw-code-inline">confirm:show</code> rather than building another modal.
-        </p>
-    {% endcard %}
-    <h2 id="empty-states" class="text-xl font-semibold text-text mb-4">Empty states</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {% card %}
-            {% empty_state icon="fas fa-cube" title="No components yet" message="Create your first component to start collecting SBOMs and documents." action_text="Add component" action_url="#empty-states" %}
-        {% endcard %}
-        {% card %}
-            {% empty_state compact=True icon="fas fa-tag" title="No releases yet" message="Tag a release when you ship." action_text="Create a release" action_url="#empty-states" action_variant="secondary" secondary_text="or read the docs" secondary_url="#empty-states" %}
-        {% endcard %}
+    {% endfor %}
+</div>
+{% endcard %}
+<h2 id="typography" class="text-xl font-semibold text-text mb-4">Typography</h2>
+{% card class="mb-8" %}
+<div class="space-y-3">
+    <h1 class="text-3xl font-bold text-text m-0">Heading 1 — Figtree Bold</h1>
+    <h2 class="text-2xl font-semibold text-text m-0">Heading 2 — Figtree Semibold</h2>
+    <h3 class="text-lg font-semibold text-text m-0">Heading 3 — Figtree Semibold</h3>
+    <p class="text-text m-0">Body — the default paragraph size, used for everything that is read rather than scanned.</p>
+    <p class="text-sm text-text-muted m-0">Muted small — secondary detail, hints and timestamps.</p>
+    <p class="tw-data-label m-0">Data label — small caps over a value</p>
+    <p class="font-mono text-sm text-text m-0">Mono — identifiers, tokens and code (tabular where numeric).</p>
+</div>
+{% endcard %}
+<h2 id="icon-chips" class="text-xl font-semibold text-text mb-4">Icon chips</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    The accent carrier of the design language — a flat 12% tint with the accent as foreground.
+    Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
+</p>
+<p class="tw-data-label mb-2">Sizes</p>
+<div class="flex flex-wrap items-center gap-4 mb-5">
+    <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-key" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip"><i class="fas fa-credit-card" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-cube" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-xl"><i class="fas fa-box" aria-hidden="true"></i></span>
+</div>
+<p class="tw-data-label mb-2">Accents</p>
+<div class="flex flex-wrap items-center gap-4 mb-5">
+    <span class="tw-icon-chip"><i class="fas fa-cube" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-plus" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-info"><i class="fas fa-circle-info" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-success"><i class="fas fa-check" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-warning"><i class="fas fa-clock" aria-hidden="true"></i></span>
+    <span class="tw-icon-chip tw-icon-chip-danger"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
+</div>
+<p class="tw-data-label mb-2">Circular — the medallion above a destructive confirmation</p>
+<div class="flex flex-wrap items-center gap-4">
+    <span class="tw-icon-chip tw-icon-chip-xl tw-icon-chip-circle tw-icon-chip-danger">
+        <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+    </span>
+    <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-circle tw-icon-chip-neutral">
+        <i class="fas fa-inbox" aria-hidden="true"></i>
+    </span>
+</div>
+{% endcard %}
+<h2 id="metric-chips" class="text-xl font-semibold text-text mb-4">Metric chips</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    The stats strip that sits under a page header — a bordered surface pill holding an icon,
+    a muted label and a value.
+</p>
+<div class="flex flex-wrap gap-2">
+    <span class="tw-metric-chip">
+        <i class="fas fa-puzzle-piece text-text-muted" aria-hidden="true"></i>
+        <span class="tw-metric-chip-value">12</span>
+        <span class="tw-metric-chip-label">Components</span>
+    </span>
+    <span class="tw-metric-chip">
+        <i class="fas fa-tag text-text-muted" aria-hidden="true"></i>
+        <span class="tw-metric-chip-value">4</span>
+        <span class="tw-metric-chip-label">Releases</span>
+    </span>
+    <span class="tw-metric-chip">
+        <i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
+        <span class="tw-metric-chip-label">Scanned</span>
+        <span class="tw-metric-chip-value">3h ago</span>
+    </span>
+</div>
+{% endcard %}
+<h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
+{% card class="mb-8" %}
+<div class="tw-page-header">
+    <div class="tw-page-header-lead">
+        <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-box" aria-hidden="true"></i></span>
+        <div>
+            <h1 class="tw-page-header-title">Acme Gateway</h1>
+            <p class="tw-page-header-subtitle">Quantum readiness and migration priority across all components</p>
+        </div>
     </div>
-    {# ── Data ──────────────────────────────────────────────────────────────── #}
-    <h2 id="tables" class="text-xl font-semibold text-text mb-4">Tables</h2>
-    <p class="text-sm text-text-muted mb-4">
-        <code class="tw-code-inline">tw-data-table</code> is the shell (toolbar, scroll container, footer);
-        <code class="tw-code-inline">tw-table</code> styles the table itself. Wide tables scroll inside
-        <code class="tw-code-inline">tw-data-table-container</code> — never on the page body.
-    </p>
-    <div class="tw-data-table mb-8">
-        <div class="tw-data-table-toolbar">
-            <div class="tw-data-table-toolbar-left">
-                <div class="tw-data-table-search">
-                    <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
-                    <label for="ds-table-search" class="sr-only">Search components</label>
-                    <input type="search"
-                           id="ds-table-search"
-                           class="tw-data-table-search-input"
-                           placeholder="Search components…">
+    <div class="tw-page-header-actions">
+        {% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
+        {% button text="New release" variant="primary" size="sm" %}
+    </div>
+</div>
+<p class="text-sm text-text-muted mb-6">
+    <code class="tw-code-inline">tw-page-header-lead</code> holds the mark (an avatar or icon chip) beside the
+    title block; add <code class="tw-code-inline">tw-page-header-flush</code> inside a
+    <code class="tw-code-inline">space-y-*</code> stack that already supplies the rhythm.
+</p>
+<hr class="my-6 border-border">
+<div class="tw-section-header">
+    <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-plus-circle" aria-hidden="true"></i></span>
+    <div>
+        <h3 class="tw-section-header-title">Generate a new token</h3>
+        <p class="tw-section-header-subtitle">Tokens are shown once and cannot be retrieved later.</p>
+    </div>
+</div>
+<div class="tw-section-body">{% input name="ds-section-token" label="Token name" placeholder="ci-pipeline" %}</div>
+{% endcard %}
+{# ── Controls ──────────────────────────────────────────────────────────── #}
+<h2 id="buttons" class="text-xl font-semibold text-text mb-4">Buttons</h2>
+{% card class="mb-8" %}
+<p class="tw-data-label mb-3">Variants</p>
+<div class="flex flex-wrap gap-2 mb-6">
+    {% button text="Primary" variant="primary" %}
+    {% button text="Secondary" variant="secondary" %}
+    {% button text="Ghost" variant="ghost" %}
+    {% button text="Gradient" variant="gradient" %}
+    {% button text="Success" variant="success" %}
+    {% button text="Warning" variant="warning" %}
+    {% button text="Danger" variant="danger" icon="fas fa-trash" %}
+</div>
+<p class="tw-data-label mb-3">Outline</p>
+<div class="flex flex-wrap gap-2 mb-6">
+    {% button text="Outline primary" variant="outline-primary" %}
+    {% button text="Outline warning" variant="outline-warning" %}
+    {% button text="Outline danger" variant="outline-danger" %}
+</div>
+<p class="tw-data-label mb-3">Sizes, states and links</p>
+<div class="flex flex-wrap items-center gap-2">
+    {% button text="Small" variant="primary" size="sm" %}
+    {% button text="Default" variant="primary" %}
+    {% button text="Large" variant="primary" size="lg" %}
+    {% button text="Loading" variant="primary" loading=True %}
+    {% button text="Disabled" variant="primary" disabled=True %}
+    {% button_link text="Link button" url="#buttons" variant="secondary" icon_right="fas fa-arrow-right" %}
+    {% icon_button icon="fas fa-pen" label="Edit" %}
+    {% icon_button icon="fas fa-trash" label="Delete" variant="danger" %}
+    {% icon_button icon="fas fa-ellipsis-vertical" label="Actions" size="sm" %}
+</div>
+{% endcard %}
+<h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    Every input in the app comes from here — including email, password and number, which are the
+    text input with a <code class="tw-code-inline">type</code>.
+</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    {% input name="ds-text" label="Text" placeholder="Acme Gateway" hint="Shown under the field." %}
+    {% input name="ds-email" label="Email" type="email" placeholder="you@example.com" %}
+    {% input name="ds-password" label="Password" type="password" value="hunter2" %}
+    {% input name="ds-number" label="Number" type="number" value="42" %}
+    {% input name="ds-required" label="Required" required=True placeholder="Cannot be blank" %}
+    {% input name="ds-error" label="With error" value="not-an-email" error="Enter a valid email address." %}
+    {% input name="ds-disabled" label="Disabled" value="Read only" disabled=True %}
+    {% select name="ds-select" label="Select" options=demo_select_options selected="document" hint="Pick an artifact type." %}
+</div>
+<div class="mt-5">
+    {% textarea name="ds-textarea" label="Textarea" rows=3 placeholder="Describe this component…" %}
+</div>
+<div class="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
+    {% checkbox name="ds-checkbox" label="Checkbox" checked=True %}
+    {% checkbox name="ds-checkbox-off" label="Unchecked" %}
+    {% checkbox name="ds-checkbox-disabled" label="Disabled" disabled=True %}
+    {% radio name="ds-radio" value="cyclonedx" label="CycloneDX" checked=True %}
+    {% radio name="ds-radio" value="spdx" label="SPDX" %}
+    {% toggle name="ds-toggle" label="Toggle on" checked=True %}
+    {% toggle name="ds-toggle-off" label="Toggle off" %}
+    {% toggle name="ds-toggle-disabled" label="Disabled" disabled=True %}
+</div>
+{% endcard %}
+<h2 id="search" class="text-xl font-semibold text-text mb-4">Search input</h2>
+{% card class="mb-8" %}
+<div class="max-w-md" x-data="{ q: 'gateway' }">
+    <div class="tw-search-input">
+        <i class="fas fa-search tw-search-input-icon" aria-hidden="true"></i>
+        <input type="search"
+               class="tw-form-input"
+               placeholder="Search products, components…"
+               x-model="q"
+               aria-label="Search">
+        <button type="button"
+                class="tw-search-input-clear"
+                x-show="q"
+                @click="q = ''"
+                aria-label="Clear search">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+    </div>
+</div>
+{% endcard %}
+<h2 id="file-upload" class="text-xl font-semibold text-text mb-4">File upload</h2>
+{% card class="mb-8" %}
+<div x-data="{ over: false }">
+    <label class="tw-file-upload"
+           :class="{ 'tw-file-upload-active': over }"
+           @dragover.prevent="over = true"
+           @dragleave.prevent="over = false"
+           @drop.prevent="over = false">
+        <i class="fas fa-cloud-arrow-up tw-file-upload-icon" aria-hidden="true"></i>
+        <span class="tw-file-upload-text">Drop an SBOM here, or click to choose</span>
+        <span class="tw-file-upload-hint">CycloneDX or SPDX, JSON or XML</span>
+        <input type="file" class="sr-only">
+    </label>
+</div>
+{% endcard %}
+<h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
+{% card class="mb-8" %}
+<div class="max-w-xs">{% include "components/date_picker.html.j2" with name="ds-date" label="Release date" %}</div>
+{% endcard %}
+{# ── Containers ────────────────────────────────────────────────────────── #}
+<h2 id="cards" class="text-xl font-semibold text-text mb-4">Cards</h2>
+<p class="text-sm text-text-muted mb-4">
+    Containers sit still — no hover lift, no shadow swap. Cards compose: a card holds library components,
+    it does not hold bespoke markup.
+</p>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    {% card title="Default card" subtitle="Header, body, hairline border" %}
+    <p class="text-sm text-text m-0">The plain container. Use it for anything that is not a dashboard panel.</p>
+{% endcard %}
+{% card variant="dashboard" title="Dashboard card" subtitle="The workspace panel" %}
+{% progress value=72 label_text="NTIA compliance" %}
+{% endcard %}
+{% card variant="danger" title="Danger zone" subtitle="Irreversible actions" %}
+{% button text="Delete product" variant="danger" icon="fas fa-trash" size="sm" %}
+{% endcard %}
+</div>
+<h2 id="collapsible" class="text-xl font-semibold text-text mb-4">Collapsible card</h2>
+<div class="space-y-3 mb-8" x-data="{ open: 'links' }">
+    {% for row in demo_collapsible %}
+        <div class="tw-collapsible-card">
+            <button type="button"
+                    class="tw-collapsible-header"
+                    @click="open = open === '{{ row.id }}' ? '' : '{{ row.id }}'"
+                    :aria-expanded="open === '{{ row.id }}'">
+                <span class="tw-collapsible-title">{{ row.label }}</span>
+                <i class="fas fa-chevron-down tw-collapsible-icon"
+                   :class="{ 'tw-collapsible-icon-open': open === '{{ row.id }}' }"
+                   aria-hidden="true"></i>
+            </button>
+            <div class="tw-collapsible-content"
+                 x-show="open === '{{ row.id }}'"
+                 x-collapse>
+                <div class="tw-collapsible-body">
+                    <p class="text-sm text-text-muted m-0">Panel content for {{ row.label|lower }}.</p>
                 </div>
             </div>
-            <div class="tw-data-table-toolbar-right">
-                <div class="tw-data-table-page-size">
-                    <span>Show</span>
-                    <label for="ds-table-per-page" class="sr-only">Entries per page</label>
-                    <select id="ds-table-per-page" class="tw-data-table-page-size-select">
-                        <option>10</option>
-                        <option>25</option>
-                    </select>
-                    <span>entries</span>
-                </div>
+        </div>
+    {% endfor %}
+</div>
+<h2 id="modals" class="text-xl font-semibold text-text mb-4">Modals</h2>
+{% card class="mb-8" %}
+<div x-data="{ open: false }">
+    {% button text="Open modal" variant="primary" attrs='@click="open = true"' %}
+    {% modal id="ds-modal" title="Assign a component" size="md" alpine_show="open" %}
+    {% input name="ds-modal-name" label="Component name" placeholder="acme-gateway-core" %}
+{% endmodal %}
+</div>
+<p class="text-sm text-text-muted mt-4 mb-0">
+    The app-wide confirm dialog is already in the base template — dispatch
+    <code class="tw-code-inline">confirm:show</code> rather than building another modal.
+</p>
+{% endcard %}
+<h2 id="empty-states" class="text-xl font-semibold text-text mb-4">Empty states</h2>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    {% card %}
+{% empty_state icon="fas fa-cube" title="No components yet" message="Create your first component to start collecting SBOMs and documents." action_text="Add component" action_url="#empty-states" %}
+{% endcard %}
+{% card %}
+{% empty_state compact=True icon="fas fa-tag" title="No releases yet" message="Tag a release when you ship." action_text="Create a release" action_url="#empty-states" action_variant="secondary" secondary_text="or read the docs" secondary_url="#empty-states" %}
+{% endcard %}
+</div>
+{# ── Data ──────────────────────────────────────────────────────────────── #}
+<h2 id="tables" class="text-xl font-semibold text-text mb-4">Tables</h2>
+<p class="text-sm text-text-muted mb-4">
+    <code class="tw-code-inline">tw-data-table</code> is the shell (toolbar, scroll container, footer);
+    <code class="tw-code-inline">tw-table</code> styles the table itself. Wide tables scroll inside
+    <code class="tw-code-inline">tw-data-table-container</code> — never on the page body.
+</p>
+<div class="tw-data-table mb-8">
+    <div class="tw-data-table-toolbar">
+        <div class="tw-data-table-toolbar-left">
+            <div class="tw-data-table-search">
+                <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
+                <label for="ds-table-search" class="sr-only">Search components</label>
+                <input type="search"
+                       id="ds-table-search"
+                       class="tw-data-table-search-input"
+                       placeholder="Search components…">
             </div>
         </div>
-        <div class="tw-data-table-container">
-            <table class="tw-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Format</th>
-                        <th>Latest version</th>
-                        <th>Vulnerabilities</th>
-                        <th class="text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td class="font-medium text-text">acme-gateway-core</td>
-                        <td><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></td>
-                        <td class="font-mono">11.2.4</td>
-                        <td>{% badge text="3 high" variant="warning" %}</td>
-                        <td class="text-right">{% icon_button icon="fas fa-ellipsis-vertical" label="Actions" %}</td>
-                    </tr>
-                    <tr>
-                        <td class="font-medium text-text">acme-vault-core</td>
-                        <td><span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span></td>
-                        <td class="font-mono">3.0.1</td>
-                        <td>{% badge text="Clean" variant="success" %}</td>
-                        <td class="text-right">{% icon_button icon="fas fa-ellipsis-vertical" label="Actions" %}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="tw-data-table-footer">
-            <span class="tw-data-table-info">Showing 1 to 2 of 2</span>
+        <div class="tw-data-table-toolbar-right">
+            <div class="tw-data-table-page-size">
+                <span>Show</span>
+                <label for="ds-table-per-page" class="sr-only">Entries per page</label>
+                <select id="ds-table-per-page" class="tw-data-table-page-size-select">
+                    <option>10</option>
+                    <option>25</option>
+                </select>
+                <span>entries</span>
+            </div>
         </div>
     </div>
-    <h2 id="pagination" class="text-xl font-semibold text-text mb-4">Pagination</h2>
-    {% card class="mb-8" %}
-        {% pagination current=3 total=8 page_range=demo_page_range base_url="#pagination" %}
-        <p class="text-sm text-text-muted mt-4 mb-0">
-            The compact Alpine pager for client-side tables lives in
-            <code class="tw-code-inline">components/tw/table_pager.html.j2</code>.
-        </p>
-    {% endcard %}
-    <h2 id="stats" class="text-xl font-semibold text-text mb-4">Stat cards</h2>
-    <p class="text-sm text-text-muted mb-4">
-        Laying the cards out is the page's job (a grid utility). <code class="tw-code-inline">tw-stat-row</code>
-        is the wrapper <em>inside</em> a card that sits the delta on the value's baseline.
-    </p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div class="tw-stat-card">
-            <p class="tw-stat-label">Total products</p>
-            <div class="tw-stat-row">
-                <span class="tw-stat-value">1,234</span>
-                <span class="tw-stat-change tw-stat-change-up">
-                    <i class="fas fa-arrow-up" aria-hidden="true"></i> 12%
-                </span>
-            </div>
-        </div>
-        <div class="tw-stat-card tw-stat-accent-danger">
-            <span class="tw-stat-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
-            <p class="tw-stat-label">Vulnerabilities</p>
-            <div class="tw-stat-row">
-                <span class="tw-stat-value">17</span>
-                <span class="tw-stat-change tw-stat-change-down">
-                    <i class="fas fa-arrow-down" aria-hidden="true"></i> 5
-                </span>
-            </div>
-        </div>
-        <div class="tw-stat-card tw-stat-accent-success">
-            <span class="tw-stat-icon"><i class="fas fa-circle-check" aria-hidden="true"></i></span>
-            <p class="tw-stat-label">NTIA compliant</p>
-            <span class="tw-stat-value">96%</span>
-        </div>
-        <div class="tw-stat-card tw-stat-accent-warning">
-            <span class="tw-stat-icon"><i class="fas fa-clock" aria-hidden="true"></i></span>
-            <p class="tw-stat-label">Stale scans</p>
-            <span class="tw-stat-value">4</span>
+    <div class="tw-data-table-container">
+        <table class="tw-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Format</th>
+                    <th>Latest version</th>
+                    <th>Vulnerabilities</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="font-medium text-text">acme-gateway-core</td>
+                    <td>
+                        <span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span>
+                    </td>
+                    <td class="font-mono">11.2.4</td>
+                    <td>{% badge text="3 high" variant="warning" %}</td>
+                    <td class="text-right">{% icon_button icon="fas fa-ellipsis-vertical" label="Actions" %}</td>
+                </tr>
+                <tr>
+                    <td class="font-medium text-text">acme-vault-core</td>
+                    <td>
+                        <span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span>
+                    </td>
+                    <td class="font-mono">3.0.1</td>
+                    <td>{% badge text="Clean" variant="success" %}</td>
+                    <td class="text-right">{% icon_button icon="fas fa-ellipsis-vertical" label="Actions" %}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="tw-data-table-footer">
+        <span class="tw-data-table-info">Showing 1 to 2 of 2</span>
+    </div>
+</div>
+<h2 id="pagination" class="text-xl font-semibold text-text mb-4">Pagination</h2>
+{% card class="mb-8" %}
+{% pagination current=3 total=8 page_range=demo_page_range base_url="#pagination" %}
+<p class="text-sm text-text-muted mt-4 mb-0">
+    The compact Alpine pager for client-side tables lives in
+    <code class="tw-code-inline">components/tw/table_pager.html.j2</code>.
+</p>
+{% endcard %}
+<h2 id="stats" class="text-xl font-semibold text-text mb-4">Stat cards</h2>
+<p class="text-sm text-text-muted mb-4">
+    Laying the cards out is the page's job (a grid utility). <code class="tw-code-inline">tw-stat-row</code>
+    is the wrapper <em>inside</em> a card that sits the delta on the value's baseline.
+</p>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="tw-stat-card">
+        <p class="tw-stat-label">Total products</p>
+        <div class="tw-stat-row">
+            <span class="tw-stat-value">1,234</span>
+            <span class="tw-stat-change tw-stat-change-up">
+                <i class="fas fa-arrow-up" aria-hidden="true"></i> 12%
+            </span>
         </div>
     </div>
-    <p class="tw-data-label mb-3">Compact — the dense metric strip above a table</p>
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
-        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
-            <span class="tw-stat-value">3</span>
-            <span class="tw-stat-label mt-1 mb-0">At risk</span>
-        </div>
-        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
-            <span class="tw-stat-value">7</span>
-            <span class="tw-stat-label mt-1 mb-0">Needs review</span>
-        </div>
-        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
-            <span class="tw-stat-value">41</span>
-            <span class="tw-stat-label mt-1 mb-0">Ready</span>
-        </div>
-        <div class="tw-stat-card tw-stat-card-compact">
-            <span class="tw-stat-value">51</span>
-            <span class="tw-stat-label mt-1 mb-0">Total</span>
-        </div>
-        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
-            <span class="tw-stat-value">—</span>
-            <span class="tw-stat-label mt-1 mb-0">Unscanned</span>
+    <div class="tw-stat-card tw-stat-accent-danger">
+        <span class="tw-stat-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
+        <p class="tw-stat-label">Vulnerabilities</p>
+        <div class="tw-stat-row">
+            <span class="tw-stat-value">17</span>
+            <span class="tw-stat-change tw-stat-change-down">
+                <i class="fas fa-arrow-down" aria-hidden="true"></i> 5
+            </span>
         </div>
     </div>
-    <p class="text-sm text-text-muted mb-8">
-        The number takes the card's accent. A Tailwind colour utility on
-        <code class="tw-code-inline">tw-stat-value</code> would be dead — component classes are unlayered and
-        emitted after the utilities, so they win at equal specificity.
-    </p>
-    <h2 id="severity" class="text-xl font-semibold text-text mb-4">Severity badges</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            One class per CVSS band, replacing the five-branch <code class="tw-code-inline">if/elif</code> chains.
-            Squarer and uppercase so the shape carries the "this is a severity" signal, not just the colour.
-        </p>
-        <div class="flex flex-wrap gap-2">
-            {% for severity in demo_severities %}
-                <span class="tw-badge-severity-{{ severity.level }}">{{ severity.label }}</span>
-            {% endfor %}
-        </div>
-    {% endcard %}
-    <h2 id="progress" class="text-xl font-semibold text-text mb-4">Progress</h2>
-    {% card class="mb-8" %}
-        <div class="space-y-4">
-            {% progress value=72 label_text="Default (primary accent)" %}
-            {% progress value=100 variant="success" label_text="Success" %}
-            {% progress value=45 variant="warning" label_text="Warning" %}
-            {% progress value=15 variant="danger" label_text="Danger" %}
-            <div class="space-y-2 pt-2">
-                {% progress value=60 size="sm" %}
-                {% progress value=60 %}
-                {% progress value=60 size="lg" %}
-            </div>
-        </div>
-    {% endcard %}
-    <h2 id="badges" class="text-xl font-semibold text-text mb-4">Badges</h2>
-    {% card class="mb-8" %}
-        <div class="flex flex-wrap gap-2 mb-4">
-            {% badge text="Primary" variant="primary" %}
-            {% badge text="Secondary" variant="secondary" %}
-            {% badge text="Success" variant="success" %}
-            {% badge text="Warning" variant="warning" %}
-            {% badge text="Danger" variant="danger" %}
-            {% badge text="Info" variant="info" %}
-            {% badge text="Accent" variant="accent" %}
-            {% badge text="Violet" variant="violet" %}
-            {% badge text="With icon" variant="info" icon="fas fa-star" %}
-            {% badge text="Pill" variant="primary" pill=True %}
-        </div>
-        <p class="tw-data-label mb-2">SBOM format</p>
-        <div class="flex flex-wrap gap-2">
-            <span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span>
-            <span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span>
-        </div>
-    {% endcard %}
-    <h2 id="tags" class="text-xl font-semibold text-text mb-4">Tags</h2>
-    {% card class="mb-8" %}
-        <div class="flex flex-wrap gap-2">
-            {% tag text="Neutral" %}
-            {% tag text="Primary" variant="primary" %}
-            {% tag text="Success" variant="success" %}
-            {% tag text="Warning" variant="warning" %}
-            {% tag text="Danger" variant="danger" %}
-            {% tag text="Python" icon="fab fa-python" %}
-            {% tag text="Removable" removable=True %}
-        </div>
-    {% endcard %}
-    {# ── Feedback ──────────────────────────────────────────────────────────── #}
-    <h2 id="alerts" class="text-xl font-semibold text-text mb-4">Alerts</h2>
-    {% card class="mb-8" %}
-        <div class="space-y-3">
-            {% alert variant="success" title="Saved" message="Your changes have been saved." %}
-            {% alert variant="warning" message="Review your settings before continuing." dismissible=True %}
-            {% alert variant="danger" title="Upload failed" message="The SBOM could not be parsed." %}
-            {% alert variant="info" message="New features are available in this release." %}
-        </div>
-    {% endcard %}
-    <h2 id="toasts" class="text-xl font-semibold text-text mb-4">Toasts</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            The container is already in the base template. Dispatch a <code class="tw-code-inline">toast</code>
-            event — never build a notification by hand.
-        </p>
-        <div class="flex flex-wrap gap-2">
-            {% button text="Success toast" variant="success" size="sm" attrs="@click=&quot;$dispatch('toast', { type: 'success', title: 'Saved', message: 'Component updated.' })&quot;" %}
-            {% button text="Error toast" variant="danger" size="sm" attrs="@click=&quot;$dispatch('toast', { type: 'danger', title: 'Failed', message: 'Could not parse the SBOM.' })&quot;" %}
-        </div>
-    {% endcard %}
-    <h2 id="loading" class="text-xl font-semibold text-text mb-4">Loading states</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {% card title="Brand loader" %}
-            <div class="flex items-center gap-6">
-                {% spinner size="sm" %}
-                {% spinner size="md" %}
-                {% spinner size="lg" %}
-            </div>
-            <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners — never a bespoke one.</p>
-        {% endcard %}
-        {% card title="Loading panel" %}
-            {% loading_state message="Loading artifacts…" %}
-            {% loading_state row=True message="Refreshing…" %}
-            <p class="text-sm text-text-muted m-0">
-                The placeholder an HTMX panel shows while its content is in flight —
-                <code class="tw-code-inline">{% templatetag openblock %} loading_state {% templatetag closeblock %}</code>,
-                or <code class="tw-code-inline">row=True</code> beside a skeleton block.
-            </p>
-        {% endcard %}
-        {% card title="Skeletons" %}
-            <div class="flex items-start gap-3">
-                {% skeleton type="avatar" %}
-                <div class="flex-1">{% skeleton type="paragraph" %}</div>
-            </div>
-            <div class="mt-4 flex gap-2">{% skeleton type="button" width="7rem" %}</div>
-        {% endcard %}
+    <div class="tw-stat-card tw-stat-accent-success">
+        <span class="tw-stat-icon"><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+        <p class="tw-stat-label">NTIA compliant</p>
+        <span class="tw-stat-value">96%</span>
     </div>
-    {# ── Navigation ────────────────────────────────────────────────────────── #}
-    <h2 id="tabs" class="text-xl font-semibold text-text mb-4">Tabs</h2>
-    {% card class="mb-8" %}
-        {% tabs tabs=demo_tabs active="overview" %}
-        <div class="mt-6">{% tabs tabs=demo_tabs active="sboms" variant="pills" %}</div>
-    {% endcard %}
-    <h2 id="breadcrumbs" class="text-xl font-semibold text-text mb-4">Breadcrumbs</h2>
-    {% card class="mb-8" %}
-        {% breadcrumbs items=demo_breadcrumbs %}
-    {% endcard %}
-    <h2 id="dropdowns" class="text-xl font-semibold text-text mb-4">Dropdowns</h2>
-    {% card class="mb-8" %}
-        <div class="flex flex-wrap gap-3">
-            {% dropdown id="ds-dropdown" trigger_text="Actions" items=demo_dropdown_items %}
-            {% dropdown id="ds-dropdown-icon" trigger_icon="fas fa-ellipsis-vertical" items=demo_dropdown_items align="right" %}
-        </div>
-    {% endcard %}
-    <h2 id="stepper" class="text-xl font-semibold text-text mb-4">Stepper</h2>
-    {% card class="mb-8" %}
-        <div class="tw-stepper">
-            <div class="tw-stepper-item">
-                <span class="tw-stepper-circle tw-stepper-circle-completed"><i class="fas fa-check" aria-hidden="true"></i></span>
-                <span class="tw-stepper-label">Scope</span>
-            </div>
-            <span class="tw-stepper-connector tw-stepper-connector-completed"></span>
-            <div class="tw-stepper-item">
-                <span class="tw-stepper-circle tw-stepper-circle-active">2</span>
-                <span class="tw-stepper-label tw-stepper-label-active">Assessment</span>
-            </div>
-            <span class="tw-stepper-connector"></span>
-            <div class="tw-stepper-item">
-                <span class="tw-stepper-circle">3</span>
-                <span class="tw-stepper-label">Declaration</span>
-            </div>
-        </div>
-    {% endcard %}
-    {# ── Misc ──────────────────────────────────────────────────────────────── #}
-    <h2 id="avatars" class="text-xl font-semibold text-text mb-4">Avatars</h2>
-    {% card class="mb-8" %}
-        <div class="flex flex-wrap items-end gap-4">
-            {% avatar initials="JD" size="sm" %}
-            {% avatar initials="AB" %}
-            {% avatar initials="CD" size="lg" %}
-            {% avatar initials="EF" size="xl" %}
-            {% avatar %}
-            {% avatar initials="ON" status="online" %}
-            {% avatar initials="BS" status="busy" %}
-            {% avatar initials="OF" status="offline" %}
-        </div>
-    {% endcard %}
-    <h2 id="copy" class="text-xl font-semibold text-text mb-4">Code &amp; tokens</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {% card title="Code block" %}
-            {% code_block code=demo_code language="bash" filename="upload.sh" %}
-        {% endcard %}
-        {% card title="Token display" %}
-            {% token_display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked=True %}
-        {% endcard %}
+    <div class="tw-stat-card tw-stat-accent-warning">
+        <span class="tw-stat-icon"><i class="fas fa-clock" aria-hidden="true"></i></span>
+        <p class="tw-stat-label">Stale scans</p>
+        <span class="tw-stat-value">4</span>
     </div>
-    <h2 id="tooltip" class="text-xl font-semibold text-text mb-4">Tooltip</h2>
-    {% card class="mb-8" %}
-        <p class="text-sm text-text-muted mb-4">
-            Tooltips come from the <code class="tw-code-inline">x-tooltip</code> Alpine directive, which
-            positions a single shared element — CSS-hover tooltips cannot follow the trigger.
-        </p>
-        <div class="flex flex-wrap gap-3">
-            {% button text="Hover me" variant="secondary" x_tooltip="'Scanned 3 hours ago'" %}
-            {% icon_button icon="fas fa-circle-info" label="More information" x_tooltip="'Immutable — sbomify never rewrites an artifact'" %}
-        </div>
-    {% endcard %}
+</div>
+<p class="tw-data-label mb-3">Compact — the dense metric strip above a table</p>
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
+        <span class="tw-stat-value">3</span>
+        <span class="tw-stat-label mt-1 mb-0">At risk</span>
+    </div>
+    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+        <span class="tw-stat-value">7</span>
+        <span class="tw-stat-label mt-1 mb-0">Needs review</span>
+    </div>
+    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
+        <span class="tw-stat-value">41</span>
+        <span class="tw-stat-label mt-1 mb-0">Ready</span>
+    </div>
+    <div class="tw-stat-card tw-stat-card-compact">
+        <span class="tw-stat-value">51</span>
+        <span class="tw-stat-label mt-1 mb-0">Total</span>
+    </div>
+    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
+        <span class="tw-stat-value">—</span>
+        <span class="tw-stat-label mt-1 mb-0">Unscanned</span>
+    </div>
+</div>
+<p class="text-sm text-text-muted mb-8">
+    The number takes the card's accent. A Tailwind colour utility on
+    <code class="tw-code-inline">tw-stat-value</code> would be dead — component classes are unlayered and
+    emitted after the utilities, so they win at equal specificity.
+</p>
+<h2 id="severity" class="text-xl font-semibold text-text mb-4">Severity badges</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    One class per CVSS band, replacing the five-branch <code class="tw-code-inline">if/elif</code> chains.
+    Squarer and uppercase so the shape carries the "this is a severity" signal, not just the colour.
+</p>
+<div class="flex flex-wrap gap-2">
+    {% for severity in demo_severities %}
+        <span class="tw-badge-severity-{{ severity.level }}">{{ severity.label }}</span>
+    {% endfor %}
+</div>
+{% endcard %}
+<h2 id="progress" class="text-xl font-semibold text-text mb-4">Progress</h2>
+{% card class="mb-8" %}
+<div class="space-y-4">
+    {% progress value=72 label_text="Default (primary accent)" %}
+    {% progress value=100 variant="success" label_text="Success" %}
+    {% progress value=45 variant="warning" label_text="Warning" %}
+    {% progress value=15 variant="danger" label_text="Danger" %}
+    <div class="space-y-2 pt-2">
+        {% progress value=60 size="sm" %}
+        {% progress value=60 %}
+        {% progress value=60 size="lg" %}
+    </div>
+</div>
+{% endcard %}
+<h2 id="badges" class="text-xl font-semibold text-text mb-4">Badges</h2>
+{% card class="mb-8" %}
+<div class="flex flex-wrap gap-2 mb-4">
+    {% badge text="Primary" variant="primary" %}
+    {% badge text="Secondary" variant="secondary" %}
+    {% badge text="Success" variant="success" %}
+    {% badge text="Warning" variant="warning" %}
+    {% badge text="Danger" variant="danger" %}
+    {% badge text="Info" variant="info" %}
+    {% badge text="Accent" variant="accent" %}
+    {% badge text="Violet" variant="violet" %}
+    {% badge text="With icon" variant="info" icon="fas fa-star" %}
+    {% badge text="Pill" variant="primary" pill=True %}
+</div>
+<p class="tw-data-label mb-2">SBOM format</p>
+<div class="flex flex-wrap gap-2">
+    <span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span>
+    <span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span>
+</div>
+{% endcard %}
+<h2 id="tags" class="text-xl font-semibold text-text mb-4">Tags</h2>
+{% card class="mb-8" %}
+<div class="flex flex-wrap gap-2">
+    {% tag text="Neutral" %}
+    {% tag text="Primary" variant="primary" %}
+    {% tag text="Success" variant="success" %}
+    {% tag text="Warning" variant="warning" %}
+    {% tag text="Danger" variant="danger" %}
+    {% tag text="Python" icon="fab fa-python" %}
+    {% tag text="Removable" removable=True %}
+</div>
+{% endcard %}
+{# ── Feedback ──────────────────────────────────────────────────────────── #}
+<h2 id="alerts" class="text-xl font-semibold text-text mb-4">Alerts</h2>
+{% card class="mb-8" %}
+<div class="space-y-3">
+    {% alert variant="success" title="Saved" message="Your changes have been saved." %}
+    {% alert variant="warning" message="Review your settings before continuing." dismissible=True %}
+    {% alert variant="danger" title="Upload failed" message="The SBOM could not be parsed." %}
+    {% alert variant="info" message="New features are available in this release." %}
+</div>
+{% endcard %}
+<h2 id="toasts" class="text-xl font-semibold text-text mb-4">Toasts</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    The container is already in the base template. Dispatch a <code class="tw-code-inline">toast</code>
+    event — never build a notification by hand.
+</p>
+<div class="flex flex-wrap gap-2">
+    {% button text="Success toast" variant="success" size="sm" attrs="@click=&quot;$dispatch('toast', { type: 'success', title: 'Saved', message: 'Component updated.' })&quot;" %}
+    {% button text="Error toast" variant="danger" size="sm" attrs="@click=&quot;$dispatch('toast', { type: 'danger', title: 'Failed', message: 'Could not parse the SBOM.' })&quot;" %}
+</div>
+{% endcard %}
+<h2 id="loading" class="text-xl font-semibold text-text mb-4">Loading states</h2>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    {% card title="Brand loader" %}
+    <div class="flex items-center gap-6">
+        {% spinner size="sm" %}
+        {% spinner size="md" %}
+        {% spinner size="lg" %}
+    </div>
+    <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners — never a bespoke one.</p>
+{% endcard %}
+{% card title="Loading panel" %}
+{% loading_state message="Loading artifacts…" %}
+{% loading_state row=True message="Refreshing…" %}
+<p class="text-sm text-text-muted m-0">
+    The placeholder an HTMX panel shows while its content is in flight —
+    <code class="tw-code-inline">{% templatetag openblock %} loading_state {% templatetag closeblock %}</code>,
+    or <code class="tw-code-inline">row=True</code> beside a skeleton block.
+</p>
+{% endcard %}
+{% card title="Skeletons" %}
+<div class="flex items-start gap-3">
+    {% skeleton type="avatar" %}
+    <div class="flex-1">{% skeleton type="paragraph" %}</div>
+</div>
+<div class="mt-4 flex gap-2">{% skeleton type="button" width="7rem" %}</div>
+{% endcard %}
+</div>
+{# ── Navigation ────────────────────────────────────────────────────────── #}
+<h2 id="tabs" class="text-xl font-semibold text-text mb-4">Tabs</h2>
+{% card class="mb-8" %}
+{% tabs tabs=demo_tabs active="overview" %}
+<div class="mt-6">{% tabs tabs=demo_tabs active="sboms" variant="pills" %}</div>
+{% endcard %}
+<h2 id="breadcrumbs" class="text-xl font-semibold text-text mb-4">Breadcrumbs</h2>
+{% card class="mb-8" %}
+{% breadcrumbs items=demo_breadcrumbs %}
+{% endcard %}
+<h2 id="dropdowns" class="text-xl font-semibold text-text mb-4">Dropdowns</h2>
+{% card class="mb-8" %}
+<div class="flex flex-wrap gap-3">
+    {% dropdown id="ds-dropdown" trigger_text="Actions" items=demo_dropdown_items %}
+    {% dropdown id="ds-dropdown-icon" trigger_icon="fas fa-ellipsis-vertical" items=demo_dropdown_items align="right" %}
+</div>
+{% endcard %}
+<h2 id="stepper" class="text-xl font-semibold text-text mb-4">Stepper</h2>
+{% card class="mb-8" %}
+<div class="tw-stepper">
+    <div class="tw-stepper-item">
+        <span class="tw-stepper-circle tw-stepper-circle-completed"><i class="fas fa-check" aria-hidden="true"></i></span>
+        <span class="tw-stepper-label">Scope</span>
+    </div>
+    <span class="tw-stepper-connector tw-stepper-connector-completed"></span>
+    <div class="tw-stepper-item">
+        <span class="tw-stepper-circle tw-stepper-circle-active">2</span>
+        <span class="tw-stepper-label tw-stepper-label-active">Assessment</span>
+    </div>
+    <span class="tw-stepper-connector"></span>
+    <div class="tw-stepper-item">
+        <span class="tw-stepper-circle">3</span>
+        <span class="tw-stepper-label">Declaration</span>
+    </div>
+</div>
+{% endcard %}
+{# ── Misc ──────────────────────────────────────────────────────────────── #}
+<h2 id="avatars" class="text-xl font-semibold text-text mb-4">Avatars</h2>
+{% card class="mb-8" %}
+<div class="flex flex-wrap items-end gap-4">
+    {% avatar initials="JD" size="sm" %}
+    {% avatar initials="AB" %}
+    {% avatar initials="CD" size="lg" %}
+    {% avatar initials="EF" size="xl" %}
+    {% avatar %}
+    {% avatar initials="ON" status="online" %}
+    {% avatar initials="BS" status="busy" %}
+    {% avatar initials="OF" status="offline" %}
+</div>
+{% endcard %}
+<h2 id="copy" class="text-xl font-semibold text-text mb-4">Code &amp; tokens</h2>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    {% card title="Code block" %}
+    {% code_block code=demo_code language="bash" filename="upload.sh" %}
+{% endcard %}
+{% card title="Token display" %}
+{% token_display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked=True %}
+{% endcard %}
+</div>
+<h2 id="tooltip" class="text-xl font-semibold text-text mb-4">Tooltip</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    Tooltips come from the <code class="tw-code-inline">x-tooltip</code> Alpine directive, which
+    positions a single shared element — CSS-hover tooltips cannot follow the trigger.
+</p>
+<div class="flex flex-wrap gap-3">
+    {% button text="Hover me" variant="secondary" x_tooltip="'Scanned 3 hours ago'" %}
+    {% icon_button icon="fas fa-circle-info" label="More information" x_tooltip="'Immutable — sbomify never rewrites an artifact'" %}
+</div>
+{% endcard %}
 {% endblock %}

@@ -16,7 +16,8 @@
     {# Page Numbers - expects page_range list from view context #}
     {% for page_num in page_range %}
         {% if page_num == current %}
-            <span class="tw-pagination-btn tw-pagination-btn-active" aria-current="page">{{ page_num }}</span>
+            <span class="tw-pagination-btn tw-pagination-btn-active"
+                  aria-current="page">{{ page_num }}</span>
         {% elif page_num == '…' or page_num == '...' %}
             <span class="tw-pagination-ellipsis">...</span>
         {% else %}
