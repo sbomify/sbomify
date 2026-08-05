@@ -38,7 +38,6 @@ ALLOWED_TABS = frozenset(
         "trust-center",
         "controls",
         "contact-profiles",
-        "plugins",
         "integrations",
         "billing",
         "branding",

@@ -89,13 +89,10 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         template="branding",
         description="How this workspace looks to everyone outside it.",
     ),
-    SettingsTab(
-        key="plugins",
-        label="Plugins",
-        icon="fa-plug",
-        template="plugins",
-        description="Vulnerability scanners and assessment plugins.",
-    ),
+    # Plugins is deliberately absent: it has its own page in the sidebar, which
+    # shows the summary bar as well as the same settings partial this tab
+    # embedded. Two entry points to one screen is a choice the reader has to make
+    # for no reason.
     SettingsTab(
         key="billing",
         label="Billing",
