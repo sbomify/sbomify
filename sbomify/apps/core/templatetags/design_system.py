@@ -94,16 +94,22 @@ def _pop_attrs(params: dict[str, Any]) -> SafeString:
         pairs.append(format_html("{}", name) if value is True else format_html('{}="{}"', name, value))
 
     if raw := params.pop("attrs", ""):
-        pairs.append(mark_safe(raw))
+        # Template-author markup for attribute names Python cannot express (@click,
+        # :class). Never user input — the component templates already rendered this
+        # with |safe before these tags existed.
+        pairs.append(mark_safe(raw))  # nosec
 
-    # Every piece is already escaped, so joining and re-marking is safe.
-    return mark_safe(" ".join(pairs))
+    # Every piece above came from format_html or the trusted `attrs` string, so it
+    # is already escaped; joining cannot introduce anything new.
+    return mark_safe(" ".join(pairs))  # nosec
 
 
 def _render(name: str, params: dict[str, Any]) -> SafeString:
     params["attrs"] = _pop_attrs(params)
     template = _ALIASES.get(name, name)
-    return mark_safe(render_to_string(f"{_TEMPLATE_DIR}/{template}.html.j2", params))
+    # Django's template engine autoescapes every value it interpolated; this only
+    # marks the finished component HTML so a tag can return it without re-escaping.
+    return mark_safe(render_to_string(f"{_TEMPLATE_DIR}/{template}.html.j2", params))  # nosec
 
 
 def _leaf(name: str) -> Callable[..., SafeString]:
