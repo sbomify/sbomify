@@ -21,11 +21,12 @@ rejects on re-upload. Those keys are dropped when emitting 1.6.
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from sbomify.logging import getLogger
+
+logger = getLogger(__name__)
 
 
 def _component_keys(model: Any) -> set[str]:

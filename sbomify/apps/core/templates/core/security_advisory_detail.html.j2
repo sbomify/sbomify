@@ -2,32 +2,46 @@
 {% load static %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
-    <div class="space-y-8">
+    <div class="space-y-6">
         {# Back link #}
         <a href="{% url 'core:security_advisories_dashboard' %}"
            class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text transition-colors">
             <i class="fas fa-arrow-left text-xs" aria-hidden="true"></i>
             Security advisories
         </a>
-        {# Header #}
-        <div class="flex items-start justify-between gap-4">
+        {% comment %}Header — same shape as the product and component detail pages: the actions drop below the title on narrow viewports rather than squeezing it.{% endcomment %}
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div class="flex items-start gap-4 min-w-0">
                 <div class="tw-avatar tw-avatar-lg shrink-0">
                     <i class="fas fa-shield-halved"></i>
                 </div>
-                <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
-                        <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity|title }}</span>
-                        <span class="tw-badge tw-badge-{{ advisory.status_variant }}">{{ advisory.status_label }}</span>
-                    </div>
-                    <h1 class="text-2xl font-bold text-text">{{ advisory.title }}</h1>
+                {% comment %}Both clamps are line-based, so the cut follows the rendered width and the ellipsis is the browser's — a wide screen shows more of the same title than a narrow one. One disclosure governs both, because a title long enough to clip usually comes with a description long enough to clip too. clipped is only re-measured while collapsed: expanding removes the clamp, so a measurement taken then would report nothing overflowing and the button would vanish mid-use. break-words keeps an unbroken string (a pasted identifier, a hostname) from running under the header actions.{% endcomment %}
+                <div class="flex-1 min-w-0"
+                     x-data="{ expanded: false, clipped: false, measure() { this.clipped = [$refs.title, $refs.summary].some((el) => el && el.scrollHeight > el.clientHeight) } }"
+                     x-init="$nextTick(() => measure())"
+                     @resize.window.debounce="expanded || measure()">
+                    <h1 x-ref="title"
+                        class="text-2xl font-bold text-text break-words"
+                        :class="expanded ? '' : 'line-clamp-1'"
+                        title="{{ advisory.title }}">{{ advisory.title }}</h1>
+                    <p class="text-text-muted text-sm m-0 mt-1">{{ advisory.type_label }} advisory</p>
                     {% if advisory.description %}
-                        <p class="text-text-muted leading-relaxed mt-2 max-w-3xl">{{ advisory.description }}</p>
+                        <p x-ref="summary"
+                           class="text-text-muted leading-relaxed break-words whitespace-pre-line mt-2 max-w-3xl"
+                           :class="expanded ? '' : 'line-clamp-2'">{{ advisory.description }}</p>
                     {% endif %}
+                    <button type="button"
+                            x-show="clipped || expanded"
+                            x-cloak
+                            @click="expanded = !expanded"
+                            :aria-expanded="expanded"
+                            class="mt-1 text-sm text-primary hover:underline">
+                        <span x-text="expanded ? 'Show less' : 'Show more'"></span>
+                    </button>
                 </div>
             </div>
             {# Header actions #}
-            <div class="flex items-center gap-2 shrink-0">
+            <div class="flex items-center gap-2 shrink-0 flex-wrap">
                 <a href="{% url 'core:workspace_public_current' %}"
                    target="_blank"
                    rel="noopener"
@@ -54,6 +68,17 @@
                              role="menu"
                              aria-orientation="vertical"
                              aria-label="Advisory actions">
+                            {% if advisory.publication_status == 'draft' %}
+                                {# Publishing is what puts an advisory on the Trust Center — until it runs, an advisory is a draft with private visibility and both are filtered out there. #}
+                                <button type="button"
+                                        class="tw-dropdown-item"
+                                        role="menuitem"
+                                        @click="open = false; $dispatch('open-publish-advisory-modal')">
+                                    <i class="fas fa-bullhorn w-5 text-center opacity-70" aria-hidden="true"></i>
+                                    Publish advisory
+                                </button>
+                                <div class="tw-dropdown-divider"></div>
+                            {% endif %}
                             <button type="button"
                                     class="tw-dropdown-item"
                                     role="menuitem"
@@ -152,7 +177,14 @@
                         <div class="flex-1 min-w-0 {% if not forloop.last %}pb-8{% endif %}"
                              {% if has_crud_permissions %}@click="if (!editing) editing = true" :class="{ 'cursor-pointer': !editing }"{% endif %}>
                             <div class="flex items-center justify-between gap-3">
-                                <span class="tw-badge tw-badge-{{ u.variant }}">{{ u.label }}</span>
+                                <span class="flex items-center gap-2 min-w-0">
+                                    {% if u.from_label %}
+                                        <span class="text-xs text-text-muted shrink-0">{{ u.from_label }}</span>
+                                        <i class="fas fa-arrow-right text-[10px] text-text-muted shrink-0"
+                                           aria-hidden="true"></i>
+                                    {% endif %}
+                                    <span class="tw-badge tw-badge-{{ u.variant }}">{{ u.label }}</span>
+                                </span>
                                 <div class="flex items-center gap-3 shrink-0">
                                     <span class="text-xs text-text-muted">{{ u.date_display }}</span>
                                     {% if has_crud_permissions %}
@@ -241,6 +273,15 @@
                     <h2 class="text-xs uppercase tracking-wide text-text-muted">Affected products</h2>
                     <div class="flex flex-wrap gap-2">
                         {% comment %}An advisory can name a product this workspace does not track, and keeps naming it after one is deleted. Those have no id, and the url tag would happily build /product/None/ rather than fail, so they render as plain text.{% endcomment %}
+                        {% if not advisory.products %}
+                            <p class="text-sm text-text-muted m-0">
+                                {% if advisory.advisory_type == 'workspace_notice' %}
+                                    A workspace notice names no products.
+                                {% else %}
+                                    No products recorded yet — publishing a product advisory requires at least one.
+                                {% endif %}
+                            </p>
+                        {% endif %}
                         {% for product in advisory.products %}
                             <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/20 text-text-muted border border-border/40">
                                 <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
@@ -282,7 +323,97 @@
                 {% endif %}
             </aside>
         </div>
-        {# Edit Advisory Modal (Alpine.js) — front-end preview, does not persist yet (#1172) #}
+        {% comment %}Publish Advisory Modal. Disclosure is irreversible in the sense that matters — the tracking id is allocated here and immutable, and made_public_at records when disclosure happened — so this asks rather than firing from the menu.{% endcomment %}
+        {% if has_crud_permissions and advisory.publication_status == 'draft' %}
+            <div x-data="{ open: false }"
+                 @open-publish-advisory-modal.window="open = true">
+                <template x-teleport="body">
+                    <div x-show="open"
+                         x-cloak
+                         class="fixed inset-0 z-[100]"
+                         role="dialog"
+                         aria-modal="true"
+                         aria-labelledby="publishAdvisoryModalLabel">
+                        <div x-show="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0"
+                             x-transition:enter-end="opacity-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100"
+                             x-transition:leave-end="opacity-0"
+                             class="tw-modal-overlay"
+                             @click="open = false"></div>
+                        <div class="tw-modal"
+                             x-show="open"
+                             x-trap.noscroll="open"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             x-transition:leave="transition ease-in duration-150"
+                             x-transition:leave-start="opacity-100 scale-100"
+                             x-transition:leave-end="opacity-0 scale-95"
+                             @click.stop
+                             @keydown.escape="if(open) open = false">
+                            <div class="tw-modal-content">
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                                            <i class="fas fa-bullhorn text-primary"></i>
+                                        </div>
+                                        <h4 id="publishAdvisoryModalLabel" class="tw-modal-title">Publish advisory</h4>
+                                    </div>
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false"
+                                            aria-label="Close">
+                                        <i class="fas fa-times" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <form method="post"
+                                      action="{% url 'core:security_advisory_detail' advisory.id %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="intent" value="publish" />
+                                    <div class="tw-modal-body space-y-4">
+                                        {# Clamped like the page header: a pasted identifier for a title would otherwise run past the modal's edge. #}
+                                        <p class="text-sm text-text-muted m-0">
+                                            <strong class="text-text block break-words line-clamp-2"
+                                                    title="{{ advisory.title }}">{{ advisory.title }}</strong>
+                                            becomes readable outside this workspace and is assigned a permanent
+                                            tracking id.
+                                        </p>
+                                        <fieldset class="space-y-2 pt-1">
+                                            <legend class="tw-form-label mb-1">Who can read it</legend>
+                                            {% for value, meta in publish_visibilities.items %}
+                                                <label class="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/40">
+                                                    <input type="radio"
+                                                           name="visibility"
+                                                           value="{{ value }}"
+                                                           class="tw-radio mt-0.5"
+                                                           {% if forloop.first %}checked{% endif %} />
+                                                    <span class="min-w-0">
+                                                        <span class="block text-sm font-medium text-text">{{ meta.label }}</span>
+                                                        <span class="block text-xs text-text-muted">{{ meta.help }}</span>
+                                                    </span>
+                                                </label>
+                                            {% endfor %}
+                                        </fieldset>
+                                    </div>
+                                    <div class="tw-modal-footer">
+                                        <p class="text-xs text-text-muted m-0 mr-auto">The tracking id and the disclosure date are recorded permanently.</p>
+                                        <button type="button" class="tw-btn-secondary" @click="open = false">Cancel</button>
+                                        <button type="submit" class="tw-btn-primary gap-2">
+                                            <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                                            Publish
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        {% endif %}
+        {# Edit Advisory Modal (Alpine.js) #}
         {% if has_crud_permissions %}
             <div x-data="{ open: false, showRef:
                 {% if advisory.vulnerability_id %}
@@ -351,7 +482,9 @@
                                         </div>
                                         <div>
                                             <label class="tw-form-label" for="editSeverity">Severity</label>
+                                            {# An advisory may legitimately carry no severity, and without a blank option the select would silently promote it to the first one on any save. #}
                                             <select id="editSeverity" name="severity" class="tw-form-input">
+                                                <option value="" {% if not advisory.severity %}selected{% endif %}>Not set</option>
                                                 <option value="critical"
                                                         {% if advisory.severity == 'critical' %}selected{% endif %}>
                                                     Critical

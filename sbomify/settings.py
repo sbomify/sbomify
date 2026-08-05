@@ -493,9 +493,20 @@ else:
     }
 
 # Channel Layers for WebSocket support
-_channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
+# Keepalive plus proactive health checks: a broker restart is then noticed
+# on the next use and reconnected quietly, instead of surfacing as a
+# mid-command "Connection reset by peer" on every consumer thread at once.
+_redis_resilience: dict[str, Any] = {
+    "socket_keepalive": True,
+    "health_check_interval": 30,
+    "socket_connect_timeout": 5,
+}
+
+# The dict host form is how channels-redis forwards client kwargs (the CA
+# path already relied on it); the resilience kwargs ride the same way.
+_channels_host: dict[str, Any] = {"address": REDIS_CHANNELS_URL, **_redis_resilience}
 if REDIS_CA_CERTS:
-    _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}
+    _channels_host["ssl_ca_certs"] = REDIS_CA_CERTS
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -511,9 +522,9 @@ CHANNEL_LAYERS = {
 # Pass a pre-built client because Dramatiq's RedisBroker creates a
 # ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
 _dramatiq_redis_options: dict[str, Any] = (
-    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)}
+    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS, **_redis_resilience)}
     if REDIS_CA_CERTS
-    else {"url": REDIS_WORKER_URL}
+    else {"url": REDIS_WORKER_URL, **_redis_resilience}
 )
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
@@ -992,6 +1003,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
+    "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",

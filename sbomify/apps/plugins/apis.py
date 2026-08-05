@@ -125,12 +125,13 @@ def _get_plugin_display_names_map(plugin_names: set[str]) -> dict[str, str]:
     }
 
 
-def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None) -> Any:
+def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None, euvd_ids: frozenset[str] | None = None) -> Any:
     """A copy of the run's result with the read-time finding flags stamped in.
 
-    Two flags, both derived rather than stored: ``kev`` from the cached CISA
-    feed, and ``malicious`` from evidence already inside the finding. Deriving
-    them here means every run ever recorded carries them without a rescan.
+    Three flags, all derived rather than stored: ``kev`` from the cached CISA
+    feed, ``euvd`` from ENISA's exploited list, and ``malicious`` from evidence
+    already inside the finding. Deriving them here means every run ever
+    recorded carries them without a rescan.
 
     The stored blob is never mutated. Non-security runs pass through as-is.
     """
@@ -146,13 +147,22 @@ def _result_with_kev(run: AssessmentRun, kev_ids: frozenset[str] | None) -> Any:
 
     # Build a new findings list only once a match is actually found — the common
     # case (no matches) returns the original result with no allocation.
+    # finding_in_kev is a generic id-or-alias set membership test, so the EUVD
+    # list reuses it rather than growing a twin.
     stamped: list[Any] | None = None
-    if kev_ids:
+    if kev_ids or euvd_ids:
         for i, finding in enumerate(findings):
-            if isinstance(finding, dict) and finding_in_kev(finding, kev_ids):
+            if not isinstance(finding, dict):
+                continue
+            flags: dict[str, bool] = {}
+            if kev_ids and finding_in_kev(finding, kev_ids):
+                flags["kev"] = True
+            if euvd_ids and finding_in_kev(finding, euvd_ids):
+                flags["euvd"] = True
+            if flags:
                 if stamped is None:
                     stamped = list(findings)
-                stamped[i] = {**finding, "kev": True}
+                stamped[i] = {**finding, **flags}
 
     findings_out, malicious_count = stamp_malicious(stamped if stamped is not None else findings)
     if findings_out is not (stamped if stamped is not None else findings):
@@ -173,6 +183,7 @@ def _run_to_schema(
     run: AssessmentRun,
     display_names: dict[str, str] | None = None,
     kev_ids: frozenset[str] | None = None,
+    euvd_ids: frozenset[str] | None = None,
 ) -> AssessmentRunSchema:
     """Convert an AssessmentRun model to schema.
 
@@ -219,7 +230,7 @@ def _run_to_schema(
         "started_at": run.started_at,
         "completed_at": run.completed_at,
         "error_message": run.error_message or None,
-        "result": _result_with_kev(run, kev_ids),
+        "result": _result_with_kev(run, kev_ids, euvd_ids),
         "created_at": run.created_at,
     }
     try:
@@ -345,15 +356,18 @@ def get_sbom_assessments(request: HttpRequest, sbom_id: str) -> SBOMAssessmentsR
     # in a single query so serialization stays O(n) without per-run lookups.
     display_names = _get_plugin_display_names_map({run.plugin_name for run in all_runs})
 
+    from sbomify.apps.vulnerability_scanning.euvd import euvd_ids_for_serialization
     from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
 
-    kev_ids = kev_ids_for_serialization() if any(run.category == "security" for run in all_runs) else frozenset()
+    has_security = any(run.category == "security" for run in all_runs)
+    kev_ids = kev_ids_for_serialization() if has_security else frozenset()
+    euvd_ids = euvd_ids_for_serialization() if has_security else frozenset()
 
     return SBOMAssessmentsResponse(
         sbom_id=sbom_id,
         status_summary=status_summary,
-        latest_runs=[_run_to_schema(run, display_names, kev_ids) for run in latest_runs],
-        all_runs=[_run_to_schema(run, display_names, kev_ids) for run in all_runs],
+        latest_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in latest_runs],
+        all_runs=[_run_to_schema(run, display_names, kev_ids, euvd_ids) for run in all_runs],
     )
 
 

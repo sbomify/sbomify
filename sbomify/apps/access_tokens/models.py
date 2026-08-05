@@ -63,3 +63,26 @@ class AccessToken(models.Model):
     def is_expired(self) -> bool:
         """True once a token with a set ``expires_at`` is past it; False when ``expires_at`` is NULL (never expires)."""
         return self.expires_at is not None and timezone.now() >= self.expires_at
+
+
+class TokenExpiryWarning(models.Model):
+    """One row per (token, threshold) warning actually sent.
+
+    The daily sweep is idempotent through this table: a token inside the
+    14-day window is warned once at each threshold it crosses, never again,
+    and a missed cron day cannot skip a warning because crossing is tested
+    with <= rather than equality.
+    """
+
+    class Meta:
+        db_table = "access_token_expiry_warnings"
+        constraints = [
+            models.UniqueConstraint(fields=["token", "threshold_days"], name="token_expiry_warning_once"),
+        ]
+
+    token = models.ForeignKey(AccessToken, on_delete=models.CASCADE, related_name="expiry_warnings")
+    threshold_days = models.PositiveSmallIntegerField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.token_id} warned at {self.threshold_days}d"

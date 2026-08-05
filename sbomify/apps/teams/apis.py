@@ -82,7 +82,16 @@ def _build_team_response(request: HttpRequest, team: Team) -> TeamSchema:
             is_default_team=member.is_default_team,
             is_me=(current_user_id == member.user.id),
         )
-        for member in team.member_set.select_related("user").exclude(role="guest").all()
+        # Bots are excluded alongside guests: a role="bot" membership is the
+        # synthetic identity behind an OIDC trusted-publisher binding, not a
+        # person with access, and one appears per binding — six bindings filled
+        # the workspace's member list with six "OIDC Bot" rows and counted them
+        # towards the member total. Bindings are managed on their own settings
+        # page, which is where removing that access belongs; the remove control
+        # on a member row would have deleted the membership and left the binding
+        # pointing at nothing. active_member_count and get_user_teams already
+        # exclude them.
+        for member in team.member_set.select_related("user").exclude(role__in=("guest", "bot")).all()
     ]
 
     invitations_data = [

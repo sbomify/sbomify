@@ -33,11 +33,22 @@ pytestmark = pytest.mark.django_db
 # --- vocabulary: the stored values must not drift from the triage canon --------
 
 
-def test_status_values_match_triage_states() -> None:
-    """Advisory statuses are the CycloneDX states the rest of the codebase uses."""
+def test_status_values_are_triage_states() -> None:
+    """Advisory statuses are CycloneDX states the rest of the codebase uses.
+
+    A subset, not the whole vocabulary. An advisory status is what a published
+    advisory tells a reader about a product; risk_accepted is an internal
+    decision carrying an owner and an expiry, and "we accepted the risk" is not
+    a statement a workspace publishes about its own product.
+    """
     from sbomify.apps.vulnerability_scanning.triage import TRIAGE_STATES
 
-    assert {choice.value for choice in AdvisoryProductStatus.Status} == set(TRIAGE_STATES)
+    assert {choice.value for choice in AdvisoryProductStatus.Status} <= set(TRIAGE_STATES)
+
+
+def test_risk_accepted_is_not_an_advisory_status() -> None:
+    """Pinned so adding it becomes a decision rather than a slip."""
+    assert "risk_accepted" not in {choice.value for choice in AdvisoryProductStatus.Status}
 
 
 def test_justification_values_match_triage_justifications() -> None:

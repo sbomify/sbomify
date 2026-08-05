@@ -477,7 +477,8 @@ def sbom_upload_cyclonedx(
         # BOM arrives with the default bom_type; tag it so the type-gated
         # pipelines run. Only when the caller left the type as the default — an
         # explicit bom_type (e.g. the delegated /artifact/vex/ path passing
-        # "vex") is honored so a crypto-heavy VEX is never re-tagged cbom.
+        # "vex") is honored, so a crypto-heavy VEX is never re-tagged cbom and a
+        # device-bearing one is never re-tagged hbom.
         if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET:
             if _is_cbom(sbom_data):
                 bom_type = "cbom"

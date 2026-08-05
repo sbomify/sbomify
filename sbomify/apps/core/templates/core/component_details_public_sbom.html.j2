@@ -1,13 +1,14 @@
 {% extends "core/component_details_public_base.html.j2" %}
 {% load django_vite %}
 {% block meta_description_suffix %}View SBOMs associated with this component.{% endblock %}
-{% block table_icon %}<i class="fas fa-file-code text-primary"></i>{% endblock %}
-{% block table_section %}
+{% block before_table %}
     {# Post-Quantum posture — lazy-loaded; collapses when the latest artifact has no crypto assets #}
-    <div class="mb-6"
+    <div class="mb-5"
          hx-get="{% url 'sboms:component_crypto_posture' component_id=component.id %}"
          hx-trigger="load"
          hx-swap="outerHTML"></div>
+{% endblock %}
+{% block table_section %}
     <div id="sboms-table-container"
          hx-get="{% url 'sboms:sboms_table_public' component.id %}"
          hx-trigger="load, refreshSbomsTable from:body"
