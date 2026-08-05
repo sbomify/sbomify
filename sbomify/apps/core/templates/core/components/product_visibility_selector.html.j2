@@ -20,7 +20,7 @@
         </form>
     </div>
     <div x-show="isLoading" x-cloak class="text-text-muted">
-        <i class="fas fa-spinner fa-spin"></i>
+        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
     </div>
     <span class="text-text-muted cursor-help"
           x-tooltip="'Public products are visible to anyone with the link'">

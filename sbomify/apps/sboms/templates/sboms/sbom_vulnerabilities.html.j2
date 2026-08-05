@@ -2,6 +2,7 @@
 {% load widget_tweaks %}
 {% load static %}
 {% load django_vite %}
+{% load advisory_tags %}
 {% block title %}sbomify SBOM Vulnerabilities{% endblock %}
 {% block content %}
     <div class="space-y-6">
@@ -70,7 +71,7 @@
             {% endif %}
             {% if is_processing %}
                 <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-spinner fa-spin text-info text-xs"></i>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-info text-xs" %}
                     <span class="font-semibold text-info">Processing</span>
                 </div>
             {% endif %}
@@ -136,30 +137,18 @@
                                                                             <div class="flex flex-wrap justify-between items-start gap-2 mb-2">
                                                                                 <div class="flex-1">
                                                                                     {# Vulnerability ID with smart links #}
-                                                                                    {% if vuln.id|slice:":4" == "CVE-" %}
-                                                                                        <a href="https://www.cve.org/CVERecord?id={{ vuln.id }}"
-                                                                                           target="_blank"
-                                                                                           rel="noopener"
-                                                                                           class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                                        </a>
-                                                                                    {% elif vuln.id|slice:":5" == "GHSA-" %}
-                                                                                        <a href="https://github.com/advisories/{{ vuln.id }}"
-                                                                                           target="_blank"
-                                                                                           rel="noopener"
-                                                                                           class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                                        </a>
-                                                                                    {% elif vuln.id == "Unknown" %}
-                                                                                        <span class="text-text font-semibold">{{ vuln.id }}</span>
-                                                                                    {% else %}
-                                                                                        <a href="https://osv.dev/vulnerability/{{ vuln.id }}"
-                                                                                           target="_blank"
-                                                                                           rel="noopener"
-                                                                                           class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                                                                                            <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
-                                                                                        </a>
-                                                                                    {% endif %}
+                                                                                    {% with vuln_url=vuln.id|advisory_url %}
+                                                                                        {% if vuln_url %}
+                                                                                            <a href="{{ vuln_url }}"
+                                                                                               target="_blank"
+                                                                                               rel="noopener"
+                                                                                               class="text-primary font-semibold hover:underline inline-flex items-center gap-1">
+                                                                                                <i class="fas fa-external-link-alt text-xs"></i>{{ vuln.id }}
+                                                                                            </a>
+                                                                                        {% else %}
+                                                                                            <span class="text-text font-semibold">{{ vuln.id }}</span>
+                                                                                        {% endif %}
+                                                                                    {% endwith %}
                                                                                     {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
                                                                                 </div>
                                                                                 <div class="flex items-center gap-2">
@@ -276,7 +265,7 @@
                     {% if is_processing %}
                         <div class="p-4 bg-info/5 border border-info/20 rounded-lg">
                             <h4 class="text-lg font-semibold text-info mb-2 flex items-center gap-2">
-                                <i class="fas fa-spinner fa-spin"></i>
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                                 Processing Vulnerability Scan
                             </h4>
                             <p class="text-text mb-2">

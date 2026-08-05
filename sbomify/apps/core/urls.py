@@ -91,6 +91,21 @@ urlpatterns = [
     path("releases/", views.ReleasesDashboardView.as_view(), name="releases_dashboard"),
     path("releases/table/", views.ReleasesTableView.as_view(), name="releases_table"),
     path(
+        "security-advisories/",
+        views.SecurityAdvisoriesDashboardView.as_view(),
+        name="security_advisories_dashboard",
+    ),
+    path(
+        "security-advisories/table/",
+        views.SecurityAdvisoriesTableView.as_view(),
+        name="security_advisories_table",
+    ),
+    path(
+        "security-advisories/<str:advisory_id>/",
+        views.SecurityAdvisoryDetailView.as_view(),
+        name="security_advisory_detail",
+    ),
+    path(
         "public/component/<str:component_id>/",
         views.ComponentDetailsPublicView.as_view(),
         name="component_details_public",
@@ -104,6 +119,29 @@ urlpatterns = [
         "public/workspace/",
         views.WorkspacePublicView.as_view(),
         name="workspace_public_current",
+    ),
+    # Trust-center advisories. The /public/ pair is the main app domain; the
+    # bare /advisories/ pair is the clean URL a custom domain or trust-center
+    # subdomain serves, matching how /product/<slug>/ already works there.
+    path(
+        "public/workspace/<str:workspace_key>/advisories/",
+        views.TrustCenterAdvisoriesView.as_view(),
+        name="workspace_advisories_public",
+    ),
+    path(
+        "public/workspace/<str:workspace_key>/advisories/<str:advisory_id>/",
+        views.TrustCenterAdvisoryDetailView.as_view(),
+        name="advisory_details_public",
+    ),
+    path(
+        "advisories/",
+        views.TrustCenterAdvisoriesView.as_view(),
+        name="workspace_advisories_public_current",
+    ),
+    path(
+        "advisories/<str:advisory_id>/",
+        views.TrustCenterAdvisoryDetailView.as_view(),
+        name="advisory_details_public_current",
     ),
     # TEA (Transparency Exchange API) endpoints for non-branded trust centers
     path(

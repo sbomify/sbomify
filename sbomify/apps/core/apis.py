@@ -32,6 +32,7 @@ from sbomify.apps.core.queries import (
 )
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
+from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
@@ -343,6 +344,12 @@ def _build_component_response(
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
+    # None when the workspace has set no window, or the component has no SBOM
+    # yet: neither is a stale component, and automation should be able to tell
+    # "not stale" from "no policy" without guessing.
+    from sbomify.apps.sboms.freshness import component_freshness
+
+    response["freshness"] = component_freshness(component)
     return response
 
 
@@ -761,6 +768,44 @@ def get_product(request: HttpRequest, product_id: str) -> Any:
 
     assert isinstance(result, ProductLookupResult)
     return status, result.payload
+
+
+@router.get(
+    "/products/{product_id}/eol-readiness",
+    response={200: dict[str, Any], 403: ErrorResponse, 404: ErrorResponse},
+    summary="Whether a product can reach end of life with CRA 6.1.6 satisfied",
+    description="Reports the notice period, the critical and high findings neither patched nor formally "
+    "risk-accepted, and whether a final SBOM and VEX exist to publish.",
+)
+def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
+    """The pre-EOL check (CRA checklist 6.1.5/6.1.6)."""
+    from dataclasses import asdict
+
+    from sbomify.apps.core.services.eol import eol_readiness
+
+    status, result = _get_product_with_instance(request, product_id)
+    if status != 200:
+        return status, result
+
+    assert isinstance(result, ProductLookupResult)
+    # _get_product_with_instance only checks access for private products — a
+    # public one is readable by anyone, which is right for the product page and
+    # wrong here. Readiness lists the product's unresolved critical and high
+    # findings by advisory id, which is internal remediation state and not
+    # something being publicly listed makes public.
+    if not can(request, "product:manage", result.instance):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    readiness = eol_readiness(result.instance)
+    payload = asdict(readiness)
+    # The derived verdicts are the point of the endpoint; a caller should not
+    # have to re-implement the checklist rule to read the answer.
+    payload["is_ready"] = readiness.is_ready
+    payload["blocking_count"] = readiness.blocking_count
+    payload["problems"] = readiness.problems
+    payload["end_of_support"] = readiness.end_of_support.isoformat() if readiness.end_of_support else None
+    payload["end_of_life"] = readiness.end_of_life.isoformat() if readiness.end_of_life else None
+    return 200, payload
 
 
 @router.put(
@@ -1617,7 +1662,7 @@ def list_components(
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
+        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
@@ -2550,6 +2595,52 @@ def download_product_sbom(
         return 500, {"detail": "Error generating product SBOM"}
 
 
+@router.get(
+    "/products/{product_id}/cbom/download",
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public products
+    tags=["Products"],
+)
+@decorate_view(optional_token_auth)
+def download_product_cbom(request: HttpRequest, product_id: str, version: str = Query("1.6")) -> Any:  # type: ignore[type-arg]
+    """Download the merged CBOM (Cryptography BOM) for a product's latest release.
+
+    The product-level counterpart of the release CBOM download: resolves the rolling
+    "latest" release and serves its merged crypto BOM, so the Trust Center's product
+    page can offer one CBOM per product next to the consolidated SBOM. Gated exactly
+    like the consolidated SBOM download.
+    """
+    if version not in ("1.6", "1.7"):
+        return 400, {"detail": "version must be 1.6 or 1.7", "error_code": ErrorCode.BAD_REQUEST}
+    try:
+        product = Product.objects.select_related("team").get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
+        if not can(request, "product:manage", product):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    release = Release.get_or_create_latest_release(product)
+    document = _release_cbom_document(release, version)
+    if document is None:
+        return 404, {"detail": "No CBOM available for this product", "error_code": ErrorCode.NOT_FOUND}
+
+    content = json.dumps(document, indent=2)
+    filename = _download_filename(product.name, release.name, ".cbom.cdx.json")
+    response = HttpResponse(content, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    capture_for_request(
+        request,
+        events.RELEASE_CBOM_DOWNLOADED,
+        {"release_id": str(release.id), "product_id": str(product.id)},
+        team_key=product.team.key or "",
+    )
+    return response
+
+
 # =============================================================================
 # RELEASE CRUD ENDPOINTS
 # =============================================================================
@@ -2784,9 +2875,65 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 # =============================================================================
 
 
+_RELEASE_VERSION_CONSTRAINT = "unique_product_version_when_not_empty"
+
+
+def _is_release_name_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, name) uniqueness violation.
+
+    Detected positively rather than as "not the version constraint": an
+    unrelated IntegrityError (a foreign key, a NOT NULL, a constraint added
+    later) must surface as itself, not be rewritten into a name collision.
+
+    ``unique_together`` leaves the constraint auto-named, so unlike the version
+    case there is no fixed name to match. Both drivers do name the columns, so
+    this requires a uniqueness violation mentioning both.
+    """
+    cause = exc.__cause__
+    msg = str(exc).lower()
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    if not is_unique:
+        return False
+
+    diag_constraint = ""
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None:
+            diag_constraint = (getattr(diag, "constraint_name", None) or "").lower()
+
+    haystack = f"{msg} {diag_constraint}"
+    table = Release._meta.db_table.lower()
+    return "product_id" in haystack and "name" in haystack and (table in haystack or "product_id" in haystack)
+
+
+def _is_release_version_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, version) constraint.
+
+    Prefers the driver's constraint name over the message, mirroring
+    ``sboms.utils._is_duplicate_integrity_error``: message text is
+    driver-dependent, and getting this wrong would silently turn a real version
+    conflict into an idempotent 200.
+    """
+    cause = exc.__cause__
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
+            return True
+    # Postgres without diag, and SQLite, both name the constraint in the message.
+    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+
 @router.post(
     "/releases",
-    response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 means the release already existed and is returned as-is; see the
+    # IntegrityError branch for why create is idempotent on a name collision.
+    response={
+        200: ReleaseResponseSchema,
+        201: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
@@ -2809,8 +2956,28 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
 
     if request_is_oidc_authed(request):
         bound_component_id = bound_component_id_for_request(request)
-        if bound_component_id is None or not product.components.filter(id=bound_component_id).exists():
-            return 403, {"detail": "You do not have permission to create releases", "error_code": ErrorCode.FORBIDDEN}
+        # Distinct wording per cause. These two share both a status and a call site with the
+        # role denial above, so one shared message leaves a CI log no way to tell which check
+        # rejected it, and the two have opposite remedies. Naming the component and the product
+        # leaks nothing: the caller supplied the product id and holds the binding for the
+        # component.
+        if bound_component_id is None:
+            return 403, {
+                "detail": (
+                    "This OIDC token has no component binding, so it cannot create releases. "
+                    "Re-create the trusted-publishing binding for the component."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+        if not product.components.filter(id=bound_component_id).exists():
+            return 403, {
+                "detail": (
+                    f"Component {bound_component_id} is not part of product {product.id}, so this "
+                    "OIDC token cannot create releases for it. Add the component to the product, "
+                    "then retry."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -2867,14 +3034,35 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        # Two CI jobs tagging the same release race here: both read "absent",
+        # both insert, and the loser used to get a 400 that failed its build.
+        # The caller already cleared can() and the OIDC binding above, so it is
+        # entitled to this release; returning the existing row makes create
+        # idempotent and the race harmless.
+        #
+        # A version collision under a *different* name is a genuine conflict, so
+        # that one is identified by constraint name and never swallowed. Only it
+        # needs identifying: for the name case the row's existence is a better
+        # authority than any message, so the decisive branch does no parsing.
+        if _is_release_version_conflict(e):
+            return 400, {
+                "detail": "A release with this version already exists for this product",
+                "error_code": ErrorCode.DUPLICATE_NAME,
+            }
+        if not _is_release_name_conflict(e):
+            # Not a uniqueness violation we recognise: a foreign key, a NOT
+            # NULL, a constraint added later. Report it as itself rather than
+            # dressing it up as a duplicate. Re-raising would escape the sibling
+            # except Exception below and 500, so this mirrors that branch.
+            log.error(f"Unexpected IntegrityError creating release: {e}")
+            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        existing = Release.objects.filter(product=product, name=payload.name).first()
+        if existing is not None:
+            return 200, _build_release_response(request, existing, include_artifacts=True)
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3286,6 +3474,29 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     return response
 
 
+def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | None:
+    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+
+    Same cache-by-slot-state approach as the VEX download: the merge fans out one
+    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
+    """
+    from django.core.cache import cache
+    from django.db.models import Count, Max
+
+    from sbomify.apps.sboms.cbom import build_release_cbom
+    from sbomify.apps.sboms.models import SBOM
+
+    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
+        n=Count("id"), newest=Max("sbom__created_at")
+    )
+    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    document = cache.get(cache_key)
+    if document is None:
+        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
+        cache.set(cache_key, document, 900)
+    return None if document.get("__absent__") else document
+
+
 @router.get(
     "/releases/{release_id}/cbom/download",
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
@@ -3316,23 +3527,8 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         if not can(request, "release:read", release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    from django.core.cache import cache
-    from django.db.models import Count, Max
-
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
-
-    # Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    # S3 fetch per pinned CBOM and the endpoint is open for public products.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
-    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
-    document = cache.get(cache_key)
+    document = _release_cbom_document(release, version)
     if document is None:
-        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
-        cache.set(cache_key, document, 900)
-    if document.get("__absent__"):
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
 
     content = json.dumps(document, indent=2)
@@ -4191,7 +4387,6 @@ def list_component_sboms(
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
         from sbomify.apps.vulnerability_scanning.utils import (
-            RESULT_SUMMARY_ANNOTATIONS,
             reconstruct_result_summary,
         )
 
@@ -4283,7 +4478,6 @@ def list_component_sboms(
             latest_runs = list(
                 AssessmentRun.objects.filter(id__in=winner_ids)
                 .defer("result")
-                .annotate(**RESULT_SUMMARY_ANNOTATIONS)
                 # id__in has undefined row order; keep the per-SBOM plugin lists
                 # stable across requests.
                 .order_by("sbom_id", "plugin_name")

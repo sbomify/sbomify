@@ -109,6 +109,7 @@ from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
 )
 from sbomify.apps.teams.views.dashboard import WorkspacesDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.onboarding_wizard import OnboardingWizardView  # noqa: F401, E402
+from sbomify.apps.teams.views.suppliers import SupplierListView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_branding import TeamBrandingView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_custom_domain import TeamCustomDomainView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401, E402
@@ -118,6 +119,7 @@ from sbomify.apps.teams.views.team_tokens import TeamTokensView  # noqa: F401, E
 __all__ = [
     "ContactProfileFormView",
     "ContactProfileView",
+    "SupplierListView",
     "WorkspacesDashboardView",
     "OnboardingWizardView",
     "TeamBrandingView",

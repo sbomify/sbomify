@@ -150,6 +150,25 @@ class SecurityAdvisory(models.Model):
         PUBLISHED = "published", "Published"
         WITHDRAWN = "withdrawn", "Withdrawn"
 
+    class RemediationStatus(models.TextChoices):
+        """Where the team is on fixing it, which is not whether it is published.
+
+        A separate axis from ``status`` on purpose: a critical advisory can be
+        resolved but still unpublished, or published while the fix is in
+        progress, and collapsing the two would make either question
+        unanswerable. Also distinct from :class:`AdvisoryProductStatus`, which
+        is the per-product VEX assertion rather than the team's workflow.
+        """
+
+        IDENTIFIED = "identified", "Identified"
+        INVESTIGATING = "investigating", "Investigating"
+        FIX_IN_PROGRESS = "fix_in_progress", "Fix in progress"
+        RESOLVED = "resolved", "Resolved"
+        WONT_FIX = "wont_fix", "Won't fix"
+
+    # Terminal states. Everything else counts as open on the dashboard.
+    CLOSED_REMEDIATION_STATUSES = frozenset({RemediationStatus.RESOLVED, RemediationStatus.WONT_FIX})
+
     class Visibility(models.TextChoices):
         """Same vocabulary as ``Component.Visibility``.
 
@@ -187,6 +206,15 @@ class SecurityAdvisory(models.Model):
 
     advisory_type = models.CharField(max_length=20, choices=AdvisoryType.choices, default=AdvisoryType.PRODUCT_ADVISORY)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    # Denormalised from the latest status_change event rather than walked at
+    # read time: the list sorts and filters on it, and deriving it per row would
+    # be one events query per advisory on every page load.
+    remediation_status = models.CharField(
+        max_length=20,
+        choices=RemediationStatus.choices,
+        default=RemediationStatus.IDENTIFIED,
+        help_text="Where the team is on fixing this, kept in step with the latest status_change event",
+    )
     visibility = models.CharField(max_length=20, choices=Visibility.choices, default=Visibility.PRIVATE)
 
     # Set the first time the advisory becomes public and never cleared: evidence of
@@ -534,8 +562,13 @@ class AdvisoryProductStatus(models.Model):
     """
 
     class Status(models.TextChoices):
-        """CycloneDX ``analysis.state``. Values match ``triage.TRIAGE_STATES``;
-        labels read the way an advisory reads."""
+        """CycloneDX ``analysis.state``. Values are drawn from
+        ``triage.TRIAGE_STATES``; labels read the way an advisory reads.
+
+        A subset of that vocabulary: ``risk_accepted`` is deliberately absent.
+        It is an internal decision carrying an owner and an expiry, and a
+        published advisory saying a workspace accepted the risk on its own
+        product is a different statement than the triage state means."""
 
         EXPLOITABLE = "exploitable", "Affected"
         NOT_AFFECTED = "not_affected", "Not affected"

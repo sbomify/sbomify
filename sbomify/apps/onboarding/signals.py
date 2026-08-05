@@ -32,6 +32,16 @@ def create_onboarding_status(sender: type[Any], instance: User, created: bool, *
         **kwargs: Additional keyword arguments
     """
     if created:
+        # Synthetic OIDC bot identities are not people: they have no inbox
+        # (``@sbomify.local`` is non-routable) and nothing to onboard. Skip
+        # both the status row and the welcome email rather than queueing a
+        # task that can only fail at the mailer.
+        from sbomify.apps.oidc.services import is_synthetic_bot_user
+
+        if is_synthetic_bot_user(instance):
+            logger.debug("Skipping onboarding for synthetic bot user %s", instance.id)
+            return
+
         try:
             OnboardingStatus.objects.create(user=instance)
             logger.info("Created onboarding status for user %s", instance.id)

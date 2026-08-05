@@ -1,13 +1,16 @@
 {# Individual assessment run collapsible card - rendered server-side #}
 {% load plugins_extras %}
+{% load advisory_tags %}
 {# Safely compute has_issues - run.result may be None for pending/running assessments #}
 {% with run_id=run.id|default:loop_index result=run.result|default_if_none:"" summary=run.result.summary|default_if_none:"" fail_count=run.result.summary.fail_count|default:0 error_count=run.result.summary.error_count|default:0 pass_count=run.result.summary.pass_count|default:0 %}
-    {% comment %}has_issues is the explicit-failure signal (fail+error). A run with only warnings (pass_count==0) is shown as "Warnings Only" rather than "Passed" so the per-card badge matches the dashboard summary and BSI's dependency gate (see _is_run_failing and orchestrator._is_passing).{% endcomment %}
-    {% with has_issues=fail_count|add:error_count is_security=run.category|is_security_category %}
+    {% comment %}has_issues is the explicit-failure signal (fail+error). A run with only warnings (pass_count==0) is shown as "Warnings Only" rather than "Passed" so the per-card badge matches the dashboard summary and BSI's dependency gate (see _is_run_failing and orchestrator._is_passing).
+    skipped mirrors _is_run_skipped in plugins/apis.py. A plugin that could not run (Dependency Track handed an SPDX SBOM, PQC handed a document with no crypto assets) reports one info/warning finding and metadata.skipped, which the counters above cannot tell apart from a real warnings-only verdict. Without this the card claims the plugin ran and disagreed with the scanners beside it.{% endcomment %}
+    {% with has_issues=fail_count|add:error_count is_security=run.category|is_security_category skipped=result.metadata.skipped %}
         {# Compute security total from by_severity #}
         {% if is_security and run.result.summary.by_severity %}
             {% with sev=run.result.summary.by_severity security_total=run.result.summary.total_findings|default:0 %}
-                <div class="tw-collapsible-card {% if security_total %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
+                {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a clean scan.{% endcomment %}
+                <div class="tw-collapsible-card {% if skipped %}{% elif security_total %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
                      id="plugin-{{ run.plugin_name }}"
                      x-data="{ expanded: false }">
                     <div class="tw-collapsible-header" @click="expanded = !expanded">
@@ -25,7 +28,13 @@
                                 </span>
                             {% endif %}
                             {% if run.status == 'completed' %}
-                                {% if security_total %}
+                                {% comment %}A skipped scanner counts its own stand-down notice as one info finding, so security_total is 1 and the card would otherwise claim a vulnerability the scanner never reported.{% endcomment %}
+                                {% if skipped %}
+                                    <span class="tw-badge-secondary"
+                                          title="This plugin did not scan, so it reported no verdict.">
+                                        <i class="fas fa-ban mr-1"></i>Skipped
+                                    </span>
+                                {% elif security_total %}
                                     <span class="tw-badge-secondary">
                                         <i class="fas fa-shield-alt mr-1"></i>{{ security_total }} Vulnerabilit{{ security_total|pluralize:"y,ies" }}
                                     </span>
@@ -40,14 +49,18 @@
                                 </span>
                             {% elif run.status == 'running' %}
                                 <span class="tw-badge-secondary">
-                                    <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                                    Running
                                 </span>
                             {% else %}
                                 <span class="tw-badge-secondary">
                                     <i class="fas fa-clock mr-1"></i>Pending
                                 </span>
                             {% endif %}
-                            {% if run.result.summary %}
+                            {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
+                            {% if skipped %}
+                                <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
+                            {% elif run.result.summary %}
                                 <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
                             {% endif %}
                         </div>
@@ -67,6 +80,7 @@
                                         <i class="fas fa-play-circle mr-1"></i>
                                         {{ run.run_reason|format_run_reason }}
                                     </span>
+                                    {% include 'plugins/components/_rerun_button.html.j2' %}
                                     {% if run.completed_at %}
                                         <span>
                                             <i class="fas fa-calendar-check mr-1"></i>
@@ -129,12 +143,19 @@
                                                     </span>
                                                     <div class="flex-1 ml-2">
                                                         <div class="finding-title flex items-center gap-2 flex-wrap">
-                                                            <a href="https://osv.dev/vulnerability/{{ finding.id }}"
-                                                               target="_blank"
-                                                               rel="noopener noreferrer"
-                                                               class="text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                                                <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
-                                                            </a>
+                                                            {% comment %}Not every finding id is an advisory: a plugin's own operational ids (dependency-track:unsupported-format) used to be linked to OSV too, which resolved to nothing.{% endcomment %}
+                                                            {% with finding_url=finding.id|advisory_url %}
+                                                                {% if finding_url %}
+                                                                    <a href="{{ finding_url }}"
+                                                                       target="_blank"
+                                                                       rel="noopener noreferrer"
+                                                                       class="text-primary hover:underline no-underline inline-flex items-center gap-1">
+                                                                        <i class="fas fa-external-link-alt text-xs"></i>{{ finding.id }}
+                                                                    </a>
+                                                                {% else %}
+                                                                    <span class="text-text font-medium">{{ finding.id }}</span>
+                                                                {% endif %}
+                                                            {% endwith %}
                                                             {# Severity badge #}
                                                             {% if finding.severity %}
                                                                 {% if finding.severity == 'critical' %}
@@ -150,13 +171,29 @@
                                                                 {% endif %}
                                                             {% endif %}
                                                             {# CVSS score #}
-                                                            {% if finding.cvss_score %}
+                                                            {% if finding.cvss_score is not None %}
                                                                 <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ finding.cvss_score }}</span>
                                                             {% endif %}
+                                                            {% comment %}A malicious package is a different decision from a vulnerable one: rip it out now rather than schedule a patch. Shown ahead of severity because the severity is not the point, and the OpenSSF records carry none at all.{% endcomment %}
+                                                            {% if finding.malicious %}
+                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
+                                                                      title="Malicious package: remove it rather than upgrade">
+                                                                    <i class="fas fa-skull-crossbones mr-1"></i>Malicious
+                                                                </span>
+                                                            {% endif %}
                                                             {# CISA KEV: confirmed exploited in the wild #}
+                                                            {% comment %}EPSS is the likelihood half of the pair: CVSS says how bad, EPSS says how likely. Rendered as the raw 0..1 probability to three decimals, which is how FIRST publishes it. Both badges test "is not None" rather than truthiness, because 0.0 is a real score for either and would otherwise vanish.{% endcomment %}
+                                                            {% if finding.epss_score is not None %}
+                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border"
+                                                                      title="EPSS: probability of exploitation in the next 30 days">EPSS: {{ finding.epss_score|floatformat:"-3" }}</span>
+                                                            {% endif %}
                                                             {% if finding.kev %}
                                                                 <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
                                                                       title="In CISA's Known Exploited Vulnerabilities catalog">KEV</span>
+                                                            {% endif %}
+                                                            {% if finding.euvd %}
+                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/80 text-white"
+                                                                      title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</span>
                                                             {% endif %}
                                                             {# VEX analysis state #}
                                                             {% if finding.analysis_state %}
@@ -199,19 +236,16 @@
                                                         {% if finding.aliases %}
                                                             <div class="mt-1 flex flex-wrap gap-1">
                                                                 {% for alias in finding.aliases %}
-                                                                    {% if alias|slice:":4" == "CVE-" %}
-                                                                        <a href="https://www.cve.org/CVERecord?id={{ alias }}"
-                                                                           target="_blank"
-                                                                           rel="noopener noreferrer"
-                                                                           class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                    {% elif alias|slice:":5" == "GHSA-" %}
-                                                                        <a href="https://github.com/advisories/{{ alias }}"
-                                                                           target="_blank"
-                                                                           rel="noopener noreferrer"
-                                                                           class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
-                                                                    {% else %}
-                                                                        <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
-                                                                    {% endif %}
+                                                                    {% with alias_url=alias|advisory_url %}
+                                                                        {% if alias_url %}
+                                                                            <a href="{{ alias_url }}"
+                                                                               target="_blank"
+                                                                               rel="noopener noreferrer"
+                                                                               class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
+                                                                        {% else %}
+                                                                            <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
+                                                                        {% endif %}
+                                                                    {% endwith %}
                                                                 {% endfor %}
                                                             </div>
                                                         {% endif %}
@@ -260,7 +294,7 @@
                             {% else %}
                                 {# Pending state #}
                                 <div class="text-center text-text-muted py-6">
-                                    <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
                                     <p class="mb-0">Assessment in progress...</p>
                                 </div>
                             {% endif %}
@@ -270,7 +304,8 @@
             {% endwith %}
         {% else %}
             {# Compliance / non-security rendering #}
-            <div class="tw-collapsible-card {% if error_count %}tw-collapsible-card--danger{% elif fail_count %}tw-collapsible-card--warning{% elif run.status == 'completed' and pass_count == 0 %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
+            {% comment %}A skipped run keeps the neutral base border: it produced no verdict, so it is neither a warning nor a pass.{% endcomment %}
+            <div class="tw-collapsible-card {% if skipped %}{% elif error_count %}tw-collapsible-card--danger{% elif fail_count %}tw-collapsible-card--warning{% elif run.status == 'completed' and pass_count == 0 %}tw-collapsible-card--warning{% elif run.status == 'completed' %}tw-collapsible-card--success{% endif %}"
                  id="plugin-{{ run.plugin_name }}"
                  x-data="{ expanded: false }">
                 <div class="tw-collapsible-header" @click="expanded = !expanded">
@@ -288,7 +323,12 @@
                             </span>
                         {% endif %}
                         {% if run.status == 'completed' %}
-                            {% if has_issues %}
+                            {% if skipped %}
+                                <span class="tw-badge-secondary"
+                                      title="This plugin did not run, so it reported no verdict.">
+                                    <i class="fas fa-ban mr-1"></i>Skipped
+                                </span>
+                            {% elif has_issues %}
                                 <span class="tw-badge-secondary">
                                     <i class="fas fa-exclamation-triangle mr-1"></i>{{ has_issues }} Issue{{ has_issues|pluralize }}
                                 </span>
@@ -308,14 +348,18 @@
                             </span>
                         {% elif run.status == 'running' %}
                             <span class="tw-badge-secondary">
-                                <i class="fas fa-sync-alt fa-spin mr-1"></i>Running
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                                Running
                             </span>
                         {% else %}
                             <span class="tw-badge-secondary">
                                 <i class="fas fa-clock mr-1"></i>Pending
                             </span>
                         {% endif %}
-                        {% if run.result.summary %}
+                        {% comment %}A skipped run's finding count is always 1 and means nothing; the reader wants the reason, which otherwise stays hidden until the card is expanded.{% endcomment %}
+                        {% if skipped %}
+                            <span class="text-text-muted text-sm truncate">{{ run.result.findings.0.title }}</span>
+                        {% elif run.result.summary %}
                             <span class="text-text-muted text-sm hidden md:inline">{{ run.result.summary.total_findings|default:0 }} findings</span>
                         {% endif %}
                     </div>
@@ -335,6 +379,7 @@
                                     <i class="fas fa-play-circle mr-1"></i>
                                     {{ run.run_reason|format_run_reason }}
                                 </span>
+                                {% include 'plugins/components/_rerun_button.html.j2' %}
                                 {% if run.completed_at %}
                                     <span>
                                         <i class="fas fa-calendar-check mr-1"></i>
@@ -433,7 +478,7 @@
                         {% else %}
                             {# Pending state #}
                             <div class="text-center text-text-muted py-6">
-                                <i class="fas fa-sync-alt fa-spin text-2xl block mb-3"></i>
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-2xl block mb-3" %}
                                 <p class="mb-0">Assessment in progress...</p>
                             </div>
                         {% endif %}

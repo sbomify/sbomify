@@ -120,12 +120,22 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
-    # ── 3. Show the CRA Compliance card ──────────────────────────────────
+    # ── 3. Unfold and show the CRA Compliance card ───────────────────────
+    # The product page keeps its compliance cards in collapsed accordions,
+    # so the card's CTA does not exist on screen until the header is
+    # clicked. Unfolding on camera also shows viewers where the card lives.
+    cra_accordion = page.locator("button:has-text('CRA Compliance')").first
+    cra_accordion.wait_for(state="visible", timeout=15_000)
+    cra_accordion.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    pace(page, 800)
+    hover_and_click(page, cra_accordion)
+    pace(page, 800)
+
     # No assessment exists yet, so the card's CTA reads "Start Scope
     # Screening" — the FAQ §1 entry point that gates the whole wizard.
     start_screening_btn = page.locator("a:has-text('Start Scope Screening')").first
     start_screening_btn.wait_for(state="visible", timeout=15_000)
-    start_screening_btn.scroll_into_view_if_needed()
+    start_screening_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
 
     # ── 4. Open the scope-screening page ────────────────────────────────
@@ -150,7 +160,9 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         "Dual-use (civilian + defence)",
     ]
     for q in screening_questions:
-        page.locator(f"span:has-text('{q}')").first.scroll_into_view_if_needed()
+        page.locator(f"span:has-text('{q}')").first.evaluate(
+            "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
+        )
         pace(page, 700)
 
     # ── 6. Tick the data-connection inclusion gate ──────────────────────
@@ -161,7 +173,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # clicking on the wrapping ``<label>`` is racy on first paint
     # because the Alpine reactivity is mid-init.
     data_conn_input = page.locator("input[x-model='hasDataConnection']").first
-    data_conn_input.scroll_into_view_if_needed()
+    data_conn_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 400)
     data_conn_input.check()
     pace(page, 1200)
@@ -172,7 +184,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # input change above).
     verdict_heading = page.locator("h3:has-text('CRA applies to this product')").first
     verdict_heading.wait_for(state="visible", timeout=10_000)
-    verdict_heading.scroll_into_view_if_needed()
+    verdict_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1500)
 
     # ── 7. Save & Continue ──────────────────────────────────────────────
@@ -183,7 +195,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # redirects to Step 1.
     save_btn = page.locator("button:has-text('Save & Continue to Wizard')").first
     save_btn.wait_for(state="visible", timeout=10_000)
-    save_btn.scroll_into_view_if_needed()
+    save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 400)
     hover_and_click(page, save_btn)
     # Match Step 1 specifically (with optional trailing slash). A
@@ -217,7 +229,9 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     first_step_1.wait_for(state="visible", timeout=15_000)
     pace(page, 2500)
     for heading in step_1_sections[1:]:
-        page.locator(f"h2:has-text('{heading}')").first.scroll_into_view_if_needed()
+        page.locator(f"h2:has-text('{heading}')").first.evaluate(
+            "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
+        )
         pace(page, 2000)
 
     # ── 9. Scroll back up so the stepper is fully visible ───────────────
@@ -244,7 +258,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     for heading in ("SBOM Compliance Summary", "Components"):
         loc = page.locator(f"h2:has-text('{heading}')").first
         loc.wait_for(state="visible", timeout=15_000)
-        loc.scroll_into_view_if_needed()
+        loc.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
         pace(page, 2500)
 
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
@@ -271,7 +285,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # button text because that is what the viewer actually sees.
     checklist_tab = page.locator("button:has-text('Security Checklist')").first
     if checklist_tab.count():
-        checklist_tab.scroll_into_view_if_needed()
+        checklist_tab.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
     page.evaluate("window.scrollBy({ top: 250, behavior: 'smooth' })")
     pace(page, 2000)
@@ -280,14 +294,18 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     vuln_tab.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, vuln_tab)
     pace(page, 2500)
-    page.locator("h2:has-text('Vulnerability Disclosure')").first.scroll_into_view_if_needed()
+    page.locator("h2:has-text('Vulnerability Disclosure')").first.evaluate(
+        "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
+    )
     pace(page, 2000)
 
     incident_tab = page.locator("button:has-text('Incident Reporting')").first
     incident_tab.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, incident_tab)
     pace(page, 2500)
-    page.locator("h2:has-text('Incident Reporting (Article 14)')").first.scroll_into_view_if_needed()
+    page.locator("h2:has-text('Incident Reporting (Article 14)')").first.evaluate(
+        "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
+    )
     pace(page, 2000)
 
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
@@ -314,7 +332,9 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     first_step_4.wait_for(state="visible", timeout=15_000)
     pace(page, 2500)
     for heading in step_4_sections[1:]:
-        page.locator(f"h2:has-text('{heading}')").first.scroll_into_view_if_needed()
+        page.locator(f"h2:has-text('{heading}')").first.evaluate(
+            "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
+        )
         pace(page, 2000)
 
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
@@ -345,12 +365,12 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # renders enabled — without that the closing frame would show a
     # greyed-out button which is the wrong message for the FAQ.
     export_heading = page.locator("h2:has-text('Export')").first
-    export_heading.scroll_into_view_if_needed()
+    export_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2000)
 
     export_btn = page.locator("button:has-text('Export Compliance Bundle')").first
     export_btn.wait_for(state="visible", timeout=10_000)
-    export_btn.scroll_into_view_if_needed()
+    export_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
     box = export_btn.bounding_box()
     if box:
@@ -364,11 +384,11 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # shape without fabricating an unrealistic bundle row.
     bundle_card = page.locator("h2:has-text('Last Export Bundle')").first
     if bundle_card.count():
-        bundle_card.scroll_into_view_if_needed()
+        bundle_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
         pace(page, 2500)
 
     documents_heading = page.locator("h2:has-text('Documents')").first
-    documents_heading.scroll_into_view_if_needed()
+    documents_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
     # One extra scroll so the bottom of the document list (Declaration
     # of Conformity row + the Back link) is in view at the closing

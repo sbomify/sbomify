@@ -16,15 +16,16 @@ def test_get_license_list():
     spdx_licenses = [l for l in licenses if l["origin"] == "SPDX"]
     custom_licenses = [l for l in licenses if l["origin"] != "SPDX"]
 
-    # Check SPDX license structure (should not have category field at all)
+    # SPDX licence structure. Category is present only for ids the static
+    # category map covers; the rest omit the key entirely.
     if spdx_licenses:
         spdx_license = spdx_licenses[0]
         assert "key" in spdx_license
         assert "name" in spdx_license
         assert "origin" in spdx_license
         assert spdx_license["origin"] == "SPDX"
-        # SPDX licenses should not have category field at all
-        assert "category" not in spdx_license
+        if "category" in spdx_license:
+            assert spdx_license["category"]
 
     # Check that custom licenses are included and have category
     assert len(custom_licenses) >= 2  # At least Commons-Clause and BUSL-1.1

@@ -41,13 +41,8 @@
     <div class="onboarding-bg min-h-screen flex flex-col items-center px-4 py-12 sm:py-16"
          x-data="{ selectedPlan: '{{ plan_hint|default:'' }}', billingPeriod: 'monthly', plans: [], init() { this.plans = window.parseJsonScript('plans-data') || []; }, get selectedPlanData() { return this.plans.find(p => p.key === this.selectedPlan) || null; }, formatPrice(plan) { if (plan.key === 'community') return '$0'; if (plan.key === 'enterprise') return 'Custom'; const price = this.billingPeriod === 'monthly' ? (plan.monthly_price_discounted || plan.monthly_price) : (plan.annual_price_discounted || plan.annual_price); if (!price) return 'Contact us'; return '$' + Math.round(price).toLocaleString(); }, priceLabel(plan) { if (plan.key === 'community') return '/forever'; if (plan.key === 'enterprise') return 'pricing'; return this.billingPeriod === 'monthly' ? '/month' : '/year'; }, monthlyEquiv(plan) { if (this.billingPeriod !== 'annual' || plan.key !== 'business') return ''; const price = plan.annual_price_discounted || plan.annual_price; if (!price) return ''; return '$' + Math.round(price / 12).toLocaleString() + '/mo billed annually'; } }">
         {# Logo #}
-        <div class="flex items-center justify-center gap-3 mb-10">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-8 w-8"
-                 width="32"
-                 height="32">
-            <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
+        <div class="flex items-center justify-center mb-10">
+            {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
         </div>
         {# Heading #}
         <div class="text-center mb-8">

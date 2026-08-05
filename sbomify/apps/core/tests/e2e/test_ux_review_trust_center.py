@@ -15,9 +15,8 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Page
 
-from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component, Release
+from sbomify.apps.core.models import LATEST_RELEASE_NAME, Component
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
-from sbomify.apps.sboms.models import ProductIdentifier, ProductLink
 
 OUT_DIR = Path("/tmp/ux-review")
 
@@ -41,109 +40,6 @@ def _full_page_screenshot(page: Page, label: str, width: int) -> Path:
     out = OUT_DIR / f"{label}__{width}.jpg"
     page.screenshot(path=out.as_posix(), type="jpeg", full_page=True, quality=80)
     return out
-
-
-@pytest.fixture
-def trust_center_product(product_factory, component_factory, sbom_factory, document_factory, team_with_business_plan):
-    """Realistic trust-center product: SBOM + doc + identifiers + links + releases."""
-    team_with_business_plan.is_public = True
-    team_with_business_plan.save()
-
-    name = "UX Review Product"
-    _id = hashlib.md5(name.encode()).hexdigest()[:12]
-    product = product_factory(name=name, _id=_id, is_public=True)
-
-    bom = component_factory(
-        "Backend API",
-        Component.ComponentType.BOM,
-        product=product,
-        visibility=Component.Visibility.PUBLIC,
-    )
-    sbom_factory(bom, name="backend-api-sbom.json", version="2.4.1")
-
-    doc = component_factory(
-        "Compliance Pack",
-        Component.ComponentType.DOCUMENT,
-        product=product,
-        visibility=Component.Visibility.PUBLIC,
-    )
-    document_factory(doc, name="soc2-report.pdf", version="2025")
-
-    ProductIdentifier.objects.bulk_create([
-        ProductIdentifier(
-            product=product,
-            identifier_type=ProductIdentifier.IdentifierType.SKU,
-            value="SKU-UX-001",
-            team=product.team,
-        ),
-        ProductIdentifier(
-            product=product,
-            identifier_type=ProductIdentifier.IdentifierType.GTIN_13,
-            value="0123456789012",
-            team=product.team,
-        ),
-        ProductIdentifier(
-            product=product,
-            identifier_type=ProductIdentifier.IdentifierType.CPE,
-            value="cpe:2.3:a:test:product:1.0.0:*:*:*:*:*:*:*",
-            team=product.team,
-        ),
-    ])
-
-    ProductLink.objects.bulk_create([
-        ProductLink(
-            product=product,
-            link_type=ProductLink.LinkType.WEBSITE,
-            title="Product Website",
-            url="https://example.com",
-            team=product.team,
-        ),
-        ProductLink(
-            product=product,
-            link_type=ProductLink.LinkType.REPOSITORY,
-            title="GitHub Repository",
-            url="https://github.com/example/product",
-            team=product.team,
-        ),
-        ProductLink(
-            product=product,
-            link_type=ProductLink.LinkType.DOCUMENTATION,
-            title="Documentation",
-            url="https://docs.example.com",
-            team=product.team,
-        ),
-    ])
-
-    # Versioned releases: is_latest=False. The model reserves is_latest for
-    # the auto-managed `latest` synthetic release; `.create()` (not bulk) so
-    # save-time validations and signals run.
-    for name_, description, is_prerelease in [
-        ("v1.0.0", "Initial GA release", False),
-        ("v1.1.0", "Maintenance release", False),
-        ("v2.0.0", "Major update — new dashboard, faster scans", False),
-        ("v2.1.0-beta", "Beta — preview of release-channel feature", True),
-    ]:
-        Release.objects.create(
-            product=product,
-            name=name_,
-            description=description,
-            is_latest=False,
-            is_prerelease=is_prerelease,
-        )
-
-    # Synthetic auto-managed `latest` release — created the way the
-    # production code does (via the reserved name + is_latest=True). The
-    # public views filter this out of release lists; the UX-review pages
-    # exercise both the filtered list rendering and the synthetic-release
-    # download CTA.
-    Release.objects.create(
-        product=product,
-        name=LATEST_RELEASE_NAME,
-        is_latest=True,
-        is_prerelease=False,
-    )
-
-    yield product
 
 
 @pytest.fixture

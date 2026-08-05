@@ -9,7 +9,7 @@
             <div class="info-panel">
                 <div class="info-content">
                     <div class="brand-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h1 class="info-title">Recover Username</h1>
                     <p class="info-tagline">Find your account using email</p>
@@ -21,7 +21,7 @@
                 <div class="form-card">
                     <!-- Mobile Logo (hidden on desktop) -->
                     <div class="mobile-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h2 class="form-title">Forgot Your Username?</h2>
 

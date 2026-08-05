@@ -333,9 +333,18 @@
             <div>
                 <p class="text-sm text-text-muted mb-3">Loading State</p>
                 <div class="flex flex-wrap gap-3 items-center">
-                    <button class="tw-btn-primary tw-btn-loading" disabled>Loading...</button>
-                    <button class="tw-btn-secondary tw-btn-loading" disabled>Processing</button>
-                    <button class="tw-btn-gradient tw-btn-loading" disabled>Saving</button>
+                    <button class="tw-btn-primary tw-btn-loading" disabled>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                        Loading...
+                    </button>
+                    <button class="tw-btn-secondary tw-btn-loading" disabled>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                        Processing
+                    </button>
+                    <button class="tw-btn-gradient tw-btn-loading" disabled>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                        Saving
+                    </button>
                 </div>
             </div>
         </div>
@@ -870,30 +879,30 @@
         <div class="tw-card-body">
             <div class="flex items-center gap-8">
                 <div class="text-center">
-                    <div class="tw-spinner tw-spinner-sm"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
                     <p class="text-xs text-text-muted mt-2">Small</p>
                 </div>
                 <div class="text-center">
-                    <div class="tw-spinner tw-spinner-md"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
                     <p class="text-xs text-text-muted mt-2">Medium</p>
                 </div>
                 <div class="text-center">
-                    <div class="tw-spinner tw-spinner-lg"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg mx-auto text-primary" %}
                     <p class="text-xs text-text-muted mt-2">Large</p>
                 </div>
                 <div class="flex items-center gap-2">
-                    <div class="tw-spinner tw-spinner-sm"></div>
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline text-primary" %}
                     <span class="text-sm text-text-muted">Loading...</span>
                 </div>
+            </div>
+            <div class="flex items-center gap-8 mt-8">
                 <div class="text-center">
-                    {# djlint:off H020 #}
-                    <div class="tw-spinner-dots">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-                    {# djlint:on H020 #}
-                    <p class="text-xs text-text-muted mt-2">Dots</p>
+                    {% include "core/components/brand/emblem.html.j2" with class="w-11 h-auto text-text mx-auto" %}
+                    <p class="text-xs text-text-muted mt-2">Emblem</p>
+                </div>
+                <div class="text-center">
+                    {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" %}
+                    <p class="text-xs text-text-muted mt-2">Full logo</p>
                 </div>
             </div>
         </div>

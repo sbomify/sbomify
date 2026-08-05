@@ -2139,3 +2139,40 @@ def test_team_general_post__updates_session(
     # Verify session was updated
     session = client.session
     assert session["current_team"]["name"] == new_name
+
+
+@pytest.mark.django_db
+def test_team_response_omits_oidc_bot_memberships(
+    sample_team_with_owner_member: Member,  # noqa: F811
+):
+    """OIDC binding bots are not people with access to the workspace.
+
+    One synthetic ``role="bot"`` membership exists per trusted-publisher binding,
+    so a workspace with several bindings listed several "OIDC Bot" rows on its
+    members page and counted them towards the member total.
+    """
+    from django.contrib.auth import get_user_model
+
+    from sbomify.apps.teams.apis import _build_team_response
+
+    team = sample_team_with_owner_member.team
+    bot_user = get_user_model().objects.create_user(
+        username="oidc-bot-AbQf00M37nNj",
+        email="oidc-bot-AbQf00M37nNj@sbomify.local",
+        first_name="OIDC",
+        last_name="Bot",
+    )
+    # The same opt-out the OIDC provisioning path uses: the binding is attached
+    # after the membership, so the signal's binding lookup would reject it here.
+    bot_member = Member(user=bot_user, team=team, role="bot")
+    bot_member._is_oidc_bot_provisioning = True
+    bot_member.save()
+
+    request = RequestFactory().get("/")
+    request.user = sample_team_with_owner_member.user
+
+    response = _build_team_response(request, team)
+
+    emails = [member.user.email for member in response.members]
+    assert bot_user.email not in emails
+    assert sample_team_with_owner_member.user.email in emails

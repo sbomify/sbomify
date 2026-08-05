@@ -339,4 +339,13 @@ async def test_oversized_upload_is_refused_over_the_transport(make_token, mcp_ow
             arguments={"component_id": component.id, "content": payload},
         )
 
-    assert "limit for MCP uploads" in json.dumps(parse(response))
+    # Two refusal paths, depending on the SDK. mcp >= 1.29 caps the request
+    # body in StreamableHTTPSessionManager and answers a plain-text 413 before
+    # the tool runs; earlier versions let the body through and the tool itself
+    # rejects it with a JSON-RPC error naming the cap. Both satisfy what this
+    # test is for, so assert the property — the oversized upload is refused —
+    # rather than one version's wording.
+    if response.status_code == 413:
+        assert "too large" in response.text.lower()
+    else:
+        assert "limit for MCP uploads" in json.dumps(parse(response))

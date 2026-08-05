@@ -26,8 +26,10 @@
                     :disabled="generatingDoc === doc.key"
                     :aria-label="'Generate ' + doc.label"
                     class="tw-btn-ghost text-xs px-2 py-1">
-                <i class="fas"
-                   :class="generatingDoc === doc.key ? 'fa-spinner fa-spin' : 'fa-rotate'"></i>
+                <span x-show="generatingDoc === doc.key">
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                </span>
+                <i x-show="generatingDoc !== doc.key" class="fas fa-rotate"></i>
             </button>
         </div>
     </div>

@@ -50,21 +50,22 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
-    # ── 2. Scroll to the Releases section ─────────────────────────────────
+    # ── 2. Show the Latest releases card ──────────────────────────────────
     # The "latest" release was auto-created by the SBOM signal.
-    # The "Create Release" button is always rendered (not x-show gated).
-    create_release_btn = page.locator("button:has-text('Create Release')")
-    create_release_btn.wait_for(state="visible", timeout=15_000)
-    create_release_btn.scroll_into_view_if_needed()
+    releases_heading = page.locator("h4:has-text('Latest releases')").first
+    releases_heading.wait_for(state="visible", timeout=15_000)
+    releases_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1000)
-
-    # Wait for the releases table to load (Alpine fetches data on init)
-    page.locator("text=Latest").first.wait_for(state="visible", timeout=15_000)
+    page.locator("text=latest").first.wait_for(state="visible", timeout=15_000)
     pace(page, 800)
 
-    # ── 3. Create a new release ───────────────────────────────────────────
-    create_btn = page.locator("button:has-text('Create Release')")
-    hover_and_click(page, create_btn)
+    # ── 3. Create a new release from the header's ⋮ menu ─────────────────
+    # The page-level Create Release button moved into the meatball menu.
+    more_actions = page.get_by_role("button", name="More actions")
+    more_actions.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, more_actions)
+    pace(page, 600)
+    hover_and_click(page, page.get_by_role("menuitem", name="Create release"))
     pace(page, 600)
 
     # Wait for the modal to appear
@@ -95,14 +96,22 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
 
     # Click "Create" button in the modal footer (exact match to avoid other create buttons)
     submit_btn = page.get_by_role("button", name="Create", exact=True)
-    hover_and_click(page, submit_btn)
+    with page.expect_response(
+        lambda r: "/api/v1/releases" in r.url and r.request.method == "POST" and r.status in (200, 201),
+        timeout=10_000,
+    ):
+        hover_and_click(page, submit_btn)
+    pace(page, 800)
 
-    # Wait for modal to close and release to appear in the table
+    # The page normally refreshes when the release_created WebSocket
+    # broadcast lands, but the recording's live server is WSGI so no
+    # socket ever connects — reload explicitly instead.
+    page.reload()
     page.wait_for_load_state("networkidle")
-    pace(page, 1500)
+    pace(page, 1200)
 
     # ── 4. Click into the new release ─────────────────────────────────────
-    release_link = page.locator(f"a.text-primary.font-medium:has-text('{RELEASE_NAME}')")
+    release_link = page.locator(f"a:has-text('{RELEASE_NAME}')").first
     release_link.wait_for(state="visible", timeout=10_000)
     pace(page, 500)
     hover_and_click(page, release_link)

@@ -54,7 +54,7 @@ def test_public_release_page_shows_vuln_posture(sample_team_with_owner_member):
 
     assert resp.status_code == 200
     html = resp.content.decode()
-    assert "Vulnerability Posture" in html
+    assert "Vulnerability posture" in html
     assert 'id="vuln-posture-data"' in html
 
     # Parse the embedded posture data and verify the VEX-applied breakdown: the
@@ -66,7 +66,7 @@ def test_public_release_page_shows_vuln_posture(sample_team_with_owner_member):
     match = re.search(r'<script id="vuln-posture-data"[^>]*>(.*?)</script>', html, re.DOTALL)
     assert match is not None
     posture = json.loads(match.group(1))
-    assert posture["counts"] == {"critical": 0, "high": 1, "medium": 0, "low": 0, "unknown": 0, "total": 1}
+    assert posture["counts"] == {"critical": 0, "high": 1, "medium": 0, "low": 0, "unknown": 0, "total": 1, "malicious": 0}
     assert posture["suppressed_count"] == 1
     by_id = {f["id"]: f for f in posture["findings"]}
     assert by_id["CVE-2026-1"]["suppressed"] is False
@@ -84,4 +84,4 @@ def test_public_release_page_no_posture_without_scans(sample_team_with_owner_mem
     resp = Client().get(url)
 
     assert resp.status_code == 200
-    assert "Vulnerability Posture" not in resp.content.decode()
+    assert "Vulnerability posture" not in resp.content.decode()

@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import asyncio
 import logging
 import os
+import sys
+import warnings
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -28,6 +30,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.sentry_config import resolve_environment, should_warn_missing_dsn
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -491,9 +494,20 @@ else:
     }
 
 # Channel Layers for WebSocket support
-_channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
+# Keepalive plus proactive health checks: a broker restart is then noticed
+# on the next use and reconnected quietly, instead of surfacing as a
+# mid-command "Connection reset by peer" on every consumer thread at once.
+_redis_resilience: dict[str, Any] = {
+    "socket_keepalive": True,
+    "health_check_interval": 30,
+    "socket_connect_timeout": 5,
+}
+
+# The dict host form is how channels-redis forwards client kwargs (the CA
+# path already relied on it); the resilience kwargs ride the same way.
+_channels_host: dict[str, Any] = {"address": REDIS_CHANNELS_URL, **_redis_resilience}
 if REDIS_CA_CERTS:
-    _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}
+    _channels_host["ssl_ca_certs"] = REDIS_CA_CERTS
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -509,9 +523,9 @@ CHANNEL_LAYERS = {
 # Pass a pre-built client because Dramatiq's RedisBroker creates a
 # ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
 _dramatiq_redis_options: dict[str, Any] = (
-    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)}
+    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS, **_redis_resilience)}
     if REDIS_CA_CERTS
-    else {"url": REDIS_WORKER_URL}
+    else {"url": REDIS_WORKER_URL, **_redis_resilience}
 )
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
@@ -557,6 +571,31 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+
+
+# WhiteNoiseMiddleware serves static files with a synchronous file iterator, and
+# whitenoise 6.11 offers no async path (the middleware is not async_capable). Under
+# ASGI, StreamingHttpResponse.__aiter__ therefore falls back to consuming it via
+# sync_to_async and warns once per worker process.
+#
+# Harmless for static assets: the bytes are correct and the files are small. Note the
+# fallback calls list() on the iterator, so the body is fully buffered rather than
+# streamed -- fine here, but it is the reason this filter is pinned to this exact
+# message instead of silencing the warning class. If a large response is ever streamed
+# through a sync iterator, we want that warning to surface.
+warnings.filterwarnings(
+    "ignore",
+    # Anchored at both ends and with the periods escaped, so this suppresses
+    # exactly Django's message and nothing that merely begins with it. Note
+    # Django has a sibling warning for the reverse case ("must consume
+    # asynchronous iterators in order to serve them synchronously") which must
+    # keep surfacing.
+    message=(
+        r"^StreamingHttpResponse must consume synchronous iterators in order to "
+        r"serve them asynchronously\. Use an asynchronous iterator instead\.$"
+    ),
+    category=Warning,
+)
 
 
 # Logging config
@@ -810,10 +849,21 @@ def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
     return base_rate
 
 
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+
+# With no DSN the SDK builds a client whose transport is None: every event is
+# dropped silently and is_active() still returns True, so nothing surfaces the
+# misconfiguration. Say so once at startup instead. Written to stderr directly
+# because Django applies LOGGING later in django.setup(), so a logger call here
+# would bypass the configured handlers and formatters.
+if should_warn_missing_dsn(_SENTRY_DSN, debug=DEBUG):
+    sys.stderr.write("SENTRY_DSN is not set - error reporting is disabled and all events will be discarded.\n")
+    sys.stderr.flush()
+
 sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
+    dsn=_SENTRY_DSN,
     release=get_sbomify_version(),
-    environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
+    environment=resolve_environment(debug=DEBUG),
     integrations=[
         DjangoIntegration(),
         DramatiqIntegration(),
@@ -866,6 +916,11 @@ API_TOKEN_RATE_LIMIT = os.environ.get("API_TOKEN_RATE_LIMIT", "1000/min")
 # alongside the global one (#1070). Lower because each call does real work (parse,
 # S3 write, downstream scan/assessment enqueue).
 API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/min")
+
+# Anonymous/session callers carry no token, so the per-token limits above never
+# apply to them. Keyed per client IP. Generous enough that a human browsing the
+# Trust Center never notices, low enough to blunt scripted enumeration.
+API_ANONYMOUS_RATE_LIMIT = os.environ.get("API_ANONYMOUS_RATE_LIMIT", "120/min")
 
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend
@@ -963,6 +1018,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
+    "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",

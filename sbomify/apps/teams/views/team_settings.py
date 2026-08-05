@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -14,6 +14,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
+from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import build_custom_domain_url
@@ -105,7 +106,7 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         active_tab = request.POST.get("active_tab", "")
         return redirect_to_team_settings(team_key, active_tab if active_tab else None)
 
-    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+    def get(self, request: HttpRequest, team_key: str, tab: str | None = None) -> HttpResponse:
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return error_response(
@@ -226,11 +227,32 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         }
                     )
 
+        # Which section is on screen, and which the nav offers. Resolved from
+        # the registry so the two cannot disagree — a tab the member may not
+        # open is neither linked nor rendered.
+        from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
+
+        role = request.session.get("current_team", {}).get("role")
+        billing_enabled_flag = is_billing_enabled()
+        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
+        if active_tab is None:
+            # The typed domain error rather than a hand-built HttpResponse:
+            # error_response understands it, it carries its own 403, and it keeps
+            # this on the same path as every other permission failure.
+            return error_response(request, PermissionDeniedError("No settings available for this role"))
+        # A stale or renamed slug resolves to the first section instead of 404ing;
+        # send the browser to the URL that actually rendered so the address bar,
+        # the highlighted tab and the content all agree.
+        if tab is not None and tab != active_tab.key:
+            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+
         return render(
             request,
             "teams/team_settings.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
+                "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
+                "active_tab": active_tab,
                 "team": team_data,
                 "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
                 # Members tab
@@ -772,8 +794,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         team.slug = new_slug
+        # Validate the slug only. A bare full_clean() also flags unrelated fields that are
+        # legitimately empty on most workspaces (branding_info defaults to {}, and
+        # billing_plan/billing_plan_limits are null on community plans), which made every
+        # rename fail with a bare "This field cannot be blank."
+        slug_only_exclude = [field.name for field in Team._meta.fields if field.name != "slug"]
         try:
-            team.full_clean(exclude=["key"])
+            team.full_clean(exclude=slug_only_exclude)
         except ValidationError as e:
             slug_errors = e.message_dict.get("slug", [])
             if slug_errors:
