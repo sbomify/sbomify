@@ -29,14 +29,17 @@ submit button applies the same filters, and the URL is the same either way.
         hx-preserve keeps the live input node across the swap, so a search that
         fires mid-word does not steal the cursor back to the start.
         {% endcomment %}
-        <div class="tc-filter-search" id="advisorySearchWrap" hx-preserve="true">
-            <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <div class="tw-data-table-search tc-filter-search-slot"
+             id="advisorySearchWrap"
+             hx-preserve="true">
+            <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
             <label for="advisorySearch" class="sr-only">Search advisories</label>
             <input id="advisorySearch"
                    type="search"
                    name="search"
                    value="{{ query.search }}"
-                   placeholder="Search advisories">
+                   class="tw-data-table-search-input"
+                   placeholder="Search advisories...">
         </div>
         {% comment %}
         Narrow screens get a disclosure instead of a wall of checkboxes: five

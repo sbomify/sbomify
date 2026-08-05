@@ -1,6 +1,7 @@
 export interface PickerRelease {
     id: string;
     label: string;
+    created?: string;
 }
 
 export interface PickerProduct {
@@ -29,6 +30,7 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
         selectedProducts: [] as string[],
         selectedReleases: [] as string[],
         expanded: [] as string[],
+        filter: '',
 
         /** Index of the last product row clicked, for shift-click ranges. */
         anchor: null as number | null,
@@ -45,6 +47,48 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
 
         isExpanded(id: string): boolean {
             return this.expanded.includes(id);
+        },
+
+        /**
+         * Narrow the list by product name or version label.
+         *
+         * A workspace with a release-per-build has hundreds of versions, and
+         * scrolling a box to find one is not a search. Matching on either name
+         * or label means typing a build number finds it without first knowing
+         * which product shipped it.
+         *
+         * Both anchors reset, because they hold positions in the list as it was
+         * rendered a moment ago; shift-clicking against a stale one selects a
+         * range the user cannot see.
+         */
+        setFilter(value: string): void {
+            this.filter = value;
+            this.anchor = null;
+            this.releaseAnchor = {};
+        },
+
+        get filterTerm(): string {
+            return this.filter.trim().toLowerCase();
+        },
+
+        get visibleProducts(): PickerProduct[] {
+            const term = this.filterTerm;
+            if (!term) return this.products;
+            return this.products.filter(
+                (product) =>
+                    product.name.toLowerCase().includes(term) ||
+                    product.releases.some((release) => release.label.toLowerCase().includes(term)),
+            );
+        },
+
+        /**
+         * A product matched by name keeps all its versions: the user asked for
+         * that product, not for a subset of its builds.
+         */
+        visibleReleases(product: PickerProduct): PickerRelease[] {
+            const term = this.filterTerm;
+            if (!term || product.name.toLowerCase().includes(term)) return product.releases;
+            return product.releases.filter((release) => release.label.toLowerCase().includes(term));
         },
 
         toggleExpanded(id: string): void {
@@ -68,16 +112,19 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
          * every file manager behaves: shift-clicking an unticked row after
          * ticking one fills the span in rather than inverting each row.
          */
-        toggleProduct(index: number, event?: MouseEvent): void {
-            const product = this.products[index];
+        toggleProduct(index: number, event?: MouseEvent, visible?: PickerProduct[]): void {
+            const list = visible ?? this.products;
+            const product = list[index];
             if (!product) return;
 
             const shouldSelect = !this.isProductSelected(product.id);
             const from = event?.shiftKey && this.anchor !== null ? this.anchor : index;
             const [start, end] = from <= index ? [from, index] : [index, from];
 
+            // As with versions, the range spans the rendered list, so a filter
+            // never drags hidden products into the selection.
             for (let i = start; i <= end; i++) {
-                this.setProduct(this.products[i], shouldSelect);
+                this.setProduct(list[i], shouldSelect);
             }
             this.anchor = index;
         },
@@ -117,8 +164,13 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
          * something you have not marked affected is not a state worth being
          * able to reach.
          */
-        toggleRelease(product: PickerProduct, index: number, event?: MouseEvent): void {
-            const release = product.releases[index];
+        toggleRelease(
+            product: PickerProduct,
+            index: number,
+            event?: MouseEvent,
+            list: PickerRelease[] = product.releases,
+        ): void {
+            const release = list[index];
             if (!release) return;
 
             const shouldSelect = !this.isReleaseSelected(release.id);
@@ -126,8 +178,11 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             const from = event?.shiftKey && previous !== undefined ? previous : index;
             const [start, end] = from <= index ? [from, index] : [index, from];
 
+            // Ranges run over the list as rendered, so shift-clicking under a
+            // filter spans what the user can see rather than the rows the
+            // filter is hiding between them.
             for (let i = start; i <= end; i++) {
-                this.setRelease(product.releases[i], shouldSelect);
+                this.setRelease(list[i], shouldSelect);
             }
             this.releaseAnchor[product.id] = index;
 
@@ -152,8 +207,8 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             return product.releases.filter((release) => this.isReleaseSelected(release.id)).map((r) => r.id);
         },
 
-        allVersionsSelected(product: PickerProduct): boolean {
-            return product.releases.length > 0 && this.selectedReleasesFor(product).length === product.releases.length;
+        allVersionsSelected(product: PickerProduct, list: PickerRelease[] = product.releases): boolean {
+            return list.length > 0 && list.every((release) => this.isReleaseSelected(release.id));
         },
 
         /**
@@ -171,9 +226,9 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             return picked > 0 && picked < product.releases.length;
         },
 
-        toggleAllVersions(product: PickerProduct): void {
-            const selectAll = !this.allVersionsSelected(product);
-            product.releases.forEach((release) => this.setRelease(release, selectAll));
+        toggleAllVersions(product: PickerProduct, list: PickerRelease[] = product.releases): void {
+            const selectAll = !this.allVersionsSelected(product, list);
+            list.forEach((release) => this.setRelease(release, selectAll));
             if (selectAll) this.setProduct(product, true);
             this.releaseAnchor[product.id] = 0;
         },
@@ -190,6 +245,28 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             const count = this.selectedReleasesFor(product).length;
             if (count === 0) return 'All versions';
             return `${count} of ${product.releases.length} versions`;
+        },
+
+        /**
+         * What the picker has been told, in a sentence.
+         *
+         * Ticking a product and no versions covers the product whole — every
+         * version it has and every version it gets. That is the most common
+         * intent and the easiest to reach by accident, and reading it off the
+         * checkboxes means knowing that an empty version list is a claim rather
+         * than an omission. Saying it in words removes the guess.
+         */
+        get selectionSummary(): string {
+            const chosen = this.products.filter((product) => this.isProductSelected(product.id));
+            if (chosen.length === 0) return 'No products selected yet.';
+
+            return chosen
+                .map((product) => {
+                    const count = this.selectedReleasesFor(product).length;
+                    if (count === 0) return `${product.name}: every version, now and in future`;
+                    return `${product.name}: ${count} version${count === 1 ? '' : 's'}`;
+                })
+                .join(' · ');
         },
     };
 }

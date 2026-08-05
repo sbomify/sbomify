@@ -31,6 +31,7 @@ from django.views import View
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
+    PUBLISHABLE_VISIBILITIES,
     REMEDIATION_META,
     advisory_counts,
     create_advisory,
@@ -38,6 +39,8 @@ from sbomify.apps.security_advisories.services.advisories import (
     get_advisory,
     list_advisories,
     post_update,
+    publish_advisory,
+    update_advisory,
 )
 from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
@@ -73,6 +76,33 @@ def _current_team(request: HttpRequest) -> Team | None:
     return membership.team if membership else None
 
 
+# Roles that may change an advisory, mirroring the has_crud_permissions the
+# templates use to decide whether to render the controls at all.
+_ADVISORY_WRITE_ROLES = ("owner", "admin")
+
+
+def _writable_team(request: HttpRequest) -> Team | None:
+    """The workspace, but only for a member who may change its advisories.
+
+    The templates hide the edit and compose controls behind
+    ``has_crud_permissions``, which is a rendering decision and nothing a
+    handler can rely on — a POST can be crafted without ever loading the page.
+    The role is read from the membership row rather than the session, so a
+    role cached there cannot outlive a demotion.
+    """
+    key = (request.session.get("current_team") or {}).get("key")
+    if not key:
+        return None
+    user = cast(User, request.user)
+    membership = (
+        Member.objects.filter(user=user, team__key=key, role__in=_ADVISORY_WRITE_ROLES)
+        .select_related("team")
+        .only("team", "role")
+        .first()
+    )
+    return membership.team if membership else None
+
+
 def _advisories_context(request: HttpRequest) -> dict[str, Any]:
     current_team = request.session.get("current_team") or {}
     team = _current_team(request)
@@ -99,7 +129,7 @@ class SecurityAdvisoriesDashboardView(GuestAccessBlockedMixin, LoginRequiredMixi
         return render(request, "core/security_advisories_dashboard.html.j2", context)
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        team = _current_team(request)
+        team = _writable_team(request)
         if team is None:
             raise Http404("Workspace not found")
 
@@ -160,6 +190,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 "advisory": advisory,
                 "timeline": advisory["timeline"],
                 "update_kinds": UPDATE_KINDS,
+                "publish_visibilities": PUBLISHABLE_VISIBILITIES,
                 # Real VEX candidates need the linking pass; an empty list renders
                 # the section's own empty state rather than inventing documents.
                 "vex_candidates": [],
@@ -167,18 +198,51 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         )
 
     def post(self, request: HttpRequest, advisory_id: str) -> HttpResponse:
-        team = _current_team(request)
+        team = _writable_team(request)
         if team is None:
             raise Http404("Advisory not found")
 
         intent = request.POST.get("intent")
-        if intent in ("edit", "edit_update", "link_vex"):
+        if intent == "publish":
+            result = publish_advisory(
+                team,
+                cast(User, request.user),
+                advisory_id,
+                visibility=request.POST.get("visibility", ""),
+            )
+            if result.ok:
+                messages.success(request, "Advisory published.")
+            elif result.status_code == 404:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, result.error or "Advisory not published.")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent == "edit":
+            result = update_advisory(
+                team,
+                cast(User, request.user),
+                advisory_id,
+                title=request.POST.get("title", ""),
+                # None when the form did not carry the field at all, so a
+                # partial edit cannot silently set a severity nobody chose.
+                severity=request.POST.get("severity"),
+                description=request.POST.get("description", ""),
+            )
+            if result.ok:
+                messages.success(request, "Advisory updated.")
+            elif result.status_code == 404:
+                raise Http404("Advisory not found")
+            else:
+                messages.error(request, result.error or "Advisory not updated.")
+            return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent in ("edit_update", "link_vex"):
             # Only the stubs pay for the full projection lookup; the real
             # composer path below lets post_update do the one scoped lookup.
             if not get_advisory(team, advisory_id).ok:
                 raise Http404("Advisory not found")
             note = {
-                "edit": "Editing an advisory is the next pass on this UI.",
                 "edit_update": "Editing a timeline entry is the next pass on this UI.",
                 "link_vex": "Linking VEX documents is the pass after the CRUD one.",
             }[intent]
