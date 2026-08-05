@@ -38,7 +38,7 @@ from sbomify.apps.sboms.models import SBOM
 # The same set that decides a document is an HBOM. Detection and projection must
 # never diverge: a stricter set here renders an HBOM page with an empty parts
 # table, a looser one lists parts on a document nothing calls hardware.
-from sbomify.apps.sboms.utils import _HARDWARE_TYPES as HARDWARE_TYPES
+from sbomify.apps.sboms.utils import _HBOM_COMPONENT_TYPES as HARDWARE_TYPES
 
 log = logging.getLogger(__name__)
 
