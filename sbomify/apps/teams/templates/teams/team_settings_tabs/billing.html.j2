@@ -4,9 +4,9 @@
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-credit-card text-primary"></i>
-                </div>
+                <span class="tw-icon-chip">
+                    <i class="fas fa-credit-card" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Billing</h5>
                     <p class="text-text-muted text-sm m-0">Manage your subscription and billing details</p>
@@ -26,9 +26,10 @@
         {# Current Plan Section #}
         <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
             <div class="flex items-start gap-3 mb-4">
-                <div class="w-8 h-8 rounded-lg {% if team.billing_plan == 'enterprise' %}bg-primary/10{% elif team.billing_plan == 'business' %}bg-success/10{% else %}bg-border/50{% endif %} flex items-center justify-center flex-shrink-0">
-                    <i class="fas {% if team.billing_plan == 'enterprise' %}fa-gem text-primary{% elif team.billing_plan == 'business' %}fa-rocket text-success{% else %}fa-users text-text-muted{% endif %} text-sm"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-sm {% if team.billing_plan == 'business' %}tw-icon-chip-success{% elif team.billing_plan != 'enterprise' %}tw-icon-chip-neutral{% endif %}">
+                    <i class="fas {% if team.billing_plan == 'enterprise' %}fa-gem{% elif team.billing_plan == 'business' %}fa-rocket{% else %}fa-users{% endif %}"
+                       aria-hidden="true"></i>
+                </span>
                 <div>
                     <h6 class="text-base font-semibold text-text m-0">Current Plan</h6>
                     <p class="text-text-muted text-sm m-0">Your active subscription details</p>
@@ -94,9 +95,9 @@
         {% if plan_limits %}
             <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
                 <div class="flex items-start gap-3 mb-4">
-                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-tachometer-alt text-text-muted text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                        <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Plan Limits</h6>
                         <p class="text-text-muted text-sm m-0">Resource limits included in your plan</p>
@@ -106,9 +107,9 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {% for limit in plan_limits %}
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-{{ limit.icon }} text-primary"></i>
-                                </div>
+                                <span class="tw-icon-chip mx-auto mb-2">
+                                    <i class="fas fa-{{ limit.icon }}" aria-hidden="true"></i>
+                                </span>
                                 <span class="text-2xl font-bold text-text block">{{ limit.value }}</span>
                                 <span class="text-text-muted text-xs">{{ limit.label }}</span>
                             </div>
@@ -121,9 +122,9 @@
         {% if plan_features %}
             <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
                 <div class="flex items-start gap-3 mb-4">
-                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-check text-text-muted text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Included Features</h6>
                         <p class="text-text-muted text-sm m-0">Features available with your current plan</p>
@@ -147,9 +148,9 @@
         {% if team.billing_plan == 'community' or not team.billing_plan %}
             <div class="bg-primary/5 border border-primary/20 rounded-xl p-5">
                 <div class="flex items-start gap-3 mb-4">
-                    <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-rocket text-primary text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm">
+                        <i class="fas fa-rocket" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Ready to upgrade?</h6>
                         <p class="text-text-muted text-sm m-0">Unlock advanced features for your team</p>

@@ -12,6 +12,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "colors", "label": "Colour tokens", "group": "Foundations"},
     {"id": "typography", "label": "Typography", "group": "Foundations"},
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
+    {"id": "metric-chips", "label": "Metric chips", "group": "Foundations"},
     {"id": "page-header", "label": "Page & section headers", "group": "Foundations"},
     {"id": "buttons", "label": "Buttons", "group": "Controls"},
     {"id": "forms", "label": "Form controls", "group": "Controls"},

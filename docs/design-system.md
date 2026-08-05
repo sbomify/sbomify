@@ -97,8 +97,8 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 | Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
 | Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*` (+ `tw-badge-severity-{critical,high,medium,low}`), `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
 | Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*`, `tw-icon-btn` (+ `-sm`, `-danger`), `tw-stepper-*` |
-| Accent | `tw-icon-chip` (+ `-sm`, `-lg`, `-neutral`, `-success`, `-warning`, `-danger`) — the flat tinted chip behind every icon-beside-a-heading |
-| Layout | `tw-page-header` (+ `-title`, `-subtitle`, `-actions`), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title |
+| Accent | `tw-icon-chip` (+ sizes `-sm`/`-lg`/`-xl`, `-circle`, and `-neutral`/`-info`/`-success`/`-warning`/`-danger`) — the flat tinted chip behind every icon-beside-a-heading |
+| Layout | `tw-page-header` (+ `-lead` for a mark beside the title, `-title`, `-subtitle`, `-actions`, `-flush` inside a `space-y-*` stack), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title, `tw-metric-chip` (+ `-label`, `-value`) for the stats strip |
 | Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose) |
 | Misc | modal, `alpine-tooltip` (via the `x-tooltip` directive), copy button / token display / code block |
 
@@ -111,7 +111,9 @@ Removed in the v2 consolidation — do not reintroduce without three real caller
 
 ## Recipes
 
-**The three-caller rule.** A pattern earns a place in the library at three or more *distinct* callers. Below that it stays page-local markup composed from library primitives. Patterns rejected under this rule during the v2 consolidation — a metadata chip (1 real caller) and a selectable tile (3 files, three divergent geometries) — are recorded here so they are not re-proposed without new evidence.
+**The three-caller rule.** A pattern earns a place in the library at three or more *distinct* callers. Below that it stays page-local markup composed from library primitives. Rejected under this rule during the v2 consolidation, and recorded so it is not re-proposed without new evidence: a selectable tile (3 files, three divergent geometries — page-local until the geometries converge).
+
+Count callers with a *loose* pattern before rejecting one. The metric chip was rejected first time round on a regex that required `text-xs`; the real shape uses `text-sm`, and it turned out to have 17 instances across 6 files. It is now `tw-metric-chip`.
 
 **New variant of a parameterized family** — set the accent properties on a modifier class; never restate the base rules:
 
@@ -162,3 +164,4 @@ Removed in the v2 consolidation — do not reintroduce without three real caller
 - **Wrapping a colour token in `rgb()`** — the tokens are already `rgb(…)`, so `rgb(var(--color-primary))` is invalid and the whole declaration is silently dropped. Use the token directly, or `color-mix(in oklab, var(--color-primary) 12%, transparent)` for a tint.
 - Referencing a class that does not exist. It fails silently, so it survives review: grep the class in `tailwind.src.css` before shipping it, and remember class names also come from `.ts` files.
 - Styling state on a decorative sibling instead of the element that carries it — a link can never match `:disabled`, so use `[aria-disabled="true"]`.
+- **A Tailwind utility fighting a component class for the same property.** The `tw-*` classes are unlayered and emitted after Tailwind's utilities, so at equal specificity the component wins: `class="tw-stat-value text-danger"` renders in the default text colour, silently. When a component owns a property, recolour it through the component's accent custom property (`tw-stat-accent-danger`), never with a utility.

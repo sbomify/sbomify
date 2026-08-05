@@ -71,28 +71,76 @@
             The accent carrier of the design language — a flat 12% tint with the accent as foreground.
             Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
         </p>
-        <div class="flex flex-wrap items-center gap-4">
+        <p class="tw-data-label mb-2">Sizes</p>
+        <div class="flex flex-wrap items-center gap-4 mb-5">
             <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-key" aria-hidden="true"></i></span>
             <span class="tw-icon-chip"><i class="fas fa-credit-card" aria-hidden="true"></i></span>
             <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-cube" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-xl"><i class="fas fa-box" aria-hidden="true"></i></span>
+        </div>
+        <p class="tw-data-label mb-2">Accents</p>
+        <div class="flex flex-wrap items-center gap-4 mb-5">
+            <span class="tw-icon-chip"><i class="fas fa-cube" aria-hidden="true"></i></span>
             <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-plus" aria-hidden="true"></i></span>
+            <span class="tw-icon-chip tw-icon-chip-info"><i class="fas fa-circle-info" aria-hidden="true"></i></span>
             <span class="tw-icon-chip tw-icon-chip-success"><i class="fas fa-check" aria-hidden="true"></i></span>
             <span class="tw-icon-chip tw-icon-chip-warning"><i class="fas fa-clock" aria-hidden="true"></i></span>
             <span class="tw-icon-chip tw-icon-chip-danger"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
+        </div>
+        <p class="tw-data-label mb-2">Circular — the medallion above a destructive confirmation</p>
+        <div class="flex flex-wrap items-center gap-4">
+            <span class="tw-icon-chip tw-icon-chip-xl tw-icon-chip-circle tw-icon-chip-danger">
+                <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+            </span>
+            <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-circle tw-icon-chip-neutral">
+                <i class="fas fa-inbox" aria-hidden="true"></i>
+            </span>
+        </div>
+    {% endcard %}
+    <h2 id="metric-chips" class="text-xl font-semibold text-text mb-4">Metric chips</h2>
+    {% card class="mb-8" %}
+        <p class="text-sm text-text-muted mb-4">
+            The stats strip that sits under a page header — a bordered surface pill holding an icon,
+            a muted label and a value.
+        </p>
+        <div class="flex flex-wrap gap-2">
+            <span class="tw-metric-chip">
+                <i class="fas fa-puzzle-piece text-text-muted" aria-hidden="true"></i>
+                <span class="tw-metric-chip-value">12</span>
+                <span class="tw-metric-chip-label">Components</span>
+            </span>
+            <span class="tw-metric-chip">
+                <i class="fas fa-tag text-text-muted" aria-hidden="true"></i>
+                <span class="tw-metric-chip-value">4</span>
+                <span class="tw-metric-chip-label">Releases</span>
+            </span>
+            <span class="tw-metric-chip">
+                <i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
+                <span class="tw-metric-chip-label">Scanned</span>
+                <span class="tw-metric-chip-value">3h ago</span>
+            </span>
         </div>
     {% endcard %}
     <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
     {% card class="mb-8" %}
         <div class="tw-page-header">
-            <div>
-                <h1 class="tw-page-header-title">Acme Gateway</h1>
-                <p class="tw-page-header-subtitle">Quantum readiness and migration priority across all components</p>
+            <div class="tw-page-header-lead">
+                <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-box" aria-hidden="true"></i></span>
+                <div>
+                    <h1 class="tw-page-header-title">Acme Gateway</h1>
+                    <p class="tw-page-header-subtitle">Quantum readiness and migration priority across all components</p>
+                </div>
             </div>
             <div class="tw-page-header-actions">
                 {% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
                 {% button text="New release" variant="primary" size="sm" %}
             </div>
         </div>
+        <p class="text-sm text-text-muted mb-6">
+            <code class="tw-code-inline">tw-page-header-lead</code> holds the mark (an avatar or icon chip) beside the
+            title block; add <code class="tw-code-inline">tw-page-header-flush</code> inside a
+            <code class="tw-code-inline">space-y-*</code> stack that already supplies the rhythm.
+        </p>
         <hr class="my-6 border-border">
         <div class="tw-section-header">
             <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-plus-circle" aria-hidden="true"></i></span>
@@ -378,27 +426,32 @@
     </div>
     <p class="tw-data-label mb-3">Compact — the dense metric strip above a table</p>
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
-        <div class="tw-stat-card tw-stat-card-compact">
-            <span class="tw-stat-value text-danger">3</span>
+        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
+            <span class="tw-stat-value">3</span>
             <span class="tw-stat-label mt-1 mb-0">At risk</span>
         </div>
-        <div class="tw-stat-card tw-stat-card-compact">
-            <span class="tw-stat-value text-warning">7</span>
+        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+            <span class="tw-stat-value">7</span>
             <span class="tw-stat-label mt-1 mb-0">Needs review</span>
         </div>
-        <div class="tw-stat-card tw-stat-card-compact">
-            <span class="tw-stat-value text-success">41</span>
+        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
+            <span class="tw-stat-value">41</span>
             <span class="tw-stat-label mt-1 mb-0">Ready</span>
         </div>
         <div class="tw-stat-card tw-stat-card-compact">
             <span class="tw-stat-value">51</span>
             <span class="tw-stat-label mt-1 mb-0">Total</span>
         </div>
-        <div class="tw-stat-card tw-stat-card-compact">
-            <span class="tw-stat-value text-text-muted">—</span>
+        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
+            <span class="tw-stat-value">—</span>
             <span class="tw-stat-label mt-1 mb-0">Unscanned</span>
         </div>
     </div>
+    <p class="text-sm text-text-muted mb-8">
+        The number takes the card's accent. A Tailwind colour utility on
+        <code class="tw-code-inline">tw-stat-value</code> would be dead — component classes are unlayered and
+        emitted after the utilities, so they win at equal specificity.
+    </p>
     <h2 id="severity" class="text-xl font-semibold text-text mb-4">Severity badges</h2>
     {% card class="mb-8" %}
         <p class="text-sm text-text-muted mb-4">
@@ -490,9 +543,11 @@
         {% endcard %}
         {% card title="Loading panel" %}
             {% loading_state message="Loading artifacts…" %}
+            {% loading_state row=True message="Refreshing…" %}
             <p class="text-sm text-text-muted m-0">
                 The placeholder an HTMX panel shows while its content is in flight —
-                <code class="tw-code-inline">{% templatetag openblock %} loading_state {% templatetag closeblock %}</code>.
+                <code class="tw-code-inline">{% templatetag openblock %} loading_state {% templatetag closeblock %}</code>,
+                or <code class="tw-code-inline">row=True</code> beside a skeleton block.
             </p>
         {% endcard %}
         {% card title="Skeletons" %}

@@ -154,19 +154,13 @@
                                                                                 <div class="flex items-center gap-2">
                                                                                     {# Severity Badge #}
                                                                                     {% if vuln.severity and vuln.severity != 'unknown' %}
-                                                                                        {% if vuln.severity|lower == 'critical' %}
-                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ vuln.severity|upper }}</span>
-                                                                                        {% elif vuln.severity|lower == 'high' %}
-                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">{{ vuln.severity|upper }}</span>
-                                                                                        {% elif vuln.severity|lower == 'medium' %}
-                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">{{ vuln.severity|upper }}</span>
-                                                                                        {% elif vuln.severity|lower == 'low' %}
-                                                                                            <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">{{ vuln.severity|upper }}</span>
+                                                                                        {% if vuln.severity|lower == 'critical' or vuln.severity|lower == 'high' or vuln.severity|lower == 'medium' or vuln.severity|lower == 'low' %}
+                                                                                            <span class="tw-badge-severity-{{ vuln.severity|lower }}">{{ vuln.severity|upper }}</span>
                                                                                         {% else %}
                                                                                             <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ vuln.severity|upper }}</span>
                                                                                         {% endif %}
                                                                                     {% else %}
-                                                                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">MEDIUM</span>
+                                                                                        <span class="tw-badge-severity-medium">MEDIUM</span>
                                                                                     {% endif %}
                                                                                     {# CVSS Score #}
                                                                                     {% if vuln.cvss_score %}

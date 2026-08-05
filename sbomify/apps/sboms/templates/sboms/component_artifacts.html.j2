@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load design_system %}
 {% load django_vite %}
 {% block title %}sbomify Artifacts: {{ component.name }}{% endblock %}
 {% block content %}
@@ -32,12 +33,7 @@
         <div id="sboms-table-container"
              hx-get="{% url 'sboms:sboms_table' component.id %}?full=1"
              hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
-             hx-swap="innerHTML">
-            <div class="text-center py-8">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg mx-auto text-primary" %}
-                <p class="mt-3 text-text-muted">Loading artifacts...</p>
-            </div>
-        </div>
+             hx-swap="innerHTML">{% loading_state message="Loading artifacts…" %}</div>
     </div>
 {% endblock %}
 {% block scripts %}

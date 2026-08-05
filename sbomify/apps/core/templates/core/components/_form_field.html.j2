@@ -50,7 +50,7 @@
             {% if required|default:field.required %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
         </label>
         {% if field.field.widget.input_type == 'select' %}
-            {{ field|add_class:"tw-form-input"|add_class:input_class }}
+            {{ field|add_class:"tw-form-select"|add_class:input_class }}
         {% elif field.field.widget.input_type == 'checkbox' %}
             <div class="flex items-center gap-2">
                 {{ field|add_class:"w-4 h-4 rounded border-border text-primary focus:ring-primary"|add_class:input_class }}

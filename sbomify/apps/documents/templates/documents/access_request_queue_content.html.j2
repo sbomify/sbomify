@@ -362,7 +362,7 @@
                                                 <i class="fas fa-info-circle" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                                                     title="Remove from Rejected List"
                                                     aria-label="Remove {{ req.user.email }} from rejected list"
                                                     onclick="window.dispatchEvent(new CustomEvent('open-clear-rejection-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">

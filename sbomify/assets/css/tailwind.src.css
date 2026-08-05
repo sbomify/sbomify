@@ -1955,6 +1955,21 @@ html.no-transitions * {
   margin-bottom: 1.5rem;
 }
 
+/* Smaller and neutral variants — the "nothing here yet" circle inside a card or
+   a table body, where the 5rem primary medallion is too loud. Declared after the
+   base so they win at equal specificity. */
+.tw-empty-state-icon-sm {
+  width: 4rem;
+  height: 4rem;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.tw-empty-state-icon-neutral {
+  background: color-mix(in oklab, var(--color-border) 30%, transparent);
+  color: var(--color-text-muted);
+}
+
 .tw-empty-state-title {
   font-size: 1.25rem;
   font-weight: 600;
@@ -3247,8 +3262,25 @@ html.no-transitions * {
   border-radius: 0.625rem;
 }
 
+.tw-icon-chip-xl {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.25rem;
+  border-radius: 0.75rem;
+}
+
+/* Circular chip — the medallion above a destructive confirmation, and the
+   standalone status circles that are not empty states. */
+.tw-icon-chip-circle {
+  border-radius: 9999px;
+}
+
 .tw-icon-chip-neutral {
   --chip-accent: var(--color-text-muted);
+}
+
+.tw-icon-chip-info {
+  --chip-accent: var(--color-info);
 }
 
 .tw-icon-chip-success {
@@ -3275,6 +3307,20 @@ html.no-transitions * {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+/* Inside a `space-y-*` stack the parent already supplies the rhythm. */
+.tw-page-header-flush {
+  margin-bottom: 0;
+}
+
+/* Most detail pages put a mark — an avatar or an icon chip — to the left of the
+   title, so the left half of the header is itself a row. */
+.tw-page-header-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
 }
 
 .tw-page-header-title {
@@ -3325,6 +3371,29 @@ html.no-transitions * {
   margin-left: 2.75rem;
 }
 
+/* Metric chip: the stats strip under a page header — a bordered surface pill
+   holding an icon, a muted label and a value. */
+.tw-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.tw-metric-chip-label {
+  color: var(--color-text-muted);
+}
+
+.tw-metric-chip-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (width < 40rem) {
   .tw-section-body {
     margin-left: 0;
@@ -3348,11 +3417,17 @@ html.no-transitions * {
 }
 
 /* Compact readout: a centred number over its label, for the dense metric strips
-   above a table. Caller sets the value's colour with a token utility. */
+   above a table. The number takes the card's accent, so colour comes from a
+   tw-stat-accent-* modifier — a Tailwind colour utility would lose to
+   .tw-stat-value, which sets colour and is emitted later. */
 .tw-stat-card-compact {
   padding: 0.75rem 1rem;
   align-items: center;
   text-align: center;
+}
+
+.tw-stat-card-compact .tw-stat-value {
+  color: var(--stat-accent, var(--color-text));
 }
 
 .tw-stat-icon {
@@ -3422,6 +3497,10 @@ html.no-transitions * {
 
 .tw-stat-accent-danger {
   --stat-accent: var(--color-danger);
+}
+
+.tw-stat-accent-muted {
+  --stat-accent: var(--color-text-muted);
 }
 
 /* ============================================

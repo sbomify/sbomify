@@ -3,9 +3,9 @@
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg {% if active_catalogs %}bg-primary/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
-                    <i class="fas {% if active_catalogs %}fa-list-check text-primary{% else %}fa-list-check text-text-muted{% endif %}"></i>
-                </div>
+                <span class="tw-icon-chip {% if not active_catalogs %}tw-icon-chip-neutral{% endif %}">
+                    <i class="fas fa-list-check" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Compliance Frameworks</h5>
                     <p class="text-text-muted text-sm m-0">Select frameworks to track on your Trust Center</p>
@@ -174,9 +174,9 @@
                                 {# Header #}
                                 <div class="tw-modal-header">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-file-import text-primary" aria-hidden="true"></i>
-                                        </div>
+                                        <span class="tw-icon-chip">
+                                            <i class="fas fa-file-import" aria-hidden="true"></i>
+                                        </span>
                                         <h4 id="oscal-import-title" class="tw-modal-title">Import OSCAL Catalog</h4>
                                     </div>
                                     <button type="button"

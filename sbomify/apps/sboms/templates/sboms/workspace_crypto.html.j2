@@ -4,9 +4,9 @@
 {% block dashboard_content %}
     <div class="mb-6">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <i class="fas fa-lock text-primary text-lg"></i>
-            </div>
+            <span class="tw-icon-chip">
+                <i class="fas fa-lock text-lg" aria-hidden="true"></i>
+            </span>
             <div>
                 <h1 class="text-2xl font-bold text-text">Cryptography</h1>
                 <p class="text-text-muted text-sm">{{ team.name }} · quantum readiness and migration priority across all components</p>
@@ -15,31 +15,29 @@
     </div>
     {% if rollup.has_crypto_data %}
         <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-danger">{{ rollup.verdict_counts.at_risk|default:0 }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">At risk</div>
+            <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
+                <span class="tw-stat-value">{{ rollup.verdict_counts.at_risk|default:0 }}</span>
+                <span class="tw-stat-label mt-1 mb-0">At risk</span>
             </div>
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-warning">{{ rollup.verdict_counts.needs_review|default:0 }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Needs review</div>
+            <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+                <span class="tw-stat-value">{{ rollup.verdict_counts.needs_review|default:0 }}</span>
+                <span class="tw-stat-label mt-1 mb-0">Needs review</span>
             </div>
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-success">{{ rollup.verdict_counts.ready|default:0 }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Quantum-ready</div>
+            <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
+                <span class="tw-stat-value">{{ rollup.verdict_counts.ready|default:0 }}</span>
+                <span class="tw-stat-label mt-1 mb-0">Quantum-ready</span>
             </div>
-            <div class="tw-card px-4 py-3 text-center">
-                <div class="text-2xl font-bold text-text-muted">{{ rollup.verdict_counts.no_crypto|default:0 }}</div>
-                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">No crypto</div>
+            <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
+                <span class="tw-stat-value">{{ rollup.verdict_counts.no_crypto|default:0 }}</span>
+                <span class="tw-stat-label mt-1 mb-0">No crypto</span>
             </div>
-            <div class="tw-card px-4 py-3 text-center">
+            <div class="tw-stat-card tw-stat-card-compact {% if rollup.certificates.expired %}tw-stat-accent-danger{% elif rollup.certificates.expiring_soon %}tw-stat-accent-warning{% endif %}">
                 {% if rollup.certificates.expired %}
-                    <div class="text-2xl font-bold text-danger">{{ rollup.certificates.expired }}</div>
-                    <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Expired certs</div>
+                    <span class="tw-stat-value">{{ rollup.certificates.expired }}</span>
+                    <span class="tw-stat-label mt-1 mb-0">Expired certs</span>
                 {% else %}
-                    <div class="text-2xl font-bold {% if rollup.certificates.expiring_soon %}text-severity-high{% else %}text-text{% endif %}">
-                        {{ rollup.certificates.expiring_soon }}
-                    </div>
-                    <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Certs expiring ≤90d</div>
+                    <span class="tw-stat-value">{{ rollup.certificates.expiring_soon }}</span>
+                    <span class="tw-stat-label mt-1 mb-0">Certs expiring ≤90d</span>
                 {% endif %}
             </div>
         </div>
@@ -123,9 +121,9 @@
     {% else %}
         <div class="tw-card">
             <div class="p-12 text-center">
-                <div class="w-12 h-12 mx-auto rounded-lg bg-border/40 flex items-center justify-center mb-4">
-                    <i class="fas fa-lock text-text-muted text-lg"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-neutral mx-auto mb-4">
+                    <i class="fas fa-lock text-lg" aria-hidden="true"></i>
+                </span>
                 <h3 class="text-lg font-semibold text-text mb-2">No crypto data yet</h3>
                 <p class="text-text-muted text-sm mb-0 max-w-md mx-auto">
                     Upload a CBOM to a component, or enable the PQC readiness plugin so scanned SBOMs with embedded

@@ -42,9 +42,9 @@
             {# Profile Details Section #}
             <div class="mb-8">
                 <div class="flex items-center gap-3 mb-4">
-                    <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <i class="fas fa-id-card text-primary text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm">
+                        <i class="fas fa-id-card" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Profile Details</h6>
                         <p class="text-text-muted text-xs m-0">Basic information about this contact profile</p>
@@ -90,9 +90,9 @@
             <div class="mb-6">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center">
-                            <i class="fas fa-building text-success text-sm"></i>
-                        </div>
+                        <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-success">
+                            <i class="fas fa-building" aria-hidden="true"></i>
+                        </span>
                         <div>
                             <h6 class="text-base font-semibold text-text m-0">Entities</h6>
                             <p class="text-text-muted text-xs m-0">Organizations (Manufacturer, Supplier, Author)</p>
@@ -124,9 +124,9 @@
                 <div class="text-center py-10 px-6 bg-background/50 rounded-xl border-2 border-dashed border-border"
                      x-show="visibleEntitiesCount === 0"
                      x-transition>
-                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-border/30 flex items-center justify-center">
-                        <i class="fas fa-building text-xl text-text-muted"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-neutral mx-auto mb-4">
+                        <i class="fas fa-building text-xl" aria-hidden="true"></i>
+                    </span>
                     <h6 class="font-semibold text-text mb-2">No Entities Added</h6>
                     <p class="text-text-muted text-sm mb-4 max-w-xs mx-auto">
                         Add an entity to define the manufacturer, supplier, or author information.

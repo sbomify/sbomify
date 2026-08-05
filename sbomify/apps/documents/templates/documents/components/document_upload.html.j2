@@ -41,7 +41,7 @@
                 <label for="document-type" class="block text-sm font-medium text-text mb-1">Document Type</label>
                 <select id="document-type"
                         x-model="documentType"
-                        class="tw-form-input"
+                        class="tw-form-select"
                         @change="documentSubcategory = ''">
                     <option value="">Select document type (optional)</option>
                     <optgroup label="Technical Documentation">
@@ -91,7 +91,7 @@
                            x-text="subcategoryInfo.label"></label>
                     <select :id="'document-subcategory-' + docType"
                             x-model="documentSubcategory"
-                            class="tw-form-input"
+                            class="tw-form-select"
                             :name="subcategoryInfo.field_name">
                         <option value="">Select subcategory (optional)</option>
                         <template x-for="[value, label] in subcategoryInfo.choices" :key="value">
@@ -106,7 +106,7 @@
                        class="block text-sm font-medium text-text mb-1">Description</label>
                 <textarea id="document-description"
                           x-model="documentDescription"
-                          class="tw-form-input"
+                          class="tw-form-textarea"
                           rows="3"
                           placeholder="Brief description of this document (optional)"></textarea>
             </div>
@@ -136,9 +136,9 @@
                 </template>
                 <template x-if="selectedFile && !isUploading">
                     <div class="flex items-center justify-center gap-4">
-                        <div class="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center">
-                            <i class="fas fa-file-alt text-xl text-success"></i>
-                        </div>
+                        <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-success">
+                            <i class="fas fa-file-alt text-xl" aria-hidden="true"></i>
+                        </span>
                         <div class="text-left">
                             <p class="font-medium text-text m-0" x-text="selectedFile.name"></p>
                             <p class="text-text-muted text-sm m-0"

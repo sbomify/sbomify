@@ -40,7 +40,7 @@
                                        class="block text-sm font-medium text-text mb-2">
                                     {{ invite_user_form.role.label }}
                                 </label>
-                                {{ invite_user_form.role|add_class:'tw-form-input' }}
+                                {{ invite_user_form.role|add_class:'tw-form-select' }}
                                 {% for error in invite_user_form.role.errors %}
                                     <span class="text-danger text-sm mt-1 block">{{ error }}</span>
                                 {% endfor %}
