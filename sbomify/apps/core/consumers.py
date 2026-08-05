@@ -131,5 +131,22 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
                 - type: "workspace_message" (used for routing)
                 - data: The actual message data to send to the client
         """
-        # Send message to WebSocket client
-        await self.send_json(event["data"])
+        # A broadcast fans out to every channel in the group, and by the time it
+        # arrives a given socket may already be gone: the reader closed the tab,
+        # the connection dropped, or the broker is restarting. Sending to it
+        # raises, and an exception escaping a consumer handler is what uvicorn
+        # logs as "Exception in ASGI application" — one stack per dead socket,
+        # per broadcast, for something that is a normal end to a connection.
+        #
+        # Nothing is retried. The payload is a refresh trigger the client
+        # re-derives when it reconnects, so a socket that missed one has lost
+        # nothing a reconnect does not restore.
+        try:
+            await self.send_json(event["data"])
+        except KeyError:
+            # A producer sent an event without a data key. That is a bug in the
+            # caller rather than a transport failure, so it is worth a real log
+            # line instead of the debug the disconnect cases get.
+            logger.warning(f"Dropped a workspace_message with no data payload: {event!r}")
+        except Exception:
+            logger.debug("workspace_message send failed; socket likely gone", exc_info=True)
