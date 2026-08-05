@@ -321,22 +321,59 @@ def _project_part(component: dict[str, Any], firmware_by_ref: dict[str, tuple[st
     )
 
 
-def derive_hardware_inventory(document: dict[str, Any] | None) -> HardwareInventory:
+def _hardware_parts(components: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Hardware-typed components in document order, one part per ``bom-ref``.
+
+    A ref repeated inside one document is a duplicate entry rather than a second
+    part, and the release merge collapses it the same way — without this, a
+    generator that names the board in both ``metadata.component`` and
+    ``components`` would list it twice here and once there.
+    """
+    parts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for component in components:
+        if component.get("type") not in HARDWARE_TYPES:
+            continue
+        ref = component.get("bom-ref")
+        if isinstance(ref, str) and ref:
+            if ref in seen:
+                continue
+            seen.add(ref)
+        parts.append(component)
+    return parts
+
+
+def derive_hardware_inventory(document: dict[str, Any] | None, *, include_root: bool = False) -> HardwareInventory:
     """Project the hardware components of a CycloneDX document into a parts list.
 
-    Reads ``components`` only. ``metadata.component`` is the subject the document
-    describes — the assembled board — not a line on its own bill of materials.
-    Parts keep document order, which on a real BOM carries the designator order.
-    Returns an empty inventory for a non-dict input or a document with no
-    hardware components. Never raises on partial or hostile data.
+    ``metadata.component`` is the subject the document describes — the assembled
+    board — rather than a line on its own bill of materials, so it is lifted in
+    only when ``include_root`` is set, and then only when it carries a hardware
+    type. Display paths set it, matching the release merge in ``hbom.py``: an
+    artifact naming its device only in ``metadata.component`` is stamped
+    hardware-bearing at upload, so a page selects it *because* it holds hardware
+    and would otherwise render "no parts" for the board the merged release HBOM
+    lists. Assessment leaves it off — the HBOM plugin scores that component
+    separately as the final-goods assembly, and an assembly has no quantity or
+    board location of its own to score as a part.
+
+    Parts keep document order, the lifted root last, which is the order the
+    merged release HBOM carries. Returns an empty inventory for a non-dict input
+    or a document with no hardware components. Never raises on partial or
+    hostile data.
     """
     if not isinstance(document, dict):
         return HardwareInventory()
     raw = document.get("components")
-    if not isinstance(raw, list):
-        return HardwareInventory()
-    components = [c for c in raw if isinstance(c, dict)]
-    parts = [c for c in components if c.get("type") in HARDWARE_TYPES]
+    components = [c for c in raw if isinstance(c, dict)] if isinstance(raw, list) else []
+    if include_root:
+        metadata = document.get("metadata")
+        root = metadata.get("component") if isinstance(metadata, dict) else None
+        # Any hardware root, not only ``device`` — the same predicate the merge
+        # applies, so a board rooted at a ``platform`` is lifted by both.
+        if isinstance(root, dict) and root.get("type") in HARDWARE_TYPES:
+            components.append(root)
+    parts = _hardware_parts(components)
     if not parts:
         return HardwareInventory()
     firmware_by_ref = _firmware_by_ref(document, components)
@@ -398,7 +435,7 @@ def get_hardware_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[
     # The artifact is immutable (ADR-004), so the derived inventory is a pure
     # function of the SBOM id: cache it after the per-request access check.
     # Bump the version key when the derivation shape changes.
-    cache_key = f"hardware-inventory:v1:{sbom.id}"
+    cache_key = f"hardware-inventory:v2:{sbom.id}"
     cached = django_cache.get(cache_key)
     if cached is not None:
         return ServiceResult.success(cached)
@@ -428,7 +465,9 @@ def get_hardware_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[
         # so a corrupt artifact degrades to an empty inventory rather than a 500.
         document = None
 
-    inventory = derive_hardware_inventory(document if isinstance(document, dict) else None)
+    # A read path: the device the document describes is a part on this page, as
+    # it is a component of the merged release HBOM.
+    inventory = derive_hardware_inventory(document if isinstance(document, dict) else None, include_root=True)
     payload = {
         "sbom_id": str(sbom.id),
         "component_id": str(sbom.component.id),

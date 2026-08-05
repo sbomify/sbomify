@@ -57,8 +57,11 @@ def test_returns_derived_hardware_inventory(sample_sbom: SBOM, mocker: MockerFix
     assert response.status_code == 200
     body = response.json()
     assert body["sbom_id"] == sample_sbom.id
-    assert body["count"] == 6
-    assert body["by_type"] == {"device": 6}
+    # Six board parts plus the adaptor board itself, which the example names in
+    # metadata.component and the merged release HBOM carries as a component.
+    assert body["count"] == 7
+    assert body["by_type"] == {"device": 7}
+    assert body["parts"][-1]["bom_ref"] == "pcie-sata-adaptor-board"
     part = next(p for p in body["parts"] if p["name"] == "47155-4001")
     assert part["manufacturer"] == "Molex"
     assert part["manufacturer_source"] == "supplier"
@@ -117,7 +120,7 @@ def test_personal_access_token_reads_private_inventory(
     _mock_s3(mocker, _PCIE.read_bytes())
     response = Client().get(_api_url(sample_sbom.id), **get_api_headers(sample_access_token))
     assert response.status_code == 200
-    assert response.json()["count"] == 6
+    assert response.json()["count"] == 7
 
 
 @pytest.mark.django_db
@@ -153,7 +156,9 @@ def test_card_renders_the_parts_table(sample_sbom: SBOM, mocker: MockerFixture):
     assert "Samtec" in html
     assert "822348522712" in html  # GTIN, from the row drill-down
     assert "thru-hole" in html
-    assert "pcie-sata-adaptor-board" not in html  # metadata.component is the subject, not a part
+    # The board the document describes lives in metadata.component; the card
+    # lists it alongside its parts, as the merged release HBOM carries it.
+    assert "pcie-sata-adaptor-board" in html
 
 
 @pytest.mark.django_db
@@ -198,7 +203,7 @@ def test_cpe_renders_as_a_labelled_manual_lookup(sample_sbom: SBOM, mocker: Mock
     _mock_s3(mocker, _device_with(name="core i7", cpe="cpe:2.3:h:intel:core_i7:-:*:*:*:*:*:*:*"))
     html = _owner_client(sample_sbom).get(_card_url(sample_sbom.id)).content.decode()
 
-    assert "nvd.nist.gov/vuln/search/results" in html
+    assert "nvd.nist.gov/products/cpe/search/results" in html
     assert "manual lookup" in html.lower()
     # A link out, never a scan result: no finding count, no severity, no badge.
     assert "tw-badge-danger" not in html

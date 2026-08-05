@@ -328,6 +328,25 @@ class TestComponentHbomIssuesTable:
         assert response.context["latest_hbom_issues"] == []
         assert b"HBOM issues" not in response.content
 
+    def test_an_hbom_predating_the_stamp_still_owns_the_card(self, sample_team_with_owner_member, sample_user):
+        """``has_hardware_components`` is None on every row uploaded before the field,
+        and its contract reads None as unknown rather than false. An artifact tagged
+        hbom qualifies on its bom_type alone — the same escape hatch plugin dispatch
+        uses — so its findings do not wait on the retag backfill."""
+        from sbomify.apps.sboms.models import SBOM
+
+        team = sample_team_with_owner_member.team
+        component = self._component(team)
+        hbom = self._artifact(component, SBOM.BomType.HBOM)
+        assert hbom.has_hardware_components is None
+        self._run(hbom, findings=[{"title": "COMP_MANUFACTURER missing", "status": "warning", "severity": "medium"}])
+
+        response = self._component_page(team, sample_user, component)
+
+        assert response.status_code == 200
+        assert response.context["latest_hbom_id"] == hbom.id
+        assert [row["title"] for row in response.context["latest_hbom_issues"]] == ["COMP_MANUFACTURER missing"]
+
     def test_component_without_hardware_artifact_renders_no_card(self, sample_team_with_owner_member, sample_user):
         from sbomify.apps.sboms.models import SBOM
 
