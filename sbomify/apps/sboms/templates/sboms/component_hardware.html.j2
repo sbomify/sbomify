@@ -5,11 +5,8 @@
     The component page is private-only, but this page's gate is component:access —
     a public component is readable anonymously, so the links back must be too.
     {% endcomment %}
-    {% if request.user.is_authenticated %}
-        {% url 'core:component_details' component.id as component_url %}
-    {% else %}
-        {% url 'core:component_details_public' component.id as component_url %}
-    {% endif %}
+    {% comment %}The view requires login and this page renders in the authenticated dashboard shell, so there is no anonymous visitor to send to the public component page.{% endcomment %}
+    {% url 'core:component_details' component.id as component_url %}
     <div class="space-y-6">
         <div class="flex items-start gap-4">
             <div class="tw-avatar tw-avatar-lg">

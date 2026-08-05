@@ -137,6 +137,22 @@ def get_team_name_for_user(user: User) -> str:
     return "My Workspace"
 
 
+# CRA checklist 4.1.4's stated minimum: Critical <=7 days, High <=30,
+# Medium <=90, Low best-effort. A callable default because Django requires
+# one for mutable field defaults — a shared dict would leak edits between
+# rows.
+CRA_DEFAULT_PATCH_SLA_DAYS: dict[str, int | None] = {
+    "critical": 7,
+    "high": 30,
+    "medium": 90,
+    "low": None,
+}
+
+
+def default_patch_sla_days() -> dict[str, int | None]:
+    return dict(CRA_DEFAULT_PATCH_SLA_DAYS)
+
+
 class Team(models.Model):
     class Plan(models.TextChoices):
         COMMUNITY = "community", "Community"
@@ -198,6 +214,19 @@ class Team(models.Model):
         blank=True,
         help_text=(
             "Days an SBOM stays current before its component is flagged stale. Empty means no freshness policy."
+        ),
+    )
+    # CRA checklist 4.1.4 wants a published Patch SLA Matrix: maximum target
+    # fix time by severity. Defaulted rather than nullable so a workspace that
+    # never opens the setting still has a defensible, stated policy — an
+    # unset SLA is what makes the compliance KPI uncomputable.
+    patch_sla_days = models.JSONField(
+        default=default_patch_sla_days,
+        blank=True,
+        help_text=(
+            "Maximum days to remediate by severity (CRA checklist 4.1.4). "
+            "A severity mapped to null is best-effort and excluded from the "
+            "SLA compliance KPI."
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True)

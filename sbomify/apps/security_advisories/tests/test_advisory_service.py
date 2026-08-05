@@ -21,6 +21,8 @@ from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
     get_advisory,
     list_advisories,
+    publish_advisory,
+    update_advisory,
 )
 
 pytestmark = pytest.mark.django_db
@@ -122,8 +124,16 @@ class TestType:
         assert row["type"] == "ghsa"
         assert row["type_label"] == "GHSA"
 
-    def test_anything_else_reads_as_other(self, sample_team):
+    def test_no_external_identifier_reads_as_internal(self, sample_team):
+        """An advisory carrying no CVE and no reference is the workspace's own
+        finding. "Other" read like the field had failed to populate."""
         _advisory(sample_team)
+
+        assert list_advisories(sample_team).value[0]["type"] == "internal"
+
+    def test_an_unrecognised_database_still_reads_as_other(self, sample_team):
+        advisory = _advisory(sample_team)
+        AdvisoryReference.objects.create(advisory=advisory, external_id="VENDOR-2026-1")
 
         assert list_advisories(sample_team).value[0]["type"] == "other"
 
@@ -261,3 +271,226 @@ def test_the_display_id_is_always_a_string(sample_team):
 
     assert isinstance(row["id"], str)
     assert isinstance(row["pk"], str)
+
+
+class TestUpdateAdvisory:
+    def test_each_changed_field_gets_its_own_timeline_entry(self, sample_team, sample_user):
+        """One event per field, so the history answers who changed the severity
+        rather than only recording status moves."""
+        advisory = _advisory(sample_team, title="Old title", severity="low", description="Old body.")
+
+        result = update_advisory(
+            sample_team,
+            sample_user,
+            advisory.id,
+            title="New title",
+            severity="high",
+            description="New body.",
+        )
+
+        assert result.ok, result.error
+        advisory.refresh_from_db()
+        assert (advisory.title, advisory.severity, advisory.description) == ("New title", "high", "New body.")
+        events = AdvisoryEvent.objects.filter(advisory=advisory, event_type=AdvisoryEvent.EventType.FIELD_CHANGE)
+        assert {event.payload["field"] for event in events} == {"title", "severity", "description"}
+
+    def test_a_field_change_entry_says_what_changed(self, sample_team, sample_user):
+        """The timeline renders an event's body. A payload-only event showed a
+        "Field change" badge with no text under it."""
+        advisory = _advisory(sample_team, severity="low")
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity="high")
+
+        event = AdvisoryEvent.objects.get(
+            advisory=advisory, event_type=AdvisoryEvent.EventType.FIELD_CHANGE, payload__field="severity"
+        )
+        assert event.body == "Severity changed from “low” to “high”."
+
+    def test_an_unchanged_field_records_nothing(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, title="Same", severity="high", description="Same body.")
+
+        result = update_advisory(
+            sample_team, sample_user, advisory.id, title="Same", severity="high", description="Same body."
+        )
+
+        assert result.ok
+        assert not AdvisoryEvent.objects.filter(advisory=advisory).exists()
+
+    def test_an_omitted_severity_is_left_alone(self, sample_team, sample_user):
+        """A <select> always posts something, so "not submitted" has to be
+        distinguishable from "submitted blank" or editing a title would set a
+        severity nobody chose."""
+        advisory = _advisory(sample_team, severity="")
+
+        update_advisory(sample_team, sample_user, advisory.id, title="Retitled")
+
+        advisory.refresh_from_db()
+        assert advisory.severity == ""
+
+    def test_a_blank_severity_clears_it(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, severity="high")
+
+        update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity="")
+
+        advisory.refresh_from_db()
+        assert advisory.severity == ""
+
+    def test_surrounding_whitespace_on_severity_is_tolerated(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, severity="low")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity=" high ")
+
+        assert result.ok, result.error
+        advisory.refresh_from_db()
+        assert advisory.severity == "high"
+
+    def test_an_empty_title_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, title="Keeps its title")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title="   ")
+
+        assert not result.ok
+        assert result.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.title == "Keeps its title"
+
+    def test_an_unknown_severity_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team, severity="low")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title=advisory.title, severity="spicy")
+
+        assert not result.ok
+        assert result.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.severity == "low"
+
+    def test_another_workspaces_advisory_is_not_found(self, sample_team, guest_user, sample_user):
+        from sbomify.apps.teams.models import Team
+
+        other = Team.objects.create(name="Someone else")
+        advisory = _advisory(other, title="Not yours")
+
+        result = update_advisory(sample_team, sample_user, advisory.id, title="Mine now")
+
+        assert not result.ok
+        assert result.status_code == 404
+        advisory.refresh_from_db()
+        assert advisory.title == "Not yours"
+
+
+class TestPublishAdvisory:
+    """Publishing is what puts an advisory on the Trust Center: until it runs the
+    advisory is a draft with private visibility, and that page filters out both."""
+
+    def _publishable(self, team, name="Gateway"):
+        from sbomify.apps.core.models import Product
+
+        advisory = _advisory(team)
+        product, _ = Product.objects.get_or_create(team=team, name=name)
+        AdvisoryProduct.objects.create(advisory=advisory, product=product)
+        return advisory
+
+    def test_publishing_public_makes_it_externally_visible(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert result.ok, result.error
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.PUBLISHED
+        assert advisory.visibility == SecurityAdvisory.Visibility.PUBLIC
+        assert advisory.is_externally_visible
+
+    def test_publishing_records_the_disclosure(self, sample_team, sample_user):
+        """published_at is when it left the workspace; made_public_at is when it
+        became public, which a gated disclosure is not."""
+        advisory = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        advisory.refresh_from_db()
+        assert advisory.published_at is not None
+        assert advisory.made_public_at is not None
+
+    def test_a_gated_disclosure_is_not_public_disclosure(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="gated")
+
+        advisory.refresh_from_db()
+        assert advisory.visibility == SecurityAdvisory.Visibility.GATED
+        assert advisory.published_at is not None
+        assert advisory.made_public_at is None
+
+    def test_a_tracking_id_is_allocated_and_sequential(self, sample_team, sample_user):
+        first = self._publishable(sample_team)
+        second = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, first.id, visibility="public")
+        publish_advisory(sample_team, sample_user, second.id, visibility="public")
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        assert first.tracking_id.endswith("-0001")
+        assert second.tracking_id.endswith("-0002")
+        assert first.tracking_id[:-4] == second.tracking_id[:-4]
+
+    def test_publishing_lands_on_the_timeline(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        advisory.refresh_from_db()
+        event = AdvisoryEvent.objects.get(advisory=advisory, event_type=AdvisoryEvent.EventType.PUBLISHED)
+        assert advisory.tracking_id in event.body
+        assert event.payload["visibility"] == "public"
+
+    def test_publishing_private_is_refused(self, sample_team, sample_user):
+        """It would move the status and disclose nothing — the Trust Center
+        excludes private advisories in SQL."""
+        advisory = self._publishable(sample_team)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="private")
+
+        assert not result.ok
+        assert result.status_code == 400
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
+
+    def test_a_product_advisory_with_no_products_is_refused(self, sample_team, sample_user):
+        advisory = _advisory(sample_team)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert "at least one product" in result.error
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT
+        assert advisory.tracking_id == ""
+
+    def test_publishing_twice_is_refused(self, sample_team, sample_user):
+        advisory = self._publishable(sample_team)
+        publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+        advisory.refresh_from_db()
+        first_id = advisory.tracking_id
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert not result.ok
+        assert result.status_code == 409
+        advisory.refresh_from_db()
+        assert advisory.tracking_id == first_id
+
+    def test_another_workspaces_advisory_is_not_found(self, sample_team, sample_user):
+        from sbomify.apps.teams.models import Team
+
+        other = Team.objects.create(name="Someone else")
+        advisory = _advisory(other)
+
+        result = publish_advisory(sample_team, sample_user, advisory.id, visibility="public")
+
+        assert not result.ok
+        assert result.status_code == 404
+        advisory.refresh_from_db()
+        assert advisory.status == SecurityAdvisory.Status.DRAFT

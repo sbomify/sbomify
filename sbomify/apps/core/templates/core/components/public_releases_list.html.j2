@@ -1,17 +1,17 @@
 {# Public releases — a tc-panel table matching the advisory detail page. #}
 {% load humanize %}
 {% if public_releases %}
-    <div class="tc-panel">
-        <div class="tc-timeline-header">
-            <h2 class="tc-panel-title tc-panel-title-flush">Releases</h2>
+    <div class="tc-panel tc-panel-flush">
+        <div class="tc-timeline-header px-6 pt-5">
+            <h2 class="tc-panel-title tc-panel-title-flush !p-0">Releases</h2>
             {% if view_all_releases_url %}
                 <a class="tc-section-link" href="{{ view_all_releases_url }}">
                     All releases <i class="fas fa-arrow-right" aria-hidden="true"></i>
                 </a>
             {% endif %}
         </div>
-        <div class="tc-table-wrap">
-            <table class="tc-table tc-table-fit">
+        <div class="tw-data-table-container">
+            <table class="tw-table">
                 <thead>
                     <tr>
                         <th scope="col">Release</th>

@@ -182,3 +182,29 @@ def test_file_upload_autodetects_hbom(
     sbom = SBOM.objects.get(id=resp.json()["id"])
     assert sbom.bom_type == "hbom"
     assert sbom.has_hardware_components is True
+
+
+@pytest.mark.parametrize("device_type", ["device", "Device", "DEVICE"])
+def test_detection_ignores_the_case_of_the_component_type(device_type: str) -> None:
+    """CycloneDX defines type as a lowercase enum, so a capitalised one is out
+    of spec — but the compliance plugins already lowercase before comparing.
+    Detection matching exactly while scoring matched loosely was the worst
+    pairing: such a document was filed as software and exempted from the checks
+    that would have graded it."""
+    document = {"components": [{"type": device_type, "name": "STM32"}]}
+
+    assert _is_hbom(document) is True
+    assert _contains_hardware_components(document) is True
+
+
+def test_a_capitalised_hardware_set_member_does_not_reject_the_document() -> None:
+    """_is_hbom requires every component to be a hardware type, so one
+    capitalised entry used to fail the all() and reject the whole document."""
+    document = {
+        "components": [
+            {"type": "device", "name": "board"},
+            {"type": "Firmware", "name": "bootloader"},
+        ]
+    }
+
+    assert _is_hbom(document) is True

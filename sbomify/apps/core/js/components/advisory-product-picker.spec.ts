@@ -156,3 +156,83 @@ describe('the half-ticked parent box', () => {
         expect(picker.isPartiallySelected(picker.products[2])).toBe(false)
     })
 })
+
+describe('filtering', () => {
+    test('a product name match keeps all of that product\'s versions', () => {
+        picker.setFilter('gateway')
+        expect(picker.visibleProducts.map((p) => p.id)).toEqual(['p1'])
+        expect(picker.visibleReleases(picker.products[0]).length).toBe(3)
+    })
+
+    test('a version label match narrows to that version, and finds the product by it', () => {
+        picker.setFilter('1.2')
+        expect(picker.visibleProducts.map((p) => p.id)).toEqual(['p1'])
+        expect(picker.visibleReleases(picker.products[0]).map((r) => r.id)).toEqual(['r3'])
+    })
+
+    test('nothing matching leaves an empty list rather than the full one', () => {
+        picker.setFilter('nonesuch')
+        expect(picker.visibleProducts).toEqual([])
+    })
+
+    test('a click under a filter selects the row shown, not the one at that index unfiltered', () => {
+        picker.setFilter('vault')
+        picker.toggleProduct(0, plain, picker.visibleProducts)
+        expect(picker.selectedProducts).toEqual(['p2'])
+    })
+
+    test('a version click under a filter selects the version shown', () => {
+        picker.setFilter('1.2')
+        const product = picker.products[0]
+        picker.toggleRelease(product, 0, plain, picker.visibleReleases(product))
+        expect(picker.selectedReleases).toEqual(['r3'])
+    })
+
+    test('a shift range under a filter never reaches a hidden row', () => {
+        picker.setFilter('1.')
+        const product = picker.products[0]
+        const visible = picker.visibleReleases(product)
+        picker.toggleRelease(product, 0, plain, visible)
+        picker.toggleRelease(product, 1, shift, visible)
+        expect(picker.selectedReleases.sort()).toEqual(['r1', 'r2'])
+    })
+
+    test('changing the filter drops the anchors, so the next shift-click starts fresh', () => {
+        picker.toggleProduct(0, plain)
+        expect(picker.anchor).toBe(0)
+        picker.setFilter('vault')
+        expect(picker.anchor).toBe(null)
+        expect(picker.releaseAnchor).toEqual({})
+    })
+
+    test('select-every-version under a filter takes only the visible ones', () => {
+        picker.setFilter('1.2')
+        const product = picker.products[0]
+        picker.toggleAllVersions(product, picker.visibleReleases(product))
+        expect(picker.selectedReleases).toEqual(['r3'])
+    })
+})
+
+describe('selection summary', () => {
+    test('says so when nothing is picked', () => {
+        expect(picker.selectionSummary).toBe('No products selected yet.')
+    })
+
+    test('a bare product tick reads as covering every version, now and later', () => {
+        picker.toggleProduct(0, plain)
+        expect(picker.selectionSummary).toBe('Gateway: every version, now and in future')
+    })
+
+    test('picked versions are counted, and singular reads singular', () => {
+        picker.toggleRelease(picker.products[0], 0, plain)
+        expect(picker.selectionSummary).toBe('Gateway: 1 version')
+    })
+
+    test('several products are joined', () => {
+        picker.toggleProduct(0, plain)
+        picker.toggleProduct(1, plain)
+        expect(picker.selectionSummary).toBe(
+            'Gateway: every version, now and in future · Vault: every version, now and in future',
+        )
+    })
+})

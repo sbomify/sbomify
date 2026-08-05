@@ -2260,8 +2260,21 @@ def _is_cbom(sbom_data: dict[str, Any]) -> bool:
 _HARDWARE_TYPES = frozenset({"device", "device-driver", "firmware", "platform"})
 
 
+def _component_type(component: Any) -> str:
+    """A component's type, lowercased, or ``""`` when it has none.
+
+    CycloneDX defines type as a lowercase enum, so a generator emitting
+    ``Device`` is out of spec. The compliance plugins already tolerate that
+    (``_component_scope`` lowercases before comparing), and detection matching
+    exactly while scoring matched loosely was the worst pairing available: a
+    hardware BOM with capitalised types was filed as software *and* exempted
+    from the checks that would have graded it.
+    """
+    return str(component.get("type", "")).lower() if isinstance(component, dict) else ""
+
+
 def _is_device(component: Any) -> bool:
-    return isinstance(component, dict) and component.get("type") == "device"
+    return _component_type(component) == "device"
 
 
 def _contains_hardware_components(sbom_data: dict[str, Any]) -> bool:
@@ -2294,9 +2307,7 @@ def _is_hbom(sbom_data: dict[str, Any]) -> bool:
     components = sbom_data.get("components")
     if not isinstance(components, list):
         return False
-    return any(_is_device(c) for c in components) and all(
-        isinstance(c, dict) and c.get("type") in _HARDWARE_TYPES for c in components
-    )
+    return any(_is_device(c) for c in components) and all(_component_type(c) in _HARDWARE_TYPES for c in components)
 
 
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:

@@ -215,8 +215,12 @@ def test_build_release_hbom_skips_missing_s3_object(sample_team_with_owner_membe
     team = sample_team_with_owner_member.team
     _product, release, c1, _c2 = _release_with_components(team, is_public=True)
     ReleaseArtifact.objects.create(release=release, sbom=_hbom_sbom(c1, "gone.hbom.json"))
-    s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
-    s3.return_value.get_sbom_data.side_effect = ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+    # Patch the method, not the class — see _mock_s3 for why replacing the class
+    # leaks into whichever module imports it next.
+    mocker.patch(
+        "sbomify.apps.core.object_store.S3Client.get_sbom_data",
+        side_effect=ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject"),
+    )
 
     assert build_release_hbom(release) is None
 
