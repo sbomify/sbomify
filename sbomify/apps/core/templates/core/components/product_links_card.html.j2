@@ -62,7 +62,7 @@
                                                 <i class="fas fa-edit" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-danger"
+                                                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                                                     title="Delete"
                                                     aria-label="Delete link"
                                                     @click="deleteId = '{{ link.id|escapejs }}'; deleteName = '{{ link.title|escapejs }}'; showDeleteModal = true">
@@ -172,7 +172,7 @@
                                     <label for="add-link-description" class="tw-form-label">Description</label>
                                     <textarea id="add-link-description"
                                               name="description"
-                                              class="tw-form-input"
+                                              class="tw-form-textarea"
                                               rows="3"
                                               placeholder="Optional description of this link"></textarea>
                                 </div>
@@ -224,9 +224,7 @@
                             <input type="hidden" name="link_id" :value="editId">
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                        <i class="fas fa-edit" aria-hidden="true"></i>
-                                    </div>
+                                    <span class="tw-icon-chip"><i class="fas fa-edit" aria-hidden="true"></i></span>
                                     <h4 id="editLinkModalLabel" class="tw-modal-title">Edit Link</h4>
                                 </div>
                                 <button type="button"
@@ -278,7 +276,7 @@
                                     <label for="edit-link-description" class="tw-form-label">Description</label>
                                     <textarea id="edit-link-description"
                                               name="description"
-                                              class="tw-form-input"
+                                              class="tw-form-textarea"
                                               rows="3"
                                               placeholder="Optional description of this link"
                                               x-model="editDescription"></textarea>

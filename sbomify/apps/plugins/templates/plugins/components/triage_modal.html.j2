@@ -23,9 +23,9 @@ Writes a sbomify-authored VEX through the triage API; requires can_triage
                 <div class="tw-modal-content tw-modal-md">
                     <div class="tw-modal-header">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-clipboard-check text-primary" aria-hidden="true"></i>
-                            </div>
+                            <span class="tw-icon-chip">
+                                <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                            </span>
                             <h4 id="triage-modal-title" class="tw-modal-title">
                                 Triage <span class="font-mono" x-text="vulnId"></span>
                             </h4>
@@ -84,7 +84,7 @@ Writes a sbomify-authored VEX through the triage API; requires can_triage
                                 Detail <span class="text-text-muted font-normal">(optional)</span>
                             </label>
                             <textarea id="triage-detail"
-                                      class="tw-form-input w-full"
+                                      class="tw-form-textarea w-full"
                                       rows="3"
                                       x-model="detail"
                                       placeholder="Why this decision holds for this product"></textarea>

@@ -1,16 +1,16 @@
 {% load static %}
 {% load utils %}
 <div id="team-branding-content"
-     class="tw-settings-card"
+     class="tw-dashboard-card mb-6"
      x-cloak
      x-data="teamBranding('{{ branding_info|pydantic_json|escapejs }}')">
     {# Card Header #}
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-palette text-primary"></i>
-                </div>
+                <span class="tw-icon-chip">
+                    <i class="fas fa-palette" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Branding</h5>
                     <p class="text-text-muted text-sm m-0">Customize your workspace's visual identity</p>
@@ -31,9 +31,9 @@
             <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
                 <div class="flex items-start justify-between gap-3 mb-4">
                     <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-swatchbook text-text-muted text-sm"></i>
-                        </div>
+                        <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                            <i class="fas fa-swatchbook" aria-hidden="true"></i>
+                        </span>
                         <div>
                             <h6 class="text-base font-semibold text-text m-0">Brand Colors</h6>
                             <p class="text-text-muted text-sm m-0">Define your primary brand colors for consistent visual identity</p>
@@ -106,9 +106,9 @@
                  @file-removed.window="removeFile($event.detail.field)"
                  @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
                 <div class="flex items-start gap-3 mb-4">
-                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-images text-text-muted text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                        <i class="fas fa-images" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Visual Assets</h6>
                         <p class="text-text-muted text-sm m-0">Upload your brand assets for public content</p>
@@ -136,9 +136,9 @@
             {# Display Preferences Section #}
             <div class="bg-background/50 border border-border rounded-xl p-5">
                 <div class="flex items-start gap-3 mb-4">
-                    <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-eye text-text-muted text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="text-base font-semibold text-text m-0">Display Preferences</h6>
                         <p class="text-text-muted text-sm m-0">Toggle workspace branding on or off</p>

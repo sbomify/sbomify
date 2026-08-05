@@ -36,9 +36,7 @@ by create_modals.html.j2 which should be included in the base template.
                 <button type="button"
                         @click="$dispatch('open-product-modal')"
                         class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group text-left">
-                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <i class="fas fa-cube text-primary"></i>
-                    </div>
+                    <span class="tw-icon-chip"><i class="fas fa-cube" aria-hidden="true"></i></span>
                     <div class="flex-1">
                         <span class="text-sm font-medium text-text group-hover:text-primary transition-colors">Create Product</span>
                         <p class="text-xs text-text-muted">Add a new product to your workspace</p>
@@ -84,9 +82,7 @@ by create_modals.html.j2 which should be included in the base template.
             </a>
             {# Generate Report - placeholder for future feature #}
             <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed">
-                <div class="w-10 h-10 rounded-lg bg-border/50 flex items-center justify-center">
-                    <i class="fas fa-file-alt text-text-muted"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-file-alt" aria-hidden="true"></i></span>
                 <div class="flex-1">
                     <span class="text-sm font-medium text-text-muted">Generate Report</span>
                     <p class="text-xs text-text-muted">Coming soon</p>

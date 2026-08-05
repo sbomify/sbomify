@@ -49,7 +49,8 @@
                                 <h3 class="text-base font-semibold text-text m-0"
                                     x-text="group.group_title"></h3>
                             </div>
-                            <span class="tw-badge-neutral text-xs" x-text="groupCompletionCount(group)"></span>
+                            <span class="tw-badge-secondary text-xs"
+                                  x-text="groupCompletionCount(group)"></span>
                         </button>
                         <div x-show="isGroupExpanded(group.group_id)"
                              x-transition
@@ -88,7 +89,7 @@
                                     <textarea x-model="finding.notes"
                                               @input="debouncedPersist(finding)"
                                               rows="2"
-                                              class="tw-form-input w-full text-sm"
+                                              class="tw-form-textarea w-full text-sm"
                                               placeholder="Add notes..."></textarea>
                                     {# Justification field for Part I controls marked not-applicable (CRA Art 13(4)) #}
                                     <div x-show="showJustificationField(finding)"
@@ -103,7 +104,7 @@
                                                       @input="debouncedPersist(finding)"
                                                       :id="`just-${finding.finding_id}`"
                                                       rows="3"
-                                                      class="tw-form-input w-full text-sm focus:border-amber-500 focus:ring-amber-500"
+                                                      class="tw-form-textarea w-full text-sm focus:border-amber-500 focus:ring-amber-500"
                                                       placeholder="e.g., This requirement is incompatible with the nature of the product because..."></textarea>
                                             <div class="mt-1.5 flex items-center justify-between gap-3 text-[11px]">
                                                 <span x-show="!finding.justification?.trim()"
@@ -144,9 +145,10 @@
                         {# Security.txt Status Card #}
                         <div class="mb-5 p-4 rounded-xl border {% if security_txt_enabled %}border-success/30 bg-success/5{% else %}border-warning/30 bg-warning/5{% endif %}">
                             <div class="flex items-start gap-3">
-                                <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 {% if security_txt_enabled %}bg-success/15{% else %}bg-warning/15{% endif %}">
-                                    <i class="fas {% if security_txt_enabled %}fa-check-circle text-success{% else %}fa-file-shield text-warning{% endif %}"></i>
-                                </div>
+                                <span class="tw-icon-chip {% if security_txt_enabled %}tw-icon-chip-success{% else %}tw-icon-chip-warning{% endif %}">
+                                    <i class="fas {% if security_txt_enabled %}fa-check-circle{% else %}fa-file-shield{% endif %}"
+                                       aria-hidden="true"></i>
+                                </span>
                                 <div class="flex-1 min-w-0">
                                     <div class="flex items-center justify-between gap-2">
                                         <h3 class="text-sm font-semibold text-text m-0">
@@ -189,7 +191,7 @@
                                            placeholder="5">
                                     <span class="text-sm text-text-muted flex-shrink-0">days</span>
                                 </div>
-                                <p class="tw-form-helper mt-1">Maximum days to acknowledge a vulnerability report (CRA Article 13)</p>
+                                <p class="tw-form-hint mt-1">Maximum days to acknowledge a vulnerability report (CRA Article 13)</p>
                             </div>
                         </div>
                     </div>
@@ -213,13 +215,13 @@
                                 <label class="tw-form-label" for="csirt-country">CSIRT Country</label>
                                 <select id="csirt-country"
                                         x-model="csirtCountry"
-                                        class="tw-form-input w-full">
+                                        class="tw-form-select w-full">
                                     <option value="">Select EU member state...</option>
                                     <template x-for="code in euCountries" :key="code">
                                         <option :value="code" x-text="euCountryNames[code]"></option>
                                     </template>
                                 </select>
-                                <p class="tw-form-helper mt-1">CSIRT that will receive incident notifications</p>
+                                <p class="tw-form-hint mt-1">CSIRT that will receive incident notifications</p>
                             </div>
                             <div>
                                 <label class="tw-form-label" for="csirt-email">CSIRT Contact Email</label>
@@ -228,7 +230,7 @@
                                        x-model="csirtContactEmail"
                                        class="tw-form-input w-full"
                                        placeholder="csirt@example.eu">
-                                <p class="tw-form-helper mt-1">Email for incident notifications to your CSIRT</p>
+                                <p class="tw-form-hint mt-1">Email for incident notifications to your CSIRT</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-3 px-4 py-3 bg-surface-hover rounded-lg">
@@ -254,7 +256,7 @@
                             <textarea id="ir-notes"
                                       x-model="incidentResponseNotes"
                                       rows="3"
-                                      class="tw-form-input w-full"
+                                      class="tw-form-textarea w-full"
                                       placeholder="Additional notes..."></textarea>
                         </div>
                     </div>

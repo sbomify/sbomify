@@ -1,7 +1,7 @@
 {% load static %}
 {% load humanize %}
 {# Access Requests Section #}
-<div class="tw-settings-card">
+<div class="tw-dashboard-card mb-6">
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -362,7 +362,7 @@
                                                 <i class="fas fa-info-circle" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                                                     title="Remove from Rejected List"
                                                     aria-label="Remove {{ req.user.email }} from rejected list"
                                                     onclick="window.dispatchEvent(new CustomEvent('open-clear-rejection-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">

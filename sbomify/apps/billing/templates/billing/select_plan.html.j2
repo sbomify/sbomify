@@ -56,12 +56,12 @@
             {# Current Usage Section #}
             <section class="mb-8"
                      x-show="usage.users > 0 || usage.products > 0 || usage.components > 0">
-                <div class="tw-settings-card max-w-3xl mx-auto">
+                <div class="tw-dashboard-card mb-6 max-w-3xl mx-auto">
                     <div class="px-6 py-4 border-b border-border">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-chart-bar text-primary"></i>
-                            </div>
+                            <span class="tw-icon-chip">
+                                <i class="fas fa-chart-bar" aria-hidden="true"></i>
+                            </span>
                             <div>
                                 <h3 class="text-lg font-semibold text-text m-0">Current Usage</h3>
                                 <p class="text-text-muted text-sm m-0">Your workspace resource usage</p>
@@ -71,23 +71,23 @@
                     <div class="p-6">
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-users text-primary"></i>
-                                </div>
+                                <span class="tw-icon-chip mx-auto mb-2">
+                                    <i class="fas fa-users" aria-hidden="true"></i>
+                                </span>
                                 <span class="text-2xl font-bold text-text block" x-text="usage.users || 0"></span>
                                 <span class="text-text-muted text-xs">Users</span>
                             </div>
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-cube text-primary"></i>
-                                </div>
+                                <span class="tw-icon-chip mx-auto mb-2">
+                                    <i class="fas fa-cube" aria-hidden="true"></i>
+                                </span>
                                 <span class="text-2xl font-bold text-text block" x-text="usage.products"></span>
                                 <span class="text-text-muted text-xs">Products</span>
                             </div>
                             <div class="bg-background border border-border rounded-xl p-4 text-center">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                                    <i class="fas fa-puzzle-piece text-primary"></i>
-                                </div>
+                                <span class="tw-icon-chip mx-auto mb-2">
+                                    <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+                                </span>
                                 <span class="text-2xl font-bold text-text block" x-text="usage.components"></span>
                                 <span class="text-text-muted text-xs">Components</span>
                             </div>
@@ -365,12 +365,12 @@
             </section>
             {# FAQ Section #}
             <section class="max-w-3xl mx-auto pb-12">
-                <div class="tw-settings-card">
+                <div class="tw-dashboard-card mb-6">
                     <div class="px-6 py-4 border-b border-border">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-question-circle text-primary"></i>
-                            </div>
+                            <span class="tw-icon-chip">
+                                <i class="fas fa-question-circle" aria-hidden="true"></i>
+                            </span>
                             <div>
                                 <h3 class="text-lg font-semibold text-text m-0">Frequently Asked Questions</h3>
                                 <p class="text-text-muted text-sm m-0">Common questions about our plans</p>

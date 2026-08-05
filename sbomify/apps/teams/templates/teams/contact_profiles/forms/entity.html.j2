@@ -30,9 +30,9 @@
             <div class="flex-grow p-4">
                 <div class="flex items-start gap-3">
                     {# Entity icon #}
-                    <div class="w-10 h-10 rounded-lg bg-border/30 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-building text-text-muted"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-neutral">
+                        <i class="fas fa-building" aria-hidden="true"></i>
+                    </span>
                     {# Entity info #}
                     <div class="flex-grow min-w-0">
                         <div class="flex items-center gap-2 mb-1">
@@ -78,7 +78,7 @@
                             <i class="fas fa-pen text-xs"></i>
                         </button>
                         <button type="button"
-                                class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
+                                class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                                 @click.stop="removeEntity"
                                 title="Remove entity">
                             <i class="fas fa-trash-alt text-xs"></i>

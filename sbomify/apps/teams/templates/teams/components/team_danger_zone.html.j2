@@ -22,9 +22,9 @@
         <div x-show="isExpanded" x-collapse class="tw-card-body">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-danger/10 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-trash-alt text-danger" aria-hidden="true"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-danger">
+                        <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                    </span>
                     <div>
                         <h6 class="font-medium text-text mb-1">Delete Workspace</h6>
                         <p class="text-sm text-text-muted m-0">Permanently remove this workspace and all its associated data.</p>
@@ -80,9 +80,9 @@
                 <div class="tw-modal-content">
                     <div class="tw-modal-header">
                         <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-full bg-danger/10 flex items-center justify-center text-danger">
+                            <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-danger">
                                 <i class="fas fa-exclamation-triangle text-xl" aria-hidden="true"></i>
-                            </div>
+                            </span>
                             <h4 id="deleteWorkspaceModalLabel" class="tw-modal-title">Delete Workspace</h4>
                         </div>
                         <button type="button"

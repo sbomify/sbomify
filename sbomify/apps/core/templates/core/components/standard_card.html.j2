@@ -10,7 +10,7 @@ Parameters (pass as context variables):
 - default_expanded: Initial expanded state (default: true)
 - info_icon: Icon class for info notice (default: 'fas fa-info-circle')
 - storage_key: Session storage key for collapse state
-- variant: 'default' | 'stats' | 'plan' | 'modal' | 'settings' | 'dangerzone'
+- variant: 'default' | 'stats' | 'plan' | 'modal' | 'dangerzone'
 - size: 'small' | 'medium' | 'large'
 - emphasis: Highlight the card (default: false)
 - center_content: Center the content (default: false)
@@ -29,7 +29,7 @@ Parameters (pass as context variables):
         false
     {% endif %}
     })" {% endif %}>
-    <div class="tw-card {% if variant == 'stats' %}stats-card{% elif variant == 'plan' %}plan-card{% if emphasis %} border-primary border-2{% endif %}{% elif variant == 'modal' %}modal-card{% elif variant == 'settings' %}tw-settings-card{% elif variant == 'dangerzone' %}tw-dangerzone-card{% endif %} {% if shadow == 'none' %}shadow-none{% elif shadow == 'md' %}shadow-md{% elif shadow == 'lg' %}shadow-lg{% else %}shadow-sm{% endif %}"
+    <div class="tw-card {% if variant == 'stats' %}stats-card{% elif variant == 'plan' %}plan-card{% if emphasis %} border-primary border-2{% endif %}{% elif variant == 'modal' %}modal-card{% elif variant == 'dangerzone' %}tw-dangerzone-card{% endif %} {% if shadow == 'none' %}shadow-none{% elif shadow == 'md' %}shadow-md{% elif shadow == 'lg' %}shadow-lg{% else %}shadow-sm{% endif %}"
          {% if collapsible %}:class="{ 'opacity-75': !isExpanded }"{% endif %}>
         {% if title or header_actions_content %}
             <div class="px-6 py-4 border-b border-border {% if collapsible %}cursor-pointer{% endif %} {% if emphasis and variant == 'plan' %}bg-primary/5{% endif %}">

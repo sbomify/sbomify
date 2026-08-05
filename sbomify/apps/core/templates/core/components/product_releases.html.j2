@@ -1,4 +1,4 @@
-{% load static %}
+{% load design_system static %}
 {# WebSocket listener for real-time updates #}
 <div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
      x-init="loadReleases()"
@@ -42,11 +42,7 @@
                 </div>
             </div>
             {# Loading State #}
-            <div x-show="isLoading"
-                 class="flex flex-col items-center justify-center py-12">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                <p class="mt-3 text-text-muted">Loading releases...</p>
-            </div>
+            {% loading_state message="Loading releases..." x_show="isLoading" %}
             {# Empty State #}
             <div x-show="!isLoading && releases.length === 0"
                  class="flex flex-col items-center justify-center py-12 px-6">
@@ -157,7 +153,7 @@
                                             {% endif %}
                                             {% if can_delete %}
                                                 <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm text-danger"
+                                                        class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                                                         title="Delete"
                                                         @click="openDeleteModal(release)">
                                                     <i class="fas fa-trash"></i>

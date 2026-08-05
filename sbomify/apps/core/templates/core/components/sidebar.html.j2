@@ -75,9 +75,7 @@
                             aria-haspopup="true"
                             aria-label="Switch workspace"
                             class="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg border border-border transition-colors duration-150 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                        <div class="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                            <i class="fas fa-briefcase text-primary text-sm"></i>
-                        </div>
+                        <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-briefcase text-sm" aria-hidden="true"></i></span>
                         <div class="flex-1 text-left min-w-0">
                             <p class="text-[10px] font-medium text-text-muted uppercase tracking-wider">Workspace</p>
                             <p class="text-sm font-semibold text-text truncate">{{ sidebar_team.name }}</p>
@@ -113,9 +111,9 @@
                                            class="flex px-3 py-2 hover:bg-surface-hover/60 transition-colors no-underline">
                                         {% endif %}
                                         <div class="flex items-center gap-2.5 min-w-0">
-                                            <div class="w-8 h-8 rounded-md flex items-center justify-center shrink-0 {% if current_workspace_key == ws_key %}bg-primary/15 text-primary{% else %}bg-surface-hover text-text-muted{% endif %}">
-                                                <i class="fas fa-briefcase text-xs"></i>
-                                            </div>
+                                            <span class="tw-icon-chip tw-icon-chip-sm{% if current_workspace_key != ws_key %} tw-icon-chip-neutral{% endif %}">
+                                                <i class="fas fa-briefcase text-xs" aria-hidden="true"></i>
+                                            </span>
                                             <div class="min-w-0 flex-1">
                                                 <p class="text-sm font-medium text-text truncate">{{ ws_info.name }}</p>
                                                 {% if current_workspace_key == ws_key %}

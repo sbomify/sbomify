@@ -357,9 +357,9 @@
                             <div class="tw-modal-content">
                                 <div class="tw-modal-header">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-bullhorn text-primary"></i>
-                                        </div>
+                                        <span class="tw-icon-chip">
+                                            <i class="fas fa-bullhorn" aria-hidden="true"></i>
+                                        </span>
                                         <h4 id="publishAdvisoryModalLabel" class="tw-modal-title">Publish advisory</h4>
                                     </div>
                                     <button type="button"
@@ -452,9 +452,9 @@
                             <div class="tw-modal-content">
                                 <div class="tw-modal-header">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-pen text-primary"></i>
-                                        </div>
+                                        <span class="tw-icon-chip">
+                                            <i class="fas fa-pen" aria-hidden="true"></i>
+                                        </span>
                                         <h4 id="editAdvisoryModalLabel" class="tw-modal-title">Edit advisory</h4>
                                     </div>
                                     <button type="button"
@@ -483,7 +483,7 @@
                                         <div>
                                             <label class="tw-form-label" for="editSeverity">Severity</label>
                                             {# An advisory may legitimately carry no severity, and without a blank option the select would silently promote it to the first one on any save. #}
-                                            <select id="editSeverity" name="severity" class="tw-form-input">
+                                            <select id="editSeverity" name="severity" class="tw-form-select">
                                                 <option value="" {% if not advisory.severity %}selected{% endif %}>Not set</option>
                                                 <option value="critical"
                                                         {% if advisory.severity == 'critical' %}selected{% endif %}>
@@ -528,7 +528,7 @@
                                             <label class="tw-form-label" for="editDescription">Description</label>
                                             <textarea id="editDescription"
                                                       name="description"
-                                                      class="tw-form-input"
+                                                      class="tw-form-textarea"
                                                       rows="3"
                                                       placeholder="Describe the vulnerability...">{{ advisory.description }}</textarea>
                                         </div>
@@ -579,9 +579,9 @@
                             <div class="tw-modal-content">
                                 <div class="tw-modal-header">
                                     <div class="flex items-center gap-3">
-                                        <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                            <i class="fas fa-file-shield text-primary"></i>
-                                        </div>
+                                        <span class="tw-icon-chip">
+                                            <i class="fas fa-file-shield" aria-hidden="true"></i>
+                                        </span>
                                         <h4 id="linkVexModalLabel" class="tw-modal-title">Link a VEX</h4>
                                     </div>
                                     <button type="button"

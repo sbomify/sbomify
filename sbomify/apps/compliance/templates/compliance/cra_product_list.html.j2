@@ -15,8 +15,10 @@
 {% endblock sidebar_content %}
 {% block dashboard_content %}
     <div class="space-y-6">
-        <div class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold text-text">CRA Compliance</h1>
+        <div class="tw-page-header">
+            <div>
+                <h1 class="tw-page-header-title">CRA Compliance</h1>
+            </div>
         </div>
         {% if not has_cra_access %}
             <div class="tw-card">
@@ -52,7 +54,7 @@
                                         {% elif a.status_value == "in_progress" %}
                                             <span class="tw-badge-warning">In Progress</span>
                                         {% else %}
-                                            <span class="tw-badge-neutral">Draft</span>
+                                            <span class="tw-badge-secondary">Draft</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ a.completed_steps|length }}/5 steps</td>

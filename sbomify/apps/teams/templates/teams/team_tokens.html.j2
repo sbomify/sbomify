@@ -1,14 +1,14 @@
 {% load static %}
 {% load widget_tweaks %}
 {% load form_helpers %}
-<div class="tw-settings-card">
+<div class="tw-dashboard-card mb-6">
     {# Card Header #}
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-key text-primary"></i>
-                </div>
+                <span class="tw-icon-chip">
+                    <i class="fas fa-key" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">API Tokens</h5>
                     <p class="text-text-muted text-sm m-0">Manage personal access tokens for API authentication</p>
@@ -44,9 +44,9 @@
             </div>
             <div class="bg-success/5 border border-success/20 rounded-xl p-5 mb-4">
                 <div class="flex items-center gap-3 mb-3">
-                    <div class="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
-                        <i class="fas fa-check-circle text-success text-sm"></i>
-                    </div>
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-success">
+                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                    </span>
                     <label class="tw-form-label m-0">Your New Token</label>
                 </div>
                 <div class="ml-11">{% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}</div>
@@ -55,9 +55,9 @@
         {# Generate New Token Section #}
         <div class="mb-6">
             <div class="flex items-start gap-3 mb-4">
-                <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-plus-circle text-text-muted text-sm"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                    <i class="fas fa-plus-circle" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h6 class="text-base font-semibold text-text m-0">Generate New Token</h6>
                     <p class="text-text-muted text-sm m-0">Create a new personal access token scoped to this workspace</p>
@@ -139,9 +139,9 @@
         {# Existing Tokens Section #}
         <div class="pt-6 border-t border-border">
             <div class="flex items-start gap-3 mb-4">
-                <div class="w-8 h-8 rounded-lg bg-border/50 flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-list text-text-muted text-sm"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
+                    <i class="fas fa-list" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h6 class="text-base font-semibold text-text m-0">Your Tokens</h6>
                     <p class="text-text-muted text-sm m-0">Manage your existing personal access tokens</p>
@@ -179,9 +179,9 @@
                                        x-model.number="selected"
                                        class="flex-shrink-0"
                                        aria-label="Select token {{ token.description }}">
-                                <div class="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-key text-primary/60"></i>
-                                </div>
+                                <span class="tw-icon-chip">
+                                    <i class="fas fa-key" aria-hidden="true"></i>
+                                </span>
                                 <div class="flex-1 min-w-0">
                                     <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
                                     <p class="text-sm text-text-muted m-0">
@@ -217,9 +217,9 @@
                                        x-model.number="selected"
                                        class="flex-shrink-0"
                                        aria-label="Select token {{ token.description }}">
-                                <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-exclamation-circle text-warning"></i>
-                                </div>
+                                <span class="tw-icon-chip tw-icon-chip-warning">
+                                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                                </span>
                                 <div class="flex-1 min-w-0">
                                     <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
                                     <p class="text-sm text-warning m-0">

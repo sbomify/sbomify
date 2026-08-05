@@ -75,7 +75,7 @@
                                                 <i class="fas fa-edit" aria-hidden="true"></i>
                                             </button>
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-danger"
+                                                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                                                     title="Delete"
                                                     aria-label="Delete identifier"
                                                     @click="deleteId = '{{ identifier.id|escapejs }}'; deleteName = '{{ identifier.value|escapejs }}'; showDeleteModal = true">
@@ -228,9 +228,7 @@
                             <input type="hidden" name="identifier_id" :value="editId">
                             <div class="tw-modal-header">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                        <i class="fas fa-edit" aria-hidden="true"></i>
-                                    </div>
+                                    <span class="tw-icon-chip"><i class="fas fa-edit" aria-hidden="true"></i></span>
                                     <h4 id="editIdentifierModalLabel" class="tw-modal-title">Edit Identifier</h4>
                                 </div>
                                 <button type="button"

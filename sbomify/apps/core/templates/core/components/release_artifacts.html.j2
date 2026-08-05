@@ -1,4 +1,4 @@
-{% load static %}
+{% load design_system static %}
 <div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
      x-init="loadArtifacts()">
     <div class="tw-card">
@@ -20,11 +20,7 @@
         </div>
         <div class="p-0">
             {# Loading State #}
-            <div x-show="isLoading"
-                 class="flex flex-col items-center justify-center py-12">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                <p class="mt-3 text-text-muted">Loading artifacts...</p>
-            </div>
+            {% loading_state message="Loading artifacts..." x_show="isLoading" %}
             {# Empty State #}
             <div x-show="!isLoading && artifacts.length === 0"
                  class="flex flex-col items-center justify-center py-12 px-6">
@@ -62,7 +58,7 @@
                             <select id="artifact-type-filter"
                                     x-model="typeFilter"
                                     @change="handleTypeFilter()"
-                                    class="tw-form-input">
+                                    class="tw-form-select">
                                 <option value="">All Types</option>
                                 <option value="sbom">SBOMs Only</option>
                                 <option value="vex">VEX Only</option>
@@ -74,7 +70,7 @@
                             <select id="artifact-component-filter"
                                     x-model="componentFilter"
                                     @change="handleComponentFilter()"
-                                    class="tw-form-input">
+                                    class="tw-form-select">
                                 <option value="">All Components</option>
                                 <template x-for="comp in uniqueComponents" :key="comp">
                                     <option :value="comp" x-text="comp"></option>
@@ -272,9 +268,7 @@
                         {# Modal Header #}
                         <div class="tw-modal-header">
                             <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                    <i class="fas fa-plus text-primary"></i>
-                                </div>
+                                <span class="tw-icon-chip"><i class="fas fa-plus" aria-hidden="true"></i></span>
                                 <h4 id="addArtifactModalLabel" class="tw-modal-title">Add Artifact to Release</h4>
                             </div>
                             <button type="button"
@@ -347,11 +341,7 @@
                                         x-text="allFilteredSelected ? 'Deselect All' : 'Select All Visible'"></button>
                             </div>
                             {# Loading State #}
-                            <div x-show="isLoadingAvailable"
-                                 class="flex flex-col items-center justify-center py-12">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                                <p class="mt-3 text-text-muted">Loading artifacts...</p>
-                            </div>
+                            {% loading_state message="Loading artifacts..." x_show="isLoadingAvailable" %}
                             {# No Results #}
                             <div x-show="!isLoadingAvailable && availableArtifacts.length === 0"
                                  class="flex flex-col items-center justify-center py-12">

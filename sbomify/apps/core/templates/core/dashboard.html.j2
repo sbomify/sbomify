@@ -2,6 +2,7 @@
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
+{% load design_system %}
 {% block title %}sbomify Dashboard{% endblock %}
 {% block dashboard_content %}
     <div class="space-y-6">
@@ -147,13 +148,10 @@
                     <div class="divide-y divide-border">
                         {% for finding in dashboard.needs_attention %}
                             <div class="px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                {% if finding.severity == 'critical' %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">Critical</span>
-                                {% elif finding.severity == 'high' %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">High</span>
-                                {% elif finding.severity == 'medium' %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">Medium</span>
+                                {% if finding.severity == 'critical' or finding.severity == 'high' or finding.severity == 'medium' or finding.severity == 'low' %}
+                                    <span class="tw-badge-severity-{{ finding.severity|lower }}">{{ finding.severity|capfirst }}</span>
                                 {% else %}
+                                    {# unknown / info / malicious carry no band on the severity scale #}
                                     <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-border/40 text-text-muted border border-border">{{ finding.severity|capfirst }}</span>
                                 {% endif %}
                                 {% with finding_url=finding.id|advisory_url %}
@@ -186,12 +184,7 @@
         <div class="tw-card">
             <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
                  hx-trigger="load"
-                 hx-swap="innerHTML">
-                <div class="flex flex-col items-center justify-center py-12">
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                    <p class="mt-3 text-text-muted">Loading vulnerability trends...</p>
-                </div>
-            </div>
+                 hx-swap="innerHTML">{% loading_state message="Loading vulnerability trends..." %}</div>
         </div>
     </div>
 {% endblock %}
