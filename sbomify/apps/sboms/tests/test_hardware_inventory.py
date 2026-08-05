@@ -205,19 +205,6 @@ def test_ignores_software_components():
     assert [p.name for p in inventory.parts] == ["board"]
 
 
-def test_cpe_becomes_an_nvd_lookup_url():
-    url = nvd_cpe_url("cpe:2.3:h:intel:core_i7:-:*:*:*:*:*:*:*")
-    assert url.startswith("https://nvd.nist.gov/vuln/search/results?")
-    assert "isCpeNameSearch=true" in url
-    assert "query=cpe%3A2.3%3Ah%3Aintel%3Acore_i7" in url  # the CPE is URL-encoded, not interpolated raw
-
-
-@pytest.mark.parametrize("cpe", ["cpe:/h:intel:core_i7", "cpe:2.3:h:intel", "not a cpe", ""])
-def test_a_cpe_that_is_not_a_2_3_name_falls_back_to_keyword_search(cpe: str):
-    # A CPE-name search errors on anything but a well-formed 2.3 name.
-    assert "isCpeNameSearch" not in nvd_cpe_url(cpe)
-
-
 @pytest.mark.parametrize(
     "document",
     [
@@ -328,3 +315,41 @@ class TestUploaderControlledUrls:
         )
 
         assert part.datasheets == ()
+
+
+class TestNvdCpeLink:
+    """The link-out targets NVD's CPE dictionary, not its vulnerability search.
+
+    NVD replaced the query-parameter vulnerability results endpoint with a
+    single-page app whose only input is a keyword, and that keyword search does
+    not match a CPE string. Verified against the live site: the full 2.3 name of
+    a real Intel part returns 0 records, its vendor and product as terms return
+    784.
+    """
+
+    def test_vendor_and_product_become_the_search_terms(self) -> None:
+        url = nvd_cpe_url("cpe:2.3:h:intel:core_i7:-:*:*:*:*:*:*:*")
+
+        assert url.startswith("https://nvd.nist.gov/products/cpe/search/results?")
+        assert "keyword=intel+core_i7" in url
+        assert "namingFormat=2.3" in url
+
+    def test_an_escaped_colon_does_not_split_a_field(self) -> None:
+        """A CPE field may contain an escaped colon, so counting colons to test
+        well-formedness rejects valid names."""
+        url = nvd_cpe_url(r"cpe:2.3:h:acme:foo\:bar:-:*:*:*:*:*:*:*")
+
+        assert "keyword=acme+foo%3Abar" in url
+
+    @pytest.mark.parametrize(
+        "cpe",
+        [
+            "cpe:2.2:/h:intel:core_i7",  # a 2.2 URI, not a 2.3 name
+            "not-a-cpe",
+            "cpe:2.3:h",  # truncated before vendor and product
+            "cpe:2.3:h:*:*:-:*:*:*:*:*:*:*",  # wildcards carry no search terms
+        ],
+    )
+    def test_a_name_with_nothing_to_search_for_yields_no_link(self, cpe: str) -> None:
+        """A link that lands on "no results" is worse than no link."""
+        assert nvd_cpe_url(cpe) == ""

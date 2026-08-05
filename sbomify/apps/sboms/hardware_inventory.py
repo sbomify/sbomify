@@ -50,7 +50,7 @@ CERTIFICATION_PROPERTY_PREFIX = "cdx:device:certifications:"
 # operating-system component; the link itself lives in the dependency graph.
 _FIRMWARE_TYPES = frozenset({"firmware", "operating-system"})
 
-_NVD_SEARCH_URL = "https://nvd.nist.gov/vuln/search/results"
+_NVD_CPE_SEARCH_URL = "https://nvd.nist.gov/products/cpe/search/results"
 
 
 @dataclass(frozen=True)
@@ -206,20 +206,58 @@ def _datasheets(component: dict[str, Any]) -> tuple[str, ...]:
     )
 
 
+def _cpe_fields(cpe: str) -> list[str]:
+    """Split a CPE 2.3 name on its unescaped colons.
+
+    A field may contain an escaped colon (``\\:``), so a plain ``split(":")``
+    over-counts and a ``count(":")`` well-formedness test rejects valid names.
+    """
+    fields: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for char in cpe:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif char == "\\":
+            current.append(char)
+            escaped = True
+        elif char == ":":
+            fields.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+    fields.append("".join(current))
+    return fields
+
+
 def nvd_cpe_url(cpe: str) -> str:
-    """NVD search for a hardware CPE — an operator lookup, not a scan.
+    """NVD product search for a hardware CPE — an operator lookup, not a scan.
 
     Hardware CPEs are unversioned and the advisory feeds carry almost no
     ``part:h`` identifiers, so matching them to CVEs automatically produces
-    noise. The link hands the CPE to a human instead.
+    noise. The link hands the part to a human instead, who picks the exact
+    entry and follows it to whatever CVEs reference it.
+
+    The target is the CPE dictionary rather than the vulnerability search.
+    NVD replaced the query-parameter vulnerability results endpoint with a
+    single-page app whose only input is a keyword, and that keyword search does
+    not match a CPE string: searching the dictionary for the full 2.3 name of a
+    real Intel part returns nothing, while its vendor and product as separate
+    terms return hundreds of entries. So the vendor and product are what get
+    sent, and an empty string comes back when the name yields neither, since a
+    link that lands on "no results" is worse than no link.
     """
-    query = {"adv_search": "true", "query": cpe}
-    # A CPE-name search rejects anything that is not a well-formed 2.3 name —
-    # a CPE 2.2 URI or a truncated one lands on an error page. Those fall back
-    # to a keyword search, which at least returns something.
-    if cpe.startswith("cpe:2.3:") and cpe.count(":") == 12:
-        query["isCpeNameSearch"] = "true"
-    return f"{_NVD_SEARCH_URL}?{urlencode(query)}"
+    if not cpe.startswith("cpe:2.3:"):
+        return ""
+    fields = _cpe_fields(cpe)
+    # cpe:2.3:part:vendor:product:... — indices 3 and 4.
+    if len(fields) < 5:
+        return ""
+    terms = [f.replace("\\", "") for f in fields[3:5] if f and f not in ("*", "-")]
+    if not terms:
+        return ""
+    return f"{_NVD_CPE_SEARCH_URL}?{urlencode({'namingFormat': '2.3', 'keyword': ' '.join(terms)})}"
 
 
 def _label(component: dict[str, Any]) -> str:
