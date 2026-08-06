@@ -38,7 +38,6 @@ import { advisoryProductPicker } from './components/advisory-product-picker';
 // ============================================
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerSbomsTable } from '../../sboms/js/sboms-table';
-import { registerCiCdInfo } from '../../sboms/js/ci-cd-info';
 import { registerLicensesEditor } from '../../sboms/js/licenses-editor';
 import { registerContactsEditor } from '../../sboms/js/contacts-editor';
 import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
@@ -237,7 +236,6 @@ export function registerAllComponents(): void {
     // SBOM module components
     registerSbomUpload();
     registerSbomsTable();
-    registerCiCdInfo();
     registerLicensesEditor();
     registerContactsEditor();
     registerSupplierEditor();
@@ -290,7 +288,6 @@ export function registerHtmxBundleComponents(): void {
     // SBOM module components
     registerSbomUpload();
     registerSbomsTable();
-    registerCiCdInfo();
     registerLicensesEditor();
     registerContactsEditor();
     registerSupplierEditor();
