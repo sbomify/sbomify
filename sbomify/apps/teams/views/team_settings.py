@@ -99,14 +99,37 @@ PLAN_LIMITS = {
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = ["owner", "admin"]
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Take ``tab`` off the URL and hold it, rather than pass it to a handler.
+
+        Two URLs reach this view: the settings index, which has no tab, and one
+        section per tab, which does. Only ``get`` declared the parameter, so
+        every form on a section page — all of which post back to their own URL —
+        died on ``post() got an unexpected keyword argument 'tab'`` before it
+        reached a line of this class. Removing a member and cancelling an
+        invitation both 500ed.
+
+        Absorbing it here keeps the handlers free of it, so adding one cannot
+        reintroduce the mismatch, and gives POST the section it was submitted
+        from as somewhere to send the browser back to.
+        """
+        self.tab: str | None = kwargs.pop("tab", None)
+        return super().dispatch(request, *args, **kwargs)
+
     def _redirect_with_tab(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """Redirect to team settings, preserving the active tab if provided."""
+        """Redirect back to the section the form was submitted from.
+
+        Forms carry an ``active_tab``, but the URL already knows which section
+        rendered them; falling back to it means a form that forgets the hidden
+        field returns to its own page instead of bouncing to the first one.
+        """
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
-        active_tab = request.POST.get("active_tab", "")
+        active_tab = request.POST.get("active_tab", "") or self.tab
         return redirect_to_team_settings(team_key, active_tab if active_tab else None)
 
-    def get(self, request: HttpRequest, team_key: str, tab: str | None = None) -> HttpResponse:
+    def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        tab = self.tab
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return error_response(

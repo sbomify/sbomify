@@ -7,6 +7,8 @@ from collections.abc import Callable
 from math import ceil
 
 from django.conf import settings
+from django.core.cache import caches
+from django.core.cache.backends.base import BaseCache
 from django.http import HttpRequest, HttpResponse
 from ninja.throttling import SimpleRateThrottle
 
@@ -25,6 +27,23 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
 
     def __init__(self, rate: str | None = None) -> None:
         super().__init__(rate or settings.API_TOKEN_RATE_LIMIT)
+
+    @property
+    def cache(self) -> BaseCache:  # type: ignore[override]
+        """The Redis alias that still raises when Redis is unreachable.
+
+        The default alias swallows connection failures so a page renders without
+        its cache instead of 500ing. A throttle cannot borrow that: it decides
+        from the window it reads back, and a swallowed failure reads as an empty
+        window, so every caller is handed a full budget for as long as Redis is
+        unwell. Raising here refuses the request instead, and the subclasses
+        below inherit it — including the per-IP limit on the anonymous surfaces,
+        which is the one an attacker would want gone.
+
+        Resolved per access rather than bound at import so a test that overrides
+        ``CACHES`` is honoured.
+        """
+        return caches["throttle"]
 
     def get_cache_key(self, request: HttpRequest) -> str | None:
         record = getattr(request, "access_token_record", None)

@@ -9,7 +9,7 @@ the same three pieces of logic the UI does rather than re-deriving any of them:
   a single set of findings. Providers report the same issue under different ids
   (Dependency-Track the CVE, OSV the GHSA with the CVE as an alias), so summing
   per-provider counts would report roughly double the real figure.
-* ``posture.is_vulnerability`` drops provider bookkeeping rows — scan errors and
+* ``utils.is_vulnerability`` drops provider bookkeeping rows — scan errors and
   "no product" markers — which are not vulnerabilities and must not be handed to
   an agent as CVEs.
 * ``extract_finding_rows`` flattens findings into display rows, resolving package
@@ -72,8 +72,11 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
     Returns ``(rows, scanned_sbom_ids)``. Each row carries the SBOM and component
     it came from so a finding can be traced back to what ships it.
     """
-    from sbomify.apps.vulnerability_scanning.posture import is_vulnerability
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows, merge_findings_by_alias
+    from sbomify.apps.vulnerability_scanning.utils import (
+        extract_finding_rows,
+        is_vulnerability,
+        merge_findings_by_alias,
+    )
 
     rows: list[dict[str, Any]] = []
     scanned: set[str] = set()

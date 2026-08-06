@@ -64,7 +64,7 @@ def run_scanned(run: Any) -> bool:
 
 def _advisories(result: dict[str, Any]) -> dict[str, str]:
     """Advisory id to severity for the real vulnerabilities in a result."""
-    from sbomify.apps.vulnerability_scanning.posture import is_vulnerability
+    from sbomify.apps.vulnerability_scanning.utils import is_vulnerability
 
     seen: dict[str, str] = {}
     for finding in result.get("findings") or []:

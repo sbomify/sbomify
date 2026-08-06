@@ -321,3 +321,86 @@ class TestBrokerOutageHandling:
         consumer.channel_layer = layer
 
         await consumer.disconnect(1006)
+
+
+class TestBroadcastResilience:
+    """A broadcast fans out to every channel in the group, and a socket may be
+    gone by the time its copy arrives. An exception escaping the handler is what
+    uvicorn logs as "Exception in ASGI application"."""
+
+    @pytest.fixture
+    def consumer(self):
+        return WorkspaceConsumer()
+
+    @pytest.mark.asyncio
+    async def test_a_dead_socket_does_not_raise_into_the_asgi_server(self, consumer):
+        consumer.send_json = AsyncMock(side_effect=ConnectionError("reset by peer"))
+
+        await consumer.workspace_message({"type": "workspace_message", "data": {"type": "sbom_uploaded"}})
+
+        consumer.send_json.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_a_closed_socket_does_not_raise_either(self, consumer):
+        """Channels raises its own error once the socket has been closed."""
+        consumer.send_json = AsyncMock(side_effect=RuntimeError("Cannot call send once a close message has been sent"))
+
+        await consumer.workspace_message({"type": "workspace_message", "data": {"x": 1}})
+
+        # Not raising is only half the claim: a handler that quietly stopped
+        # sending would pass on that alone.
+        consumer.send_json.assert_awaited_once_with({"x": 1})
+
+    @pytest.mark.asyncio
+    async def test_a_payload_that_will_not_serialise_is_not_swallowed(self, consumer):
+        """The half that must stay loud.
+
+        A non-serialisable payload raises from the same call a dead socket does,
+        so catching everything here dropped the broadcast to every socket in the
+        workspace, every time, and said so in one debug line. It is a producer
+        bug, and the only way it gets fixed is by being visible.
+        """
+        consumer.send_json = AsyncMock(side_effect=TypeError("Object of type datetime is not JSON serializable"))
+
+        with pytest.raises(TypeError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"when": object()}})
+
+    @pytest.mark.asyncio
+    async def test_a_recursion_error_is_not_mistaken_for_a_closed_socket(self, consumer):
+        """``RecursionError`` subclasses ``RuntimeError``.
+
+        A payload nested deeply enough makes ``json.dumps`` raise it from the
+        same call Channels raises a plain ``RuntimeError`` from, so matching the
+        base class would swallow it and put the silent drop straight back.
+        """
+        consumer.send_json = AsyncMock(side_effect=RecursionError("maximum recursion depth exceeded"))
+
+        with pytest.raises(RecursionError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"deep": {}}})
+
+    @pytest.mark.asyncio
+    async def test_a_not_implemented_error_is_not_either(self, consumer):
+        """The other ``RuntimeError`` subclass, and squarely a programmer bug."""
+        consumer.send_json = AsyncMock(side_effect=NotImplementedError("encode_json"))
+
+        with pytest.raises(NotImplementedError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"x": 1}})
+
+    @pytest.mark.asyncio
+    async def test_an_event_with_no_data_is_dropped_not_raised(self, consumer):
+        """A producer bug, not a transport failure — it must not take the socket
+        down with it, and it is the one case worth a warning."""
+        consumer.send_json = AsyncMock()
+
+        await consumer.workspace_message({"type": "workspace_message"})
+
+        consumer.send_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_live_socket_still_receives_the_payload(self, consumer):
+        consumer.send_json = AsyncMock()
+        payload = {"type": "scan_complete", "sbom_id": "123"}
+
+        await consumer.workspace_message({"type": "workspace_message", "data": payload})
+
+        consumer.send_json.assert_awaited_once_with(payload)
