@@ -133,13 +133,27 @@ STORAGES = {
     },
 }
 
-# Django Vite test settings
+# Django Vite test settings.
+#
+# ``manifest.json`` is a ``bun run build`` artifact and is gitignored, so a clean
+# checkout does not have one. With ``dev_mode: False`` and no manifest, every
+# test that renders a template fails with ``DjangoViteAssetNotFoundError`` —
+# around 200 of them, spread across billing, compliance, core, teams, sboms and
+# documents, all with an error that says nothing about the real cause.
+#
+# So: use the built manifest when it exists (CI builds assets, and that path
+# exercises what production actually serves), and fall back to dev mode when it
+# does not. Dev mode emits dev-server URLs without consulting a manifest, which
+# is enough for tests that assert on rendered content — no test asserts on
+# asset URLs. The suite is then green straight from a clone.
+_VITE_MANIFEST = BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"
+
 DJANGO_VITE = {
     "default": {
-        "dev_mode": False,  # Always False for tests
+        "dev_mode": not _VITE_MANIFEST.exists(),
         "dev_server_host": "127.0.0.1",
         "dev_server_port": 5170,
-        "manifest_path": str(BASE_DIR / "sbomify" / "static" / "dist" / "manifest.json"),
+        "manifest_path": str(_VITE_MANIFEST),
         "static_url_prefix": "dist/",
     }
 }
