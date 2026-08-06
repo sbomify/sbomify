@@ -29,21 +29,31 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-        """Answer guests with JSON rather than the mixin's HTML redirect.
+        """Answer a redirect with JSON, but not the same JSON for both of them.
 
-        ``GuestAccessBlockedMixin`` bounces guests to the public workspace
-        page, which is right for a page view and wrong for a fetch: the
+        Two mixins can redirect here, and a fetch cannot follow either: the
         client would parse an HTML document as JSON and surface a generic
-        failure. A guest gets an empty result set in the shape the client
-        expects — still no workspace data, just an answer it can read.
+        failure.
+
+        ``GuestAccessBlockedMixin`` bounces a guest to the public workspace
+        page. There genuinely is no workspace data for them, so an empty result
+        set in the shape the client expects is a true answer.
+
+        ``LoginRequiredMixin`` bounces an unauthenticated caller to the login
+        page — including a session that expired mid-typing. Answering *that*
+        with an empty result set tells the user their workspace is empty, which
+        is false, and hides the one thing they need to know. It is a 401, which
+        the client turns into a prompt to sign in again.
         """
         response = super().dispatch(request, *args, **kwargs)
         if (
-            getattr(response, "status_code", None) in (301, 302)
-            and request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            getattr(response, "status_code", None) not in (301, 302)
+            or request.headers.get("X-Requested-With") != "XMLHttpRequest"
         ):
-            return JsonResponse({"products": [], "components": [], "results": []})
-        return response
+            return response
+        if not request.user.is_authenticated:
+            return JsonResponse({"detail": "Authentication required", "authenticated": False}, status=401)
+        return JsonResponse({"products": [], "components": [], "results": []})
 
     def get(self, request: HttpRequest) -> JsonResponse:
         query = request.GET.get("q", "").strip()
@@ -58,7 +68,10 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         current_team = request.session.get("current_team") or {}
         destinations = search_destinations(
             query,
-            role=current_team.get("role", ""),
+            # ``or ""`` rather than a get() default: the session stores role=None for a
+            # workspace whose membership carries none, and a default only fires on a
+            # missing key. search_destinations is typed str.
+            role=current_team.get("role") or "",
             team_key=current_team.get("key", ""),
         )
 
@@ -160,13 +173,17 @@ def _advisory_rows(query: str, team_id: Any, limit: int) -> Any:
 
 def _finding_rows(query: str, team_id: Any, limit: int) -> Any:
     """Open findings only: a resolved one is history, and leading with it
-    would answer "am I affected?" wrongly."""
+    would answer "am I affected?" wrongly.
+
+    Matched on the component's name as well as the advisory id. The row already
+    reads "CVE-x in component-y", so someone typing the component name and
+    getting nothing was being told that component has no open findings.
+    """
     from sbomify.apps.plugins.models import VulnerabilityLifecycle
 
     return (
-        VulnerabilityLifecycle.objects.filter(
-            component__team_id=team_id, advisory_id__icontains=query, resolved_at__isnull=True
-        )
+        VulnerabilityLifecycle.objects.filter(component__team_id=team_id, resolved_at__isnull=True)
+        .filter(Q(advisory_id__icontains=query) | Q(component__name__icontains=query))
         .select_related("component")
         .order_by("advisory_id", "component__name")[:limit]
     )

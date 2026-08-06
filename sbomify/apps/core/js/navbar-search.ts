@@ -44,7 +44,10 @@ function debounceSearch(callback: () => void, delay: number = 200): void {
 function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
-  return div.innerHTML;
+  // textContent -> innerHTML escapes <, > and &, but leaves quotes alone, so
+  // the result is only safe between tags. These values are interpolated into
+  // href="..." too, where an unescaped quote would end the attribute.
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 /**
@@ -127,6 +130,18 @@ async function performSearch(query: string): Promise<void> {
     const response = await fetch(`/search/?${new URLSearchParams({ q: query, limit: '10' })}`, {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
     });
+    // A session that expired while the dropdown was open. Saying "no results"
+    // would tell someone their workspace is empty; say the true thing and give
+    // them the way back.
+    if (response.status === 401) {
+      if (query !== currentSearchQuery) return;
+      dropdown.innerHTML =
+        '<p class="px-4 py-6 text-center text-sm text-text-muted m-0">' +
+        'Your session has expired. <a href="/login" class="font-medium underline">Sign in again</a>' +
+        '</p>';
+      dropdown.style.display = 'block';
+      return;
+    }
     if (!response.ok) throw new Error('Search failed');
 
     const data: SearchResponse = await response.json();

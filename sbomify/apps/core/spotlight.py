@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from django.urls import NoReverseMatch, reverse
 
@@ -109,8 +110,6 @@ class Destination:
         except NoReverseMatch:
             return None
         if self.query:
-            from urllib.parse import urlencode
-
             url = f"{url}?{urlencode(dict(self.query))}"
         if self.fragment:
             url = f"{url}#{self.fragment}"

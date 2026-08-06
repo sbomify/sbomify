@@ -15,11 +15,7 @@ from sbomify.apps.core.spotlight import SECTION_ORDER, load_destinations, search
 class TestRegistryIntegrity:
     def test_every_destination_resolves(self):
         """A typo'd url_name would 404 a user; fail here instead."""
-        unresolved = [
-            d.url_name
-            for d in load_destinations()
-            if d.resolve(team_key="AAAAAAAA") is None
-        ]
+        unresolved = [d.url_name for d in load_destinations() if d.resolve(team_key="AAAAAAAA") is None]
 
         assert unresolved == []
 
@@ -165,14 +161,57 @@ class TestSearchEndpoint:
         assert [p["name"] for p in body["products"]] == ["Gateway"]
 
     def test_a_short_query_returns_the_empty_shape(self, client, sample_team_with_owner_member):
+        """Authenticated on purpose: the same body is what an expired session
+        used to get, and the point is that these two are now different."""
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 
         member = sample_team_with_owner_member
         setup_authenticated_client_session(client, member.team, member.user)
 
-        body = client.get(reverse("core:search"), {"q": "a"}).json()
+        response = client.get(reverse("core:search"), {"q": "a"})
 
-        assert body == {"products": [], "components": [], "results": []}
+        assert response.status_code == 200
+        assert response.json() == {"products": [], "components": [], "results": []}
+
+
+@pytest.mark.django_db
+class TestWhoIsAsking:
+    """A redirect cannot be followed by a fetch, so both mixins answer in JSON.
+
+    They must not answer with the *same* JSON. An empty result set is a true
+    answer for a guest and a false one for a session that just expired: it says
+    the workspace is empty and hides the reason.
+    """
+
+    XHR = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+    def test_an_expired_session_is_told_so(self, client):
+        response = client.get(reverse("core:search"), {"q": "gateway"}, **self.XHR)
+
+        assert response.status_code == 401
+        assert response.json()["authenticated"] is False
+        # The shape that would have said "your workspace has nothing in it".
+        assert "results" not in response.json()
+
+    def test_a_guest_gets_an_empty_result_set(self, client, sample_team_with_owner_member):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+        from sbomify.apps.teams.models import Member
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+        Member.objects.filter(pk=member.pk).update(role="guest")
+
+        response = client.get(reverse("core:search"), {"q": "gateway"}, **self.XHR)
+
+        assert response.status_code == 200
+        assert response.json() == {"products": [], "components": [], "results": []}
+
+    def test_a_browser_navigation_still_redirects(self, client):
+        """Without the XHR header this is a page request, and a redirect to the
+        login page is the right answer to it."""
+        response = client.get(reverse("core:search"), {"q": "gateway"})
+
+        assert response.status_code == 302
 
 
 class TestRootLevelCoverage:
@@ -199,7 +238,7 @@ class TestRootLevelCoverage:
         assert expected in self._titles(query)
 
     def test_a_shorter_title_wins_an_equal_match(self):
-        """"plug" should land on Plugins, not Plugin summary."""
+        """ "plug" should land on Plugins, not Plugin summary."""
         assert self._titles("plug")[0] == "Plugins"
 
 
@@ -215,7 +254,7 @@ class TestEntitySearch:
         return client.get(reverse("core:search"), {"q": q}).json()["results"]
 
     def test_a_cve_finds_the_affected_component(self, client, sample_team_with_owner_member):
-        """"Am I affected?" is what a pasted CVE is really asking."""
+        """ "Am I affected?" is what a pasted CVE is really asking."""
         from django.utils import timezone
 
         from sbomify.apps.core.models import Component
@@ -225,8 +264,11 @@ class TestEntitySearch:
         component = Component.objects.create(team=member.team, name="Gateway")
         now = timezone.now()
         VulnerabilityLifecycle.objects.create(
-            component=component, advisory_id="CVE-2021-44228", severity="critical",
-            first_seen_at=now, last_seen_at=now,
+            component=component,
+            advisory_id="CVE-2021-44228",
+            severity="critical",
+            first_seen_at=now,
+            last_seen_at=now,
         )
 
         results = self._search(client, member, "CVE-2021-44228")
@@ -247,8 +289,12 @@ class TestEntitySearch:
         component = Component.objects.create(team=member.team, name="Fixed Gateway")
         now = timezone.now()
         VulnerabilityLifecycle.objects.create(
-            component=component, advisory_id="CVE-2020-11111", severity="high",
-            first_seen_at=now, last_seen_at=now, resolved_at=now,
+            component=component,
+            advisory_id="CVE-2020-11111",
+            severity="high",
+            first_seen_at=now,
+            last_seen_at=now,
+            resolved_at=now,
         )
 
         assert self._search(client, member, "CVE-2020-11111") == []
@@ -301,9 +347,7 @@ class TestGuestAccess:
         Member.objects.create(user=guest_user, team=member.team, role="guest")
         setup_authenticated_client_session(client, member.team, guest_user)
 
-        response = client.get(
-            reverse("core:search"), {"q": "billing"}, headers={"x-requested-with": "XMLHttpRequest"}
-        )
+        response = client.get(reverse("core:search"), {"q": "billing"}, headers={"x-requested-with": "XMLHttpRequest"})
 
         assert response.status_code == 200
         assert response["Content-Type"].startswith("application/json")
