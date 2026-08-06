@@ -29,7 +29,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from ..auth import Principal
 from ..limits import enforce_upload_size
 from ._base import mcp_tool, run_db
-from .catalog import _get_release, _lookup_component, _lookup_product
+from .catalog import _lookup_component, _lookup_product, _lookup_release
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -193,7 +193,10 @@ def register_tools(mcp: FastMCP) -> None:
             if bool(sbom_id) == bool(document_id):
                 raise ToolError("Pass exactly one of sbom_id or document_id.")
 
-            _get_release(principal, release_id)
+            # Workspace-scoped lookup only. This tool is declared release:tag,
+            # which is what add_artifacts_to_release checks; requiring
+            # release:read on top would refuse a token scoped to just release:tag.
+            _lookup_release(principal, release_id)
             payload = ReleaseArtifactCreateSchema(sbom_id=sbom_id, document_id=document_id)
             return _unwrap(
                 apis.add_artifacts_to_release(principal.request, release_id, payload),

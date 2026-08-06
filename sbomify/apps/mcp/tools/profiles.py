@@ -25,7 +25,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from .. import serializers
 from ..auth import Principal, require
 from ._base import mcp_tool, not_found, resolve_workspace, run_db, workspace_key
-from .catalog import _get_component
+from .catalog import _lookup_component
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -235,7 +235,10 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.teams.models import ContactProfile
 
             team = resolve_workspace(principal)
-            component = _get_component(principal, component_id)
+            # Workspace-scoped lookup only. This tool is declared component:manage,
+            # which is what patch_component_metadata checks; requiring
+            # component:read_internal on top would refuse a correctly scoped token.
+            component = _lookup_component(principal, component_id)
             if not ContactProfile.objects.filter(pk=profile_id, team=team).exists():
                 raise not_found("contact profile", profile_id)
 

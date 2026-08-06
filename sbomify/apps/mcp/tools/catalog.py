@@ -41,6 +41,16 @@ def _lookup_component(principal: Principal, component_id: str) -> Any:
     return obj
 
 
+def _lookup_release(principal: Principal, release_id: str) -> Any:
+    from sbomify.apps.core.models import Release
+
+    team = resolve_workspace(principal)
+    obj = Release.objects.filter(pk=release_id, product__team=team).select_related("product").first()
+    if obj is None:
+        raise not_found("release", release_id)
+    return obj
+
+
 def _get_product(principal: Principal, product_id: str) -> Any:
     obj = _lookup_product(principal, product_id)
     require(principal, "product:read", obj)
@@ -54,12 +64,7 @@ def _get_component(principal: Principal, component_id: str) -> Any:
 
 
 def _get_release(principal: Principal, release_id: str) -> Any:
-    from sbomify.apps.core.models import Release
-
-    team = resolve_workspace(principal)
-    obj = Release.objects.filter(pk=release_id, product__team=team).select_related("product").first()
-    if obj is None:
-        raise not_found("release", release_id)
+    obj = _lookup_release(principal, release_id)
     require(principal, "release:read", obj.product)
     return obj
 

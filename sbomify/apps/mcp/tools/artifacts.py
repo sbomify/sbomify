@@ -11,7 +11,7 @@ from .. import serializers
 from ..auth import Principal, require
 from ..limits import enforce_parse_size, untrusted
 from ._base import clamp_page, mcp_tool, not_found, resolve_workspace, run_db
-from .catalog import _get_component
+from .catalog import _lookup_component
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -145,7 +145,11 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             from sbomify.apps.sboms.models import SBOM
 
-            component = _get_component(principal, component_id)
+            # Authorize with this tool's own action, not component:read_internal:
+            # the registry advertises the tool to any token granting sbom:read,
+            # so demanding a second scope here would advertise-then-refuse.
+            component = _lookup_component(principal, component_id)
+            require(principal, "sbom:read", component)
             safe_page, safe_size = clamp_page(page, page_size)
             queryset = SBOM.objects.filter(component=component).order_by("-created_at")
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)
@@ -241,7 +245,8 @@ def register_tools(mcp: FastMCP) -> None:
         def query() -> dict[str, Any]:
             from sbomify.apps.documents.models import Document
 
-            component = _get_component(principal, component_id)
+            component = _lookup_component(principal, component_id)
+            require(principal, "document:read", component)
             safe_page, safe_size = clamp_page(page, page_size)
             queryset = Document.objects.filter(component=component).order_by("-created_at")
             rows, total = serializers.page_queryset(queryset, safe_page, safe_size)

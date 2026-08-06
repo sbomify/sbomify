@@ -349,3 +349,47 @@ async def test_oversized_upload_is_refused_over_the_transport(make_token, mcp_ow
         assert "too large" in response.text.lower()
     else:
         assert "limit for MCP uploads" in json.dumps(parse(response))
+
+
+# --------------------------------------------------------------------------
+# 4. Declared action == required action
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_tool_works_with_a_token_scoped_to_exactly_its_declared_action(
+    make_token, component_in_bound_workspace, product_in_bound_workspace
+):
+    """The registry's promise: the declared action is sufficient to call the tool.
+
+    `tools/list` advertises a tool whenever the token grants its declared
+    action, so a tool that internally demands some *other* action is advertised
+    and then refused — the exact guaranteed-to-fail advertised call that
+    scope-filtered listing exists to prevent.
+
+    Not-found is a fine outcome here (the fixtures do not set up every
+    resource); a permission refusal is not.
+    """
+    from sbomify.apps.core.models import Release
+
+    release = await sync_to_async(Release.objects.create)(product=product_in_bound_workspace, name="v1", version="1")
+
+    cases = [
+        ("list_sboms", "sbom:read", {"component_id": component_in_bound_workspace.id}),
+        ("list_documents", "document:read", {"component_id": component_in_bound_workspace.id}),
+        ("tag_artifact_to_release", "release:tag", {"release_id": release.id, "sbom_id": "nope"}),
+        (
+            "assign_contact_profile",
+            "component:manage",
+            {"component_id": component_in_bound_workspace.id, "profile_id": "nope"},
+        ),
+    ]
+
+    async with mcp_http() as client:
+        for name, action, arguments in cases:
+            token = await sync_to_async(make_token)([action])
+            response = await call(client, "tools/call", token=token.encoded_token, name=name, arguments=arguments)
+            body = json.dumps(parse(response))
+            assert "token scope does not grant" not in body, (name, action, body)
+            assert "Not permitted" not in body, (name, action, body)
