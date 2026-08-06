@@ -209,6 +209,7 @@ keycloak-postgres-data/
 # Screencast recordings
 screencasts/output/*.webm
 screencasts/output/*.txt
+screencasts/output/*.md
 screencasts/output/screenshots/
 
 # VSCode settings

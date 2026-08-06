@@ -46,16 +46,18 @@ from conftest import (
     hover_and_click,
     navigate_to_components,
     navigate_to_products,
-    navigate_to_settings,
+    navigate_to_trust_center_tab,
     pace,
     rewrite_localhost_urls,
     shot,
+    smooth_scroll,
     start_on_dashboard,
 )
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import Component, ProductIdentifier, ProductLink
+from sbomify.apps.security_advisories.models import AdvisoryEvent, SecurityAdvisory
 
 # ---------------------------------------------------------------------------
 # Seed data — Silicon Valley's Pied Piper, with a believable dependency tree
@@ -292,6 +294,42 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
     return store
 
 
+def _seed_published_advisory(team: Any) -> None:
+    """Publish one resolved security advisory for the workspace.
+
+    The trust center now leads with a Security Advisories section, and with
+    none published the tour's closing frame is three zeros over a "No
+    published advisories" empty state — which argues against the page it is
+    meant to sell. One resolved, published advisory is also the honest
+    depiction: a team that has disclosed something and shipped the fix.
+
+    Mirrors the publish path the app enforces — ``status`` PUBLISHED needs a
+    ``published_at`` and a tracking id, and the advisory only reaches the
+    public page once ``visibility`` is PUBLIC.
+    """
+    now = datetime.now(tz=timezone.utc)
+    advisory = SecurityAdvisory.objects.create(
+        team=team,
+        title="Path traversal in archive extraction",
+        severity="medium",
+        description=(
+            "Archive entries with parent-directory segments could be written outside the "
+            "extraction root. Fixed by normalising entry paths before write."
+        ),
+        remediation_status=SecurityAdvisory.RemediationStatus.RESOLVED,
+        status=SecurityAdvisory.Status.PUBLISHED,
+        published_at=now,
+        visibility=SecurityAdvisory.Visibility.PUBLIC,
+        made_public_at=now,
+        tracking_id=SecurityAdvisory.allocate_tracking_id(team),
+    )
+    AdvisoryEvent.objects.create(
+        advisory=advisory,
+        event_type=AdvisoryEvent.EventType.PUBLISHED,
+        payload={"tracking_id": advisory.tracking_id},
+    )
+
+
 @pytest.fixture
 def pied_piper_scanned(
     sample_user: AbstractBaseUser,
@@ -353,6 +391,20 @@ def pied_piper_scanned(
     # full of scan results.
     TeamPluginSettings.objects.update_or_create(team=team, defaults={"enabled_plugins": ["osv"]})
 
+    # A workspace-wide compliance artifact. The trust center counts public
+    # global components under "Compliance artifacts"; a real workspace has a
+    # SOC 2 report or similar sitting there, and a zero reads as an unfinished
+    # setup rather than a feature.
+    Component.objects.create(
+        team=team,
+        name="SOC 2 Type II Report",
+        component_type=Component.ComponentType.DOCUMENT,
+        is_global=True,
+        visibility=Component.Visibility.PUBLIC,
+    )
+
+    _seed_published_advisory(team)
+
     now = datetime.now(tz=timezone.utc)
     last_day = len(SCAN_HISTORY_PROFILE) - 1
     for offset, (component_name, sbom) in enumerate(pied_piper_with_sboms["sboms"].items()):
@@ -403,14 +455,12 @@ def _expand_product_panel(page: Page, header: str, card_selector: str, text: str
     """
     toggle = page.locator(f"button:has-text('{header}')").first
     toggle.wait_for(state="visible", timeout=15_000)
-    toggle.scroll_into_view_if_needed()
-    pace(page, 600)
+    smooth_scroll(page, toggle, 600)
     hover_and_click(page, toggle)
 
     card = page.locator(card_selector)
     card.wait_for(state="visible", timeout=15_000)
-    card.scroll_into_view_if_needed()
-    pace(page, 800)
+    smooth_scroll(page, card, 800)
 
     caption(page, text)
     pace(page, 2600)
@@ -512,8 +562,7 @@ def chapter_inventory(page: Page) -> None:
     # what the tour holds on.
     releases_card = page.locator("h4:has-text('Latest releases')")
     releases_card.wait_for(state="visible", timeout=15_000)
-    releases_card.scroll_into_view_if_needed()
-    pace(page, 1200)
+    smooth_scroll(page, releases_card, 1200)
 
     caption(page, "Releases pin an exact set of artifacts to a version you shipped.")
     shot(page, "08-releases")
@@ -572,8 +621,7 @@ def chapter_vulnerabilities(page: Page) -> None:
 
     vulns_card = page.locator("text=Vulnerabilities").first
     vulns_card.wait_for(state="visible", timeout=15_000)
-    vulns_card.scroll_into_view_if_needed()
-    pace(page, 1400)
+    smooth_scroll(page, vulns_card, 1400)
 
     caption(page, "Drill into a component: advisory, package, fix version, status.")
     shot(page, "12-vulnerability-drilldown")
@@ -590,14 +638,15 @@ def chapter_vulnerabilities(page: Page) -> None:
     pace(page, 2600)
     clear_caption(page)
 
-    menu_btn = page.locator("button[aria-label='More actions']").first
+    # Role-based lookups, matching the convention the other recordings settled
+    # on: the meatball's contents move around, but its accessible names don't.
+    menu_btn = page.get_by_role("button", name="More actions")
     menu_btn.wait_for(state="visible", timeout=15_000)
-    menu_btn.scroll_into_view_if_needed()
-    pace(page, 700)
+    smooth_scroll(page, menu_btn, 700)
     hover_and_click(page, menu_btn)
     pace(page, 800)
 
-    upload_item = page.locator("button:has-text('Upload artifact')").first
+    upload_item = page.get_by_role("menuitem", name="Upload artifact")
     upload_item.wait_for(state="visible", timeout=10_000)
     pace(page, 400)
     hover_and_click(page, upload_item)
@@ -639,8 +688,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     # ── The dry-run preview ───────────────────────────────────────────────
     apply_btn = page.locator("button:has-text('Apply this VEX')")
     apply_btn.wait_for(state="visible", timeout=20_000)
-    apply_btn.scroll_into_view_if_needed()
-    pace(page, 1400)
+    smooth_scroll(page, apply_btn, 1400)
 
     caption(page, "A dry run: one finding would be suppressed, nothing stored yet.")
     pace(page, 3000)
@@ -658,21 +706,37 @@ def chapter_vulnerabilities(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1800)
 
-    # Land back on the vulnerabilities table to show the row has gone quiet.
+    # Land back on the vulnerabilities table. The suppressed row is now gone
+    # from the default view — the working list matches the open counts — and
+    # the footer accounts for it rather than silently dropping it.
     vulns_card = page.locator("text=Vulnerabilities").first
     vulns_card.wait_for(state="visible", timeout=15_000)
-    vulns_card.scroll_into_view_if_needed()
-    pace(page, 1200)
+    smooth_scroll(page, vulns_card, 1200)
+
+    hidden_note = page.locator("text=suppressed hidden").first
+    hidden_note.wait_for(state="visible", timeout=15_000)
+    smooth_scroll(page, hidden_note, 800)
+
+    caption(page, "It drops straight out of your working list — and the count says so.")
+    pace(page, 3000)
+    shot(page, "14-vex-suppressed-hidden")
+    clear_caption(page)
+
+    # Reveal it again: nothing was deleted, and the decision is auditable.
+    show_suppressed = page.get_by_text("Show suppressed").first
+    show_suppressed.wait_for(state="visible", timeout=10_000)
+    smooth_scroll(page, show_suppressed, 700)
+    hover_and_click(page, show_suppressed)
+    pace(page, 1400)
 
     suppressed = page.locator("td:has-text('Not affected')").first
     suppressed.wait_for(state="visible", timeout=15_000)
-    suppressed.scroll_into_view_if_needed()
-    pace(page, 800)
+    smooth_scroll(page, suppressed, 800)
     suppressed.hover()
 
-    caption(page, "The finding stays on the record — now marked not affected, with the reason attached.")
+    caption(page, "Nothing is deleted — the finding is still there, with the reason attached.")
     pace(page, 3200)
-    shot(page, "14-vex-suppression")
+    shot(page, "15-vex-suppression")
     clear_caption(page)
 
 
@@ -688,10 +752,8 @@ def chapter_trust_center(page: Page) -> None:
     the posture are only worth maintaining if you can hand them to a customer
     without a spreadsheet and an NDA thread.
     """
-    navigate_to_settings(page)
-    trust_center_tab = page.locator("a[data-tab='trust-center']")
-    hover_and_click(page, trust_center_tab)
-    pace(page, 1000)
+    navigate_to_trust_center_tab(page)
+    pace(page, 600)
 
     caption(page, "Turn on a public trust center — no separate site to build.")
     pace(page, 2400)
@@ -701,7 +763,7 @@ def chapter_trust_center(page: Page) -> None:
     rewrite_localhost_urls(page)
 
     caption(page, "Serve it from your own domain: trust.piedpiper.com.")
-    shot(page, "15-trust-center-config")
+    shot(page, "16-trust-center-config")
     pace(page, 2800)
     clear_caption(page)
 
@@ -722,8 +784,7 @@ def chapter_trust_center(page: Page) -> None:
 
     visibility = page.locator("select[aria-label='Product visibility']")
     visibility.wait_for(state="visible", timeout=15_000)
-    visibility.scroll_into_view_if_needed()
-    pace(page, 700)
+    smooth_scroll(page, visibility, 700)
     hover_and_click(page, visibility)
     pace(page, 400)
     visibility.select_option("true")
@@ -739,7 +800,7 @@ def chapter_trust_center(page: Page) -> None:
     pace(page, 2000)
 
     caption(page, "This is what your customers see — always current, no email thread.")
-    shot(page, "16-trust-center-public")
+    shot(page, "17-trust-center-public")
     pace(page, 3200)
     clear_caption(page)
     pace(page, 1200)

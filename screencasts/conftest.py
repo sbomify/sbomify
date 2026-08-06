@@ -505,10 +505,17 @@ def navigate_to_plugins(page: Page) -> None:
 
 
 def navigate_to_trust_center_tab(page: Page) -> None:
-    """Navigate to Settings, then click the Trust Center tab."""
+    """Navigate to Settings, then click the Trust Center tab.
+
+    The settings tabs used to be in-page panels switched by a ``data-tab``
+    attribute; they are now real links to ``/settings/<tab>``, so the tab is
+    matched by its href and the click is a navigation.
+    """
     navigate_to_settings(page)
-    trust_center_tab = page.locator("a[data-tab='trust-center']")
+    trust_center_tab = page.locator("a.settings-tab[href$='/trust-center']")
+    trust_center_tab.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, trust_center_tab)
+    page.wait_for_load_state("networkidle")
     pace(page, 800)
 
 
