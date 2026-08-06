@@ -1343,3 +1343,49 @@ class TestManufacturerPolicyParity:
             assert v == v.lower()
             assert v == v.strip()
         assert "" in mod.PLACEHOLDER_MANUFACTURER_VALUES
+
+
+@pytest.mark.django_db
+class TestDeclarationAuthorisedRepresentative:
+    """The Art. 22 wording is a legal claim, so it has to follow the
+    determination rather than the mere presence of a representative."""
+
+    def test_art_22_wording_only_when_the_manufacturer_is_not_eu_established(self, assessment):
+        assessment.is_eu_established = False
+        assessment.authorized_rep_name = "Acme EU Compliance BV"
+        assessment.authorized_rep_email = "ar@acme-eu.example"
+        assessment.authorized_rep_address = "Keizersgracht 1, Amsterdam"
+        assessment.save()
+
+        result = get_document_preview(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
+
+        assert result.ok
+        assert "under CRA Art. 22 because the manufacturer is not established in the Union" in result.value
+
+    def test_a_voluntary_representative_does_not_claim_art_22(self, assessment):
+        """An EU-established manufacturer may still name a representative.
+        Declaring it was appointed because they are not EU-established would
+        be a false statement in a signed declaration."""
+        assessment.is_eu_established = True
+        assessment.authorized_rep_name = "Acme EU Compliance BV"
+        assessment.save()
+
+        result = get_document_preview(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
+
+        assert result.ok
+        assert "because the manufacturer is not established in the Union" not in result.value
+        assert "Acme EU Compliance BV" in result.value
+
+    def test_the_representative_email_is_escaped(self, assessment):
+        """The AR block is typed into the wizard and reaches the document
+        unchecked, so markdown in it must not render."""
+        assessment.is_eu_established = False
+        assessment.authorized_rep_name = "Acme EU"
+        assessment.authorized_rep_address = "Somewhere"
+        assessment.authorized_rep_email = "[click](http://evil.example)"
+        assessment.save()
+
+        result = get_document_preview(assessment, CRAGeneratedDocument.DocumentKind.DECLARATION_OF_CONFORMITY)
+
+        assert result.ok
+        assert "[click](http://evil.example)" not in result.value
