@@ -28,7 +28,7 @@
                 <div class="tw-alert-content">
                     <p class="tw-alert-title">Unscoped tokens detected</p>
                     <p class="text-sm m-0">
-                        You have tokens that are not scoped to any workspace. These tokens grant access to all your workspaces and will be deprecated in a future release. Please create new workspace-scoped tokens and delete the unscoped ones.
+                        These tokens reach every workspace you belong to. They stay valid until you rotate them; there is no forced cutover or auto-expiry. Create a workspace-scoped replacement, move your integration across, then delete the unscoped token.
                     </p>
                 </div>
             </div>
@@ -63,8 +63,10 @@
                     <p class="text-text-muted text-sm m-0">Create a new personal access token scoped to this workspace</p>
                 </div>
             </div>
+            {# expiryChoice drives the custom TTL row; seeded from the bound value so a validation re-render keeps it open. #}
             <form method="post"
                   id="tokenGenerationForm"
+                  x-data="{ expiryChoice: '{{ create_access_token_form.expires_in_hours.value|default:"2160"|escapejs }}' }"
                   hx-post="{% url 'teams:team_tokens' team.key %}"
                   hx-target="#team-tokens-content"
                   hx-disabled-elt="find button[type='submit']"
@@ -95,8 +97,27 @@
                             {% endwith %}
                         </div>
                         <div>
-                            {% with field=create_access_token_form.expires_in_days %}
+                            {% with field=create_access_token_form.expires_in_hours %}
                                 <label for="{{ field.id_for_label }}" class="tw-form-label">Expiration</label>
+                                {{ field }}
+                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                            {% endwith %}
+                        </div>
+                    </div>
+                    {# Custom TTL — revealed only when the preset list says Custom. #}
+                    <div x-show="expiryChoice === 'custom'"
+                         x-cloak
+                         class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            {% with field=create_access_token_form.custom_expiry_value %}
+                                <label for="{{ field.id_for_label }}" class="tw-form-label">Expires after</label>
+                                {{ field }}
+                                {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
+                            {% endwith %}
+                        </div>
+                        <div>
+                            {% with field=create_access_token_form.custom_expiry_unit %}
+                                <label for="{{ field.id_for_label }}" class="tw-form-label">Unit</label>
                                 {{ field }}
                                 {% for error in field.errors %}<p class="tw-form-error mt-1">{{ error }}</p>{% endfor %}
                             {% endwith %}

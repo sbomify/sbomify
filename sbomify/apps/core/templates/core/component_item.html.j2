@@ -1,6 +1,7 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
+{% load advisory_tags %}
 {% block title %}{{ component.get_component_type_display }}: {{ item.name }}{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
@@ -250,30 +251,18 @@
                                     {% for s in vex_suppressions %}
                                         <tr x-show="pageSet.has({{ forloop.counter0 }})">
                                             <td>
-                                                {% if s.id|slice:":4" == "CVE-" %}
-                                                    <a href="https://www.cve.org/CVERecord?id={{ s.id }}"
-                                                       target="_blank"
-                                                       rel="noopener"
-                                                       class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                                        {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                                    </a>
-                                                {% elif s.id|slice:":5" == "GHSA-" %}
-                                                    <a href="https://github.com/advisories/{{ s.id }}"
-                                                       target="_blank"
-                                                       rel="noopener"
-                                                       class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                                        {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                                    </a>
-                                                {% elif s.id == "Unknown" %}
-                                                    <span class="font-medium text-text-muted">{{ s.id }}</span>
-                                                {% else %}
-                                                    <a href="https://osv.dev/vulnerability/{{ s.id }}"
-                                                       target="_blank"
-                                                       rel="noopener"
-                                                       class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                                        {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                                    </a>
-                                                {% endif %}
+                                                {% with suppression_url=s.id|advisory_url %}
+                                                    {% if suppression_url %}
+                                                        <a href="{{ suppression_url }}"
+                                                           target="_blank"
+                                                           rel="noopener"
+                                                           class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                                                            {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                                                        </a>
+                                                    {% else %}
+                                                        <span class="font-medium text-text-muted">{{ s.id }}</span>
+                                                    {% endif %}
+                                                {% endwith %}
                                                 {% if s.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ s.aliases|join:", " }}</div>{% endif %}
                                             </td>
                                             <td class="text-text">{{ s.package }}</td>

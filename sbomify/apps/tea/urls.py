@@ -16,7 +16,10 @@ from sbomify.logging import getLogger
 
 log = getLogger(__name__)
 
-app_name = "tea"
+# Deliberately no ``app_name``. ``tea_api.urls`` already carries the "tea"
+# namespace from ``urls_namespace``, and declaring one here too nests it inside
+# itself: every route ends up at ``tea:tea:<name>`` while django-ninja reverses
+# ``tea:<name>``, which 500s /docs and /openapi.json with NoReverseMatch.
 
 # Create a dedicated NinjaAPI instance for TEA
 # This allows TEA to have its own OpenAPI docs

@@ -172,7 +172,11 @@ class ProductDetailsPublicView(View):
                 request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
             )
 
-        has_downloadable_content = SBOM.objects.filter(component__products__id=resolved_id).exists()
+        # Actual SBOMs only: a product whose components carry nothing but CBOMs or
+        # VEX must not show SBOM download buttons that would 404.
+        product_boms = SBOM.objects.filter(component__products__id=resolved_id)
+        has_downloadable_content = product_boms.filter(bom_type=SBOM.BomType.SBOM).exists()
+        has_cbom = product_boms.filter(bom_type=SBOM.BomType.CBOM).exists()
         team = Team.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
@@ -253,6 +257,7 @@ class ProductDetailsPublicView(View):
         context = {
             "brand": brand,
             "has_downloadable_content": has_downloadable_content,
+            "has_cbom": has_cbom,
             "product": product,
             "product_tei": product_tei,
             # Server-side rendered data

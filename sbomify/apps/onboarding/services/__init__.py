@@ -19,6 +19,22 @@ from ..utils import get_email_context, render_email_templates
 logger = getLogger(__name__)
 
 
+def _is_mailable(user: Any) -> bool:
+    """Return False for recipients that must never be handed to the mailer.
+
+    Currently that means synthetic OIDC bot identities. This is the last gate
+    before ``EmailMultiAlternatives``, deliberately duplicating the check in
+    ``onboarding.signals`` so a bot reaching any send path — a backfill, an
+    admin action, a future sender — still can't produce a message.
+    """
+    from sbomify.apps.oidc.services import is_synthetic_bot_user
+
+    if is_synthetic_bot_user(user):
+        logger.debug("Suppressing onboarding email for synthetic bot user %s", user.id)
+        return False
+    return True
+
+
 class OnboardingEmailService:
     """Service for sending onboarding emails."""
 
@@ -33,6 +49,9 @@ class OnboardingEmailService:
         Returns:
             True if email was sent successfully, False otherwise
         """
+        if not _is_mailable(user):
+            return False
+
         # Check if welcome email already sent
         onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=user)
         if onboarding_status.welcome_email_sent:
@@ -91,6 +110,9 @@ class OnboardingEmailService:
 
         Checks deduplication, eligibility, and handles record creation/failure tracking.
         """
+        if not _is_mailable(user):
+            return False
+
         # Dedup check — only skip if successfully sent
         existing = OnboardingEmail.objects.filter(user=user, email_type=email_type).first()
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:

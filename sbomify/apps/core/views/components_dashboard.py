@@ -40,6 +40,9 @@ def _get_components_context(request: HttpRequest) -> dict[str, Any] | None:
             "visibility": c.visibility,
             "is_global": c.is_global,
             "sbom_count": getattr(c, "sbom_count", 0) or 0,
+            # None when the workspace set no window or the component has no SBOM,
+            # which the table renders as no badge rather than as "fresh".
+            "freshness": getattr(c, "freshness", None),
         }
         for c in sorted_components
     ]

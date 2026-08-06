@@ -149,6 +149,7 @@ services:
       - "${FRONTEND_PORT:-5170}:5170"
     volumes:
       - ./sbomify:/app-frontend/sbomify # Mount to the WORKDIR of frontend-dev-server stage
+      - ./vite.config.ts:/app-frontend/vite.config.ts # Hot-apply Vite config tweaks without a rebuild
       - /app-frontend/node_modules # Prevent host node_modules from overwriting container's
     environment:
       NODE_ENV: ${NODE_ENV:-development}

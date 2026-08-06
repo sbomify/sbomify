@@ -96,6 +96,14 @@
                                 <i class="fas fa-puzzle-piece w-4 text-center" aria-hidden="true"></i>
                                 Component
                             </button>
+                            {% comment %}A link rather than a dispatch: the advisory modal needs the workspace's products and releases in context, so it lives on the advisories page and ?new=1 opens it on arrival.{% endcomment %}
+                            <a href="{% url 'core:security_advisories_dashboard' %}?new=1"
+                               @click="open = false"
+                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                               role="menuitem">
+                                <i class="fas fa-shield-halved w-4 text-center" aria-hidden="true"></i>
+                                Advisory
+                            </a>
                         </div>
                     </div>
                 {% endif %}
@@ -145,7 +153,7 @@
                     {# Loading State #}
                     <div id="notifications-loading"
                          class="flex flex-col items-center justify-center py-12 px-4">
-                        <div class="w-10 h-10 border-2 border-primary/20 border-t-primary rounded-full animate-spin mb-3"></div>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary mb-3" %}
                         <p class="text-sm text-text-muted">Loading notifications...</p>
                     </div>
                     {# Notifications List #}

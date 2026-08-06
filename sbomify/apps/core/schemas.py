@@ -101,7 +101,12 @@ class ProductIdentifierSchema(BaseModel):
 
 
 class _PURLNormalizationMixin(BaseModel):
-    """Mixin that auto-strips version from PURL identifiers during validation."""
+    """Normalises PURL identifiers and rejects malformed CPEs.
+
+    Without the CPE branch a typo persists as a free string, and the assessment
+    plugins only check that an identifier is present, so nothing downstream ever
+    catches it.
+    """
 
     identifier_type: ProductIdentifierType
     value: str
@@ -112,6 +117,13 @@ class _PURLNormalizationMixin(BaseModel):
             from sbomify.apps.core.purl import strip_purl_version
 
             self.value = strip_purl_version(self.value)
+        elif self.identifier_type == "cpe":
+            from sbomify.apps.core.cpe import CPEValidationError, validate_cpe
+
+            try:
+                self.value = validate_cpe(self.value)
+            except CPEValidationError as exc:
+                raise ValueError(str(exc)) from exc
         return self
 
 
@@ -321,6 +333,8 @@ class ComponentResponseSchema(BaseModel):
     metadata: dict[str, Any]
     sbom_count: int | None = None
     document_count: int | None = None
+    # None when no freshness window is configured or the component has no SBOM.
+    freshness: dict[str, Any] | None = None
 
 
 class ProductComponentLinkSchema(BaseModel):

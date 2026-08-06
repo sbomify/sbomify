@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
@@ -14,6 +14,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
+from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import build_custom_domain_url
@@ -98,14 +99,37 @@ PLAN_LIMITS = {
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     allowed_roles = ["owner", "admin"]
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Take ``tab`` off the URL and hold it, rather than pass it to a handler.
+
+        Two URLs reach this view: the settings index, which has no tab, and one
+        section per tab, which does. Only ``get`` declared the parameter, so
+        every form on a section page — all of which post back to their own URL —
+        died on ``post() got an unexpected keyword argument 'tab'`` before it
+        reached a line of this class. Removing a member and cancelling an
+        invitation both 500ed.
+
+        Absorbing it here keeps the handlers free of it, so adding one cannot
+        reintroduce the mismatch, and gives POST the section it was submitted
+        from as somewhere to send the browser back to.
+        """
+        self.tab: str | None = kwargs.pop("tab", None)
+        return super().dispatch(request, *args, **kwargs)
+
     def _redirect_with_tab(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """Redirect to team settings, preserving the active tab if provided."""
+        """Redirect back to the section the form was submitted from.
+
+        Forms carry an ``active_tab``, but the URL already knows which section
+        rendered them; falling back to it means a form that forgets the hidden
+        field returns to its own page instead of bouncing to the first one.
+        """
         from sbomify.apps.teams.utils import redirect_to_team_settings
 
-        active_tab = request.POST.get("active_tab", "")
+        active_tab = request.POST.get("active_tab", "") or self.tab
         return redirect_to_team_settings(team_key, active_tab if active_tab else None)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        tab = self.tab
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return error_response(
@@ -226,11 +250,32 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         }
                     )
 
+        # Which section is on screen, and which the nav offers. Resolved from
+        # the registry so the two cannot disagree — a tab the member may not
+        # open is neither linked nor rendered.
+        from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
+
+        role = request.session.get("current_team", {}).get("role")
+        billing_enabled_flag = is_billing_enabled()
+        active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
+        if active_tab is None:
+            # The typed domain error rather than a hand-built HttpResponse:
+            # error_response understands it, it carries its own 403, and it keeps
+            # this on the same path as every other permission failure.
+            return error_response(request, PermissionDeniedError("No settings available for this role"))
+        # A stale or renamed slug resolves to the first section instead of 404ing;
+        # send the browser to the URL that actually rendered so the address bar,
+        # the highlighted tab and the content all agree.
+        if tab is not None and tab != active_tab.key:
+            return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab.key)
+
         return render(
             request,
             "teams/team_settings.html.j2",
             {
                 "APP_BASE_URL": settings.APP_BASE_URL,
+                "settings_tabs": visible_tabs(role, billing_enabled=billing_enabled_flag),
+                "active_tab": active_tab,
                 "team": team_data,
                 "team_obj": team_obj,  # Pass actual model in case specific valid/function call is lower down
                 # Members tab
@@ -772,8 +817,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
 
         team.slug = new_slug
+        # Validate the slug only. A bare full_clean() also flags unrelated fields that are
+        # legitimately empty on most workspaces (branding_info defaults to {}, and
+        # billing_plan/billing_plan_limits are null on community plans), which made every
+        # rename fail with a bare "This field cannot be blank."
+        slug_only_exclude = [field.name for field in Team._meta.fields if field.name != "slug"]
         try:
-            team.full_clean(exclude=["key"])
+            team.full_clean(exclude=slug_only_exclude)
         except ValidationError as e:
             slug_errors = e.message_dict.get("slug", [])
             if slug_errors:

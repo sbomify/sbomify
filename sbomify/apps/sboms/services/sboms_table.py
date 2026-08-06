@@ -25,8 +25,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
     Rows with no completed security run get ``vuln = None``.
     """
     from sbomify.apps.vulnerability_scanning.utils import (
-        RESULT_SUMMARY_ANNOTATIONS,
-        RESULT_SUMMARY_FIELDS,
+        RESULT_SUMMARY_COLUMNS,
         extract_finding_rows,
         extract_severity_counts,
         merge_findings_by_alias,
@@ -43,8 +42,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
             AssessmentRun.objects.filter(sbom_id__in=sbom_ids, category="security", status="completed")
             .order_by("sbom_id", "-created_at")
             .distinct("sbom_id")
-            .annotate(**RESULT_SUMMARY_ANNOTATIONS)
-            .values("sbom_id", *RESULT_SUMMARY_FIELDS)
+            .values("sbom_id", *RESULT_SUMMARY_COLUMNS)
         )
         counts_by_sbom = {
             str(row["sbom_id"]): extract_severity_counts(reconstruct_result_summary(row)) for row in latest_summaries
@@ -92,8 +90,14 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
 
 
 def _summary_artifacts(sbom_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The compact card view: the newest artifact of each bom_type (latest SBOM,
-    latest VEX, latest CBOM, …).
+    """The compact card view: the newest artifact of each (format, bom_type).
+
+    Keyed the same way as ``Component.get_latest_sboms_by_format``, so the card
+    and the release rollup agree on what "latest" means. Both halves of the key
+    earn their place: a component published as CycloneDX and SPDX has two
+    artifacts of bom_type ``sbom``, and a VEX or CBOM shares the cyclonedx
+    format with the SBOM. Dropping either half hides a current artifact behind
+    an unrelated one.
 
     VEX resolution is latest-wins, so the card shows just the newest VEX; the
     superseded ones (and the full SBOM history) live behind the "View all"
@@ -104,12 +108,12 @@ def _summary_artifacts(sbom_items: list[dict[str, Any]]) -> list[dict[str, Any]]
         key=lambda x: x["sbom"]["created_at"].timestamp() if x["sbom"].get("created_at") else 0.0,
         reverse=True,
     )
-    seen: set[str] = set()
+    seen: set[tuple[str, str]] = set()
     summary: list[dict[str, Any]] = []
     for item in by_date:
-        bom_type = item["sbom"].get("bom_type") or "sbom"
-        if bom_type not in seen:
-            seen.add(bom_type)
+        key = (item["sbom"].get("format") or "", item["sbom"].get("bom_type") or "sbom")
+        if key not in seen:
+            seen.add(key)
             summary.append(item)
     return summary
 

@@ -1,0 +1,86 @@
+# SPDX license id -> risk category.
+#
+# Static and offline by design: no network call, and an id absent from this
+# file stays uncategorised rather than being guessed at. A wrong category on a
+# licence is worse than none, because procurement reads this as a risk signal.
+#
+# Categories:
+#   public-domain   no conditions; dedication or equivalent
+#   permissive      attribution only, no copyleft on derivative works
+#   weak-copyleft   copyleft scoped to the file or library, linking permitted
+#   strong-copyleft copyleft extends to the combined work
+#   network-copyleft strong copyleft that also triggers on network use
+#   proprietary     source-available or restricted terms
+#
+# Sourced from the SPDX licence texts and the categorisation choosealicense.com
+# and ClearlyDefined publish. Only ids whose category is unambiguous are listed.
+
+public-domain:
+  - CC0-1.0
+  - Unlicense
+  - WTFPL
+  - 0BSD
+
+permissive:
+  - MIT
+  - MIT-0
+  - Apache-2.0
+  - Apache-1.1
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - BSD-4-Clause
+  - ISC
+  - Zlib
+  - PostgreSQL
+  - Python-2.0
+  - PSF-2.0
+  - X11
+  - BSL-1.0
+  - NCSA
+  - AFL-3.0
+  - ECL-2.0
+  - UPL-1.0
+  - Artistic-2.0
+  - CC-BY-4.0
+  - CC-BY-3.0
+
+weak-copyleft:
+  - LGPL-2.0-only
+  - LGPL-2.0-or-later
+  - LGPL-2.1-only
+  - LGPL-2.1-or-later
+  - LGPL-3.0-only
+  - LGPL-3.0-or-later
+  - MPL-1.1
+  - MPL-2.0
+  - EPL-1.0
+  - EPL-2.0
+  - CDDL-1.0
+  - CDDL-1.1
+  - CECILL-C
+  - EUPL-1.1
+  - EUPL-1.2
+  - OSL-3.0
+
+strong-copyleft:
+  - GPL-2.0-only
+  - GPL-2.0-or-later
+  - GPL-3.0-only
+  - GPL-3.0-or-later
+  - CECILL-2.1
+  - CC-BY-SA-4.0
+  - CC-BY-SA-3.0
+
+network-copyleft:
+  - AGPL-3.0-only
+  - AGPL-3.0-or-later
+
+# Source-available licences that also carry a real SPDX id belong here even
+# when non_spdx.yaml lists them, because get_license_list() emits the SPDX and
+# custom entries separately — omitting the id leaves the SPDX copy
+# uncategorised while the custom copy has a category. Commons-Clause and ELv2
+# have no SPDX id at all, so they stay custom-only.
+proprietary:
+  - Elastic-2.0
+  - BUSL-1.1
+  - SSPL-1.0

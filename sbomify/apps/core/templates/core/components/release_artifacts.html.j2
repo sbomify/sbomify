@@ -22,7 +22,7 @@
             {# Loading State #}
             <div x-show="isLoading"
                  class="flex flex-col items-center justify-center py-12">
-                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
                 <p class="mt-3 text-text-muted">Loading artifacts...</p>
             </div>
             {# Empty State #}
@@ -201,7 +201,7 @@
                                               x-text="getArtifactFormat(artifact)"></span>
                                         <span x-show="!isArtifactTypeSbom(artifact)"
                                               class="tw-sbom-format text-text-muted bg-border/20 border"
-                                              style="border-color: color-mix(in srgb, rgb(var(--color-border)) 60%, transparent)"
+                                              style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)"
                                               x-text="getArtifactFormat(artifact)"></span>
                                     </td>
                                     <td class="px-4 py-3">
@@ -349,7 +349,7 @@
                             {# Loading State #}
                             <div x-show="isLoadingAvailable"
                                  class="flex flex-col items-center justify-center py-12">
-                                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
+                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
                                 <p class="mt-3 text-text-muted">Loading artifacts...</p>
                             </div>
                             {# No Results #}
@@ -503,7 +503,7 @@
                                                               x-text="getAvailableArtifactFormat(artifact)"></span>
                                                         <span x-show="!isArtifactSbom(artifact)"
                                                               class="tw-sbom-format text-text-muted bg-border/20 border"
-                                                              style="border-color: color-mix(in srgb, rgb(var(--color-border)) 60%, transparent)"
+                                                              style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)"
                                                               x-text="getAvailableArtifactFormat(artifact)"></span>
                                                     </td>
                                                     <td class="px-4 py-3.5">
@@ -540,8 +540,7 @@
                                         @click="addSelectedArtifacts()"
                                         :disabled="selectedArtifacts.size === 0 || isSubmitting"
                                         :class="{ 'opacity-50 cursor-not-allowed': selectedArtifacts.size === 0 || isSubmitting }">
-                                    <span x-show="isSubmitting"
-                                          class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                                    <span x-show="isSubmitting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
                                     <i x-show="!isSubmitting" class="fas fa-plus"></i>
                                     <span>Add to Release</span>
                                 </button>

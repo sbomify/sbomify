@@ -109,6 +109,7 @@ from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
 )
 from sbomify.apps.teams.views.dashboard import WorkspacesDashboardView  # noqa: F401, E402
 from sbomify.apps.teams.views.onboarding_wizard import OnboardingWizardView  # noqa: F401, E402
+from sbomify.apps.teams.views.suppliers import SupplierListView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_branding import TeamBrandingView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_custom_domain import TeamCustomDomainView  # noqa: F401, E402
 from sbomify.apps.teams.views.team_general import TeamGeneralView  # noqa: F401, E402
@@ -118,6 +119,7 @@ from sbomify.apps.teams.views.team_tokens import TeamTokensView  # noqa: F401, E
 __all__ = [
     "ContactProfileFormView",
     "ContactProfileView",
+    "SupplierListView",
     "WorkspacesDashboardView",
     "OnboardingWizardView",
     "TeamBrandingView",
@@ -134,7 +136,30 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
     from django.utils.http import url_has_allowed_host_and_scheme
 
     user = cast(User, request.user)
-    team = dict(key=team_key, **request.session["user_teams"][team_key])
+
+    # The session's workspace map is written at login and refreshed on a
+    # checksum, so a membership granted since then is not in it yet. Every
+    # existing caller built its link from that same map and so could only ask
+    # for a key already present; the Trust Center's scanning prompt is built
+    # from a live membership check, and could ask for one that is not.
+    # Re-reading before giving up turns a KeyError 500 into the switch the user
+    # asked for.
+    user_teams: dict[str, Any] = request.session.get("user_teams") or {}
+    if team_key not in user_teams:
+        from sbomify.apps.teams.utils import get_user_teams
+
+        # Read the memberships rather than call update_user_teams_session, which
+        # returns the session's copy untouched whenever the stored checksum
+        # matches — the cache being consulted is the thing suspected of being
+        # wrong. The refreshed map is written back so the next reader benefits.
+        user_teams = get_user_teams(user)
+        request.session["user_teams"] = user_teams
+        request.session.modified = True
+    if team_key not in user_teams:
+        messages.add_message(request, messages.ERROR, "You are not a member of that workspace")
+        return redirect("core:dashboard")
+
+    team = dict(key=team_key, **user_teams[team_key])
     request.session["current_team"] = team
 
     # Check if user is a guest member of the newly switched workspace

@@ -26,6 +26,13 @@
                         <div class="flex items-center gap-2 text-sm text-text-muted">
                             {% include 'core/components/copyable_value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
                         </div>
+                        {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
+                        {% if component.freshness.is_stale %}
+                            <span class="tw-badge-secondary text-danger"
+                                  title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
+                                <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
+                            </span>
+                        {% endif %}
                     </div>
                     {# Component Type Label #}
                     <p class="text-text-muted text-sm m-0 mt-1">{{ component.component_type_display }} Component</p>
@@ -143,7 +150,7 @@
                 </span>
             </div>
             {# Latest-scan vulnerability summary (design review / mock). #}
-            {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low %}
+            {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
                 <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_summary.critical or vuln_summary.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
                     <i class="fas fa-triangle-exclamation text-xs {% if vuln_summary.critical or vuln_summary.high %}text-danger{% else %}text-warning{% endif %}"></i>
                     {% if vuln_summary.critical %}
@@ -162,6 +169,10 @@
                             <span class="text-text-muted">·</span>
                         {% endif %}
                         <span class="font-semibold text-text-muted">{{ vuln_summary.low }} Low</span>
+                    {% endif %}
+                    {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
+                    {% if vuln_summary.suppressed %}
+                        <span class="text-text-muted">· {{ vuln_summary.suppressed }} suppressed</span>
                     {% endif %}
                     <span class="text-text-muted">· latest scan</span>
                 </div>

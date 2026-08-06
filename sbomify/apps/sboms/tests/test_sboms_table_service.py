@@ -11,6 +11,7 @@ from django.test import RequestFactory
 
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.sboms.services.sboms_table import (
+    _summary_artifacts,
     build_sboms_table_context,
     delete_sbom_from_request,
 )
@@ -319,3 +320,70 @@ class TestDeleteSbomFromRequest:
         assert result.ok is False
         assert "not found" in result.error.lower()
         assert result.status_code == 404
+
+
+def _artifact(name: str, fmt: str, bom_type: str | None, day: int) -> dict:
+    from datetime import datetime, timezone
+
+    return {
+        "sbom": {
+            "id": name,
+            "name": name,
+            "format": fmt,
+            "bom_type": bom_type,
+            "created_at": datetime(2026, 7, day, tzinfo=timezone.utc),
+        }
+    }
+
+
+class TestSummaryArtifacts:
+    """The compact card keeps the newest artifact of each (format, bom_type).
+
+    Same key as ``Component.get_latest_sboms_by_format``, so the card and the
+    release rollup agree on what "latest" means.
+    """
+
+    def test_cyclonedx_and_spdx_sboms_both_survive(self):
+        """Both carry bom_type 'sbom', so keying on bom_type alone showed one."""
+        summary = _summary_artifacts(
+            [
+                _artifact("container-cdx", "cyclonedx", "sbom", 27),
+                _artifact("container-spdx", "spdx", "sbom", 26),
+            ]
+        )
+
+        assert {item["sbom"]["format"] for item in summary} == {"cyclonedx", "spdx"}
+
+    def test_newest_wins_within_one_format(self):
+        summary = _summary_artifacts(
+            [
+                _artifact("old", "cyclonedx", "sbom", 20),
+                _artifact("new", "cyclonedx", "sbom", 27),
+            ]
+        )
+
+        assert [item["sbom"]["name"] for item in summary] == ["new"]
+
+    def test_vex_and_cbom_keep_their_own_slot(self):
+        """They share the cyclonedx format, so format alone would collapse them."""
+        summary = _summary_artifacts(
+            [
+                _artifact("sbom", "cyclonedx", "sbom", 27),
+                _artifact("vex", "cyclonedx", "vex", 26),
+                _artifact("cbom", "cyclonedx", "cbom", 25),
+            ]
+        )
+
+        assert {item["sbom"]["bom_type"] for item in summary} == {"sbom", "vex", "cbom"}
+
+    def test_missing_bom_type_is_treated_as_sbom(self):
+        """A legacy row carrying no bom_type shares the sbom slot rather than
+        opening one of its own, so it cannot show up alongside its successor."""
+        summary = _summary_artifacts(
+            [
+                _artifact("legacy", "spdx", None, 20),
+                _artifact("current", "spdx", "sbom", 27),
+            ]
+        )
+
+        assert [item["sbom"]["name"] for item in summary] == ["current"]

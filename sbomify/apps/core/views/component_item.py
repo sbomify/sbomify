@@ -307,6 +307,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         from sbomify.apps.core.authz import can
 
         can_triage = can(request, "artifact:publish_vex", component)
+        # Same tier the rerun endpoint enforces, so the button is only offered
+        # to a caller the API would actually accept.
+        can_rerun = can(request, "component:manage", component)
 
         return render(
             request,
@@ -326,6 +329,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_cbom": is_cbom,
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
+                "can_rerun": can_rerun,
                 "team_key": component.team.key,
             },
         )

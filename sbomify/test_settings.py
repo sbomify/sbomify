@@ -179,7 +179,15 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "unique-snowflake",
-    }
+    },
+    # Same LOCATION as default, so the two aliases share one LocMemCache store
+    # and a test that clears the default alias still clears the throttle's
+    # window. In production they are the same Redis but differ in whether a
+    # connection failure is swallowed, which is not a distinction tests make.
+    "throttle": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    },
 }
 
 # Effectively unlimited so the per-token throttle (#1060) doesn't trip existing API

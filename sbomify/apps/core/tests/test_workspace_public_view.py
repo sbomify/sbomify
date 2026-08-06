@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from sbomify.apps.core.models import Component, Product
 from sbomify.apps.sboms.models import ProductComponent
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 
 
 @pytest.mark.django_db
@@ -148,7 +148,7 @@ def test_workspace_public_rejects_xss_in_brand_color():
     assert "</style><script>" not in content
 
     # Should fall back to default brand color (better UX than gray)
-    assert "--brand-color: #4F66DC" in content
+    assert "--brand-color: #25293F" in content
 
 
 @pytest.mark.django_db
@@ -171,8 +171,8 @@ def test_workspace_public_sanitizes_malformed_hex_colors():
     content = response.content.decode()
 
     # Should fall back to defaults (brand colors, not gray)
-    assert "--brand-color: #4F66DC" in content
-    assert "--accent-color: #4F66DC" in content
+    assert "--brand-color: #25293F" in content
+    assert "--accent-color: #4263EB" in content
 
 
 @pytest.mark.django_db
@@ -195,8 +195,8 @@ def test_workspace_public_handles_none_colors():
     content = response.content.decode()
 
     # Should use defaults
-    assert "--brand-color: #4F66DC" in content
-    assert "--accent-color: #4F66DC" in content
+    assert "--brand-color: #25293F" in content
+    assert "--accent-color: #4263EB" in content
 
 
 @pytest.mark.django_db
@@ -320,7 +320,7 @@ def test_workspace_public_uses_configurable_description():
     # Custom description should be shown
     assert custom_description in content
     # Default description should not be shown
-    assert "Your centralized hub for transparency and compliance" not in content
+    assert "Security advisories, software bills of materials, and compliance artifacts" not in content
 
 
 @pytest.mark.django_db
@@ -346,7 +346,7 @@ def test_workspace_public_uses_default_description_when_empty():
     content = response.content.decode()
 
     # Default description should be shown
-    assert "Your centralized hub for transparency and compliance" in content
+    assert "Security advisories, software bills of materials, and compliance artifacts" in content
 
 
 @pytest.mark.django_db
@@ -463,3 +463,91 @@ def test_workspace_public_og_image_fallback_when_brand_image_relative():
     assert "sbomify-social.png" in og_image_url
     # Should NOT use relative path
     assert og_image_url.startswith("http")
+
+
+# --- the "enable vulnerability scanning" admin prompt -------------------------
+#
+# It links into workspace settings, so it must only reach someone who can act on
+# it: a signed-in owner or admin *of the workspace being viewed*. The trust
+# centre is a public page, so every other viewer — anonymous, a signed-in
+# stranger, a guest, and an admin of some other workspace — must not see it.
+
+ADMIN_PROMPT = "Enable vulnerability scanning to show security status on your products"
+
+
+def _public_workspace(name: str) -> Team:
+    """A public workspace with one public product, so the page renders its sections."""
+    team = Team.objects.create(name=name, is_public=True)
+    product = Product.objects.create(name=f"{name} Product", team=team, is_public=True)
+    component = Component.objects.create(
+        name=f"{name} Component", team=team, visibility=Component.Visibility.PUBLIC
+    )
+    ProductComponent.objects.create(product=product, component=component)
+    return team
+
+
+def _visit(team: Team, user=None) -> str:
+    client = Client()
+    if user is not None:
+        client.force_login(user)
+    response = client.get(reverse("core:workspace_public", kwargs={"workspace_key": team.key}))
+    assert response.status_code == 200
+    return response.content.decode()
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_hidden_from_anonymous_visitors():
+    assert ADMIN_PROMPT not in _visit(_public_workspace("Anon Workspace"))
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_shown_to_an_owner_of_the_workspace_viewed(sample_user):
+    team = _public_workspace("Owner Workspace")
+    Member.objects.create(team=team, user=sample_user, role="owner")
+    assert ADMIN_PROMPT in _visit(team, sample_user)
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_shown_to_an_admin_of_the_workspace_viewed(sample_user):
+    team = _public_workspace("Admin Workspace")
+    Member.objects.create(team=team, user=sample_user, role="admin")
+    assert ADMIN_PROMPT in _visit(team, sample_user)
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_hidden_from_a_signed_in_non_member(sample_user):
+    """Being logged in is not the same as having anything to do with this workspace."""
+    assert ADMIN_PROMPT not in _visit(_public_workspace("Stranger Workspace"), sample_user)
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_hidden_from_a_guest_member(sample_user):
+    """A guest cannot reach workspace settings, so the prompt would be a dead end."""
+    team = _public_workspace("Guest Workspace")
+    Member.objects.create(team=team, user=sample_user, role="guest")
+    assert ADMIN_PROMPT not in _visit(team, sample_user)
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_hidden_when_admin_of_a_different_workspace(sample_user):
+    """The check is per-workspace, not "is this person an admin somewhere".
+
+    Owning workspace A must not surface A's settings link on B's trust centre.
+    """
+    own = _public_workspace("My Workspace")
+    Member.objects.create(team=own, user=sample_user, role="owner")
+    other = _public_workspace("Someone Elses Workspace")
+
+    assert ADMIN_PROMPT in _visit(own, sample_user)
+    assert ADMIN_PROMPT not in _visit(other, sample_user)
+
+
+@pytest.mark.django_db
+def test_scanning_prompt_hidden_once_a_scanner_is_enabled(sample_user):
+    from sbomify.apps.plugins.models import TeamPluginSettings
+
+    team = _public_workspace("Scanning Workspace")
+    Member.objects.create(team=team, user=sample_user, role="owner")
+    TeamPluginSettings.objects.create(team=team, enabled_plugins=["osv"])
+
+    assert ADMIN_PROMPT not in _visit(team, sample_user)
