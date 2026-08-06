@@ -19,16 +19,20 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
-    setup_authenticated_client_session,
-)
+from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def blocked_assessment(sample_team_with_owner_member, sample_user):  # noqa: F811
-    """An assessment whose outstanding item is the determination."""
+def blocked_assessment(sample_team_with_owner_member, sample_user):
+    """A fresh assessment on a CRA-eligible plan.
+
+    Nothing is completed on it — the point is only that the determination is
+    unanswered, which is what puts a reason in the summary for Step 5 to show.
+    Completing the other steps would make the page prettier and prove nothing
+    more.
+    """
     from sbomify.apps.compliance.services.wizard_service import get_or_create_assessment
     from sbomify.apps.core.models import Product
     from sbomify.apps.teams.models import ContactEntity, ContactProfile
@@ -52,7 +56,7 @@ def blocked_assessment(sample_team_with_owner_member, sample_user):  # noqa: F81
 
 
 @pytest.fixture
-def step_5_html(blocked_assessment, sample_team_with_owner_member) -> str:  # noqa: F811
+def step_5_html(blocked_assessment, sample_team_with_owner_member) -> str:
     member = sample_team_with_owner_member
     client = Client()
     client.force_login(member.user)
