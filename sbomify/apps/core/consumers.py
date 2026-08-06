@@ -15,6 +15,27 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# The transport dropping under us. ``ConnectionError`` is a subclass, named
+# here because it is the case this is actually about.
+_SOCKET_GONE = (ConnectionError, OSError)
+
+
+def _is_socket_closed(exc: RuntimeError) -> bool:
+    """Whether a ``RuntimeError`` is Channels saying the socket is already shut.
+
+    Channels and the ASGI servers raise a plain ``RuntimeError`` for "cannot
+    send once a close message has been sent", which is the ordinary end of a
+    connection rather than a fault.
+
+    Matched on the exact type rather than with ``isinstance``, because
+    ``RecursionError`` and ``NotImplementedError`` are ``RuntimeError``
+    subclasses and neither is a closed socket. A payload nested deeply enough
+    makes ``json.dumps`` raise ``RecursionError`` from the same call as a
+    dropped connection, so treating the base class as "socket gone" would put
+    back exactly the silent-drop this is here to remove.
+    """
+    return type(exc) is RuntimeError
+
 
 class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
     """
@@ -142,11 +163,24 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         # re-derives when it reconnects, so a socket that missed one has lost
         # nothing a reconnect does not restore.
         try:
-            await self.send_json(event["data"])
+            data = event["data"]
         except KeyError:
             # A producer sent an event without a data key. That is a bug in the
             # caller rather than a transport failure, so it is worth a real log
             # line instead of the debug the disconnect cases get.
             logger.warning(f"Dropped a workspace_message with no data payload: {event!r}")
-        except Exception:
+            return
+
+        # Deliberately narrow. A payload that will not serialise raises from
+        # this same call, and swallowing that logged one debug line and dropped
+        # the broadcast to every socket in the workspace, for every broadcast,
+        # until someone noticed the UI had quietly stopped updating. That is a
+        # bug in the producer and it should be as loud as any other.
+        try:
+            await self.send_json(data)
+        except _SOCKET_GONE:
             logger.debug("workspace_message send failed; socket likely gone", exc_info=True)
+        except RuntimeError as exc:
+            if not _is_socket_closed(exc):
+                raise
+            logger.debug("workspace_message send failed; socket already closed", exc_info=True)
