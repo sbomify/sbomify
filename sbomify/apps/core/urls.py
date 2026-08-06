@@ -120,6 +120,29 @@ urlpatterns = [
         views.WorkspacePublicView.as_view(),
         name="workspace_public_current",
     ),
+    # Trust-center advisories. The /public/ pair is the main app domain; the
+    # bare /advisories/ pair is the clean URL a custom domain or trust-center
+    # subdomain serves, matching how /product/<slug>/ already works there.
+    path(
+        "public/workspace/<str:workspace_key>/advisories/",
+        views.TrustCenterAdvisoriesView.as_view(),
+        name="workspace_advisories_public",
+    ),
+    path(
+        "public/workspace/<str:workspace_key>/advisories/<str:advisory_id>/",
+        views.TrustCenterAdvisoryDetailView.as_view(),
+        name="advisory_details_public",
+    ),
+    path(
+        "advisories/",
+        views.TrustCenterAdvisoriesView.as_view(),
+        name="workspace_advisories_public_current",
+    ),
+    path(
+        "advisories/<str:advisory_id>/",
+        views.TrustCenterAdvisoryDetailView.as_view(),
+        name="advisory_details_public_current",
+    ),
     # TEA (Transparency Exchange API) endpoints for non-branded trust centers
     path(
         f"public/<str:workspace_key>/tea/v{TEA_API_VERSION}/",

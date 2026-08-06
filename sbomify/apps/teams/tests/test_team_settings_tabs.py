@@ -32,7 +32,7 @@ def test_visibility_toggle_redirects_to_active_tab(sample_team_with_owner_member
     )
 
     assert response.status_code == 302
-    assert response.url.endswith("#members")
+    assert response.url.endswith("/settings/members")
 
 
 @pytest.mark.django_db
@@ -74,7 +74,7 @@ def test_delete_invitation_redirects_to_members_tab(sample_team_with_owner_membe
     )
 
     assert response.status_code == 302
-    assert response.url.endswith("#members")
+    assert response.url.endswith("/settings/members")
 
 
 @pytest.mark.django_db
@@ -139,7 +139,7 @@ def test_delete_member_redirects_to_active_tab(sample_team_with_owner_member: Me
     )
 
     assert response.status_code == 302
-    assert response.url.endswith("#members")
+    assert response.url.endswith("/settings/members")
     # Verify member was actually deleted
     assert not Member.objects.filter(pk=other_membership.id).exists()
 
@@ -174,11 +174,19 @@ class TestRedirectToTeamSettingsHelper:
 
     @pytest.mark.django_db
     def test_valid_tab_is_included(self, sample_team_with_owner_member: Member):  # noqa: F811
-        """Valid tab names should be included in the redirect URL."""
+        """A valid tab is named in the redirect, as a page where one exists.
+
+        Sections with a page of their own redirect straight to it. The two names
+        still in ALLOWED_TABS that have no page (controls, integrations) keep the
+        old fragment form, so links to them are not broken by the move.
+        """
+        from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
+
         team_key = sample_team_with_owner_member.team.key
         for tab in ALLOWED_TABS:
             response = redirect_to_team_settings(team_key, tab)
-            assert response.url.endswith(f"#{tab}")
+            expected = f"/settings/{tab}" if tab in TABS_BY_KEY else f"#{tab}"
+            assert response.url.endswith(expected), f"{tab} -> {response.url}"
 
     @pytest.mark.django_db
     def test_invalid_tab_is_rejected(self, sample_team_with_owner_member: Member):  # noqa: F811
@@ -236,7 +244,7 @@ class TestTrustCenterDescription:
         )
 
         assert response.status_code == 302
-        assert response.url.endswith("#trust-center")
+        assert response.url.endswith("/settings/trust-center")
 
         # Verify description was saved
         team.refresh_from_db()

@@ -770,6 +770,44 @@ def get_product(request: HttpRequest, product_id: str) -> Any:
     return status, result.payload
 
 
+@router.get(
+    "/products/{product_id}/eol-readiness",
+    response={200: dict[str, Any], 403: ErrorResponse, 404: ErrorResponse},
+    summary="Whether a product can reach end of life with CRA 6.1.6 satisfied",
+    description="Reports the notice period, the critical and high findings neither patched nor formally "
+    "risk-accepted, and whether a final SBOM and VEX exist to publish.",
+)
+def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
+    """The pre-EOL check (CRA checklist 6.1.5/6.1.6)."""
+    from dataclasses import asdict
+
+    from sbomify.apps.core.services.eol import eol_readiness
+
+    status, result = _get_product_with_instance(request, product_id)
+    if status != 200:
+        return status, result
+
+    assert isinstance(result, ProductLookupResult)
+    # _get_product_with_instance only checks access for private products — a
+    # public one is readable by anyone, which is right for the product page and
+    # wrong here. Readiness lists the product's unresolved critical and high
+    # findings by advisory id, which is internal remediation state and not
+    # something being publicly listed makes public.
+    if not can(request, "product:manage", result.instance):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    readiness = eol_readiness(result.instance)
+    payload = asdict(readiness)
+    # The derived verdicts are the point of the endpoint; a caller should not
+    # have to re-implement the checklist rule to read the answer.
+    payload["is_ready"] = readiness.is_ready
+    payload["blocking_count"] = readiness.blocking_count
+    payload["problems"] = readiness.problems
+    payload["end_of_support"] = readiness.end_of_support.isoformat() if readiness.end_of_support else None
+    payload["end_of_life"] = readiness.end_of_life.isoformat() if readiness.end_of_life else None
+    return 200, payload
+
+
 @router.put(
     "/products/{product_id}",
     response={200: ProductResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
@@ -2557,6 +2595,52 @@ def download_product_sbom(
         return 500, {"detail": "Error generating product SBOM"}
 
 
+@router.get(
+    "/products/{product_id}/cbom/download",
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public products
+    tags=["Products"],
+)
+@decorate_view(optional_token_auth)
+def download_product_cbom(request: HttpRequest, product_id: str, version: str = Query("1.6")) -> Any:  # type: ignore[type-arg]
+    """Download the merged CBOM (Cryptography BOM) for a product's latest release.
+
+    The product-level counterpart of the release CBOM download: resolves the rolling
+    "latest" release and serves its merged crypto BOM, so the Trust Center's product
+    page can offer one CBOM per product next to the consolidated SBOM. Gated exactly
+    like the consolidated SBOM download.
+    """
+    if version not in ("1.6", "1.7"):
+        return 400, {"detail": "version must be 1.6 or 1.7", "error_code": ErrorCode.BAD_REQUEST}
+    try:
+        product = Product.objects.select_related("team").get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
+        if not can(request, "product:manage", product):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    release = Release.get_or_create_latest_release(product)
+    document = _release_cbom_document(release, version)
+    if document is None:
+        return 404, {"detail": "No CBOM available for this product", "error_code": ErrorCode.NOT_FOUND}
+
+    content = json.dumps(document, indent=2)
+    filename = _download_filename(product.name, release.name, ".cbom.cdx.json")
+    response = HttpResponse(content, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    capture_for_request(
+        request,
+        events.RELEASE_CBOM_DOWNLOADED,
+        {"release_id": str(release.id), "product_id": str(product.id)},
+        team_key=product.team.key or "",
+    )
+    return response
+
+
 # =============================================================================
 # RELEASE CRUD ENDPOINTS
 # =============================================================================
@@ -3390,6 +3474,29 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     return response
 
 
+def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | None:
+    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+
+    Same cache-by-slot-state approach as the VEX download: the merge fans out one
+    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
+    """
+    from django.core.cache import cache
+    from django.db.models import Count, Max
+
+    from sbomify.apps.sboms.cbom import build_release_cbom
+    from sbomify.apps.sboms.models import SBOM
+
+    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
+        n=Count("id"), newest=Max("sbom__created_at")
+    )
+    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    document = cache.get(cache_key)
+    if document is None:
+        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
+        cache.set(cache_key, document, 900)
+    return None if document.get("__absent__") else document
+
+
 @router.get(
     "/releases/{release_id}/cbom/download",
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
@@ -3420,23 +3527,8 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         if not can(request, "release:read", release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    from django.core.cache import cache
-    from django.db.models import Count, Max
-
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
-
-    # Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    # S3 fetch per pinned CBOM and the endpoint is open for public products.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
-    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
-    document = cache.get(cache_key)
+    document = _release_cbom_document(release, version)
     if document is None:
-        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
-        cache.set(cache_key, document, 900)
-    if document.get("__absent__"):
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
 
     content = json.dumps(document, indent=2)

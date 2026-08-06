@@ -6,144 +6,75 @@
 {% load teams %}
 {% block title %}sbomify Workspace Settings: {{ team.name|workspace_display }}{% endblock %}
 {% block content %}
-    <div class="space-y-6 animate-[fadeInUp_0.4s_ease-out]">
-        {# Page Header #}
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-cog"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Workspace Settings</h1>
-                    <p class="text-text-muted text-sm mt-0.5">Manage {{ team.name }} configuration and preferences</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                    <i class="fas fa-users text-xs"></i>
-                    {{ team.members|length }} member{{ team.members|length|pluralize }}
-                </span>
-                {% if team.billing_plan and team.billing_plan != 'community' %}
-                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium {% if team.billing_plan == 'business' %}bg-success/10 text-success{% else %}bg-primary/10 text-primary{% endif %}">
-                        <i class="fas fa-crown text-xs"></i>
-                        {{ team.billing_plan|title }}
+    <div class="settings-page">
+        {% comment %}
+        Stripe-style masthead: a breadcrumb back to the section, the workspace as
+        the title, then the sections as tabs. Each tab is its own URL, so only
+        the section being read is rendered and it can be linked to directly.
+        {% endcomment %}
+        <header class="settings-masthead">
+            <a class="settings-breadcrumb" href="{% url 'teams:teams_dashboard' %}">Workspaces</a>
+            <div class="settings-masthead-row">
+                <h1 class="settings-title">{{ team.name|workspace_display }}</h1>
+                <div class="settings-meta">
+                    <span class="settings-chip">
+                        <i class="fas fa-users" aria-hidden="true"></i>
+                        {{ team.members|length }} member{{ team.members|length|pluralize }}
                     </span>
-                {% endif %}
+                    {% if team.billing_plan and team.billing_plan != 'community' %}
+                        <span class="settings-chip {% if team.billing_plan == 'business' %}is-success{% endif %}">
+                            <i class="fas fa-crown" aria-hidden="true"></i>
+                            {{ team.billing_plan|title }}
+                        </span>
+                    {% endif %}
+                </div>
             </div>
-        </div>
-        {# Settings Layout #}
-        <div class="flex flex-col lg:flex-row gap-8">
-            {# Vertical Navigation Tabs #}
-            <div class="w-full lg:w-64 flex-shrink-0">
-                <nav id="settings-tabs" aria-label="Settings navigation">
-                    <div class="flex flex-row lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-                        {% if request.session.current_team.role == 'owner' %}
-                            <a href="#general"
-                               data-tab="general"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-sliders-h text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">General</span>
-                            </a>
+            <nav class="settings-tabs" aria-label="Settings sections">
+                {% for tab in settings_tabs %}
+                    <a class="settings-tab {% if tab.key == active_tab.key %}is-active{% endif %}"
+                       href="{% url 'teams:team_settings_tab' team_key=team.key tab=tab.key %}"
+                       {% if tab.key == active_tab.key %}aria-current="page"{% endif %}>
+                        <i class="fas {{ tab.icon }}" aria-hidden="true"></i>
+                        <span>{{ tab.label }}</span>
+                        {% if tab.key == 'members' and team.invitations|length > 0 %}
+                            <span class="settings-tab-badge">{{ team.invitations|length }}</span>
                         {% endif %}
-                        <a href="#members"
-                           data-tab="members"
-                           class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                            <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                <i class="fas fa-users text-sm group-[.active]:text-primary"></i>
-                            </div>
-                            <span class="font-medium">Members</span>
-                            {% if team.invitations|length > 0 %}
-                                <span class="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning">{{ team.invitations|length }}</span>
-                            {% endif %}
-                        </a>
-                        <a href="#tokens"
-                           data-tab="tokens"
-                           class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                            <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                <i class="fas fa-key text-sm group-[.active]:text-primary"></i>
-                            </div>
-                            <span class="font-medium">API Tokens</span>
-                        </a>
-                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                            <a href="#contact-profiles"
-                               data-tab="contact-profiles"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-address-book text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">Contacts</span>
-                            </a>
-                        {% endif %}
-                        {% if request.session.current_team.role == 'owner' %}
-                            <a href="#trust-center"
-                               data-tab="trust-center"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-globe text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">Trust Center</span>
-                            </a>
-                        {% endif %}
-                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                            <a href="#branding"
-                               data-tab="branding"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-palette text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">Branding</span>
-                            </a>
-                        {% endif %}
-                        {% if billing_enabled and request.session.current_team.role == 'owner' %}
-                            <a href="#billing"
-                               data-tab="billing"
-                               class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                                <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                    <i class="fas fa-credit-card text-sm group-[.active]:text-primary"></i>
-                                </div>
-                                <span class="font-medium">Billing</span>
-                            </a>
-                        {% endif %}
-                        <a href="#account"
-                           data-tab="account"
-                           class="settings-tab-link group flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-primary/5 hover:text-text transition-all whitespace-nowrap">
-                            <div class="w-8 h-8 rounded-lg bg-background flex items-center justify-center group-[.active]:bg-primary/10 transition-colors">
-                                <i class="fas fa-user-cog text-sm group-[.active]:text-primary"></i>
-                            </div>
-                            <span class="font-medium">Account</span>
-                        </a>
-                    </div>
-                </nav>
-            </div>
-            {# Tab Content #}
-            <div class="flex-1 min-w-0">
-                {% if request.session.current_team.role == 'owner' %}
-                    <div class="settings-tab-pane hidden" id="general">{% include "teams/team_settings_tabs/general.html.j2" %}</div>
-                {% endif %}
-                <div class="settings-tab-pane hidden" id="members">{% include "teams/team_settings_tabs/members.html.j2" %}</div>
-                <div class="settings-tab-pane hidden" id="tokens">{% include "teams/team_settings_tabs/tokens.html.j2" %}</div>
-                {% if request.session.current_team.role == 'owner' %}
-                    <div class="settings-tab-pane hidden" id="trust-center">
-                        {% include "teams/team_settings_tabs/trust_center.html.j2" %}
-                    </div>
-                {% endif %}
-                {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                    <div class="settings-tab-pane hidden" id="contact-profiles">
-                        {% include "teams/team_settings_tabs/contact_profiles.html.j2" %}
-                    </div>
-                {% endif %}
-                {% if billing_enabled and request.session.current_team.role == 'owner' %}
-                    <div class="settings-tab-pane hidden" id="billing">{% include "teams/team_settings_tabs/billing.html.j2" %}</div>
-                {% endif %}
-                {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                    <div class="settings-tab-pane hidden" id="branding">{% include "teams/team_settings_tabs/branding.html.j2" %}</div>
-                {% endif %}
-                <div class="settings-tab-pane hidden" id="account">{% include "teams/team_settings_tabs/account.html.j2" %}</div>
-            </div>
-        </div>
+                    </a>
+                {% endfor %}
+            </nav>
+        </header>
+        {% comment %}
+        A plain landmark, not a card: every section template already opens with
+        its own titled card, so a wrapper with a second title and a second border
+        would say the name twice and draw a box around a box.
+        {% endcomment %}
+        <section class="settings-panel"
+                 id="{{ active_tab.key }}"
+                 aria-label="{{ active_tab.label }} settings">
+            {% include active_tab.template_path %}
+        </section>
     </div>
+    {% comment %}
+    Settings have been linked to by fragment from all over the app for a long
+    time ({% url ... %}#branding). Those links still arrive here, so a fragment
+    naming a real section is turned into a visit to that section's page. Uses
+    replace() so the redirect does not become a step in the back button.
+    {% endcomment %}
+    <script>
+      (function () {
+        var urls = {
+          {% for tab in settings_tabs %}"{{ tab.key|escapejs }}": "{% url 'teams:team_settings_tab' team_key=team.key tab=tab.key %}"{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        };
+        var hash = window.location.hash.replace('#', '');
+        if (!hash || !urls[hash]) return;
+        if (hash === '{{ active_tab.key|escapejs }}') {
+          history.replaceState(null, '', window.location.pathname);
+          return;
+        }
+        window.location.replace(urls[hash]);
+      })();
+    </script>
     {# Access Request Modals - at page level to avoid hidden tab pane issues #}
     {% if request.session.current_team.role == 'owner' and team.is_public %}
         {# Invite User Modal #}
@@ -603,104 +534,13 @@
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}
     {% vite_asset 'sbomify/apps/teams/js/main.ts' %}
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get available tabs
-            const availableTabs = ['members', 'tokens'];
-            {% if request.session.current_team.role == 'owner' %}availableTabs.unshift('general');{% endif %}
-            {% if request.session.current_team.role == 'owner' %}availableTabs.push('trust-center');{% endif %}
-            {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                availableTabs.push('controls');
-            {% endif %}
-            {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                availableTabs.push('contact-profiles');
-            {% endif %}
-            {% if billing_enabled and request.session.current_team.role == 'owner' %}availableTabs.push('billing');{% endif %}
-            {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
-                availableTabs.push('branding');
-            {% endif %}
-            availableTabs.push('account');
+    {% comment %}
+    The hash-based tab switcher that used to live here is gone: each section
+    is its own page now, so there are no panes to show and hide, and the
+    active tab comes from the URL rather than from JavaScript.
 
-            const activeTabInputs = document.querySelectorAll('input[name="active_tab"]');
-
-            // Function to activate a tab
-            function activateTab(tabName) {
-                // Remove active class from all nav links and hide all tab panes
-                document.querySelectorAll('.settings-tab-link').forEach(link => {
-                    link.classList.remove('active', 'bg-primary/10', 'text-primary');
-                    link.classList.add('text-text-muted');
-                    // Reset icon container
-                    const iconContainer = link.querySelector('div');
-                    if (iconContainer) {
-                        iconContainer.classList.remove('bg-primary/10');
-                        iconContainer.classList.add('bg-background');
-                    }
-                    const icon = link.querySelector('i');
-                    if (icon) {
-                        icon.classList.remove('text-primary');
-                    }
-                });
-                document.querySelectorAll('.settings-tab-pane').forEach(pane => {
-                    pane.classList.add('hidden');
-                });
-
-                // Add active class to the selected tab nav link and show pane
-                const navLink = document.querySelector(`.settings-tab-link[href="#${tabName}"]`);
-                const tabPane = document.getElementById(tabName);
-
-                if (navLink && tabPane) {
-                    navLink.classList.add('active', 'bg-primary/10', 'text-primary');
-                    navLink.classList.remove('text-text-muted');
-                    // Update icon container
-                    const iconContainer = navLink.querySelector('div');
-                    if (iconContainer) {
-                        iconContainer.classList.add('bg-primary/10');
-                        iconContainer.classList.remove('bg-background');
-                    }
-                    const icon = navLink.querySelector('i');
-                    if (icon) {
-                        icon.classList.add('text-primary');
-                    }
-                    tabPane.classList.remove('hidden');
-                }
-            }
-
-            // Function to get the current tab from URL hash
-            function getCurrentTab() {
-                const hash = window.location.hash.substring(1);
-                return availableTabs.includes(hash) ? hash : availableTabs[0];
-            }
-
-            // Activate tab based on current URL hash
-            activateTab(getCurrentTab());
-
-            // Listen for hash changes
-            window.addEventListener('hashchange', function() {
-                activateTab(getCurrentTab());
-            });
-
-            // Update hash when tab links are clicked
-            document.querySelectorAll('.settings-tab-link').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const targetTab = this.getAttribute('href').substring(1);
-                    if (availableTabs.includes(targetTab)) {
-                        history.pushState(null, null, `#${targetTab}`);
-                        activateTab(targetTab);
-                        updateActiveTabInputs(targetTab);
-                    }
-                });
-            });
-
-            // Function to update all active_tab hidden inputs
-            function updateActiveTabInputs(tabName) {
-                activeTabInputs.forEach(input => {
-                    input.value = tabName;
-                });
-            }
-
-            // Initialize active_tab inputs with current tab
-            updateActiveTabInputs(getCurrentTab());
-        });
-    </script>
+    Forms still post an active_tab so the server knows where to send them
+    back to; that value is the section being viewed, which the server
+    already knows, so it is rendered rather than discovered.
+    {% endcomment %}
 {% endblock %}

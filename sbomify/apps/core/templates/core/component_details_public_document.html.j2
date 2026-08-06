@@ -1,7 +1,6 @@
 {% extends "core/component_details_public_base.html.j2" %}
 {% load django_vite %}
 {% block meta_description_suffix %}View documents associated with this component.{% endblock %}
-{% block table_icon %}<i class="fas fa-file-alt text-primary"></i>{% endblock %}
 {% block table_section %}
     <div id="documents-table-container"
          hx-get="{% url 'documents:documents_table_public' component.id %}"
