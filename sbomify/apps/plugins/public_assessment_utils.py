@@ -39,9 +39,10 @@ class PassingAssessment:
     standard_url: str | None = None
     pass_count: int | None = None
     total_findings: int | None = None
-    # Non-zero means some checks were not graded — typically an optional thing
-    # that was absent (no signature, no provenance) rather than a problem. The
-    # badge needs it because "All checks passed" beside "1/7" is a contradiction.
+    # Checks that warned. Often an optional thing that was absent — no signature,
+    # no provenance — rather than a problem, which is why a run carrying them is
+    # still shown. The badge needs the count because "All checks passed" beside
+    # "1/7" is a contradiction.
     warning_count: int | None = None
     completed_at: Any = None
 
@@ -709,6 +710,7 @@ def passing_assessments_to_dict(assessments: list[PassingAssessment]) -> list[di
             "standard_url": a.standard_url,
             "pass_count": a.pass_count,
             "total_findings": a.total_findings,
+            "warning_count": a.warning_count,
             "completed_at": a.completed_at,
         }
         for a in assessments

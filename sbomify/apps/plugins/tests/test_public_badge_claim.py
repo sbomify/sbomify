@@ -19,10 +19,20 @@ import re
 import pytest
 from django.template.loader import render_to_string
 
-from sbomify.apps.plugins.public_assessment_utils import PassingAssessment
+from sbomify.apps.plugins.public_assessment_utils import (
+    PassingAssessment,
+    passing_assessments_to_dict,
+)
 
 
 def _render(**kwargs) -> str:
+    """Render the badge the way the pages do.
+
+    Through ``passing_assessments_to_dict`` deliberately. The template is handed
+    that dict, never the dataclass, so rendering the dataclass directly would
+    pass while the field it needs was missing from the conversion — which is
+    exactly what happened.
+    """
     assessment = PassingAssessment(
         plugin_name="sbom-verification",
         plugin_display_name="SBOM Verification",
@@ -32,7 +42,7 @@ def _render(**kwargs) -> str:
     return render_to_string(
         "plugins/components/_public_assessment_badge_inner.html.j2",
         {
-            "assessment": assessment,
+            "assessment": passing_assessments_to_dict([assessment])[0],
             "badge_class": "badge-compliance",
             "badge_icon": "fa-check-circle",
             "status_phrase": "All checks passed",
@@ -65,7 +75,7 @@ def test_the_ungraded_count_is_named_rather_than_hidden() -> None:
     title = _title(_render(pass_count=1, total_findings=7, warning_count=6))
 
     assert "1/7 checks passed" in title
-    assert "6 not graded" in title
+    assert "6 warned" in title
 
 
 def test_a_run_with_no_count_information_is_unchanged() -> None:
@@ -116,3 +126,21 @@ def test_they_also_agree_that_zero_passes_is_not_passing() -> None:
 
     assert PluginOrchestrator()._is_passing(graded_nothing) is False
     assert _is_run_passing(graded_nothing) is False
+
+
+def test_the_conversion_carries_the_warning_count() -> None:
+    """The dataclass and the dict are two places one field has to exist.
+
+    The template reads the dict; a field added to only the dataclass renders as
+    empty and the badge goes on claiming what it did before.
+    """
+    assessment = PassingAssessment(
+        plugin_name="sbom-verification",
+        plugin_display_name="SBOM Verification",
+        category="compliance",
+        pass_count=1,
+        total_findings=7,
+        warning_count=6,
+    )
+
+    assert passing_assessments_to_dict([assessment])[0]["warning_count"] == 6
