@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 from pathlib import Path
@@ -19,8 +20,12 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Member, Team
 
-RECORDING_WIDTH = 1280
-RECORDING_HEIGHT = 720
+# Full HD. Marketplace listings (AWS, GitHub, Atlassian) reject or upscale
+# anything below 1080p, so this is the floor for every recording — the video
+# encoder gets exactly these dimensions. ``device_scale_factor`` below doubles
+# it again for stills, so screenshots land at 3840x2160.
+RECORDING_WIDTH = 1920
+RECORDING_HEIGHT = 1080
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 # Minimal valid PDF for fake uploads in screencasts.
@@ -71,9 +76,13 @@ _SCREENSHOT_INTERVAL_SEC = 3.0
 
 _screenshot_state: dict[str, Any] = {
     "dir": None,
+    "hero_dir": None,
     "last_time": 0.0,
     "counter": 0,
 }
+
+# Hero-shot names become filenames, so keep them to a slug we can trust.
+_HERO_NAME_RE = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
 
 
 def _recording_name(request: pytest.FixtureRequest) -> str:
@@ -105,6 +114,73 @@ def _maybe_capture_screenshot(page: Page) -> None:
         print(f"[screencasts] screenshot capture failed: {exc}", file=sys.stderr)
         return
     _screenshot_state["last_time"] = now
+
+
+def _set_caption_visible(page: Page, visible: bool) -> None:
+    """Toggle the narration caption's visibility without removing it.
+
+    ``visibility`` rather than ``display`` so the caption keeps its box and
+    does not reflow the page between the hide and the restore — a reflow mid
+    recording is visible as a jump in the video.
+    """
+    try:
+        page.evaluate(
+            """(payload) => {
+                const bar = document.getElementById(payload.id);
+                if (bar) bar.style.visibility = payload.visible ? 'visible' : 'hidden';
+            }""",
+            {"id": CAPTION_ID, "visible": visible},
+        )
+    except PlaywrightError:
+        # The page can navigate out from under a hero shot; a missing caption
+        # is not worth failing a recording over.
+        pass
+
+
+def shot(page: Page, name: str, *, full_page: bool = False, settle_ms: int = 400) -> None:
+    """Capture a curated, stably-named still into the recording's ``hero/`` dir.
+
+    The timer-driven frames captured by :func:`pace` are incidental — they
+    land wherever the 3s cadence happens to fall, so half of them catch a
+    modal mid-transition or a table mid-load. Marketplace listings need the
+    opposite: a small, deliberately chosen set of images with names that stay
+    put across re-records, so a listing that embeds ``04-vulnerability-posture.png``
+    keeps working after the next run.
+
+    Call this at the moments worth publishing. ``name`` must be a lowercase
+    slug (digits, dashes, underscores) — it becomes the filename, and a
+    numeric prefix keeps the set in narrative order in a file browser.
+
+    Any :func:`caption` showing is hidden for the duration of the capture and
+    restored afterwards. The video wants the caption — it plays muted and
+    needs the narration; a still does not, because the listing supplies its own
+    caption, and the lower-third would otherwise sit on top of the table rows
+    the screenshot exists to show.
+
+    Args:
+        page: The recording page.
+        name: Slug for the file, e.g. ``"09-vulnerability-posture"``.
+        full_page: Capture the whole scrollable page rather than the viewport.
+            Viewport shots match what the video shows and are the default;
+            full-page is for long surfaces you want to show entirely.
+        settle_ms: Pause before capturing, letting transitions and lazily
+            loaded panels finish so the still is not caught mid-animation.
+    """
+    if not _HERO_NAME_RE.match(name):
+        raise ValueError(f"hero shot name must be a lowercase slug, got {name!r}")
+
+    hero_dir = _screenshot_state["hero_dir"]
+    if hero_dir is None:
+        return
+
+    page.wait_for_timeout(settle_ms)
+    _set_caption_visible(page, False)
+    try:
+        page.screenshot(path=str(hero_dir / f"{name}.png"), full_page=full_page)
+    except PlaywrightError as exc:
+        print(f"[screencasts] hero shot {name!r} failed: {exc}", file=sys.stderr)
+    finally:
+        _set_caption_visible(page, True)
 
 
 def pace(page: Page, ms: int = 600) -> None:
@@ -220,6 +296,127 @@ def rewrite_localhost_urls(page: Page) -> None:
         };
         walk(document.body);
     }""")
+
+
+# ---------------------------------------------------------------------------
+# Narration — chapter title cards and lower-third captions
+#
+# The FAQ-length recordings need no narration: each shows one action and the
+# surrounding FAQ text carries the explanation. A marketplace walkthrough has
+# no surrounding text — it plays cold, often muted, next to a listing. These
+# two helpers carry the story instead.
+#
+# Both build their DOM node-by-node and set every dynamic string via
+# ``textContent`` rather than ``innerHTML``, matching the existing overlay in
+# ``oidc_trusted_publishing.py`` — keeps automated security linters quiet even
+# though all content originates in these scripts.
+# ---------------------------------------------------------------------------
+
+TITLE_CARD_ID = "__walkthrough-title-card"
+CAPTION_ID = "__walkthrough-caption"
+
+
+def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600) -> None:
+    """Cover the viewport with a branded chapter card, hold, then fade out.
+
+    Used between chapters of the long tour so the viewer gets a beat to
+    reset before the next surface appears. ``eyebrow`` is the small label
+    above the title (e.g. ``"Chapter 2"``).
+    """
+    page.evaluate(
+        """(payload) => {
+            const existing = document.getElementById(payload.id);
+            if (existing) existing.remove();
+
+            const card = document.createElement('div');
+            card.id = payload.id;
+            card.style.cssText = `
+                position: fixed; inset: 0; z-index: 2147483646;
+                display: flex; flex-direction: column;
+                justify-content: center; align-items: center; gap: 14px;
+                background: ${payload.bg};
+                font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+                opacity: 0; transition: opacity 420ms ease;
+            `;
+
+            const eyebrow = document.createElement('div');
+            eyebrow.style.cssText = 'font-size:15px; font-weight:600;' +
+                ' letter-spacing:0.22em; text-transform:uppercase;' +
+                ' color:#818cf8;';
+            eyebrow.textContent = payload.eyebrow;
+
+            const title = document.createElement('div');
+            title.style.cssText = 'font-size:52px; font-weight:700;' +
+                ' color:#f8fafc; letter-spacing:-0.02em; text-align:center;' +
+                ' max-width:70%; line-height:1.15;';
+            title.textContent = payload.title;
+
+            const rule = document.createElement('div');
+            rule.style.cssText = 'width:72px; height:3px; border-radius:2px;' +
+                ' background:linear-gradient(90deg,#6366f1,#a78bfa);';
+
+            card.appendChild(eyebrow);
+            card.appendChild(title);
+            card.appendChild(rule);
+            document.body.appendChild(card);
+            requestAnimationFrame(() => { card.style.opacity = '1'; });
+        }""",
+        {"id": TITLE_CARD_ID, "eyebrow": eyebrow, "title": title, "bg": APP_BG_COLOR},
+    )
+    page.wait_for_timeout(hold_ms)
+    page.evaluate(
+        """(id) => {
+            const card = document.getElementById(id);
+            if (!card) return;
+            card.style.opacity = '0';
+            setTimeout(() => card.remove(), 460);
+        }""",
+        TITLE_CARD_ID,
+    )
+    page.wait_for_timeout(500)
+
+
+def caption(page: Page, text: str) -> None:
+    """Show (or update) a lower-third caption explaining the current step.
+
+    Anchored bottom-centre and ``pointer-events:none`` so it never intercepts
+    a click the recording is about to make. Call :func:`clear_caption` before
+    a navigation — the caption lives in the current document and would
+    otherwise vanish on its own mid-sentence.
+    """
+    page.evaluate(
+        """(payload) => {
+            let bar = document.getElementById(payload.id);
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.id = payload.id;
+                bar.style.cssText = `
+                    position: fixed; bottom: 40px; left: 50%;
+                    transform: translateX(-50%);
+                    z-index: 2147483645; pointer-events: none;
+                    max-width: 74%; padding: 14px 26px;
+                    border-radius: 12px;
+                    background: rgba(10, 10, 35, 0.92);
+                    border: 1px solid rgba(129, 140, 248, 0.28);
+                    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+                    color: #f1f5f9; font-size: 19px; line-height: 1.45;
+                    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+                    text-align: center;
+                    opacity: 0; transition: opacity 260ms ease;
+                `;
+                document.body.appendChild(bar);
+            }
+            bar.textContent = payload.text;
+            requestAnimationFrame(() => { bar.style.opacity = '1'; });
+        }""",
+        {"id": CAPTION_ID, "text": text},
+    )
+    page.wait_for_timeout(260)
+
+
+def clear_caption(page: Page) -> None:
+    """Remove the lower-third caption if one is showing."""
+    page.evaluate(f"document.getElementById({CAPTION_ID!r})?.remove()")
 
 
 # ---------------------------------------------------------------------------
@@ -680,7 +877,10 @@ def recording_page(
 
     screenshot_dir = OUTPUT_DIR / "screenshots" / recording_name
     screenshot_dir.mkdir(parents=True, exist_ok=True)
+    hero_dir = screenshot_dir / "hero"
+    hero_dir.mkdir(parents=True, exist_ok=True)
     _screenshot_state["dir"] = screenshot_dir
+    _screenshot_state["hero_dir"] = hero_dir
     _screenshot_state["last_time"] = 0.0
     _screenshot_state["counter"] = 0
 
@@ -688,6 +888,7 @@ def recording_page(
         yield page
     finally:
         _screenshot_state["dir"] = None
+        _screenshot_state["hero_dir"] = None
 
     # Grab the video handle, close the page (finalizes recording),
     # then save to a meaningful filename.
