@@ -253,7 +253,7 @@ def _security_result(component_name: str, scanned_at: datetime, finding_count: i
         "assessed_at": scanned_at.isoformat(),
         "summary": {
             "total_findings": len(findings),
-            "pass_count": 0,
+            "pass_count": 0,  # nosec B105 — a count of passing findings, not a credential
             "fail_count": len(findings),
             "warning_count": 0,
             "error_count": 0,
