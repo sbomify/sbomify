@@ -15,6 +15,20 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# What a send raises when the socket is no longer there to send to.
+#
+# ``ConnectionError`` and the rest of ``OSError`` cover the transport dropping
+# under us; ``RuntimeError`` is what Channels and the ASGI servers raise for
+# "cannot send once a close message has been sent", which is the ordinary end
+# of a connection rather than a fault.
+#
+# Deliberately not ``Exception``. A payload that will not serialise raises
+# ``TypeError`` from the same call, and swallowing that logged one debug line
+# and dropped the broadcast to every socket in the workspace, for every
+# broadcast, until someone noticed the UI had quietly stopped updating. That is
+# a bug in the producer and it should be as loud as any other.
+_SOCKET_GONE = (ConnectionError, OSError, RuntimeError)
+
 
 class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
     """
@@ -142,11 +156,15 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         # re-derives when it reconnects, so a socket that missed one has lost
         # nothing a reconnect does not restore.
         try:
-            await self.send_json(event["data"])
+            data = event["data"]
         except KeyError:
             # A producer sent an event without a data key. That is a bug in the
             # caller rather than a transport failure, so it is worth a real log
             # line instead of the debug the disconnect cases get.
             logger.warning(f"Dropped a workspace_message with no data payload: {event!r}")
-        except Exception:
+            return
+
+        try:
+            await self.send_json(data)
+        except _SOCKET_GONE:
             logger.debug("workspace_message send failed; socket likely gone", exc_info=True)

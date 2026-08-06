@@ -347,6 +347,24 @@ class TestBroadcastResilience:
 
         await consumer.workspace_message({"type": "workspace_message", "data": {"x": 1}})
 
+        # Not raising is only half the claim: a handler that quietly stopped
+        # sending would pass on that alone.
+        consumer.send_json.assert_awaited_once_with({"x": 1})
+
+    @pytest.mark.asyncio
+    async def test_a_payload_that_will_not_serialise_is_not_swallowed(self, consumer):
+        """The half that must stay loud.
+
+        A non-serialisable payload raises from the same call a dead socket does,
+        so catching everything here dropped the broadcast to every socket in the
+        workspace, every time, and said so in one debug line. It is a producer
+        bug, and the only way it gets fixed is by being visible.
+        """
+        consumer.send_json = AsyncMock(side_effect=TypeError("Object of type datetime is not JSON serializable"))
+
+        with pytest.raises(TypeError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"when": object()}})
+
     @pytest.mark.asyncio
     async def test_an_event_with_no_data_is_dropped_not_raised(self, consumer):
         """A producer bug, not a transport failure — it must not take the socket
