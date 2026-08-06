@@ -352,6 +352,12 @@ def _build_common_context(assessment: CRAAssessment) -> dict[str, Any]:
         # the determination says one is needed but none was captured, rather
         # than silently omitting a mandatory block.
         "authorized_rep_required": assessment.requires_authorized_representative,
+        # Distinct from ``not authorized_rep_required``: that is also true when
+        # the manufacturer *is* established in the Union, where omitting 2a is
+        # correct. Unanswered means the document cannot say either way, and a
+        # declaration that quietly leaves out a mandatory block reads as though
+        # the block did not apply.
+        "eu_establishment_unanswered": assessment.is_eu_established is None,
         "authorized_rep_name": _sanitize(assessment.authorized_rep_name, escape_markdown=True),
         "authorized_rep_address": _sanitize(assessment.authorized_rep_address, escape_markdown=True),
         # Escaped like the other AR fields. The nearby manufacturer emails come

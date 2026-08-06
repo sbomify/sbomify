@@ -53,6 +53,13 @@ The Authorised Representative holds a copy of this declaration and of the techni
 > Art. 22 requires an Authorised Representative to be appointed before this
 > product is placed on the market. No representative has been recorded —
 > this declaration MUST NOT be signed until one is.
+{% elif eu_establishment_unanswered %}
+## 2a. Authorised Representative
+
+> ⚠️  It has not been recorded whether the manufacturer is established in the
+> Union, so whether CRA Art. 22 requires an Authorised Representative is
+> unknown. Answer the establishment question in Step 1 and regenerate this
+> document. Silence here is not a statement that no representative is needed.
 {% endif %}
 
 ## 3. Responsibility Statement

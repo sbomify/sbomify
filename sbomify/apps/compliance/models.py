@@ -309,7 +309,7 @@ class CRAAssessment(models.Model):
         max_length=255,
         blank=True,
         default="",
-        help_text="Reference to the mandate document — contract id, DMS link or file name.",
+        help_text="Reference to the mandate document: contract id, DMS link or file name.",
     )
 
     # Step 3b — Vulnerability disclosure

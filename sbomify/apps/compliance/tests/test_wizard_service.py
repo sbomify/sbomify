@@ -756,9 +756,8 @@ class TestGetComplianceSummary:
         assert data["overall_ready"] is False
         assert data["steps"][3]["controls"]["total"] == 21
 
-    def test_overall_ready_when_all_steps_complete(self, assessment, sample_user):
-        # Complete steps 1-4
-        save_step_data(assessment, 1, {"product_category": "default"}, sample_user)
+    def _complete_steps_1_to_4(self, assessment, sample_user, step_1_extra=None):
+        save_step_data(assessment, 1, {"product_category": "default", **(step_1_extra or {})}, sample_user)
         save_step_data(assessment, 2, {}, sample_user)
 
         # Mark all findings as satisfied or not-applicable
@@ -771,9 +770,34 @@ class TestGetComplianceSummary:
         save_step_data(assessment, 4, {}, sample_user)
         assessment.refresh_from_db()
 
+    def test_overall_ready_when_all_steps_complete(self, assessment, sample_user):
+        """The establishment determination is part of "complete" now, so this
+        answers it. Annex V item 2a cannot be produced without it."""
+        self._complete_steps_1_to_4(assessment, sample_user, {"is_eu_established": True})
+
         result = get_compliance_summary(assessment)
+
         assert result.ok
         assert result.value["overall_ready"] is True
+        assert result.value["steps"][1]["eu_representation_problems"] == []
+
+    def test_not_ready_while_the_establishment_question_is_unanswered(self, assessment, sample_user):
+        """Every step complete and still not ready.
+
+        The determination defaults to unanswered, and an assessment that cannot
+        say whether an Authorised Representative is required cannot produce a
+        declaration — it would silently omit section 2a, which reads as though
+        no representative was needed.
+        """
+        self._complete_steps_1_to_4(assessment, sample_user)
+        assert assessment.is_eu_established is None
+
+        result = get_compliance_summary(assessment)
+
+        assert result.ok
+        assert result.value["overall_ready"] is False
+        assert result.value["export_available"] is False
+        assert result.value["steps"][1]["eu_representation_problems"] != []
 
 
 @pytest.mark.django_db
