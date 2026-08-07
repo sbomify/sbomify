@@ -174,6 +174,28 @@ class TestShortLivedTokensAreNotNagged:
         assert warn_expiring_tokens.fn() == 1
         assert "expires in 1 day" in mail.outbox[0].subject
 
+    def test_a_threshold_equal_to_the_lifetime_is_skipped(self, sample_team_with_owner_member: Any) -> None:
+        """The boundary the rule turns on: a token issued for exactly 14 days
+        sits on the 14-day threshold the moment it exists, so it says nothing.
+        """
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=14, lifetime=14)
+
+        assert warn_expiring_tokens.fn() == 0
+        assert mail.outbox == []
+
+    def test_the_tighter_thresholds_fire_once_it_has_aged(self, sample_team_with_owner_member: Any) -> None:
+        """The same 14-day token a week on, expressed as a second fixture
+        rather than by moving ``expires_at``: shifting it also moves the
+        computed lifetime, and the sub-second remainder decides whether the
+        ceiling lands on 7 or 8, which is a coin toss to hang a test on.
+        """
+        member = sample_team_with_owner_member
+        token = _token(member.user, member.team, days=7, lifetime=14)
+
+        assert warn_expiring_tokens.fn() == 1
+        assert {w.threshold_days for w in token.expiry_warnings.all()} == {7}
+
 
 class TestEmailSweep:
     def test_first_run_sends_the_tightest_threshold_only(self, sample_team_with_owner_member: Any) -> None:
