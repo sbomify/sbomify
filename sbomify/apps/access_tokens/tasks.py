@@ -68,8 +68,15 @@ def warn_expiring_tokens() -> int:
     for token in tokens:
         if token.expires_at is None:
             continue
+        from sbomify.apps.access_tokens.notifications import lifetime_days
+
         already = {warning.threshold_days for warning in token.expiry_warnings.all()}
-        due = [t for t in EXPIRY_WARNING_THRESHOLDS if token.expires_at <= now + timedelta(days=t)]
+        # A threshold wider than the token's whole life was already true when
+        # the token was issued, so crossing it is not news: a 7-day CI token
+        # would otherwise be mailed about on the first sweep after creation.
+        lifetime = lifetime_days(token)
+        thresholds = [t for t in EXPIRY_WARNING_THRESHOLDS if lifetime is None or t < lifetime]
+        due = [t for t in thresholds if token.expires_at <= now + timedelta(days=t)]
         unsent = [t for t in due if t not in already]
         if not unsent:
             continue
