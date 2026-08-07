@@ -25,6 +25,7 @@ from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.teams.apis import get_team
+from sbomify.apps.teams.models import Member
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 
 # Viktor's number, and already a preset on the token form. Long enough to get a
@@ -54,9 +55,21 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return JsonResponse({"detail": team.get("detail", "Unknown error")}, status=status_code)
 
+        # Authorize against the workspace in the URL, which is the one being
+        # minted for. TeamRoleRequiredMixin above reads session["current_team"],
+        # so on its own it answers a different question: whether the caller is
+        # an owner or admin of whatever workspace they happen to have selected.
+        #
+        # A legacy role="member" row is currently refused a few layers down, by
+        # can("workspace:read") inside get_team. That closes it, but it means
+        # this endpoint is right because of how another layer's read tier
+        # happens to be drawn. Minting a credential should not depend on that.
+        user = cast(User, request.user)
+        if not Member.objects.filter(user=user, team__key=team_key, role__in=self.allowed_roles).exists():
+            return JsonResponse({"detail": "Forbidden"}, status=403)
+
         from sbomify.apps.core.authz import SCOPE_PRESETS
 
-        user = cast(User, request.user)
         raw_token = create_personal_access_token(user)
         expires_at = timezone.now() + timedelta(days=CI_TOKEN_LIFETIME_DAYS)
 

@@ -146,6 +146,64 @@ class TestCsrfIsRequired:
         assert AccessToken.objects.count() == 0
 
 
+class TestItAuthorizesTheWorkspaceInTheUrl:
+    """TeamRoleRequiredMixin reads session["current_team"], so on its own it
+    answers whether the caller administers whatever workspace they happen to
+    have selected — not the one being minted for.
+
+    A legacy ``role="member"`` row is refused a few layers down by
+    ``can("workspace:read")`` inside ``get_team``, so this was closed already.
+    It is checked here so that it stays closed for a reason this endpoint owns.
+    """
+
+    def test_a_member_of_another_workspace_cannot_mint_for_it(
+        self, sample_team_with_owner_member: Member
+    ) -> None:
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Team
+
+        user = sample_team_with_owner_member.user
+        owned = sample_team_with_owner_member.team
+        other = Team.objects.create(name="Another Workspace")
+        other.key = number_to_random_token(other.pk)
+        other.save(update_fields=["key"])
+        Member.objects.create(user=user, team=other, role="member")
+
+        client = Client()
+        client.force_login(user)
+        # The session names the workspace they *do* own.
+        setup_authenticated_client_session(client, owned, user)
+
+        response = client.post(reverse("teams:ci_token", kwargs={"team_key": other.key}))
+
+        assert response.status_code == 403
+        assert not AccessToken.objects.filter(team=other).exists()
+
+    def test_an_owner_of_a_second_workspace_still_can(
+        self, sample_team_with_owner_member: Member
+    ) -> None:
+        """The check must not break the legitimate case: minting for a
+        workspace you own while another is selected."""
+        from sbomify.apps.core.utils import number_to_random_token
+        from sbomify.apps.teams.models import Team
+
+        user = sample_team_with_owner_member.user
+        owned = sample_team_with_owner_member.team
+        second = Team.objects.create(name="Second Workspace")
+        second.key = number_to_random_token(second.pk)
+        second.save(update_fields=["key"])
+        Member.objects.create(user=user, team=second, role="owner")
+
+        client = Client()
+        client.force_login(user)
+        setup_authenticated_client_session(client, owned, user)
+
+        response = client.post(reverse("teams:ci_token", kwargs={"team_key": second.key}))
+
+        assert response.status_code == 200
+        assert AccessToken.objects.filter(team=second).count() == 1
+
+
 class TestOnePerClick:
     def test_two_posts_make_two_tokens(self, client_and_member) -> None:
         """Recorded rather than prevented: the button guards the double-click on
