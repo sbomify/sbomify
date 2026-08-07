@@ -367,9 +367,9 @@ def test_build_release_response_has_vex_flag(
     sample_product: Product,  # noqa: F811
     sample_component: Component,  # noqa: F811
 ):
-    """The release response dict (consumed by the public Trust Center page)
-    exposes has_vex so the latest-VEX download button gates independently of the
-    SBOM download."""
+    """The release response dict (consumed by both release detail pages) exposes a
+    per-bom_type flag, so the VEX/CBOM/HBOM download buttons each gate independently
+    of the SBOM download."""
     from django.test import RequestFactory
 
     from sbomify.apps.core.apis import _build_release_response
@@ -383,11 +383,12 @@ def test_build_release_response_has_vex_flag(
     )
     ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
-    # SBOM only: has_sboms true, has_vex/has_cbom false.
+    # SBOM only: has_sboms true, has_vex/has_cbom/has_hbom false.
     before = _build_release_response(request, release)
     assert before["has_sboms"] is True
     assert before["has_vex"] is False
     assert before["has_cbom"] is False
+    assert before["has_hbom"] is False
 
     # Add a VEX slot: has_vex flips true, has_sboms unchanged.
     vex = SBOM.objects.create(
@@ -414,6 +415,22 @@ def test_build_release_response_has_vex_flag(
     )
     ReleaseArtifact.objects.create(release=release, sbom=cbom)
     assert _build_release_response(request, release)["has_cbom"] is True
+
+    # Add an HBOM slot: has_hbom flips true, the other flags stay set.
+    hbom = SBOM.objects.create(
+        name="hb",
+        format="cyclonedx",
+        format_version="1.6",
+        sbom_filename="hb.json",
+        component=sample_component,
+        bom_type=SBOM.BomType.HBOM,
+    )
+    ReleaseArtifact.objects.create(release=release, sbom=hbom)
+    final = _build_release_response(request, release)
+    assert final["has_hbom"] is True
+    assert final["has_sboms"] is True
+    assert final["has_vex"] is True
+    assert final["has_cbom"] is True
 
 
 @pytest.mark.django_db

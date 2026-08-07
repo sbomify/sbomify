@@ -425,6 +425,39 @@ class TestBulkEnqueueTask:
         yield plugin
         plugin.delete()
 
+    def test_task_backfills_every_assessable_bom_type(
+        self, test_team: Team, sample_component_bom: Component, registered_plugin
+    ) -> None:
+        """SBOM, CBOM and HBOM are backfilled; VEX is not an assessment target."""
+        from sbomify.apps.plugins.tasks import enqueue_assessments_for_existing_sboms_task
+
+        boms = {
+            bom_type: SBOM.objects.create(
+                name=f"{bom_type}-artifact",
+                version="1.0.0",
+                format="cyclonedx",
+                format_version="1.6",
+                sbom_filename=f"{bom_type}.json",
+                component=sample_component_bom,
+                bom_type=bom_type,
+            )
+            for bom_type in (SBOM.BomType.SBOM, SBOM.BomType.CBOM, SBOM.BomType.HBOM, SBOM.BomType.VEX)
+        }
+
+        with patch("sbomify.apps.plugins.tasks.enqueue_assessment") as mock_enqueue:
+            result = enqueue_assessments_for_existing_sboms_task(
+                team_id=str(test_team.id),
+                enabled_plugins=["checksum"],
+                cutoff_hours=24,
+            )
+
+        assert result["sboms_found"] == 3
+        assert {call.kwargs["sbom_id"] for call in mock_enqueue.call_args_list} == {
+            str(boms[SBOM.BomType.SBOM].id),
+            str(boms[SBOM.BomType.CBOM].id),
+            str(boms[SBOM.BomType.HBOM].id),
+        }
+
     def test_task_only_processes_recent_sboms(
         self, test_team: Team, sample_component_bom: Component, registered_plugin
     ) -> None:

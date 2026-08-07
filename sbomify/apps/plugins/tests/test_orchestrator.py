@@ -60,6 +60,18 @@ class MockPlugin(AssessmentPlugin):
         )
 
 
+class HardwareGatedPlugin(MockPlugin):
+    """Stands in for a real hardware plugin until one ships."""
+
+    def get_metadata(self) -> PluginMetadata:
+        return PluginMetadata(
+            name="mock-plugin",
+            version="1.0.0",
+            category=AssessmentCategory.COMPLIANCE,
+            requires_hardware_components=True,
+        )
+
+
 class FailingPlugin(AssessmentPlugin):
     """A plugin that always fails for testing error handling."""
 
@@ -811,6 +823,85 @@ class TestCryptoAssetGate:
         run = PluginOrchestrator().run_assessment(
             sbom_id=test_sbom.id, plugin=self._pqc_plugin(), run_reason=RunReason.ON_UPLOAD
         )
+
+        assert run is not None
+        assert run.status == RunStatus.COMPLETED.value
+
+
+@pytest.mark.django_db
+class TestHardwareComponentGate:
+    """Hardware-gated plugins skip dispatch when the document holds no hardware components."""
+
+    def _run(self, sbom, plugin=None):
+        return PluginOrchestrator().run_assessment(
+            sbom_id=sbom.id, plugin=plugin or HardwareGatedPlugin(), run_reason=RunReason.ON_UPLOAD
+        )
+
+    @pytest.fixture
+    def stored_sbom(self, test_sbom, mock_sbom_data, mocker):
+        mocker.patch(
+            "sbomify.apps.plugins.orchestrator.get_sbom_data_bytes",
+            return_value=(test_sbom, mock_sbom_data),
+        )
+        return test_sbom
+
+    def test_skips_when_document_has_no_hardware_components(self, test_sbom) -> None:
+        test_sbom.has_hardware_components = False
+        test_sbom.save(update_fields=["has_hardware_components"])
+
+        assert self._run(test_sbom) is None
+
+    def test_skip_logs_same_line_shape_as_crypto_gate(self, test_sbom, mocker) -> None:
+        # The "sbomify" logger sets propagate=False, so caplog never sees these
+        # records; patch the module logger instead of fighting the log config.
+        log = mocker.patch("sbomify.apps.plugins.orchestrator.logger")
+        test_sbom.has_hardware_components = False
+        test_sbom.save(update_fields=["has_hardware_components"])
+
+        self._run(test_sbom)
+
+        message = log.info.call_args[0][0]
+        assert message == (
+            f"[PLUGIN] Skipping plugin 'mock-plugin' for SBOM {test_sbom.id}: document has no hardware components"
+        )
+
+    def test_dispatches_when_hardware_components_present(self, stored_sbom) -> None:
+        stored_sbom.has_hardware_components = True
+        stored_sbom.save(update_fields=["has_hardware_components"])
+
+        run = self._run(stored_sbom)
+
+        assert run is not None
+        assert run.status == RunStatus.COMPLETED.value
+
+    def test_runs_when_hardware_flag_unknown(self, stored_sbom) -> None:
+        # Rows predating the field (None) still run: unknown is not a skip reason.
+        assert stored_sbom.has_hardware_components is None
+
+        run = self._run(stored_sbom)
+
+        assert run is not None
+        assert run.status == RunStatus.COMPLETED.value
+
+    def test_explicit_hbom_runs_even_when_stamped_hardware_free(self, stored_sbom) -> None:
+        """An hbom-tagged artifact with has_hardware_components=False is a generator
+        misfire: the plugin must run and warn, not skip."""
+        stored_sbom.bom_type = "hbom"
+        stored_sbom.has_hardware_components = False
+        stored_sbom.save(update_fields=["bom_type", "has_hardware_components"])
+
+        run = self._run(stored_sbom)
+
+        assert run is not None
+        assert run.status == RunStatus.COMPLETED.value
+
+    def test_ungated_plugins_are_unaffected(self, stored_sbom) -> None:
+        """Every existing plugin defaults to requires_hardware_components=False
+        and must keep dispatching for hardware-free documents."""
+        stored_sbom.has_hardware_components = False
+        stored_sbom.save(update_fields=["has_hardware_components"])
+
+        run = self._run(stored_sbom, plugin=MockPlugin())
 
         assert run is not None
         assert run.status == RunStatus.COMPLETED.value

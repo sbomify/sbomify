@@ -61,6 +61,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sbomify.apps.plugins.builtins._component_scope import (
+    element_verdict,
+    get_component_supplier,
+    is_non_software_component,
+    is_supplier_exempt,
+    nothing_to_grade,
+)
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
@@ -242,16 +249,20 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         # Calculate summary
         pass_count = sum(1 for f in findings if f.status == "pass")
         fail_count = sum(1 for f in findings if f.status == "fail")
+        warning_count = sum(1 for f in findings if f.status == "warning")
 
         summary = AssessmentSummary(
             total_findings=len(findings),
             pass_count=pass_count,
             fail_count=fail_count,
-            warning_count=0,
+            warning_count=warning_count,
             error_count=0,
         )
 
-        logger.info(f"[CISA-2025] Completed compliance check for SBOM {sbom_id}: {pass_count} pass, {fail_count} fail")
+        logger.info(
+            f"[CISA-2025] Completed compliance check for SBOM {sbom_id}: "
+            f"{pass_count} pass, {fail_count} fail, {warning_count} warning"
+        )
 
         return AssessmentResult(
             plugin_name="cisa-minimum-elements-2025",
@@ -849,32 +860,31 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         hash_failures: list[str] = []
         license_failures: list[str] = []
 
+        # An element every component was exempt from graded nothing, so its
+        # empty failure list is a warning rather than a pass — see
+        # _component_scope. The producer element has its own, narrower exemption.
+        nothing_graded = nothing_to_grade(components)
+        no_producer_graded = nothing_to_grade(components, is_supplier_exempt)
+
         # Check each component for required elements
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
-
-            # Skip type=file components (lockfiles, config files, etc.) —
-            # they're input metadata, not software packages. The per-component
-            # CISA fields (producer, version, identifier, hash, licence) apply
-            # to software components only. Parity with the BSI, NTIA, and
-            # FDA plugins. Component Name is still checked because a missing
-            # name on a file entry is still a data-quality issue.
-            is_file_type = str(component.get("type", "")).lower() == "file"
 
             # 3. Component name (applies to all component types)
             if not component.get("name"):
                 component_name_failures.append(f"Component at index {i}")
 
-            if is_file_type:
-                continue
-
-            # 2. Software Producer (publisher or supplier.name)
-            supplier_field = component.get("supplier")
-            supplier = component.get("publisher") or (
-                supplier_field.get("name") if isinstance(supplier_field, dict) else None
-            )
-            if not supplier:
+            # 2. Software Producer (publisher, supplier.name or manufacturer.name).
+            # A device is graded here: manufacturer is where it names its vendor.
+            if not is_supplier_exempt(component) and not get_component_supplier(component):
                 producer_failures.append(component_name)
+
+            # The remaining per-component CISA fields (version, identifier,
+            # hash, licence) apply to software components only; the exempt
+            # types are listed in _component_scope. Parity with the BSI, NTIA
+            # and FDA plugins.
+            if is_non_software_component(component):
+                continue
 
             # 4. Component Version
             if not component.get("version"):
@@ -899,12 +909,13 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         # Create findings for per-component elements
 
         # 2. Software Producer
+        status, details = element_verdict(producer_failures, no_producer_graded)
         findings.append(
             self._create_finding(
                 "software_producer",
-                status="fail" if producer_failures else "pass",
-                details=f"Missing for: {', '.join(producer_failures)}" if producer_failures else None,
-                remediation="Add publisher field or supplier.name to components.",
+                status=status,
+                details=details,
+                remediation="Add publisher, supplier.name or manufacturer.name to components.",
             )
         )
 
@@ -919,41 +930,45 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         )
 
         # 4. Component Version
+        status, details = element_verdict(version_failures, nothing_graded)
         findings.append(
             self._create_finding(
                 "component_version",
-                status="fail" if version_failures else "pass",
-                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
+                status=status,
+                details=details,
                 remediation="Add version field. Use file creation date if version is unknown.",
             )
         )
 
         # 5. Software Identifiers
+        status, details = element_verdict(identifier_failures, nothing_graded)
         findings.append(
             self._create_finding(
                 "software_identifiers",
-                status="fail" if identifier_failures else "pass",
-                details=f"Missing for: {', '.join(identifier_failures)}" if identifier_failures else None,
+                status=status,
+                details=details,
                 remediation="Add at least one identifier: purl (preferred), cpe, or swid.",
             )
         )
 
         # 6. Component Hash (NEW)
+        status, details = element_verdict(hash_failures, nothing_graded)
         findings.append(
             self._create_finding(
                 "component_hash",
-                status="fail" if hash_failures else "pass",
-                details=f"Missing for: {', '.join(hash_failures)}" if hash_failures else None,
+                status=status,
+                details=details,
                 remediation="Add hashes field with cryptographic hash (SHA-256 recommended).",
             )
         )
 
         # 7. License (NEW)
+        status, details = element_verdict(license_failures, nothing_graded)
         findings.append(
             self._create_finding(
                 "license",
-                status="fail" if license_failures else "pass",
-                details=f"Missing for: {', '.join(license_failures)}" if license_failures else None,
+                status=status,
+                details=details,
                 remediation="Add licenses field with license information.",
             )
         )
@@ -1139,7 +1154,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
 
         Args:
             element: Element key (e.g., "software_producer").
-            status: Status string ("pass" or "fail").
+            status: Status string ("pass", "fail" or "warning").
             details: Additional details about the finding.
             remediation: Suggested fix for failures.
 
@@ -1155,7 +1170,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             title=self.FINDING_TITLES[element],
             description=description,
             status=status,
-            severity="info" if status == "pass" else "medium",
+            severity="info" if status == "pass" else ("low" if status == "warning" else "medium"),
             remediation=remediation if status == "fail" else None,
             metadata={
                 "standard": "CISA",

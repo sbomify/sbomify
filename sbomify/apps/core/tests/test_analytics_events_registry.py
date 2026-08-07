@@ -153,6 +153,7 @@ class TestCoverageOfShippedEvents:
         "release_sbom:downloaded",
         "release_vex:downloaded",
         "release_cbom:downloaded",
+        "release_hbom:downloaded",
         # trust-center:*
         "document:access_requested",
         "document:access_approved",

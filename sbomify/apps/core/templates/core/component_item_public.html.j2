@@ -101,6 +101,9 @@
         <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
              hx-trigger="load"
              hx-swap="outerHTML"></div>
+        <div hx-get="{% url 'sboms:sbom_hardware_inventory' sbom_id=item.id %}"
+             hx-trigger="load"
+             hx-swap="outerHTML"></div>
     {% endif %}
 {% endblock %}
 {% block scripts %}
