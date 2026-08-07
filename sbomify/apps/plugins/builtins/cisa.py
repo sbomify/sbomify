@@ -61,6 +61,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sbomify.apps.plugins.builtins._component_scope import is_non_software_component
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
@@ -853,19 +854,15 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
-            # Skip type=file components (lockfiles, config files, etc.) —
-            # they're input metadata, not software packages. The per-component
-            # CISA fields (producer, version, identifier, hash, licence) apply
-            # to software components only. Parity with the BSI, NTIA, and
-            # FDA plugins. Component Name is still checked because a missing
-            # name on a file entry is still a data-quality issue.
-            is_file_type = str(component.get("type", "")).lower() == "file"
-
             # 3. Component name (applies to all component types)
             if not component.get("name"):
                 component_name_failures.append(f"Component at index {i}")
 
-            if is_file_type:
+            # The per-component CISA fields (producer, version, identifier,
+            # hash, licence) apply to software components only; the exempt
+            # types are listed in _component_scope. Parity with the BSI, NTIA
+            # and FDA plugins.
+            if is_non_software_component(component):
                 continue
 
             # 2. Software Producer (publisher or supplier.name)
