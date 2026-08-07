@@ -103,6 +103,7 @@ def _render_workspace_availability_page(
     )
 
 
+from sbomify.apps.teams.views.ci_token import CITokenView  # noqa: F401, E402
 from sbomify.apps.teams.views.contact_profiles import (  # noqa: F401, E402
     ContactProfileFormView,
     ContactProfileView,
@@ -117,6 +118,7 @@ from sbomify.apps.teams.views.team_settings import TeamSettingsView  # noqa: F40
 from sbomify.apps.teams.views.team_tokens import TeamTokensView  # noqa: F401, E402
 
 __all__ = [
+    "CITokenView",
     "ContactProfileFormView",
     "ContactProfileView",
     "SupplierListView",

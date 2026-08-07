@@ -95,6 +95,12 @@ urlpatterns: list[URLPattern] = [
         views.TeamTokensView.as_view(),
         name="team_tokens",
     ),
+    # POST-only: mints the short-lived token the CI/CD dialog puts in its command.
+    path(
+        "<team_key>/ci-token",
+        views.CITokenView.as_view(),
+        name="ci_token",
+    ),
     # One page per settings section. Declared before the bare <team_key> so the
     # slug is not swallowed by it.
     path("<team_key>/settings/<slug:tab>", views.TeamSettingsView.as_view(), name="team_settings_tab"),

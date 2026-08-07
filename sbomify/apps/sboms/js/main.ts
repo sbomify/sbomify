@@ -6,6 +6,9 @@ import { registerLicensesEditor } from './licenses-editor'
 import { registerReleaseList } from '../../core/js/components/release-list'
 import { registerAssessmentBadge } from '../../plugins/js/assessment-badge'
 import { initializeAlpine } from '../../core/js/alpine-init'
+import { registerCiCdToken } from './ci-cd-token';
+
+registerCiCdToken();
 
 registerSbomsTable()
 registerSbomUpload()

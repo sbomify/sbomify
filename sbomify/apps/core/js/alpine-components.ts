@@ -59,6 +59,7 @@ import { registerCraStep2 } from '../../compliance/js/cra-step-2';
 import { registerCraStep3 } from '../../compliance/js/cra-step-3';
 import { registerCraStep4 } from '../../compliance/js/cra-step-4';
 import { registerCraStep5 } from '../../compliance/js/cra-step-5';
+import { registerCiCdToken } from '../../sboms/js/ci-cd-token';
 
 // Track registered components to prevent double-registration
 const registeredComponents = new Set<string>();
@@ -206,6 +207,7 @@ export function registerCommonComponents(): void {
  */
 export function registerAllComponents(): void {
     // Common inline components
+    registerCiCdToken();
     registerCommonComponents();
 
     // Core components
