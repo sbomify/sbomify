@@ -294,7 +294,7 @@ class TestOnboardingWizard:
             {
                 "company_name": "No Auto Entities Ltd",
                 "contact_name": "Jane Doe",
-                "contact_email": "jane@example.com",
+                "email": "jane@example.com",
                 "goal": "compliance",
             },
         )
@@ -322,7 +322,7 @@ class TestOnboardingWizard:
             {
                 "company_name": "Identity Survives Ltd",
                 "contact_name": "Jane Doe",
-                "contact_email": "jane@example.com",
+                "email": "jane@example.com",
                 "goal": "compliance",
             },
         )
@@ -330,7 +330,11 @@ class TestOnboardingWizard:
         team = Team.objects.get(pk=team.pk)
         assert team.has_completed_wizard is True
         assert "Identity Survives Ltd" in team.name
-        assert ContactEntity.objects.filter(profile__team=team, is_manufacturer=True).exists()
+        entity = ContactEntity.objects.get(profile__team=team, is_manufacturer=True)
+        # The posted address, not the user's. Before the field name was fixed the
+        # form ignored it and this fell back to sample_user.email, so the test
+        # passed while exercising nothing.
+        assert entity.email == "jane@example.com"
 
 
     def test_complete_step_shows_summary(
@@ -365,6 +369,11 @@ class TestOnboardingWizard:
         assert response.context["company_name"] == "Summary Test Inc"
         # No component id: the completion step is keyed on the company name now,
         # since the wizard no longer creates a component to point at.
+        #
+        # The positive control matters: ContextList.__contains__ does look up
+        # keys, but a bare "not in" assertion is indistinguishable from one that
+        # can never fail, so a key known to be present is asserted beside it.
+        assert "company_name" in response.context
         assert "component_id" not in response.context
 
     def test_session_updated_after_completion(
