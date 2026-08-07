@@ -13,10 +13,12 @@ per-product default has no single answer for those components: three products
 could each declare a different window over the same component. The workspace is
 the one unambiguous owner, with a per-component override for the exceptions.
 
-**Only ``bom_type="sbom"`` counts.** A component also holds CBOMs, VEX documents
-and plain documents, and those move on their own cadence. If any upload reset
-the clock, a component with a fourteen-month-old SBOM and a VEX uploaded
-yesterday would read as fresh, which inverts the point of the feature.
+**Only ``bom_type="sbom"`` counts.** A component also holds CBOMs, HBOMs, VEX
+documents and plain documents, and those move on their own cadence. If any
+upload reset the clock, a component with a fourteen-month-old SBOM and a VEX
+uploaded yesterday would read as fresh, which inverts the point of the feature.
+A component whose only artifact is an HBOM therefore has no freshness state at
+all — hardware inventories carry no software support period to keep current.
 
 Nothing is stored: freshness is arithmetic over the newest SBOM's timestamp, so
 there is no state to keep in step with uploads. With no window configured a

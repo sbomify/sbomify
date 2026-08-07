@@ -1,0 +1,73 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}sbomify Hardware: {{ component.name }}{% endblock %}
+{% block content %}
+    {% comment %}
+    The component page is private-only, but this page's gate is component:access —
+    a public component is readable anonymously, so the links back must be too.
+    {% endcomment %}
+    {% comment %}The view requires login and this page renders in the authenticated dashboard shell, so there is no anonymous visitor to send to the public component page.{% endcomment %}
+    {% url 'core:component_details' component.id as component_url %}
+    <div class="space-y-6">
+        <div class="flex items-start gap-4">
+            <div class="tw-avatar tw-avatar-lg">
+                <i class="fas fa-microchip"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h1 class="text-2xl font-bold text-text">
+                    {{ component.name }} <span class="font-normal text-text-muted">hardware</span>
+                </h1>
+                <nav aria-label="breadcrumb" class="mt-1">
+                    <ol class="flex items-center gap-2 text-sm text-text-muted">
+                        <li>
+                            <a href="{{ component_url }}"
+                               class="text-primary hover:underline no-underline">{{ component.name }}</a>
+                        </li>
+                        <li class="text-text-muted">/</li>
+                        <li class="text-text" aria-current="page">Hardware</li>
+                    </ol>
+                </nav>
+                {% if hardware_inventory %}
+                    <p class="mt-2 mb-0 text-sm text-text-muted">
+                        Derived on read from the newest
+                        {% if artifact.bom_type == 'hbom' %}
+                            HBOM
+                        {% else %}
+                            SBOM carrying device components
+                        {% endif %}
+                        {% if artifact.version %}(version {{ artifact.version }}){% endif %}
+                        — the stored document is never modified.
+                    </p>
+                {% endif %}
+            </div>
+            <a href="{{ component_url }}"
+               class="tw-btn-secondary inline-flex items-center gap-2 no-underline flex-shrink-0">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to component
+            </a>
+        </div>
+        {% if hardware_inventory %}
+            {% include "sboms/components/hardware_inventory_card.html.j2" %}
+        {% else %}
+            <div class="tw-card">
+                <div class="p-12 text-center">
+                    <div class="w-12 h-12 mx-auto rounded-lg bg-border/40 flex items-center justify-center mb-4">
+                        <i class="fas fa-microchip text-text-muted text-lg"></i>
+                    </div>
+                    {% if artifact %}
+                        <h3 class="text-lg font-semibold text-text mb-2">No parts to show</h3>
+                        <p class="text-text-muted text-sm mb-0 max-w-md mx-auto">
+                            The newest hardware artifact for this component lists no device components, or its
+                            document could not be read from storage right now.
+                        </p>
+                    {% else %}
+                        <h3 class="text-lg font-semibold text-text mb-2">No hardware components yet</h3>
+                        <p class="text-text-muted text-sm mb-0 max-w-md mx-auto">
+                            Upload an HBOM — or an SBOM containing <code>device</code>, <code>firmware</code>,
+                            <code>device-driver</code> or <code>platform</code> components — and its parts
+                            inventory appears here.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}

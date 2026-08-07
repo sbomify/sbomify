@@ -366,6 +366,31 @@ class PluginsConfig(AppConfig):
             },
         )
 
+        # HBOM Structure Plugin (hardware BOM field coverage and CycloneDX conventions)
+        from .builtins.hbom_structure import HbomStructurePlugin
+
+        _register(
+            "hbom-structure",
+            {
+                "display_name": "HBOM Structure (CISA Framework)",
+                "description": (
+                    "Scores a hardware BOM against the field taxonomy in CISA's voluntary HBOM "
+                    "Framework (Appendix C, September 2023) and the CycloneDX property taxonomy: "
+                    "authorship and timestamp, final-goods-assembly and per-part identity, and the "
+                    "quantity, board-location and firmware-linkage conventions that make an HBOM "
+                    "readable as a parts list. Fields CycloneDX cannot express are reported as a "
+                    "note, never as a gap. Applies only to HBOM artifacts (bom_type 'hbom')."
+                ),
+                "category": "compliance",
+                "version": HbomStructurePlugin.VERSION,
+                "plugin_class_path": "sbomify.apps.plugins.builtins.hbom_structure.HbomStructurePlugin",
+                "is_enabled": True,
+                "is_beta": True,
+                "is_builtin": True,
+                "default_config": {},
+            },
+        )
+
         # Reconcile: disable builtin plugins no longer in codebase
         if not registered_builtin_names:
             return

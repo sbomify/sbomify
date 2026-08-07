@@ -73,6 +73,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sbomify.apps.plugins.builtins._component_scope import is_non_software_component
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
@@ -895,15 +896,16 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
-            # Skip type=file components (e.g., lockfiles) — they're input metadata,
-            # not software packages, so FDA/NTIA per-component fields don't apply.
-            # Component Name is still checked so misnamed file entries surface.
-            is_file_type = str(component.get("type", "")).lower() == "file"
+            # The FDA/NTIA per-component fields — and the CLE support data that
+            # follows them — describe a software release, so the non-software
+            # entries listed in _component_scope are exempt. Component Name is
+            # still checked so misnamed entries surface.
+            is_exempt = is_non_software_component(component)
 
             # === NTIA Elements ===
 
             # 1. Supplier name (publisher or supplier.name)
-            if not is_file_type:
+            if not is_exempt:
                 supplier_field = component.get("supplier")
                 supplier = component.get("publisher") or (
                     supplier_field.get("name") if isinstance(supplier_field, dict) else None
@@ -915,7 +917,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             if not component.get("name"):
                 component_name_failures.append(f"Component at index {i}")
 
-            if is_file_type:
+            if is_exempt:
                 continue
 
             # 3. Version

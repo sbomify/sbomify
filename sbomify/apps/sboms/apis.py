@@ -9,10 +9,10 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
-from ninja import File, Query, Router, UploadedFile
+from ninja import File, Query, Router, Schema, UploadedFile
 from ninja.decorators import decorate_view
 from ninja.security import django_auth
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth, optional_auth
 from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
@@ -31,10 +31,13 @@ from sbomify.apps.core.utils import (
     obj_extract,
 )
 from sbomify.apps.oidc.permissions import is_authorised_for_component
+from sbomify.apps.sboms.hardware_inventory import get_hardware_inventory
 from sbomify.apps.sboms.utils import (
     _contains_crypto_assets,
+    _contains_hardware_components,
     _is_cbom,
     _is_duplicate_integrity_error,
+    _is_hbom,
     verify_download_token,
 )
 from sbomify.apps.teams.models import ContactProfile
@@ -471,14 +474,19 @@ def sbom_upload_cyclonedx(
         sbom_version = sbom_dict.get("version", "")
         sbom_format = "cyclonedx"
 
-        # Auto-detect CBOM content: an action-published CBOM arrives with the
-        # default bom_type; tag it cbom so the cbom-gated PQC plugin runs. Only
-        # when the caller left the type as the default — an explicit bom_type
-        # (e.g. the delegated /artifact/vex/ path passing "vex") is honored so
-        # a crypto-heavy VEX is never re-tagged cbom.
-        if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET and _is_cbom(sbom_data):
-            bom_type = "cbom"
+        # Auto-detect CBOM/HBOM content: an action-published CBOM or a hardware
+        # BOM arrives with the default bom_type; tag it so the type-gated
+        # pipelines run. Only when the caller left the type as the default — an
+        # explicit bom_type (e.g. the delegated /artifact/vex/ path passing
+        # "vex") is honored, so a crypto-heavy VEX is never re-tagged cbom and a
+        # device-bearing one is never re-tagged hbom.
+        if bom_type == SBOM.BomType.SBOM.value and "bom_type" not in request.GET:
+            if _is_cbom(sbom_data):
+                bom_type = "cbom"
+            elif _is_hbom(sbom_data):
+                bom_type = "hbom"
         sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
+        sbom_dict["has_hardware_components"] = _contains_hardware_components(sbom_data)
 
         # Extract PURL qualifiers from metadata.component.purl
         cdx_purl = _extract_cdx_purl(payload)
@@ -709,10 +717,13 @@ def sbom_upload_spdx(request: HttpRequest, component_id: str, bom_type: str = "s
         sbom_dict["format"] = sbom_format
         sbom_dict["component"] = component
         sbom_dict["source"] = "api"
-        # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so the
-        # crypto-gated plugins skip these artifacts instead of treating the
-        # unstamped NULL as "maybe crypto".
+        # SPDX has neither the CycloneDX crypto-asset lineage nor a device
+        # component type; stamp both false so the gated pipelines skip instead
+        # of treating NULL as "maybe". Both stamps have to match the file-upload
+        # path below: the same document through the two endpoints must reach the
+        # dispatch gates saying the same thing about itself.
         sbom_dict["has_crypto_assets"] = False
+        sbom_dict["has_hardware_components"] = False
         sbom_dict["format_version"] = spdx_version  # Already extracted from validation
         sbom_dict["sha256_hash"] = sha256_hash
 
@@ -969,6 +980,81 @@ def download_cipher_suite_inventory_csv(request: HttpRequest, sbom_id: str) -> A
     response = HttpResponse(buffer.getvalue(), content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="cipher-suite-inventory-{sbom_id}.csv"'
     return response
+
+
+class HardwareCertificationSchema(Schema):
+    """A regulatory approval declared on a hardware component."""
+
+    country: str
+    authority: str
+    identifier: str | None = None
+    url: str | None = None
+
+
+class HardwarePartSchema(Schema):
+    """One hardware component, projected into BOM-line shape."""
+
+    name: str | None = None
+    bom_ref: str | None = None
+    type: str | None = None
+    manufacturer: str | None = None
+    manufacturer_source: str | None = None
+    revision: str | None = None
+    quantity: str | None = None
+    function: str | None = None
+    location: str | None = None
+    device_type: str | None = None
+    sku: str | None = None
+    serial_number: str | None = None
+    lot_number: str | None = None
+    prod_timestamp: str | None = None
+    mac_address: str | None = None
+    gs1: dict[str, str] = Field(default_factory=dict)
+    certifications: list[HardwareCertificationSchema] = Field(default_factory=list)
+    datasheets: list[str] = Field(default_factory=list)
+    cpe: str | None = None
+    # An NVD search link for an operator to follow, not a scan result: hardware
+    # CPEs are unversioned and the advisory feeds carry almost no part:h
+    # identifiers, so sbomify never matches them to CVEs automatically.
+    cpe_nvd_url: str | None = None
+    firmware: list[str] = Field(default_factory=list)
+
+
+class HardwareInventorySchema(Schema):
+    """Derived hardware-parts inventory (HBOM) for a single SBOM."""
+
+    sbom_id: str
+    component_id: str
+    count: int
+    by_type: dict[str, int]
+    parts: list[HardwarePartSchema]
+
+
+@router.get(
+    "/{sbom_id}/hardware-inventory",
+    response={
+        200: HardwareInventorySchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+        503: ErrorResponse,
+    },
+    auth=None,  # Allow unauthenticated access for public SBOMs
+)
+@decorate_view(optional_auth)
+def get_sbom_hardware_inventory(request: HttpRequest, sbom_id: str) -> tuple[int, dict[str, Any]]:
+    """Return the derived hardware (HBOM) inventory for an SBOM.
+
+    Projects the ``device`` / ``firmware`` / ``device-driver`` / ``platform``
+    components of the stored CycloneDX artifact, with the part detail carried in
+    the ``cdx:device`` property namespace. Software-only SBOMs return an empty
+    inventory rather than an error.
+    """
+    result = get_hardware_inventory(request, sbom_id)
+    if not result.ok:
+        return result.status_code or 400, {"detail": result.error or "Invalid request"}
+
+    return 200, result.value or {}
 
 
 @router.get(
@@ -1262,10 +1348,11 @@ def sbom_upload_file(
             sbom_dict["format"] = sbom_format
             sbom_dict["component"] = component
             sbom_dict["source"] = "manual_upload"
-            # SPDX has no CycloneDX crypto-asset lineage; stamp crypto-free so
-            # the crypto-gated plugins skip instead of treating NULL as
-            # "maybe crypto".
+            # SPDX has neither the CycloneDX crypto-asset lineage nor a device
+            # component type; stamp both false so the gated pipelines skip
+            # instead of treating NULL as "maybe".
             sbom_dict["has_crypto_assets"] = False
+            sbom_dict["has_hardware_components"] = False
             sbom_dict["format_version"] = spdx_version  # Already extracted from validation
             sbom_dict["sha256_hash"] = sha256_hash
 
@@ -1353,12 +1440,17 @@ def sbom_upload_file(
             sbom_version = sbom_dict.get("version", "")
             sbom_format = "cyclonedx"
 
-            # Auto-detect CBOM content: tag a crypto BOM uploaded with the
-            # default bom_type as cbom so the cbom-gated PQC plugin runs. Only when
-            # the caller omitted bom_type — an explicit ?bom_type=sbom is honored.
-            if "bom_type" not in request.GET and _is_cbom(sbom_data):
-                bom_type = "cbom"
+            # Auto-detect CBOM/HBOM content: tag a crypto or hardware BOM
+            # uploaded with the default bom_type so the type-gated pipelines run.
+            # Only when the caller omitted bom_type — an explicit ?bom_type=sbom
+            # is honored.
+            if "bom_type" not in request.GET:
+                if _is_cbom(sbom_data):
+                    bom_type = "cbom"
+                elif _is_hbom(sbom_data):
+                    bom_type = "hbom"
             sbom_dict["has_crypto_assets"] = _contains_crypto_assets(sbom_data)
+            sbom_dict["has_hardware_components"] = _contains_hardware_components(sbom_data)
 
             # Extract PURL qualifiers from metadata.component.purl
             cdx_purl = _extract_cdx_purl(cdx_payload)
