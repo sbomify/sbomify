@@ -77,8 +77,8 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
             item["vuln"] = None
             continue
         # Only when EVERY provider skipped. One scanner failing while another
-        # scanned the same artifact still leaves a real verdict, and calling
-        # that "not scanned" would be its own kind of wrong.
+        # scanned the same artifact still leaves a real verdict, and marking
+        # that "Nothing scanned" would hide the scan that worked.
         scanned_nothing = all(result_scanned_nothing(result) for result in provider_results)
         rows = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
         if rows:
