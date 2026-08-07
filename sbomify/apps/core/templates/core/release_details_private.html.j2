@@ -55,7 +55,7 @@
                 </div>
             </div>
             {# Download Buttons - Desktop #}
-            {% if release.has_sboms or release.has_vex or release.has_cbom %}
+            {% if release.has_sboms or release.has_vex or release.has_cbom or release.has_hbom %}
                 <div class="hidden lg:flex gap-2 flex-shrink-0">
                     {% if release.has_sboms %}
                         <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
@@ -92,6 +92,14 @@
                            href="{% url 'api-1:download_release_cbom' release.id %}"
                            title="Download CBOM (Cryptography BOM, CycloneDX)">
                             <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                            <i class="fas fa-download" aria-hidden="true"></i>
+                        </a>
+                    {% endif %}
+                    {% if release.has_hbom %}
+                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
+                           href="{% url 'api-1:download_release_hbom' release.id %}"
+                           title="Download HBOM (Hardware BOM, CycloneDX)">
+                            <span class="text-sm font-semibold tracking-wide">HBOM</span>
                             <i class="fas fa-download" aria-hidden="true"></i>
                         </a>
                     {% endif %}
@@ -142,7 +150,7 @@
             </div>
         </div>
         {# Download Release Card - Mobile Only #}
-        {% if release.has_sboms or release.has_vex or release.has_cbom %}
+        {% if release.has_sboms or release.has_vex or release.has_cbom or release.has_hbom %}
             <div class="tw-card lg:hidden">
                 <div class="px-6 py-4 border-b border-border">
                     <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
@@ -154,7 +162,7 @@
                     {% if release.has_sboms %}
                         <p class="text-text-muted mb-4">Download the consolidated SBOM of this release's SBOM artifacts</p>
                     {% else %}
-                        <p class="text-text-muted mb-4">Download the latest VEX for this release</p>
+                        <p class="text-text-muted mb-4">Download the BOMs pinned to this release</p>
                     {% endif %}
                     <div class="flex justify-center gap-3 flex-wrap">
                         {% if release.has_sboms %}
@@ -192,6 +200,14 @@
                                href="{% url 'api-1:download_release_cbom' release.id %}"
                                title="Download CBOM (Cryptography BOM, CycloneDX)">
                                 <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                                <i class="fas fa-download" aria-hidden="true"></i>
+                            </a>
+                        {% endif %}
+                        {% if release.has_hbom %}
+                            <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
+                               href="{% url 'api-1:download_release_hbom' release.id %}"
+                               title="Download HBOM (Hardware BOM, CycloneDX)">
+                                <span class="text-sm font-semibold tracking-wide">HBOM</span>
                                 <i class="fas fa-download" aria-hidden="true"></i>
                             </a>
                         {% endif %}

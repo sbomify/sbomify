@@ -40,3 +40,10 @@ All of these can be generate with:
 ```bash
 parlay ecosystems enrich sbomify_[...].json > sbomify_[...].json
 ```
+
+## Hardware
+
+`hbom_pcie_sata_adapter.cdx.json` is a verbatim copy of the upstream
+[CycloneDX HBOM example](https://github.com/CycloneDX/bom-examples/blob/master/HBOM/PCIe-SATA-adapter-board/bom.json)
+(Apache-2.0), kept unmodified so hardware detection is exercised against a
+real-world document rather than a hand-written one.

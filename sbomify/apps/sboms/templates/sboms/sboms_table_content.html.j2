@@ -100,10 +100,27 @@
                 </thead>
                 <tbody>
                     <template x-for="item in paginatedData" :key="item.sbom.id">
+                        {% comment %}
+                        `assessable` is the set of types the plugin framework actually runs
+                        against, not a synonym for "not a VEX": a VEX asserts exploitability
+                        and carries no component inventory to assess, so it alone has nothing
+                        to show. Naming the set once keeps the three guards in the assessments
+                        column from drifting apart as types are added.
+                        {% endcomment %}
                         <tr class="hover:bg-background/50 transition-colors"
-                            x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
+                            x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' }, get assessable() { return ['sbom','cbom','hbom'].includes(this.bomType) } }">
                             <td class="break-all">
-                                <a :href="(item.sbom.bom_type === 'vex' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% endif %}' : item.sbom.bom_type === 'cbom' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% endif %}' : '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}').replace('SBOM_ID', item.sbom.id)"
+                                {% comment %}
+                                Every BOM type reverses to the same route with only the type segment
+                                differing, so one reversed URL plus a segment swap stands in for what
+                                was a nested ternary carrying a public and a private URL per type — a
+                                new type is now one word in the allow-list. The swap is unambiguous
+                                because component ids are slash-free generated tokens, so the literal
+                                '/sboms/' occurs exactly once in the path. Types outside the list
+                                (including a null bom_type) stay on /sboms/, matching the route the
+                                detail view redirects them to.
+                                {% endcomment %}
+                                <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}'.replace('/sboms/', '/' + (['vex','cbom','hbom'].includes(bomType) ? bomType : 'sboms') + '/').replace('SBOM_ID', item.sbom.id)"
                                    class="text-primary font-medium hover:underline"
                                    x-text="item.sbom.name"></a>
                                 {% comment %}
@@ -122,7 +139,7 @@
                             </td>
                             <td>
                                 <span class="tw-badge text-xs"
-                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-violet': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(bomType) }"
+                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-violet': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-warning': bomType === 'hbom', 'tw-badge-secondary': !['sbom','vex','cbom','hbom'].includes(bomType) }"
                                       x-text="bomType.toUpperCase()"></span>
                             </td>
                             <td class="hidden md:table-cell">
@@ -131,17 +148,25 @@
                                       :title="item.sbom.version"></span>
                             </td>
                             {% if not is_public_view %}
+                                {% comment %}
+                                Every branch is gated on bomType, not just on whether a scan record
+                                exists: a record outlives the type it ran against. A hardware BOM
+                                misfiled as sbom gets scanned, matches nothing (hardware carries no
+                                PURLs), and stores a zero-finding run; retagging it to hbom leaves
+                                that run attached, so gating on the record alone would show a green
+                                Clean badge earned by a scan that matched nothing.
+                                {% endcomment %}
                                 <td class="whitespace-nowrap">
                                     <template x-if="!item.vuln && bomType === 'sbom'">
                                         <span class="text-text-muted text-sm">Not scanned</span>
                                     </template>
-                                    <template x-if="!item.vuln && bomType !== 'sbom'">
+                                    <template x-if="bomType !== 'sbom'">
                                         <span class="text-text-muted text-sm">—</span>
                                     </template>
-                                    <template x-if="item.vuln && item.vuln.total === 0">
+                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0">
                                         <span class="tw-badge-success text-xs">Clean</span>
                                     </template>
-                                    <template x-if="item.vuln && item.vuln.total > 0">
+                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total > 0">
                                         <div class="flex items-center gap-1.5 flex-wrap">
                                             <template x-if="item.vuln.critical > 0">
                                                 <span class="px-2 py-0.5 rounded text-xs font-bold bg-danger/10 text-danger"
@@ -163,7 +188,7 @@
                                     </template>
                                 </td>
                                 <td class="hidden lg:table-cell">
-                                    <template x-if="bomType === 'sbom' && item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
+                                    <template x-if="assessable && item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
                                         <div class="flex flex-wrap items-center gap-1">
                                             <!-- Individual plugin badges (show up to 3) -->
                                             <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
@@ -192,13 +217,13 @@
                                             </template>
                                         </div>
                                     </template>
-                                    <template x-if="bomType === 'sbom' && item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
+                                    <template x-if="assessable && item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
                                         <span class="inline-flex items-center gap-1.5 text-info text-sm">
                                             <i class="fas fa-clock fa-pulse"></i>
                                             <span>Checking...</span>
                                         </span>
                                     </template>
-                                    <template x-if="bomType !== 'sbom' || !item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
+                                    <template x-if="!assessable || !item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
                                         <span class="text-text-muted text-sm">—</span>
                                     </template>
                                 </td>

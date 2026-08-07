@@ -37,6 +37,8 @@
                                     VEX Details
                                 {% elif is_cbom %}
                                     CBOM Details
+                                {% elif is_hbom %}
+                                    HBOM Details
                                 {% elif is_sbom_backed %}
                                     SBOM Details
                                 {% else %}
@@ -52,7 +54,7 @@
                 {% if is_sbom_backed %}
                     <a href="{% url 'sboms:sbom_download' item.id %}"
                        class="tw-btn-secondary inline-flex items-center gap-2"
-                       title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} {% if is_vex %}VEX{% elif is_cbom %}CBOM{% else %}SBOM{% endif %}">
+                       title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} {% if is_vex %}VEX{% elif is_cbom %}CBOM{% elif is_hbom %}HBOM{% else %}SBOM{% endif %}">
                         {% if item.format == 'cyclonedx' %}
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
                                  alt="CycloneDX"
