@@ -1,4 +1,3 @@
-import { registerCiCdInfo } from './ci-cd-info'
 import { registerSbomsTable } from './sboms-table'
 import { registerSbomUpload } from './sbom-upload'
 import { registerContactsEditor } from './contacts-editor'
@@ -10,7 +9,6 @@ import { initializeAlpine } from '../../core/js/alpine-init'
 
 registerSbomsTable()
 registerSbomUpload()
-registerCiCdInfo()
 registerContactsEditor()
 registerSupplierEditor()
 registerLicensesEditor()
