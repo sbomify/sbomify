@@ -24,14 +24,28 @@ def _bot_member(user: Any, team: Any) -> Member:
     return member
 
 
-def _token(user: Any, team: Any = None, days: int = 10, description: str = "ci token") -> AccessToken:
-    return AccessToken.objects.create(
+def _token(
+    user: Any, team: Any = None, days: int = 10, description: str = "ci token", lifetime: int = 90
+) -> AccessToken:
+    """A token with ``days`` left to run, issued for ``lifetime`` days total.
+
+    ``created_at`` is ``auto_now_add``, so a token created in a test always
+    starts out with its lifetime equal to its remaining time — the one shape
+    where "issued short" and "issued long and since aged" are indistinguishable.
+    The default backdates to 90 days, which is what a token sitting at 5 days
+    remaining looks like in practice; the short-lived cases ask for a small
+    ``lifetime`` explicitly.
+    """
+    token = AccessToken.objects.create(
         user=user,
         team=team,
         description=description,
         encoded_token=f"tok-{description}-{days}-{user.pk}",
         expires_at=timezone.now() + timedelta(days=days),
     )
+    AccessToken.objects.filter(pk=token.pk).update(created_at=token.expires_at - timedelta(days=lifetime))
+    token.refresh_from_db()
+    return token
 
 
 class TestBellProvider:
@@ -92,6 +106,95 @@ class TestBellProvider:
         _token(guest_user, member.team, days=3)
 
         assert get_notifications(self._request(rf, member.user, member.team, role="guest")) == []
+
+
+class TestShortLivedTokensAreNotNagged:
+    """A token made short-lived on purpose must not be reported as expiring.
+
+    From staging, seconds after clicking "Add a 7-day token" in the CI/CD
+    dialog:
+
+        Access token "CI/CD setup (07 Aug 2026)" expires in 7 days. Just now
+
+    The warning window is 14 days, so a 7-day token is inside it for its whole
+    life: the bell fires at creation and never clears, and the daily sweep
+    mails about a lifetime the reader chose a day earlier. The warning is for
+    a long-lived token drifting toward expiry unnoticed, which this is not.
+    """
+
+    def _request(self, rf: Any, user: Any, team: Any) -> Any:
+        request = rf.get("/")
+        request.user = user
+        request.session = {"current_team": {"key": team.key, "role": "owner"}}
+        return request
+
+    def test_a_freshly_minted_ci_token_does_not_warn(self, rf: Any, sample_team_with_owner_member: Any) -> None:
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=7, lifetime=7)
+
+        assert get_notifications(self._request(rf, member.user, member.team)) == []
+
+    def test_a_long_token_that_has_aged_into_the_window_still_warns(
+        self, rf: Any, sample_team_with_owner_member: Any
+    ) -> None:
+        """The case the warning exists for: 5 days left of an original 90."""
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=5, lifetime=90)
+
+        notifications = get_notifications(self._request(rf, member.user, member.team))
+
+        assert len(notifications) == 1
+        assert "expires in 5 days" in notifications[0].message
+
+    def test_the_last_day_warns_even_for_a_short_token(self, rf: Any, sample_team_with_owner_member: Any) -> None:
+        """Silence for the whole life would let a pipeline break unannounced."""
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=1, lifetime=7)
+
+        notifications = get_notifications(self._request(rf, member.user, member.team))
+
+        assert len(notifications) == 1
+        assert notifications[0].severity == "error"
+
+    def test_the_sweep_skips_a_threshold_already_true_at_creation(
+        self, sample_team_with_owner_member: Any
+    ) -> None:
+        """A 7-day token is inside the 14- and 7-day thresholds the moment it
+        exists, so neither says anything the reader did not just decide."""
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=7, lifetime=7)
+
+        assert warn_expiring_tokens.fn() == 0
+        assert mail.outbox == []
+
+    def test_the_sweep_still_mails_that_token_on_its_final_day(self, sample_team_with_owner_member: Any) -> None:
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=1, lifetime=7)
+
+        assert warn_expiring_tokens.fn() == 1
+        assert "expires in 1 day" in mail.outbox[0].subject
+
+    def test_a_threshold_equal_to_the_lifetime_is_skipped(self, sample_team_with_owner_member: Any) -> None:
+        """The boundary the rule turns on: a token issued for exactly 14 days
+        sits on the 14-day threshold the moment it exists, so it says nothing.
+        """
+        member = sample_team_with_owner_member
+        _token(member.user, member.team, days=14, lifetime=14)
+
+        assert warn_expiring_tokens.fn() == 0
+        assert mail.outbox == []
+
+    def test_the_tighter_thresholds_fire_once_it_has_aged(self, sample_team_with_owner_member: Any) -> None:
+        """The same 14-day token a week on, expressed as a second fixture
+        rather than by moving ``expires_at``: shifting it also moves the
+        computed lifetime, and the sub-second remainder decides whether the
+        ceiling lands on 7 or 8, which is a coin toss to hang a test on.
+        """
+        member = sample_team_with_owner_member
+        token = _token(member.user, member.team, days=7, lifetime=14)
+
+        assert warn_expiring_tokens.fn() == 1
+        assert {w.threshold_days for w in token.expiry_warnings.all()} == {7}
 
 
 class TestEmailSweep:
