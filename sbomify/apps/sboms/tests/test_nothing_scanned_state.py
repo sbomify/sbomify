@@ -93,11 +93,23 @@ class TestOnlyWhenEveryProviderSkipped:
         return SBOM.objects.create(name="s", component=component, format="cyclonedx", format_version="1.6")
 
     def _run(self, sbom, plugin_name: str, result: dict[str, Any]) -> None:
-        from sbomify.apps.plugins.models import AssessmentRun, RunStatus
+        """A row shaped like one the orchestrator writes.
+
+        ``plugin_version``, ``plugin_config_hash`` and ``run_reason`` are not
+        read by anything under test — ``create()`` does not run ``full_clean``,
+        so leaving them out stores empty strings rather than raising. They are
+        filled in anyway so the fixture looks like production data and a later
+        test reading them is not surprised by a blank.
+        """
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.plugins.sdk.enums import RunReason, RunStatus
 
         AssessmentRun.objects.create(
             sbom=sbom,
             plugin_name=plugin_name,
+            plugin_version="1.0.0",
+            plugin_config_hash="test-config-hash",
+            run_reason=RunReason.MANUAL,
             category="security",
             status=RunStatus.COMPLETED.value,
             result=result,
