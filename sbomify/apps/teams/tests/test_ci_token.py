@@ -118,6 +118,34 @@ class TestWhenItRefuses:
         assert AccessToken.objects.count() == 0
 
 
+class TestTheResponseIsNotCacheable:
+    def test_it_is_marked_no_store(self, client_and_member) -> None:
+        """The body is a live credential. Without this a back-navigation or a
+        shared proxy could hand it to someone else."""
+        client, member = client_and_member
+
+        response = client.post(_url(member))
+
+        assert response["Cache-Control"] == "no-store"
+
+
+class TestCsrfIsRequired:
+    def test_a_post_without_a_csrf_token_mints_nothing(self, sample_team_with_owner_member: Member) -> None:
+        """Pinned rather than assumed: this endpoint returns a credential, so a
+        middleware or settings change that weakened it should fail here rather
+        than be discovered from the outside."""
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(sample_team_with_owner_member.user)
+        setup_authenticated_client_session(
+            client, sample_team_with_owner_member.team, sample_team_with_owner_member.user
+        )
+
+        response = client.post(_url(sample_team_with_owner_member))
+
+        assert response.status_code == 403
+        assert AccessToken.objects.count() == 0
+
+
 class TestOnePerClick:
     def test_two_posts_make_two_tokens(self, client_and_member) -> None:
         """Recorded rather than prevented: the button guards the double-click on

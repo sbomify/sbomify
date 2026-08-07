@@ -39,7 +39,14 @@ export function ciCdToken(mintUrl: string) {
         if (!response.ok) throw new Error(String(response.status));
         const data = (await response.json()) as CiTokenResponse;
         this.token = data.token;
-        this.expiresAt = new Date(data.expires_at).toLocaleDateString();
+        // Explicit parts rather than the locale default: that renders 14/08/2026
+        // in one locale and 08/14/2026 in another, and an expiry date a reader
+        // can misread by six months is worse than no date.
+        this.expiresAt = new Date(data.expires_at).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
       } catch {
         this.error = 'Could not create a token. Create one in Settings → API tokens instead.';
       } finally {

@@ -76,13 +76,18 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
         # Returned once and never stored anywhere we can read back — the row
         # holds the encoded form, same as every other token.
-        return JsonResponse(
+        response = JsonResponse(
             {
                 "token": raw_token,
                 "expires_at": expires_at.isoformat(),
                 "lifetime_days": CI_TOKEN_LIFETIME_DAYS,
             }
         )
+        # The body is a live credential. no-store keeps it out of the browser's
+        # cache and out of any intermediary's, where a back-navigation or a
+        # shared proxy could otherwise hand it to someone else.
+        response["Cache-Control"] = "no-store"
+        return response
 
     def http_method_not_allowed(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
         """A GET here would mint a credential on navigation, including from a
