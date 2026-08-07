@@ -6,12 +6,25 @@ This used to ask which of five CI platforms you were on, which of three SBOM
 sources you had, and whether you wanted augment / enrich / save-to-file, then
 render the YAML those answers produced. Every one of those questions is one the
 wizard asks in the repository it is being run in, where it can look and answer
-most of them itself. Asking them here meant asking someone to describe their
-repository to a form.
+most of them itself.
 
-The wizard writes the pipeline config for whichever platform it finds, so the
-five tabs became one command.
+The command is written out in the markup rather than assembled in JavaScript.
+Only the token varies, so it is one span; building the whole string in an
+x-data attribute meant escaping shell quotes and newlines through an HTML
+attribute, and djlint collapses that attribute onto one line, which turns any
+// comment in it into a comment over the rest of the code.
+
+The token is minted on click, not on open. Rendering this dialog is not a
+decision to create a credential, and someone opening it three times to read the
+command should not leave three live tokens behind.
 {% endcomment %}
+{% comment %}
+Resolved here rather than passed in by each view: two templates include this
+dialog, and a context key one of them forgot would break the button silently.
+The ``as`` form swallows NoReverseMatch, so a session without a workspace
+leaves it empty and the button is not offered rather than 500ing the page.
+{% endcomment %}
+{% url 'teams:ci_token' team_key=request.session.current_team.key as ci_token_url %}
 <div x-data="{ cicdOpen: false }"
      @open-cicd.window="cicdOpen = true"
      @keydown.escape.window="if (cicdOpen) cicdOpen = false">
@@ -40,7 +53,8 @@ five tabs became one command.
              x-transition:leave-start="opacity-100 scale-100"
              x-transition:leave-end="opacity-0 scale-95"
              @click.stop>
-            <div class="tw-modal-content">
+            <div class="tw-modal-content"
+                 x-data="ciCdToken('{{ ci_token_url|escapejs }}')">
                 <div class="tw-modal-header">
                     <h4 class="tw-modal-title flex items-center gap-2">
                         <i class="fas fa-gears text-primary"></i>CI/CD Integration
@@ -61,12 +75,44 @@ five tabs became one command.
                         <pre class="p-4 m-0 overflow-x-auto"><code id="ci-cd-command-{{ component.id }}" class="text-sm text-white">docker run --rm -it \
   -v "$(pwd):/github/workspace" \
   -w /github/workspace \
+  -e SBOMIFY_TOKEN=<span x-text="token || '$SBOMIFY_TOKEN'">$SBOMIFY_TOKEN</span> \
   ghcr.io/sbomify/sbomify-action \
   sbomify-action wizard</code></pre>
                         <div class="absolute top-2 right-2">
                             {% include "core/components/copyable_value.html.j2" with copy_from="ci-cd-command-"|add:component.id title="Copy command" hide_value=True %}
                         </div>
                     </div>
+                    {# Before minting: the command reads an env var the reader may already have. #}
+                    <div x-show="!token" class="mt-4 flex flex-wrap items-center gap-3">
+                        {% if not ci_token_url %}
+                            <span class="text-xs text-text-muted">Set <code class="px-1 py-0.5 bg-border/30 rounded">SBOMIFY_TOKEN</code> to a token from Settings → API tokens.</span>
+                        {% endif %}
+                        {% if ci_token_url %}
+                            <button type="button"
+                                    @click="mint()"
+                                    :disabled="minting"
+                                    data-testid="mint-ci-token"
+                                    class="tw-btn-secondary tw-btn-sm">
+                                <span x-show="!minting"><i class="fas fa-key mr-2"></i>Add a 7-day token</span>
+                                <span x-show="minting" x-cloak>Creating…</span>
+                            </button>
+                            <span class="text-xs text-text-muted">Or set <code class="px-1 py-0.5 bg-border/30 rounded">SBOMIFY_TOKEN</code> yourself.</span>
+                        {% endif %}
+                    </div>
+                    {# After minting: say what it can do and when it stops, because it is now on screen. #}
+                    <div x-show="token" x-cloak class="tw-alert tw-alert-info mt-4">
+                        <i class="fas fa-key tw-alert-icon" aria-hidden="true"></i>
+                        <div class="tw-alert-content">
+                            <p class="text-sm m-0">
+                                Expires <span x-text="expiresAt" class="font-medium"></span>. It can upload artifacts
+                                and tag releases, nothing else. Revoke it any time in Settings → API tokens.
+                            </p>
+                        </div>
+                    </div>
+                    <p x-show="error"
+                       x-cloak
+                       x-text="error"
+                       class="text-xs text-danger mt-3 mb-0"></p>
                     <p class="text-xs text-text-muted mt-3 mb-0">For a manual one-off, use Upload artifact in the component menu.</p>
                 </div>
             </div>
