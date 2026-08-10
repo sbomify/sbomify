@@ -350,7 +350,11 @@ def _extract_spdx3_primary_package(
         rel_type = rel.get("relationshipType", "")
         if rel_type == "describes":
             target_ids = rel.get("to", [])
-            if target_ids:
+            # JSON-LD compact form: a one-element set may serialise as a bare
+            # string; indexing it would yield one character.
+            if isinstance(target_ids, str):
+                target_ids = [target_ids]
+            if isinstance(target_ids, list) and target_ids:
                 target_id = target_ids[0]
                 for pkg in packages:
                     if pkg.spdx_id == target_id:

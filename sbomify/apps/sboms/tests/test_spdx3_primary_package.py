@@ -128,3 +128,31 @@ class TestBuilderComponentInfo:
 
     def test_no_packages_is_none(self) -> None:
         assert _spdx3_component_info(_doc({"type": "SpdxDocument", "spdxId": "urn:doc"})) is None
+
+
+class TestCompactDescribesTarget:
+    """JSON-LD compact form on the describes fallback: a bare-string ``to``
+    must resolve as one id, not be indexed into its first character."""
+
+    def test_api_strategy(self) -> None:
+        payload = SPDX3Schema.model_validate(
+            _doc(
+                {"type": "Relationship", "relationshipType": "describes", "from": "urn:doc", "to": "urn:p2"},
+                *_three_packages(),
+            )
+        )
+
+        package, _ = _extract_spdx3_primary_package(payload)
+
+        assert package is not None
+        assert package.name == "libbar"
+
+    def test_builder_helper(self) -> None:
+        info = _spdx3_component_info(
+            _doc(
+                {"type": "Relationship", "relationshipType": "describes", "from": "urn:doc", "to": "urn:p2"},
+                *_three_packages(),
+            )
+        )
+
+        assert info == ("libbar", "2.0.0", None)
