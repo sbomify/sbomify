@@ -96,8 +96,7 @@
                                 <i class="fas fa-puzzle-piece tw-dropdown-item-icon" aria-hidden="true"></i>
                                 Component
                             </button>
-                            {% comment %}A link rather than a dispatch: the advisory modal needs the workspace's products and releases in context, so it lives on the advisories page and ?new=1 opens it on arrival.{% endcomment %}
-                            <a href="{% url 'core:security_advisories_dashboard' %}?new=1"
+                            <a href="{% url 'core:security_advisory_new' %}"
                                @click="open = false"
                                class="tw-dropdown-item"
                                role="menuitem">

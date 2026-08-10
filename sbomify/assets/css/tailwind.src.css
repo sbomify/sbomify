@@ -3434,6 +3434,44 @@ html.no-transitions * {
   margin-left: 2.75rem;
 }
 
+/* A step in a long form: what this part is on the left, the fields on the right.
+   Stacks into one column below 64rem, where there is no room for two. The rule
+   between sections is the section's own top border, so sections can be added or
+   removed without minding separators. */
+.tw-form-section {
+  display: grid;
+  gap: 1rem 3rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.tw-form-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (width >= 64rem) {
+  .tw-form-section {
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+}
+
+.tw-form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.tw-form-section-description {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0.375rem 0 0;
+}
+
 /* Metric chip: the stats strip under a page header — a bordered surface pill
    holding an icon, a muted label and a value. */
 .tw-metric-chip {

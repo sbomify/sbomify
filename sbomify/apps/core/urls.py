@@ -101,6 +101,12 @@ urlpatterns = [
         views.SecurityAdvisoriesTableView.as_view(),
         name="security_advisories_table",
     ),
+    # Before the <advisory_id> pattern, which would otherwise swallow "new".
+    path(
+        "security-advisories/new/",
+        views.SecurityAdvisoryCreateView.as_view(),
+        name="security_advisory_new",
+    ),
     path(
         "security-advisories/<str:advisory_id>/",
         views.SecurityAdvisoryDetailView.as_view(),
