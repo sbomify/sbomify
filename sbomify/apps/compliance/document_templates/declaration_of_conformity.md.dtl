@@ -26,6 +26,42 @@
 > the document.
 {% endif %}
 
+{% if authorized_rep_name %}
+## 2a. Authorised Representative
+
+{% if authorized_rep_required %}Appointed under CRA Art. 22 because the manufacturer is not established in the Union.{% else %}Appointed by the manufacturer. This assessment does not record an Art. 22 obligation, which arises only for manufacturers established outside the Union.{% endif %}
+
+- **Name:** {{ authorized_rep_name }}
+{% if authorized_rep_address %}
+- **Address:** {{ authorized_rep_address }}
+{% endif %}
+{% if authorized_rep_email %}
+- **Email:** {{ authorized_rep_email }}
+{% endif %}
+{% if authorized_rep_mandate_date %}
+- **Mandate dated:** {{ authorized_rep_mandate_date }}
+{% endif %}
+{% if authorized_rep_mandate_reference %}
+- **Mandate reference:** {{ authorized_rep_mandate_reference }}
+{% endif %}
+
+The Authorised Representative holds a copy of this declaration and of the technical documentation, and is empowered to act on the manufacturer's behalf before market surveillance authorities.
+{% elif authorized_rep_required %}
+## 2a. Authorised Representative
+
+> ⚠️  The manufacturer is recorded as not established in the Union, so CRA
+> Art. 22 requires an Authorised Representative to be appointed before this
+> product is placed on the market. No representative has been recorded —
+> this declaration MUST NOT be signed until one is.
+{% elif eu_establishment_unanswered %}
+## 2a. Authorised Representative
+
+> ⚠️  It has not been recorded whether the manufacturer is established in the
+> Union, so whether CRA Art. 22 requires an Authorised Representative is
+> unknown. Answer the establishment question in Step 1 and regenerate this
+> document. Silence here is not a statement that no representative is needed.
+{% endif %}
+
 ## 3. Responsibility Statement
 
 This EU declaration of conformity is issued under the sole responsibility of the manufacturer.

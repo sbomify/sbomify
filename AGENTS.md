@@ -331,6 +331,19 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 - Use `gh` CLI for GitHub operations
 - Never amend commits or force push — always create new commits
 
+## Spotlight Search (navbar)
+
+The search bar is a navigation palette first, an asset finder second. Every
+navigable destination lives in **`sbomify/apps/core/data/spotlight_destinations.json`** —
+adding a feature to the palette means appending one object there and nothing else.
+The file's own header documents the fields; `sbomify/apps/core/spotlight.py` reads it,
+and `test_spotlight.py` fails on a `url_name` that does not resolve, so a typo cannot
+ship as a dead entry.
+
+When you add a user-facing feature, add its destination in the same PR, and put the
+words people actually type in `keywords` — including the ones the UI does not use
+(someone searching "api key" should land on the tokens tab).
+
 ## ADR Summary
 
 - **ADR-001**: Django monolith with API-first approach (moved away from Vue SPA)
