@@ -100,6 +100,7 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 | Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*`, `tw-icon-btn` (+ `-sm`, `-danger`), `tw-stepper-*` |
 | Accent | `tw-icon-chip` (+ sizes `-sm`/`-lg`/`-xl`, `-circle`, and `-neutral`/`-info`/`-success`/`-warning`/`-danger`) — the flat tinted chip behind every icon-beside-a-heading |
 | Layout | `tw-page-header` (+ `-lead` for a mark beside the title, `-title`, `-subtitle`, `-actions`, `-flush` inside a `space-y-*` stack), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title, `tw-metric-chip` (+ `-label`, `-value`) for the stats strip |
+| Selection | `tw-select-row` — a list row that is clickable in full. Selected state comes from `:has(:checked)`, never a class, so it cannot drift from the control; keep a real checkbox for keyboard and form submission and add the row click as a pointer convenience, guarded so nested controls still work. |
 | Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose) |
 | Misc | modal, `alpine-tooltip` (via the `x-tooltip` directive), copy button / token display / code block |
 

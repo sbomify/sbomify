@@ -2810,6 +2810,49 @@ html.no-transitions * {
 }
 
 /* ============================================
+   Component Classes - Selectable Row
+   ============================================ */
+/* A list row that is clickable in full: clicking anywhere in it toggles the
+   control it contains, so the hover has to say so. The selected state comes from
+   `:has(:checked)` rather than a class, so it cannot fall out of step with the
+   control. Rows keep a real checkbox for keyboard and form submission — the row
+   click is a pointer convenience on top. */
+.tw-select-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-select-row:hover {
+  background-color: color-mix(in oklab, var(--color-primary) 6%, transparent);
+}
+
+.tw-select-row:has(:checked) {
+  background-color: color-mix(in oklab, var(--color-primary) 4%, transparent);
+}
+
+.tw-select-row:has(:checked):hover {
+  background-color: color-mix(in oklab, var(--color-primary) 9%, transparent);
+}
+
+/* Keyboard users land on the control, so the row shows the focus. */
+.tw-select-row:has(:focus-visible) {
+  background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
+}
+
+/* A row whose control is disabled is not clickable, and must not pretend to be. */
+.tw-select-row:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.tw-select-row:has(input:disabled):hover {
+  background-color: transparent;
+}
+
+/* ============================================
    Component Classes - Avatar
    ============================================ */
 .tw-avatar {

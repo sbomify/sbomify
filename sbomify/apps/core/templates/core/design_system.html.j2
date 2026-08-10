@@ -249,7 +249,13 @@
 {% endcard %}
 <h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
 {% card class="mb-8" %}
-<div class="max-w-xs">{% include "components/date_picker.html.j2" with name="ds-date" label="Release date" %}</div>
+{% comment %}
+    value_binding is required — it names the Alpine property the picker reads and
+    writes, so it must resolve in an enclosing scope.
+{% endcomment %}
+<div class="max-w-xs" x-data="{ dsReleaseDate: '' }">
+    {% include "components/date_picker.html.j2" with value_binding='dsReleaseDate' label="Release date" placeholder="Select a date..." %}
+</div>
 {% endcard %}
 {# ── Containers ────────────────────────────────────────────────────────── #}
 <h2 id="cards" class="text-xl font-semibold text-text mb-4">Cards</h2>
@@ -304,6 +310,37 @@
     <code class="tw-code-inline">confirm:show</code> rather than building another modal.
 </p>
 {% endcard %}
+<h2 id="select-rows" class="text-xl font-semibold text-text mb-4">Selectable rows</h2>
+<p class="text-sm text-text-muted mb-4">
+    A list where the whole row toggles its control. The selected state reads from
+    <code class="tw-code-inline">:has(:checked)</code>, so it cannot fall out of step with the checkbox, and the
+    row keeps a real control for keyboard and form submission — the row click is a pointer convenience.
+    A disabled row loses both the hover and the pointer.
+</p>
+<div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden mb-8">
+    {% for row in demo_select_rows %}
+        <div class="tw-select-row{% if row.disabled %} opacity-50 grayscale{% endif %}"
+             @click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.toggle.click()"
+             x-data>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center flex-wrap gap-2 mb-1">
+                    <label class="font-medium text-text cursor-pointer" for="ds-row-{{ forloop.counter }}">{{ row.name }}</label>
+                    <span class="tw-badge-secondary text-xs">{{ row.version }}</span>
+                    {% if row.beta %}<span class="tw-badge-info text-xs">Beta</span>{% endif %}
+                </div>
+                <p class="text-text-muted text-sm m-0">{{ row.description }}</p>
+            </div>
+            <div class="flex-shrink-0">
+                <input type="checkbox"
+                       id="ds-row-{{ forloop.counter }}"
+                       class="tw-checkbox"
+                       x-ref="toggle"
+                       {% if row.checked %}checked{% endif %}
+                       {% if row.disabled %}disabled{% endif %}>
+            </div>
+        </div>
+    {% endfor %}
+</div>
 <h2 id="empty-states" class="text-xl font-semibold text-text mb-4">Empty states</h2>
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     {% card %}
@@ -528,8 +565,9 @@
     event — never build a notification by hand.
 </p>
 <div class="flex flex-wrap gap-2">
-    {% button text="Success toast" variant="success" size="sm" attrs="@click=&quot;$dispatch('toast', { type: 'success', title: 'Saved', message: 'Component updated.' })&quot;" %}
-    {% button text="Error toast" variant="danger" size="sm" attrs="@click=&quot;$dispatch('toast', { type: 'danger', title: 'Failed', message: 'Could not parse the SBOM.' })&quot;" %}
+    {% for toast in demo_toasts %}
+        {% button text=toast.label variant=toast.variant size="sm" attrs=toast.attrs %}
+    {% endfor %}
 </div>
 {% endcard %}
 <h2 id="loading" class="text-xl font-semibold text-text mb-4">Loading states</h2>

@@ -22,6 +22,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "cards", "label": "Cards", "group": "Containers"},
     {"id": "collapsible", "label": "Collapsible card", "group": "Containers"},
     {"id": "modals", "label": "Modals", "group": "Containers"},
+    {"id": "select-rows", "label": "Selectable rows", "group": "Containers"},
     {"id": "empty-states", "label": "Empty states", "group": "Containers"},
     {"id": "tables", "label": "Tables", "group": "Data"},
     {"id": "pagination", "label": "Pagination", "group": "Data"},
@@ -72,6 +73,49 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "border",
                 "text",
                 "text-muted",
+            ],
+            # Alpine handlers come from here, not inline in the template: an `attrs`
+            # string containing double quotes cannot survive a template tag argument
+            # (the HTML parser splits it into junk attributes).
+            "demo_toasts": [
+                {
+                    "label": "Success toast",
+                    "variant": "success",
+                    "attrs": "@click=\"$dispatch('toast', "
+                    "{ type: 'success', title: 'Saved', message: 'Component updated.' })\"",
+                },
+                {
+                    "label": "Error toast",
+                    "variant": "danger",
+                    "attrs": "@click=\"$dispatch('toast', "
+                    "{ type: 'danger', title: 'Failed', message: 'Could not parse the SBOM.' })\"",
+                },
+            ],
+            "demo_select_rows": [
+                {
+                    "name": "BSI TR-03183-2 v2.1",
+                    "version": "v1.0.0",
+                    "beta": True,
+                    "checked": True,
+                    "disabled": False,
+                    "description": "Validates SBOMs against BSI Technical Guideline TR-03183-2 v2.1.0.",
+                },
+                {
+                    "name": "CNSA 2.0 Compliance",
+                    "version": "v1.0.0",
+                    "beta": True,
+                    "checked": False,
+                    "disabled": False,
+                    "description": "Grades cryptographic assets against the NSA CNSA 2.0 suite.",
+                },
+                {
+                    "name": "Dependency Track",
+                    "version": "v2.1.0",
+                    "beta": False,
+                    "checked": False,
+                    "disabled": True,
+                    "description": "Requires a Business plan — the row is not clickable.",
+                },
             ],
             "demo_severities": [
                 {"level": "critical", "label": "Critical"},
