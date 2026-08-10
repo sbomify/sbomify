@@ -129,7 +129,7 @@
                         <input type="checkbox"
                                x-model="isOpenSourceSteward"
                                id="oss-steward"
-                               class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                               class="tw-checkbox shrink-0">
                         <label for="oss-steward" class="text-text cursor-pointer select-none">
                             This product is maintained by an Open Source Steward
                         </label>
@@ -151,7 +151,7 @@
                                            name="conformity_procedure"
                                            :value="proc.value"
                                            x-model="conformityAssessmentProcedure"
-                                           class="w-4 h-4 text-primary focus:ring-primary border-border">
+                                           class="tw-radio">
                                     <div>
                                         <span class="text-text font-medium text-sm" x-text="proc.label"></span>
                                         <span x-show="proc.note"
@@ -171,7 +171,7 @@
                             <label class="flex items-start gap-3 px-4 pt-3 pb-4 cursor-pointer">
                                 <input type="checkbox"
                                        x-model="harmonisedStandardApplied"
-                                       class="w-5 h-5 shrink-0 mt-0.5 rounded border-border text-primary focus:ring-primary">
+                                       class="tw-checkbox shrink-0 mt-0.5">
                                 <span class="text-sm text-text">I confirm a harmonised standard has been applied to this product.</span>
                             </label>
                         </div>
@@ -194,7 +194,7 @@
                     <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer">
                         <input type="checkbox"
                                x-model="isRadioEquipment"
-                               class="mt-0.5 w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                               class="tw-checkbox mt-0.5 shrink-0">
                         <span class="flex-1">
                             <span class="text-text font-medium block">Radio equipment under the RED</span>
                             <span class="text-xs text-text-muted">Triggers EN 18031-1 (RED Article 3(3)(d)) — access control, authentication, secure update, cryptography.</span>
@@ -205,7 +205,7 @@
                         <input type="checkbox"
                                x-model="processesPersonalData"
                                :disabled="!isRadioEquipment"
-                               class="mt-0.5 w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed">
+                               class="tw-checkbox mt-0.5 shrink-0">
                         <span class="flex-1">
                             <span class="text-text font-medium block">Processes personal data</span>
                             <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)) — data minimisation, GDPR alignment. Requires RED.</span>
@@ -216,7 +216,7 @@
                         <input type="checkbox"
                                x-model="handlesFinancialValue"
                                :disabled="!isRadioEquipment"
-                               class="mt-0.5 w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed">
+                               class="tw-checkbox mt-0.5 shrink-0">
                         <span class="flex-1">
                             <span class="text-text font-medium block">Handles monetary value or virtual currency</span>
                             <span class="text-xs text-text-muted">Triggers EN 18031-3 (RED Article 3(3)(f)) — protection from fraud. Requires RED.</span>
@@ -248,7 +248,7 @@
                                id="all-markets"
                                :checked="allMarketsSelected"
                                @click="toggleAllMarkets()"
-                               class="w-5 h-5 shrink-0 rounded border-border text-primary focus:ring-primary cursor-pointer">
+                               class="tw-checkbox shrink-0">
                         <label for="all-markets"
                                class="text-text font-medium cursor-pointer select-none">All EU markets</label>
                         <span class="text-xs text-text-muted ml-auto"
@@ -261,7 +261,7 @@
                                 <input type="checkbox"
                                        :checked="isMarketSelected(code)"
                                        @change="toggleMarket(code)"
-                                       class="w-4 h-4 shrink-0 rounded border-border text-primary focus:ring-primary">
+                                       class="tw-checkbox shrink-0">
                                 <span class="text-text" x-text="euCountryNames[code]"></span>
                             </label>
                         </template>

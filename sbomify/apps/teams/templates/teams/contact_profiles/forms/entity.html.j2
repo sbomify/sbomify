@@ -101,7 +101,7 @@
                            :class="!canSelectManufacturer && !isManufacturer ? 'opacity-50' : ''"
                            :title="!canSelectManufacturer && !isManufacturer ? 'Another entity is already assigned as manufacturer' : 'The organization that created or manufactured the component'">
                         <input type="checkbox"
-                               class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                               class="tw-checkbox"
                                name="{{ form.prefix }}-is_manufacturer"
                                id="{{ form.prefix }}-role-manufacturer"
                                x-model="isManufacturer"
@@ -113,7 +113,7 @@
                            :class="!canSelectSupplier && !isSupplier ? 'opacity-50' : ''"
                            :title="!canSelectSupplier && !isSupplier ? 'Another entity is already assigned as supplier' : 'The organization that provided the component'">
                         <input type="checkbox"
-                               class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                               class="tw-checkbox"
                                name="{{ form.prefix }}-is_supplier"
                                id="{{ form.prefix }}-role-supplier"
                                x-model="isSupplier"
@@ -124,7 +124,7 @@
                     <label class="flex items-center gap-2.5 cursor-pointer group"
                            title="Group of individual authors">
                         <input type="checkbox"
-                               class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                               class="tw-checkbox"
                                name="{{ form.prefix }}-is_author"
                                id="{{ form.prefix }}-role-author"
                                x-model="isAuthor"
@@ -167,7 +167,7 @@
                            name="{{ form.name.html_name }}"
                            id="{{ form.name.id_for_label }}"
                            value="{{ form.name.value|default:'' }}"
-                           class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           class="tw-form-input"
                            placeholder="e.g. Acme Corporation"
                            x-model.trim="name"
                            :required="!deleted && !isAuthorOnly"
@@ -186,7 +186,7 @@
                     <input type="email"
                            name="{{ form.email.html_name }}"
                            id="{{ form.email.id_for_label }}"
-                           class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           class="tw-form-input"
                            placeholder="contact@example.com"
                            x-model.trim="email"
                            :required="!deleted && !isAuthorOnly"
@@ -204,7 +204,7 @@
                            name="{{ form.phone.html_name }}"
                            id="{{ form.phone.id_for_label }}"
                            value="{{ form.phone.value|default:'' }}"
-                           class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           class="tw-form-input"
                            placeholder="+1 555 123 4567"
                            x-model.trim="phone">
                 </div>

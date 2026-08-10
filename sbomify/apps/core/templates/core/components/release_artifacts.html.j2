@@ -372,7 +372,7 @@
                                             <tr>
                                                 <th class="px-4 py-3.5 text-left w-12">
                                                     <input type="checkbox"
-                                                           class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                                                           class="tw-checkbox"
                                                            :checked="allFilteredSelected"
                                                            @change="toggleAllFiltered($event)"
                                                            aria-label="Select all artifacts">
@@ -467,7 +467,7 @@
                                                     @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
                                                     <td class="px-4 py-3.5">
                                                         <input type="checkbox"
-                                                               class="w-4 h-4 rounded border-border text-primary focus:ring-primary focus:ring-offset-0"
+                                                               class="tw-checkbox"
                                                                :checked="isSelected(artifact.id)"
                                                                @click.stop="toggleArtifactSelection(artifact.id)"
                                                                :aria-label="'Select ' + artifact.name">

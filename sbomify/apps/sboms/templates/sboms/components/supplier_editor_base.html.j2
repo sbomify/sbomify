@@ -3,7 +3,7 @@
     <label for="supplierName" class="block text-sm font-medium text-text mb-1">Name</label>
     <input id="supplierName"
            type="text"
-           class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+           class="tw-form-input"
            x-model="supplier.name"
            @input="dispatchUpdate()">
 </div>
@@ -17,7 +17,7 @@
                 <template x-for="(url, index) in supplier.url" :key="index">
                     <div class="flex gap-2">
                         <input type="url"
-                               class="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                               class="tw-form-input flex-1"
                                placeholder="https://example.com"
                                :value="url"
                                @input="updateUrl(index, $event.target.value)">
@@ -42,7 +42,7 @@
     <template x-if="!supplier.url || supplier.url.length === 0">
         <div class="flex gap-2">
             <input type="url"
-                   class="flex-1 px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   class="tw-form-input flex-1"
                    placeholder="https://example.com"
                    x-model="newUrlInput"
                    @keyup.enter="addUrlFromInput()">

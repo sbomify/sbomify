@@ -4088,6 +4088,11 @@ html.no-transitions * {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Room on the right for a trailing shortcut hint (the navbar's ⌘K). */
+.tw-search-input-hint input {
+  padding-right: 3.5rem;
+}
+
 .tw-search-input input::placeholder {
   color: var(--color-text-muted);
 }

@@ -14,17 +14,15 @@
     </button>
     {# Search Bar #}
     <div class="flex-1 max-w-xl">
-        <div class="relative" x-data="{ focused: false }">
+        <div class="tw-search-input tw-search-input-hint"
+             x-data="{ focused: false }">
             <label for="navbar-search-input" class="sr-only">Search products and components</label>
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <i class="fas fa-search text-text-muted transition-colors duration-200"
-                   :class="focused ? 'text-primary' : ''"
-                   aria-hidden="true"></i>
-            </div>
+            <i class="fas fa-search tw-search-input-icon"
+               :class="focused ? 'text-primary' : ''"
+               aria-hidden="true"></i>
             <input type="search"
                    id="navbar-search-input"
                    placeholder="Search products, components..."
-                   class="w-full pl-10 pr-12 py-2 bg-background border border-border rounded-lg text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all duration-200"
                    @focus="focused = true"
                    @blur="focused = false"
                    autocomplete="off"

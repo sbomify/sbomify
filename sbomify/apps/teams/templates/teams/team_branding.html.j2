@@ -55,7 +55,7 @@
                                          :style="'background-color: ' + uiColors.brand_color">
                                         <input type="color"
                                                id="brand-color"
-                                               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                               class="tw-form-input absolute inset-0"
                                                x-model="uiColors.brand_color"
                                                :value="uiColors.brand_color"
                                                @input="updateColor('brand_color', $event.target.value)">
@@ -80,7 +80,7 @@
                                          :style="'background-color: ' + uiColors.accent_color">
                                         <input type="color"
                                                id="accent-color"
-                                               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                               class="tw-form-input absolute inset-0"
                                                x-model="uiColors.accent_color"
                                                :value="uiColors.accent_color"
                                                @input="updateColor('accent_color', $event.target.value)">

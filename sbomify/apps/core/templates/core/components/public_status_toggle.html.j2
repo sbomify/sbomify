@@ -23,14 +23,14 @@
                                name="visibility"
                                :value="isPublic ? 'public' : 'private'" />
                         <input :id="'toggle-' + itemId"
-                               class="toggle-input"
+                               class="tw-checkbox"
                                type="checkbox"
                                :checked="isPublic"
                                :disabled="isLoading"
                                @change="togglePublicStatus()" />
                     {% else %}
                         <input :id="'toggle-' + itemId"
-                               class="toggle-input"
+                               class="tw-checkbox"
                                type="checkbox"
                                name="is_public"
                                :checked="isPublic"

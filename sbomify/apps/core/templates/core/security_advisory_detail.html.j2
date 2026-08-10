@@ -589,7 +589,7 @@
                                                    type="search"
                                                    x-model="search"
                                                    placeholder="Search VEX documents…"
-                                                   class="w-full rounded-lg border border-border bg-surface pl-9 pr-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors focus:outline-none focus:border-primary/60" />
+                                                   class="tw-form-input" />
                                         </div>
                                         <div class="space-y-2">
                                             <template x-for="v in filtered" :key="v.id">
@@ -598,7 +598,7 @@
                                                            name="vex_ids"
                                                            :value="v.id"
                                                            x-model="sel"
-                                                           class="mt-0.5 accent-primary" />
+                                                           class="tw-checkbox mt-0.5" />
                                                     <span class="min-w-0">
                                                         <span class="block text-sm font-medium text-text"
                                                               x-text="v.product + ' — maintained VEX'"></span>

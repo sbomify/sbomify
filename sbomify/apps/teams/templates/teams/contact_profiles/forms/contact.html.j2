@@ -26,7 +26,7 @@
                            name="{{ form.name.html_name }}"
                            id="{{ form.name.id_for_label }}"
                            value="{{ form.name.value|default:'' }}"
-                           class="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           class="tw-form-input"
                            placeholder="Name *"
                            maxlength="255"
                            :required="!deleted && editing"
@@ -39,7 +39,7 @@
                            name="{{ form.email.html_name }}"
                            id="{{ form.email.id_for_label }}"
                            value="{{ form.email.value|default:'' }}"
-                           class="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           class="tw-form-input"
                            placeholder="Email"
                            maxlength="254"
                            aria-label="Contact Email">
@@ -51,7 +51,7 @@
                            name="{{ form.phone.html_name }}"
                            id="{{ form.phone.id_for_label }}"
                            value="{{ form.phone.value|default:'' }}"
-                           class="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+                           class="tw-form-input"
                            placeholder="Phone"
                            aria-label="Contact Phone">
                 </div>
@@ -62,7 +62,7 @@
                     <input type="checkbox"
                            name="{{ form.is_author.html_name }}"
                            id="{{ form.is_author.id_for_label }}"
-                           class="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
+                           class="tw-checkbox"
                            {% if form.is_author.value %}checked{% endif %}
                            x-model="isAuthor">
                     <span class="text-text-muted group-hover:text-text transition-colors">
@@ -75,7 +75,7 @@
                     <input type="checkbox"
                            name="{{ form.is_security_contact.html_name }}"
                            id="{{ form.is_security_contact.id_for_label }}"
-                           class="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
+                           class="tw-checkbox"
                            {% if form.is_security_contact.value %}checked{% endif %}
                            x-model="isSecurityContact"
                            :disabled="securityContactDisabled && !isSecurityContact">
@@ -87,7 +87,7 @@
                     <input type="checkbox"
                            name="{{ form.is_technical_contact.html_name }}"
                            id="{{ form.is_technical_contact.id_for_label }}"
-                           class="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary"
+                           class="tw-checkbox"
                            {% if form.is_technical_contact.value %}checked{% endif %}
                            x-model="isTechnicalContact">
                     <span class="text-text-muted group-hover:text-text transition-colors">

@@ -27,7 +27,7 @@
             </label>
             <input type="text"
                    x-model="newContact.name"
-                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   class="tw-form-input"
                    :class="{ 'border-danger': formErrors.name }"
                    placeholder="Enter name"
                    @keyup.enter="saveContact()">
@@ -39,7 +39,7 @@
             <label class="block text-sm font-medium text-text mb-1">Email</label>
             <input type="email"
                    x-model="newContact.email"
-                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   class="tw-form-input"
                    :class="{ 'border-danger': formErrors.email }"
                    placeholder="Enter email address"
                    @keyup.enter="saveContact()">
@@ -51,7 +51,7 @@
             <label class="block text-sm font-medium text-text mb-1">Phone</label>
             <input type="tel"
                    x-model="newContact.phone"
-                   class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                   class="tw-form-input"
                    :class="{ 'border-danger': formErrors.phone }"
                    placeholder="Enter phone number"
                    @keyup.enter="saveContact()">
