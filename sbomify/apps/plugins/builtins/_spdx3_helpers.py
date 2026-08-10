@@ -44,23 +44,32 @@ _PURL_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl"})
 
 
 def is_spdx3(sbom_data: dict[str, Any]) -> bool:
-    """Check if SBOM is SPDX 3.0 format.
+    """Check if SBOM is SPDX 3.x format — the one detector every caller shares.
 
-    Detection is based primarily on @context containing "spdx.org/rdf/3.0",
-    with a fallback to legacy documents where spdxVersion starts with
-    "SPDX-3.".
+    Three signals, any of which decides it:
+      - @context containing "spdx.org/rdf/3." (any 3.x line, so a 3.1
+        document reaches the code that can reject it by name);
+      - a root-level @graph, the JSON-LD element array no other supported
+        format carries;
+      - a legacy root spdxVersion starting with "SPDX-3.".
     """
+    if not isinstance(sbom_data, dict):
+        return False
+
     context = sbom_data.get("@context", "")
     if isinstance(context, str):
-        if "spdx.org/rdf/3.0" in context:
+        if "spdx.org/rdf/3." in context:
             return True
     elif isinstance(context, list):
         for entry in context:
-            if "spdx.org/rdf/3.0" in str(entry):
+            if "spdx.org/rdf/3." in str(entry):
                 return True
     elif isinstance(context, dict):
-        if "spdx.org/rdf/3.0" in str(context):
+        if "spdx.org/rdf/3." in str(context):
             return True
+
+    if "@graph" in sbom_data:
+        return True
 
     spdx_version = sbom_data.get("spdxVersion") or ""
     if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
