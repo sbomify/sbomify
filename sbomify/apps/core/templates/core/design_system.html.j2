@@ -616,6 +616,16 @@
 {% endcard %}
 {% card title="Token display" %}
 {% token_display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked=True %}
+<p class="tw-data-label mt-6 mb-2">Inline copy</p>
+<p class="text-sm text-text-muted mb-3">
+    An identifier you click to copy. It confirms in place with its own
+    <code class="tw-code-inline">copied</code> state — no toast, because these sit in page headers
+    and identifier tables where one toast per click is far too loud.
+</p>
+<div class="flex flex-wrap items-center gap-2">
+    {% include "core/components/copyable_value.html.j2" with value="DLyQjCBkNJkB" title="Component ID (click to copy)" %}
+    {% include "core/components/copyable_value.html.j2" with value="pkg:npm/left-pad@1.3.0" title="PURL (click to copy)" %}
+</div>
 {% endcard %}
 </div>
 <h2 id="tooltip" class="text-xl font-semibold text-text mb-4">Tooltip</h2>

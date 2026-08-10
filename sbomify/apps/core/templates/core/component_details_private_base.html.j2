@@ -59,58 +59,58 @@
                              x-cloak
                              x-transition
                              @click.outside="compMenu = false"
-                             class="absolute right-0 top-full mt-2 w-60 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40"
+                             class="tw-dropdown right-0 top-full mt-2 w-60"
                              role="menu">
                             {% if component.has_crud_permissions %}
                                 {% block meatball_artifacts %}
-                                    <div class="px-2.5 pt-1.5 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Artifacts</div>
+                                    <div class="tw-dropdown-header">Artifacts</div>
                                     <button type="button"
                                             role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            class="tw-dropdown-item"
                                             @click="compMenu = false; $dispatch('open-upload')">
-                                        <i class="fas fa-upload w-4 text-text-muted" aria-hidden="true"></i>Upload artifact…
+                                        <i class="fas fa-upload tw-dropdown-item-icon" aria-hidden="true"></i>Upload artifact…
                                     </button>
-                                    <hr class="my-1.5 border-border">
+                                    <div class="tw-dropdown-divider"></div>
                                 {% endblock %}
                             {% endif %}
-                            <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Component</div>
+                            <div class="tw-dropdown-header">Component</div>
                             {% if component.component_type == 'bom' %}
                                 <button type="button"
                                         role="menuitem"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        class="tw-dropdown-item"
                                         @click="compMenu = false; $dispatch('open-metadata')">
-                                    <i class="fas fa-address-card w-4 text-text-muted" aria-hidden="true"></i>Metadata…
+                                    <i class="fas fa-address-card tw-dropdown-item-icon" aria-hidden="true"></i>Metadata…
                                 </button>
                             {% endif %}
                             {% if component.has_crud_permissions %}
                                 {% if component.component_type == 'bom' %}
                                     <button type="button"
                                             role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            class="tw-dropdown-item"
                                             @click="compMenu = false; $dispatch('open-cicd')">
-                                        <i class="fas fa-gears w-4 text-text-muted" aria-hidden="true"></i>CI/CD integration…
+                                        <i class="fas fa-gears tw-dropdown-item-icon" aria-hidden="true"></i>CI/CD integration…
                                     </button>
                                 {% endif %}
                                 <button type="button"
                                         role="menuitem"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        class="tw-dropdown-item"
                                         @click="compMenu = false; $dispatch('open-trusted-publishers')">
-                                    <i class="fas fa-shield-halved w-4 text-text-muted" aria-hidden="true"></i>Trusted publishers…
+                                    <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>Trusted publishers…
                                 </button>
                                 {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
                                 <button type="button"
                                         role="menuitem"
                                         x-show="visibility === 'public' || visibility === 'gated'"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        class="tw-dropdown-item"
                                         @click="compMenu = false; $dispatch('copy-url')">
-                                    <i class="fas fa-link w-4 text-text-muted" aria-hidden="true"></i>Copy public URL
+                                    <i class="fas fa-link tw-dropdown-item-icon" aria-hidden="true"></i>Copy public URL
                                 </button>
                                 <button type="button"
                                         role="menuitem"
                                         x-show="visibility === 'public' || visibility === 'gated'"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                        class="tw-dropdown-item"
                                         @click="compMenu = false; $dispatch('copy-badge')">
-                                    <i class="fas fa-certificate w-4 text-text-muted" aria-hidden="true"></i>Copy badge
+                                    <i class="fas fa-certificate tw-dropdown-item-icon" aria-hidden="true"></i>Copy badge
                                 </button>
                             {% endif %}
                         </div>

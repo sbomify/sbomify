@@ -96,45 +96,45 @@
                              x-cloak
                              x-transition
                              @click.outside="pmenu = false"
-                             class="absolute right-0 top-full mt-2 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40"
+                             class="tw-dropdown right-0 top-full mt-2 w-64"
                              role="menu">
-                            <div class="px-2.5 pt-1.5 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Product</div>
+                            <div class="tw-dropdown-header">Product</div>
                             <a href="{% url 'core:sbom_download_product' product.id %}"
                                role="menuitem"
-                               class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left no-underline">
-                                <i class="fas fa-download w-4 text-text-muted" aria-hidden="true"></i>Download SBOM · CycloneDX
+                               class="tw-dropdown-item no-underline">
+                                <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>Download SBOM · CycloneDX
                             </a>
                             <a href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
                                role="menuitem"
-                               class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left no-underline">
-                                <i class="fas fa-download w-4 text-text-muted" aria-hidden="true"></i>Download SBOM · SPDX
+                               class="tw-dropdown-item no-underline">
+                                <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>Download SBOM · SPDX
                             </a>
                             {# Sharing actions appear the moment the product goes public, no reload. #}
                             <template x-if="isPublic">
                                 <div>
-                                    <hr class="my-1.5 border-border">
-                                    <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Sharing</div>
+                                    <div class="tw-dropdown-divider"></div>
+                                    <div class="tw-dropdown-header">Sharing</div>
                                     <button type="button"
                                             role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            class="tw-dropdown-item"
                                             @click="pmenu = false; navigator.clipboard.writeText('{{ APP_BASE_URL }}{{ product_public_url }}').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Public URL copied to clipboard' }] }))">
-                                        <i class="fas fa-link w-4 text-text-muted" aria-hidden="true"></i>Copy public URL
+                                        <i class="fas fa-link tw-dropdown-item-icon" aria-hidden="true"></i>Copy public URL
                                     </button>
                                     <button type="button"
                                             role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            class="tw-dropdown-item"
                                             @click="pmenu = false; navigator.clipboard.writeText('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({{ APP_BASE_URL }}{{ product_public_url }})').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Badge markdown copied to clipboard' }] }))">
-                                        <i class="fas fa-certificate w-4 text-text-muted" aria-hidden="true"></i>Copy badge
+                                        <i class="fas fa-certificate tw-dropdown-item-icon" aria-hidden="true"></i>Copy badge
                                     </button>
                                 </div>
                             </template>
-                            <hr class="my-1.5 border-border">
-                            <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Releases</div>
+                            <div class="tw-dropdown-divider"></div>
+                            <div class="tw-dropdown-header">Releases</div>
                             <button type="button"
                                     role="menuitem"
-                                    class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                    class="tw-dropdown-item"
                                     @click="pmenu = false; $dispatch('open-create-release')">
-                                <i class="fas fa-plus w-4 text-text-muted" aria-hidden="true"></i>Create release…
+                                <i class="fas fa-plus tw-dropdown-item-icon" aria-hidden="true"></i>Create release…
                             </button>
                         </div>
                     </div>

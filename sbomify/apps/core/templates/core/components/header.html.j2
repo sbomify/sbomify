@@ -78,30 +78,30 @@
                              @keydown.arrow-up.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus();"
                              @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
                              @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()"
-                             class="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
+                             class="tw-dropdown right-0 mt-2 w-48"
                              role="menu"
                              aria-orientation="vertical"
                              aria-label="Create options">
                             <button type="button"
                                     @click="open = false; $dispatch('open-product-modal')"
-                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                                    class="tw-dropdown-item"
                                     role="menuitem">
-                                <i class="fas fa-cube w-4 text-center" aria-hidden="true"></i>
+                                <i class="fas fa-cube tw-dropdown-item-icon" aria-hidden="true"></i>
                                 Product
                             </button>
                             <button type="button"
                                     @click="open = false; $dispatch('open-component-modal')"
-                                    class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                                    class="tw-dropdown-item"
                                     role="menuitem">
-                                <i class="fas fa-puzzle-piece w-4 text-center" aria-hidden="true"></i>
+                                <i class="fas fa-puzzle-piece tw-dropdown-item-icon" aria-hidden="true"></i>
                                 Component
                             </button>
                             {% comment %}A link rather than a dispatch: the advisory modal needs the workspace's products and releases in context, so it lives on the advisories page and ?new=1 opens it on arrival.{% endcomment %}
                             <a href="{% url 'core:security_advisories_dashboard' %}?new=1"
                                @click="open = false"
-                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted text-left transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                               class="tw-dropdown-item"
                                role="menuitem">
-                                <i class="fas fa-shield-halved w-4 text-center" aria-hidden="true"></i>
+                                <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>
                                 Advisory
                             </a>
                         </div>
@@ -204,7 +204,7 @@
                  @keydown.arrow-up.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus();"
                  @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
                  @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()"
-                 class="absolute right-0 mt-2 w-64 bg-surface border border-border rounded-lg shadow-xl py-2 z-50"
+                 class="tw-dropdown right-0 mt-2 w-64"
                  role="menu"
                  aria-orientation="vertical"
                  aria-label="User options">
@@ -216,16 +216,16 @@
                 {# Profile Settings Link — link directly to team settings#account to avoid redirect losing fragment #}
                 {% if request.session.current_team and request.session.current_team.key %}
                     <a href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}#account"
-                       class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                       class="tw-dropdown-item"
                        role="menuitem">
-                        <i class="fas fa-user-edit w-4 text-center" aria-hidden="true"></i>
+                        <i class="fas fa-user-edit tw-dropdown-item-icon" aria-hidden="true"></i>
                         Profile Settings
                     </a>
                 {% else %}
                     <a href="{% url 'core:settings' %}"
-                       class="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted no-underline transition-all duration-150 focus:outline-none focus-visible:bg-primary/10 dropdown-item-hover"
+                       class="tw-dropdown-item"
                        role="menuitem">
-                        <i class="fas fa-user-edit w-4 text-center" aria-hidden="true"></i>
+                        <i class="fas fa-user-edit tw-dropdown-item-icon" aria-hidden="true"></i>
                         Profile Settings
                     </a>
                 {% endif %}
@@ -263,9 +263,9 @@
                 {# Logout #}
                 <div class="border-t border-border mt-2 pt-2">
                     <a href="{% url 'core:logout' %}"
-                       class="flex items-center gap-3 px-4 py-2.5 text-sm text-danger no-underline transition-all duration-150 focus:outline-none focus-visible:bg-danger/20 dropdown-item-danger-hover"
+                       class="tw-dropdown-item tw-dropdown-item-danger"
                        role="menuitem">
-                        <i class="fas fa-sign-out-alt w-4 text-center" aria-hidden="true"></i>
+                        <i class="fas fa-sign-out-alt tw-dropdown-item-icon" aria-hidden="true"></i>
                         Sign out
                     </a>
                 </div>
