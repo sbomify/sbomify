@@ -138,6 +138,10 @@ def extract_spdx3_elements(
         them are legal in creator and supplier positions.
     """
     elements = data.get("@graph", data.get("elements", []))
+    # Untrusted uploads: an explicit null @graph reaches here as None and
+    # would TypeError on iteration.
+    if not isinstance(elements, list):
+        elements = []
 
     creation_info: dict[str, Any] | None = None
     packages: list[dict[str, Any]] = []
