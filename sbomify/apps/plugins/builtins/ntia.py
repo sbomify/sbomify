@@ -35,6 +35,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
+    has_spdx3_supplier,
     is_spdx3,
 )
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
@@ -387,12 +388,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             pkg_name = pkg_fields["name"] or f"Package {i + 1}"
 
             # 1. Supplier name (originatedBy → Person/Org)
-            has_supplier = False
-            for ref in pkg_fields["supplier_refs"]:
-                if isinstance(ref, str) and ref in persons_orgs:
-                    has_supplier = True
-                    break
-            if not has_supplier:
+            if not has_spdx3_supplier(pkg_fields["supplier_refs"], persons_orgs):
                 supplier_failures.append(pkg_name)
 
             # 2. Component name
