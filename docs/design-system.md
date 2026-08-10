@@ -32,6 +32,7 @@ All tokens live in `sbomify/assets/css/tailwind.src.css` — `:root` (dark, the 
 | Surfaces | `--color-background`, `--color-surface`, `--color-surface-elevated` |
 | Lines & text | `--color-border`, `--color-border-light`, `--color-text`, `--color-text-muted` |
 | Shadows | `--shadow-xs`, `--shadow-card`, `--shadow-card-hover`, `--shadow-inner` |
+| Raised edges | `--edge-highlight`, `--edge-underline` — the top/bottom inset edges that make a surface-coloured control read as raised. Each theme states its own: on dark the surface is navy and takes a light top edge; on light it is pure white, where a white highlight is invisible, so the raise comes from the bottom edge. |
 
 Derive intermediate shades with `color-mix(in oklab, …)` from these — do not invent new hex values.
 

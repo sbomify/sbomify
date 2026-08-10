@@ -185,6 +185,12 @@
   --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.3);
   --shadow-xl: 0 20px 40px -10px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.05);
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.3);
+  /* Raised edges for surface-coloured controls. Filled buttons get their top
+     highlight from white over an accent; a surface button cannot, so each theme
+     states its own: on dark the surface is navy and takes a light top edge, on
+     light it is pure white and can only read as raised via the bottom edge. */
+  --edge-highlight: rgb(255 255 255 / 0.1);
+  --edge-underline: rgb(0 0 0 / 0.2);
   --shadow-glow-primary: 0 0 20px rgb(124 140 255 / 0.25), 0 0 40px rgb(124 140 255 / 0.1);
   --shadow-glow-success: 0 0 15px rgb(54 197 143 / 0.3);
   --shadow-glow-danger: 0 0 15px rgb(240 104 108 / 0.3);
@@ -256,6 +262,10 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+  /* Pure-white surface: a white top highlight would be invisible, so the raise
+     comes from a soft bottom edge instead. */
+  --edge-highlight: rgb(255 255 255 / 0.9);
+  --edge-underline: rgb(0 0 0 / 0.07);
   --shadow-glow-primary: 0 0 20px rgb(37 41 63 / 0.15);
   --shadow-glow-success: 0 0 15px rgb(31 169 113 / 0.15);
   --shadow-glow-danger: 0 0 15px rgb(229 72 77 / 0.15);
@@ -933,17 +943,20 @@ html.no-transitions * {
 }
 
 /* Secondary Button */
+/* Secondary carries the same raised edge as the filled variants — a light top
+   edge and a soft bottom one — so it reads as the same family of control rather
+   than a flat outline. */
 .tw-btn-secondary {
   background-color: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs), inset 0 1px 0 var(--edge-highlight), inset 0 -1px 0 var(--edge-underline);
 }
 
 .tw-btn-secondary:hover {
   background-color: var(--color-surface-elevated);
   border-color: var(--color-border-light);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs), inset 0 1px 0 var(--edge-highlight), inset 0 -1px 0 var(--edge-underline);
 }
 
 .tw-btn-secondary:active {
