@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Count, Exists, OuterRef
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
@@ -79,6 +79,17 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
 
 def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5) -> list[Any]:
     """Get releases for a public product (releases inherit visibility from their product)."""
+    from sbomify.apps.core.models import Component
+
+    # Count what the release page will actually list: artifacts from private
+    # components are absent there (get_release filters them for anyone who
+    # cannot manage the release), so counting them here would advertise rows
+    # the click-through does not show.
+    listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+    listable_artifacts = Q(artifacts__sbom__component__visibility__in=listable) | Q(
+        artifacts__document__component__visibility__in=listable
+    )
+
     # Use annotations to avoid N+1 queries for artifacts_count and has_sboms
     # Exclude the synthetic auto-`latest` release — the product page surfaces it
     # via the "Download Latest Release" CTA, so it shouldn't also occupy a row
@@ -88,10 +99,13 @@ def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: 
         .exclude(name=LATEST_RELEASE_NAME)
         .select_related("product")
         .annotate(
-            annotated_artifacts_count=Count("artifacts"),
+            annotated_artifacts_count=Count("artifacts", filter=listable_artifacts),
             annotated_has_sboms=Exists(
                 ReleaseArtifact.objects.filter(
-                    release=OuterRef("pk"), sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM
+                    release=OuterRef("pk"),
+                    sbom__isnull=False,
+                    sbom__bom_type=SBOM.BomType.SBOM,
+                    sbom__component__visibility__in=listable,
                 )
             ),
         )

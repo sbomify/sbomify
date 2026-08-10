@@ -417,6 +417,100 @@ def test_build_release_response_has_vex_flag(
 
 
 @pytest.mark.django_db
+class TestPublicReleaseHidesPrivateComponents:
+    """A public release page must not name components the Trust Center refuses to show.
+
+    From production: a public product's release listed an artifact from a
+    private component — name, id, format — while the product page's Components
+    panel (correctly) left that component out. A visitor sees a component in
+    the release that does not exist anywhere else on the trust center, and its
+    per-artifact download 403s. The aggregate download already excludes
+    non-public members (builders._members_with_files); the metadata listing was
+    the one surface without the filter.
+    """
+
+    def _release_with_mixed_visibility(self, product: Product) -> tuple[Release, dict[str, Component]]:
+        product.is_public = True
+        product.save(update_fields=["is_public"])
+        release = Release.objects.create(product=product, name="v1.0.0")
+        components = {}
+        for visibility in ("public", "private", "gated"):
+            component = Component.objects.create(
+                name=f"{visibility} component", team_id=product.team_id, visibility=visibility
+            )
+            product.components.add(component)
+            sbom = SBOM.objects.create(
+                name=f"{visibility} sbom",
+                format="cyclonedx",
+                format_version="1.6",
+                sbom_filename=f"{visibility}.json",
+                component=component,
+            )
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+            components[visibility] = component
+        # A private component's document leaks through the same loop.
+        document = Document.objects.create(
+            name="private doc",
+            version="1.0",
+            document_filename="d.pdf",
+            component=components["private"],
+            source="manual_upload",
+            content_type="application/pdf",
+            file_size=1,
+            document_type="license",
+        )
+        ReleaseArtifact.objects.create(release=release, document=document)
+        return release, components
+
+    def _get_release_as(self, user) -> dict:
+        """The path the public view actually takes: ``get_release`` called as a
+        function (ReleaseDetailsPublicView bypasses the ninja serializer, so
+        the HTTP endpoint would not reproduce the leak — its Detail schema
+        drops the flat artifact keys entirely)."""
+        from django.contrib.auth.models import AnonymousUser
+        from django.test import RequestFactory
+
+        from sbomify.apps.core.apis import get_release
+
+        request = RequestFactory().get("/")
+        request.user = user
+        request.session = {}
+        status_code, release = get_release(request, self.release_id)
+        assert status_code == 200
+        return release
+
+    def test_anonymous_caller_sees_only_public_and_gated(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        from django.contrib.auth.models import AnonymousUser
+
+        release, _ = self._release_with_mixed_visibility(sample_product)
+        self.release_id = release.id
+
+        data = self._get_release_as(AnonymousUser())
+
+        names = {a["component_name"] for a in data["artifacts"]}
+        assert names == {"public component", "gated component"}
+
+    def test_team_member_still_sees_everything(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """The owner manages the release through the same code path — hiding
+        rows from them would read as artifacts silently vanishing."""
+        release, _ = self._release_with_mixed_visibility(sample_product)
+        self.release_id = release.id
+        member = sample_product.team.members.first()
+
+        data = self._get_release_as(member)
+
+        artifacts = data["artifacts"]
+        assert {a["component_name"] for a in artifacts} == {"public component", "private component", "gated component"}
+        assert "private doc" in {a["artifact_name"] for a in artifacts}
+
+
+@pytest.mark.django_db
 def test_update_release_success(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
