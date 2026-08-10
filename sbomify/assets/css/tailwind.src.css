@@ -2319,12 +2319,12 @@ html.no-transitions * {
 /* Edge cells breathe away from the card frame so rows don't read as packed. */
 .tw-table th:first-child {
   border-top-left-radius: 0.5rem;
-  padding-left: 1.5rem;
+  padding-left: 1rem;
 }
 
 .tw-table th:last-child {
   border-top-right-radius: 0.5rem;
-  padding-right: 1.5rem;
+  padding-right: 1rem;
 }
 
 .tw-table td {
@@ -2336,11 +2336,11 @@ html.no-transitions * {
 }
 
 .tw-table td:first-child {
-  padding-left: 1.5rem;
+  padding-left: 1rem;
 }
 
 .tw-table td:last-child {
-  padding-right: 1.5rem;
+  padding-right: 1rem;
 }
 
 .tw-table tbody tr {
@@ -2425,16 +2425,6 @@ html.no-transitions * {
   .tw-table td {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
-  }
-
-  .tw-table th:first-child,
-  .tw-table td:first-child {
-    padding-left: 1rem;
-  }
-
-  .tw-table th:last-child,
-  .tw-table td:last-child {
-    padding-right: 1rem;
   }
 
   /* Narrower still: at 375px a fixed table splits what is left equally, so
@@ -2522,7 +2512,7 @@ html.no-transitions * {
   gap: 1rem;
   /* Horizontal padding matches tw-table's first/last cell gutter, so the
      search box and the first column share an edge. */
-  padding: 1rem 1.5rem;
+  padding: 1rem;
   background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
   border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
   flex-wrap: wrap;
@@ -2616,7 +2606,7 @@ html.no-transitions * {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.875rem 1.5rem;
+  padding: 0.875rem 1rem;
   background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
   border-top: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
   flex-wrap: wrap;
