@@ -674,9 +674,9 @@ def _spdx3_version_tuple(version: str | None) -> tuple[int, ...] | None:
 
 
 _SPDX31_REJECTION = (
-    "SPDX {version} is not supported: the 3.1 line is a prerelease. "
-    "sbomify accepts SPDX 2.2, 2.3 and 3.0.x; send 3.0.1 or later to also "
-    "satisfy the BSI TR-03183-2 floor."
+    "SPDX {version} is not supported: no SPDX release above the 3.0 line "
+    "exists yet (3.1 is a prerelease). sbomify accepts SPDX 2.2, 2.3 and "
+    "3.0.x; send 3.0.1 or later to also satisfy the BSI TR-03183-2 floor."
 )
 
 

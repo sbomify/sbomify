@@ -57,7 +57,9 @@ def spdx3_schema_errors(document: dict[str, Any], limit: int = 3) -> list[str]:
 
     errors: list[str] = []
     for error in _validator().iter_errors(document):
-        pointer = "/" + "/".join(str(part) for part in error.absolute_path)
+        # JSON Pointer for the document root is the empty string, not "/".
+        path_parts = list(error.absolute_path)
+        pointer = "/" + "/".join(str(part) for part in path_parts) if path_parts else "(document root)"
         errors.append(f"{pointer}: {error.message[:200]}")
         if len(errors) >= limit:
             break
