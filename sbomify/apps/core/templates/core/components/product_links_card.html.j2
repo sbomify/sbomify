@@ -83,12 +83,15 @@
                 </table>
             </div>
         {% else %}
-            {% if not has_crud_permissions %}
-                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links available" message="This product does not have any links defined" %}
-            {% elif can_manage_links %}
+            {% comment %}
+            Two branches, not three: build_links_context sets can_manage_links
+            to has_crud_permissions verbatim, so there is no reader who can
+            crud but not manage.
+            {% endcomment %}
+            {% if can_manage_links %}
                 {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product" action_text="Add Link" action_click="showAddModal = true" %}
             {% else %}
-                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product" %}
+                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links available" message="This product does not have any links defined" %}
             {% endif %}
         {% endif %}
     </div>
