@@ -152,7 +152,7 @@
                                         <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
                                     </button>
                                 </th>
-                                <th class="px-4 py-3 text-left w-28"
+                                <th class="px-4 py-3 text-left w-28 tw-cell-date"
                                     :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                     <button type="button"
                                             class="tw-table-sortable"
@@ -442,7 +442,7 @@
                                                         </span>
                                                     </button>
                                                 </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-28"
+                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-28 tw-cell-date"
                                                     :aria-sort="availableSortColumn === 'created' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                                     <button type="button"
                                                             class="tw-table-sortable"
@@ -503,7 +503,7 @@
                                                               x-text="truncateText(artifact.version || '', 20)"></span>
                                                         <span x-show="!artifact.version" class="text-text-muted">—</span>
                                                     </td>
-                                                    <td class="px-4 py-3.5">
+                                                    <td class="px-4 py-3.5 tw-cell-date">
                                                         <span class="text-text-muted text-sm"
                                                               x-text="formatDate(artifact.created_at)"></span>
                                                     </td>

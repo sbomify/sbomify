@@ -94,7 +94,7 @@
                                             </span>
                                         </button>
                                     </th>
-                                    <th class="hidden lg:table-cell"
+                                    <th class="hidden lg:table-cell tw-cell-date"
                                         :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                         <button type="button"
                                                 class="tw-table-sortable"
@@ -183,7 +183,7 @@
                                                 </template>
                                             </div>
                                         </td>
-                                        <td class="hidden lg:table-cell">
+                                        <td class="hidden lg:table-cell tw-cell-date">
                                             <span class="text-text text-sm"
                                                   :title="formatDateFull(release.released_at || release.created_at)"
                                                   x-text="formatDate(release.released_at || release.created_at)"></span>

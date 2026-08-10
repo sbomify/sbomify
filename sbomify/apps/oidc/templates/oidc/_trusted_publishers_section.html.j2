@@ -33,7 +33,7 @@ workflow's OIDC identity and are valid for 15 minutes.
 <th>Provider</th>
 <th>Repository</th>
 <th>Added by</th>
-<th>Last used</th>
+<th class="tw-cell-date">Last used</th>
 <th class="text-right">Actions</th>
 </tr>
 </thead>
@@ -69,7 +69,7 @@ repo_id={{ binding.repository_id }}
 {% endif %}
 <div class="text-xs">{{ binding.created_at|date:"Y-m-d" }}</div>
 </td>
-<td class="text-sm text-text-muted">
+<td class="text-sm text-text-muted tw-cell-date">
 {% if binding.last_used_at %}
 {{ binding.last_used_at|date:"Y-m-d H:i" }} UTC
 {% else %}

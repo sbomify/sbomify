@@ -48,7 +48,7 @@
                             <th scope="col">Release</th>
                             <th scope="col" class="hidden md:table-cell">Version</th>
                             <th scope="col">Status</th>
-                            <th scope="col" class="hidden md:table-cell">Released</th>
+                            <th scope="col" class="hidden md:table-cell tw-cell-date">Released</th>
                             <th scope="col">
                                 <span class="sr-only">View</span>
                             </th>
@@ -83,7 +83,7 @@
                                         <span class="text-xs opacity-75">Stable</span>
                                     {% endif %}
                                 </td>
-                                <td class="hidden md:table-cell whitespace-nowrap">
+                                <td class="hidden md:table-cell tw-cell-date">
                                     <span title="{{ release.released_at|default_if_none:release.created_at }}">
                                         {{ release.released_at|default_if_none:release.created_at|naturaltime }}
                                     </span>

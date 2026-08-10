@@ -21,7 +21,7 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                             <th class="hidden md:table-cell">Format</th>
                             <th class="hidden md:table-cell">Source</th>
                             <th>Suppresses</th>
-                            <th class="hidden lg:table-cell">Created</th>
+                            <th class="hidden lg:table-cell tw-cell-date">Created</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -52,7 +52,7 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                                         <span class="text-text-muted text-xs">No suppressions</span>
                                     {% endif %}
                                 </td>
-                                <td class="hidden lg:table-cell text-text-muted text-sm">{{ doc.created_at|date:"M j, Y" }}</td>
+                                <td class="hidden lg:table-cell text-text-muted text-sm tw-cell-date">{{ doc.created_at|date:"M j, Y" }}</td>
                                 <td>
                                     <div class="flex items-center justify-center gap-1">
                                         <a href="{% url 'sboms:sbom_download' doc.id %}"

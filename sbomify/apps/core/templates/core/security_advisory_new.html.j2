@@ -19,7 +19,7 @@
                 </span>
                 <div>
                     <h1 class="tw-page-header-title">New advisory</h1>
-                    <p class="tw-page-header-subtitle">Opens as a draft. Its first timeline update records the status you set.</p>
+                    <p class="tw-page-header-subtitle">Opens as a draft. The first timeline entry shows this status.</p>
                 </div>
             </div>
             <div class="tw-page-header-actions">
@@ -40,7 +40,7 @@
                 <div class="space-y-5">
                     {% input name="title" label="Title" required=True placeholder="e.g. Improper authentication in SAML assertion handling" %}
                     {% choice_group name="severity" label="Severity" options=severity_options selected="medium" %}
-                    {% choice_group name="remediation_status" label="Status" options=status_options selected="identified" hint="Where the work already stands — the first timeline entry records this." %}
+                    {% choice_group name="remediation_status" label="Status" options=status_options selected="identified" hint="Where the work stands now." %}
                 </div>
             </div>
             <div class="tw-form-section">
@@ -49,9 +49,7 @@
                         <span class="tw-icon-chip tw-icon-chip-sm" aria-hidden="true">2</span>
                         What it affects
                     </h2>
-                    <p class="tw-form-section-description">
-                        Tick a product to cover it whole, or open it and pick versions. Shift-click selects a range.
-                    </p>
+                    <p class="tw-form-section-description">Tick a product to cover every version. Open one to pick versions.</p>
                 </div>
                 <div>{% include "core/components/advisory_product_picker.html.j2" %}</div>
             </div>
@@ -62,12 +60,12 @@
                               aria-hidden="true">3</span>
                         What else is known
                     </h2>
-                    <p class="tw-form-section-description">Optional — add these now, or from the advisory's timeline later.</p>
+                    <p class="tw-form-section-description">Optional. You can add these later.</p>
                 </div>
                 <div class="space-y-5">
                     <input type="hidden" name="type" value="cve">
                     {% input name="vulnerability_id" label="CVE or reference" placeholder="CVE-2026-0000" %}
-                    {% textarea name="description" label="Description" rows=4 placeholder="Describe the vulnerability..." %}
+                    {% textarea name="description" label="Description" rows=4 placeholder="What is the problem, and who does it affect?" %}
                 </div>
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-6">

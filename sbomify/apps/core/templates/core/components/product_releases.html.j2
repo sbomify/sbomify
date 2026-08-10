@@ -95,7 +95,8 @@
                                     </span>
                                 </button>
                             </th>
-                            <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <th class="tw-cell-date"
+                                :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                 <button type="button"
                                         class="tw-table-sortable"
                                         :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
@@ -136,7 +137,7 @@
                                     <span class="text-text-muted"
                                           x-text="(release.artifacts_count || 0) + ' artifacts'"></span>
                                 </td>
-                                <td>
+                                <td class="tw-cell-date">
                                     <span class="text-text-muted text-sm"
                                           x-text="formatDate(release.created_at)"></span>
                                 </td>

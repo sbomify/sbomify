@@ -90,7 +90,7 @@
                                         <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
                                     </button>
                                 </th>
-                                <th class="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell"
+                                <th class="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell tw-cell-date"
                                     :aria-sort="sortColumn === 'created' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                     <button type="button"
                                             class="tw-table-sortable"
@@ -156,7 +156,7 @@
                                               x-text="getVersion(artifact)"></span>
                                         <span x-show="!getVersion(artifact)" class="text-text-muted">—</span>
                                     </td>
-                                    <td class="py-3 px-4 text-text-muted text-sm hidden lg:table-cell"
+                                    <td class="py-3 px-4 text-text-muted text-sm hidden lg:table-cell tw-cell-date"
                                         x-text="formatDate(artifact.created_at)"></td>
                                 </tr>
                             </template>

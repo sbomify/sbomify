@@ -52,7 +52,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-text-muted">{{ req.user.email }}</td>
-                                    <td class="text-text-muted">{{ req.requested_at|naturaltime }}</td>
+                                    <td class="text-text-muted tw-cell-date">{{ req.requested_at|naturaltime }}</td>
                                     <td>
                                         {% if req.nda_signature %}
                                             {% if req.has_current_nda_signature %}
@@ -168,7 +168,7 @@
                                                 <span class="text-text-muted">—</span>
                                             {% endif %}
                                         </td>
-                                        <td class="text-text-muted">{{ invitation.created_at|naturaltime }}</td>
+                                        <td class="text-text-muted tw-cell-date">{{ invitation.created_at|naturaltime }}</td>
                                         <td>
                                             <div class="flex justify-end">
                                                 <button type="button"
@@ -334,7 +334,7 @@
                                             <span class="text-text-muted">—</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-text-muted">{{ req.decided_at|naturaltime }}</td>
+                                    <td class="text-text-muted tw-cell-date">{{ req.decided_at|naturaltime }}</td>
                                     <td>
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"

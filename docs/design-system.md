@@ -97,7 +97,7 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 | Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline-{primary,warning,danger}`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
 | Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card` + `tw-card-{header,body,footer}`, `tw-collapsible-card` + `tw-collapsible-*` (the settings card was removed — use `tw-dashboard-card`) |
 | Forms | `tw-form-{label,input,select,textarea,error,hint}`, `tw-checkbox`, `tw-radio`, `tw-toggle` (+ `tw-toggle-label`), `tw-search-input-*`, `tw-file-upload-*`, `tw-date-picker-*`/`tw-calendar-*` |
-| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-cell-end` on a right-aligned column, `tw-table-actions` on a row-actions column, `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
+| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-cell-end` on a right-aligned column, `tw-cell-date` on every date or time column so the value never wraps, `tw-table-actions` on a row-actions column, `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
 | Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*` (+ `tw-badge-severity-{critical,high,medium,low}`), `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
 | Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*` (+ `tw-dropdown-floating` for a body-teleported menu), `tw-icon-btn` (+ `-sm`, `-danger`, `-stretch` to match the height of a taller neighbour), `tw-stepper-*` |
 | Accent | `tw-icon-chip` (+ sizes `-sm`/`-lg`/`-xl`, `-circle`, and `-neutral`/`-info`/`-success`/`-warning`/`-danger`) — the flat tinted chip behind every icon-beside-a-heading |
@@ -113,6 +113,30 @@ Two names that are easy to get wrong:
 - **`tw-stat-row`** is the wrapper *inside* a stat card that sits the delta on the value's baseline. Laying out a row of stat cards is the page's job (a grid utility).
 
 Removed in the v2 consolidation — do not reintroduce without three real callers: timeline, list group, range slider, `tw-tooltip` (CSS-hover; use `x-tooltip`), dividers, notification badge, `tw-table-striped`, `tw-tag-outline*`, `tw-avatar-group`, `tw-modal-{backdrop,container}`.
+
+## Copy
+
+The words are part of the component. A shared control with wordy copy is still a
+wordy screen, so the rules live here.
+
+- **No em dash (—) and no en dash (–) as punctuation, anywhere a user reads.**
+  Labels, hints, placeholders, empty states, toasts, errors, docs pages. Use a
+  comma, a colon, a full stop, or two sentences.
+- Short. One idea per sentence. Cut every word that does not change the meaning.
+- Plain words over precise ones. The reader is doing a job, not reading a spec.
+- Say what the user gets, not how it works. Internal model, field and status
+  names are not copy.
+- A button says the action it performs.
+
+| Instead of | Write |
+| --- | --- |
+| `Opens as a draft — its first timeline update records the status you set.` | `Opens as a draft. The first timeline entry shows this status.` |
+| `Remediation status` | `Status` |
+| `Tick a product to cover it whole, or open it and pick versions — shift-click selects a range.` | `Tick a product to cover every version. Open one to pick versions.` |
+| `No products selected yet.` | `No products chosen.` |
+| `Submit` | `Create advisory` |
+
+This is a review blocker, same as the anti-patterns below.
 
 ## Recipes
 
@@ -160,6 +184,7 @@ Count callers with a *loose* pattern before rejecting one. The metric chip was r
 
 ## Anti-patterns (review blockers)
 
+- An em dash or en dash in copy a user reads (see **Copy** above)
 - Hand-rolled buttons/cards/form controls where a component exists
 - Raw hex/rgb values, or Bootstrap classes (`btn`, `card`, `row`) in new work
 - Hover lift/motion on containers; ambient infinite animation outside loading states

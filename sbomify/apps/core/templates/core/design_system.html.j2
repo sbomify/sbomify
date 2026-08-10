@@ -640,6 +640,7 @@
         <thead>
             <tr>
                 <th>Product</th>
+                <th class="tw-cell-date">Updated</th>
                 <th class="tw-table-actions">
                     <span class="sr-only">Actions</span>
                 </th>
@@ -649,6 +650,7 @@
             {% for product in demo_menu_rows %}
                 <tr>
                     <td>{{ product }}</td>
+                    <td class="tw-cell-date text-text-muted text-sm">10 Aug 2026, 14:32</td>
                     <td class="tw-table-actions">
                         {% actions_menu label="Product actions" width="w-56" %}
                         <div class="tw-dropdown-header">Advisories</div>

@@ -80,7 +80,8 @@
                                 </span>
                             </button>
                         </th>
-                        <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                        <th class="tw-cell-date"
+                            :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
                                     :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
@@ -118,7 +119,7 @@
                                       x-text="item.document.version.length > 20 ? item.document.version.slice(0, 20) + '...' : item.document.version"
                                       :title="item.document.version"></span>
                             </td>
-                            <td class="text-text-muted text-sm whitespace-nowrap">
+                            <td class="text-text-muted text-sm tw-cell-date">
                                 <span x-text="new Date(item.document.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
                             </td>
                             <td class="hidden lg:table-cell">

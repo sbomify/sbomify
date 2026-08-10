@@ -83,7 +83,8 @@
                         </th>
                         {% if not is_public_view %}<th>Vulnerabilities</th>{% endif %}
                         {% if not is_public_view %}<th class="hidden lg:table-cell">Assessments</th>{% endif %}
-                        <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                        <th class="tw-cell-date"
+                            :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
                                     :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
@@ -215,7 +216,7 @@
                                     </template>
                                 </td>
                             {% endif %}
-                            <td class="text-text text-sm whitespace-nowrap">
+                            <td class="text-text text-sm tw-cell-date">
                                 <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
                                 <div class="text-xs text-text-muted"
                                      x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version">

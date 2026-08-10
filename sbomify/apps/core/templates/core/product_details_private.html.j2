@@ -208,7 +208,7 @@
                             <th>Name</th>
                             <th>Latest version</th>
                             <th>Vulnerabilities</th>
-                            <th>Last scan</th>
+                            <th class="tw-cell-date">Last scan</th>
                             {% if product.has_crud_permissions %}<th class="text-center">Actions</th>{% endif %}
                         </tr>
                     </thead>
@@ -252,7 +252,7 @@
                                         </div>
                                     {% endif %}
                                 </td>
-                                <td class="text-sm text-text-muted whitespace-nowrap">
+                                <td class="text-sm text-text-muted tw-cell-date">
                                     {% if row.last_scan %}
                                         {{ row.last_scan|naturaltime }}
                                     {% else %}

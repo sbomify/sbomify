@@ -52,7 +52,7 @@
                             </button>
                         </th>
                         <th class="w-[120px]">Status</th>
-                        <th class="w-[150px]"
+                        <th class="w-[150px] tw-cell-date"
                             :aria-sort="sortColumn === 'updated_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                             <button type="button"
                                     class="tw-table-sortable"
@@ -84,7 +84,7 @@
                                     <i class="fas fa-star mr-1 text-[10px]"></i>Default
                                 </span>
                             </td>
-                            <td>
+                            <td class="tw-cell-date">
                                 <span class="text-text-muted text-sm"
                                       x-text="formatDate(profile.updated_at)"></span>
                             </td>

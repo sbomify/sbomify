@@ -297,6 +297,24 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 - "sbomify" is always lowercase
 - "Workspace" in UI maps to "Team" in models (legacy naming)
 
+### Copy (anything a user reads)
+
+Covers UI strings, labels, hints, placeholders, empty states, toasts, error
+messages and docs pages.
+
+- **Never use an em dash (—) or an en dash (–) as punctuation.** Use a comma, a
+  colon, a full stop, or split it into two sentences.
+- Keep it short. One idea per sentence. Cut any word that does not change the
+  meaning.
+- Use plain words. "Fix" not "remediation", "version" not "release artifact
+  revision", "delete" not "permanently remove".
+- Say what the user does or gets, not how it works inside. Names of internal
+  models, statuses and fields are not copy.
+- Write a button as the action it performs: "Create advisory", not "Submit".
+
+`docs/design-system.md` carries the same rule with examples, where it is a
+review blocker.
+
 ### Python
 
 - Python 3.13+, type hints required

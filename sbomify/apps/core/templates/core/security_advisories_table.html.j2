@@ -90,7 +90,7 @@
                                     </span>
                                 </button>
                             </th>
-                            <th class="hidden sm:table-cell"
+                            <th class="hidden sm:table-cell tw-cell-date"
                                 :aria-sort="sortColumn === 'updated' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
                                 <button type="button"
                                         class="tw-table-sortable"
@@ -160,7 +160,7 @@
                                         </template>
                                     </div>
                                 </td>
-                                <td class="hidden sm:table-cell">
+                                <td class="hidden sm:table-cell tw-cell-date">
                                     <div class="flex flex-col">
                                         <span class="text-sm text-text-muted"
                                               x-text="window.sbomifyFormatDate(advisory.updated)"></span>

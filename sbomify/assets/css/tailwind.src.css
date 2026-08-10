@@ -2393,6 +2393,15 @@ html.no-transitions * {
   table-layout: fixed;
 }
 
+/* A date or time column stays on one line. "10 Aug 2026" broken across two
+   lines reads as two values, and "M d, Y at H:i" broken after the comma reads
+   as a date and a stray number. Put it on both the th and the td so the header
+   and the value agree. Stacked content inside the cell (a date over a count)
+   still stacks: give it a block or flex wrapper, which nowrap does not touch. */
+.tw-cell-date {
+  white-space: nowrap;
+}
+
 /* The row-actions column, holding one icon button — the actions menu. Wide
    enough for the button to sit inside the cell's own right gutter, so it lines
    up with the toolbar above rather than crowding the card's edge, and a fixed

@@ -40,7 +40,7 @@
                                 <th>Product</th>
                                 <th>Status</th>
                                 <th>Progress</th>
-                                <th>Last Updated</th>
+                                <th class="tw-cell-date">Last Updated</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -58,7 +58,7 @@
                                         {% endif %}
                                     </td>
                                     <td>{{ a.completed_steps|length }}/5 steps</td>
-                                    <td>{{ a.updated_at|date:"M d, Y" }}</td>
+                                    <td class="tw-cell-date">{{ a.updated_at|date:"M d, Y" }}</td>
                                     <td>
                                         <a href="{% url 'compliance:cra_wizard_shell' assessment_id=a.id %}"
                                            class="tw-btn-ghost text-sm">
