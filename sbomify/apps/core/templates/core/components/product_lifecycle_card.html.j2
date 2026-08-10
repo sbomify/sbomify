@@ -8,14 +8,22 @@
             <i class="far fa-question-circle text-text-muted text-sm cursor-help"
                x-tooltip="'Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)'"></i>
         </h4>
+        {% comment %}
+        Rendered only when there are dates to edit — same reasoning as the
+        links and identifiers cards: in the product page's collapsible section
+        (.tw-embed hides this header's title), an always-on Edit floated alone
+        over the empty state, which offers Set Dates itself.
+        {% endcomment %}
         {% if can_edit %}
-            <template x-if="!editing">
-                <button type="button"
-                        class="tw-btn-secondary text-sm"
-                        @click="editing = true">
-                    <i class="fas fa-edit mr-1"></i>Edit
-                </button>
-            </template>
+            {% if product.release_date or product.end_of_support or product.end_of_life %}
+                <template x-if="!editing">
+                    <button type="button"
+                            class="tw-btn-secondary text-sm"
+                            @click="editing = true">
+                        <i class="fas fa-edit mr-1"></i>Edit
+                    </button>
+                </template>
+            {% endif %}
         {% endif %}
     </div>
     <div class="p-6">
@@ -50,20 +58,11 @@
                         </div>
                     </div>
                 {% else %}
-                    <div class="flex flex-col items-center justify-center py-8">
-                        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                            <i class="fas fa-clock text-2xl text-text-muted"></i>
-                        </div>
-                        {% if can_edit %}
-                            <p class="text-text-muted m-0">No lifecycle dates set</p>
-                            <p class="text-text-muted text-sm mt-1">
-                                Add release date, end of support, and end of life dates to track product lifecycle
-                            </p>
-                        {% else %}
-                            <p class="text-text-muted m-0">No lifecycle dates available</p>
-                            <p class="text-text-muted text-sm mt-1">This product does not have lifecycle dates defined</p>
-                        {% endif %}
-                    </div>
+                    {% if can_edit %}
+                        {% include "components/tw/empty_state.html.j2" with icon="fas fa-clock" title="No lifecycle dates set" message="Add release date, end of support, and end of life dates to track product lifecycle" action_text="Set Dates" action_click="editing = true" compact=True %}
+                    {% else %}
+                        {% include "components/tw/empty_state.html.j2" with icon="fas fa-clock" title="No lifecycle dates available" message="This product does not have lifecycle dates defined" compact=True %}
+                    {% endif %}
                 {% endif %}
             </div>
         </template>
