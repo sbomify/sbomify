@@ -754,7 +754,6 @@ html.no-transitions * {
 
 /* Dashboard Card */
 .tw-dashboard-card {
-  animation: fadeInUp 0.4s ease-out;
   position: relative;
   overflow: hidden;
 }
@@ -1915,7 +1914,6 @@ html.no-transitions * {
   justify-content: center;
   padding: 3rem 2rem;
   text-align: center;
-  animation: fadeInUp 0.5s ease-out;
 }
 
 .tw-empty-state-compact {
@@ -3203,13 +3201,13 @@ html.no-transitions * {
 }
 
 .tw-copy-btn.copied {
+  background-color: var(--color-success);
   border-color: var(--color-success);
-  background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
-  color: var(--color-success);
+  color: white;
 }
 
 .tw-copy-btn.copied .tw-copy-btn-icon {
-  color: var(--color-success);
+  color: white;
 }
 
 /* Token Display Block */
@@ -3306,8 +3304,9 @@ html.no-transitions * {
 }
 
 .tw-token-action-btn.copied {
-  background-color: color-mix(in oklab, var(--color-success) 15%, transparent);
-  color: var(--color-success);
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
 }
 
 /* Token Alert */
@@ -3400,9 +3399,9 @@ html.no-transitions * {
 }
 
 .tw-code-block-copy-btn.copied {
-  background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
-  border-color: color-mix(in oklab, var(--color-success) 20%, transparent);
-  color: var(--color-success);
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
 }
 
 .tw-code-block-content {
@@ -3464,14 +3463,15 @@ html.no-transitions * {
 }
 
 .tw-inline-copy.copied {
-  background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
-  border-color: color-mix(in oklab, var(--color-success) 40%, transparent);
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
 }
 
 .tw-inline-copy.copied,
 .tw-inline-copy.copied .tw-inline-copy-icon,
 .tw-inline-copy.copied:hover .tw-inline-copy-icon {
-  color: color-mix(in oklab, var(--color-success) 70%, var(--color-text));
+  color: white;
 }
 
 /* ============================================

@@ -52,13 +52,13 @@
                 <div class="flex items-center gap-2">
                     <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
                     <button type="button"
-                            class="tw-btn-secondary tw-btn-sm flex-shrink-0"
-                            :class="{ 'tw-btn-success': copied }"
+                            class="tw-copy-btn flex-shrink-0"
+                            :class="{ copied: copied }"
                             title="Copy public URL"
                             aria-label="Copy public URL"
                             @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
-                        <i x-show="!copied" class="fas fa-copy"></i>
-                        <i x-show="copied" x-cloak class="fas fa-check"></i>
+                        <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
+                        <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                         <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                     </button>
                     <a href="{{ public_url }}"
@@ -204,13 +204,13 @@
                     <div class="flex items-center gap-2">
                         <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.custom_domain }}/.well-known/tea</code>
                         <button type="button"
-                                class="tw-btn-secondary tw-btn-sm flex-shrink-0"
-                                :class="{ 'tw-btn-success': copied }"
+                                class="tw-copy-btn flex-shrink-0"
+                                :class="{ copied: copied }"
                                 title="Copy TEA discovery URL"
                                 aria-label="Copy TEA discovery URL"
                                 @click="navigator.clipboard.writeText('https://{{ team_obj.custom_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                            <i x-show="!copied" class="fas fa-copy"></i>
-                            <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
+                            <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                             <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                         </button>
                     </div>
@@ -222,13 +222,13 @@
                     <div class="flex items-center gap-2">
                         <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea</code>
                         <button type="button"
-                                class="tw-btn-secondary tw-btn-sm flex-shrink-0"
-                                :class="{ 'tw-btn-success': copied }"
+                                class="tw-copy-btn flex-shrink-0"
+                                :class="{ copied: copied }"
                                 title="Copy TEA discovery URL"
                                 aria-label="Copy TEA discovery URL"
                                 @click="navigator.clipboard.writeText('https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                            <i x-show="!copied" class="fas fa-copy"></i>
-                            <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
+                            <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                             <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                         </button>
                     </div>
