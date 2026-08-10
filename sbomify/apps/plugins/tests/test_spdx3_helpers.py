@@ -279,3 +279,20 @@ class TestSPDX3PackageSchemaPurl:
 
         assert legacy.purl == "pkg:pypi/p@1.0"
         assert bare.purl == "pkg:/p@1.0"
+
+
+class TestHostileGraphEntries:
+    """Untrusted documents: a non-dict element or a null type must be skipped,
+    not crash the extraction."""
+
+    def test_non_dict_and_null_type_entries_are_skipped(self) -> None:
+        doc = _graph(
+            {"type": None, "spdxId": "urn:x"},
+            {"type": "Person", "spdxId": "urn:p", "name": "Jane"},
+        )
+        doc["@graph"].insert(0, "not-an-element")
+        doc["@graph"].insert(0, 42)
+
+        _, _, _, agents, _ = extract_spdx3_elements(doc)
+
+        assert agents["urn:p"]["name"] == "Jane"
