@@ -146,8 +146,14 @@ def extract_spdx3_elements(
     tools: dict[str, dict[str, Any]] = {}
 
     for element in elements:
-        elem_type = element.get("type", element.get("@type", ""))
-        bare_type = elem_type.rsplit("/", 1)[-1] if isinstance(elem_type, str) else ""
+        # Untrusted documents: a non-dict entry or a null type must not take
+        # the whole assessment run down.
+        if not isinstance(element, dict):
+            continue
+        elem_type = element.get("type", element.get("@type", "")) or ""
+        if not isinstance(elem_type, str):
+            continue
+        bare_type = elem_type.rsplit("/", 1)[-1]
         if "CreationInfo" in elem_type:
             creation_info = element
         elif "software_Package" in elem_type or elem_type == "Package":
@@ -262,9 +268,11 @@ def get_spdx3_package_fields(
     download_location = package.get("software_downloadLocation", "")
 
     # Check for unique identifiers: the first-class purl property first, then
-    # purl/cpe/swid external identifiers under either spelling.
+    # one scan of the external identifiers under either spelling — the purl
+    # type variants are a subset of _UNIQUE_ID_TYPES, so no second pass.
     external_identifiers = iter_spdx3_external_identifiers(package)
-    has_unique_id = bool(spdx3_package_purl(package)) or any(
+    direct_purl = package.get("software_packageUrl")
+    has_unique_id = bool(isinstance(direct_purl, str) and direct_purl) or any(
         ext_id.get("externalIdentifierType", "") in _UNIQUE_ID_TYPES for ext_id in external_identifiers
     )
 
