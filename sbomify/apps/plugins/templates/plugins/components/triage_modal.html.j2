@@ -41,9 +41,11 @@ Writes a sbomify-authored VEX through the triage API; requires can_triage
                         <div>
                             <label for="triage-scope" class="block text-sm font-medium text-text mb-1">Applies to</label>
                             <select id="triage-scope" class="tw-form-select w-full" x-model="scope">
-                                {# A real option element (a template element is invalid inside a select);
-                               hidden AND disabled when there is no package, and openTriage never defaults
-                               scope to 'package' without a purl, so it can neither show nor be selected. #}
+                                {% comment %}
+                                    A real option element (a template element is invalid inside a select);
+                                    hidden AND disabled when there is no package, and openTriage never defaults
+                                    scope to 'package' without a purl, so it can neither show nor be selected.
+                                {% endcomment %}
                                 <option value="package"
                                         :hidden="!purl"
                                         :disabled="!purl"

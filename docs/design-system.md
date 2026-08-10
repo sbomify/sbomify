@@ -194,6 +194,7 @@ Count callers with a *loose* pattern before rejecting one. The metric chip was r
 - New components or variants defined inside an app template or app CSS instead of the library
 - New UI merged without a gallery demo
 - **Wrapping a colour token in `rgb()`** — the tokens are already `rgb(…)`, so `rgb(var(--color-primary))` is invalid and the whole declaration is silently dropped. Use the token directly, or `color-mix(in oklab, var(--color-primary) 12%, transparent)` for a tint.
+- **A `{# … #}` comment spanning more than one line.** Django's tag pattern is not multi-line, so it is not recognised as a comment and the text renders on the page, or becomes junk attributes inside the tag it sits in. Use `{% comment %}…{% endcomment %}` for anything longer than one line.
 - Referencing a class that does not exist. It fails silently, so it survives review: grep the class in `tailwind.src.css` before shipping it, and remember class names also come from `.ts` files.
 - Styling state on a decorative sibling instead of the element that carries it — a link can never match `:disabled`, so use `[aria-disabled="true"]`.
 - **A Tailwind utility fighting a component class for the same property.** The `tw-*` classes are unlayered and emitted after Tailwind's utilities, so at equal specificity the component wins: `class="tw-stat-value text-danger"` renders in the default text colour, silently. When a component owns a property, recolour it through the component's accent custom property (`tw-stat-accent-danger`), never with a utility.

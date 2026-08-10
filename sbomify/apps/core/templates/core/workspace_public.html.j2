@@ -129,10 +129,12 @@
                 <div class="tw-alert-content">
                     <p class="text-sm m-0">
                         Enable vulnerability scanning to show security status on your products.
-                        {# Through switch_team: this page is reachable for any workspace the
-                           viewer administers, while the Plugins page is scoped to the session's
-                           current workspace. Linking straight to it could offer to enable
-                           scanning on whichever workspace happened to be selected. #}
+                        {% comment %}
+                            Through switch_team: this page is reachable for any workspace the
+                            viewer administers, while the Plugins page is scoped to the session's
+                            current workspace. Linking straight to it could offer to enable
+                            scanning on whichever workspace happened to be selected.
+                        {% endcomment %}
                         <a href="{% url 'teams:switch_team' workspace.key %}?next={% url 'plugins:plugins_page' %}"
                            class="font-medium">Plugins</a>
                     </p>

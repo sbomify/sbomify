@@ -32,8 +32,10 @@
     <button type="button"
         x-ref="trigger"
         class="{{ trigger_class|default:'tw-icon-btn tw-icon-btn-sm' }}"
-        {# Stops the click reaching a clickable table row, and stops the
-               teleported menu's own click-outside handler from re-opening it. #}
+        {% comment %}
+            Stops the click reaching a clickable table row, and stops the
+            teleported menu's own click-outside handler from re-opening it.
+        {% endcomment %}
         @click.stop="toggle()"
         :aria-expanded="open"
         aria-haspopup="true"

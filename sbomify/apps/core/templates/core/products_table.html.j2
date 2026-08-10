@@ -155,8 +155,10 @@
                                                 </span>
                                             </template>
                                         </td>
-                                        {# Row actions. The cell swallows its own clicks so reaching
-                                           for the menu never navigates to the product. #}
+                                        {% comment %}
+                                            Row actions. The cell swallows its own clicks so reaching
+                                            for the menu never navigates to the product.
+                                        {% endcomment %}
                                         <td class="tw-table-actions" @click.stop>
                                             {% actions_menu label="Product actions" width="w-56" %}
                                             {% if has_crud_permissions %}
