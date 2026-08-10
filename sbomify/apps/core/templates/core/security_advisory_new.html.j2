@@ -19,9 +19,7 @@
                 </span>
                 <div>
                     <h1 class="tw-page-header-title">New advisory</h1>
-                    <p class="tw-page-header-subtitle">
-                        Opens as a draft with its first update, <span class="text-text">Vulnerability identified</span>.
-                    </p>
+                    <p class="tw-page-header-subtitle">Opens as a draft. Its first timeline update records the status you set.</p>
                 </div>
             </div>
             <div class="tw-page-header-actions">
@@ -41,8 +39,9 @@
                 </div>
                 <div class="space-y-5">
                     {% input name="title" label="Title" required=True placeholder="e.g. Improper authentication in SAML assertion handling" %}
-                    <div class="max-w-[12rem]">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-lg">
                         {% select name="severity" label="Severity" options=severity_options selected="medium" %}
+                        {% select name="remediation_status" label="Status" options=status_options selected="identified" hint="Where you are on fixing it." %}
                     </div>
                 </div>
             </div>

@@ -1,18 +1,33 @@
 {% comment %}
     Affected products picker for the New Advisory form.
 
+    Two panes: products on the left, the versions of the open product on the
+    right. Versions used to expand inline, which pushed every other product off
+    screen as soon as one had more than a handful of builds — the pane gives them
+    their own scroll area and leaves the product list where it was.
+
     Selection state lives in the Alpine component rather than in the checkboxes,
     because shift-click sets a whole range from one event. The boxes render from
-    that state and the form submits from the hidden inputs at the end of the block.
+    that state and the form submits from the hidden inputs at the end.
 
     Expects `creation_products` in context.
 {% endcomment %}
 {% if creation_products %}
     {{ creation_products|json_script:"advisoryProductsData" }}
     <div x-data="advisoryProductPicker(window.parseJsonScript('advisoryProductsData'))">
-        {# The enclosing card already names this section, so only the actions sit here. #}
-        <div class="flex items-end justify-end gap-3 mb-1.5">
-            <div class="flex items-center gap-2 text-xs">
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 mb-1.5">
+            {% comment %}
+                The scope reads before the list. A ticked product with no ticked
+                versions covers every version it has and every version it gets —
+                which the checkboxes cannot say on their own, since an empty
+                version list looks identical to one nobody has opened yet.
+            {% endcomment %}
+            <p class="text-xs m-0 min-w-0"
+               :class="anySelected ? 'text-text' : 'text-text-muted'"
+               aria-live="polite">
+                <span x-text="selectionSummary"></span>
+            </p>
+            <div class="flex items-center gap-2 text-xs shrink-0">
                 <button type="button"
                         @click="selectAll()"
                         :disabled="allSelected"
@@ -28,147 +43,141 @@
                 </button>
             </div>
         </div>
-        {% comment %}
-        The scope reads above the list, not below it. A ticked product with
-        no ticked versions covers every version it has and every version it
-        gets — which the checkboxes cannot say on their own, since an empty
-        version list looks identical to one nobody has opened yet. Below the
-        list it fell under the modal's fold on a short window, so the one
-        line that resolves the ambiguity was the one you had to scroll for.
-        {% endcomment %}
-        <p class="mb-1.5 text-xs m-0"
-           :class="anySelected ? 'text-text' : 'text-text-muted'"
-           aria-live="polite">
-            <span x-text="selectionSummary"></span>
-        </p>
-        <div class="relative mb-1.5">
-            <i class="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-text-muted"
-               aria-hidden="true"></i>
+        <div class="tw-search-input mb-2">
+            <i class="fas fa-magnifying-glass tw-search-input-icon" aria-hidden="true"></i>
             <input type="search"
-                   class="tw-form-input !pl-8 !py-1.5 text-sm"
+                   class="tw-form-input"
                    placeholder="Filter products and versions…"
                    aria-label="Filter products and versions"
                    :value="filter"
-                   @input="setFilter($event.target.value)" />
+                   @input="setFilter($event.target.value)">
         </div>
-        <div class="max-h-[32rem] overflow-y-auto rounded-lg border border-border divide-y divide-border/60 select-none">
-            <p x-show="!visibleProducts.length"
-               x-cloak
-               class="px-3 py-4 text-xs text-text-muted text-center m-0">
-                Nothing matches <span class="font-mono" x-text="filter"></span>.
-            </p>
-            <template x-for="(product, index) in visibleProducts" :key="product.id">
-                <div>
-                    <div class="flex items-center gap-2 px-3 py-2">
-                        {% comment %}
-                        The row is the control, not a label wrapping a checkbox.
-                        A real click on label text makes the browser forward a
-                        second click to the nested input, which fired this
-                        handler twice and moved the selection to the wrong
-                        version. There is no label here to forward, so a click
-                        lands exactly once. The box is painted from state and
-                        takes no pointer or tab stop of its own; the row carries
-                        the role, the checked state and the keyboard handling.
-                        {% endcomment %}
-                        <div class="flex items-center gap-2.5 text-sm text-text cursor-pointer flex-1 min-w-0 select-none"
-                             role="checkbox"
-                             tabindex="0"
-                             :aria-checked="isPartiallySelected(product) ? 'mixed' : (isProductSelected(product.id) ? 'true' : 'false')"
-                             @click="toggleProduct(index, $event, visibleProducts)"
-                             @keydown.space.prevent="toggleProduct(index, undefined, visibleProducts)"
-                             @keydown.enter.prevent="toggleProduct(index, undefined, visibleProducts)">
-                            <input type="checkbox"
-                                   class="tw-checkbox shrink-0 pointer-events-none"
-                                   tabindex="-1"
-                                   aria-hidden="true"
-                                   :checked="isProductSelected(product.id)"
-                                   x-effect="$el.indeterminate = isPartiallySelected(product)" />
-                            <i class="fas fa-cube text-xs text-text-muted shrink-0"
-                               aria-hidden="true"></i>
-                            <span class="truncate" x-text="product.name"></span>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {# Products #}
+            <div class="rounded-lg border border-border overflow-hidden">
+                <p class="tw-data-label px-3 py-2 m-0 border-b border-border bg-muted/30">Products</p>
+                <div class="max-h-80 overflow-y-auto divide-y divide-border/60 select-none">
+                    <p x-show="!visibleProducts.length"
+                       x-cloak
+                       class="px-3 py-4 text-xs text-text-muted text-center m-0">
+                        Nothing matches <span class="font-mono" x-text="filter"></span>.
+                    </p>
+                    <template x-for="(product, index) in visibleProducts" :key="product.id">
+                        <div class="flex items-center gap-2 px-3 py-2 transition-colors"
+                             :class="isActive(product.id) ? 'bg-primary/8' : ''">
+                            {% comment %}
+                                The row is the control, not a label wrapping a checkbox.
+                                A real click on label text makes the browser forward a
+                                second click to the nested input, which fired this
+                                handler twice and moved the selection to the wrong
+                                version. There is no label here to forward, so a click
+                                lands exactly once. The box is painted from state and
+                                takes no pointer or tab stop of its own; the row carries
+                                the role, the checked state and the keyboard handling.
+                            {% endcomment %}
+                            <div class="flex items-center gap-2.5 text-sm text-text cursor-pointer flex-1 min-w-0 select-none"
+                                 role="checkbox"
+                                 tabindex="0"
+                                 :aria-checked="isPartiallySelected(product) ? 'mixed' : (isProductSelected(product.id) ? 'true' : 'false')"
+                                 @click="toggleProduct(index, $event, visibleProducts)"
+                                 @keydown.space.prevent="toggleProduct(index, undefined, visibleProducts)"
+                                 @keydown.enter.prevent="toggleProduct(index, undefined, visibleProducts)">
+                                <input type="checkbox"
+                                       class="tw-checkbox shrink-0 pointer-events-none"
+                                       tabindex="-1"
+                                       aria-hidden="true"
+                                       :checked="isProductSelected(product.id)"
+                                       x-effect="$el.indeterminate = isPartiallySelected(product)">
+                                <i class="fas fa-cube text-xs text-text-muted shrink-0" aria-hidden="true"></i>
+                                <span class="truncate" x-text="product.name"></span>
+                            </div>
+                            {# Opening a product is a separate action from selecting it. #}
+                            <button type="button"
+                                    x-show="product.releases.length"
+                                    @click="openProduct(product.id)"
+                                    :aria-expanded="isActive(product.id) ? 'true' : 'false'"
+                                    :class="isActive(product.id) ? 'text-primary' : 'text-text-muted hover:text-text'"
+                                    class="flex items-center gap-1.5 text-xs shrink-0 cursor-pointer">
+                                <span x-text="versionSummary(product)"></span>
+                                <i class="fas fa-chevron-right text-[0.625rem]" aria-hidden="true"></i>
+                            </button>
                         </div>
-                        <button type="button"
-                                x-show="product.releases.length"
-                                @click="toggleExpanded(product.id)"
-                                :aria-expanded="isExpanded(product.id) ? 'true' : 'false'"
-                                class="flex items-center gap-1.5 text-xs text-text-muted hover:text-text shrink-0">
-                            <span x-text="versionSummary(product)"></span>
-                            <i class="fas fa-chevron-down text-[0.625rem] transition-transform"
-                               :class="isExpanded(product.id) ? 'rotate-180' : ''"
-                               aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    {% comment %}
-                    Guarded on releases as well as expansion: a product with no
-                    versions has nothing to show, and its toggle is hidden, so
-                    this would only ever render an empty panel.
-                    {% endcomment %}
-                    {% comment %}
-                    One version per row, not a wrapping flow. Version labels
-                    are build identifiers of wildly uneven length, so packing
-                    them by intrinsic width put a different number on every
-                    row and left no edge to read down. Two columns aligned
-                    them but cost too much width: these identifiers share a
-                    long prefix and differ only in the tail, so truncating
-                    rendered neighbouring builds identical and you could not
-                    tell which one you were about to attach an advisory to.
-                    A single column keeps every label whole. truncate stays
-                    as a guard for a pathological name, with the full string
-                    on hover. Monospace keeps the digits in register.
-                    {% endcomment %}
-                    <div x-show="(isExpanded(product.id) || filterTerm) && visibleReleases(product).length"
-                         x-cloak
-                         class="px-3 pb-2.5 pl-11 bg-muted/30">
-                        <button type="button"
-                                @click="toggleAllVersions(product, visibleReleases(product))"
-                                class="text-xs text-primary hover:underline mb-1.5">
-                            <span x-text="allVersionsSelected(product, visibleReleases(product)) ? 'Clear versions' : 'Select every version'"></span>
-                        </button>
-                        <div class="grid grid-cols-1 gap-y-0.5">
-                            <template x-for="(release, rIndex) in visibleReleases(product)"
-                                      :key="release.id">
-                                <div class="flex items-center gap-2 min-w-0 py-0.5 text-xs text-text cursor-pointer select-none"
-                                     role="checkbox"
-                                     tabindex="0"
-                                     :aria-checked="isReleaseSelected(release.id) ? 'true' : 'false'"
-                                     @click="toggleRelease(product, rIndex, $event, visibleReleases(product))"
-                                     @keydown.space.prevent="toggleRelease(product, rIndex, undefined, visibleReleases(product))"
-                                     @keydown.enter.prevent="toggleRelease(product, rIndex, undefined, visibleReleases(product))">
-                                    <input type="checkbox"
-                                           class="tw-checkbox shrink-0 pointer-events-none"
-                                           tabindex="-1"
-                                           aria-hidden="true"
-                                           :checked="isReleaseSelected(release.id)" />
-                                    <span class="truncate font-mono"
-                                          :title="release.label"
-                                          x-text="release.label"></span>
-                                    <span class="ml-auto shrink-0 pl-2 text-[0.6875rem] text-text-muted tabular-nums"
-                                          x-text="release.created"></span>
-                                </div>
-                            </template>
-                        </div>
+                    </template>
+                </div>
+            </div>
+            {# Versions of the open product #}
+            <div class="rounded-lg border border-border overflow-hidden">
+                <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-muted/30">
+                    <p class="tw-data-label m-0 min-w-0 truncate">
+                        <span x-show="!activeProduct" x-cloak>Versions</span>
+                        <span x-show="activeProduct" x-cloak x-text="activeProduct?.name"></span>
+                    </p>
+                    <button type="button"
+                            x-show="activeProduct && activeReleases.length"
+                            x-cloak
+                            @click="toggleAllVersions(activeProduct, activeReleases)"
+                            class="text-xs text-primary hover:underline shrink-0 cursor-pointer">
+                        <span x-text="allVersionsSelected(activeProduct, activeReleases) ? 'Clear versions' : 'Select every version'"></span>
+                    </button>
+                </div>
+                {% comment %}
+                    One version per row, not a wrapping flow. Version labels are build
+                    identifiers of wildly uneven length, so packing them by intrinsic
+                    width put a different number on every row and left no edge to read
+                    down. Truncating rendered neighbouring builds identical — they
+                    share a long prefix and differ only in the tail — so you could not
+                    tell which one you were about to attach an advisory to. A single
+                    column keeps every label whole; monospace keeps the digits in
+                    register.
+                {% endcomment %}
+                <div class="max-h-80 overflow-y-auto select-none">
+                    <p x-show="!activeProduct"
+                       class="px-3 py-8 text-xs text-text-muted text-center m-0">
+                        A ticked product covers every version, now and in future.
+                        <br>
+                        Open one to narrow it to specific versions.
+                    </p>
+                    <div x-show="activeProduct" x-cloak class="divide-y divide-border/60">
+                        <p x-show="!activeReleases.length"
+                           x-cloak
+                           class="px-3 py-4 text-xs text-text-muted text-center m-0">
+                            No versions match <span class="font-mono" x-text="filter"></span>.
+                        </p>
+                        <template x-for="(release, rIndex) in activeReleases" :key="release.id">
+                            <div class="flex items-center gap-2.5 px-3 py-2 min-w-0 text-xs text-text cursor-pointer select-none"
+                                 role="checkbox"
+                                 tabindex="0"
+                                 :aria-checked="isReleaseSelected(release.id) ? 'true' : 'false'"
+                                 @click="toggleRelease(activeProduct, rIndex, $event, activeReleases)"
+                                 @keydown.space.prevent="toggleRelease(activeProduct, rIndex, undefined, activeReleases)"
+                                 @keydown.enter.prevent="toggleRelease(activeProduct, rIndex, undefined, activeReleases)">
+                                <input type="checkbox"
+                                       class="tw-checkbox shrink-0 pointer-events-none"
+                                       tabindex="-1"
+                                       aria-hidden="true"
+                                       :checked="isReleaseSelected(release.id)">
+                                <span class="truncate font-mono" :title="release.label" x-text="release.label"></span>
+                                <span class="ml-auto shrink-0 pl-2 text-[0.6875rem] text-text-muted tabular-nums"
+                                      x-text="release.created"></span>
+                            </div>
+                        </template>
                     </div>
                 </div>
-            </template>
+            </div>
         </div>
         <template x-for="id in selectedProducts" :key="id">
-            <input type="hidden" name="products" :value="id" />
+            <input type="hidden" name="products" :value="id">
         </template>
         <template x-for="id in selectedReleases" :key="id">
-            <input type="hidden" name="affected_releases" :value="id" />
+            <input type="hidden" name="affected_releases" :value="id">
         </template>
-        <p class="mt-1.5 text-xs text-text-muted m-0">
-            Tick a product on its own to cover it whole, or open it and pick
-            versions to narrow the advisory. Shift-click selects a range.
-        </p>
+        <p class="mt-2 text-xs text-text-muted m-0">Shift-click selects a range.</p>
     </div>
 {% else %}
     <div>
-        <label class="tw-form-label">Affected products</label>
-        <p class="text-sm text-text-muted rounded-lg border border-dashed border-border px-3 py-2.5">
+        <p class="text-sm text-text-muted rounded-lg border border-dashed border-border px-3 py-2.5 m-0">
             No products in this workspace yet.
-            <a href="{% url 'core:products_dashboard' %}"
-               class="text-primary hover:underline">Create one</a>
+            <a href="{% url 'core:products_dashboard' %}" class="text-primary hover:underline">Create one</a>
             to map advisories to it.
         </p>
     </div>

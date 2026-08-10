@@ -117,14 +117,44 @@ describe('the collapsed row summary', () => {
     })
 })
 
-describe('expanding rows', () => {
-    test('expansion is independent of selection', () => {
-        picker.toggleExpanded('p1')
-        expect(picker.isExpanded('p1')).toBe(true)
+describe('opening a product in the detail pane', () => {
+    test('opening is independent of selection', () => {
+        picker.openProduct('p1')
+        expect(picker.isActive('p1')).toBe(true)
         expect(picker.isProductSelected('p1')).toBe(false)
 
-        picker.toggleExpanded('p1')
-        expect(picker.isExpanded('p1')).toBe(false)
+        picker.openProduct('p1')
+        expect(picker.isActive('p1')).toBe(false)
+    })
+
+    test('only one product is open at a time', () => {
+        picker.openProduct('p1')
+        picker.openProduct('p2')
+
+        expect(picker.isActive('p2')).toBe(true)
+        expect(picker.isActive('p1')).toBe(false)
+    })
+
+    test('the open product exposes its own versions', () => {
+        picker.openProduct('p1')
+
+        expect(picker.activeProduct?.id).toBe('p1')
+        expect(picker.activeReleases.map((release) => release.id)).toEqual(
+            picker.products[0]!.releases.map((release) => release.id),
+        )
+    })
+
+    test('nothing open means no versions to show', () => {
+        expect(picker.activeProduct).toBeNull()
+        expect(picker.activeReleases).toEqual([])
+    })
+
+    test('the open product narrows to the filter, like the list does', () => {
+        const [target] = picker.products[0]!.releases
+        picker.openProduct('p1')
+        picker.setFilter(target!.label)
+
+        expect(picker.activeReleases.map((release) => release.id)).toEqual([target!.id])
     })
 })
 

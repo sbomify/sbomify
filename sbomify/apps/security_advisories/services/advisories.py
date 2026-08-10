@@ -404,6 +404,7 @@ def create_advisory(
     severity: str = "",
     description: str = "",
     identifier: str = "",
+    remediation_status: str = "",
     products: list[Product] | None = None,
     affected_releases: list[Release] | None = None,
 ) -> ServiceResult[str]:
@@ -421,11 +422,17 @@ def create_advisory(
     range pinned to that release, so the advisory keeps naming the version
     after the release row is ever deleted.
     """
+    # An advisory written up after the work began opens at the status it is
+    # actually at, and its first timeline entry records that rather than a
+    # fictional "identified" the team would have to correct.
+    opening_status = remediation_status or SecurityAdvisory.RemediationStatus.IDENTIFIED.value
+
     advisory = SecurityAdvisory.objects.create(
         team=team,
         title=title.strip(),
         severity=severity,
         description=description.strip(),
+        remediation_status=opening_status,
         created_by=user,
     )
 
@@ -480,7 +487,7 @@ def create_advisory(
         advisory=advisory,
         event_type=AdvisoryEvent.EventType.STATUS_CHANGE,
         actor=user,
-        payload={"to": SecurityAdvisory.RemediationStatus.IDENTIFIED.value},
+        payload={"to": opening_status},
     )
     return ServiceResult.success(advisory.id)
 

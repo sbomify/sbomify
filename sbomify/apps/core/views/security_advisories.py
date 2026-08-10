@@ -11,7 +11,7 @@ is draft / published / withdrawn, whether anyone outside the workspace can read
 it. An advisory can be resolved and unpublished, or published mid-fix, so
 neither collapses into the other.
 
-Creation and the timeline composer persist: the New Advisory modal writes the
+Creation and the timeline composer persist: the New Advisory form writes the
 whole initial graph through ``create_advisory``, and posting an update writes a
 note or a status move through ``post_update``. Editing and linking VEX still
 land in the following passes, and those handlers say so rather than pretending
@@ -164,6 +164,11 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                     {"value": "medium", "label": "Medium"},
                     {"value": "low", "label": "Low"},
                 ],
+                # From REMEDIATION_META so the form, the badges and the timeline
+                # all read the same vocabulary in the same order.
+                "status_options": [
+                    {"value": value, "label": meta["label"]} for value, meta in REMEDIATION_META.items()
+                ],
             },
         )
 
@@ -192,6 +197,7 @@ def _create_advisory(request: HttpRequest, *, on_error: str) -> HttpResponse:
         severity=form.cleaned_data.get("severity") or "",
         description=form.cleaned_data.get("description") or "",
         identifier=form.cleaned_data.get("vulnerability_id") or "",
+        remediation_status=form.cleaned_data.get("remediation_status") or "",
         products=list(form.cleaned_data.get("products") or []),
         affected_releases=list(form.cleaned_data.get("affected_releases") or []),
     )
