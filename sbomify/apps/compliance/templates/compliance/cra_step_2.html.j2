@@ -167,19 +167,19 @@
                                                             <span x-text="check.title"></span>
                                                             {# issue #907: remediation_type badge — operators understand what to do at a glance rather than reading the remediation prose. Kept on a single line so it parses cleanly in both Django and Jinja2 engines. #}
                                                             <template x-if="check.remediation_type === 'tooling_limitation'">
-                                                                <span class="tw-badge-warning text-[10px] font-normal px-1.5 py-0.5"
+                                                                <span class="tw-badge-warning font-normal tw-badge-sm"
                                                                       data-testid="step-2-tooling-limitation-badge">
                                                                     Tooling limitation
                                                                 </span>
                                                             </template>
                                                             <template x-if="check.remediation_type === 'operator_action'">
-                                                                <span class="tw-badge-info text-[10px] font-normal px-1.5 py-0.5"
+                                                                <span class="tw-badge-info font-normal tw-badge-sm"
                                                                       data-testid="step-2-operator-action-badge">
                                                                     Operator action
                                                                 </span>
                                                             </template>
                                                             <template x-if="check.waived">
-                                                                <span class="tw-badge-success text-[10px] font-normal px-1.5 py-0.5"
+                                                                <span class="tw-badge-success font-normal tw-badge-sm"
                                                                       data-testid="step-2-waived-badge">Waived</span>
                                                             </template>
                                                         </p>

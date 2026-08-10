@@ -107,7 +107,7 @@
                         {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
                             {% if member.role != 'owner' %}
                                 <div class="flex-shrink-0">
-                                    <button class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
+                                    <button class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10"
                                             title="Remove member"
                                             aria-label="Remove {{ member.user.first_name }} {{ member.user.last_name }}"
                                             @click="$dispatch('open-delete-member-modal', { displayName: '{{ member.user.first_name }} {{ member.user.last_name }}', formData: { member_id: '{{ member.id }}' } })">
@@ -203,7 +203,7 @@
                             </div>
                             {# Actions #}
                             <div class="flex-shrink-0 flex items-center gap-2">
-                                <button class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
+                                <button class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10"
                                         title="Cancel invitation"
                                         aria-label="Cancel invitation for {{ invitation.email }}"
                                         @click="$dispatch('open-delete-invitation-modal', { displayName: '{{ invitation.email }}', formData: { invitation_id: '{{ invitation.id }}' } })">

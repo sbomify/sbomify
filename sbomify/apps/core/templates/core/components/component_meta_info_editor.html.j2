@@ -155,7 +155,7 @@
             <div class="mt-6 pt-6 border-t border-border">
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
                     <div class="lg:col-span-3">
-                        <button class="tw-btn-primary w-full py-3"
+                        <button class="tw-btn-primary w-full tw-btn-lg"
                                 :disabled="!isFormValid || isSaving"
                                 @click="updateMetaData()">
                             <template x-if="isSaving">
@@ -173,7 +173,7 @@
                     </div>
                     <div class="relative z-10">
                         <button type="button"
-                                class="tw-btn-secondary w-full py-3 tw-btn-cancel-danger"
+                                class="tw-btn-secondary w-full tw-btn-cancel-danger tw-btn-lg"
                                 @click="handleCancel()">
                             <i class="fas fa-times mr-2"></i>
                             Cancel

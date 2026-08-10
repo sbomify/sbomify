@@ -46,7 +46,22 @@ The undefined-class check found only interpolated prefixes (`tw-badge-severity-`
 from `class="tw-badge-severity-{{ severity }}"`), which a static check cannot
 resolve. No dead class names.
 
-### The two that fail silently, worst first
+### Status: fixed
+
+The 113 conflict findings are down to 5, and those 5 are limits of the detector
+rather than defects: `tw-card` does not set padding and `tw-data-label` does not
+set a background, so a utility doing either beside them is not a conflict, and
+`badge.html.j2` sets `rounded-full` conditionally because that is the component's
+own `pill` parameter.
+
+What the utilities turned out to be standing in for, now in the library:
+`tw-badge-sm`, `tw-icon-btn-success`, `tw-btn-ghost-danger`, `tw-form-select-sm`
+and `tw-form-select-{success,warning,danger}`. The rest resolved to variants that
+already existed (`tw-btn-sm`, `tw-btn-lg`, `tw-icon-btn-danger`,
+`tw-icon-btn-primary`, `tw-badge-danger`, `tw-btn-outline-danger`) or to a
+declaration that was doing nothing and is gone.
+
+### The two that failed silently, worst first (now fixed)
 
 These are the ones to fix first: they look correct in the template, they pass
 review, and the declaration simply never applies.

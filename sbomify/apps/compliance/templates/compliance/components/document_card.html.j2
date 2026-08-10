@@ -18,14 +18,14 @@
             <button type="button"
                     @click="previewDocument(doc.key, doc.label)"
                     :aria-label="'Preview ' + doc.label"
-                    class="tw-btn-ghost text-xs px-2 py-1">
+                    class="tw-btn-ghost text-xs tw-btn-sm">
                 <i class="fas fa-eye"></i>
             </button>
             <button type="button"
                     @click="generateDocument(doc.key)"
                     :disabled="generatingDoc === doc.key"
                     :aria-label="'Generate ' + doc.label"
-                    class="tw-btn-ghost text-xs px-2 py-1">
+                    class="tw-btn-ghost text-xs tw-btn-sm">
                 <span x-show="generatingDoc === doc.key">
                     {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
                 </span>

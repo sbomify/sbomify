@@ -245,7 +245,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                 </span>
                 <div class="flex items-center gap-2">
                     <button type="button"
-                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
                             :disabled="page === 1"
                             @click="if (page > 1) page--"
                             aria-label="Previous page">
@@ -253,7 +253,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                     </button>
                     <span class="text-sm text-text-muted">Page <span x-text="page"></span> / <span x-text="pageCount"></span></span>
                     <button type="button"
-                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
                             :disabled="page === pageCount"
                             @click="if (page < pageCount) page++"
                             aria-label="Next page">

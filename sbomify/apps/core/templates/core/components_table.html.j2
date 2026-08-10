@@ -141,7 +141,7 @@
                                                 <span class="text-text font-medium block truncate" x-text="component.name"></span>
                                                 {% comment %}Only rendered once the workspace configures a window and the component has an SBOM; freshness is null otherwise, so an unconfigured workspace sees no badges at all.{% endcomment %}
                                                 <template x-if="component.freshness && component.freshness.is_stale">
-                                                    <span class="tw-badge-secondary mt-1 text-danger"
+                                                    <span class="tw-badge-danger mt-1"
                                                           :title="'SBOM is ' + Math.abs(component.freshness.expires_in_days) + ' days past the ' + component.freshness.window_days + '-day freshness window'">
                                                         <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
                                                     </span>

@@ -18,7 +18,7 @@
                 </div>
             </div>
             <button type="button"
-                    class="tw-btn-primary px-4"
+                    class="tw-btn-primary"
                     @click="$dispatch('open-add-workspace-modal')">
                 <i class="fas fa-plus mr-2"></i>
                 Add Workspace
@@ -51,9 +51,9 @@
                                         </h6>
                                         <div class="flex flex-wrap items-center gap-1.5 mt-1">
                                             {% if request.session.current_team and request.session.current_team.key == team.key %}
-                                                <span class="tw-badge-success text-[11px]">Active</span>
+                                                <span class="tw-badge-success tw-badge-sm">Active</span>
                                             {% endif %}
-                                            {% if team.is_default_team %}<span class="tw-badge-primary text-[11px]">Default</span>{% endif %}
+                                            {% if team.is_default_team %}<span class="tw-badge-primary tw-badge-sm">Default</span>{% endif %}
                                             <span class="{% if me.role == 'owner' %}tw-badge-primary{% elif me.role == 'admin' %}tw-badge-warning{% else %}tw-badge-secondary{% endif %} text-[11px]">{{ me.role|title }}</span>
                                         </div>
                                     </div>
@@ -81,13 +81,13 @@
                                     <button type="submit"
                                             title="{% if me.is_default_team %}Already default workspace{% else %}Make default workspace{% endif %}"
                                             aria-label="{% if me.is_default_team %}Already default workspace{% else %}Make {{ team.name|workspace_display }} default workspace{% endif %}"
-                                            class="tw-icon-btn tw-icon-btn-sm text-primary hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            class="tw-icon-btn tw-icon-btn-sm hover:bg-primary/10 disabled:opacity-40 disabled:cursor-not-allowed tw-icon-btn-primary"
                                             {% if me.is_default_team %}disabled{% endif %}>
                                         <i class="fas fa-star" aria-hidden="true"></i>
                                     </button>
                                 </form>
                                 {% if request.session.current_team and request.session.current_team.key == team.key %}
-                                    <span class="tw-icon-btn tw-icon-btn-sm text-text-muted/40 cursor-not-allowed"
+                                    <span class="tw-icon-btn tw-icon-btn-sm cursor-not-allowed"
                                           title="Already active"
                                           aria-label="Already active workspace">
                                         <i class="fas fa-exchange-alt" aria-hidden="true"></i>
@@ -96,7 +96,7 @@
                                     <a href="{% url 'teams:switch_team' team.key %}"
                                        title="Switch to this workspace"
                                        aria-label="Switch to {{ team.name|workspace_display }}"
-                                       class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10">
+                                       class="tw-icon-btn tw-icon-btn-sm hover:text-primary hover:bg-primary/10">
                                         <i class="fas fa-exchange-alt" aria-hidden="true"></i>
                                     </a>
                                 {% endif %}

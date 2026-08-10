@@ -77,7 +77,7 @@ repo_id={{ binding.repository_id }}
 {% endif %}
 </td>
 <td class="text-right">
-<button type="button" class="tw-btn tw-btn-sm tw-btn-ghost text-danger hover:bg-danger/10" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
+<button type="button" class="tw-btn tw-btn-sm tw-btn-ghost hover:bg-danger/10 tw-btn-ghost-danger" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
 <i class="fas fa-trash"></i>
 <span class="sr-only md:not-sr-only md:ml-1">Revoke</span>
 </button>

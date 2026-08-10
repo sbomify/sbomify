@@ -15,8 +15,7 @@
         <div class="p-6">
             {# Danger Zone - Collapsible #}
             <div class="tw-dangerzone-card" :class="{ 'opacity-75': !isExpanded }">
-                <div class="px-5 py-3.5 cursor-pointer tw-card-header rounded-t-[0.65rem]"
-                     @click="toggle()">
+                <div class="cursor-pointer tw-card-header" @click="toggle()">
                     <div class="flex items-center justify-between">
                         <h4 class="text-base font-semibold text-text m-0 flex items-center gap-2">
                             <i class="fas fa-exclamation-triangle text-danger"></i>

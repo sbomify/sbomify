@@ -164,14 +164,14 @@
                 </div>
                 <div class="flex items-center gap-2" x-show="pageCount > 1">
                     <button type="button"
-                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
                             :disabled="page === 1"
                             @click="if (page > 1) page--">
                         <i class="fas fa-chevron-left text-xs"></i>
                     </button>
                     <span class="text-sm text-text-muted">Page <span x-text="page"></span> / <span x-text="pageCount"></span></span>
                     <button type="button"
-                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
                             :disabled="page === pageCount"
                             @click="if (page < pageCount) page++">
                         <i class="fas fa-chevron-right text-xs"></i>

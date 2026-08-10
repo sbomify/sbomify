@@ -8,6 +8,6 @@
     <form method="post" action="{% url 'openid_connect_login' 'keycloak' %}">
         {% csrf_token %}
         <button type="submit"
-                class="tw-btn-primary w-full justify-center text-lg py-3">Log In / Register</button>
+                class="tw-btn-primary w-full justify-center text-lg tw-btn-lg">Log In / Register</button>
     </form>
 {% endblock %}

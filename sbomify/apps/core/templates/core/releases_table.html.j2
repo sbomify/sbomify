@@ -130,13 +130,13 @@
                                                 <span class="text-text font-medium block truncate" x-text="release.name"></span>
                                                 <div class="flex flex-wrap gap-1 mt-1">
                                                     <template x-if="release.is_latest">
-                                                        <span class="tw-badge-success text-[10px]">Latest</span>
+                                                        <span class="tw-badge-success tw-badge-sm">Latest</span>
                                                     </template>
                                                     <template x-if="release.is_prerelease">
-                                                        <span class="tw-badge-warning text-[10px]">Pre-release</span>
+                                                        <span class="tw-badge-warning tw-badge-sm">Pre-release</span>
                                                     </template>
                                                     <template x-if="release.version">
-                                                        <span class="tw-badge-secondary text-[10px]" x-text="release.version"></span>
+                                                        <span class="tw-badge-secondary tw-badge-sm" x-text="release.version"></span>
                                                     </template>
                                                 </div>
                                                 <template x-if="release.description">

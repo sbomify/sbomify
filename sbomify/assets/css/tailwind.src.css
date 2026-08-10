@@ -945,6 +945,16 @@ html.no-transitions * {
 /* Secondary carries the same raised edge as the filled variants — a light top
    edge and a soft bottom one — so it reads as the same family of control rather
    than a flat outline. */
+/* A ghost button whose action is destructive: revoke, remove, delete. */
+.tw-btn-ghost-danger {
+  color: var(--color-danger);
+}
+
+.tw-btn-ghost-danger:hover {
+  background-color: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+}
+
 .tw-btn-secondary {
   background-color: var(--color-surface);
   color: var(--color-text);
@@ -1641,6 +1651,13 @@ html.no-transitions * {
 }
 
 /* Dot Badge - with status indicator */
+/* The badge at label size, for a badge inside a table cell or beside a heading
+   where the default reads as loud as the text it annotates. */
+.tw-badge-sm {
+  padding: 0.125rem 0.375rem;
+  font-size: 0.625rem;
+}
+
 .tw-badge-dot {
   gap: 0.375rem;
   font-weight: 500;
@@ -2755,6 +2772,18 @@ html.no-transitions * {
   transform: none;
 }
 
+/* Success accent, mirroring tw-icon-btn-danger: the approve action beside a
+   reject one. */
+.tw-icon-btn-success {
+  color: var(--color-success);
+}
+
+.tw-icon-btn-success:hover {
+  background-color: color-mix(in oklab, var(--color-success) 12%, transparent);
+  border-color: color-mix(in oklab, var(--color-success) 30%, transparent);
+  color: var(--color-success);
+}
+
 .tw-icon-btn-lg {
   width: 3rem;  /* 48px - comfortable for large buttons */
   height: 3rem; /* 48px - comfortable for large buttons */
@@ -2770,6 +2799,35 @@ html.no-transitions * {
 .tw-icon-btn-primary:hover {
   background-color: var(--color-primary);
   color: white;
+}
+
+/* An inline select sized for a table cell. */
+.tw-form-select-sm {
+  width: auto;
+  padding: 0.25rem 1.75rem 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* A select that shows the state it holds: the accent tints it and colours its
+   text and border, the way a badge of the same value would. */
+.tw-form-select-success,
+.tw-form-select-warning,
+.tw-form-select-danger {
+  background-color: color-mix(in oklab, var(--field-accent) 10%, transparent);
+  border-color: color-mix(in oklab, var(--field-accent) 30%, transparent);
+  color: var(--field-accent);
+}
+
+.tw-form-select-success {
+  --field-accent: var(--color-success);
+}
+
+.tw-form-select-warning {
+  --field-accent: var(--color-warning);
+}
+
+.tw-form-select-danger {
+  --field-accent: var(--color-danger);
 }
 
 /* ============================================

@@ -29,7 +29,7 @@
                         </div>
                         {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
                         {% if component.freshness.is_stale %}
-                            <span class="tw-badge-secondary text-danger"
+                            <span class="tw-badge-danger"
                                   title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
                                 <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
                             </span>

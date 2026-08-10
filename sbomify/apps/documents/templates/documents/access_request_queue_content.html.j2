@@ -73,7 +73,7 @@
                                     <td>
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
+                                                    class="tw-icon-btn tw-icon-btn-sm hover:text-primary hover:bg-primary/10 info-btn"
                                                     title="View Details"
                                                     aria-label="View details for {{ req.user.email }}"
                                                     data-info-request-id="{{ req.id }}"
@@ -110,7 +110,7 @@
                                                 <button type="submit"
                                                         name="action"
                                                         value="approve"
-                                                        class="tw-icon-btn tw-icon-btn-sm text-success hover:text-success hover:bg-success/10"
+                                                        class="tw-icon-btn tw-icon-btn-sm hover:text-success hover:bg-success/10 tw-icon-btn-success"
                                                         title="Approve Access"
                                                         aria-label="Approve Access">
                                                     <i class="fas fa-check" aria-hidden="true"></i>
@@ -118,7 +118,7 @@
                                                 <button type="button"
                                                         name="action"
                                                         value="reject"
-                                                        class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10 reject-btn"
+                                                        class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10 reject-btn tw-icon-btn-danger"
                                                         title="Reject Access"
                                                         aria-label="Reject Access"
                                                         data-request-id="{{ req.id }}"
@@ -172,7 +172,7 @@
                                         <td>
                                             <div class="flex justify-end">
                                                 <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                        class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10 tw-icon-btn-danger"
                                                         title="Cancel Invitation"
                                                         aria-label="Cancel invitation for {{ invitation.email }}"
                                                         onclick="window.dispatchEvent(new CustomEvent('open-cancel-invitation-modal', { detail: { invitationId: '{{ invitation.id }}', invitationEmail: '{{ invitation.email|escapejs }}' } }))">
@@ -248,7 +248,7 @@
                                     <td>
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
+                                                    class="tw-icon-btn tw-icon-btn-sm hover:text-primary hover:bg-primary/10 info-btn"
                                                     title="View Details"
                                                     aria-label="View details for {{ req.user.email }}"
                                                     data-info-request-id="{{ req.id }}"
@@ -278,7 +278,7 @@
                                                 <input type="hidden" name="request_id" value="{{ req.id }}">
                                                 <input type="hidden" name="active_tab" value="trust-center">
                                                 <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm text-danger hover:text-danger hover:bg-danger/10"
+                                                        class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10 tw-icon-btn-danger"
                                                         title="Revoke Access"
                                                         aria-label="Revoke access for {{ req.user.email }}"
                                                         onclick="window.dispatchEvent(new CustomEvent('open-revoke-access-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
@@ -338,7 +338,7 @@
                                     <td>
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-primary hover:bg-primary/10 info-btn"
+                                                    class="tw-icon-btn tw-icon-btn-sm hover:text-primary hover:bg-primary/10 info-btn"
                                                     title="View Details"
                                                     aria-label="View details for {{ req.user.email }}"
                                                     data-info-request-id="{{ req.id }}"
