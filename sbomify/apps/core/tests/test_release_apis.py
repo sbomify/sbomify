@@ -467,7 +467,6 @@ class TestPublicReleaseHidesPrivateComponents:
         function (ReleaseDetailsPublicView bypasses the ninja serializer, so
         the HTTP endpoint would not reproduce the leak — its Detail schema
         drops the flat artifact keys entirely)."""
-        from django.contrib.auth.models import AnonymousUser
         from django.test import RequestFactory
 
         from sbomify.apps.core.apis import get_release
@@ -508,6 +507,27 @@ class TestPublicReleaseHidesPrivateComponents:
         artifacts = data["artifacts"]
         assert {a["component_name"] for a in artifacts} == {"public component", "private component", "gated component"}
         assert "private doc" in {a["artifact_name"] for a in artifacts}
+
+    def test_product_page_release_counts_follow_the_same_caller_rule(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """The public product page's releases table must advertise the same
+        number of rows the release page will show to that caller: the filtered
+        count for visitors, the full count for a manager — otherwise a manager
+        reads "2 artifacts" here and finds 4 there."""
+        from sbomify.apps.core.views.product_details_public import _get_public_releases
+
+        release, _ = self._release_with_mixed_visibility(sample_product)
+        # The mixed release is named v1.0.0, so it survives the synthetic
+        # `latest` exclusion. 4 artifacts total; listable = the public and
+        # gated components' SBOMs (the document hangs off the private one).
+        as_visitor = _get_public_releases(str(sample_product.id), False, "slug", sees_all_components=False)
+        as_manager = _get_public_releases(str(sample_product.id), False, "slug", sees_all_components=True)
+
+        by_name = lambda rows: {r["name"]: r["artifacts_count"] for r in rows}  # noqa: E731
+        assert by_name(as_visitor)["v1.0.0"] == 2
+        assert by_name(as_manager)["v1.0.0"] == 4
 
 
 @pytest.mark.django_db
