@@ -10,6 +10,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 from ninja import Query, Router
@@ -2789,20 +2790,34 @@ def list_all_releases(
 
 def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
     """Build a standardized response for releases."""
+    from sbomify.apps.core.models import Component
     from sbomify.apps.sboms.models import SBOM
 
-    # Count artifacts for this release
-    artifact_count = release.artifacts.count()
+    has_crud_permissions = can(request, "release:manage", release.product).allowed
+
+    # To anyone who cannot manage the release, an artifact from a private
+    # component does not exist: the Trust Center's component panel refuses to
+    # list the component, its public page 403s, and the aggregate download
+    # already leaves it out (builders._members_with_files) — so a row for it
+    # here named a component every other public surface denies. Same predicate
+    # as the component panel: public and gated are listable, private is not.
+    # Every derived field below (count, capability flags, rows) comes from this
+    # one queryset so none of them can disagree about what the release holds.
+    artifacts_qs = release.artifacts.all()
+    if not has_crud_permissions:
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+        artifacts_qs = artifacts_qs.filter(
+            Q(sbom__component__visibility__in=listable) | Q(document__component__visibility__in=listable)
+        )
+
+    artifact_count = artifacts_qs.count()
 
     # Which bom_types the release carries — one query drives all the download
     # capability flags (SBOM download, and the Trust Center VEX/CBOM downloads).
-    bom_types_present = set(
-        release.artifacts.filter(sbom__isnull=False).values_list("sbom__bom_type", flat=True).distinct()
-    )
+    bom_types_present = set(artifacts_qs.filter(sbom__isnull=False).values_list("sbom__bom_type", flat=True).distinct())
     has_sboms = SBOM.BomType.SBOM.value in bom_types_present
     has_vex = SBOM.BomType.VEX.value in bom_types_present
     has_cbom = SBOM.BomType.CBOM.value in bom_types_present
-    has_crud_permissions = can(request, "release:manage", release.product).allowed
 
     response = {
         "id": str(release.id),
@@ -2832,7 +2847,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 
     if include_artifacts:
         artifacts: Any = []
-        for artifact in release.artifacts.select_related("sbom__component", "document__component"):
+        for artifact in artifacts_qs.select_related("sbom__component", "document__component"):
             if artifact.sbom:
                 artifacts.append(
                     {
