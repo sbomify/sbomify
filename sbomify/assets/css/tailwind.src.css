@@ -2370,16 +2370,20 @@ html.no-transitions * {
 
 /* In an equal-width (fixed) table, centre every column between the first
    and the last so all columns are spaced equally — the first column stays
-   left-aligned and the last is right-aligned via tw-cell-end. */
-.tw-table-fixed th:not(:first-child):not(:last-child),
-.tw-table-fixed td:not(:first-child):not(:last-child) {
+   left-aligned and the last is right-aligned via tw-cell-end.
+   A cell that states its own alignment is left alone: adding a trailing
+   actions column turns the previous last column into a middle one, and this
+   rule is more specific than `.tw-table td.tw-cell-end`, so without the
+   exclusion a column that asked to be right-aligned drifted to the centre. */
+.tw-table-fixed th:not(:first-child):not(:last-child):not(.tw-cell-end),
+.tw-table-fixed td:not(:first-child):not(:last-child):not(.tw-cell-end) {
   text-align: center;
 }
 
 /* text-align doesn't reach a block-level flex container (e.g. a row of
    pills), so centre those too, keeping cell content aligned with its
    centred header. */
-.tw-table-fixed td:not(:first-child):not(:last-child) > .flex {
+.tw-table-fixed td:not(:first-child):not(:last-child):not(.tw-cell-end) > .flex {
   justify-content: center;
 }
 
@@ -2389,15 +2393,48 @@ html.no-transitions * {
   table-layout: fixed;
 }
 
-/* Tighter table cell padding on small screens for public trust-center
-   pages only, so 3-column tables (Name + Created + Actions) fit in
-   375px viewports without a horizontal scrollbar. Scoped to .public-page
-   so the app-wide tw-table padding stays unchanged on internal pages. */
+/* The row-actions column, holding one icon button — the actions menu. Wide
+   enough for the button to sit inside the cell's own right gutter, so it lines
+   up with the toolbar above rather than crowding the card's edge, and a fixed
+   width so it never takes an equal share of the split. */
+.tw-table th.tw-table-actions,
+.tw-table td.tw-table-actions {
+  width: 5.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+
+/* Tighter cell padding on small screens, so a three-column table fits a 375px
+   viewport without a horizontal scrollbar. It began scoped to the public
+   trust-center pages; 1.25rem either side of every cell is luxury on a phone
+   anywhere, and app tables now carry a row-actions column too, which takes its
+   width out of the name column. The first and last cells keep a wider outer
+   gutter so the rows still line up with the card around them. */
 @media (max-width: 640px) {
-  .public-page .tw-table th,
-  .public-page .tw-table td {
+  .tw-table th,
+  .tw-table td {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
+  }
+
+  .tw-table th:first-child,
+  .tw-table td:first-child {
+    padding-left: 1rem;
+  }
+
+  .tw-table th:last-child,
+  .tw-table td:last-child {
+    padding-right: 1rem;
+  }
+
+  /* Narrower still: at 375px a fixed table splits what is left equally, so
+     every pixel this column keeps comes out of the name beside it. The button
+     keeps its own size — it is the tap target. */
+  .tw-table th.tw-table-actions,
+  .tw-table td.tw-table-actions {
+    width: 4rem;
+    padding-left: 0.25rem;
   }
 }
 
@@ -2700,6 +2737,25 @@ html.no-transitions * {
   color: var(--color-danger);
 }
 
+/* Outlined, and as tall as the control beside it — the meatball in a page
+   header's action row, which sits next to a taller visibility select. Fixed
+   square sizes leave it floating against that select's edge. */
+.tw-icon-btn-stretch {
+  width: 3rem;
+  height: 100%;
+  min-height: 2.5rem;
+  background-color: var(--color-background);
+  border-color: var(--color-border);
+}
+
+.tw-icon-btn-stretch:hover {
+  background-color: var(--color-background);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+  color: var(--color-primary);
+  /* No scale: it is sized to a neighbour, so growing on hover breaks the pair. */
+  transform: none;
+}
+
 .tw-icon-btn-lg {
   width: 3rem;  /* 48px - comfortable for large buttons */
   height: 3rem; /* 48px - comfortable for large buttons */
@@ -2718,6 +2774,123 @@ html.no-transitions * {
 }
 
 /* ============================================
+   Component Classes - Choice Group
+   ============================================ */
+
+/* A radio group whose options read as tiles rather than lines in a select:
+   each carries the icon and the accent that the same value wears elsewhere, so
+   picking "Critical" here looks like the Critical badge on the advisory it
+   creates. Selection is painted from :has(:checked), so what is highlighted
+   cannot drift from what is submitted. */
+.tw-choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tw-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  background-color: var(--color-surface);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The control keeps the state and the keyboard, but takes no space: the tile
+   around it is the whole affordance. Not `display: none`, which would drop it
+   out of the tab order and off the accessibility tree. */
+.tw-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tw-choice-icon {
+  color: var(--choice-accent, var(--color-text-muted));
+  font-size: 0.875rem;
+}
+
+.tw-choice:hover {
+  border-color: color-mix(in oklab, var(--choice-accent, var(--color-primary)) 40%, transparent);
+  color: var(--color-text);
+}
+
+.tw-choice:has(:checked) {
+  border-color: var(--choice-accent, var(--color-primary));
+  background-color: color-mix(in oklab, var(--choice-accent, var(--color-primary)) 12%, transparent);
+  /* Full-contrast text on the tint: amber and cyan accents cannot carry label
+     text on their own tint in either theme, so the accent stays on the icon,
+     the border and the wash. */
+  color: var(--color-text);
+}
+
+.tw-choice:has(:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 45%, transparent);
+}
+
+.tw-choice:has(:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Accents, named as the badge families are, so one value reads the same
+   wherever it appears. */
+.tw-choice-primary {
+  --choice-accent: var(--color-primary);
+}
+
+.tw-choice-secondary {
+  --choice-accent: var(--color-text-muted);
+}
+
+.tw-choice-success {
+  --choice-accent: var(--color-success);
+}
+
+.tw-choice-warning {
+  --choice-accent: var(--color-warning);
+}
+
+.tw-choice-danger {
+  --choice-accent: var(--color-danger);
+}
+
+.tw-choice-info {
+  --choice-accent: var(--color-info);
+}
+
+.tw-choice-violet {
+  --choice-accent: var(--color-accent);
+}
+
+.tw-choice-severity-critical {
+  --choice-accent: var(--color-severity-critical);
+}
+
+.tw-choice-severity-high {
+  --choice-accent: var(--color-severity-high);
+}
+
+.tw-choice-severity-medium {
+  --choice-accent: var(--color-severity-medium);
+}
+
+.tw-choice-severity-low {
+  --choice-accent: var(--color-severity-low);
+}
+
+/* ============================================
    Component Classes - Dropdown
    ============================================ */
 .tw-dropdown {
@@ -2732,6 +2905,15 @@ html.no-transitions * {
   z-index: 50;
   animation: scaleIn 0.15s ease-out;
   transform-origin: top;
+}
+
+/* A menu teleported to the body, positioned against its trigger in JS. Used by
+   the actions menu, whose triggers sit inside tables that clip. The cap keeps a
+   long menu inside the viewport wherever the trigger happens to be. */
+.tw-dropdown-floating {
+  position: fixed;
+  max-height: min(70vh, 32rem);
+  overflow-y: auto;
 }
 
 .tw-dropdown-header {

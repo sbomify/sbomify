@@ -16,6 +16,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "page-header", "label": "Page & section headers", "group": "Foundations"},
     {"id": "buttons", "label": "Buttons", "group": "Controls"},
     {"id": "forms", "label": "Form controls", "group": "Controls"},
+    {"id": "choice-group", "label": "Choice group", "group": "Controls"},
     {"id": "search", "label": "Search input", "group": "Controls"},
     {"id": "file-upload", "label": "File upload", "group": "Controls"},
     {"id": "date-picker", "label": "Date picker", "group": "Controls"},
@@ -37,6 +38,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "tabs", "label": "Tabs", "group": "Navigation"},
     {"id": "breadcrumbs", "label": "Breadcrumbs", "group": "Navigation"},
     {"id": "dropdowns", "label": "Dropdowns", "group": "Navigation"},
+    {"id": "actions-menu", "label": "Actions menu", "group": "Navigation"},
     {"id": "stepper", "label": "Stepper", "group": "Navigation"},
     {"id": "avatars", "label": "Avatars", "group": "Misc"},
     {"id": "copy", "label": "Code & tokens", "group": "Misc"},
@@ -150,6 +152,36 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {"divider": True},
                 {"label": "Delete", "icon": "fas fa-trash", "danger": True},
             ],
+            "demo_severity_choices": [
+                {
+                    "value": "critical",
+                    "label": "Critical",
+                    "icon": "fas fa-triangle-exclamation",
+                    "variant": "severity-critical",
+                },
+                {"value": "high", "label": "High", "icon": "fas fa-angles-up", "variant": "severity-high"},
+                {"value": "medium", "label": "Medium", "icon": "fas fa-angle-up", "variant": "severity-medium"},
+                {"value": "low", "label": "Low", "icon": "fas fa-angle-down", "variant": "severity-low"},
+            ],
+            "demo_status_choices": [
+                {
+                    "value": "identified",
+                    "label": "Identified",
+                    "icon": "fas fa-circle-exclamation",
+                    "variant": "warning",
+                },
+                {
+                    "value": "investigating",
+                    "label": "Investigating",
+                    "icon": "fas fa-magnifying-glass",
+                    "variant": "info",
+                },
+                {"value": "fix_in_progress", "label": "Fix in progress", "icon": "fas fa-wrench", "variant": "violet"},
+                {"value": "resolved", "label": "Resolved", "icon": "fas fa-circle-check", "variant": "success"},
+                {"value": "wont_fix", "label": "Won't fix", "icon": "fas fa-ban", "variant": "secondary"},
+            ],
+            # Enough rows that the last one's menu has to flip above its trigger.
+            "demo_menu_rows": ["Gateway", "Vault", "Edge Agent"],
             "demo_code": (
                 'curl -X POST "$SBOMIFY_URL/api/v1/sboms" \\\n'
                 '  -H "Authorization: Bearer $TOKEN" \\\n'

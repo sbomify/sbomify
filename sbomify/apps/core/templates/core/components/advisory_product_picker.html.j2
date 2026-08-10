@@ -10,11 +10,14 @@
     because shift-click sets a whole range from one event. The boxes render from
     that state and the form submits from the hidden inputs at the end.
 
-    Expects `creation_products` in context.
+    Expects `creation_products` in context, and optionally
+    `preselected_product_ids` — the products a caller arrived with already
+    chosen, e.g. the row menu on the products page.
 {% endcomment %}
 {% if creation_products %}
     {{ creation_products|json_script:"advisoryProductsData" }}
-    <div x-data="advisoryProductPicker(window.parseJsonScript('advisoryProductsData'))">
+    {{ preselected_product_ids|default:""|json_script:"advisoryPreselectedProducts" }}
+    <div x-data="advisoryProductPicker(window.parseJsonScript('advisoryProductsData'), window.parseJsonScript('advisoryPreselectedProducts'))">
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 mb-1.5">
             {% comment %}
                 The scope reads before the list. A ticked product with no ticked
@@ -44,7 +47,8 @@
             </div>
         </div>
         <div class="tw-search-input mb-2">
-            <i class="fas fa-magnifying-glass tw-search-input-icon" aria-hidden="true"></i>
+            <i class="fas fa-magnifying-glass tw-search-input-icon"
+               aria-hidden="true"></i>
             <input type="search"
                    class="tw-form-input"
                    placeholder="Filter products and versions…"
@@ -88,7 +92,8 @@
                                        aria-hidden="true"
                                        :checked="isProductSelected(product.id)"
                                        x-effect="$el.indeterminate = isPartiallySelected(product)">
-                                <i class="fas fa-cube text-xs text-text-muted shrink-0" aria-hidden="true"></i>
+                                <i class="fas fa-cube text-xs text-text-muted shrink-0"
+                                   aria-hidden="true"></i>
                                 <span class="truncate" x-text="product.name"></span>
                             </div>
                             {# Opening a product is a separate action from selecting it. #}
@@ -156,7 +161,9 @@
                                        tabindex="-1"
                                        aria-hidden="true"
                                        :checked="isReleaseSelected(release.id)">
-                                <span class="truncate font-mono" :title="release.label" x-text="release.label"></span>
+                                <span class="truncate font-mono"
+                                      :title="release.label"
+                                      x-text="release.label"></span>
                                 <span class="ml-auto shrink-0 pl-2 text-[0.6875rem] text-text-muted tabular-nums"
                                       x-text="release.created"></span>
                             </div>
@@ -177,7 +184,8 @@
     <div>
         <p class="text-sm text-text-muted rounded-lg border border-dashed border-border px-3 py-2.5 m-0">
             No products in this workspace yet.
-            <a href="{% url 'core:products_dashboard' %}" class="text-primary hover:underline">Create one</a>
+            <a href="{% url 'core:products_dashboard' %}"
+               class="text-primary hover:underline">Create one</a>
             to map advisories to it.
         </p>
     </div>

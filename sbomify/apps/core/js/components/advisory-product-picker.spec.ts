@@ -61,6 +61,38 @@ describe('selecting products', () => {
     })
 })
 
+describe('arriving with a product already chosen', () => {
+    test('a preselected product is ticked, covering every version', () => {
+        const opened = advisoryProductPicker(structuredClone(PRODUCTS), ['p2'])
+
+        expect(opened.selectedProducts).toEqual(['p2'])
+        expect(opened.selectionSummary).toBe('Vault: every version, now and in future')
+    })
+
+    test('it can still be cleared like any other selection', () => {
+        const opened = advisoryProductPicker(structuredClone(PRODUCTS), ['p1'])
+        opened.toggleProduct(0, plain)
+
+        expect(opened.selectedProducts).toEqual([])
+    })
+
+    test('nothing preselected is the normal empty start', () => {
+        expect(advisoryProductPicker(structuredClone(PRODUCTS)).selectedProducts).toEqual([])
+    })
+
+    test('a template that never set the ids serialises an empty string, not a list', () => {
+        expect(advisoryProductPicker(structuredClone(PRODUCTS), '').selectedProducts).toEqual([])
+    })
+
+    test('the caller\'s list is copied, not adopted', () => {
+        const ids = ['p1']
+        const opened = advisoryProductPicker(structuredClone(PRODUCTS), ids)
+        opened.toggleProduct(1, plain)
+
+        expect(ids).toEqual(['p1'])
+    })
+})
+
 describe('selecting versions', () => {
     test('ticking a version implies its product', () => {
         picker.toggleRelease(picker.products[0], 1, plain)

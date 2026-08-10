@@ -228,7 +228,8 @@
                 Security advisories track vulnerabilities in your products over time. Create one to open its timeline with a first update.
             </p>
             {% if has_crud_permissions %}
-                <a href="{% url 'core:security_advisory_new' %}" class="tw-btn-primary no-underline">
+                <a href="{% url 'core:security_advisory_new' %}"
+                   class="tw-btn-primary no-underline">
                     <i class="fas fa-plus mr-2"></i>Create Your First Advisory
                 </a>
             {% endif %}

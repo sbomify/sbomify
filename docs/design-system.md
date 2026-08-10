@@ -61,6 +61,7 @@ List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown
 
 | Component | Use for | Key params |
 | --- | --- | --- |
+| `actions_menu` | Row and header “meatball” menus (block tag) | `label`, `icon`, `width`, `trigger_class`; items are block content |
 | `alert` | Inline notice banners | `variant`, `title`, `message`, `dismissible` |
 | `analytics_consent` | PostHog consent banner (base templates only) | — |
 | `avatar` | User initials/status | `initials`/`src`, `size` (defaults `md` — the base class has no size of its own), `status` |
@@ -69,6 +70,7 @@ List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown
 | `button` / `button_link` | Actions / link styled as button | `text`, `variant`, `size`, `icon`, `loading` / `url` |
 | `card` | Content containers | `variant` (`dashboard`/`danger`/default), `title`, `subtitle`, `content`, `footer_content` |
 | `checkbox` / `radio` / `toggle` | Form controls | `name`, `label`, `checked`, `disabled` |
+| `choice_group` | Radios as tiles for a short, colour-carrying set (severity, status) | `name`, `options` (`{value, label, icon, variant}`), `selected`, `label`, `hint` |
 | `code_block` | Copyable code | `code`, `language`, `filename`, `max_height` |
 | `confirm_modal` | App-wide confirm dialog (already in base) | dispatch `confirm:show` event |
 | `dropdown` | Action menus | `id`, `trigger_text`/`trigger_icon`, `items` (supports `divider`, `danger`, `disabled`) |
@@ -95,18 +97,19 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 | Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline-{primary,warning,danger}`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
 | Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card` + `tw-card-{header,body,footer}`, `tw-collapsible-card` + `tw-collapsible-*` (the settings card was removed — use `tw-dashboard-card`) |
 | Forms | `tw-form-{label,input,select,textarea,error,hint}`, `tw-checkbox`, `tw-radio`, `tw-toggle` (+ `tw-toggle-label`), `tw-search-input-*`, `tw-file-upload-*`, `tw-date-picker-*`/`tw-calendar-*` |
-| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
+| Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-cell-end` on a right-aligned column, `tw-table-actions` on a row-actions column, `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
 | Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*` (+ `tw-badge-severity-{critical,high,medium,low}`), `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
-| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*`, `tw-icon-btn` (+ `-sm`, `-danger`), `tw-stepper-*` |
+| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*` (+ `tw-dropdown-floating` for a body-teleported menu), `tw-icon-btn` (+ `-sm`, `-danger`, `-stretch` to match the height of a taller neighbour), `tw-stepper-*` |
 | Accent | `tw-icon-chip` (+ sizes `-sm`/`-lg`/`-xl`, `-circle`, and `-neutral`/`-info`/`-success`/`-warning`/`-danger`) — the flat tinted chip behind every icon-beside-a-heading |
 | Layout | `tw-page-header` (+ `-lead` for a mark beside the title, `-title`, `-subtitle`, `-actions`, `-flush` inside a `space-y-*` stack), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title, `tw-metric-chip` (+ `-label`, `-value`) for the stats strip |
-| Selection | `tw-select-row` — a list row that is clickable in full. Selected state comes from `:has(:checked)`, never a class, so it cannot drift from the control; keep a real checkbox for keyboard and form submission and add the row click as a pointer convenience, guarded so nested controls still work. |
+| Selection | `tw-choice-group`/`tw-choice` (+ accents `-primary`/`-secondary`/`-success`/`-warning`/`-danger`/`-info`/`-violet` and `-severity-{critical,high,medium,low}`, or set `--choice-accent`), `tw-select-row` — a list row that is clickable in full. Selected state comes from `:has(:checked)`, never a class, so it cannot drift from the control; keep a real checkbox for keyboard and form submission and add the row click as a pointer convenience, guarded so nested controls still work. |
 | Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose) |
 | Misc | modal, `alpine-tooltip` (via the `x-tooltip` directive), copy button / token display / code block |
 
 Two names that are easy to get wrong:
 
 - **`tw-table` vs `tw-data-table`** — `tw-table` styles the `<table>` element; `tw-data-table` is the surrounding shell. A `<table class="tw-data-table">` gets no cell padding.
+- **`actions_menu` vs `dropdown`** — `dropdown` takes a list of items and positions itself inside its parent. `actions_menu` takes block content (so items can be HTMX buttons and Alpine dispatches) and teleports the menu to the body, which is what makes it safe inside a table: `tw-data-table-container` scrolls, so an absolutely positioned menu is clipped on both axes. It closes on any scroll, because a fixed menu does not follow a scrolling ancestor.
 - **`tw-stat-row`** is the wrapper *inside* a stat card that sits the delta on the value's baseline. Laying out a row of stat cards is the page's job (a grid utility).
 
 Removed in the v2 consolidation — do not reintroduce without three real callers: timeline, list group, range slider, `tw-tooltip` (CSS-hover; use `x-tooltip`), dividers, notification badge, `tw-table-striped`, `tw-tag-outline*`, `tw-avatar-group`, `tw-modal-{backdrop,container}`.

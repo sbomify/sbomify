@@ -1,12 +1,13 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load widget_tweaks %}
 {% load static %}
+{% load design_system %}
 {% load django_vite %}
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
     <div class="space-y-6"
-         x-data="{ compMenu: false, visibility: '{{ component.visibility|escapejs }}' }"
+         x-data="{ visibility: '{{ component.visibility|escapejs }}' }"
          @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
         {# Page Header - matches product page pattern #}
         <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -46,149 +47,134 @@
                         {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
                     {% endif %}
                     {# Meatball menu — moves secondary surfaces off the page body (design review p8/p9): upload, metadata, CI/CD integration, trusted publishers all open from here. #}
-                    <div class="relative flex" @keydown.escape.window="compMenu = false">
+                    {% actions_menu label="Component actions" trigger_class="tw-icon-btn tw-icon-btn-stretch" %}
+                    {% if component.has_crud_permissions %}
+                        {% block meatball_artifacts %}
+                            <div class="tw-dropdown-header">Artifacts</div>
+                            <button type="button"
+                                    role="menuitem"
+                                    class="tw-dropdown-item"
+                                    @click="$dispatch('open-upload')">
+                                <i class="fas fa-upload tw-dropdown-item-icon" aria-hidden="true"></i>Upload artifact…
+                            </button>
+                            <div class="tw-dropdown-divider"></div>
+                        {% endblock %}
+                    {% endif %}
+                    <div class="tw-dropdown-header">Component</div>
+                    {% if component.component_type == 'bom' %}
                         <button type="button"
-                                class="w-12 min-h-10 h-full rounded-lg border border-border bg-background text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center"
-                                @click="compMenu = !compMenu"
-                                :aria-expanded="compMenu"
-                                aria-haspopup="true"
-                                aria-label="More actions">
-                            <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
+                                role="menuitem"
+                                class="tw-dropdown-item"
+                                @click="$dispatch('open-metadata')">
+                            <i class="fas fa-address-card tw-dropdown-item-icon" aria-hidden="true"></i>Metadata…
                         </button>
-                        <div x-show="compMenu"
-                             x-cloak
-                             x-transition
-                             @click.outside="compMenu = false"
-                             class="tw-dropdown right-0 top-full mt-2 w-60"
-                             role="menu">
-                            {% if component.has_crud_permissions %}
-                                {% block meatball_artifacts %}
-                                    <div class="tw-dropdown-header">Artifacts</div>
-                                    <button type="button"
-                                            role="menuitem"
-                                            class="tw-dropdown-item"
-                                            @click="compMenu = false; $dispatch('open-upload')">
-                                        <i class="fas fa-upload tw-dropdown-item-icon" aria-hidden="true"></i>Upload artifact…
-                                    </button>
-                                    <div class="tw-dropdown-divider"></div>
-                                {% endblock %}
-                            {% endif %}
-                            <div class="tw-dropdown-header">Component</div>
-                            {% if component.component_type == 'bom' %}
-                                <button type="button"
-                                        role="menuitem"
-                                        class="tw-dropdown-item"
-                                        @click="compMenu = false; $dispatch('open-metadata')">
-                                    <i class="fas fa-address-card tw-dropdown-item-icon" aria-hidden="true"></i>Metadata…
-                                </button>
-                            {% endif %}
-                            {% if component.has_crud_permissions %}
-                                {% if component.component_type == 'bom' %}
-                                    <button type="button"
-                                            role="menuitem"
-                                            class="tw-dropdown-item"
-                                            @click="compMenu = false; $dispatch('open-cicd')">
-                                        <i class="fas fa-gears tw-dropdown-item-icon" aria-hidden="true"></i>CI/CD integration…
-                                    </button>
-                                {% endif %}
-                                <button type="button"
-                                        role="menuitem"
-                                        class="tw-dropdown-item"
-                                        @click="compMenu = false; $dispatch('open-trusted-publishers')">
-                                    <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>Trusted publishers…
-                                </button>
-                                {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
-                                <button type="button"
-                                        role="menuitem"
-                                        x-show="visibility === 'public' || visibility === 'gated'"
-                                        class="tw-dropdown-item"
-                                        @click="compMenu = false; $dispatch('copy-url')">
-                                    <i class="fas fa-link tw-dropdown-item-icon" aria-hidden="true"></i>Copy public URL
-                                </button>
-                                <button type="button"
-                                        role="menuitem"
-                                        x-show="visibility === 'public' || visibility === 'gated'"
-                                        class="tw-dropdown-item"
-                                        @click="compMenu = false; $dispatch('copy-badge')">
-                                    <i class="fas fa-certificate tw-dropdown-item-icon" aria-hidden="true"></i>Copy badge
-                                </button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
-        {# Stats Badges #}
-        <div class="flex flex-wrap gap-2">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
-                <span class="font-semibold text-text">
-                    {% if component.component_type == 'bom' %}
-                        {{ component.sbom_count|default:0 }}
-                    {% else %}
-                        {{ component.document_count|default:0 }}
                     {% endif %}
-                </span>
-                <span class="text-text-muted">
-                    {% if component.component_type == 'bom' %}
-                        BOMs
-                    {% else %}
-                        Documents
-                    {% endif %}
-                </span>
-            </div>
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
-                    <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
-                    <span>
-                        {% if component.is_global %}
-                            Workspace-wide
-                        {% else %}
-                            Product-scoped
+                    {% if component.has_crud_permissions %}
+                        {% if component.component_type == 'bom' %}
+                            <button type="button"
+                                    role="menuitem"
+                                    class="tw-dropdown-item"
+                                    @click="$dispatch('open-cicd')">
+                                <i class="fas fa-gears tw-dropdown-item-icon" aria-hidden="true"></i>CI/CD integration…
+                            </button>
                         {% endif %}
-                    </span>
-                </span>
-            </div>
-            {# Latest-scan vulnerability summary (design review / mock). #}
-            {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_summary.critical or vuln_summary.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
-                    <i class="fas fa-triangle-exclamation text-xs {% if vuln_summary.critical or vuln_summary.high %}text-danger{% else %}text-warning{% endif %}"></i>
-                    {% if vuln_summary.critical %}
-                        <span class="font-semibold text-danger">{{ vuln_summary.critical }} Critical</span>
+                        <button type="button"
+                                role="menuitem"
+                                class="tw-dropdown-item"
+                                @click="$dispatch('open-trusted-publishers')">
+                            <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>Trusted publishers…
+                        </button>
+                        {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
+                        <button type="button"
+                                role="menuitem"
+                                x-show="visibility === 'public' || visibility === 'gated'"
+                                class="tw-dropdown-item"
+                                @click="$dispatch('copy-url')">
+                            <i class="fas fa-link tw-dropdown-item-icon" aria-hidden="true"></i>Copy public URL
+                        </button>
+                        <button type="button"
+                                role="menuitem"
+                                x-show="visibility === 'public' || visibility === 'gated'"
+                                class="tw-dropdown-item"
+                                @click="$dispatch('copy-badge')">
+                            <i class="fas fa-certificate tw-dropdown-item-icon" aria-hidden="true"></i>Copy badge
+                        </button>
                     {% endif %}
-                    {% if vuln_summary.high %}
-                        {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
-                        <span class="font-semibold text-severity-high">{{ vuln_summary.high }} High</span>
-                    {% endif %}
-                    {% if vuln_summary.medium %}
-                        {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
-                        <span class="font-semibold text-info">{{ vuln_summary.medium }} Medium</span>
-                    {% endif %}
-                    {% if vuln_summary.low %}
-                        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
-                            <span class="text-text-muted">·</span>
-                        {% endif %}
-                        <span class="font-semibold text-text-muted">{{ vuln_summary.low }} Low</span>
-                    {% endif %}
-                    {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
-                    {% if vuln_summary.suppressed %}
-                        <span class="text-text-muted">· {{ vuln_summary.suppressed }} suppressed</span>
-                    {% endif %}
-                    <span class="text-text-muted">· latest scan</span>
-                </div>
-            {% endif %}
-        </div>
-        {% block header_after_meta %}{% endblock %}
-        {% block content_after_header %}{% endblock %}
-        {% block upload_section %}{% endblock %}
-        {% block table_section %}{% endblock %}
-        {# Danger Zone #}
-        {% if component.has_crud_permissions %}
-            <div>
-                {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name is_owner=is_owner %}
+                {% endactions_menu %}
             </div>
         {% endif %}
     </div>
+    {# Stats Badges #}
+    <div class="flex flex-wrap gap-2">
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+            <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
+            <span class="font-semibold text-text">
+                {% if component.component_type == 'bom' %}
+                    {{ component.sbom_count|default:0 }}
+                {% else %}
+                    {{ component.document_count|default:0 }}
+                {% endif %}
+            </span>
+            <span class="text-text-muted">
+                {% if component.component_type == 'bom' %}
+                    BOMs
+                {% else %}
+                    Documents
+                {% endif %}
+            </span>
+        </div>
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+            <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
+                <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
+                <span>
+                    {% if component.is_global %}
+                        Workspace-wide
+                    {% else %}
+                        Product-scoped
+                    {% endif %}
+                </span>
+            </span>
+        </div>
+        {# Latest-scan vulnerability summary (design review / mock). #}
+        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
+            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_summary.critical or vuln_summary.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
+                <i class="fas fa-triangle-exclamation text-xs {% if vuln_summary.critical or vuln_summary.high %}text-danger{% else %}text-warning{% endif %}"></i>
+                {% if vuln_summary.critical %}
+                    <span class="font-semibold text-danger">{{ vuln_summary.critical }} Critical</span>
+                {% endif %}
+                {% if vuln_summary.high %}
+                    {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
+                    <span class="font-semibold text-severity-high">{{ vuln_summary.high }} High</span>
+                {% endif %}
+                {% if vuln_summary.medium %}
+                    {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
+                    <span class="font-semibold text-info">{{ vuln_summary.medium }} Medium</span>
+                {% endif %}
+                {% if vuln_summary.low %}
+                    {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
+                        <span class="text-text-muted">·</span>
+                    {% endif %}
+                    <span class="font-semibold text-text-muted">{{ vuln_summary.low }} Low</span>
+                {% endif %}
+                {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
+                {% if vuln_summary.suppressed %}
+                    <span class="text-text-muted">· {{ vuln_summary.suppressed }} suppressed</span>
+                {% endif %}
+                <span class="text-text-muted">· latest scan</span>
+            </div>
+        {% endif %}
+    </div>
+    {% block header_after_meta %}{% endblock %}
+    {% block content_after_header %}{% endblock %}
+    {% block upload_section %}{% endblock %}
+    {% block table_section %}{% endblock %}
+    {# Danger Zone #}
+    {% if component.has_crud_permissions %}
+        <div>
+            {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name is_owner=is_owner %}
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

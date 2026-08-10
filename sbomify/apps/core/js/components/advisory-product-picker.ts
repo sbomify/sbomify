@@ -24,10 +24,13 @@ export interface PickerProduct {
  * from hidden inputs instead. That keeps one source of truth and means a
  * range-select and a plain click go through exactly the same path.
  */
-export function advisoryProductPicker(products: PickerProduct[] = []) {
+export function advisoryProductPicker(products: PickerProduct[] = [], preselected: unknown = []) {
     return {
         products,
-        selectedProducts: [] as string[],
+        // Products the caller arrived with already chosen — the products page's
+        // row menu links here with the product it was opened from. Coerced,
+        // because a template that never sets them serialises an empty string.
+        selectedProducts: (Array.isArray(preselected) ? [...preselected] : []) as string[],
         selectedReleases: [] as string[],
         filter: '',
 

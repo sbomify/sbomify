@@ -36,116 +36,112 @@
                                         control — the upgrade link and the config fields below — working
                                         on its own click.
                                     {% endcomment %}
-                                    <div class="tw-select-row {% if plugin.requires_upgrade %}opacity-50 grayscale{% endif %}"
-                                         @click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.toggle.click()"
-                                         x-data="{ enabled:
-                                         {% if plugin.is_enabled %}
-                                             true
-                                         {% else %}
-                                             false
-                                         {% endif %}
-                                         }">
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex items-center flex-wrap gap-2 mb-1">
-                                                    <label class="font-medium text-text {% if plugin.requires_upgrade %}text-text-muted{% endif %} cursor-pointer"
-                                                           for="plugin-{{ plugin.name }}">
-                                                        {{ plugin.display_name }}
-                                                    </label>
-                                                    <span class="tw-badge-secondary text-xs">v{{ plugin.version }}</span>
-                                                    {% for bom_type in plugin.supported_bom_types %}
-                                                        <span class="tw-badge-secondary text-xs uppercase tracking-wide"
-                                                              title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type }}</span>
-                                                    {% endfor %}
-                                                    {% if plugin.is_beta %}
-                                                        <span class="tw-badge-info text-xs">
-                                                            <i class="fas fa-flask mr-1"></i>Beta
-                                                        </span>
-                                                    {% endif %}
-                                                    {% if plugin.requires_upgrade %}
-                                                        <span class="tw-badge-warning text-xs">
-                                                            <i class="fas fa-lock mr-1"></i>{{ plugin.required_plan }}+ Plan
-                                                        </span>
-                                                    {% endif %}
-                                                </div>
-                                                <p class="text-text-muted text-sm m-0 line-clamp-2"
-                                                   title="{{ plugin.description }}">{{ plugin.description }}</p>
+                                    <div class="tw-select-row {% if plugin.requires_upgrade %}opacity-50 grayscale{% endif %}" @click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.toggle.click()" x-data="{ enabled:
+                                        {% if plugin.is_enabled %}
+                                            true
+                                        {% else %}
+                                            false
+                                        {% endif %}
+                                        }">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center flex-wrap gap-2 mb-1">
+                                                <label class="font-medium text-text {% if plugin.requires_upgrade %}text-text-muted{% endif %} cursor-pointer"
+                                                       for="plugin-{{ plugin.name }}">{{ plugin.display_name }}</label>
+                                                <span class="tw-badge-secondary text-xs">v{{ plugin.version }}</span>
+                                                {% for bom_type in plugin.supported_bom_types %}
+                                                    <span class="tw-badge-secondary text-xs uppercase tracking-wide"
+                                                          title="Runs on {{ bom_type|upper }} artifacts">{{ bom_type }}</span>
+                                                {% endfor %}
+                                                {% if plugin.is_beta %}
+                                                    <span class="tw-badge-info text-xs">
+                                                        <i class="fas fa-flask mr-1"></i>Beta
+                                                    </span>
+                                                {% endif %}
                                                 {% if plugin.requires_upgrade %}
-                                                    <div class="mt-3">
-                                                        <a href="{% url 'billing:select_plan' team.key %}"
-                                                           class="tw-btn-warning tw-btn-sm no-underline">
-                                                            <i class="fas fa-arrow-up mr-1"></i>Upgrade to Enable
-                                                        </a>
-                                                    </div>
+                                                    <span class="tw-badge-warning text-xs">
+                                                        <i class="fas fa-lock mr-1"></i>{{ plugin.required_plan }}+ Plan
+                                                    </span>
                                                 {% endif %}
-                                                {% if plugin.has_visible_config %}
-                                                    <div x-show="enabled" x-cloak class="mt-4 pt-4 border-t border-border">
-                                                        {% for field in plugin.config_schema %}
-                                                            {% if field.type == "select" and not field.choices and field.hide_if_no_choices %}
-                                                                {# Skip entire field — no choices available and explicitly flagged (e.g., Business tier for DT server) #}
-                                                            {% else %}
-                                                                <div class="{% if not forloop.last %}mb-3{% endif %}">
-                                                                    <label class="tw-form-label"
-                                                                           for="plugin_config_{{ plugin.name }}_{{ field.key }}">
-                                                                        {{ field.label }}
-                                                                    </label>
-                                                                    {% if field.type == "select" %}
-                                                                        <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                                id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                                class="tw-form-select">
-                                                                            <option value="">-- Default --</option>
-                                                                            {% for choice in field.choices %}
-                                                                                {% if field.current_value == choice.value %}
-                                                                                    <option value="{{ choice.value }}" selected>{{ choice.label }}</option>
-                                                                                {% else %}
-                                                                                    <option value="{{ choice.value }}">{{ choice.label }}</option>
-                                                                                {% endif %}
-                                                                            {% endfor %}
-                                                                        </select>
-                                                                    {% elif field.type == "boolean" %}
-                                                                        {% if field.current_value == "true" %}
-                                                                            <input type="checkbox"
-                                                                                   name="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                                   id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                                   class="tw-checkbox"
-                                                                                   value="true"
-                                                                                   checked>
-                                                                        {% else %}
-                                                                            <input type="checkbox"
-                                                                                   name="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                                   id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                                   class="tw-checkbox"
-                                                                                   value="true">
-                                                                        {% endif %}
-                                                                    {% elif field.type == "number" %}
-                                                                        <input type="number"
+                                            </div>
+                                            <p class="text-text-muted text-sm m-0 line-clamp-2"
+                                               title="{{ plugin.description }}">{{ plugin.description }}</p>
+                                            {% if plugin.requires_upgrade %}
+                                                <div class="mt-3">
+                                                    <a href="{% url 'billing:select_plan' team.key %}"
+                                                       class="tw-btn-warning tw-btn-sm no-underline">
+                                                        <i class="fas fa-arrow-up mr-1"></i>Upgrade to Enable
+                                                    </a>
+                                                </div>
+                                            {% endif %}
+                                            {% if plugin.has_visible_config %}
+                                                <div x-show="enabled" x-cloak class="mt-4 pt-4 border-t border-border">
+                                                    {% for field in plugin.config_schema %}
+                                                        {% if field.type == "select" and not field.choices and field.hide_if_no_choices %}
+                                                            {# Skip entire field — no choices available and explicitly flagged (e.g., Business tier for DT server) #}
+                                                        {% else %}
+                                                            <div class="{% if not forloop.last %}mb-3{% endif %}">
+                                                                <label class="tw-form-label"
+                                                                       for="plugin_config_{{ plugin.name }}_{{ field.key }}">
+                                                                    {{ field.label }}
+                                                                </label>
+                                                                {% if field.type == "select" %}
+                                                                    <select name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                            id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                            class="tw-form-select">
+                                                                        <option value="">-- Default --</option>
+                                                                        {% for choice in field.choices %}
+                                                                            {% if field.current_value == choice.value %}
+                                                                                <option value="{{ choice.value }}" selected>{{ choice.label }}</option>
+                                                                            {% else %}
+                                                                                <option value="{{ choice.value }}">{{ choice.label }}</option>
+                                                                            {% endif %}
+                                                                        {% endfor %}
+                                                                    </select>
+                                                                {% elif field.type == "boolean" %}
+                                                                    {% if field.current_value == "true" %}
+                                                                        <input type="checkbox"
                                                                                name="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                                id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                               class="tw-form-input"
-                                                                               value="{{ field.current_value }}">
+                                                                               class="tw-checkbox"
+                                                                               value="true"
+                                                                               checked>
                                                                     {% else %}
-                                                                        <input type="text"
+                                                                        <input type="checkbox"
                                                                                name="plugin_config_{{ plugin.name }}_{{ field.key }}"
                                                                                id="plugin_config_{{ plugin.name }}_{{ field.key }}"
-                                                                               class="tw-form-input"
-                                                                               value="{{ field.current_value }}">
+                                                                               class="tw-checkbox"
+                                                                               value="true">
                                                                     {% endif %}
-                                                                    {% if field.help_text %}<p class="tw-form-hint">{{ field.help_text }}</p>{% endif %}
-                                                                </div>
-                                                            {% endif %}
-                                                        {% endfor %}
-                                                    </div>
-                                                {% endif %}
-                                            </div>
-                                            <div class="flex-shrink-0">
-                                                <input type="checkbox"
-                                                       name="enabled_plugins"
-                                                       value="{{ plugin.name }}"
-                                                       id="plugin-{{ plugin.name }}"
-                                                       class="tw-checkbox"
-                                                       x-ref="toggle"
-                                                       x-model="enabled"
-                                                       {% if plugin.requires_upgrade %}disabled{% endif %}>
-                                            </div>
+                                                                {% elif field.type == "number" %}
+                                                                    <input type="number"
+                                                                           name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                           id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                           class="tw-form-input"
+                                                                           value="{{ field.current_value }}">
+                                                                {% else %}
+                                                                    <input type="text"
+                                                                           name="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                           id="plugin_config_{{ plugin.name }}_{{ field.key }}"
+                                                                           class="tw-form-input"
+                                                                           value="{{ field.current_value }}">
+                                                                {% endif %}
+                                                                {% if field.help_text %}<p class="tw-form-hint">{{ field.help_text }}</p>{% endif %}
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            <input type="checkbox"
+                                                   name="enabled_plugins"
+                                                   value="{{ plugin.name }}"
+                                                   id="plugin-{{ plugin.name }}"
+                                                   class="tw-checkbox"
+                                                   x-ref="toggle"
+                                                   x-model="enabled"
+                                                   {% if plugin.requires_upgrade %}disabled{% endif %}>
+                                        </div>
                                     </div>
                                 {% endfor %}
                             </div>

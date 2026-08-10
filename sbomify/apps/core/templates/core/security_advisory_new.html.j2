@@ -39,10 +39,8 @@
                 </div>
                 <div class="space-y-5">
                     {% input name="title" label="Title" required=True placeholder="e.g. Improper authentication in SAML assertion handling" %}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-lg">
-                        {% select name="severity" label="Severity" options=severity_options selected="medium" %}
-                        {% select name="remediation_status" label="Status" options=status_options selected="identified" hint="Where you are on fixing it." %}
-                    </div>
+                    {% choice_group name="severity" label="Severity" options=severity_options selected="medium" %}
+                    {% choice_group name="remediation_status" label="Status" options=status_options selected="identified" hint="Where the work already stands — the first timeline entry records this." %}
                 </div>
             </div>
             <div class="tw-form-section">

@@ -52,6 +52,7 @@ _LEAF_COMPONENTS = (
     "button",
     "button_link",
     "checkbox",
+    "choice_group",
     "code_block",
     "dropdown",
     "empty_state",
@@ -73,6 +74,7 @@ _LEAF_COMPONENTS = (
 
 # Container components: wrap content, called as ``{% x %}…{% endx %}``.
 _BLOCK_COMPONENTS = (
+    "actions_menu",
     "card",
     "modal",
 )

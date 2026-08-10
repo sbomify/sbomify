@@ -212,6 +212,19 @@
     {% toggle name="ds-toggle-disabled" label="Disabled" disabled=True %}
 </div>
 {% endcard %}
+<h2 id="choice-group" class="text-xl font-semibold text-text mb-4">Choice group</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    Radios as tiles, for a short set of values that carry an icon and a colour elsewhere. Each option wears the
+    accent its badge wears, so choosing one looks like the badge it produces. Selection is painted with
+    <code class="tw-code-inline">:has(:checked)</code>, so the highlight cannot drift from what submits.
+    Longer or free-form lists stay in <code class="tw-code-inline">select</code>.
+</p>
+<div class="space-y-5 max-w-2xl">
+    {% choice_group name="ds-severity" label="Severity" options=demo_severity_choices selected="medium" %}
+    {% choice_group name="ds-status" label="Status" options=demo_status_choices selected="fix_in_progress" hint="Helper text sits under the group." %}
+</div>
+{% endcard %}
 <h2 id="search" class="text-xl font-semibold text-text mb-4">Search input</h2>
 {% card class="mb-8" %}
 <div class="max-w-md" x-data="{ q: 'gateway' }">
@@ -324,7 +337,8 @@
              x-data>
             <div class="flex-1 min-w-0">
                 <div class="flex items-center flex-wrap gap-2 mb-1">
-                    <label class="font-medium text-text cursor-pointer" for="ds-row-{{ forloop.counter }}">{{ row.name }}</label>
+                    <label class="font-medium text-text cursor-pointer"
+                           for="ds-row-{{ forloop.counter }}">{{ row.name }}</label>
                     <span class="tw-badge-secondary text-xs">{{ row.version }}</span>
                     {% if row.beta %}<span class="tw-badge-info text-xs">Beta</span>{% endif %}
                 </div>
@@ -612,6 +626,55 @@
 <div class="flex flex-wrap gap-3">
     {% dropdown id="ds-dropdown" trigger_text="Actions" items=demo_dropdown_items %}
     {% dropdown id="ds-dropdown-icon" trigger_icon="fas fa-ellipsis-vertical" items=demo_dropdown_items align="right" %}
+</div>
+{% endcard %}
+<h2 id="actions-menu" class="text-xl font-semibold text-text mb-4">Actions menu</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    Row and header actions. Unlike <code class="tw-code-inline">dropdown</code>, the items are block content
+    rather than a list, so a menu can mix links with HTMX and Alpine actions — and the menu is teleported out
+    to the body, so one opened from the last row of a scrolling table is neither clipped nor off screen.
+</p>
+<div class="tw-data-table-container border border-border rounded-lg">
+    <table class="tw-table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th class="tw-table-actions">
+                    <span class="sr-only">Actions</span>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in demo_menu_rows %}
+                <tr>
+                    <td>{{ product }}</td>
+                    <td class="tw-table-actions">
+                        {% actions_menu label="Product actions" width="w-56" %}
+                        <div class="tw-dropdown-header">Advisories</div>
+                        <a href="#actions-menu"
+                           role="menuitem"
+                           class="tw-dropdown-item no-underline">
+                            <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>Add security advisory
+                        </a>
+                        <div class="tw-dropdown-divider"></div>
+                        <div class="tw-dropdown-header">Download</div>
+                        <a href="#actions-menu"
+                           role="menuitem"
+                           class="tw-dropdown-item no-underline">
+                            <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>SBOM · CycloneDX
+                        </a>
+                        <a href="#actions-menu"
+                           role="menuitem"
+                           class="tw-dropdown-item no-underline">
+                            <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>SBOM · SPDX
+                        </a>
+                    {% endactions_menu %}
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
 </div>
 {% endcard %}
 <h2 id="stepper" class="text-xl font-semibold text-text mb-4">Stepper</h2>

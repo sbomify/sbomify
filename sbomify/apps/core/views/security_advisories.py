@@ -76,6 +76,22 @@ def _current_team(request: HttpRequest) -> Team | None:
     return membership.team if membership else None
 
 
+# Severity as the New Advisory form offers it. The icons read as a scale rather
+# than as five different warnings, and each variant points at the same token the
+# severity badge uses, so the choice looks like the badge it produces.
+SEVERITY_OPTIONS: list[dict[str, str]] = [
+    {
+        "value": "critical",
+        "label": "Critical",
+        "icon": "fas fa-triangle-exclamation",
+        "variant": "severity-critical",
+    },
+    {"value": "high", "label": "High", "icon": "fas fa-angles-up", "variant": "severity-high"},
+    {"value": "medium", "label": "Medium", "icon": "fas fa-angle-up", "variant": "severity-medium"},
+    {"value": "low", "label": "Low", "icon": "fas fa-angle-down", "variant": "severity-low"},
+]
+
+
 # Roles that may change an advisory, mirroring the has_crud_permissions the
 # templates use to decide whether to render the controls at all.
 _ADVISORY_WRITE_ROLES = ("owner", "admin")
@@ -151,23 +167,34 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         if current_team.get("role") not in ["owner", "admin"]:
             raise Http404("Workspace not found")
 
+        products = creation_options(team).value or []
+        # ``?product=`` lets a product's row menu open this form with that
+        # product already ticked. Intersected with the workspace's own products,
+        # so a hand-edited id cannot preselect another workspace's product — and
+        # an id for something deleted since simply drops out.
+        requested = set(request.GET.getlist("product"))
+        preselected = [product["id"] for product in products if product["id"] in requested]
+
         return render(
             request,
             "core/security_advisory_new.html.j2",
             {
                 "current_team": current_team,
                 "has_crud_permissions": True,
-                "creation_products": creation_options(team).value or [],
-                "severity_options": [
-                    {"value": "critical", "label": "Critical"},
-                    {"value": "high", "label": "High"},
-                    {"value": "medium", "label": "Medium"},
-                    {"value": "low", "label": "Low"},
-                ],
+                "creation_products": products,
+                "preselected_product_ids": preselected,
+                "severity_options": SEVERITY_OPTIONS,
                 # From REMEDIATION_META so the form, the badges and the timeline
-                # all read the same vocabulary in the same order.
+                # read the same vocabulary, in the same order, with the same icon
+                # and colour on each value.
                 "status_options": [
-                    {"value": value, "label": meta["label"]} for value, meta in REMEDIATION_META.items()
+                    {
+                        "value": value,
+                        "label": meta["label"],
+                        "icon": meta["icon"],
+                        "variant": meta["variant"],
+                    }
+                    for value, meta in REMEDIATION_META.items()
                 ],
             },
         )

@@ -1,3 +1,4 @@
+{% load design_system %}
 {# WebSocket listener for real-time updates #}
 <div id="products-table-container"
      x-data="{ search: '', filter: 'all', sortColumn: 'name', sortDirection: 'asc', currentPage: 1, perPage: 10, allProducts: [], init() { this.allProducts = window.parseJsonScript('products-data') || []; this.$el.addEventListener('htmx:afterSettle', () => { this.allProducts = window.parseJsonScript('products-data') || []; if (this.currentPage > this.totalPages && this.totalPages > 0) { this.currentPage = this.totalPages; } }); }, get filteredData() { let data = [...this.allProducts]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.name.toLowerCase().includes(s) || (item.description && item.description.toLowerCase().includes(s)) ); } if (this.filter === 'public') { data = data.filter(item => item.is_public); } else if (this.filter === 'private') { data = data.filter(item => !item.is_public); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal = a[this.sortColumn]; let bVal = b[this.sortColumn]; if (this.sortColumn === 'components_count') { aVal = a.components?.length || 0; bVal = b.components?.length || 0; } if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.max(1, Math.ceil(this.filteredData.length / this.perPage)); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, getComponentPillColor(idx) { return 'bg-border/20 text-text-muted border-border/40'; } }"
@@ -94,6 +95,9 @@
                                             </span>
                                         </button>
                                     </th>
+                                    <th class="tw-table-actions">
+                                        <span class="sr-only">Actions</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -154,50 +158,75 @@
                                                 </span>
                                             </template>
                                         </td>
-                                    </tr>
-                                </template>
-                                <template x-if="paginatedData.length === 0">
-                                    <tr>
-                                        <td colspan="3" class="text-center py-8 text-text-muted">
-                                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                            <p>No products match your search</p>
-                                            <button @click="search = ''; filter = 'all'"
-                                                    class="mt-3 text-xs text-primary hover:underline">
-                                                Clear filters
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                        <div class="tw-data-table-info">
-                            Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
-                            <template x-if="search || filter !== 'all'">
-                                <span>(filtered from <strong x-text="allProducts.length"></strong> total)</span>
+                                        {# Row actions. The cell swallows its own clicks so reaching
+                                           for the menu never navigates to the product. #}
+                                        <td class="tw-table-actions" @click.stop>
+                                            {% actions_menu label="Product actions" width="w-56" %}
+                                            {% if has_crud_permissions %}
+                                                <a :href="'{% url 'core:security_advisory_new' %}?product=' + product.id"
+                                                   role="menuitem"
+                                                   class="tw-dropdown-item no-underline">
+                                                    <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>Add security advisory
+                                                </a>
+                                                <div class="tw-dropdown-divider"></div>
+                                                <div class="tw-dropdown-header">Download SBOM</div>
+                                            {% endif %}
+                                            <a :href="'{% url 'core:sbom_download_product' 0 %}'.replace('0', product.id)"
+                                               role="menuitem"
+                                               class="tw-dropdown-item no-underline">
+                                                <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>CycloneDX
+                                            </a>
+                                            <a :href="'{% url 'core:sbom_download_product' 0 %}'.replace('0', product.id) + '?format=spdx'"
+                                               role="menuitem"
+                                               class="tw-dropdown-item no-underline">
+                                                <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>SPDX
+                                            </a>
+                                        {% endactions_menu %}
+                                    </td>
+                                </tr>
                             </template>
-                        </div>
-                        {% include "components/tw/table_pager.html.j2" %}
-                    </div>
+                            <template x-if="paginatedData.length === 0">
+                                <tr>
+                                    <td colspan="4" class="text-center py-8 text-text-muted">
+                                        <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                        <p>No products match your search</p>
+                                        <button @click="search = ''; filter = 'all'"
+                                                class="mt-3 text-xs text-primary hover:underline">
+                                            Clear filters
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
-            {% else %}
-                {# Empty State #}
-                <div class="flex flex-col items-center justify-center py-16 px-6">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
-                        <i class="fas fa-cube text-3xl text-primary"></i>
+                <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+                    <div class="tw-data-table-info">
+                        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+                        <template x-if="search || filter !== 'all'">
+                            <span>(filtered from <strong x-text="allProducts.length"></strong> total)</span>
+                        </template>
                     </div>
-                    <h3 class="text-lg font-semibold text-text mb-2">No products yet</h3>
-                    <p class="text-text-muted text-sm text-center max-w-sm mb-6">
-                        Products help you organize your software releases and their associated components, SBOMs, and documentation.
-                    </p>
-                    {% if has_crud_permissions %}
-                        <button @click="$dispatch('open-add-product-modal')" class="tw-btn-primary">
-                            <i class="fas fa-plus mr-2"></i>Create Your First Product
-                        </button>
-                    {% endif %}
+                    {% include "components/tw/table_pager.html.j2" %}
                 </div>
-            {% endif %}
-        </div>
+            </div>
+        {% else %}
+            {# Empty State #}
+            <div class="flex flex-col items-center justify-center py-16 px-6">
+                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
+                    <i class="fas fa-cube text-3xl text-primary"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-text mb-2">No products yet</h3>
+                <p class="text-text-muted text-sm text-center max-w-sm mb-6">
+                    Products help you organize your software releases and their associated components, SBOMs, and documentation.
+                </p>
+                {% if has_crud_permissions %}
+                    <button @click="$dispatch('open-add-product-modal')" class="tw-btn-primary">
+                        <i class="fas fa-plus mr-2"></i>Create Your First Product
+                    </button>
+                {% endif %}
+            </div>
+        {% endif %}
     </div>
+</div>
 </div>
