@@ -59,3 +59,9 @@ class TestOneDetector:
 
     def test_spdx2_is_not(self) -> None:
         assert is_spdx3({"spdxVersion": "SPDX-2.3", "packages": []}) is False
+
+    def test_non_list_graph_is_not_spdx3(self) -> None:
+        """An arbitrary JSON object with a scalar @graph key must not be
+        classified as SPDX 3 — callers iterate the graph."""
+        assert is_spdx3({"@graph": "not-a-list"}) is False
+        assert is_spdx3({"@graph": 42}) is False

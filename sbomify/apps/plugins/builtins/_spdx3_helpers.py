@@ -68,7 +68,7 @@ def is_spdx3(sbom_data: dict[str, Any]) -> bool:
         if "spdx.org/rdf/3." in str(context):
             return True
 
-    if "@graph" in sbom_data:
+    if isinstance(sbom_data.get("@graph"), list):
         return True
 
     spdx_version = sbom_data.get("spdxVersion") or ""
