@@ -10,13 +10,10 @@
     {# Serialize products data for Alpine.js #}
     {{ products|json_script:"products-data" }}
     <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border">
-            <h3 class="text-lg font-semibold text-text m-0">All Products</h3>
-        </div>
         <div>
             {% if products %}
-                <div class="flex flex-col overflow-hidden">
-                    <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3 justify-between">
+                <div class="tw-data-table">
+                    <div class="tw-data-table-toolbar">
                         <div class="tw-data-table-toolbar-left">
                             <div class="tw-data-table-search">
                                 <i class="fas fa-search tw-data-table-search-icon"></i>
@@ -200,7 +197,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+                <div class="tw-data-table-footer">
                     <div class="tw-data-table-info">
                         Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
                         <template x-if="search || filter !== 'all'">

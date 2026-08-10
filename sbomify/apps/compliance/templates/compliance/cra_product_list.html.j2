@@ -1,4 +1,5 @@
 {% extends "core/dashboard_base.html.j2" %}
+{% load design_system %}
 {% block title %}CRA Compliance — sbomify{% endblock %}
 {% block sidebar_content %}
     <div x-show="!sidebarCollapsed"
@@ -14,12 +15,8 @@
     </div>
 {% endblock sidebar_content %}
 {% block dashboard_content %}
+    {% page_header title="CRA compliance" subtitle="Track each product against the Cyber Resilience Act." icon="fas fa-scale-balanced" %}{% endpage_header %}
     <div class="space-y-6">
-        <div class="tw-page-header">
-            <div>
-                <h1 class="tw-page-header-title">CRA Compliance</h1>
-            </div>
-        </div>
         {% if not has_cra_access %}
             <div class="tw-card">
                 <div class="p-8 text-center">

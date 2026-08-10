@@ -1,36 +1,35 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load design_system %}
 {% load widget_tweaks %}
 {% load form_helpers %}
 {% load django_vite %}
 {% block title %}sbomify Settings{% endblock %}
 {% block content %}
-    <div class="p-6">
+    {# No padding wrapper: dashboard_base already pads the page, and a second p-6 gave this page twice the inset of every other one. #}
+    <div>
+        {% page_header title="Settings" subtitle="Your API tokens and workspace invitations." icon="fas fa-gear" %}{% endpage_header %}
         {% if pending_invitations %}
             <div class="mb-6">
-                <div class="flex items-center gap-3 mb-4">
-                    <span class="tw-icon-chip tw-icon-chip-success">
-                        <i class="fas fa-envelope-open-text text-lg" aria-hidden="true"></i>
+                <div class="tw-section-header">
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-success"
+                          aria-hidden="true">
+                        <i class="fas fa-envelope-open-text"></i>
                     </span>
                     <div>
-                        <h1 class="text-2xl font-bold text-text">Pending Workspace Invitations</h1>
-                        <p class="text-text-muted text-sm">You have been invited to join the following workspaces. Accept or decline below.</p>
+                        <h2 class="tw-section-header-title">Pending invitations</h2>
+                        <p class="tw-section-header-subtitle">Accept or decline the workspaces you have been invited to.</p>
                     </div>
                 </div>
                 {% include "core/components/pending_invitations.html.j2" %}
             </div>
         {% endif %}
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip">
-                    <i class="fas fa-key text-lg" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Personal Access Tokens</h1>
-                    <p class="text-text-muted text-sm">
-                        Personal access tokens are used to authenticate API requests to sbomify. Use these tokens to access the API programmatically.
-                    </p>
-                </div>
+        <div class="tw-section-header mb-6">
+            <span class="tw-icon-chip tw-icon-chip-sm" aria-hidden="true">
+                <i class="fas fa-key"></i>
+            </span>
+            <div>
+                <h2 class="tw-section-header-title">Personal access tokens</h2>
+                <p class="tw-section-header-subtitle">Tokens let scripts and CI use the sbomify API as you.</p>
             </div>
         </div>
         {# Token Generation Card #}

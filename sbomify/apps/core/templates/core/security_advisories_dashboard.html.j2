@@ -6,25 +6,12 @@
     picker needs room to be usable.
 {% endcomment %}
 {% block dashboard_content %}
-    <div class="space-y-6">
-        <div class="tw-page-header tw-page-header-flush">
-            <div class="tw-page-header-lead">
-                <span class="tw-icon-chip tw-icon-chip-lg">
-                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h1 class="tw-page-header-title">Security Advisories</h1>
-                    <p class="tw-page-header-subtitle">Publish security advisories for your products</p>
-                </div>
-            </div>
-            {% if has_crud_permissions %}
-                <div class="tw-page-header-actions">
-                    {% url 'core:security_advisory_new' as new_advisory_url %}
-                    {% button_link text="New advisory" url=new_advisory_url variant="primary" icon="fas fa-plus" %}
-                </div>
-            {% endif %}
-        </div>
-        {% include 'core/security_advisories_table.html.j2' %}
-    </div>
+    {% url 'core:security_advisory_new' as new_advisory_url %}
+    {% page_header title="Security advisories" subtitle="Publish advisories for your products." icon="fas fa-shield-halved" %}
+    {% if has_crud_permissions %}
+        {% button_link text="New advisory" url=new_advisory_url variant="primary" icon="fas fa-plus" %}
+    {% endif %}
+{% endpage_header %}
+<div class="space-y-6">{% include 'core/security_advisories_table.html.j2' %}</div>
 {% endblock %}
 {% block scripts %}{% endblock %}

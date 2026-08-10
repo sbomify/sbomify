@@ -1,0 +1,39 @@
+{% comment %}
+    The header every main page starts with: a mark, the page title, one line
+    under it, and the page's actions on the right.
+
+    Block content becomes the actions area, because actions are real controls
+    (buttons, a filter form, a menu) and a list of parameters cannot describe
+    them. Pages with no actions still close the tag:
+
+        {% page_header title="Products" subtitle="Your products and their components." icon="fas fa-cube" %}{% endpage_header %}
+
+        {% page_header title="Security advisories" icon="fas fa-shield-halved" %}
+            {% button_link text="New advisory" url=new_advisory_url variant="primary" icon="fas fa-plus" %}
+        {% endpage_header %}
+
+    Put it above the page's content stack, not inside it. The gap under the title
+    belongs to this component, so every page has the same one, and a header
+    inside a `space-y-*` stack would get that gap twice.
+
+    Params:
+      title     the page title, rendered as its h1 (required)
+      subtitle  one short line under the title
+      icon      Font Awesome class for the mark; omitted, the title starts the row
+      class     extra classes on the wrapper
+{% endcomment %}
+<div class="tw-page-header{% if class %} {{ class }}{% endif %}"
+     {{ attrs|safe }}>
+    <div class="tw-page-header-lead">
+        {% if icon %}
+            <span class="tw-icon-chip tw-icon-chip-lg" aria-hidden="true">
+                <i class="{{ icon }}"></i>
+            </span>
+        {% endif %}
+        <div>
+            <h1 class="tw-page-header-title">{{ title }}</h1>
+            {% if subtitle %}<p class="tw-page-header-subtitle">{{ subtitle }}</p>{% endif %}
+        </div>
+    </div>
+    {% if content %}<div class="tw-page-header-actions">{{ content|safe }}</div>{% endif %}
+</div>

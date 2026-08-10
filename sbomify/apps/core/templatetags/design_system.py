@@ -77,6 +77,7 @@ _BLOCK_COMPONENTS = (
     "actions_menu",
     "card",
     "modal",
+    "page_header",
 )
 
 
@@ -125,7 +126,9 @@ def _leaf(name: str) -> Callable[..., SafeString]:
 
 def _block(name: str) -> Callable[..., SafeString]:
     def component(content: str, **params: Any) -> SafeString:
-        params["content"] = content
+        # Stripped so a component can test whether it was given any content at
+        # all: an empty block still arrives as the template's whitespace.
+        params["content"] = content.strip()
         return _render(name, params)
 
     component.__name__ = name

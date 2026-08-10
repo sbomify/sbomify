@@ -79,6 +79,7 @@ List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown
 | `input` / `textarea` / `select` | Form fields | `name`, `label`, `hint`, `error`, `required` |
 | `loading_state` | Placeholder for an in-flight HTMX panel | `message`, `size`, `compact` |
 | `modal` | Alpine-driven dialog | `id`, `title`, `content`, `size`, `alpine_show` |
+| `page_header` | The title block every main page opens with (block tag; content is the actions) | `title`, `subtitle`, `icon` |
 | `pagination` | Page navigation | `current`, `total`, `page_range`, `base_url` |
 | `progress` | Determinate progress | `value`, `variant` (omit for the primary accent), `size`, `label_text` (renders the header row) |
 | `skeleton` / `spinner` | Loading states (prefer the brand loader for spinners) | `type` (`text`/`paragraph`/`avatar`/`button`/`image`), `width`, `lines` / `size` |
@@ -110,6 +111,7 @@ Two names that are easy to get wrong:
 
 - **`tw-table` vs `tw-data-table`** — `tw-table` styles the `<table>` element; `tw-data-table` is the surrounding shell. A `<table class="tw-data-table">` gets no cell padding.
 - **`actions_menu` vs `dropdown`** — `dropdown` takes a list of items and positions itself inside its parent. `actions_menu` takes block content (so items can be HTMX buttons and Alpine dispatches) and teleports the menu to the body, which is what makes it safe inside a table: `tw-data-table-container` scrolls, so an absolutely positioned menu is clipped on both axes. It closes on any scroll, because a fixed menu does not follow a scrolling ancestor.
+- **`page_header` goes above the content stack, never inside it.** `tw-page-header` owns the gap under the title, so a header inside a `space-y-*` stack gets that gap twice. The old `tw-page-header-flush` escape hatch exists for markup that cannot move.
 - **`tw-stat-row`** is the wrapper *inside* a stat card that sits the delta on the value's baseline. Laying out a row of stat cards is the page's job (a grid utility).
 
 Removed in the v2 consolidation — do not reintroduce without three real callers: timeline, list group, range slider, `tw-tooltip` (CSS-hover; use `x-tooltip`), dividers, notification badge, `tw-table-striped`, `tw-tag-outline*`, `tw-avatar-group`, `tw-modal-{backdrop,container}`.

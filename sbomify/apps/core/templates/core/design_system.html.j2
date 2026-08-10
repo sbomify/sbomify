@@ -122,23 +122,14 @@
 {% endcard %}
 <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
 {% card class="mb-8" %}
-<div class="tw-page-header">
-    <div class="tw-page-header-lead">
-        <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-box" aria-hidden="true"></i></span>
-        <div>
-            <h1 class="tw-page-header-title">Acme Gateway</h1>
-            <p class="tw-page-header-subtitle">Quantum readiness and migration priority across all components</p>
-        </div>
-    </div>
-    <div class="tw-page-header-actions">
-        {% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
-        {% button text="New release" variant="primary" size="sm" %}
-    </div>
-</div>
+{% page_header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box" %}
+{% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
+{% button text="New release" variant="primary" size="sm" %}
+{% endpage_header %}
 <p class="text-sm text-text-muted mb-6">
-    <code class="tw-code-inline">tw-page-header-lead</code> holds the mark (an avatar or icon chip) beside the
-    title block; add <code class="tw-code-inline">tw-page-header-flush</code> inside a
-    <code class="tw-code-inline">space-y-*</code> stack that already supplies the rhythm.
+    Every main page opens with this, called as <code class="tw-code-inline">page_header</code>. Block content
+    becomes the actions on the right; a page with none still closes the tag. Put it above the page's content
+    stack, not inside it, so the gap under the title is the same on every page.
 </p>
 <hr class="my-6 border-border">
 <div class="tw-section-header">

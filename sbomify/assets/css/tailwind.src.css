@@ -2520,7 +2520,9 @@ html.no-transitions * {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1rem;
+  /* Horizontal padding matches tw-table's first/last cell gutter, so the
+     search box and the first column share an edge. */
+  padding: 1rem 1.5rem;
   background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
   border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
   flex-wrap: wrap;
@@ -2614,7 +2616,7 @@ html.no-transitions * {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.875rem 1rem;
+  padding: 0.875rem 1.5rem;
   background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
   border-top: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
   flex-wrap: wrap;
@@ -5217,51 +5219,13 @@ html.no-transitions * {
   align-self: flex-start;
   font-size: 0.8125rem;
   font-weight: 550;
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
 }
 
-.settings-masthead-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 
-.settings-title {
-  font-size: 1.875rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: rgb(var(--color-text));
-  margin: 0;
-}
 
-.settings-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
-.settings-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4375rem;
-  padding: 0.3125rem 0.75rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: color-mix(in oklab, rgb(var(--color-primary)) 10%, transparent);
-  color: rgb(var(--color-primary));
-}
 
-.settings-chip.is-success {
-  background: color-mix(in oklab, rgb(var(--color-success)) 12%, transparent);
-  color: rgb(var(--color-success));
-}
-
-.settings-chip i {
-  font-size: 0.6875rem;
-}
 
 /* --- Tabs ----------------------------------------------------------------- */
 /* A single hairline runs the width of the row, and the active tab sits on a
@@ -5277,7 +5241,7 @@ html.no-transitions * {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  border-bottom: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid var(--color-border);
 }
 
 .settings-tabs::-webkit-scrollbar {
@@ -5294,18 +5258,18 @@ html.no-transitions * {
   font-size: 0.875rem;
   font-weight: 550;
   white-space: nowrap;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .settings-tab:hover {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   text-decoration: none;
 }
 
 .settings-tab.is-active {
-  color: rgb(var(--color-primary));
-  border-bottom-color: rgb(var(--color-primary));
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .settings-tab i {
@@ -5316,8 +5280,8 @@ html.no-transitions * {
 .settings-tab-badge {
   padding: 0.0625rem 0.4375rem;
   border-radius: 999px;
-  background: color-mix(in oklab, rgb(var(--color-warning)) 15%, transparent);
-  color: rgb(var(--color-warning));
+  background: color-mix(in oklab, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
   font-size: 0.6875rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -5335,10 +5299,4 @@ html.no-transitions * {
    their width from the page container rather than from a nested padding. */
 .settings-panel {
   min-width: 0;
-}
-
-@media (max-width: 640px) {
-  .settings-title {
-    font-size: 1.5rem;
-  }
 }

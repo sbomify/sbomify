@@ -209,7 +209,11 @@
                             <th>Latest version</th>
                             <th>Vulnerabilities</th>
                             <th class="tw-cell-date">Last scan</th>
-                            {% if product.has_crud_permissions %}<th class="text-center">Actions</th>{% endif %}
+                            {% if product.has_crud_permissions %}
+                                <th class="tw-table-actions">
+                                    <span class="sr-only">Actions</span>
+                                </th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -260,335 +264,336 @@
                                     {% endif %}
                                 </td>
                                 {% if product.has_crud_permissions %}
-                                    <td class="text-center">
+                                    <td class="tw-table-actions">
+                                        {% actions_menu label="Component actions" width="w-56" %}
                                         <button type="button"
-                                                class="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                                                title="Remove from product"
-                                                aria-label="Remove {{ row.name }} from product"
+                                                role="menuitem"
+                                                class="tw-dropdown-item tw-dropdown-item-danger"
                                                 :disabled="busy"
                                                 @click="removeTarget = { id: '{{ row.id }}', name: '{{ row.name|escapejs }}' }">
-                                            <i class="fas fa-unlink" aria-hidden="true"></i>
+                                            <i class="fas fa-unlink tw-dropdown-item-icon" aria-hidden="true"></i>Remove from product
                                         </button>
-                                    </td>
-                                {% endif %}
-                            </tr>
-                        {% endfor %}
-                        <tr x-show="total === 0">
-                            <td colspan="{% if product.has_crud_permissions %}5{% else %}4{% endif %}"
-                                class="text-center py-8 text-text-muted">No components match your search.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                <span class="text-sm text-text-muted">
-                    Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
-                </span>
-                {% include "components/tw/table_pager.html.j2" %}
-            </div>
-        {% else %}
-            {% include "components/tw/empty_state.html.j2" with icon="fas fa-puzzle-piece" title="No components assigned yet" message="Components are shared building blocks. Assign an existing one, or create a component and connect CI/CD so your first push reports here." action_text="Assign a component" action_click="openAssign()" secondary_text="or create a new one" secondary_url="/components/" %}
-        {% endif %}
-        {# Assign modal #}
-        {% if product.has_crud_permissions %}
-            <div x-show="assignOpen"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="tw-modal-overlay"
-                 @click="assignOpen = false"></div>
-            <div x-show="assignOpen"
-                 x-cloak
-                 x-trap.noscroll="assignOpen"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 class="tw-modal"
-                 @keydown.escape.window="assignOpen = false"
-                 @click.stop>
-                <div class="tw-modal-content"
-                     role="dialog"
-                     aria-modal="true"
-                     aria-label="Assign component">
-                    <div class="tw-modal-header">
-                        <h4 class="tw-modal-title flex items-center gap-2">
-                            <i class="fas fa-puzzle-piece text-primary"></i>Assign Component
-                        </h4>
-                        <button type="button"
-                                class="tw-modal-close"
-                                @click="assignOpen = false"
-                                aria-label="Close">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <div class="tw-modal-body">
-                        <p class="text-sm text-text-muted mt-0 mb-4">
-                            <span x-show="prodPublic">This product is public, so assign public components. Private components stay hidden on the public page.</span>
-                            <span x-show="!prodPublic">This product is private, so you can assign any component, public or private.</span>
-                        </p>
-                        <div x-show="availLoading" class="py-6 text-center text-text-muted">
-                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
-                            Loading components…
-                        </div>
-                        <template x-if="!availLoading && avail.length === 0 && !err">
-                            <p class="text-sm text-text-muted">Every component in this workspace is already assigned.</p>
-                        </template>
-                        <template x-if="!availLoading && avail.length > 0">
-                            <div>
-                                <label for="pc-assign-select"
-                                       class="text-text text-sm font-medium block mb-1.5">Component</label>
-                                <select id="pc-assign-select"
-                                        x-model="selectedId"
-                                        class="tw-form-select w-full">
-                                    <option value="">Choose a component…</option>
-                                    <template x-for="c in avail" :key="c.id">
-                                        <option :value="c.id" x-text="c.name"></option>
-                                    </template>
-                                </select>
-                            </div>
-                        </template>
-                        <p x-show="err" class="text-sm text-danger mt-3" x-text="err"></p>
-                    </div>
-                    <div class="tw-modal-footer">
-                        <button type="button"
-                                class="tw-btn-secondary text-sm"
-                                @click="assignOpen = false">Cancel</button>
-                        <button type="button"
-                                class="tw-btn-primary text-sm"
-                                :disabled="!selectedId || busy"
-                                @click="confirmAssign()">
-                            <span x-show="!busy">Assign</span>
-                            <span x-show="busy">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                            Assigning…</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            {# Remove confirmation #}
-            <div x-show="removeTarget !== null"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="tw-modal-overlay"
-                 @click="removeTarget = null"></div>
-            <div x-show="removeTarget !== null"
-                 x-cloak
-                 x-trap.noscroll="removeTarget !== null"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 class="tw-modal"
-                 @keydown.escape.window="removeTarget = null"
-                 @click.stop>
-                <div class="tw-modal-content"
-                     role="dialog"
-                     aria-modal="true"
-                     aria-label="Remove component from product">
-                    <div class="tw-modal-header">
-                        <h4 class="tw-modal-title flex items-center gap-2">
-                            <i class="fas fa-unlink text-danger"></i>Remove Component
-                        </h4>
-                        <button type="button"
-                                class="tw-modal-close"
-                                @click="removeTarget = null"
-                                aria-label="Close">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <div class="tw-modal-body">
-                        <p class="text-text text-sm mt-0 mb-2">
-                            Are you sure you want to remove <strong x-text="removeTarget?.name"></strong> from this product?
-                        </p>
-                        <p class="text-sm text-text-muted m-0">
-                            The component is only unassigned. It stays in your workspace and in any other products that use it.
-                        </p>
-                        <p x-show="err" class="text-sm text-danger mt-3 mb-0" x-text="err"></p>
-                    </div>
-                    <div class="tw-modal-footer">
-                        <button type="button"
-                                class="tw-btn-secondary text-sm"
-                                @click="removeTarget = null">Cancel</button>
-                        <button type="button"
-                                class="tw-btn-danger text-sm"
-                                :disabled="busy"
-                                @click="confirmRemove()">
-                            <span x-show="!busy">Remove</span>
-                            <span x-show="busy">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                            Removing…</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        {% endif %}
-    </section>
-    {# Latest releases #}
-    <section class="tw-card">
-        <div class="px-6 py-4 {% if releases_summary.releases %}border-b border-border{% endif %} flex items-center justify-between gap-3">
-            <h4 class="text-lg font-semibold text-text m-0">Latest releases</h4>
-            {% if releases_summary.releases %}
-                <a href="{% url 'core:product_releases' product.id %}"
-                   class="tw-btn-secondary text-sm no-underline">View all {{ releases_summary.total }}
-                    <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
-                </a>
-            {% endif %}
-        </div>
-        {% if releases_summary.releases %}
-            {% for release in releases_summary.releases %}
-                <div class="px-6 py-3.5 flex items-center gap-3 flex-wrap text-sm text-text-muted {% if not forloop.last %}border-b border-border/50{% endif %}">
-                    <a href="{% url 'core:release_details' product.id release.id %}"
-                       class="font-semibold text-text hover:text-primary no-underline">{{ release.name }}</a>
-                    {% if release.is_latest %}
-                        <span class="text-[10px] font-extrabold tracking-wider uppercase text-success bg-success/10 rounded px-2 py-0.5">Latest</span>
-                    {% endif %}
-                    {% if release.is_prerelease %}
-                        <span class="text-[10px] font-extrabold tracking-wider uppercase text-warning bg-warning/10 rounded px-2 py-0.5">Pre-release</span>
-                    {% endif %}
-                    <span class="ml-auto">{{ release.artifact_count }} artifact{{ release.artifact_count|pluralize }}</span>
-                    <span>{{ release.date|date:"M d, Y" }}</span>
-                </div>
-            {% endfor %}
-        {% else %}
-            {% url 'core:product_releases' product.id as releases_url %}
-            {% include "components/tw/empty_state.html.j2" with compact=True icon="fas fa-tag" title="No releases yet" message="A release freezes this product's artifacts at a point in time. Tag one when you ship." action_text="Create a release" action_url=releases_url action_variant="secondary" %}
-        {% endif %}
-    </section>
-    {# About this product — compliance & metadata, uniform collapsed rows #}
-    <section class="tw-card">
-        <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-            <h4 class="text-lg font-semibold text-text m-0">About this product</h4>
-            <span class="text-xs text-text-muted">Compliance &amp; metadata</span>
-        </div>
-        {% if has_cra_access %}
-            <div x-data="{ open: false }" class="border-b border-border">
-                <button type="button"
-                        class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
-                        :aria-expanded="open"
-                        @click="open = !open">
-                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
-                    <span>
-                        <span class="block text-sm font-semibold text-text">CRA Compliance</span>
-                        <span class="block text-xs text-text-muted">
-                            {% if cra_assessment %}
-                                In progress · step {{ cra_assessment.current_step }}
-                            {% else %}
-                                Not started
+                                    {% endactions_menu %}
+                                </td>
                             {% endif %}
-                        </span>
-                    </span>
-                    <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
-                       :class="open ? 'rotate-180' : ''"
-                       aria-hidden="true"></i>
-                </button>
-                <div x-show="open" x-collapse>
-                    <div class="tw-embed">{% include "compliance/components/cra_product_card.html.j2" %}</div>
+                        </tr>
+                    {% endfor %}
+                    <tr x-show="total === 0">
+                        <td colspan="{% if product.has_crud_permissions %}5{% else %}4{% endif %}"
+                            class="text-center py-8 text-text-muted">No components match your search.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+            <span class="text-sm text-text-muted">
+                Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+            </span>
+            {% include "components/tw/table_pager.html.j2" %}
+        </div>
+    {% else %}
+        {% include "components/tw/empty_state.html.j2" with icon="fas fa-puzzle-piece" title="No components assigned yet" message="Components are shared building blocks. Assign an existing one, or create a component and connect CI/CD so your first push reports here." action_text="Assign a component" action_click="openAssign()" secondary_text="or create a new one" secondary_url="/components/" %}
+    {% endif %}
+    {# Assign modal #}
+    {% if product.has_crud_permissions %}
+        <div x-show="assignOpen"
+             x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="assignOpen = false"></div>
+        <div x-show="assignOpen"
+             x-cloak
+             x-trap.noscroll="assignOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="tw-modal"
+             @keydown.escape.window="assignOpen = false"
+             @click.stop>
+            <div class="tw-modal-content"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-label="Assign component">
+                <div class="tw-modal-header">
+                    <h4 class="tw-modal-title flex items-center gap-2">
+                        <i class="fas fa-puzzle-piece text-primary"></i>Assign Component
+                    </h4>
+                    <button type="button"
+                            class="tw-modal-close"
+                            @click="assignOpen = false"
+                            aria-label="Close">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="tw-modal-body">
+                    <p class="text-sm text-text-muted mt-0 mb-4">
+                        <span x-show="prodPublic">This product is public, so assign public components. Private components stay hidden on the public page.</span>
+                        <span x-show="!prodPublic">This product is private, so you can assign any component, public or private.</span>
+                    </p>
+                    <div x-show="availLoading" class="py-6 text-center text-text-muted">
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
+                        Loading components…
+                    </div>
+                    <template x-if="!availLoading && avail.length === 0 && !err">
+                        <p class="text-sm text-text-muted">Every component in this workspace is already assigned.</p>
+                    </template>
+                    <template x-if="!availLoading && avail.length > 0">
+                        <div>
+                            <label for="pc-assign-select"
+                                   class="text-text text-sm font-medium block mb-1.5">Component</label>
+                            <select id="pc-assign-select"
+                                    x-model="selectedId"
+                                    class="tw-form-select w-full">
+                                <option value="">Choose a component…</option>
+                                <template x-for="c in avail" :key="c.id">
+                                    <option :value="c.id" x-text="c.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </template>
+                    <p x-show="err" class="text-sm text-danger mt-3" x-text="err"></p>
+                </div>
+                <div class="tw-modal-footer">
+                    <button type="button"
+                            class="tw-btn-secondary text-sm"
+                            @click="assignOpen = false">Cancel</button>
+                    <button type="button"
+                            class="tw-btn-primary text-sm"
+                            :disabled="!selectedId || busy"
+                            @click="confirmAssign()">
+                        <span x-show="!busy">Assign</span>
+                        <span x-show="busy">
+                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                        Assigning…</span>
+                    </button>
                 </div>
             </div>
+        </div>
+        {# Remove confirmation #}
+        <div x-show="removeTarget !== null"
+             x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="tw-modal-overlay"
+             @click="removeTarget = null"></div>
+        <div x-show="removeTarget !== null"
+             x-cloak
+             x-trap.noscroll="removeTarget !== null"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="tw-modal"
+             @keydown.escape.window="removeTarget = null"
+             @click.stop>
+            <div class="tw-modal-content"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-label="Remove component from product">
+                <div class="tw-modal-header">
+                    <h4 class="tw-modal-title flex items-center gap-2">
+                        <i class="fas fa-unlink text-danger"></i>Remove Component
+                    </h4>
+                    <button type="button"
+                            class="tw-modal-close"
+                            @click="removeTarget = null"
+                            aria-label="Close">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="tw-modal-body">
+                    <p class="text-text text-sm mt-0 mb-2">
+                        Are you sure you want to remove <strong x-text="removeTarget?.name"></strong> from this product?
+                    </p>
+                    <p class="text-sm text-text-muted m-0">
+                        The component is only unassigned. It stays in your workspace and in any other products that use it.
+                    </p>
+                    <p x-show="err" class="text-sm text-danger mt-3 mb-0" x-text="err"></p>
+                </div>
+                <div class="tw-modal-footer">
+                    <button type="button"
+                            class="tw-btn-secondary text-sm"
+                            @click="removeTarget = null">Cancel</button>
+                    <button type="button"
+                            class="tw-btn-danger text-sm"
+                            :disabled="busy"
+                            @click="confirmRemove()">
+                        <span x-show="!busy">Remove</span>
+                        <span x-show="busy">
+                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                        Removing…</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</section>
+{# Latest releases #}
+<section class="tw-card">
+    <div class="px-6 py-4 {% if releases_summary.releases %}border-b border-border{% endif %} flex items-center justify-between gap-3">
+        <h4 class="text-lg font-semibold text-text m-0">Latest releases</h4>
+        {% if releases_summary.releases %}
+            <a href="{% url 'core:product_releases' product.id %}"
+               class="tw-btn-secondary text-sm no-underline">View all {{ releases_summary.total }}
+                <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
+            </a>
         {% endif %}
-        <div x-data="{ open: false }" class="border-b border-border">
-            <button type="button"
-                    class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
-                    :aria-expanded="open"
-                    @click="open = !open">
-                <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-link" aria-hidden="true"></i></span>
-                <span>
-                    <span class="block text-sm font-semibold text-text">Product links</span>
-                    <span class="block text-xs text-text-muted">Website, docs, support…</span>
-                </span>
-                <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
-                   :class="open ? 'rotate-180' : ''"
-                   aria-hidden="true"></i>
-            </button>
-            <div x-show="open" x-collapse>
-                <div class="tw-embed"
-                     hx-get="{% url 'core:product_links' product.id %}"
-                     hx-trigger="click once from:previous button"
-                     hx-swap="innerHTML">
-                    <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
-                </div>
-            </div>
-        </div>
-        <div x-data="{ open: false }" class="border-b border-border">
-            <button type="button"
-                    class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
-                    :aria-expanded="open"
-                    @click="open = !open">
-                <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-barcode" aria-hidden="true"></i></span>
-                <span>
-                    <span class="block text-sm font-semibold text-text">Product identifiers</span>
-                    <span class="block text-xs text-text-muted">GTIN, SKU, MPN…</span>
-                </span>
-                {% if identifiers_locked %}
-                    <span class="ml-auto mr-3 text-[10px] font-bold tracking-wider uppercase text-warning bg-warning/10 rounded px-2 py-0.5"><i class="fas fa-lock mr-1"></i>Business</span>
-                    <i class="fas fa-chevron-down text-text-muted transition-transform"
-                       :class="open ? 'rotate-180' : ''"
-                       aria-hidden="true"></i>
-                {% else %}
-                    <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
-                       :class="open ? 'rotate-180' : ''"
-                       aria-hidden="true"></i>
+    </div>
+    {% if releases_summary.releases %}
+        {% for release in releases_summary.releases %}
+            <div class="px-6 py-3.5 flex items-center gap-3 flex-wrap text-sm text-text-muted {% if not forloop.last %}border-b border-border/50{% endif %}">
+                <a href="{% url 'core:release_details' product.id release.id %}"
+                   class="font-semibold text-text hover:text-primary no-underline">{{ release.name }}</a>
+                {% if release.is_latest %}
+                    <span class="text-[10px] font-extrabold tracking-wider uppercase text-success bg-success/10 rounded px-2 py-0.5">Latest</span>
                 {% endif %}
-            </button>
-            <div x-show="open" x-collapse>
-                <div class="tw-embed"
-                     hx-get="{% url 'core:product_identifiers' product.id %}"
-                     hx-trigger="click once from:previous button"
-                     hx-swap="innerHTML">
-                    <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
-                </div>
+                {% if release.is_prerelease %}
+                    <span class="text-[10px] font-extrabold tracking-wider uppercase text-warning bg-warning/10 rounded px-2 py-0.5">Pre-release</span>
+                {% endif %}
+                <span class="ml-auto">{{ release.artifact_count }} artifact{{ release.artifact_count|pluralize }}</span>
+                <span>{{ release.date|date:"M d, Y" }}</span>
             </div>
-        </div>
-        <div x-data="{ open: false }">
+        {% endfor %}
+    {% else %}
+        {% url 'core:product_releases' product.id as releases_url %}
+        {% include "components/tw/empty_state.html.j2" with compact=True icon="fas fa-tag" title="No releases yet" message="A release freezes this product's artifacts at a point in time. Tag one when you ship." action_text="Create a release" action_url=releases_url action_variant="secondary" %}
+    {% endif %}
+</section>
+{# About this product — compliance & metadata, uniform collapsed rows #}
+<section class="tw-card">
+    <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+        <h4 class="text-lg font-semibold text-text m-0">About this product</h4>
+        <span class="text-xs text-text-muted">Compliance &amp; metadata</span>
+    </div>
+    {% if has_cra_access %}
+        <div x-data="{ open: false }" class="border-b border-border">
             <button type="button"
                     class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
                     :aria-expanded="open"
                     @click="open = !open">
-                <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-clock" aria-hidden="true"></i></span>
+                <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
                 <span>
-                    <span class="block text-sm font-semibold text-text">Lifecycle</span>
-                    <span class="block text-xs text-text-muted">Release, end of support, end of life</span>
+                    <span class="block text-sm font-semibold text-text">CRA Compliance</span>
+                    <span class="block text-xs text-text-muted">
+                        {% if cra_assessment %}
+                            In progress · step {{ cra_assessment.current_step }}
+                        {% else %}
+                            Not started
+                        {% endif %}
+                    </span>
                 </span>
                 <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
                    :class="open ? 'rotate-180' : ''"
                    aria-hidden="true"></i>
             </button>
             <div x-show="open" x-collapse>
-                <div class="tw-embed"
-                     hx-get="{% url 'core:product_lifecycle' product.id %}"
-                     hx-trigger="click once from:previous button"
-                     hx-swap="innerHTML">
-                    <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
-                </div>
+                <div class="tw-embed">{% include "compliance/components/cra_product_card.html.j2" %}</div>
             </div>
         </div>
-    </section>
-    {# Shared create-release modal opened from the meatball; slim productReleases scope, ws release_created refreshes. #}
-    {% if product.has_crud_permissions %}
-        <div x-data="productReleases({ productId: '{{ product.id }}', initialReleases: [], totalCount: 0, isPublicView: false, canCreate: true, canEdit: false, canDelete: false })"
-             @open-create-release.window="openCreateModal()"
-             @ws:message.window="if ($event.detail.type === 'release_created' && $event.detail.product_id === '{{ product.id }}') location.reload()">
-            {% include 'core/components/release_form_modal.html.j2' %}
+    {% endif %}
+    <div x-data="{ open: false }" class="border-b border-border">
+        <button type="button"
+                class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
+                :aria-expanded="open"
+                @click="open = !open">
+            <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-link" aria-hidden="true"></i></span>
+            <span>
+                <span class="block text-sm font-semibold text-text">Product links</span>
+                <span class="block text-xs text-text-muted">Website, docs, support…</span>
+            </span>
+            <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
+               :class="open ? 'rotate-180' : ''"
+               aria-hidden="true"></i>
+        </button>
+        <div x-show="open" x-collapse>
+            <div class="tw-embed"
+                 hx-get="{% url 'core:product_links' product.id %}"
+                 hx-trigger="click once from:previous button"
+                 hx-swap="innerHTML">
+                <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
+            </div>
         </div>
-    {% endif %}
-    {# Danger Zone #}
-    {% if product.has_crud_permissions %}
-        <div>{% include 'components/product_danger_zone.html.j2' with product_id=product.id product_name=product.name %}</div>
-    {% endif %}
+    </div>
+    <div x-data="{ open: false }" class="border-b border-border">
+        <button type="button"
+                class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
+                :aria-expanded="open"
+                @click="open = !open">
+            <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-barcode" aria-hidden="true"></i></span>
+            <span>
+                <span class="block text-sm font-semibold text-text">Product identifiers</span>
+                <span class="block text-xs text-text-muted">GTIN, SKU, MPN…</span>
+            </span>
+            {% if identifiers_locked %}
+                <span class="ml-auto mr-3 text-[10px] font-bold tracking-wider uppercase text-warning bg-warning/10 rounded px-2 py-0.5"><i class="fas fa-lock mr-1"></i>Business</span>
+                <i class="fas fa-chevron-down text-text-muted transition-transform"
+                   :class="open ? 'rotate-180' : ''"
+                   aria-hidden="true"></i>
+            {% else %}
+                <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
+                   :class="open ? 'rotate-180' : ''"
+                   aria-hidden="true"></i>
+            {% endif %}
+        </button>
+        <div x-show="open" x-collapse>
+            <div class="tw-embed"
+                 hx-get="{% url 'core:product_identifiers' product.id %}"
+                 hx-trigger="click once from:previous button"
+                 hx-swap="innerHTML">
+                <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
+            </div>
+        </div>
+    </div>
+    <div x-data="{ open: false }">
+        <button type="button"
+                class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
+                :aria-expanded="open"
+                @click="open = !open">
+            <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"><i class="fas fa-clock" aria-hidden="true"></i></span>
+            <span>
+                <span class="block text-sm font-semibold text-text">Lifecycle</span>
+                <span class="block text-xs text-text-muted">Release, end of support, end of life</span>
+            </span>
+            <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
+               :class="open ? 'rotate-180' : ''"
+               aria-hidden="true"></i>
+        </button>
+        <div x-show="open" x-collapse>
+            <div class="tw-embed"
+                 hx-get="{% url 'core:product_lifecycle' product.id %}"
+                 hx-trigger="click once from:previous button"
+                 hx-swap="innerHTML">
+                <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
+            </div>
+        </div>
+    </div>
+</section>
+{# Shared create-release modal opened from the meatball; slim productReleases scope, ws release_created refreshes. #}
+{% if product.has_crud_permissions %}
+    <div x-data="productReleases({ productId: '{{ product.id }}', initialReleases: [], totalCount: 0, isPublicView: false, canCreate: true, canEdit: false, canDelete: false })"
+         @open-create-release.window="openCreateModal()"
+         @ws:message.window="if ($event.detail.type === 'release_created' && $event.detail.product_id === '{{ product.id }}') location.reload()">
+        {% include 'core/components/release_form_modal.html.j2' %}
+    </div>
+{% endif %}
+{# Danger Zone #}
+{% if product.has_crud_permissions %}
+    <div>{% include 'components/product_danger_zone.html.j2' with product_id=product.id product_name=product.name %}</div>
+{% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

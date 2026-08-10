@@ -1,20 +1,10 @@
 {% extends "core/dashboard_base.htmx.j2" %}
+{% load design_system %}
 {% load static %}
 {% block title %}sbomify Components{% endblock %}
 {% block dashboard_content %}
+    {% page_header title="Components" subtitle="Components and the SBOMs attached to them." icon="fas fa-puzzle-piece" %}{% endpage_header %}
     <div class="space-y-6">
-        {# Page Header #}
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-puzzle-piece"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Components</h1>
-                    <p class="text-text-muted text-sm">Manage individual software components and their SBOMs</p>
-                </div>
-            </div>
-        </div>
         {# Components Table #}
         {% include 'core/components_table.html.j2' %}
         {# Add Component Modal (Alpine.js) #}

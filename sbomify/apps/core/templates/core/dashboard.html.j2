@@ -5,16 +5,9 @@
 {% load design_system %}
 {% block title %}sbomify Dashboard{% endblock %}
 {% block dashboard_content %}
+    {# The greeting is this page's title: it is the security picture, not a page label. #}
+    {% page_header title=greeting subtitle=page_subtitle %}{% endpage_header %}
     <div class="space-y-6">
-        {# Greeting header — the security picture, not a page label #}
-        <div class="mb-2">
-            <h1 class="text-2xl font-bold text-text">{{ greeting }}</h1>
-            {% if dashboard.is_first_visit %}
-                <p class="text-text-muted text-sm m-0 mt-1">Let's get your first component reporting.</p>
-            {% else %}
-                <p class="text-text-muted text-sm m-0 mt-1">Here's the security picture across {{ current_team.name }}.</p>
-            {% endif %}
-        </div>
         {% if dashboard.is_first_visit %}
             {# First visit — a flowing onboarding hero: soft surface, illustration bleeds in. #}
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 dark:from-primary/20 via-transparent to-transparent">
