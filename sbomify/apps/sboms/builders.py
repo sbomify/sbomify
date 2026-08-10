@@ -106,7 +106,11 @@ def _spdx3_component_info(sbom_data: dict[str, Any]) -> tuple[str, str | None, s
             if isinstance(rel, dict) and rel.get("type") == "Relationship":
                 if rel.get("relationshipType") == "describes":
                     target_ids = rel.get("to", [])
-                    if target_ids:
+                    # JSON-LD compact form: a one-element set may serialise as
+                    # a bare string; indexing it would yield one character.
+                    if isinstance(target_ids, str):
+                        target_ids = [target_ids]
+                    if isinstance(target_ids, list) and target_ids:
                         pkg = next((p for p in packages if p.get("spdxId") == target_ids[0]), None)
                         if pkg:
                             break
