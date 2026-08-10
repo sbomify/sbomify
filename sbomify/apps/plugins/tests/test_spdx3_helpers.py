@@ -296,3 +296,9 @@ class TestHostileGraphEntries:
         _, _, _, agents, _ = extract_spdx3_elements(doc)
 
         assert agents["urn:p"]["name"] == "Jane"
+
+    def test_null_graph_yields_empty_extraction(self) -> None:
+        creation_info, packages, relationships, agents, tools = extract_spdx3_elements({"@graph": None})
+
+        assert creation_info is None
+        assert packages == [] and relationships == [] and agents == {} and tools == {}
