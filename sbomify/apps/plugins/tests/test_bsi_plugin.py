@@ -78,14 +78,14 @@ def create_base_spdx3_sbom() -> dict:
                 "spdxId": "SPDXRef-Creator",
                 "creationInfo": "_:creationInfo",
                 "name": "SBOM Creator Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "sbom@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "sbom@example.com"}],
             },
             {
                 "type": "Organization",
                 "spdxId": "SPDXRef-Maintainer",
                 "creationInfo": "_:creationInfo",
                 "name": "Example Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "maintainer@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "maintainer@example.com"}],
             },
             {
                 "type": "software_Package",
@@ -94,8 +94,8 @@ def create_base_spdx3_sbom() -> dict:
                 "name": "example-package",
                 "software_packageVersion": "1.0.0",
                 "originatedBy": ["SPDXRef-Maintainer"],
-                "externalIdentifiers": [
-                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/example@1.0.0"}
+                "externalIdentifier": [
+                    {"externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/example@1.0.0"}
                 ],
             },
             {
@@ -900,7 +900,7 @@ class TestAdditionalDataFields:
         sbom = create_base_spdx3_sbom()
         for element in sbom["@graph"]:
             if element.get("type") == "software_Package":
-                element.setdefault("externalIdentifiers", []).append(
+                element.setdefault("externalIdentifier", []).append(
                     {
                         "externalIdentifierType": "vcs",
                         "identifier": "https://github.com/example/repo",
