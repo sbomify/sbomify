@@ -75,6 +75,47 @@ class SBOMVersion(str, Enum):
     SPDX_3_0 = "3.0"
 
 
+def _spdx3_component_info(sbom_data: dict[str, Any]) -> tuple[str, str | None, str | None] | None:
+    """(name, version, supplier) of an SPDX 3 document's primary package.
+
+    Shared by both release builders, which carried this block in duplicate —
+    and both picked ``packages[0]`` before looking at ``rootElement``, so the
+    aggregate could name the component after whichever package happened to
+    serialise first. Order: the SpdxDocument's rootElement (how SPDX 3
+    declares the BOM subject), then a ``describes`` relationship, then the
+    first package.
+    """
+    elements = sbom_data.get("@graph", sbom_data.get("elements", []))
+    if not isinstance(elements, list):
+        return None
+    packages = [e for e in elements if isinstance(e, dict) and e.get("type") == "software_Package"]
+    if not packages:
+        return None
+
+    from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
+
+    pkg = None
+    _, root_element_ids = spdx3_document_subjects({"@graph": elements})
+    for p in packages:
+        if p.get("spdxId") in root_element_ids:
+            pkg = p
+            break
+
+    if pkg is None:
+        for rel in elements:
+            if isinstance(rel, dict) and rel.get("type") == "Relationship":
+                if rel.get("relationshipType") == "describes":
+                    target_ids = rel.get("to", [])
+                    if target_ids:
+                        pkg = next((p for p in packages if p.get("spdxId") == target_ids[0]), None)
+                        if pkg:
+                            break
+
+    if pkg is None:
+        pkg = packages[0]
+    return pkg.get("name", "Unknown"), pkg.get("software_packageVersion"), None
+
+
 class SBOMBuilderProtocol(Protocol):
     """Protocol defining the interface for SBOM builders."""
 
@@ -718,23 +759,9 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
         elif "@graph" in sbom_data or (
             sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
         ):
-            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-            packages = [e for e in elements if e.get("type") == "software_Package"]
-            if packages:
-                pkg = packages[0]
-                relationships = [e for e in elements if e.get("type") == "Relationship"]
-                for rel in relationships:
-                    if rel.get("relationshipType") == "describes":
-                        target_ids = rel.get("to", [])
-                        if target_ids:
-                            for p in packages:
-                                if p.get("spdxId") == target_ids[0]:
-                                    pkg = p
-                                    break
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("software_packageVersion")
-                supplier = None
-                return name, version, supplier
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
 
         # Try SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
@@ -1053,24 +1080,9 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
         elif "@graph" in sbom_data or (
             sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
         ):
-            elements = sbom_data.get("@graph", sbom_data.get("elements", []))
-            packages = [e for e in elements if e.get("type") == "software_Package"]
-            if packages:
-                pkg = packages[0]
-                # Try to find the described package via relationships
-                relationships = [e for e in elements if e.get("type") == "Relationship"]
-                for rel in relationships:
-                    if rel.get("relationshipType") == "describes":
-                        target_ids = rel.get("to", [])
-                        if target_ids:
-                            for p in packages:
-                                if p.get("spdxId") == target_ids[0]:
-                                    pkg = p
-                                    break
-                name = pkg.get("name", "Unknown")
-                version = pkg.get("software_packageVersion")
-                supplier = None
-                return name, version, supplier
+            info = _spdx3_component_info(sbom_data)
+            if info:
+                return info
 
         # SPDX 2.x format
         elif sbom_data.get("spdxVersion", "").startswith("SPDX-"):
