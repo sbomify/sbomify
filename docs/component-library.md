@@ -61,7 +61,11 @@ document is how that language ships as components.
    old macros had a real link twin.
 8. **Declare props bare in `<c-vars>`** (`class` not `class=""`), which keeps
    djlint's empty-attribute rule meaningful for real markup. `<c-vars>` keys
-   are excluded from `attrs`.
+   are excluded from `attrs`. With isolation on, a bare prop the caller omits
+   is **undefined, not empty**: `{% if class %}` and `{{ class }}` are safe,
+   but passing it as a **filter argument** (`"x-"|add:class`) raises
+   `VariableDoesNotExist`. Branch with `{% if %}`, or normalise it first with
+   `{% with extra=class|default:"" %}`.
 9. **Accessibility floor carries over**: `aria-label` required on icon-only
    controls, real elements for state (`disabled` on the button, never a
    styled sibling), focus-visible ring from the primary token on every
