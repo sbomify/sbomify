@@ -1,5 +1,35 @@
 # Design system audit
 
+## Status: conversion complete (2026-08-11)
+
+The findings below are settled. A discovery pass over all 146 in-scope template
+files verified 637 instances; 522 converted to the library, and the rest are
+recorded leaves with reasons (rejected families stay page-local, one-off boxes
+stay boxes, the oidc modal keeps its inline revoke button because a teleported
+menu would open under the modal overlay).
+
+The library grew by exactly the surface the callers needed: tw-btn-outline,
+tw-badge-severity-unknown, tw-badge-solid-danger, tw-metric-chip accents,
+tw-code-inline-primary, tw-inset-card, tw-dropdown-flush, tw-accordion-sm, the
+tw-callout family, an --avatar-accent parameterisation, and four page_header
+params (mark, editable title, copy_values, breadcrumbs). Each has a gallery
+demo and an inventory row.
+
+One root bug found on the way: public_base set --color-surface,
+--color-surface-elevated and --color-border as bare triplets in inline styles,
+and --color-primary the same way in its brand block, which silently dropped
+every tailwind shorthand consuming them on public pages. Fixed by emitting
+whole rgb() values; trust-center.css's nine compensating rgb(var()) wraps were
+unwrapped in the same change.
+
+The sweep now reports 6 conflicts, every one a named detector limit (padding
+beside tw-card, which sets none; the badge pill parameter; a background beside
+tw-data-label, which sets none), and zero undefined class names. All 46 moved
+e2e baselines were reviewed image by image before regeneration; every move is
+the intended conversion.
+
+The original snapshot follows for history.
+
 A snapshot of where the app still does not use the component library, taken
 across 243 templates (trust centre and emails excluded, as they are out of scope
 for this pass).
