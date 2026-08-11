@@ -75,9 +75,14 @@ else
   fi
 fi
 
-# Always enable user registration after all other steps. The email address
-# is the username, matching production.
-/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true -s registrationEmailAsUsername=true
+# Always enable user registration after all other steps. Mirror production's
+# registration exactly so local runs predict it: the email address is the
+# username, the form collects no password, and the account is activated by
+# verifying the email first and setting a password right after.
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" \
+  -s registrationAllowed=true \
+  -s registrationEmailAsUsername=true \
+  -s verifyEmail=true
 
 # Email action links must survive real-world mailbox delays: verification
 # links live 3 days, credential resets 1 hour (the Keycloak default of
@@ -86,9 +91,24 @@ fi
   -s 'attributes."actionTokenGeneratedByUserLifespan.verify-email"=259200' \
   -s 'attributes."actionTokenGeneratedByUserLifespan.reset-credentials"=3600'
 
-# The password is collected on the registration form, so never force a
-# second "set new password" step after email verification.
-/opt/keycloak/bin/kcadm.sh update "authentication/required-actions/UPDATE_PASSWORD" -r "$REALM" -s defaultAction=false
+# Registration flow without the password step (production behaviour): copy
+# the built-in flow, disable Password Validation, and bind the copy.
+if ! /opt/keycloak/bin/kcadm.sh get authentication/flows -r "$REALM" | grep -q 'registration-email-first'; then
+  /opt/keycloak/bin/kcadm.sh create "authentication/flows/registration/copy" -r "$REALM" -s newName=registration-email-first
+fi
+PASSWORD_EXEC_ID=$(/opt/keycloak/bin/kcadm.sh get "authentication/flows/registration-email-first/executions" -r "$REALM" \
+  | tr -d '\n ' \
+  | sed 's/.*"id":"\([^"]*\)"[^{]*"providerId":"registration-password-action".*/\1/')
+if [ -n "$PASSWORD_EXEC_ID" ]; then
+  /opt/keycloak/bin/kcadm.sh update "authentication/flows/registration-email-first/executions" -r "$REALM" \
+    -b "{\"id\":\"$PASSWORD_EXEC_ID\",\"requirement\":\"DISABLED\"}"
+fi
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationFlow=registration-email-first
+
+# The password is set right after email verification: Verify Email runs
+# first, then Update Password.
+/opt/keycloak/bin/kcadm.sh update "authentication/required-actions/VERIFY_EMAIL" -r "$REALM" -s priority=20
+/opt/keycloak/bin/kcadm.sh update "authentication/required-actions/UPDATE_PASSWORD" -r "$REALM" -s defaultAction=true -s priority=30
 
 # Create test users for development (only in dev mode)
 if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
