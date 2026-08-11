@@ -54,7 +54,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         from django.utils import timezone
 
-        from sbomify.apps.core.services.dashboard_page import build_dashboard_context
+        from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
         hour = timezone.localtime().hour
         daypart = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
@@ -75,10 +75,8 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         # left is whether a component exists yet, which gates the
         # upload-a-file alternative (an upload needs somewhere to land).
         if team and context["dashboard"].get("is_first_visit"):
-            from sbomify.apps.core.models import Component
-
             context["onboarding"] = {
-                "first_component": Component.objects.filter(team_id=team.id).first(),
+                "first_component": get_first_component(team.id),
             }
 
         return render(request, "core/dashboard.html.j2", context)

@@ -73,7 +73,7 @@ leaves it empty and the button is not offered rather than 500ing the page.
                         manager, then writes the pipeline configuration for you.
                     </p>
                     <div class="relative bg-[#1e1e1e] rounded-lg overflow-hidden">
-                        <pre class="p-4 m-0 overflow-x-auto"><code id="ci-cd-command-{{ component.id|default:'onboarding' }}" class="text-sm text-white">docker run --rm -it \
+                        <pre class="p-4 m-0 overflow-x-auto"><code id="ci-cd-command-{{ cicd_copy_suffix }}" class="text-sm text-white">docker run --rm -it \
   -v "$(pwd):/github/workspace" \
   -w /github/workspace \
   -e SBOMIFY_TOKEN=<span x-text="token || '$SBOMIFY_TOKEN'">$SBOMIFY_TOKEN</span> \
