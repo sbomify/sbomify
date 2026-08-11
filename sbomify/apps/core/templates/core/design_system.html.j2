@@ -178,34 +178,38 @@
 {# ── Controls ──────────────────────────────────────────────────────────── #}
 <h2 id="buttons" class="text-xl font-semibold text-text mb-4">Buttons</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/buttons/), the first componentized set.
+{% endcomment %}
 <p class="tw-data-label mb-3">Variants</p>
 <div class="flex flex-wrap gap-2 mb-6">
-    {% button text="Primary" variant="primary" %}
-    {% button text="Secondary" variant="secondary" %}
-    {% button text="Ghost" variant="ghost" %}
-    {% button text="Gradient" variant="gradient" %}
-    {% button text="Success" variant="success" %}
-    {% button text="Warning" variant="warning" %}
-    {% button text="Danger" variant="danger" icon="fas fa-trash" %}
+    <c-buttons.primary>Primary</c-buttons.primary>
+    <c-buttons.secondary>Secondary</c-buttons.secondary>
+    <c-buttons.ghost>Ghost</c-buttons.ghost>
+    <c-buttons.gradient>Gradient</c-buttons.gradient>
+    <c-buttons.success>Success</c-buttons.success>
+    <c-buttons.warning>Warning</c-buttons.warning>
+    <c-buttons.danger><i class="fas fa-trash" aria-hidden="true"></i> <span>Danger</span></c-buttons.danger>
 </div>
 <p class="tw-data-label mb-3">Outline</p>
 <div class="flex flex-wrap gap-2 mb-6">
-    {% button text="Outline" variant="outline" %}
-    {% button text="Outline primary" variant="outline-primary" %}
-    {% button text="Outline warning" variant="outline-warning" %}
-    {% button text="Outline danger" variant="outline-danger" %}
+    <c-buttons.outline>Outline</c-buttons.outline>
+    <c-buttons.outline-primary>Outline primary</c-buttons.outline-primary>
+    <c-buttons.outline-warning>Outline warning</c-buttons.outline-warning>
+    <c-buttons.outline-danger>Outline danger</c-buttons.outline-danger>
 </div>
 <p class="tw-data-label mb-3">Sizes, states and links</p>
 <div class="flex flex-wrap items-center gap-2">
-    {% button text="Small" variant="primary" size="sm" %}
-    {% button text="Default" variant="primary" %}
-    {% button text="Large" variant="primary" size="lg" %}
-    {% button text="Loading" variant="primary" loading=True %}
-    {% button text="Disabled" variant="primary" disabled=True %}
-    {% button_link text="Link button" url="#buttons" variant="secondary" icon_right="fas fa-arrow-right" %}
-    {% icon_button icon="fas fa-pen" label="Edit" %}
-    {% icon_button icon="fas fa-trash" label="Delete" variant="danger" %}
-    {% icon_button icon="fas fa-ellipsis-vertical" label="Actions" size="sm" %}
+    <c-buttons.primary size="sm">Small</c-buttons.primary>
+    <c-buttons.primary>Default</c-buttons.primary>
+    <c-buttons.primary size="lg">Large</c-buttons.primary>
+    <c-buttons.primary loading>Loading</c-buttons.primary>
+    <c-buttons.primary disabled>Disabled</c-buttons.primary>
+    <c-buttons.link href="#buttons" variant="secondary"><span>Link button</span> <i class="fas fa-arrow-right" aria-hidden="true"></i></c-buttons.link>
+    <c-buttons.icon label="Edit"><i class="fas fa-pen" aria-hidden="true"></i></c-buttons.icon>
+    <c-buttons.icon label="Delete" variant="danger"><i class="fas fa-trash" aria-hidden="true"></i></c-buttons.icon>
+    <c-buttons.icon label="Actions" size="sm"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon>
 </div>
 {% endcard %}
 <h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>

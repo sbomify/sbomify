@@ -1,0 +1,16 @@
+{% comment %}
+The shell every text button shares. Pages normally use a variant component
+(c-buttons.primary and friends); reach for this directly only with a
+variant_class the library defines. Slot is the label content; put text in a
+span when it sits beside an icon.
+{% endcomment %}
+<c-vars variant_class="" size="" type="button" loading="" disabled="" class />
+<button type="{{ type }}"
+        class="tw-btn {{ variant_class }}{% if size %} tw-btn-{{ size }}{% endif %}{% if loading %} tw-btn-loading{% endif %}{% if class %} {{ class }}{% endif %}"
+        {% if disabled or loading %}disabled{% endif %}
+        {{ attrs }}>
+    {% if loading %}
+        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+    {% endif %}
+    {{ slot }}
+</button>

@@ -67,6 +67,7 @@ dependencies = [
     "weasyprint>=68.0,<70",
     "defusedxml>=0.7.1",
     "defusedcsv>=3.0.0",
+    "django-cotton>=2.7.2",
 ]
 
 [project.urls]

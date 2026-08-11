@@ -1,0 +1,11 @@
+{% comment %}
+Icon-only button. label is the accessible name and is required; the slot is
+the icon element itself.
+{% endcomment %}
+<c-vars label="" variant="" size="" stretch="" type="button" disabled="" class />
+<button type="{{ type }}"
+        class="tw-icon-btn{% if variant %} tw-icon-btn-{{ variant }}{% endif %}{% if size %} tw-icon-btn-{{ size }}{% endif %}{% if stretch %} tw-icon-btn-stretch{% endif %}{% if class %} {{ class }}{% endif %}"
+        aria-label="{{ label }}"
+        {% if disabled %}disabled{% endif %}
+        {{ attrs }}>{{ slot }}
+</button>

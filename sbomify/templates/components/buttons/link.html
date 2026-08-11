@@ -1,0 +1,9 @@
+{% comment %}
+An anchor styled as a button. variant is a prop here, the one exception to
+variants-as-files, so links do not double the tree.
+{% endcomment %}
+<c-vars href="" variant="primary" size="" target="" class />
+<a href="{{ href }}"
+   class="tw-btn tw-btn-{{ variant }}{% if size %} tw-btn-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}"
+   {% if target %}target="{{ target }}" rel="noopener noreferrer"{% endif %}
+   {{ attrs }}>{{ slot }}</a>

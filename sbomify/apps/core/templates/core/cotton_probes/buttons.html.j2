@@ -1,0 +1,22 @@
+{% comment %}
+Render probe for the cotton buttons set. Unit tests render this file and
+assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-buttons.primary>Save</c-buttons.primary>
+<c-buttons.secondary>Cancel</c-buttons.secondary>
+<c-buttons.ghost>Quiet</c-buttons.ghost>
+<c-buttons.gradient>Shiny</c-buttons.gradient>
+<c-buttons.success>Confirm</c-buttons.success>
+<c-buttons.warning>Care</c-buttons.warning>
+<c-buttons.danger>Delete</c-buttons.danger>
+<c-buttons.outline>Neutral</c-buttons.outline>
+<c-buttons.outline-primary>Choose</c-buttons.outline-primary>
+<c-buttons.outline-warning>Hold</c-buttons.outline-warning>
+<c-buttons.outline-danger>Remove</c-buttons.outline-danger>
+<c-buttons.primary size="sm" class="w-full" hx-get="/probe" @click.stop="fire()"><i class="fas fa-plus" aria-hidden="true"></i> <span>New release</span></c-buttons.primary>
+<c-buttons.secondary size="lg" type="submit">Big submit</c-buttons.secondary>
+<c-buttons.primary loading>Saving</c-buttons.primary>
+<c-buttons.danger disabled>Frozen</c-buttons.danger>
+<c-buttons.icon label="Product actions" variant="danger" size="sm" @click="menu()"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon>
+<c-buttons.icon label="Stretchy" stretch><i class="fas fa-download" aria-hidden="true"></i></c-buttons.icon>
+<c-buttons.link href="/releases/new" variant="ghost" size="sm" target="_blank"><span>All releases</span></c-buttons.link>

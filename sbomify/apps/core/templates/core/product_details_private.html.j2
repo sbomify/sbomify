@@ -147,9 +147,9 @@
         <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
             <h4 class="text-lg font-semibold text-text m-0">Components</h4>
             {% if product.has_crud_permissions and component_rows %}
-                <button type="button" class="tw-btn-primary text-sm" @click="openAssign()">
-                    <i class="fas fa-plus mr-1"></i>Assign component
-                </button>
+                <c-buttons.primary @click="openAssign()">
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Assign component
+                </c-buttons.primary>
             {% endif %}
         </div>
         {% if component_rows %}
