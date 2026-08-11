@@ -107,7 +107,7 @@ def test_header_cell_band_recipe(rendered: str) -> None:
     cell = _element_holding(rendered, "th", "Unsorted head")
     for bit in (
         "px-5 py-4",
-        "text-xs font-semibold uppercase tracking-[0.05em]",
+        "text-xs leading-[1.5] font-semibold uppercase tracking-[0.05em]",
         "text-text-muted bg-background",
         "border-b border-solid border-border",
         "sticky top-0 z-[1]",
@@ -173,7 +173,7 @@ def test_row_tints_on_hover_and_the_last_row_loses_its_rule(rendered: str) -> No
 def test_body_cell_recipe(rendered: str) -> None:
     cell = _element_holding(rendered, "td", "Plain body cell")
     for bit in (
-        "p-5 text-sm text-text",
+        "p-5 text-sm leading-[1.5] text-text",
         "border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]",
         "transition-[background-color] duration-150",
         "first:pl-4 last:pr-4 max-sm:px-2",
@@ -206,7 +206,7 @@ def test_actions_cell_states_its_own_column_gutters(rendered: str) -> None:
     body = _element_holding(rendered, "td", "Component actions")
     assert "w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" in body
     assert "max-sm:px-2" not in body
-    assert "p-5 text-sm text-text" in body
+    assert "p-5 text-sm leading-[1.5] text-text" in body
     header = _element_holding(rendered, "th", "Row actions")
     assert "w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" in header
     assert "max-sm:px-2" not in header

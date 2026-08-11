@@ -13,7 +13,7 @@ class is layout for the box around it.
     <label for="{{ id }}" class="sr-only">{{ label }}</label>
     <input type="search"
            id="{{ id }}"
-           class="py-2 pr-3 pl-9 min-w-[240px] text-sm text-text bg-surface border border-solid border-border rounded-lg transition-all duration-200 placeholder:text-text-muted focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]"
+           class="py-2 pr-3 pl-9 min-w-[240px] text-sm leading-[1.5] text-text bg-surface border border-solid border-border rounded-lg transition-all duration-200 placeholder:text-text-muted focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]"
            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
            {{ attrs }}>
 </div>

@@ -179,7 +179,7 @@ def test_tag_variants_carry_their_recipe(rendered: str, label: str, recipe_bit: 
 
 def test_shared_tag_shell_structure(rendered: str) -> None:
     neutral = _span_holding(rendered, "Neutral")
-    assert "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md" in neutral
+    assert "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs leading-[1.5] font-medium rounded-md" in neutral
     assert "transition-all duration-150" in neutral
 
 

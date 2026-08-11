@@ -78,8 +78,10 @@ def test_flush_replaces_the_gap_rather_than_stacking_on_it(rendered: str) -> Non
 
 
 def test_page_header_title_and_subtitle_recipes(rendered: str) -> None:
-    assert '<h1 class="text-2xl font-bold tracking-[-0.02em] text-text m-0">' in rendered
-    assert '<p class="text-sm text-text-muted mt-1">Quantum readiness across all components.</p>' in rendered
+    assert '<h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">' in rendered
+    assert (
+        '<p class="text-sm leading-[1.5] text-text-muted mt-1">Quantum readiness across all components.</p>'
+    ) in rendered
 
 
 def test_chip_mark_is_the_icon_chip_at_its_large_size(rendered: str) -> None:

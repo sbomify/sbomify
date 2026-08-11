@@ -11,7 +11,7 @@ its width and its narrow-screen padding), and it replaces the default one, so
 only one padding rule ever lands on a side.
 {% endcomment %}
 <c-vars end date variant_class class />
-<td class="p-5 text-sm text-text border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
+<td class="p-5 text-sm leading-[1.5] text-text border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
     {% if end %}data-cell-end{% endif %}
     {{ attrs }}>{{ slot }}
 </td>

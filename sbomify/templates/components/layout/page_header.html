@@ -33,7 +33,7 @@ nests it.
         <div>
             {% if copy_values %}
                 <div class="flex items-center gap-3 flex-wrap">
-                    <h1 class="text-2xl font-bold tracking-[-0.02em] text-text m-0">
+                    <h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
                         {% if editable_item_type and editable_item_id %}
                             {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
                         {% else %}
@@ -47,7 +47,7 @@ nests it.
                     </div>
                 </div>
             {% else %}
-                <h1 class="text-2xl font-bold tracking-[-0.02em] text-text m-0">
+                <h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
                     {% if editable_item_type and editable_item_id %}
                         {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
                     {% else %}
@@ -58,7 +58,7 @@ nests it.
             {% if breadcrumbs %}
                 <c-navigation.breadcrumbs :items="breadcrumbs" class="text-sm text-text-muted mt-1" />
             {% elif subtitle %}
-                <p class="text-sm text-text-muted mt-1">{{ subtitle }}</p>
+                <p class="text-sm leading-[1.5] text-text-muted mt-1">{{ subtitle }}</p>
             {% endif %}
         </div>
     </div>

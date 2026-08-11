@@ -10,7 +10,7 @@ pair reads that marker, which means the sorted look and the hover look are
 mutually exclusive and can never both apply.
 {% endcomment %}
 <c-vars sort end date variant_class class />
-<th class="px-5 py-4 text-xs font-semibold uppercase tracking-[0.05em] text-text-muted bg-background border-b border-solid border-border sticky top-0 z-[1] first:rounded-tl-lg last:rounded-tr-lg {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %} {% if end %}text-right{% else %}text-left{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
+<th class="px-5 py-4 text-xs leading-[1.5] font-semibold uppercase tracking-[0.05em] text-text-muted bg-background border-b border-solid border-border sticky top-0 z-[1] first:rounded-tl-lg last:rounded-tr-lg {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %} {% if end %}text-right{% else %}text-left{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
     {% if end %}data-cell-end{% endif %}
     {% if sort %}:aria-sort="sortColumn === '{{ sort }}' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"{% endif %}
     {{ attrs }}>
