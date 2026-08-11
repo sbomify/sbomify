@@ -69,13 +69,13 @@ def test_shared_badge_shell_structure(rendered: str) -> None:
 
 
 def test_default_badge_shape_segment(rendered: str) -> None:
-    assert "px-3 py-1 text-xs tracking-[0.01em]" in _badge(rendered, "Primary")
+    assert "px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]" in _badge(rendered, "Primary")
     assert "rounded-full" in _badge(rendered, "Primary")
 
 
 def test_small_badge_segment_replaces_the_default(rendered: str) -> None:
     compact = _badge(rendered, "Compact")
-    assert "px-1.5 py-0.5 text-[0.625rem] tracking-[0.01em]" in compact
+    assert "px-1.5 py-0.5 text-[0.625rem] leading-[1.5] tracking-[0.01em]" in compact
     assert "px-3 py-1 " not in compact
     assert "text-xs" not in compact
 
@@ -118,7 +118,7 @@ def test_severity_level_prop_picks_the_band_accent(rendered: str, label: str, to
 
 def test_severity_shape_segment_replaces_the_badge_shape(rendered: str) -> None:
     critical = _badge(rendered, "Critical")
-    assert "px-2 py-1 text-xs uppercase tracking-[0.04em]" in critical
+    assert "px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]" in critical
     assert "rounded" in critical
     assert "rounded-full" not in critical
     assert "px-3" not in critical
