@@ -15,6 +15,7 @@ The contract for **all** UI work in this codebase — for humans, Claude session
 - **Calm surfaces.** Cards and containers are `--color-surface` with a 1px `--color-border` hairline, `0.75rem` radius, and the resting `--shadow-card`. Containers do not move: no hover lift, no hover shadow swap, no animated accent bars. The only entrance motion is the card family's `fadeInUp`.
 - **Filled controls carry a soft gradient.** Filled buttons use `linear-gradient(135deg, accent 0%, accent-dark 100%)` with a 0.5px self-colored border and an inset top highlight. Hover lightens the gradient — nothing translates. Active is `scale(0.98)` with an inset shadow.
 - **Accent lives in chips.** Icon accents use a flat tinted chip: `color-mix(in oklab, accent 12%, transparent)` background with the accent as foreground (see toasts, stat cards, modal header icons). No gradient chips, no colored side-borders.
+- **Solid badge fill is reserved.** A badge is a tint. Solid fill marks confirmed-exploitation alarms (KEV, malicious package) and alert counters, nothing else.
 - **Text on tinted backgrounds mixes toward the theme text color.** Never place a raw accent color as text on its own tint; use `color-mix(in oklab, accent 60–70%, var(--color-text))` so contrast holds in both themes (see alerts, stat deltas).
 - **Data is tabular.** Numbers that update or align in columns (stats, deltas, progress values) get `font-variant-numeric: tabular-nums`.
 - **Type** is Figtree throughout. Labels over data use the small-caps pattern: `0.75rem`, weight 600, uppercase, `letter-spacing 0.06em`, `--color-text-muted`.
@@ -64,7 +65,7 @@ List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown
 | `actions_menu` | Row and header “meatball” menus (block tag) | `label`, `icon`, `width`, `trigger_class`; items are block content |
 | `alert` | Inline notice banners | `variant`, `title`, `message`, `dismissible` |
 | `analytics_consent` | PostHog consent banner (base templates only) | — |
-| `avatar` | User initials/status | `initials`/`src`, `size` (defaults `md` — the base class has no size of its own), `status` |
+| `avatar` | User initials/status | `initials`/`src`, `size` (defaults `md`, the base class has no size of its own), `status`; tint via `--avatar-accent` on the element or an ancestor |
 | `badge` | Status labels | `text`, `variant`, `icon`, `pill` |
 | `breadcrumbs` | Page trail | `items` (list of `{label, url}`) |
 | `button` / `button_link` | Actions / link styled as button | `text`, `variant`, `size`, `icon`, `loading` / `url` |
@@ -79,7 +80,7 @@ List-taking components (`select`, `tabs`, `breadcrumbs`, `pagination`, `dropdown
 | `input` / `textarea` / `select` | Form fields | `name`, `label`, `hint`, `error`, `required` |
 | `loading_state` | Placeholder for an in-flight HTMX panel | `message`, `size`, `compact` |
 | `modal` | Alpine-driven dialog | `id`, `title`, `content`, `size`, `alpine_show` |
-| `page_header` | The title block every main page opens with (block tag; content is the actions) | `title`, `subtitle`, `icon` |
+| `page_header` | The title block every main page opens with (block tag; content is the actions) | `title`, `subtitle`, `icon`, `mark` (`chip` default or `avatar`), `copy_values` (list of `{value, title}`), `breadcrumbs` (items list, replaces `subtitle`), `editable_item_type` + `editable_item_id` (title renders as the editable field when both set) |
 | `pagination` | Page navigation | `current`, `total`, `page_range`, `base_url` |
 | `progress` | Determinate progress | `value`, `variant` (omit for the primary accent), `size`, `label_text` (renders the header row) |
 | `skeleton` / `spinner` | Loading states (prefer the brand loader for spinners) | `type` (`text`/`paragraph`/`avatar`/`button`/`image`), `width`, `lines` / `size` |
@@ -95,16 +96,18 @@ Brand marks (logo, emblem, animated loader) are separate includes under `core/co
 
 | Family | Classes |
 | --- | --- |
-| Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline-{primary,warning,danger}`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
-| Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card` + `tw-card-{header,body,footer}`, `tw-collapsible-card` + `tw-collapsible-*` (the settings card was removed — use `tw-dashboard-card`) |
+| Buttons | `tw-btn-{primary,secondary,ghost,gradient,success,warning,danger}`, `tw-btn-outline` (neutral), `tw-btn-outline-{primary,warning,danger}`, sizes `tw-btn-{sm,lg}`, `tw-btn-loading` |
+| Cards | `tw-card`, `tw-dashboard-card`, `tw-dangerzone-card`, `tw-inset-card` (quiet sub-panel inside a card body: tinted, hairline, no shadow) + `tw-card-{header,body,footer}`, `tw-collapsible-card` + `tw-collapsible-*` (the settings card was removed, use `tw-dashboard-card`) |
+| Accordion | `tw-accordion` + `tw-accordion-{item,trigger,trigger-icon,content}`, density `tw-accordion-sm`: one bordered container of divided collapsible sections |
 | Forms | `tw-form-{label,input,select,textarea,error,hint}`, `tw-checkbox`, `tw-radio`, `tw-toggle` (+ `tw-toggle-label`), `tw-search-input-*`, `tw-file-upload-*`, `tw-date-picker-*`/`tw-calendar-*` |
 | Data | `tw-table` (the `<table>`) inside `tw-data-table` (the shell: `-toolbar`, `-container`, `-footer`, `-search`, `-info`, `-page-size`), `tw-cell-end` on a right-aligned column, `tw-cell-date` on every date or time column so the value never wraps, `tw-table-actions` on a row-actions column, `tw-stat-*` (+ `tw-stat-card-compact`), `tw-progress-*` (+ `tw-progress-header`) |
-| Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*` (+ `tw-badge-severity-{critical,high,medium,low}`), `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
-| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*` (+ `tw-dropdown-floating` for a body-teleported menu), `tw-icon-btn` (+ `-sm`, `-danger`, `-stretch` to match the height of a taller neighbour), `tw-stepper-*` |
+| Feedback | `tw-alert-*`, `tw-toast-*`, `tw-badge-*` (+ `tw-badge-severity-{critical,high,medium,low,unknown}`, `tw-badge-solid-danger` for confirmed-exploitation alarms and counters), `tw-sbom-format-*`, `tw-tag-*`, `tw-empty-state-*`, `tw-skeleton-*`, `tw-brand-loader`/`tw-loader-*` |
+| Callout | `tw-callout` (+ `tw-callout-header`, `tw-callout-body`, `tw-callout-warning` via `--callout-accent`): a regulatory notice panel with an icon chip, title, legal-basis pill and a body that carries controls |
+| Navigation | `tw-tabs`/`tw-tab`, `tw-pagination-*`, `tw-breadcrumb-*`, `tw-dropdown-*` (+ `tw-dropdown-floating` for a body-teleported menu, `tw-dropdown-flush` for sectioned or full-bleed panels: padding 0, clips to the radius, scroll lives on an inner element), `tw-icon-btn` (+ `-sm`, `-danger`, `-stretch` to match the height of a taller neighbour), `tw-stepper-*` |
 | Accent | `tw-icon-chip` (+ sizes `-sm`/`-lg`/`-xl`, `-circle`, and `-neutral`/`-info`/`-success`/`-warning`/`-danger`) — the flat tinted chip behind every icon-beside-a-heading |
-| Layout | `tw-page-header` (+ `-lead` for a mark beside the title, `-title`, `-subtitle`, `-actions`, `-flush` inside a `space-y-*` stack), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title, `tw-metric-chip` (+ `-label`, `-value`) for the stats strip |
+| Layout | `tw-page-header` (+ `-lead` for a mark beside the title, `-title`, `-subtitle`, `-actions`, `-flush` inside a `space-y-*` stack), `tw-section-header` (+ `-title`, `-subtitle`) with `tw-section-body` to indent under the title, `tw-metric-chip` (+ `-label`, `-value`, accents `-info`/`-success`/`-warning`/`-danger` via `--metric-chip-accent`) for the stats strip |
 | Selection | `tw-choice-group`/`tw-choice` (+ accents `-primary`/`-secondary`/`-success`/`-warning`/`-danger`/`-info`/`-violet` and `-severity-{critical,high,medium,low}`, or set `--choice-accent`), `tw-select-row` — a list row that is clickable in full. Selected state comes from `:has(:checked)`, never a class, so it cannot drift from the control; keep a real checkbox for keyboard and form submission and add the row click as a pointer convenience, guarded so nested controls still work. |
-| Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose) |
+| Type | `tw-data-label` (small-caps label over a value), `tw-code-inline` (identifier in prose; `tw-code-inline-primary` for a brand-tinted identifier chip) |
 | Misc | modal, `alpine-tooltip` (via the `x-tooltip` directive), copy button / token display / code block |
 
 Two names that are easy to get wrong:

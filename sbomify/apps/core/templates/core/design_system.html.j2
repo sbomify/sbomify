@@ -118,7 +118,31 @@
         <span class="tw-metric-chip-label">Scanned</span>
         <span class="tw-metric-chip-value">3h ago</span>
     </span>
+    <span class="tw-metric-chip tw-metric-chip-info">
+        <i class="fas fa-file-code" aria-hidden="true"></i>
+        <span class="tw-metric-chip-value">9</span>
+        <span class="tw-metric-chip-label">SBOMs</span>
+    </span>
+    <span class="tw-metric-chip tw-metric-chip-success">
+        <i class="fas fa-circle-check" aria-hidden="true"></i>
+        <span class="tw-metric-chip-value">41</span>
+        <span class="tw-metric-chip-label">Passed</span>
+    </span>
+    <span class="tw-metric-chip tw-metric-chip-warning">
+        <i class="fas fa-clock" aria-hidden="true"></i>
+        <span class="tw-metric-chip-value">4</span>
+        <span class="tw-metric-chip-label">Stale</span>
+    </span>
+    <span class="tw-metric-chip tw-metric-chip-danger">
+        <i class="fas fa-shield-halved" aria-hidden="true"></i>
+        <span class="tw-metric-chip-value">3</span>
+        <span class="tw-metric-chip-label">Critical</span>
+    </span>
 </div>
+<p class="text-sm text-text-muted mt-4 mb-0">
+    Accents recolour the chip through <code class="tw-code-inline">--metric-chip-accent</code>. The label
+    stays muted; the value and icon take the accent.
+</p>
 {% endcard %}
 <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
 {% card class="mb-8" %}
@@ -130,6 +154,16 @@
     Every main page opens with this, called as <code class="tw-code-inline">page_header</code>. Block content
     becomes the actions on the right; a page with none still closes the tag. Put it above the page's content
     stack, not inside it, so the gap under the title is the same on every page.
+</p>
+{% page_header mark="avatar" icon="fas fa-cube" title="Acme Gateway" breadcrumbs=demo_breadcrumbs copy_values=demo_copy_values editable_item_type="product" editable_item_id="ds-demo" %}
+{% button text="New release" variant="primary" size="sm" %}
+{% endpage_header %}
+<p class="text-sm text-text-muted mb-6">
+    The detail-page shape of the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
+    chip for the avatar mark. <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers
+    beside the title. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
+    <code class="tw-code-inline">editable_item_type</code> and
+    <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
 </p>
 <hr class="my-6 border-border">
 <div class="tw-section-header">
@@ -156,6 +190,7 @@
 </div>
 <p class="tw-data-label mb-3">Outline</p>
 <div class="flex flex-wrap gap-2 mb-6">
+    {% button text="Outline" variant="outline" %}
     {% button text="Outline primary" variant="outline-primary" %}
     {% button text="Outline warning" variant="outline-warning" %}
     {% button text="Outline danger" variant="outline-danger" %}
@@ -278,6 +313,16 @@
 {% button text="Delete product" variant="danger" icon="fas fa-trash" size="sm" %}
 {% endcard %}
 </div>
+{% card title="Inset panels" subtitle="The quiet sub-panel inside a card body" class="mb-8" %}
+<div class="tw-inset-card">
+    <p class="text-sm text-text m-0 mb-3">
+        An inset card is sunken, not raised: a tinted background, a hairline border, no shadow.
+    </p>
+    <div class="tw-inset-card">
+        <p class="text-sm text-text-muted m-0">One nesting level stays legible: the inner panel goes solid.</p>
+    </div>
+</div>
+{% endcard %}
 <h2 id="collapsible" class="text-xl font-semibold text-text mb-4">Collapsible card</h2>
 <div class="space-y-3 mb-8" x-data="{ open: 'links' }">
     {% for row in demo_collapsible %}
@@ -300,6 +345,52 @@
             </div>
         </div>
     {% endfor %}
+</div>
+<h2 id="accordion" class="text-xl font-semibold text-text mb-4">Accordion</h2>
+<p class="text-sm text-text-muted mb-4">
+    One bordered container of divided collapsible sections. The compact density
+    (<code class="tw-code-inline">tw-accordion-sm</code>) is for category lists inside a card, like the
+    controls catalogue.
+</p>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <div class="tw-accordion" x-data="{ open: 'a-org' }">
+        {% for row in demo_accordion %}
+            <div class="tw-accordion-item">
+                <button type="button"
+                        class="tw-accordion-trigger"
+                        @click="open = open === 'a-{{ row.id }}' ? '' : 'a-{{ row.id }}'"
+                        :aria-expanded="open === 'a-{{ row.id }}'">
+                    <span>{{ row.label }}</span>
+                    <i class="fas fa-chevron-down tw-accordion-trigger-icon"
+                       aria-hidden="true"></i>
+                </button>
+                <div class="tw-accordion-content"
+                     x-show="open === 'a-{{ row.id }}'"
+                     x-collapse>
+                    <p class="m-0">{{ row.body }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="tw-accordion tw-accordion-sm" x-data="{ open: 'b-org' }">
+        {% for row in demo_accordion %}
+            <div class="tw-accordion-item">
+                <button type="button"
+                        class="tw-accordion-trigger"
+                        @click="open = open === 'b-{{ row.id }}' ? '' : 'b-{{ row.id }}'"
+                        :aria-expanded="open === 'b-{{ row.id }}'">
+                    <span>{{ row.label }}</span>
+                    <i class="fas fa-chevron-down tw-accordion-trigger-icon"
+                       aria-hidden="true"></i>
+                </button>
+                <div class="tw-accordion-content"
+                     x-show="open === 'b-{{ row.id }}'"
+                     x-collapse>
+                    <p class="m-0">{{ row.body }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
 </div>
 <h2 id="modals" class="text-xl font-semibold text-text mb-4">Modals</h2>
 {% card class="mb-8" %}
@@ -535,6 +626,15 @@
     {% badge text="With icon" variant="info" icon="fas fa-star" %}
     {% badge text="Pill" variant="primary" pill=True %}
 </div>
+<p class="tw-data-label mb-2">Solid</p>
+<div class="flex flex-wrap items-center gap-2 mb-2">
+    {% badge text="KEV" variant="solid-danger" class="tw-badge-sm" %}
+    {% badge text="Malicious" variant="solid-danger" class="tw-badge-sm" %}
+    {% badge text="3" variant="solid-danger" %}
+</div>
+<p class="text-sm text-text-muted mb-4">
+    Solid fill is reserved for confirmed-exploitation alarms and alert counters. Everything else stays a tint.
+</p>
 <p class="tw-data-label mb-2">SBOM format</p>
 <div class="flex flex-wrap gap-2">
     <span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span>
@@ -561,6 +661,46 @@
     {% alert variant="warning" message="Review your settings before continuing." dismissible=True %}
     {% alert variant="danger" title="Upload failed" message="The SBOM could not be parsed." %}
     {% alert variant="info" message="New features are available in this release." %}
+</div>
+{% endcard %}
+<h2 id="callouts" class="text-xl font-semibold text-text mb-4">Callouts</h2>
+{% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    A regulatory notice panel, richer than an alert: an icon chip, a title, a legal-basis pill and a body
+    that carries controls. The accent tints the full hairline border, never a side border.
+</p>
+<div class="space-y-4">
+    <div class="tw-callout tw-callout-warning">
+        <div class="tw-callout-header">
+            <span class="tw-icon-chip tw-icon-chip-warning tw-icon-chip-circle">
+                <i class="fas fa-scale-balanced" aria-hidden="true"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center flex-wrap gap-2">
+                    <h3 class="text-sm font-semibold text-text m-0">Reporting obligation</h3>
+                    {% badge text="CRA Article 14" variant="warning" class="tw-badge-sm" %}
+                </div>
+                <p class="text-sm text-text-muted m-0 mt-1">Actively exploited vulnerabilities must be reported within 24 hours.</p>
+            </div>
+        </div>
+        <div class="tw-callout-body">
+            {% checkbox name="ds-callout-ack" label="This product has a coordinated disclosure policy." %}
+        </div>
+    </div>
+    <div class="tw-callout">
+        <div class="tw-callout-header">
+            <span class="tw-icon-chip tw-icon-chip-neutral tw-icon-chip-circle">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold text-text m-0">Assessment scope</h3>
+                <p class="text-sm text-text-muted m-0 mt-1">Without an accent the callout keeps the plain hairline.</p>
+            </div>
+        </div>
+        <div class="tw-callout-body">
+            <p class="text-sm text-text-muted m-0">The body carries form controls or explanatory copy.</p>
+        </div>
+    </div>
 </div>
 {% endcard %}
 <h2 id="toasts" class="text-xl font-semibold text-text mb-4">Toasts</h2>
@@ -617,6 +757,49 @@
 <div class="flex flex-wrap gap-3">
     {% dropdown id="ds-dropdown" trigger_text="Actions" items=demo_dropdown_items %}
     {% dropdown id="ds-dropdown-icon" trigger_icon="fas fa-ellipsis-vertical" items=demo_dropdown_items align="right" %}
+</div>
+<p class="tw-data-label mt-6 mb-3">Flush panels</p>
+<p class="text-sm text-text-muted mb-4">
+    <code class="tw-code-inline">tw-dropdown-flush</code> removes the inset padding, so sections and option
+    lists run edge to edge and the radius clips them. It owns overflow: scrolling content goes on an inner
+    element.
+</p>
+<div class="flex flex-wrap items-start gap-6">
+    <div class="relative w-64 h-28">
+        <div class="tw-dropdown w-64">
+            <button type="button" class="tw-dropdown-item">
+                <i class="fas fa-pen tw-dropdown-item-icon" aria-hidden="true"></i>Edit
+            </button>
+            <button type="button" class="tw-dropdown-item">
+                <i class="fas fa-copy tw-dropdown-item-icon" aria-hidden="true"></i>Duplicate
+            </button>
+        </div>
+    </div>
+    <div class="relative w-72 h-52">
+        <div class="tw-dropdown tw-dropdown-flush w-72">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border/50">
+                <span class="text-sm font-semibold text-text">Notifications</span>
+                {% badge text="3" variant="solid-danger" %}
+            </div>
+            <div class="max-h-24 overflow-y-auto">
+                <div class="px-4 py-2.5 border-b border-border/50">
+                    <p class="text-sm text-text m-0">SBOM uploaded to acme-gateway-core</p>
+                    <p class="text-xs text-text-muted m-0 mt-0.5">2 minutes ago</p>
+                </div>
+                <div class="px-4 py-2.5 border-b border-border/50">
+                    <p class="text-sm text-text m-0">Vulnerability scan finished</p>
+                    <p class="text-xs text-text-muted m-0 mt-0.5">1 hour ago</p>
+                </div>
+                <div class="px-4 py-2.5">
+                    <p class="text-sm text-text m-0">Release v2.4.0 tagged</p>
+                    <p class="text-xs text-text-muted m-0 mt-0.5">Yesterday</p>
+                </div>
+            </div>
+            <div class="px-4 py-2 border-t border-border/50 text-center">
+                <a href="#dropdowns" class="text-sm text-primary hover:underline">View all</a>
+            </div>
+        </div>
+    </div>
 </div>
 {% endcard %}
 <h2 id="actions-menu" class="text-xl font-semibold text-text mb-4">Actions menu</h2>
@@ -702,6 +885,16 @@
     {% avatar initials="BS" status="busy" %}
     {% avatar initials="OF" status="offline" %}
 </div>
+<p class="tw-data-label mt-6 mb-2">Accent</p>
+<p class="text-sm text-text-muted mb-3">
+    The tint runs on <code class="tw-code-inline">--avatar-accent</code>. Set it on the avatar or an
+    ancestor; unset, it falls back to primary.
+</p>
+<div class="flex flex-wrap items-center gap-4">
+    {% avatar initials="PR" %}
+    <div style="--avatar-accent: var(--color-success)">{% avatar initials="OK" %}</div>
+    <div style="--avatar-accent: var(--color-warning)">{% avatar initials="ST" %}</div>
+</div>
 {% endcard %}
 <h2 id="copy" class="text-xl font-semibold text-text mb-4">Code &amp; tokens</h2>
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -720,6 +913,11 @@
     {% include "core/components/copyable_value.html.j2" with value="DLyQjCBkNJkB" title="Component ID (click to copy)" %}
     {% include "core/components/copyable_value.html.j2" with value="pkg:npm/left-pad@1.3.0" title="PURL (click to copy)" %}
 </div>
+<p class="tw-data-label mt-6 mb-2">Inline code</p>
+<p class="text-sm text-text-muted mb-0">
+    A neutral identifier in prose: <code class="tw-code-inline">pkg:npm/left-pad</code>. A control ID gets
+    the brand tint: <code class="tw-code-inline tw-code-inline-primary">A.5.13</code>.
+</p>
 {% endcard %}
 </div>
 <h2 id="tooltip" class="text-xl font-semibold text-text mb-4">Tooltip</h2>

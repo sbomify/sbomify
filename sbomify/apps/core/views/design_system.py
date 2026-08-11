@@ -22,6 +22,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "date-picker", "label": "Date picker", "group": "Controls"},
     {"id": "cards", "label": "Cards", "group": "Containers"},
     {"id": "collapsible", "label": "Collapsible card", "group": "Containers"},
+    {"id": "accordion", "label": "Accordion", "group": "Containers"},
     {"id": "modals", "label": "Modals", "group": "Containers"},
     {"id": "select-rows", "label": "Selectable rows", "group": "Containers"},
     {"id": "empty-states", "label": "Empty states", "group": "Containers"},
@@ -33,6 +34,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "badges", "label": "Badges", "group": "Data"},
     {"id": "tags", "label": "Tags", "group": "Data"},
     {"id": "alerts", "label": "Alerts", "group": "Feedback"},
+    {"id": "callouts", "label": "Callouts", "group": "Feedback"},
     {"id": "toasts", "label": "Toasts", "group": "Feedback"},
     {"id": "loading", "label": "Loading states", "group": "Feedback"},
     {"id": "tabs", "label": "Tabs", "group": "Navigation"},
@@ -124,11 +126,33 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {"level": "high", "label": "High"},
                 {"level": "medium", "label": "Medium"},
                 {"level": "low", "label": "Low"},
+                {"level": "unknown", "label": "Unknown"},
+            ],
+            "demo_copy_values": [
+                {"value": "DLyQjCBkNJkB", "title": "Product ID (click to copy)"},
+                {"value": "urn:tei:uuid:sbomify.com", "title": "TEI (click to copy)"},
             ],
             "demo_collapsible": [
                 {"id": "links", "label": "Product links"},
                 {"id": "identifiers", "label": "Product identifiers"},
                 {"id": "lifecycle", "label": "Lifecycle"},
+            ],
+            "demo_accordion": [
+                {
+                    "id": "org",
+                    "label": "Organisational controls",
+                    "body": "Policies, roles and supplier relationships.",
+                },
+                {
+                    "id": "tech",
+                    "label": "Technological controls",
+                    "body": "Access control, cryptography and secure development.",
+                },
+                {
+                    "id": "phys",
+                    "label": "Physical controls",
+                    "body": "Facilities, equipment and media handling.",
+                },
             ],
             "demo_select_options": [
                 {"value": "sbom", "label": "SBOM"},

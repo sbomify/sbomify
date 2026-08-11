@@ -68,9 +68,7 @@
                                     <i class="fas fa-chevron-left"></i>
                                 </button>
                             </div>
-                            <button type="button"
-                                    @click="viewMode = 'months'"
-                                    class="tw-calendar-title hover:bg-border/30 px-2 py-1 rounded transition-colors cursor-pointer">
+                            <button type="button" @click="viewMode = 'months'" class="tw-calendar-title">
                                 <span x-text="monthsFull[currentMonth]"></span> <span x-text="currentYear"></span>
                             </button>
                             <div class="tw-calendar-nav">
@@ -159,7 +157,7 @@
                             </div>
                             <button type="button"
                                     @click="viewMode = 'years'"
-                                    class="tw-calendar-title hover:bg-border/30 px-2 py-1 rounded transition-colors cursor-pointer"
+                                    class="tw-calendar-title"
                                     x-text="currentYear"></button>
                             <div class="tw-calendar-nav">
                                 <button @click="currentYear++" class="tw-calendar-nav-btn" type="button">
@@ -167,12 +165,12 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-3 gap-2 p-3">
+                        <div class="tw-calendar-month-grid">
                             <template x-for="(month, idx) in months">
                                 <button type="button"
                                         @click="selectMonth(idx)"
-                                        class="px-3 py-2 text-sm rounded-lg transition-colors"
-                                        :class="{ 'bg-primary text-white': isSelectedMonth(idx), 'ring-2 ring-primary ring-inset': isCurrentMonth(idx) && !isSelectedMonth(idx), 'hover:bg-border/30 text-text': !isSelectedMonth(idx) }"
+                                        class="tw-calendar-month-btn"
+                                        :class="{ 'tw-calendar-month-btn-selected': isSelectedMonth(idx), 'ring-2 ring-primary ring-inset': isCurrentMonth(idx) && !isSelectedMonth(idx) }"
                                         x-text="month"></button>
                             </template>
                         </div>
@@ -200,12 +198,12 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-3 gap-2 p-3">
+                        <div class="tw-calendar-year-grid">
                             <template x-for="year in yearRange">
                                 <button type="button"
                                         @click="selectYear(year)"
-                                        class="px-3 py-2 text-sm rounded-lg transition-colors"
-                                        :class="{ 'bg-primary text-white': isSelectedYear(year), 'ring-2 ring-primary ring-inset': isCurrentYear(year) && !isSelectedYear(year), 'hover:bg-border/30 text-text': !isSelectedYear(year) }"
+                                        class="tw-calendar-year-btn"
+                                        :class="{ 'tw-calendar-year-btn-selected': isSelectedYear(year), 'ring-2 ring-primary ring-inset': isCurrentYear(year) && !isSelectedYear(year) }"
                                         x-text="year"></button>
                             </template>
                         </div>

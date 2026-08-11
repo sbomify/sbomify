@@ -790,6 +790,20 @@ html.no-transitions * {
   background: color-mix(in oklab, var(--color-danger) 2%, transparent);
 }
 
+/* Inset card: the quiet sub-panel inside a card body. Sunken, not raised: no
+   shadow, no entrance animation, no hover. */
+.tw-inset-card {
+  background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+/* One nesting level stays legible: the inner panel goes solid. */
+.tw-inset-card .tw-inset-card {
+  background-color: var(--color-background);
+}
+
 /* ============================================
    Component Classes - Buttons
    Base button class - use with variant classes
@@ -802,6 +816,7 @@ html.no-transitions * {
 .tw-btn-ghost,
 .tw-btn-success,
 .tw-btn-warning,
+.tw-btn-outline,
 .tw-btn-outline-primary,
 .tw-btn-outline-danger,
 .tw-btn-outline-warning {
@@ -836,6 +851,7 @@ html.no-transitions * {
 .tw-btn-ghost:focus-visible,
 .tw-btn-success:focus-visible,
 .tw-btn-warning:focus-visible,
+.tw-btn-outline:focus-visible,
 .tw-btn-outline-primary:focus-visible,
 .tw-btn-outline-danger:focus-visible,
 .tw-btn-outline-warning:focus-visible {
@@ -851,6 +867,7 @@ html.no-transitions * {
 .tw-btn-ghost:disabled,
 .tw-btn-success:disabled,
 .tw-btn-warning:disabled,
+.tw-btn-outline:disabled,
 .tw-btn-outline-primary:disabled,
 .tw-btn-outline-danger:disabled,
 .tw-btn-outline-warning:disabled {
@@ -1046,6 +1063,24 @@ html.no-transitions * {
   --btn-text: rgb(15 23 42);
 }
 
+/* Neutral outline. It completes the outline set the way tw-btn-secondary
+   completes the filled set. Neutral is not accent-tinted, so it keeps its own
+   small recipe instead of the outline accent fill, whose hover fills with the
+   accent gradient and white text. */
+.tw-btn-outline {
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1.5px solid var(--color-border);
+}
+
+.tw-btn-outline:hover {
+  background-color: color-mix(in oklab, var(--color-border) 30%, transparent);
+}
+
+.tw-btn-outline:active {
+  transform: scale(0.98);
+}
+
 /* Cancel Button with Danger Hover */
 .tw-btn-cancel-danger:hover {
   background-color: color-mix(in oklab, var(--color-danger) 10%, transparent);
@@ -1138,14 +1173,22 @@ html.no-transitions * {
   color: var(--color-text-muted);
 }
 
-/* Inline code inside prose: an identifier, path or token mentioned mid-sentence. */
+/* Inline code inside prose: an identifier, path or token mentioned mid-sentence.
+   Accent and tint are parameterized; unset, the reads collapse to today's
+   neutral border tint and plain text. */
 .tw-code-inline {
   padding: 0.125rem 0.375rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.8125em;
-  background-color: color-mix(in oklab, var(--color-border) 35%, transparent);
-  color: var(--color-text);
+  background-color: color-mix(in oklab, var(--code-inline-accent, var(--color-border)) var(--code-inline-tint, 35%), transparent);
+  color: color-mix(in oklab, var(--code-inline-accent, var(--color-text)) 70%, var(--color-text));
   border-radius: 0.25rem;
+}
+
+/* Brand-tinted identifier chip: control IDs and linked advisory IDs. */
+.tw-code-inline-primary {
+  --code-inline-accent: var(--color-primary);
+  --code-inline-tint: 12%;
 }
 
 .tw-form-hint {
@@ -1552,7 +1595,9 @@ html.no-transitions * {
 .tw-badge-severity-critical,
 .tw-badge-severity-high,
 .tw-badge-severity-medium,
-.tw-badge-severity-low {
+.tw-badge-severity-low,
+.tw-badge-severity-unknown,
+.tw-badge-solid-danger {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
@@ -1561,8 +1606,10 @@ html.no-transitions * {
   border-radius: 9999px;
   letter-spacing: 0.01em;
   transition: all 0.15s;
-  color: var(--badge-accent, var(--color-text-muted));
-  background-color: color-mix(in oklab, var(--badge-accent, var(--color-border)) 12%, transparent);
+  /* Solid variants override --badge-fill and --badge-text; unset, the reads
+     collapse to the tinted defaults. */
+  color: var(--badge-text, var(--badge-accent, var(--color-text-muted)));
+  background-color: color-mix(in oklab, var(--badge-accent, var(--color-border)) var(--badge-fill, 12%), transparent);
   border: 1px solid color-mix(in oklab, var(--badge-accent, var(--color-border)) 20%, transparent);
 }
 
@@ -1607,10 +1654,16 @@ html.no-transitions * {
   --badge-accent: var(--color-severity-low);
 }
 
+/* Values off the CVSS scale keep the scale's shape with a neutral accent. */
+.tw-badge-severity-unknown {
+  --badge-accent: var(--color-text-muted);
+}
+
 .tw-badge-severity-critical,
 .tw-badge-severity-high,
 .tw-badge-severity-medium,
-.tw-badge-severity-low {
+.tw-badge-severity-low,
+.tw-badge-severity-unknown {
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
   text-transform: uppercase;
@@ -1633,6 +1686,14 @@ html.no-transitions * {
 /* Soft violet — attestation artifacts (VEX); distinct from every severity hue. */
 .tw-badge-violet {
   --badge-accent: var(--color-accent);
+}
+
+/* Solid fill is reserved: confirmed-exploitation alarms (KEV, malicious
+   package) and alert counters. Everything else stays a tint. */
+.tw-badge-solid-danger {
+  --badge-accent: var(--color-danger);
+  --badge-fill: 100%;
+  --badge-text: white;
 }
 
 /* Neutral chip — squared variant for table-like contexts (counts, types).
@@ -1919,6 +1980,35 @@ html.no-transitions * {
   opacity: 1;
   background-color: currentColor;
   color: var(--color-surface);
+}
+
+/* ============================================
+   Component Classes - Callout
+   ============================================ */
+/* A regulatory notice panel: an icon chip, a title, a legal-basis pill and a
+   body that carries controls. Structurally richer than an alert. The border
+   consumes the accent with an exact-neutral fallback, so the accent tints the
+   full hairline, never a side border. */
+.tw-callout {
+  background-color: var(--color-surface);
+  border: 1px solid color-mix(in oklab, var(--callout-accent, var(--color-border)) 30%, var(--color-border));
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.tw-callout-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0;
+}
+
+.tw-callout-body {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.tw-callout-warning {
+  --callout-accent: var(--color-warning);
 }
 
 /* ============================================
@@ -2973,6 +3063,14 @@ html.no-transitions * {
   overflow-y: auto;
 }
 
+/* Full-bleed variant of the popover panel: sections and option lists run to
+   the edge and the radius clips them. Scrolling content goes on an inner
+   element, because this class owns overflow. */
+.tw-dropdown-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
 .tw-dropdown-header {
   padding: 0.375rem 0.625rem 0.25rem;
   font-size: 0.625rem;
@@ -3094,14 +3192,17 @@ html.no-transitions * {
 /* ============================================
    Component Classes - Avatar
    ============================================ */
+/* The tint runs on --avatar-accent with a primary fallback. Custom properties
+   inherit, so a caller can set the accent on the avatar or on an ancestor:
+   style="--avatar-accent: var(--color-warning)". */
 .tw-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
   font-weight: 600;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 20%, transparent) 0%, color-mix(in oklab, var(--color-primary) 10%, transparent) 100%);
-  color: var(--color-primary);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--avatar-accent, var(--color-primary)) 20%, transparent) 0%, color-mix(in oklab, var(--avatar-accent, var(--color-primary)) 10%, transparent) 100%);
+  color: var(--avatar-accent, var(--color-primary));
   position: relative;
   flex-shrink: 0;
 }
@@ -3736,6 +3837,33 @@ html.no-transitions * {
   font-variant-numeric: tabular-nums;
 }
 
+/* Accent variants share one tint recipe over --metric-chip-accent. The text
+   mixes toward the theme text colour so contrast holds in both themes. */
+.tw-metric-chip-info,
+.tw-metric-chip-success,
+.tw-metric-chip-warning,
+.tw-metric-chip-danger {
+  background-color: color-mix(in oklab, var(--metric-chip-accent) 10%, transparent);
+  border-color: color-mix(in oklab, var(--metric-chip-accent) 30%, transparent);
+  color: color-mix(in oklab, var(--metric-chip-accent) 60%, var(--color-text));
+}
+
+.tw-metric-chip-info {
+  --metric-chip-accent: var(--color-info);
+}
+
+.tw-metric-chip-success {
+  --metric-chip-accent: var(--color-success);
+}
+
+.tw-metric-chip-warning {
+  --metric-chip-accent: var(--color-warning);
+}
+
+.tw-metric-chip-danger {
+  --metric-chip-accent: var(--color-danger);
+}
+
 @media (width < 40rem) {
   .tw-section-body {
     margin-left: 0;
@@ -4068,6 +4196,16 @@ html.no-transitions * {
   font-size: 0.875rem;
   color: var(--color-text-muted);
   line-height: 1.6;
+}
+
+/* Density modifier, the same descendant pattern as tw-calendar-compact. */
+.tw-accordion-sm .tw-accordion-trigger {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.tw-accordion-sm .tw-accordion-content {
+  padding: 0 1rem 0.75rem;
 }
 
 /* ============================================
@@ -4703,12 +4841,14 @@ html.no-transitions * {
 }
 
 /* Compact month/year grids */
-.tw-calendar-compact .grid {
+.tw-calendar-compact .tw-calendar-month-grid,
+.tw-calendar-compact .tw-calendar-year-grid {
   gap: 0.25rem;
   padding: 0.25rem;
 }
 
-.tw-calendar-compact .grid button {
+.tw-calendar-compact .tw-calendar-month-btn,
+.tw-calendar-compact .tw-calendar-year-btn {
   padding: 0.25rem 0.375rem;
   font-size: 0.6875rem;
 }
@@ -4925,7 +5065,7 @@ html.no-transitions * {
   transition: all 0.15s;
 }
 
-.tw-calendar-month-btn:hover {
+.tw-calendar-month-btn:hover:not(.tw-calendar-month-btn-selected) {
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
@@ -4954,7 +5094,7 @@ html.no-transitions * {
   transition: all 0.15s;
 }
 
-.tw-calendar-year-btn:hover {
+.tw-calendar-year-btn:hover:not(.tw-calendar-year-btn-selected) {
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
