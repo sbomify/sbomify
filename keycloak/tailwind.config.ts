@@ -31,7 +31,7 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['Inter', 'Helvetica Neue', 'Arial', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                sans: ['Figtree', 'Helvetica Neue', 'Arial', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
             },
             borderRadius: {
                 'xl': '10px',
