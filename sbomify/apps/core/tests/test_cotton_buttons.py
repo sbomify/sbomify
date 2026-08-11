@@ -1,8 +1,8 @@
 """Render contract for the cotton buttons component set.
 
 The probe template exercises every component in components/buttons; these
-tests pin the emitted markup to the same classes the tag-layer macros emit,
-so a page can swap between the two without a pixel moving.
+tests pin the shell structure and the utility recipes each variant emits, so
+pages can rely on the components without ever writing a class themselves.
 """
 
 import pytest
@@ -14,30 +14,67 @@ def rendered() -> str:
     return render_to_string("core/cotton_probes/buttons.html.j2")
 
 
-@pytest.mark.parametrize(
-    "variant",
-    ["primary", "secondary", "ghost", "gradient", "success", "warning", "danger"],
-)
-def test_filled_variants_emit_macro_identical_classes(rendered: str, variant: str) -> None:
-    assert f'class="tw-btn tw-btn-{variant}"' in rendered
+def _button_holding(rendered: str, marker: str) -> str:
+    chunks = [part for part in rendered.split("<button") if marker in part]
+    assert chunks, f"no button holds {marker!r}"
+    return chunks[0]
 
 
 @pytest.mark.parametrize(
-    "variant",
-    ["outline", "outline-primary", "outline-warning", "outline-danger"],
+    ("marker", "recipe_bit"),
+    [
+        ("Save", "var(--color-primary)_0%,var(--color-primary-dark)_100%"),
+        ("Confirm", "var(--color-success)_0%,var(--color-success-dark)_100%"),
+        ("Care", "var(--color-warning)_0%,var(--color-warning-dark)_100%"),
+        ("Delete", "var(--color-danger)_0%,var(--color-danger-dark)_100%"),
+        ("Cancel", "bg-surface"),
+        ("Quiet", "hover:bg-surface"),
+        ("Shiny", "var(--color-accent-pink)_50%"),
+    ],
 )
-def test_outline_variants_resolve_snake_cased_files(rendered: str, variant: str) -> None:
-    assert f'class="tw-btn tw-btn-{variant}"' in rendered
+def test_filled_variants_carry_their_recipe(rendered: str, marker: str, recipe_bit: str) -> None:
+    assert recipe_bit in _button_holding(rendered, marker)
 
 
-def test_size_class_and_layout_class_merge_after_variant(rendered: str) -> None:
-    assert 'class="tw-btn tw-btn-primary tw-btn-sm w-full"' in rendered
-    assert 'class="tw-btn tw-btn-secondary tw-btn-lg"' in rendered
+@pytest.mark.parametrize(
+    ("marker", "recipe_bit"),
+    [
+        ("Neutral", "border-[1.5px] border-solid border-border"),
+        ("Choose", "border-[1.5px] border-solid border-primary"),
+        ("Hold", "border-[1.5px] border-solid border-warning"),
+        ("Remove", "border-[1.5px] border-solid border-danger"),
+    ],
+)
+def test_outline_variants_carry_their_border(rendered: str, marker: str, recipe_bit: str) -> None:
+    assert recipe_bit in _button_holding(rendered, marker)
+
+
+def test_shared_shell_structure_present_once_per_button(rendered: str) -> None:
+    save = _button_holding(rendered, "Save")
+    for bit in ("inline-flex", "items-center", "gap-2", "font-medium", "whitespace-nowrap"):
+        assert bit in save
+
+
+def test_default_size_segment(rendered: str) -> None:
+    assert "px-5 py-2.5 min-h-11 text-sm rounded-lg" in _button_holding(rendered, "Save")
+
+
+def test_small_and_large_size_segments(rendered: str) -> None:
+    assert "px-3.5 py-2 min-h-9 text-xs rounded-md" in _button_holding(rendered, "New release")
+    assert "px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]" in _button_holding(rendered, "Big submit")
+
+
+def test_size_and_variant_segments_never_conflict(rendered: str) -> None:
+    small = _button_holding(rendered, "New release")
+    assert "px-5" not in small
+    assert "min-h-11" not in small
 
 
 def test_attrs_pass_through_variant_and_base_untouched(rendered: str) -> None:
-    assert 'hx-get="/probe"' in rendered
-    assert '@click.stop="fire()"' in rendered
+    small = _button_holding(rendered, "New release")
+    assert 'hx-get="/probe"' in small
+    assert '@click.stop="fire()"' in small
+    assert "w-full" in small
 
 
 def test_slot_carries_nested_markup(rendered: str) -> None:
@@ -45,32 +82,36 @@ def test_slot_carries_nested_markup(rendered: str) -> None:
 
 
 def test_submit_type_reaches_the_shell(rendered: str) -> None:
-    assert 'type="submit"' in rendered
+    assert 'type="submit"' in _button_holding(rendered, "Big submit")
 
 
-def test_loading_adds_class_spinner_and_disables(rendered: str) -> None:
-    assert "tw-btn-loading" in rendered
-    assert "tw-loader-inline" in rendered
-    loading_button = rendered.split("tw-btn-loading")[0].rsplit("<button", 1)[1]
-    assert "disabled" in loading_button + rendered.split("tw-btn-loading")[1][:200]
+def test_loading_disables_and_shows_the_brand_loader(rendered: str) -> None:
+    loading = _button_holding(rendered, "Saving")
+    assert "pointer-events-none opacity-80" in loading
+    assert "disabled" in loading
+    assert "tw-loader-inline" in loading
 
 
 def test_disabled_prop_disables_the_shell(rendered: str) -> None:
-    frozen = [part for part in rendered.split("<button") if "Frozen" in part][0]
-    assert "disabled" in frozen
+    assert "disabled" in _button_holding(rendered, "Frozen")
 
 
-def test_icon_button_carries_label_variant_size_and_stretch(rendered: str) -> None:
-    actions = [part for part in rendered.split("<button") if "Product actions" in part][0]
-    assert 'class="tw-icon-btn tw-icon-btn-danger tw-icon-btn-sm"' in actions
-    assert 'aria-label="Product actions"' in actions
+def test_icon_button_variant_size_label_and_stretch_segments(rendered: str) -> None:
+    actions = _button_holding(rendered, 'aria-label="Product actions"')
+    assert "w-9 h-9 text-sm rounded-md" in actions
+    assert "color-mix(in_oklab,var(--color-danger)_12%,transparent)" in actions
     assert '@click="menu()"' in actions
-    stretchy = [part for part in rendered.split("<button") if "Stretchy" in part][0]
-    assert "tw-icon-btn-stretch" in stretchy
+    stretchy = _button_holding(rendered, 'aria-label="Stretchy"')
+    assert "w-12 h-full min-h-10" in stretchy
+    assert "hover:scale-105" not in stretchy
 
 
-def test_link_renders_anchor_with_button_classes_and_safe_target(rendered: str) -> None:
-    anchor = [part for part in rendered.split("<a ") if "All releases" in part][0]
+def test_variant_with_href_renders_an_anchor(rendered: str) -> None:
+    anchors = [part for part in rendered.split("<a ") if "All releases" in part]
+    assert anchors, "href variant did not render an anchor"
+    anchor = anchors[0]
     assert 'href="/releases/new"' in anchor
-    assert "tw-btn tw-btn-ghost tw-btn-sm" in anchor
-    assert 'target="_blank" rel="noopener noreferrer"' in anchor
+    assert "hover:bg-surface" in anchor
+    assert "px-3.5 py-2 min-h-9" in anchor
+    assert 'target="_blank"' in anchor
+    assert "disabled" not in anchor.split(">")[0]

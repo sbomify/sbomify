@@ -1,16 +1,24 @@
 {% comment %}
-The shell every text button shares. Pages normally use a variant component
-(c-buttons.primary and friends); reach for this directly only with a
-variant_class the library defines. Slot is the label content; put text in a
-span when it sits beside an icon.
+The shell every text button shares, in plain Tailwind utilities. Pages use a
+variant component (c-buttons.primary and friends); those nest this and pass
+their recipe through variant_class. With an href it renders an anchor, so any
+variant works as a link. Size renders as one conditional segment so utilities
+never stack against each other. The two branches below differ only in element
+and must stay in lockstep.
 {% endcomment %}
-<c-vars variant_class="" size="" type="button" loading="" disabled="" class />
-<button type="{{ type }}"
-        class="tw-btn {{ variant_class }}{% if size %} tw-btn-{{ size }}{% endif %}{% if loading %} tw-btn-loading{% endif %}{% if class %} {{ class }}{% endif %}"
-        {% if disabled or loading %}disabled{% endif %}
-        {{ attrs }}>
-    {% if loading %}
-        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
-    {% endif %}
-    {{ slot }}
-</button>
+<c-vars variant_class size type="button" href loading disabled class />
+{% if href %}
+    <a href="{{ href }}"
+       class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer relative overflow-hidden transition-all duration-200 {% if size == 'sm' %}px-3.5 py-2 min-h-9 text-xs rounded-md{% elif size == 'lg' %}px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]{% else %}px-5 py-2.5 min-h-11 text-sm rounded-lg{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+       {{ attrs }}>{{ slot }}</a>
+{% else %}
+    <button type="{{ type }}"
+            class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer relative overflow-hidden transition-all duration-200 {% if size == 'sm' %}px-3.5 py-2 min-h-9 text-xs rounded-md{% elif size == 'lg' %}px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]{% else %}px-5 py-2.5 min-h-11 text-sm rounded-lg{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none{% if loading %} pointer-events-none opacity-80{% endif %} {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+            {% if disabled or loading %}disabled{% endif %}
+            {{ attrs }}>
+        {% if loading %}
+            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+        {% endif %}
+        {{ slot }}
+    </button>
+{% endif %}
