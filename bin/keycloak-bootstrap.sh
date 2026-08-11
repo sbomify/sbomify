@@ -80,14 +80,6 @@ fi
 
 # Create test users for development (only in dev mode)
 if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
-  # Wire realm email to the mailpit catcher and enable forgot-password so the
-  # verification and reset flows are testable locally
-  cat > /tmp/smtp.json <<'EOF'
-{"smtpServer":{"host":"mailpit","port":"1025","from":"noreply@sbomify.dev","fromDisplayName":"Team sbomify (dev)"}}
-EOF
-  /opt/keycloak/bin/kcadm.sh update "realms/$REALM" -f /tmp/smtp.json
-  /opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s resetPasswordAllowed=true
-
   # Create test user if it doesn't exist
   if ! /opt/keycloak/bin/kcadm.sh get users -r "$REALM" -q username=jdoe | grep -q '"id"'; then
     /opt/keycloak/bin/kcadm.sh create users -r "$REALM" \
