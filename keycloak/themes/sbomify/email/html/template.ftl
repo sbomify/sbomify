@@ -41,14 +41,6 @@
             max-width: 221px;
         }
 
-        .logo .logo-light {
-            display: inline !important;
-        }
-
-        .logo .logo-dark {
-            display: none !important;
-        }
-
         .logo-text {
             font-size: 28px;
             font-weight: bold;
@@ -137,23 +129,13 @@
             }
         }
 
-        @media (prefers-color-scheme: dark) {
-            .logo .logo-light {
-                display: none !important;
-            }
-
-            .logo .logo-dark {
-                display: inline !important;
-            }
-        }
     </style>
 </head>
 <body>
     <div class="email-container">
         <div class="header">
             <div class="logo">
-                <img src="${url.resourcesUrl}/img/logo.svg" alt="sbomify" height="40" class="logo-light">
-                <img src="${url.resourcesUrl}/img/logo-white.svg" alt="sbomify" height="40" class="logo-dark">
+                <img src="${url.resourcesUrl}/img/logo.svg" alt="sbomify" height="40">
             </div>
             <div class="tagline">The Security Artifact Hub</div>
         </div>
