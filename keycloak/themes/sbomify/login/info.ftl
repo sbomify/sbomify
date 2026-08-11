@@ -75,7 +75,7 @@
                                     </svg>
                                     <span>
                                         <strong>Didn't receive the email?</strong> 
-                                        The link will expire in a few minutes. You can request a new verification email if needed.
+                                        The link expires after a while. You can request a new verification email if needed.
                                     </span>
                                 </div>
                             <#elseif message?has_content>
