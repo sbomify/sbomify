@@ -47,7 +47,7 @@
                                    maxlength="128"
                                    title="Password must be at least 8 characters long"
                                    aria-invalid="<#if messagesPerField.existsError('password-new','password-confirm')>true</#if>"
-                                   aria-describedby="password-tips<#if messagesPerField.existsError('password-new','password-confirm')> password-new-error</#if>" />
+                                   aria-describedby="password-tips<#if messagesPerField.existsError('password-new')> password-new-error</#if>" />
                             <#if messagesPerField.existsError('password-new')>
                                 <span id="password-new-error" class="input-error" role="alert">${kcSanitize(messagesPerField.getFirstError('password-new'))}</span>
                             </#if>
@@ -62,7 +62,7 @@
                                    maxlength="128"
                                    title="Please confirm your new password"
                                    aria-invalid="<#if messagesPerField.existsError('password-new','password-confirm')>true</#if>"
-                                   aria-describedby="<#if messagesPerField.existsError('password-new','password-confirm')>password-confirm-error</#if>" />
+                                   aria-describedby="<#if messagesPerField.existsError('password-confirm')>password-confirm-error</#if>" />
                             <#if messagesPerField.existsError('password-confirm')>
                                 <span id="password-confirm-error" class="input-error" role="alert">${kcSanitize(messagesPerField.getFirstError('password-confirm'))}</span>
                             </#if>
