@@ -756,6 +756,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """Check if SPDX 3.0 document has generation context information.
 
         Checks:
+        - software_Sbom.software_sbomType — the first-class lifecycle field
+          ("build", "source", "deployed", ...), which is how Yocto declares
+          it, with no accompanying comment
         - SpdxDocument comment field
         - CreationInfo comment field
         - Annotation elements whose subject is the SpdxDocument or one of
@@ -778,6 +781,15 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             elem_type = element.get("type", element.get("@type", ""))
             if not isinstance(elem_type, str):
                 continue
+
+            # The first-class lifecycle declaration: a software_Sbom element
+            # carrying a non-empty sbomType.
+            if "software_Sbom" in elem_type:
+                sbom_type = element.get("software_sbomType")
+                if isinstance(sbom_type, str) and sbom_type.strip():
+                    return True
+                if isinstance(sbom_type, list) and any(isinstance(v, str) and v.strip() for v in sbom_type):
+                    return True
 
             # Check SpdxDocument comment
             if "SpdxDocument" in elem_type:

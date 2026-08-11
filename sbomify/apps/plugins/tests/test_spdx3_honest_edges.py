@@ -65,3 +65,32 @@ class TestOneDetector:
         classified as SPDX 3 — callers iterate the graph."""
         assert is_spdx3({"@graph": "not-a-list"}) is False
         assert is_spdx3({"@graph": 42}) is False
+
+
+class TestSbomTypeGenerationContext:
+    """The CISA 2026 mapping puts SPDX 3's Generation Context at
+    Software/Sbom.sbomType — the first-class field. The check read only
+    comments and annotations, so Yocto's sbomType: ["build"] with no
+    explanatory comment failed generation context despite declaring it
+    per spec."""
+
+    def _has_context(self, *graph: object) -> bool:
+        from sbomify.apps.plugins.builtins.cisa import CISAMinimumElementsPlugin
+
+        doc = {"@context": "https://spdx.org/rdf/3.0.1/spdx-context.jsonld", "@graph": list(graph)}
+        return CISAMinimumElementsPlugin()._spdx3_has_generation_context(doc)
+
+    def test_sbom_type_declares_the_context(self) -> None:
+        assert (
+            self._has_context(
+                {"type": "software_Sbom", "spdxId": "urn:x:sbom", "software_sbomType": ["build"]},
+            )
+            is True
+        )
+
+    def test_empty_sbom_type_does_not(self) -> None:
+        assert self._has_context({"type": "software_Sbom", "spdxId": "urn:x:sbom", "software_sbomType": []}) is False
+        assert self._has_context({"type": "software_Sbom", "spdxId": "urn:x:sbom"}) is False
+
+    def test_no_sbom_element_keeps_failing(self) -> None:
+        assert self._has_context({"type": "software_Package", "spdxId": "urn:x:p", "name": "p"}) is False

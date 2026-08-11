@@ -39,7 +39,7 @@ _SPDX_ORGANIZATION_AGENT = {"type": "Organization", "name": "SPDX"}
 # "Agent" matches.
 _AGENT_TYPES = frozenset({"Person", "Organization", "SoftwareAgent", "Agent"})
 
-_UNIQUE_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl", "cpe22", "cpe23", "swid"})
+_UNIQUE_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl", "cpe22", "cpe23", "swid", "gitoid", "swhid"})
 _PURL_ID_TYPES = frozenset({"packageUrl", "packageURL", "purl"})
 
 
@@ -285,8 +285,16 @@ def get_spdx3_package_fields(
     # type variants are a subset of _UNIQUE_ID_TYPES, so no second pass.
     external_identifiers = iter_spdx3_external_identifiers(package)
     direct_purl = package.get("software_packageUrl")
-    has_unique_id = bool(isinstance(direct_purl, str) and direct_purl) or any(
-        ext_id.get("externalIdentifierType", "") in _UNIQUE_ID_TYPES for ext_id in external_identifiers
+    # The first-class content-addressable identifiers (gitoid/swhid) live on
+    # software_contentIdentifier, distinct from externalIdentifier.
+    content_identifiers = package.get("software_contentIdentifier")
+    has_content_identifier = isinstance(content_identifiers, list) and any(
+        isinstance(ci, dict) and ci.get("software_contentIdentifierValue") for ci in content_identifiers
+    )
+    has_unique_id = (
+        bool(isinstance(direct_purl, str) and direct_purl)
+        or has_content_identifier
+        or any(ext_id.get("externalIdentifierType", "") in _UNIQUE_ID_TYPES for ext_id in external_identifiers)
     )
 
     # Check for hash values in verifiedUsing
