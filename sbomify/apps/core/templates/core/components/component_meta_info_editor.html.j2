@@ -4,14 +4,16 @@
     <!-- Main Card (title lives on the modal header) -->
     <div>
         <div>
-            <div class="flex items-start gap-3 p-4 mb-6 rounded-lg bg-border/10 border border-border/30">
-                <i class="fas fa-info-circle text-text-muted mt-0.5"></i>
-                <span class="text-text">
-                    <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/"
+            <div class="tw-alert tw-alert-info mb-6" role="alert">
+                <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <span>
+                        <strong>Augmentation:</strong> Enable the <a href="https://sbomify.com/features/generate-collaborate-analyze/"
     target="_blank"
     rel="noopener noreferrer"
     class="text-primary hover:underline">Augmentation feature</a> to include this metadata in your SBOM
-                </span>
+                    </span>
+                </div>
             </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Left Column: Contact Information -->
@@ -28,7 +30,7 @@
                             <!-- Contact Profile Selector -->
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-text mb-2">Contact Profile</label>
-                                <select class="w-full px-3 py-2 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                <select class="tw-form-select"
                                         x-model="selectedProfileId"
                                         @change="handleProfileChange()"
                                         :disabled="contactProfiles.length === 0 && !selectedProfile">
@@ -46,12 +48,14 @@
                             <!-- Profile Details (when using profile) -->
                             <template x-if="isUsingProfile">
                                 <div>
-                                    <div class="flex items-start gap-3 p-4 mb-4 rounded-lg bg-border/10 border border-border/30">
-                                        <i class="fas fa-info-circle text-text-muted mt-0.5"></i>
-                                        <span class="text-text text-sm">
-                                            This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
-                                            Contact details are managed at the workspace level.
-                                        </span>
+                                    <div class="tw-alert tw-alert-info mb-4" role="alert">
+                                        <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                                        <div class="tw-alert-content">
+                                            <span class="text-sm">
+                                                This component uses the <strong x-text="selectedProfile?.name || 'contact profile'"></strong>.
+                                                Contact details are managed at the workspace level.
+                                            </span>
+                                        </div>
                                     </div>
                                     <template x-if="selectedProfile">
                                         <div x-data="{ get profile() { return selectedProfile } }">
@@ -96,8 +100,8 @@
                             <!-- Lifecycle Phase -->
                             <div class="mb-5">
                                 <label class="block text-sm font-medium text-text mb-2">SBOM Generation Phase</label>
-                                <select class="w-full px-3 py-2.5 text-sm bg-surface border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50"
-                                        :class="validationErrors.lifecycle_phase ? 'border-danger' : 'border-border'"
+                                <select class="tw-form-select"
+                                        :class="validationErrors.lifecycle_phase ? 'tw-form-select-danger' : ''"
                                         x-model="metadata.lifecycle_phase"
                                         @change="hasUnsavedChanges = true">
                                     <option :value="null">Select a phase...</option>

@@ -18,6 +18,7 @@
     proper would tolerate multi-line ``{# ... #}`` — we don't have that
     parser here.
 {% endcomment %}
+{% load design_system %}
 <section id="trusted-publishers-section">
 <div class="space-y-4">
 <p class="text-sm text-text-muted m-0">
@@ -34,7 +35,9 @@ workflow's OIDC identity and are valid for 15 minutes.
 <th>Repository</th>
 <th>Added by</th>
 <th class="tw-cell-date">Last used</th>
-<th class="text-right">Actions</th>
+<th class="tw-table-actions">
+<span class="sr-only">Actions</span>
+</th>
 </tr>
 </thead>
 <tbody>
@@ -57,7 +60,7 @@ workflow's OIDC identity and are valid for 15 minutes.
 owner_id={{ binding.repository_owner_id }} ·
 repo_id={{ binding.repository_id }}
 {% else %}
-<span class="italic">awaiting first publish — IDs pin automatically</span>
+<span class="italic">awaiting first publish, IDs pin automatically</span>
 {% endif %}
 </div>
 </td>
@@ -76,10 +79,9 @@ repo_id={{ binding.repository_id }}
 <span class="italic">never</span>
 {% endif %}
 </td>
-<td class="text-right">
-<button type="button" class="tw-btn tw-btn-sm tw-btn-ghost hover:bg-danger/10 tw-btn-ghost-danger" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
-<i class="fas fa-trash"></i>
-<span class="sr-only md:not-sr-only md:ml-1">Revoke</span>
+<td class="tw-table-actions">
+<button type="button" class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger" aria-label="Revoke trusted publisher" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
+<i class="fas fa-trash" aria-hidden="true"></i>
 </button>
 </td>
 </tr>
@@ -88,15 +90,7 @@ repo_id={{ binding.repository_id }}
 </table>
 </div>
 {% else %}
-<div class="flex items-center gap-4 p-4 rounded-lg border border-dashed border-border bg-background/40">
-<i class="fas fa-shield-halved text-2xl text-text-muted opacity-50"></i>
-<div>
-<p class="text-sm font-medium text-text m-0">No trusted publishers yet</p>
-<p class="text-xs text-text-muted m-0 mt-0.5">
-Add a repository below — its workflow authenticates with OIDC, no long-lived API tokens required.
-</p>
-</div>
-</div>
+{% empty_state icon="fas fa-shield-halved" title="No trusted publishers yet" message="Add a repository below. Its workflow authenticates with OIDC, no long-lived API tokens required." %}
 {% endif %}
 <div class="pt-1">
 <form method="post" hx-post="{% url 'oidc:trusted_publishers' component_id=component.id %}" hx-target="#trusted-publishers-section" hx-swap="outerHTML" class="space-y-3">
@@ -123,21 +117,33 @@ Add publisher
 </div>
 </form>
 </div>
-<details class="group rounded-lg bg-surface border border-border/60">
-<summary class="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm font-medium text-text hover:bg-background/40 rounded-lg">
-<i class="fas fa-code text-text-muted"></i>
-<span>Configure your GitHub Actions workflow</span>
-<i class="fas fa-chevron-down text-xs text-text-muted ml-auto transition-transform group-open:rotate-180"></i>
+<div class="tw-accordion tw-accordion-sm">
+<details class="tw-accordion-item group">
+<summary class="tw-accordion-trigger cursor-pointer">
+<span class="flex items-center gap-2">
+<i class="fas fa-code text-text-muted" aria-hidden="true"></i>
+Configure your GitHub Actions workflow
+</span>
+<i class="fas fa-chevron-down tw-accordion-trigger-icon group-open:rotate-180" aria-hidden="true"></i>
 </summary>
-<div class="px-4 pb-4 pt-1 space-y-3 text-sm border-t border-border/40">
+<div class="tw-accordion-content space-y-3">
 <p class="text-text-muted m-0">
 Add this step to the workflow that should be authorised to push to this
-component. The <code class="px-1.5 py-0.5 rounded bg-background border border-border/40 text-text font-mono text-xs">audience</code> value must be exactly
-<code class="px-1.5 py-0.5 rounded bg-background border border-border/40 text-text font-mono text-xs">{{ oidc_github_audience }}</code> — the backend rejects
+component. The <code class="tw-code-inline">audience</code> value must be exactly
+<code class="tw-code-inline">{{ oidc_github_audience }}</code>. The backend rejects
 tokens minted for any other audience.
 </p>
+<div class="tw-code-block" x-data="{ copied: false }">
+<div class="tw-code-block-header">
+<span class="tw-code-block-title">workflow.yml</span>
+<button type="button" class="tw-code-block-copy-btn" :class="copied ? 'copied' : ''" :aria-label="copied ? 'Copied' : 'Copy code'" @click="navigator.clipboard.writeText($el.closest('.tw-code-block').querySelector('code').textContent).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
+<i :class="copied ? 'fas fa-check' : 'fas fa-copy'" aria-hidden="true"></i>
+<span x-text="copied ? 'Copied' : 'Copy'"></span>
+</button>
+</div>
+<div class="tw-code-block-content">
 {# djlint:off #}
-                <pre class="bg-background border border-border rounded-md p-3 text-xs overflow-x-auto text-text"><code>{% verbatim %}permissions:
+                <pre><code>{% verbatim %}permissions:
   id-token: write    # required to mint the OIDC token
   contents: read
 
@@ -171,12 +177,14 @@ steps:
         {% endverbatim %}{{ api_base_url }}{% verbatim %}/api/v1/sboms/artifact/cyclonedx/{% endverbatim %}{{ component.id }}
 </code></pre>
 {# djlint:on #}
+</div>
+</div>
 <p class="text-xs text-text-muted m-0 flex items-center gap-1.5">
-<i class="fas fa-clock text-text-muted"></i>
-The sbomify token expires after 15 minutes — request a fresh one for each
-job that needs it.
+<i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
+The sbomify token expires after 15 minutes. Request a fresh one for each run.
 </p>
 </div>
 </details>
+</div>
 </div>
 </section>

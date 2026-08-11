@@ -33,14 +33,18 @@
                     <div x-show="showExport"
                          x-cloak
                          x-transition
-                         class="absolute right-0 top-full mt-1 z-10 p-1.5 rounded-lg border border-border bg-card shadow-lg min-w-[160px]">
+                         class="tw-dropdown right-0 top-full mt-1"
+                         role="menu"
+                         aria-label="Export">
                         <a href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/csv"
-                           class="flex items-center gap-2 px-3 py-2 text-xs text-text rounded hover:bg-primary/5 transition-colors">
-                            <i class="fas fa-file-csv text-primary"></i>Controls CSV
+                           role="menuitem"
+                           class="tw-dropdown-item no-underline">
+                            <i class="fas fa-file-csv tw-dropdown-item-icon" aria-hidden="true"></i>Controls CSV
                         </a>
                         <a href="/api/v1/controls/catalogs/{{ controls_catalog.id }}/export/summary-csv"
-                           class="flex items-center gap-2 px-3 py-2 text-xs text-text rounded hover:bg-primary/5 transition-colors">
-                            <i class="fas fa-chart-bar text-primary"></i>Summary CSV
+                           role="menuitem"
+                           class="tw-dropdown-item no-underline">
+                            <i class="fas fa-chart-bar tw-dropdown-item-icon" aria-hidden="true"></i>Summary CSV
                         </a>
                     </div>
                 </div>
@@ -58,95 +62,96 @@
             </div>
         </div>
     </div>
-    <div class="space-y-2 p-4">
-        {% for category in controls_categories %}
-            <div x-data="{ open: false }"
-                 class="border border-border/50 rounded-lg overflow-hidden">
-                {# Category Header #}
-                <button type="button"
-                        class="w-full px-6 py-4 flex items-center justify-between gap-4 hover:bg-primary/5 transition-colors text-left"
-                        @click="open = !open">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <span class="tw-icon-chip tw-icon-chip-sm">
-                            <i class="fas {{ category.icon }}" aria-hidden="true"></i>
-                        </span>
-                        <span class="font-medium text-text truncate">{{ category.name }}</span>
-                        <span class="text-text-muted text-sm flex-shrink-0">({{ category.controls|length }})</span>
-                    </div>
-                    <div class="flex items-center gap-4 flex-shrink-0">
-                        <div class="w-24 hidden sm:block">
-                            <div class="h-2 bg-border/50 rounded-full overflow-hidden">
-                                <div class="h-full rounded-full transition-all duration-300 {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
-                                     style="width: {{ category.percentage }}%"></div>
-                            </div>
+    <div class="p-4">
+        <div class="tw-accordion tw-accordion-sm">
+            {% for category in controls_categories %}
+                <div x-data="{ open: false }" class="tw-accordion-item">
+                    {# Category Header #}
+                    <button type="button"
+                            class="tw-accordion-trigger gap-4"
+                            :aria-expanded="open"
+                            @click="open = !open">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="tw-icon-chip tw-icon-chip-sm">
+                                <i class="fas {{ category.icon }}" aria-hidden="true"></i>
+                            </span>
+                            <span class="font-medium text-text truncate">{{ category.name }}</span>
+                            <span class="text-text-muted text-sm flex-shrink-0">({{ category.controls|length }})</span>
                         </div>
-                        <span class="text-sm text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
-                        <i class="fas fa-chevron-right text-text-muted text-xs transition-transform duration-200"
-                           :class="{ 'rotate-90': open }"></i>
-                    </div>
-                </button>
-                {# Expanded Controls #}
-                <div x-show="open" x-collapse>
-                    {# Bulk Actions Bar #}
-                    <div class="border-t border-border/50 px-6 py-2 bg-background/50 flex items-center gap-2 text-xs">
-                        <span class="text-text-muted mr-1">Set all to:</span>
-                        {% for bulk_status, bulk_label in bulk_statuses %}
-                            <form method="post"
-                                  action="{% url 'controls:bulk_category_update' team.key %}"
-                                  onclick="return confirm('Set all {{ category.name|escapejs }} controls to {{ bulk_label|escapejs }}?')"
-                                  class="inline">
-                                {% csrf_token %}
-                                <input type="hidden" name="category" value="{{ category.name }}">
-                                <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
-                                <input type="hidden" name="status" value="{{ bulk_status }}">
-                                <button type="submit"
-                                        class="px-2.5 py-1 rounded text-xs font-medium border transition-all cursor-pointer hover:shadow-sm {% if bulk_status == 'compliant' %}border-success/30 text-success hover:bg-success/10 hover:border-success{% elif bulk_status == 'partial' %}border-warning/30 text-warning hover:bg-warning/10 hover:border-warning{% elif bulk_status == 'not_implemented' %}border-border text-text-muted hover:bg-border/20 hover:text-text{% else %}border-border text-text-muted hover:bg-border/20 hover:text-text{% endif %}">
-                                    {{ bulk_label }}
-                                </button>
-                            </form>
-                        {% endfor %}
-                    </div>
-                    <div class="border-t border-border/50">
-                        {% for control in category.controls %}
-                            <div class="px-6 py-3 flex items-center gap-4 hover:bg-background/50 transition-colors border-b border-border/30 last:border-b-0"
-                                 x-show="statusFilter === 'all' || statusFilter === '{{ control.status }}'">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium bg-primary/10 text-primary flex-shrink-0">
-                                    {{ control.control_id }}
-                                </span>
-                                <span class="text-sm text-text flex-1 min-w-0 truncate"
-                                      title="{{ control.title }}">{{ control.title }}</span>
-                                <form method="post"
-                                      action="{% url 'controls:status_update' team.key %}"
-                                      class="flex-shrink-0">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="control_id" value="{{ control.id }}">
-                                    <input type="hidden" name="active_tab" value="controls">
-                                    <select name="status"
-                                            class="tw-form-select tw-form-select-sm {% if control.status == 'compliant' %}tw-form-select-success{% elif control.status == 'partial' %}tw-form-select-warning{% elif control.status == 'not_implemented' %}tw-form-select-danger{% endif %}"
-                                            @change="$el.form.requestSubmit()">
-                                        <option value="compliant"
-                                                {% if control.status == "compliant" %}selected{% endif %}>
-                                            Compliant
-                                        </option>
-                                        <option value="partial"
-                                                {% if control.status == "partial" %}selected{% endif %}>
-                                            Partial
-                                        </option>
-                                        <option value="not_implemented"
-                                                {% if control.status == "not_implemented" %}selected{% endif %}>
-                                            Not Implemented
-                                        </option>
-                                        <option value="not_applicable"
-                                                {% if control.status == "not_applicable" %}selected{% endif %}>
-                                            Not Applicable
-                                        </option>
-                                    </select>
-                                </form>
+                        <div class="flex items-center gap-4 flex-shrink-0">
+                            <div class="w-24 hidden sm:block">
+                                <div class="h-2 bg-border/50 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full transition-all duration-300 {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                         style="width: {{ category.percentage }}%"></div>
+                                </div>
                             </div>
-                        {% endfor %}
+                            <span class="text-sm text-text-muted w-10 text-right">{{ category.percentage|floatformat:0 }}%</span>
+                            <i class="fas fa-chevron-down tw-accordion-trigger-icon"
+                               aria-hidden="true"></i>
+                        </div>
+                    </button>
+                    {# Expanded Controls #}
+                    <div class="tw-accordion-content" x-show="open" x-collapse>
+                        {# Bulk Actions Bar #}
+                        <div class="flex flex-wrap items-center gap-2 py-2 text-xs">
+                            <span class="text-text-muted mr-1">Set all to:</span>
+                            {% for bulk_status, bulk_label in bulk_statuses %}
+                                <form method="post"
+                                      action="{% url 'controls:bulk_category_update' team.key %}"
+                                      onclick="return confirm('Set all {{ category.name|escapejs }} controls to {{ bulk_label|escapejs }}?')"
+                                      class="inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="category" value="{{ category.name }}">
+                                    <input type="hidden" name="catalog_id" value="{{ controls_catalog.id }}">
+                                    <input type="hidden" name="status" value="{{ bulk_status }}">
+                                    <button type="submit"
+                                            class="tw-btn-sm {% if bulk_status == 'compliant' %}tw-btn-outline-primary{% elif bulk_status == 'partial' %}tw-btn-outline-warning{% else %}tw-btn-outline{% endif %}"
+                                            {% if bulk_status == 'compliant' %}style="--btn-accent: var(--color-success); --btn-accent-dark: var(--color-success-dark)"{% endif %}>
+                                        {{ bulk_label }}
+                                    </button>
+                                </form>
+                            {% endfor %}
+                        </div>
+                        <div class="border-t border-border/50">
+                            {% for control in category.controls %}
+                                <div class="py-3 flex items-center gap-4 hover:bg-background/50 transition-colors border-b border-border/30 last:border-b-0"
+                                     x-show="statusFilter === 'all' || statusFilter === '{{ control.status }}'">
+                                    <code class="tw-code-inline tw-code-inline-primary flex-shrink-0">{{ control.control_id }}</code>
+                                    <span class="text-sm text-text flex-1 min-w-0 truncate"
+                                          title="{{ control.title }}">{{ control.title }}</span>
+                                    <form method="post"
+                                          action="{% url 'controls:status_update' team.key %}"
+                                          class="flex-shrink-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="control_id" value="{{ control.id }}">
+                                        <input type="hidden" name="active_tab" value="controls">
+                                        <select name="status"
+                                                class="tw-form-select tw-form-select-sm {% if control.status == 'compliant' %}tw-form-select-success{% elif control.status == 'partial' %}tw-form-select-warning{% elif control.status == 'not_implemented' %}tw-form-select-danger{% endif %}"
+                                                @change="$el.form.requestSubmit()">
+                                            <option value="compliant"
+                                                    {% if control.status == "compliant" %}selected{% endif %}>
+                                                Compliant
+                                            </option>
+                                            <option value="partial"
+                                                    {% if control.status == "partial" %}selected{% endif %}>
+                                                Partial
+                                            </option>
+                                            <option value="not_implemented"
+                                                    {% if control.status == "not_implemented" %}selected{% endif %}>
+                                                Not Implemented
+                                            </option>
+                                            <option value="not_applicable"
+                                                    {% if control.status == "not_applicable" %}selected{% endif %}>
+                                                Not Applicable
+                                            </option>
+                                        </select>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
-            </div>
-        {% endfor %}
+            {% endfor %}
+        </div>
     </div>
 </div>

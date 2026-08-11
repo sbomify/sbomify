@@ -2,36 +2,26 @@
 {% with team=request.session.current_team %}
     {% if team and team.billing_plan_limits and team.billing_plan_limits.subscription_status == 'past_due' and is_owner %}
         {% if team.is_in_grace_period %}
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 mb-6 rounded-xl bg-warning/10 border border-warning/30 shadow-sm">
-                <div class="flex items-start gap-3">
-                    <div class="text-2xl text-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <div>
-                        <h5 class="font-bold text-text mb-1">Payment Failed</h5>
-                        <p class="text-text-muted text-sm m-0">
-                            Your grace period is active. Update your payment method within {{ grace_period_days }} days to avoid service interruption.
-                        </p>
-                    </div>
+            <div class="tw-alert tw-alert-warning mb-6" role="alert">
+                <i class="fas fa-exclamation-triangle tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Payment Failed</p>
+                    <p class="text-sm m-0">
+                        Your grace period is active. Update your payment method within {{ grace_period_days }} days to avoid service interruption.
+                    </p>
                 </div>
                 <a href="{% url 'billing:create_portal_session' team.key %}"
-                   class="px-4 py-2 text-sm font-bold rounded-lg bg-warning text-white hover:bg-warning/90 transition-colors no-underline whitespace-nowrap">Fix Payment</a>
+                   class="tw-btn-warning tw-btn-sm no-underline self-center">Fix Payment</a>
             </div>
         {% else %}
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 mb-6 rounded-xl bg-danger/10 border border-danger/30 shadow-sm">
-                <div class="flex items-start gap-3">
-                    <div class="text-2xl text-danger">
-                        <i class="fas fa-ban"></i>
-                    </div>
-                    <div>
-                        <h5 class="font-bold text-text mb-1">Account Suspended</h5>
-                        <p class="text-text-muted text-sm m-0">
-                            Your account is restricted due to payment failure. Creation of new resources is blocked.
-                        </p>
-                    </div>
+            <div class="tw-alert tw-alert-danger mb-6" role="alert">
+                <i class="fas fa-ban tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Account Suspended</p>
+                    <p class="text-sm m-0">Your account is restricted due to payment failure. Creation of new resources is blocked.</p>
                 </div>
                 <a href="{% url 'billing:create_portal_session' team.key %}"
-                   class="px-4 py-2 text-sm font-bold rounded-lg bg-danger text-white hover:bg-danger/90 transition-colors no-underline whitespace-nowrap">Reactivate Subscription</a>
+                   class="tw-btn-danger tw-btn-sm no-underline self-center">Reactivate Subscription</a>
             </div>
         {% endif %}
     {% endif %}

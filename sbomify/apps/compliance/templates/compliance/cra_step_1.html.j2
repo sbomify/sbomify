@@ -60,7 +60,7 @@
                         <div class="tw-alert-content">
                             <p class="tw-alert-title">Annex V item 2 requires a legal manufacturer name</p>
                             <p class="opacity-80">
-                                The current value looks like a placeholder — the DoC will render
+                                The current value looks like a placeholder. The DoC will render
                                 <code class="text-xs">[Manufacturer Name — not configured]</code>
                                 and the bundle manifest will carry
                                 <code class="text-xs">is_placeholder: true</code>.
@@ -125,15 +125,13 @@
                         </div>
                     </div>
                     {# Open Source Steward toggle #}
-                    <div class="flex items-center gap-3 px-4 py-3 bg-surface-hover rounded-lg">
+                    <label class="tw-select-row">
                         <input type="checkbox"
                                x-model="isOpenSourceSteward"
                                id="oss-steward"
                                class="tw-checkbox shrink-0">
-                        <label for="oss-steward" class="text-text cursor-pointer select-none">
-                            This product is maintained by an Open Source Steward
-                        </label>
-                    </div>
+                        <span class="text-text select-none">This product is maintained by an Open Source Steward</span>
+                    </label>
                     {# Conformity Assessment Procedure (CRA Art 32) #}
                     <div class="px-4 py-3 bg-surface-hover rounded-lg space-y-3">
                         <span class="tw-form-label text-xs uppercase tracking-wider">Conformity Assessment Procedure</span>
@@ -146,7 +144,7 @@
                         </p>
                         <div class="space-y-2">
                             <template x-for="proc in availableProcedures" :key="proc.value">
-                                <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-surface transition-colors">
+                                <label class="tw-select-row">
                                     <input type="radio"
                                            name="conformity_procedure"
                                            :value="proc.value"
@@ -166,14 +164,16 @@
                              x-cloak
                              role="status"
                              aria-live="polite"
-                             class="mt-2 rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm">
+                             class="mt-2 tw-callout tw-callout-warning">
                             {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-shield-halved" title="Harmonised standard required" pill_label="CRA Art 32(2)" pill_href=cra_oj_url description="Class I products may only use Module A (self-assessment) when a harmonised standard covering all relevant requirements has been applied." %}
-                            <label class="flex items-start gap-3 px-4 pt-3 pb-4 cursor-pointer">
-                                <input type="checkbox"
-                                       x-model="harmonisedStandardApplied"
-                                       class="tw-checkbox shrink-0 mt-0.5">
-                                <span class="text-sm text-text">I confirm a harmonised standard has been applied to this product.</span>
-                            </label>
+                            <div class="tw-callout-body">
+                                <label class="flex items-start gap-3 cursor-pointer">
+                                    <input type="checkbox"
+                                           x-model="harmonisedStandardApplied"
+                                           class="tw-checkbox shrink-0 mt-0.5">
+                                    <span class="text-sm text-text">I confirm a harmonised standard has been applied to this product.</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -191,42 +191,40 @@
                     </p>
                 </div>
                 <div class="p-6 space-y-3">
-                    <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer">
+                    <label class="tw-select-row">
                         <input type="checkbox"
                                x-model="isRadioEquipment"
                                class="tw-checkbox mt-0.5 shrink-0">
                         <span class="flex-1">
                             <span class="text-text font-medium block">Radio equipment under the RED</span>
-                            <span class="text-xs text-text-muted">Triggers EN 18031-1 (RED Article 3(3)(d)) — access control, authentication, secure update, cryptography.</span>
+                            <span class="text-xs text-text-muted">Triggers EN 18031-1 (RED Article 3(3)(d)): access control, authentication, secure update, cryptography.</span>
                         </span>
                     </label>
-                    <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer"
-                           :class="!isRadioEquipment ? 'opacity-50 cursor-not-allowed' : ''">
+                    <label class="tw-select-row" :class="!isRadioEquipment ? 'opacity-50' : ''">
                         <input type="checkbox"
                                x-model="processesPersonalData"
                                :disabled="!isRadioEquipment"
                                class="tw-checkbox mt-0.5 shrink-0">
                         <span class="flex-1">
                             <span class="text-text font-medium block">Processes personal data</span>
-                            <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)) — data minimisation, GDPR alignment. Requires RED.</span>
+                            <span class="text-xs text-text-muted">Triggers EN 18031-2 (RED Article 3(3)(e)): data minimisation, GDPR alignment. Requires RED.</span>
                         </span>
                     </label>
-                    <label class="flex items-start gap-3 px-4 py-3 bg-surface-hover rounded-lg cursor-pointer"
-                           :class="!isRadioEquipment ? 'opacity-50 cursor-not-allowed' : ''">
+                    <label class="tw-select-row" :class="!isRadioEquipment ? 'opacity-50' : ''">
                         <input type="checkbox"
                                x-model="handlesFinancialValue"
                                :disabled="!isRadioEquipment"
                                class="tw-checkbox mt-0.5 shrink-0">
                         <span class="flex-1">
                             <span class="text-text font-medium block">Handles monetary value or virtual currency</span>
-                            <span class="text-xs text-text-muted">Triggers EN 18031-3 (RED Article 3(3)(f)) — protection from fraud. Requires RED.</span>
+                            <span class="text-xs text-text-muted">Triggers EN 18031-3 (RED Article 3(3)(f)): protection from fraud. Requires RED.</span>
                         </span>
                     </label>
                     <div x-show="isRadioEquipment" x-cloak class="tw-alert tw-alert-info">
                         <i class="fas fa-circle-info tw-alert-icon"></i>
                         <div class="tw-alert-content">
                             <p class="opacity-80 m-0">
-                                The DoC will carry the OJ L_202500138 restriction notes — review them before export. Products that allow the user not to set any password cannot claim presumption of conformity for EN 18031-1, EN 18031-2, and EN 18031-3 in respect of clauses 6.2.5.1 and 6.2.5.2.
+                                The DoC will carry the OJ L_202500138 restriction notes. Review them before export. Products that allow the user not to set any password cannot claim presumption of conformity for EN 18031-1, EN 18031-2, and EN 18031-3 in respect of clauses 6.2.5.1 and 6.2.5.2.
                             </p>
                         </div>
                     </div>
@@ -295,24 +293,24 @@
                              x-cloak
                              role="status"
                              aria-live="polite"
-                             class="rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm">
+                             class="tw-callout tw-callout-warning">
                             {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-clock-rotate-left" title="Support period below 5-year minimum" pill_label="CRA Art 13(8)" pill_href=cra_oj_url description="CRA Art 13(8) requires at least 5 years unless the product's expected use time is shorter (e.g., pandemic contact tracing apps, time-limited subscription software)." %}
-                            <div class="px-4 pt-3 pb-4">
+                            <div class="tw-callout-body">
                                 <label class="tw-form-label" for="support-short-justification">Justification (required)</label>
                                 <textarea id="support-short-justification"
                                           x-model="supportPeriodShortJustification"
                                           rows="3"
-                                          class="tw-form-textarea w-full text-sm focus:border-amber-500 focus:ring-amber-500"
+                                          class="tw-form-textarea w-full text-sm"
                                           placeholder="Explain why the expected product lifetime is less than 5 years..."></textarea>
                                 <div class="mt-1.5 flex items-center justify-between gap-3 text-[11px]">
                                     <span x-show="!supportPeriodShortJustification?.trim()"
-                                          class="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
+                                          class="flex items-center gap-1 text-warning font-medium">
                                         <i class="fas fa-exclamation-circle"></i>
                                         A non-empty justification is required.
                                     </span>
                                     <span x-show="supportPeriodShortJustification?.trim()"
                                           x-cloak
-                                          class="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                                          class="flex items-center gap-1 text-success font-medium">
                                         <i class="fas fa-circle-check"></i>
                                         Saved on next update
                                     </span>

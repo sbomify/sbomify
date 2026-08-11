@@ -1,5 +1,6 @@
 {% load static %}
 {% load widget_tweaks %}
+{% load design_system %}
 {# Store team name as JSON in data attribute for safe Alpine.js initialization #}
 <div id="team-general-content"
      class="tw-dashboard-card mb-6"
@@ -94,10 +95,7 @@
             <div class="flex items-center justify-between flex-wrap gap-3 ml-11">
                 <div>
                     {% if is_default_team %}
-                        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium bg-success/10 text-success">
-                            <i class="fas fa-check-circle"></i>
-                            This is your default workspace
-                        </span>
+                        {% badge text="This is your default workspace" variant="success" icon="fas fa-check-circle" %}
                     {% else %}
                         <span class="text-text-muted text-sm">This workspace is not set as your default</span>
                     {% endif %}

@@ -42,14 +42,12 @@
                     <p class="text-sm m-0">You won't be able to see it again.</p>
                 </div>
             </div>
-            <div class="bg-success/5 border border-success/20 rounded-xl p-5 mb-4">
-                <div class="flex items-center gap-3 mb-3">
-                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-success">
-                        <i class="fas fa-check-circle" aria-hidden="true"></i>
-                    </span>
-                    <label class="tw-form-label m-0">Your New Token</label>
+            <div class="tw-alert tw-alert-success mb-4" role="alert">
+                <i class="fas fa-check-circle tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">Your New Token</p>
+                    {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
                 </div>
-                <div class="ml-11">{% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}</div>
             </div>
         {% endif %}
         {# Generate New Token Section #}
@@ -169,14 +167,16 @@
                                     @click="showRevokeAllModal = true">Revoke all</button>
                         </div>
                     </div>
-                    <div class="space-y-3 ml-11">
+                    <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden ml-11">
                         {% for token in access_tokens %}
-                            <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg border border-border/50"
+                            <div class="tw-select-row"
                                  x-cloak
-                                 x-data="{ showDeleteModal: false }">
+                                 x-data="{ showDeleteModal: false }"
+                                 @click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.toggle.click()">
                                 <input type="checkbox"
                                        value="{{ token.id }}"
                                        x-model.number="selected"
+                                       x-ref="toggle"
                                        class="tw-checkbox flex-shrink-0"
                                        aria-label="Select token {{ token.description }}">
                                 <span class="tw-icon-chip">
@@ -209,12 +209,14 @@
                             </div>
                         {% endfor %}
                         {% for token in unscoped_tokens %}
-                            <div class="flex items-center gap-4 p-4 bg-warning/5 rounded-lg border border-warning/30"
+                            <div class="tw-select-row"
                                  x-cloak
-                                 x-data="{ showDeleteModal: false }">
+                                 x-data="{ showDeleteModal: false }"
+                                 @click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.toggle.click()">
                                 <input type="checkbox"
                                        value="{{ token.id }}"
                                        x-model.number="selected"
+                                       x-ref="toggle"
                                        class="tw-checkbox flex-shrink-0"
                                        aria-label="Select token {{ token.description }}">
                                 <span class="tw-icon-chip tw-icon-chip-warning">
@@ -224,7 +226,7 @@
                                     <h6 class="font-medium text-text m-0 truncate">{{ token.description }}</h6>
                                     <p class="text-sm text-warning m-0">
                                         <i class="fas fa-globe text-xs mr-1"></i>
-                                        Unscoped — not tied to any workspace. Please replace with a scoped token.
+                                        Unscoped: not tied to any workspace. Replace it with a scoped token.
                                     </p>
                                     <p class="text-sm text-text-muted m-0">
                                         <i class="fas fa-clock text-xs mr-1"></i>

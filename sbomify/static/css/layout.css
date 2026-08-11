@@ -7,30 +7,30 @@
 /* Dark mode (default) layout variables */
 :root {
   /* Layout-specific dark mode colors */
-  --layout-surface: rgb(var(--color-surface));
-  --layout-surface-hover: rgb(var(--color-surface-hover));
-  --layout-bg: rgb(var(--color-background));
-  --layout-text: rgb(var(--color-text));
-  --layout-text-secondary: rgb(var(--color-text-secondary));
-  --layout-border: rgb(var(--color-border));
+  --layout-surface: var(--color-surface);
+  --layout-surface-hover: var(--color-surface-hover);
+  --layout-bg: var(--color-background);
+  --layout-text: var(--color-text);
+  --layout-text-secondary: var(--color-text-secondary);
+  --layout-border: var(--color-border);
   --layout-btn-dark: #4b5563;
   --layout-btn-dark-hover: #6b7280;
-  --layout-icon-muted: rgb(var(--color-text-muted));
-  --layout-search-result-border: rgb(var(--color-border));
-  --layout-search-result-header-bg: rgb(var(--color-surface-elevated));
-  --layout-search-result-hover: rgb(var(--color-surface-hover));
-  --layout-footer-gradient-start: rgb(var(--color-surface));
-  --layout-footer-gradient-end: rgb(var(--color-surface-elevated));
-  --layout-action-link-bg-start: rgb(var(--color-surface-elevated));
-  --layout-action-link-bg-end: rgb(var(--color-surface));
-  --layout-action-link-hover-end: rgb(var(--color-primary) / 0.1);
+  --layout-icon-muted: var(--color-text-muted);
+  --layout-search-result-border: var(--color-border);
+  --layout-search-result-header-bg: var(--color-surface-elevated);
+  --layout-search-result-hover: var(--color-surface-hover);
+  --layout-footer-gradient-start: var(--color-surface);
+  --layout-footer-gradient-end: var(--color-surface-elevated);
+  --layout-action-link-bg-start: var(--color-surface-elevated);
+  --layout-action-link-bg-end: var(--color-surface);
+  --layout-action-link-hover-end: color-mix(in oklab, var(--color-primary) 10%, transparent);
   --sidebar-width: 280px;
   --sidebar-width-tablet: 260px;
   --sidebar-width-mobile: 300px;
   --sidebar-bg: var(--surface-card);
   --sidebar-border: var(--surface-border);
   --sidebar-color: var(--text-primary);
-  --sidebar-hover-bg: rgb(var(--color-surface-elevated));
+  --sidebar-hover-bg: var(--color-surface-elevated);
   --sidebar-active-bg: var(--brand-primary);
   --sidebar-active-color: #fff;
   --transition-sidebar: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -156,8 +156,8 @@ body {
 }
 
 .sidebar-close:hover {
-  background-color: rgb(var(--color-danger) / 0.1);
-  border-color: rgb(var(--color-danger) / 0.2);
+  background-color: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-danger) 20%, transparent);
   color: var(--brand-danger);
 }
 
@@ -262,7 +262,7 @@ body {
   width: 2rem;
   height: 2rem;
   border-radius: 0.375rem;
-  background: linear-gradient(135deg, rgb(var(--color-gradient-red-start)) 0%, rgb(var(--color-gradient-red-end)) 100%);
+  background: linear-gradient(135deg, var(--color-gradient-red-start) 0%, var(--color-gradient-red-end) 100%);
   color: #991b1b;
   font-size: 0.7rem;
   font-weight: 600;
@@ -272,7 +272,7 @@ body {
 
 /* Avatar color variations - light gradients */
 .workspace-avatar-0 {
-  background: linear-gradient(135deg, rgb(var(--color-gradient-red-start)) 0%, rgb(var(--color-gradient-red-end)) 100%);
+  background: linear-gradient(135deg, var(--color-gradient-red-start) 0%, var(--color-gradient-red-end) 100%);
   color: #991b1b;
 }
 
@@ -282,7 +282,7 @@ body {
 }
 
 .workspace-avatar-2 {
-  background: linear-gradient(135deg, rgb(var(--color-alert-success-border)) 0%, #86efac 100%);
+  background: linear-gradient(135deg, var(--color-alert-success-border) 0%, #86efac 100%);
   color: #166534;
 }
 
@@ -292,7 +292,7 @@ body {
 }
 
 .workspace-avatar-4 {
-  background: linear-gradient(135deg, rgb(var(--color-alert-info-border)) 0%, #93c5fd 100%);
+  background: linear-gradient(135deg, var(--color-alert-info-border) 0%, #93c5fd 100%);
   color: #1e40af;
 }
 
@@ -514,8 +514,8 @@ body.workspace-modal-open .sidebar {
 
 .workspace-search-input:focus {
   outline: none;
-  border-color: rgb(var(--color-primary));
-  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.1);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 10%, transparent);
 }
 
 .workspace-search-input::placeholder {
@@ -551,13 +551,13 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-option-active {
-  border-color: rgb(var(--color-primary));
-  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.12);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 12%, transparent);
 }
 
 .workspace-option-selected {
-  background: rgb(var(--color-primary) / 0.08);
-  border-color: rgb(var(--color-primary) / 0.4);
+  background: color-mix(in oklab, var(--color-primary) 8%, transparent);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
 }
 
 .workspace-option-name {
@@ -568,14 +568,14 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-option-star {
-  color: rgb(var(--color-warning));
+  color: var(--color-warning);
   font-size: 0.75rem;
   margin-left: 0.375rem;
   flex-shrink: 0;
 }
 
 .workspace-option-check {
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
   font-size: 0.875rem;
   margin-left: auto;
 }
@@ -749,7 +749,7 @@ body.workspace-modal-open .sidebar {
 .search-input:focus {
   outline: none;
   border-color: var(--sidebar-active-bg);
-  box-shadow: 0 0 0 0.2rem rgb(var(--color-primary) / 0.1);
+  box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--color-primary) 10%, transparent);
 }
 
 /* Search Results Dropdown */
@@ -1184,7 +1184,7 @@ body.workspace-modal-open .sidebar {
 }
 
 .btn-new:active {
-  background-color: rgb(var(--color-text));
+  background-color: var(--color-text);
 }
 
 .btn-new:active span {
@@ -1311,7 +1311,7 @@ body.workspace-modal-open .sidebar {
   width: 2rem !important;
   height: 2rem !important;
   border-radius: 50% !important;
-  background: linear-gradient(135deg, rgb(var(--color-info)) 0%, color-mix(in srgb, rgb(var(--color-info)), #000 15%) 100%) !important;
+  background: linear-gradient(135deg, var(--color-info) 0%, color-mix(in srgb, var(--color-info), #000 15%) 100%) !important;
   color: #fff !important;
   display: flex !important;
   align-items: center !important;
@@ -1327,7 +1327,7 @@ body.workspace-modal-open .sidebar {
 
 /* User avatar color variations - same as workspace avatars */
 .user-avatar-placeholder-0 {
-  background: linear-gradient(135deg, rgb(var(--color-gradient-red-start)) 0%, rgb(var(--color-gradient-red-end)) 100%) !important;
+  background: linear-gradient(135deg, var(--color-gradient-red-start) 0%, var(--color-gradient-red-end) 100%) !important;
   color: #991b1b !important;
 }
 
@@ -1337,7 +1337,7 @@ body.workspace-modal-open .sidebar {
 }
 
 .user-avatar-placeholder-2 {
-  background: linear-gradient(135deg, rgb(var(--color-alert-success-border)) 0%, #86efac 100%) !important;
+  background: linear-gradient(135deg, var(--color-alert-success-border) 0%, #86efac 100%) !important;
   color: #166534 !important;
 }
 
@@ -1347,7 +1347,7 @@ body.workspace-modal-open .sidebar {
 }
 
 .user-avatar-placeholder-4 {
-  background: linear-gradient(135deg, rgb(var(--color-alert-info-border)) 0%, #93c5fd 100%) !important;
+  background: linear-gradient(135deg, var(--color-alert-info-border) 0%, #93c5fd 100%) !important;
   color: #1e40af !important;
 }
 
@@ -1387,7 +1387,7 @@ body.workspace-modal-open .sidebar {
 
 .navbar .form-select:focus {
   border-color: var(--sidebar-active-bg);
-  box-shadow: 0 0 0 0.2rem rgb(var(--color-primary) / 0.25);
+  box-shadow: 0 0 0 0.2rem color-mix(in oklab, var(--color-primary) 25%, transparent);
 }
 
 /* ===== ENHANCED SIDEBAR TOGGLE ===== */
@@ -1413,8 +1413,8 @@ body.workspace-modal-open .sidebar {
 
 .sidebar-toggle:hover {
   color: var(--text-primary);
-  background-color: rgb(var(--color-primary) / 0.1);
-  border-color: rgb(var(--color-primary) / 0.2);
+  background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
   text-decoration: none;
   transform: scale(1.05);
 }
@@ -1427,7 +1427,7 @@ body.workspace-modal-open .sidebar {
 
 .sidebar-toggle:active {
   transform: scale(0.95);
-  background-color: rgb(var(--color-primary) / 0.2);
+  background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
 
 /* Enhanced hamburger icon with animation */
@@ -1894,7 +1894,7 @@ body.workspace-modal-open .sidebar {
 }
 
 .dropdown-item:hover {
-  background-color: rgb(var(--color-surface-elevated));
+  background-color: var(--color-surface-elevated);
   color: var(--text-primary);
 }
 
@@ -1966,20 +1966,20 @@ body.workspace-modal-open .sidebar {
 .workspace-selector .nav-link:hover,
 .workspace-selector .nav-link:focus {
   background-color: rgba(var(--black-rgb), 0.05);
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
 
 .workspace-selector .nav-link:focus-visible {
-  outline: 2px solid rgb(var(--color-primary));
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
 .workspace-selector .dropdown-menu {
   min-width: 220px;
   max-width: 320px;
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--color-border);
   box-shadow: 0 0.5rem 1rem rgba(var(--black-rgb), 0.15);
   border-radius: 0.5rem;
 }
@@ -1997,12 +1997,12 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-selector .dropdown-item.active {
-  background-color: rgb(var(--color-primary));
+  background-color: var(--color-primary);
   color: white;
 }
 
 .workspace-selector .dropdown-item.active:hover {
-  background-color: rgb(var(--color-primary));
+  background-color: var(--color-primary);
   color: white;
 }
 
@@ -2011,7 +2011,7 @@ body.workspace-modal-open .sidebar {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgb(var(--color-text-secondary));
+  color: var(--color-text-secondary);
   padding: 0.5rem 1rem;
 }
 
@@ -2023,7 +2023,7 @@ body.workspace-modal-open .sidebar {
 
 .workspace-selector .current-workspace-hint {
   white-space: nowrap;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -2141,11 +2141,11 @@ body.workspace-modal-open .sidebar {
 }
 
 .action-link:hover {
-  color: rgb(var(--color-info));
+  color: var(--color-info);
   background: linear-gradient(135deg, var(--layout-action-link-bg-start) 0%, var(--layout-action-link-hover-end) 100%);
-  border-color: rgb(var(--color-primary) / 0.2);
+  border-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgb(var(--color-primary) / 0.15);
+  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-primary) 15%, transparent);
   text-decoration: none;
 }
 
@@ -2278,9 +2278,9 @@ body.workspace-modal-open .sidebar {
 }
 
 .workspace-create-form .form-control:focus {
-  border-color: rgb(var(--color-primary));
+  border-color: var(--color-primary);
   outline: 0;
-  box-shadow: 0 0 0 0.25rem rgb(var(--color-primary) / 0.25);
+  box-shadow: 0 0 0 0.25rem color-mix(in oklab, var(--color-primary) 25%, transparent);
 }
 
 .workspace-create-form .workspace-modal-footer {

@@ -10,7 +10,7 @@
         <div class="flex items-center gap-2">
             <h4 class="text-lg font-semibold text-text m-0">Custom Domain</h4>
             {% if not has_custom_domain_access %}
-                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">Business / Enterprise</span>
+                <span class="tw-badge-secondary tw-badge-sm">Business / Enterprise</span>
             {% endif %}
         </div>
         <div class="flex items-center gap-2" x-show="hasAccess">
@@ -30,7 +30,7 @@
             </button>
             <button x-show="currentDomain && !hasUnsavedChanges() && !isLoading"
                     type="button"
-                    class="px-3 py-1.5 text-sm bg-transparent border border-danger text-danger rounded-lg hover:bg-danger/10 transition-colors"
+                    class="tw-btn-outline-danger tw-btn-sm"
                     @click="removeDomain()">
                 <i class="fas fa-trash mr-2"></i>
                 Remove Domain
@@ -64,21 +64,21 @@
                     <label class="block text-sm font-medium text-text mb-2">Verification Status</label>
                     <div class="flex items-center gap-2">
                         <template x-if="!currentDomain">
-                            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted">
-                                <i class="fas fa-minus-circle mr-1"></i>
-                                No domain configured
+                            <span class="tw-metric-chip">
+                                <i class="fas fa-minus-circle text-text-muted" aria-hidden="true"></i>
+                                <span class="tw-metric-chip-value">No domain configured</span>
                             </span>
                         </template>
                         <template x-if="currentDomain && validated">
-                            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-success/10 text-success">
-                                <i class="fas fa-check-circle mr-1"></i>
-                                Verified
+                            <span class="tw-metric-chip tw-metric-chip-success">
+                                <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                <span class="tw-metric-chip-value">Verified</span>
                             </span>
                         </template>
                         <template x-if="currentDomain && !validated">
-                            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-warning/10 text-warning">
-                                <i class="fas fa-clock mr-1"></i>
-                                Pending verification
+                            <span class="tw-metric-chip tw-metric-chip-warning">
+                                <i class="fas fa-clock" aria-hidden="true"></i>
+                                <span class="tw-metric-chip-value">Pending verification</span>
                             </span>
                         </template>
                     </div>
@@ -90,72 +90,71 @@
                 </div>
             </div>
             <!-- DNS Setup Instructions -->
-            <div class="p-4 bg-info/5 border border-info/20 rounded-lg">
-                <div class="flex items-center gap-2 mb-3">
-                    <i class="fas fa-info-circle text-info"></i>
-                    <span class="font-medium text-text">DNS Configuration Required</span>
-                </div>
-                <p class="text-text-muted text-sm mb-4">
-                    To use a custom domain, create the following <strong>CNAME</strong>
-                    {% if dcv_hostname %}
-                        records
-                    {% else %}
-                        record
-                    {% endif %}
-                    in your DNS provider:
-                </p>
-                <!-- Primary CNAME Record -->
-                <h6 class="text-sm font-semibold text-text mb-2">1. Domain CNAME Record</h6>
-                <div class="bg-surface border border-border rounded-lg p-4 mb-4">
-                    <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                        <div>
-                            <span class="text-text-muted">Type:</span>
-                            <span class="text-text font-medium ml-2">CNAME</span>
-                        </div>
-                        <div>
-                            <span class="text-text-muted">Name:</span>
-                            <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs"
-                                  x-text="localDomain || 'trust'"></code>
-                        </div>
-                        <div class="min-w-0">
-                            <span class="text-text-muted">Target:</span>
-                            <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs break-all">{{ app_hostname }}</code>
-                        </div>
-                    </div>
-                </div>
-                {% if dcv_hostname %}
-                    <!-- DCV Delegation CNAME Record -->
-                    <h6 class="text-sm font-semibold text-text mb-2">2. SSL Certificate CNAME Record (DCV Delegation)</h6>
+            <div class="tw-alert tw-alert-info" role="alert">
+                <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="tw-alert-title">DNS Configuration Required</p>
+                    <p class="text-text-muted text-sm mb-4">
+                        To use a custom domain, create the following <strong>CNAME</strong>
+                        {% if dcv_hostname %}
+                            records
+                        {% else %}
+                            record
+                        {% endif %}
+                        in your DNS provider:
+                    </p>
+                    <!-- Primary CNAME Record -->
+                    <h6 class="text-sm font-semibold text-text mb-2">1. Domain CNAME Record</h6>
                     <div class="bg-surface border border-border rounded-lg p-4 mb-4">
                         <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                             <div>
                                 <span class="text-text-muted">Type:</span>
                                 <span class="text-text font-medium ml-2">CNAME</span>
                             </div>
-                            <div class="min-w-0">
+                            <div>
                                 <span class="text-text-muted">Name:</span>
-                                <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs break-all">_acme-challenge.<span x-text="localDomain || 'trust'"></span></code>
+                                <code class="tw-code-inline ml-2" x-text="localDomain || 'trust'"></code>
                             </div>
-                            <div class="min-w-0 max-w-full">
+                            <div class="min-w-0">
                                 <span class="text-text-muted">Target:</span>
-                                <code class="ml-2 px-1.5 py-0.5 bg-border/30 rounded text-text text-xs break-all"><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</code>
+                                <code class="tw-code-inline ml-2 break-all">{{ app_hostname }}</code>
                             </div>
                         </div>
                     </div>
-                    <p class="text-text-muted text-xs mb-4">
-                        <i class="fas fa-shield-alt mr-1"></i>
-                        This record enables automatic SSL certificate issuance and renewal for your custom domain.
-                    </p>
-                {% endif %}
-                <div class="space-y-2 text-sm text-text-muted">
-                    <p class="flex items-start gap-2 m-0">
-                        <i class="fas fa-lightbulb text-warning mt-0.5"></i>
-                        <span><strong class="text-text">Note:</strong> The Name field shows the full domain. In your DNS provider, enter only the subdomain portion relative to your zone (e.g., for <code class="px-1 py-0.5 bg-border/30 rounded text-xs">trust.example.com</code> in zone <code class="px-1 py-0.5 bg-border/30 rounded text-xs">example.com</code>, enter <code class="px-1 py-0.5 bg-border/30 rounded text-xs">trust</code>).</span>
-                    </p>
-                    <p class="flex items-start gap-2 m-0">
-                        <i class="fas fa-clock text-info mt-0.5"></i>
-                        <span>DNS changes may take up to 48 hours to propagate. Verification happens automatically once the DNS is configured correctly.</span>
-                    </p>
+                    {% if dcv_hostname %}
+                        <!-- DCV Delegation CNAME Record -->
+                        <h6 class="text-sm font-semibold text-text mb-2">2. SSL Certificate CNAME Record (DCV Delegation)</h6>
+                        <div class="bg-surface border border-border rounded-lg p-4 mb-4">
+                            <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                                <div>
+                                    <span class="text-text-muted">Type:</span>
+                                    <span class="text-text font-medium ml-2">CNAME</span>
+                                </div>
+                                <div class="min-w-0">
+                                    <span class="text-text-muted">Name:</span>
+                                    <code class="tw-code-inline ml-2 break-all">_acme-challenge.<span x-text="localDomain || 'trust'"></span></code>
+                                </div>
+                                <div class="min-w-0 max-w-full">
+                                    <span class="text-text-muted">Target:</span>
+                                    <code class="tw-code-inline ml-2 break-all"><span x-text="localDomain || 'trust.example.com'"></span>.{{ dcv_hostname }}</code>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-text-muted text-xs mb-4">
+                            <i class="fas fa-shield-alt mr-1"></i>
+                            This record enables automatic SSL certificate issuance and renewal for your custom domain.
+                        </p>
+                    {% endif %}
+                    <div class="space-y-2 text-sm text-text-muted">
+                        <p class="flex items-start gap-2 m-0">
+                            <i class="fas fa-lightbulb text-warning mt-0.5"></i>
+                            <span><strong class="text-text">Note:</strong> The Name field shows the full domain. In your DNS provider, enter only the subdomain portion relative to your zone (e.g., for <code class="tw-code-inline">trust.example.com</code> in zone <code class="tw-code-inline">example.com</code>, enter <code class="tw-code-inline">trust</code>).</span>
+                        </p>
+                        <p class="flex items-start gap-2 m-0">
+                            <i class="fas fa-clock text-info mt-0.5"></i>
+                            <span>DNS changes may take up to 48 hours to propagate. Verification happens automatically once the DNS is configured correctly.</span>
+                        </p>
+                    </div>
                 </div>
             </div>
         {% else %}

@@ -11,11 +11,7 @@
                     <p class="text-text-muted text-sm m-0">Select frameworks to track on your Trust Center</p>
                 </div>
             </div>
-            {% if active_catalogs %}
-                <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
-                    {{ active_catalogs|length }} active
-                </span>
-            {% endif %}
+            {% if active_catalogs %}<span class="tw-badge-primary">{{ active_catalogs|length }} active</span>{% endif %}
         </div>
     </div>
     <div class="p-5">
@@ -56,7 +52,7 @@
                         <input type="hidden" name="catalog_name" value="{{ catalog_key }}">
                         <input type="hidden" name="active_tab" value="controls">
                         <button type="submit"
-                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer">
                             <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
                                 <i class="fas {{ catalog_icon }} text-text-muted text-sm"></i>
                             </div>
@@ -74,7 +70,7 @@
                          class="relative">
                         <button type="button"
                                 @click="showActions = !showActions"
-                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                                class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-border/60 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer">
                             <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center">
                                 <i class="fas fa-file-import text-text-muted text-sm"></i>
                             </div>
@@ -85,7 +81,9 @@
                         <div x-show="showActions"
                              x-cloak
                              x-transition
-                             class="absolute z-10 top-full left-0 right-0 mt-1 p-2 rounded-lg border border-border bg-card shadow-lg flex flex-col gap-1">
+                             class="tw-dropdown top-full left-0 mt-1"
+                             role="menu"
+                             aria-label="Catalog actions">
                             {% if not ic.is_active %}
                                 <form method="post" action="{% url 'controls:catalog_action' team.key %}">
                                     {% csrf_token %}
@@ -93,16 +91,16 @@
                                     <input type="hidden" name="catalog_name" value="__custom__">
                                     <input type="hidden" name="catalog_id" value="{{ ic.id }}">
                                     <input type="hidden" name="active_tab" value="controls">
-                                    <button type="submit"
-                                            class="w-full text-xs text-left px-2 py-1.5 rounded hover:bg-primary/10 text-primary">
-                                        <i class="fas fa-check mr-1.5"></i>Activate
+                                    <button type="submit" role="menuitem" class="tw-dropdown-item">
+                                        <i class="fas fa-check tw-dropdown-item-icon" aria-hidden="true"></i>Activate
                                     </button>
                                 </form>
                             {% endif %}
                             <button type="button"
-                                    class="w-full text-xs text-left px-2 py-1.5 rounded hover:bg-danger/10 text-danger"
+                                    role="menuitem"
+                                    class="tw-dropdown-item tw-dropdown-item-danger"
                                     @click="showActions = false; $dispatch('open-delete-catalog-modal', { displayName: '{{ ic.name|escapejs }}', formData: { controls_catalog_action: 'delete', catalog_id: '{{ ic.id }}', active_tab: 'controls' } })">
-                                <i class="fas fa-trash mr-1.5"></i>Delete
+                                <i class="fas fa-trash tw-dropdown-item-icon" aria-hidden="true"></i>Delete
                             </button>
                         </div>
                     </div>
@@ -133,7 +131,7 @@
             <div x-data="{ showImport: false, importing: false, error: '', fileName: '', importMode: 'file', oscalUrl: '' }">
                 <button type="button"
                         @click="showImport = true"
-                        class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-dashed border-border/60 hover:border-primary hover:shadow-md hover:bg-primary/5 transition-all cursor-pointer">
+                        class="w-full flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border border-dashed border-border/60 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer">
                     <div class="w-9 h-9 rounded-full bg-border/30 flex items-center justify-center">
                         <i class="fas fa-file-import text-text-muted text-sm"></i>
                     </div>

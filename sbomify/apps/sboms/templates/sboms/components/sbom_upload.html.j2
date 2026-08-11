@@ -114,26 +114,27 @@
                         </div>
                     </template>
                     <template x-if="preview">
-                        <div class="mt-4 border border-border rounded-xl p-4">
+                        <div class="tw-inset-card mt-4">
                             <h5 class="font-semibold text-text mb-3">
-                                <i class="fas fa-flask text-primary mr-1"></i>Preview — nothing stored yet
+                                <i class="fas fa-flask text-primary mr-1"></i>Preview: nothing stored yet
                             </h5>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 text-center">
-                                <div class="bg-info/10 p-2 rounded-lg">
-                                    <div class="font-bold text-info" x-text="preview.would_suppress"></div>
-                                    <small class="text-text-muted">Would suppress</small>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                                <div class="tw-stat-card tw-stat-card-compact"
+                                     style="--stat-accent: var(--color-info)">
+                                    <span class="tw-stat-value" x-text="preview.would_suppress"></span>
+                                    <span class="tw-stat-label mt-1 mb-0">Would suppress</span>
                                 </div>
-                                <div class="bg-border/30 p-2 rounded-lg">
-                                    <div class="font-bold text-text" x-text="preview.already_suppressed"></div>
-                                    <small class="text-text-muted">Already suppressed</small>
+                                <div class="tw-stat-card tw-stat-card-compact">
+                                    <span class="tw-stat-value" x-text="preview.already_suppressed"></span>
+                                    <span class="tw-stat-label mt-1 mb-0">Already suppressed</span>
                                 </div>
-                                <div class="bg-warning/10 p-2 rounded-lg">
-                                    <div class="font-bold text-warning" x-text="preview.unmatched_statements"></div>
-                                    <small class="text-text-muted">Statements matching nothing</small>
+                                <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+                                    <span class="tw-stat-value" x-text="preview.unmatched_statements"></span>
+                                    <span class="tw-stat-label mt-1 mb-0">Statements matching nothing</span>
                                 </div>
-                                <div class="bg-border/30 p-2 rounded-lg">
-                                    <div class="font-bold text-text" x-text="preview.findings_checked"></div>
-                                    <small class="text-text-muted">Findings checked</small>
+                                <div class="tw-stat-card tw-stat-card-compact">
+                                    <span class="tw-stat-value" x-text="preview.findings_checked"></span>
+                                    <span class="tw-stat-label mt-1 mb-0">Findings checked</span>
                                 </div>
                             </div>
                             <template x-if="preview.matched.length">
@@ -143,7 +144,7 @@
                                         <li>
                                             <span class="font-mono" x-text="match.id"></span>
                                             <template x-if="match.package">
-                                                <span> — <span x-text="match.package"></span><template x-if="match.version"><span x-text="'@' + match.version"></span></template></span>
+                                                <span>: <span x-text="match.package"></span><template x-if="match.version"><span x-text="'@' + match.version"></span></template></span>
                                             </template>
                                             <span class="text-info" x-text="' → ' + match.state"></span>
                                         </li>

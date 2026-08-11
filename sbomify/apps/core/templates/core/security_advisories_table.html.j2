@@ -133,8 +133,8 @@
                                         <div class="flex flex-wrap gap-1.5">
                                             {% comment %}An advisory can name a product this workspace does not track, and keeps naming it after one is deleted. Those have no id, so they render as plain text rather than a link to nowhere.{% endcomment %}
                                             <template x-for="product in advisory.products" :key="product.key">
-                                                <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/20 text-text-muted border border-border/40">
-                                                    <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
+                                                <span class="tw-chip-neutral">
+                                                    <i class="fas fa-cube text-[10px] opacity-70"></i>
                                                     <template x-if="product.id">
                                                         <a :href="'{% url 'core:product_details' 0 %}'.replace('0', product.id)"
                                                            @click.stop
@@ -222,12 +222,12 @@
             </div>
         {% else %}
             {# Empty State #}
-            <div class="flex flex-col items-center justify-center py-16 px-6 bg-surface border border-border rounded-xl">
-                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
-                    <i class="fas fa-shield-halved text-3xl text-primary"></i>
+            <div class="tw-empty-state">
+                <div class="tw-empty-state-icon">
+                    <i class="fas fa-shield-halved text-2xl" aria-hidden="true"></i>
                 </div>
-                <h3 class="text-lg font-semibold text-text mb-2">No advisories yet</h3>
-                <p class="text-text-muted text-sm text-center max-w-sm mb-6">
+                <h3 class="tw-empty-state-title">No advisories yet</h3>
+                <p class="tw-empty-state-description">
                     Security advisories track vulnerabilities in your products over time. Create one to open its timeline with a first update.
                 </p>
                 {% if has_crud_permissions %}
@@ -237,6 +237,6 @@
                     </a>
                 {% endif %}
             </div>
-        </div>
-    {% endif %}
+        {% endif %}
+    </div>
 </div>

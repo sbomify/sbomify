@@ -1,4 +1,4 @@
-{% load widget_tweaks %}
+{% load design_system widget_tweaks %}
 <div class="profile-form"
      x-cloak
      x-data="contactProfileForm('{{ entities_formset.prefix|escapejs }}')"
@@ -14,7 +14,7 @@
             <i class="fas fa-arrow-left"></i>
         </button>
         <div>
-            <h5 class="text-xl font-semibold text-text m-0">
+            <h5 class="tw-section-header-title">
                 {% if is_create %}
                     Create
                 {% else %}
@@ -22,7 +22,7 @@
                 {% endif %}
                 Contact Profile
             </h5>
-            <p class="text-sm text-text-muted m-0 mt-0.5">
+            <p class="tw-section-header-subtitle">
                 {% if is_create %}
                     Create a new reusable contact profile for your components
                 {% else %}
@@ -41,46 +41,36 @@
         <div class="p-6">
             {# Profile Details Section #}
             <div class="mb-8">
-                <div class="flex items-center gap-3 mb-4">
+                <div class="tw-section-header">
                     <span class="tw-icon-chip tw-icon-chip-sm">
                         <i class="fas fa-id-card" aria-hidden="true"></i>
                     </span>
                     <div>
-                        <h6 class="text-base font-semibold text-text m-0">Profile Details</h6>
-                        <p class="text-text-muted text-xs m-0">Basic information about this contact profile</p>
+                        <h6 class="tw-section-header-title">Profile Details</h6>
+                        <p class="tw-section-header-subtitle">Basic information about this contact profile</p>
                     </div>
                 </div>
-                <div class="bg-surface border border-border rounded-xl p-5">
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                        <div class="lg:col-span-8">
-                            <label class="block text-sm font-medium text-text mb-2"
-                                   for="{{ form.name.id_for_label }}">
-                                Profile Name <span class="text-danger">*</span>
-                            </label>
-                            <input type="text"
-                                   name="{{ form.name.html_name }}"
-                                   id="{{ form.name.id_for_label }}"
-                                   value="{{ form.name.value|default:'' }}"
-                                   class="tw-form-input"
-                                   placeholder="e.g., Default Profile, Engineering Team"
-                                   required
-                                   title="A unique name to identify this contact profile">
-                            <p class="text-xs text-text-muted mt-2">A descriptive name for this collection of contacts</p>
-                            {% if form.name.errors %}
-                                <div class="text-danger text-sm mt-2 flex items-center gap-1">
-                                    <i class="fas fa-exclamation-circle"></i>{{ form.name.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="lg:col-span-4">
-                            <label class="block text-sm font-medium text-text mb-2">Default Status</label>
-                            <div class="flex items-center gap-3 mt-1">
-                                <input type="checkbox"
-                                       class="tw-checkbox"
-                                       name="{{ form.is_default.html_name }}"
-                                       id="{{ form.is_default.id_for_label }}"
-                                       {% if form.is_default.value %}checked{% endif %}>
-                                <label for="{{ form.is_default.id_for_label }}" class="text-sm text-text">Set as default</label>
+                <div class="tw-card">
+                    <div class="tw-card-body">
+                        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            <div class="lg:col-span-8">
+                                <label class="tw-form-label" for="{{ form.name.id_for_label }}">
+                                    Profile Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text"
+                                       name="{{ form.name.html_name }}"
+                                       id="{{ form.name.id_for_label }}"
+                                       value="{{ form.name.value|default:'' }}"
+                                       class="tw-form-input"
+                                       placeholder="e.g., Default Profile, Engineering Team"
+                                       required
+                                       title="A unique name to identify this contact profile">
+                                <p class="tw-form-hint">A descriptive name for this collection of contacts</p>
+                                {% if form.name.errors %}<p class="tw-form-error">{{ form.name.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div class="lg:col-span-4">
+                                <label class="tw-form-label">Default Status</label>
+                                {% checkbox name=form.is_default.html_name label="Set as default" checked=form.is_default.value %}
                             </div>
                         </div>
                     </div>
@@ -88,15 +78,13 @@
             </div>
             {# Entities Section #}
             <div class="mb-6">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex items-center gap-3">
-                        <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-success">
-                            <i class="fas fa-building" aria-hidden="true"></i>
-                        </span>
-                        <div>
-                            <h6 class="text-base font-semibold text-text m-0">Entities</h6>
-                            <p class="text-text-muted text-xs m-0">Organizations (Manufacturer, Supplier, Author)</p>
-                        </div>
+                <div class="tw-section-header">
+                    <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-success">
+                        <i class="fas fa-building" aria-hidden="true"></i>
+                    </span>
+                    <div class="flex-1">
+                        <h6 class="tw-section-header-title">Entities</h6>
+                        <p class="tw-section-header-subtitle">Organizations (Manufacturer, Supplier, Author)</p>
                     </div>
                     <button type="button"
                             class="tw-btn-primary tw-btn-sm"
@@ -107,12 +95,14 @@
                     </button>
                 </div>
                 {# Info banner #}
-                <div class="flex items-start gap-3 px-4 py-3 rounded-lg bg-info/5 border border-info/20 mb-4 text-sm">
-                    <i class="fas fa-info-circle text-info mt-0.5"></i>
-                    <p class="m-0 text-text-muted">
-                        Each profile can have <strong class="text-text">one manufacturer</strong> and <strong class="text-text">one supplier</strong>.
-                        A single entity can fulfill both roles.
-                    </p>
+                <div class="tw-alert tw-alert-info mb-4" role="alert">
+                    <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">
+                            Each profile can have <strong>one manufacturer</strong> and <strong>one supplier</strong>.
+                            A single entity can fulfill both roles.
+                        </p>
+                    </div>
                 </div>
                 {{ entities_formset.management_form }}
                 <div id="entities-container" class="space-y-3">
@@ -121,16 +111,14 @@
                     {% endfor %}
                 </div>
                 {# Empty State for Entities #}
-                <div class="text-center py-10 px-6 bg-background/50 rounded-xl border-2 border-dashed border-border"
+                <div class="tw-empty-state tw-empty-state-compact"
                      x-show="visibleEntitiesCount === 0"
                      x-transition>
-                    <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-neutral mx-auto mb-4">
-                        <i class="fas fa-building text-xl" aria-hidden="true"></i>
-                    </span>
-                    <h6 class="font-semibold text-text mb-2">No Entities Added</h6>
-                    <p class="text-text-muted text-sm mb-4 max-w-xs mx-auto">
-                        Add an entity to define the manufacturer, supplier, or author information.
-                    </p>
+                    <div class="tw-empty-state-icon tw-empty-state-icon-sm tw-empty-state-icon-neutral">
+                        <i class="fas fa-building" aria-hidden="true"></i>
+                    </div>
+                    <h6 class="tw-empty-state-title">No entities added</h6>
+                    <p class="tw-empty-state-description">Add an entity to define the manufacturer, supplier, or author information.</p>
                     <button type="button" class="tw-btn-secondary tw-btn-sm" @click="addEntity">
                         <i class="fas fa-plus mr-1.5"></i>Add Entity
                     </button>
@@ -156,9 +144,6 @@
         {# Templates for Alpine.js to clone #}
         <template id="entity-template">
             {% include "teams/contact_profiles/forms/entity.html.j2" with form=entities_formset.empty_form contacts_formset=None %}
-        </template>
-        <template id="contact-template">
-            <div class="contact-template-placeholder"></div>
         </template>
     </form>
 </div>

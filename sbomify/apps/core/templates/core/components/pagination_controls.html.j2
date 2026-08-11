@@ -14,37 +14,35 @@
                 <select id="{{ pagination_id|default:'pagination' }}-page-size"
                         x-model="pageSize"
                         @change="handlePageSizeChange($event)"
-                        class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50">
+                        class="tw-form-select tw-form-select-sm">
                     <template x-for="size in pageSizeOptions" :key="size">
                         <option :value="size" x-text="size"></option>
                     </template>
                 </select>
             </div>
         </div>
-        <nav aria-label="Pagination" class="flex items-center gap-1">
+        <nav aria-label="Pagination" class="tw-pagination">
             <button type="button"
-                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
-                    :class="currentPage === 1 ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    class="tw-pagination-btn tw-pagination-btn-nav"
                     :disabled="currentPage === 1"
                     @click="goToPage(1)"
                     aria-label="First page">First</button>
             <button type="button"
-                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
-                    :class="currentPage === 1 ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    class="tw-pagination-btn tw-pagination-btn-nav"
                     :disabled="currentPage === 1"
                     @click="goToPage(currentPage - 1)"
                     aria-label="Previous page">Previous</button>
             <template x-for="page in visiblePages" :key="page">
                 <template x-if="page === '...'">
-                    <span class="px-3 py-1.5 text-sm text-text-muted">
+                    <span class="tw-pagination-ellipsis">
                         <span aria-hidden="true" x-text="ellipsis"></span>
                         <span class="sr-only">Pages skipped</span>
                     </span>
                 </template>
                 <template x-if="page !== '...'">
                     <button type="button"
-                            class="px-3 py-1.5 text-sm rounded-lg transition-colors"
-                            :class="page === currentPage ? 'bg-primary text-white' : 'text-text hover:bg-border/30'"
+                            class="tw-pagination-btn"
+                            :class="page === currentPage ? 'tw-pagination-btn-active' : ''"
                             @click="goToPage(page)"
                             :aria-label="`Go to page ${page}`"
                             :aria-current="page === currentPage ? 'page' : null"
@@ -52,14 +50,12 @@
                 </template>
             </template>
             <button type="button"
-                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
-                    :class="currentPage === totalPages ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    class="tw-pagination-btn tw-pagination-btn-nav"
                     :disabled="currentPage === totalPages"
                     @click="goToPage(currentPage + 1)"
                     aria-label="Next page">Next</button>
             <button type="button"
-                    class="px-3 py-1.5 text-sm rounded-lg transition-colors"
-                    :class="currentPage === totalPages ? 'text-text-muted cursor-not-allowed' : 'text-text hover:bg-border/30'"
+                    class="tw-pagination-btn tw-pagination-btn-nav"
                     :disabled="currentPage === totalPages"
                     @click="goToPage(totalPages)"
                     aria-label="Last page">Last</button>

@@ -9,7 +9,7 @@
         {% if pending_invitations %}
             <div class="space-y-3">
                 {% for inv in pending_invitations %}
-                    <div class="p-4 border border-border rounded-lg bg-background/50">
+                    <div class="tw-inset-card">
                         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h5 class="font-semibold text-text flex items-center gap-2 mb-2">
@@ -17,7 +17,7 @@
                                     {{ inv.team_name }}
                                 </h5>
                                 <div class="flex items-center gap-3 text-sm">
-                                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-border/50 text-text">{{ inv.role|title }}</span>
+                                    <span class="tw-chip-neutral">{{ inv.role|title }}</span>
                                     <span class="text-text-muted flex items-center gap-1">
                                         <i class="fas fa-clock"></i>
                                         Expires {{ inv.expires_at|date:"M d, Y" }}
@@ -39,8 +39,7 @@
                                       class="inline"
                                       hx-boost="false">
                                     {% csrf_token %}
-                                    <button type="submit"
-                                            class="px-3 py-1.5 text-sm rounded-lg border border-danger text-danger hover:bg-danger/10 transition-colors">
+                                    <button type="submit" class="tw-btn-outline-danger tw-btn-sm">
                                         <i class="fas fa-times mr-1"></i> Decline
                                     </button>
                                 </form>

@@ -473,42 +473,16 @@
                 }
             }
             
-            // Validate at least one role is selected
+            // Validate at least one role is selected; the template shows the
+            // inline role error because `touched` is set above.
             if (!this.isManufacturer && !this.isSupplier && !this.isAuthor) {
-                this.touched = true;
-                const roleSection = this.$root.querySelector('.role-selection');
-                if (roleSection) {
-                    roleSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    // Find first checkbox to show tooltip
-                    const firstCheckbox = roleSection.querySelector('input[type="checkbox"]');
-                    if (firstCheckbox) {
-                        firstCheckbox.setCustomValidity('Please select at least one role (Manufacturer, Supplier, or Author)');
-                        firstCheckbox.focus();
-                        firstCheckbox.reportValidity();
-                        const clearValidity = () => {
-                            firstCheckbox.setCustomValidity('');
-                            firstCheckbox.removeEventListener('change', clearValidity);
-                        };
-                        firstCheckbox.addEventListener('change', clearValidity);
-                    }
-                }
                 return;
             }
             
-            // CycloneDX requirement: at least one contact per entity
+            // CycloneDX requirement: at least one contact per entity; the
+            // template shows the missing-contacts banner via `contactsTouched`.
             this.updateContactCount();
             if (this.activeContactsCount === 0) {
-                const addContactBtn = this.$root.querySelector('.add-contact-btn');
-                if (addContactBtn) {
-                    addContactBtn.setCustomValidity('Please add at least one contact person for this entity');
-                    addContactBtn.focus();
-                    addContactBtn.reportValidity();
-                    const clearValidity = () => {
-                        addContactBtn.setCustomValidity('');
-                        addContactBtn.removeEventListener('click', clearValidity);
-                    };
-                    addContactBtn.addEventListener('click', clearValidity);
-                }
                 return;
             }
             
@@ -1068,8 +1042,8 @@
             <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
             <div class="flex items-start gap-3 p-3">
                 <div class="flex-shrink-0 mt-1">
-                    <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <i class="fas fa-user text-primary text-xs"></i>
+                    <div class="tw-avatar tw-avatar-sm">
+                        <i class="fas fa-user text-xs"></i>
                     </div>
                 </div>
                 <div class="flex-grow min-w-0">
@@ -1100,7 +1074,7 @@
                     </div>
                 </div>
                 <div class="flex-shrink-0">
-                    <button type="button" class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10" @click="removeContact" title="Remove contact" aria-label="Remove contact">
+                    <button type="button" class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger" @click="removeContact" title="Remove contact" aria-label="Remove contact">
                         <i class="fas fa-times text-xs"></i>
                     </button>
                 </div>
@@ -1127,69 +1101,27 @@
         }
     });
 
-    // Delete confirmation modal functionality (Alpine-based)
+    // Delete confirmation via the app-wide confirm modal included in base.html.j2.
     window.showDeleteConfirmation = function(itemName, callback) {
-        window.dispatchEvent(new CustomEvent('open-entity-delete-modal', {
-            detail: { displayName: itemName, callback: callback }
+        const confirmId = `contact-profile-remove-${Date.now()}`;
+        const handler = function(event) {
+            if (event.detail && event.detail.id === confirmId) {
+                window.removeEventListener('confirm:result', handler);
+                if (event.detail.confirmed) {
+                    callback();
+                }
+            }
+        };
+        window.addEventListener('confirm:result', handler);
+        window.dispatchEvent(new CustomEvent('confirm:show', {
+            detail: {
+                id: confirmId,
+                title: `Remove ${itemName}?`,
+                message: 'This cannot be undone.',
+                type: 'danger',
+                confirmText: 'Remove',
+                cancelText: 'Cancel'
+            }
         }));
     };
 </script>
-{# Delete Confirmation Modal for Entity/Contact removal - Alpine/Tailwind version #}
-<div id="entity-delete-modal"
-     x-data="{ open: false, displayName: '', deleteCallback: null, openModal(event) { this.open = true; if (event.detail) { this.displayName = event.detail.displayName || ''; this.deleteCallback = event.detail.callback || null; } }, close() { this.open = false; this.displayName = ''; this.deleteCallback = null; }, confirm() { if (this.deleteCallback) { this.deleteCallback(); } this.close(); } }"
-     @open-entity-delete-modal.window="openModal($event)">
-    <template x-teleport="body">
-        <div x-show="open"
-             x-cloak
-             class="fixed inset-0 z-[100]"
-             role="alertdialog"
-             aria-modal="true"
-             aria-labelledby="entity-delete-modal-label">
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0"
-                 x-transition:enter-end="opacity-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100"
-                 x-transition:leave-end="opacity-0"
-                 class="tw-modal-overlay"
-                 @click="close()"></div>
-            <div class="tw-modal"
-                 x-show="open"
-                 x-trap.noscroll="open"
-                 x-transition:enter="transition ease-out duration-200"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-150"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 @click.stop
-                 @keydown.escape="if(open) close()">
-                <div class="tw-modal-content tw-modal-sm">
-                    <div class="tw-modal-body text-center py-6">
-                        <button type="button"
-                                class="tw-modal-close absolute top-4 right-4"
-                                @click="close()"
-                                aria-label="Close">
-                            <i class="fas fa-times"></i>
-                        </button>
-                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
-                        </div>
-                        <h3 id="entity-delete-modal-label" class="tw-modal-title mb-2">Remove Item</h3>
-                        <p class="text-sm text-text mb-2">
-                            Are you sure you want to remove <span class="font-semibold text-text" x-text="displayName"></span>?
-                        </p>
-                        <p class="text-xs text-text-muted">This action cannot be undone.</p>
-                    </div>
-                    <div class="tw-modal-footer justify-center">
-                        <button type="button" class="tw-btn-ghost" @click="close()">Cancel</button>
-                        <button type="button" class="tw-btn-danger" @click="confirm()">
-                            <i class="fas fa-trash mr-2"></i>Remove
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </template>
-</div>

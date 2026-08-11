@@ -1,160 +1,143 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
+{% load design_system %}
 {% load django_vite %}
-{% load breadcrumb_tags %}
 {% block title %}sbomify Product: {{ product.name }} - Releases{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
           href="{% static 'css/product-releases-private.css' %}">
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb releases 'releases' %}
-{% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        {# Page Header - matches dashboard pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-tag"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Releases</h1>
-                    <p class="text-text-muted text-sm">Manage releases for {{ product.name }}</p>
-                </div>
-            </div>
-            {% if product.has_crud_permissions %}
-                <button type="button"
-                        class="tw-btn-primary self-start lg:self-auto"
-                        @click="$dispatch('open-createReleaseModal')">
-                    <i class="fas fa-plus mr-2"></i>New Release
-                </button>
-            {% endif %}
+    {% page_header title="Releases" subtitle="Manage releases for "|add:product.name icon="fas fa-tag" mark="avatar" %}
+    {% if product.has_crud_permissions %}
+        {% button text="New release" variant="primary" icon="fas fa-plus" attrs='@click="$dispatch(`open-createReleaseModal`)"' %}
+    {% endif %}
+{% endpage_header %}
+<div class="space-y-6">
+    {# Stats Badge #}
+    <div class="flex flex-wrap gap-2">
+        <div class="tw-metric-chip">
+            <i class="fas fa-tag text-primary text-xs" aria-hidden="true"></i>
+            <span class="tw-metric-chip-value">{{ releases|length }}</span>
+            <span class="tw-metric-chip-label">Release{{ releases|length|pluralize }}</span>
         </div>
-        {# Stats Badge #}
-        <div class="flex flex-wrap gap-2">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-tag text-primary text-xs"></i>
-                <span class="font-semibold text-text">{{ releases|length }}</span>
-                <span class="text-text-muted">Release{{ releases|length|pluralize }}</span>
-            </div>
-        </div>
-        {# Product Releases #}
-        <div>
-            {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
-        </div>
-        {# Create Release Modal #}
-        {% if product.has_crud_permissions %}
-            <div x-data="{ open: false, createdAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}', releasedAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}' }"
-                 @open-createReleaseModal.window="open = true">
-                <template x-teleport="body">
+    </div>
+    {# Product Releases #}
+    <div>
+        {% include 'core/components/product_releases.html.j2' with product_id=product.id is_public_view=False can_create=product.has_crud_permissions can_edit=product.has_crud_permissions can_delete=product.has_crud_permissions %}
+    </div>
+    {# Create Release Modal #}
+    {% if product.has_crud_permissions %}
+        <div x-data="{ open: false, createdAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}', releasedAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}' }"
+             @open-createReleaseModal.window="open = true">
+            <template x-teleport="body">
+                <div x-show="open"
+                     x-cloak
+                     class="fixed inset-0 z-[100]"
+                     id="createReleaseModal"
+                     role="dialog"
+                     aria-modal="true"
+                     aria-labelledby="createReleaseModalLabel">
                     <div x-show="open"
-                         x-cloak
-                         class="fixed inset-0 z-[100]"
-                         id="createReleaseModal"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-labelledby="createReleaseModalLabel">
-                        <div x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="tw-modal-overlay"
-                             @click="open = false; $dispatch('close-all-pickers')"></div>
-                        <div class="tw-modal"
-                             x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             @click.stop
-                             x-trap.noscroll="open"
-                             @keydown.escape="if(open) { open = false; $dispatch('close-all-pickers'); }">
-                            <div class="tw-modal-content">
-                                <form id="createReleaseForm"
-                                      method="post"
-                                      action="{% url 'core:product_releases' product.id %}">
-                                    {% csrf_token %}
-                                    <div class="tw-modal-header">
-                                        <div class="flex items-center gap-3">
-                                            <span class="tw-icon-chip">
-                                                <i class="fas fa-tag" aria-hidden="true"></i>
-                                            </span>
-                                            <h4 id="createReleaseModalLabel" class="tw-modal-title">New Release</h4>
-                                        </div>
-                                        <button type="button"
-                                                class="tw-modal-close"
-                                                @click="open = false; $dispatch('close-all-pickers')"
-                                                aria-label="Close">
-                                            <i class="fas fa-times"></i>
-                                        </button>
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="tw-modal-overlay"
+                         @click="open = false; $dispatch('close-all-pickers')"></div>
+                    <div class="tw-modal"
+                         x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.stop
+                         x-trap.noscroll="open"
+                         @keydown.escape="if(open) { open = false; $dispatch('close-all-pickers'); }">
+                        <div class="tw-modal-content">
+                            <form id="createReleaseForm"
+                                  method="post"
+                                  action="{% url 'core:product_releases' product.id %}">
+                                {% csrf_token %}
+                                <div class="tw-modal-header">
+                                    <div class="flex items-center gap-3">
+                                        <span class="tw-icon-chip">
+                                            <i class="fas fa-tag" aria-hidden="true"></i>
+                                        </span>
+                                        <h4 id="createReleaseModalLabel" class="tw-modal-title">New Release</h4>
                                     </div>
-                                    <div class="tw-modal-body space-y-4">
+                                    <button type="button"
+                                            class="tw-modal-close"
+                                            @click="open = false; $dispatch('close-all-pickers')"
+                                            aria-label="Close">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div class="tw-modal-body space-y-4">
+                                    <div>
+                                        <label for="releaseName" class="tw-form-label">
+                                            Release Name <span class="text-danger">*</span>
+                                        </label>
+                                        <input type="text"
+                                               class="tw-form-input"
+                                               id="releaseName"
+                                               name="name"
+                                               required
+                                               placeholder="e.g., v1.0.0, 2024.1, beta-3">
+                                        <p class="text-xs text-text-muted mt-1.5">Enter a unique name for this release</p>
+                                    </div>
+                                    <div>
+                                        <label for="releaseDescription" class="tw-form-label">Description</label>
+                                        <textarea class="tw-form-textarea"
+                                                  id="releaseDescription"
+                                                  name="description"
+                                                  rows="3"
+                                                  placeholder="Describe what's included in this release..."></textarea>
+                                        <p class="text-xs text-text-muted mt-1.5">Optional. A brief description of this release.</p>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
-                                            <label for="releaseName" class="tw-form-label">
-                                                Release Name <span class="text-danger">*</span>
-                                            </label>
-                                            <input type="text"
-                                                   class="tw-form-input"
-                                                   id="releaseName"
-                                                   name="name"
-                                                   required
-                                                   placeholder="e.g., v1.0.0, 2024.1, beta-3">
-                                            <p class="text-xs text-text-muted mt-1.5">Enter a unique name for this release</p>
-                                        </div>
-                                        <div>
-                                            <label for="releaseDescription" class="tw-form-label">Description</label>
-                                            <textarea class="tw-form-textarea"
-                                                      id="releaseDescription"
-                                                      name="description"
-                                                      rows="3"
-                                                      placeholder="Describe what's included in this release..."></textarea>
-                                            <p class="text-xs text-text-muted mt-1.5">Optional. A brief description of this release.</p>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <input type="hidden" name="created_at" :value="createdAt">
-                                                {% include 'components/date_picker.html.j2' with value_binding='createdAt' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-                                            </div>
-                                            <div>
-                                                <input type="hidden" name="released_at" :value="releasedAt">
-                                                {% include 'components/date_picker.html.j2' with value_binding='releasedAt' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-                                            </div>
+                                            <input type="hidden" name="created_at" :value="createdAt">
+                                            {% include 'components/date_picker.html.j2' with value_binding='createdAt' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                         </div>
                                         <div>
-                                            <label class="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox"
-                                                       class="tw-checkbox"
-                                                       id="releaseIsPrerelease"
-                                                       name="is_prerelease">
-                                                <span class="text-sm text-text">Mark as pre-release</span>
-                                            </label>
-                                            <p class="text-xs text-text-muted mt-1.5 ml-6">
-                                                Pre-releases are typically alpha, beta, or release candidate versions
-                                            </p>
+                                            <input type="hidden" name="released_at" :value="releasedAt">
+                                            {% include 'components/date_picker.html.j2' with value_binding='releasedAt' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                                         </div>
                                     </div>
-                                    <div class="tw-modal-footer">
-                                        <button type="button"
-                                                class="tw-btn-ghost"
-                                                @click="open = false; $dispatch('close-all-pickers')">Cancel</button>
-                                        <button type="submit" class="tw-btn-primary">
-                                            <i class="fas fa-plus mr-2"></i>Create Release
-                                        </button>
+                                    <div>
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox"
+                                                   class="tw-checkbox"
+                                                   id="releaseIsPrerelease"
+                                                   name="is_prerelease">
+                                            <span class="text-sm text-text">Mark as pre-release</span>
+                                        </label>
+                                        <p class="text-xs text-text-muted mt-1.5 ml-6">
+                                            Pre-releases are typically alpha, beta, or release candidate versions
+                                        </p>
                                     </div>
-                                </form>
-                            </div>
+                                </div>
+                                <div class="tw-modal-footer">
+                                    <button type="button"
+                                            class="tw-btn-ghost"
+                                            @click="open = false; $dispatch('close-all-pickers')">Cancel</button>
+                                    <button type="submit" class="tw-btn-primary">
+                                        <i class="fas fa-plus mr-2"></i>Create Release
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
-                </template>
-            </div>
-        {% endif %}
-    </div>
+                </div>
+            </template>
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

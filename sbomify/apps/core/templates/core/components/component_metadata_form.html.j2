@@ -36,16 +36,16 @@
                 {% endfor %}
             </div>
             {# Empty state when no entities #}
-            <div class="text-center p-6 bg-border/10 rounded-xl border border-dashed border-border"
+            <div class="tw-empty-state tw-empty-state-compact"
                  x-show="visibleEntitiesCount === 0"
                  x-transition>
-                <div class="mb-3 text-text-muted opacity-50">
-                    <i class="fas fa-building text-4xl"></i>
+                <div class="tw-empty-state-icon tw-empty-state-icon-sm tw-empty-state-icon-neutral">
+                    <i class="fas fa-building" aria-hidden="true"></i>
                 </div>
-                <h6 class="font-semibold text-text mb-2">No Entities Added</h6>
-                <p class="text-text-muted text-sm mb-4">Add an entity as manufacturer, supplier, author, or a combination.</p>
+                <h6 class="tw-empty-state-title">No Entities Added</h6>
+                <p class="tw-empty-state-description">Add an entity as manufacturer, supplier, author, or a combination.</p>
                 <button type="button"
-                        class="px-3 py-1.5 text-sm rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
+                        class="tw-btn-outline-primary tw-btn-sm"
                         @click="addEntity"
                         title="Add an organization or author group">
                     <i class="fas fa-plus mr-1"></i>Add Entity
@@ -55,7 +55,7 @@
         {# Form actions #}
         <div class="flex justify-end gap-2 pt-4 border-t border-border">
             <button type="button"
-                    class="px-4 py-2 rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
+                    class="tw-btn-secondary"
                     @click="$dispatch('cancel-custom-form')">Cancel</button>
             <button type="submit" class="tw-btn-primary" :disabled="hasErrors">
                 <i class="fas fa-save mr-1"></i>Save Contact Info
@@ -64,9 +64,6 @@
         {# Templates for Alpine.js to clone #}
         <template id="entity-template">
             {% include "teams/contact_profiles/forms/entity.html.j2" with form=entities_formset.empty_form contacts_formset=None %}
-        </template>
-        <template id="contact-template">
-            <div class="contact-template-placeholder"></div>
         </template>
     </form>
 </div>

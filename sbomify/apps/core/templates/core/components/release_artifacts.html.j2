@@ -2,7 +2,7 @@
 <div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
      x-init="loadArtifacts()">
     <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-3">
+        <div class="tw-card-header flex flex-wrap items-center justify-between gap-3">
             <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
                 <i class="fas fa-puzzle-piece text-primary"></i>
                 Artifacts
@@ -18,7 +18,7 @@
                 </div>
             {% endif %}
         </div>
-        <div class="p-0">
+        <div>
             {# Loading State #}
             {% loading_state message="Loading artifacts..." x_show="isLoading" %}
             {# Empty State #}
@@ -41,184 +41,179 @@
             </div>
             {# Artifacts Table Container #}
             <div x-show="!isLoading && artifacts.length > 0">
-                {# Search and Filter Controls #}
-                <div class="px-6 py-4 border-b border-border">
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-                        <div class="md:col-span-6">
-                            <label for="artifact-search" class="sr-only">Search artifacts</label>
-                            <input type="text"
-                                   id="artifact-search"
-                                   x-model="search"
-                                   @input.debounce="handleSearch()"
-                                   class="tw-form-input"
-                                   placeholder="Search artifacts by name, component, or format...">
-                        </div>
-                        <div class="md:col-span-3">
+                <div class="tw-data-table">
+                    {# Search and Filter Controls #}
+                    <div class="tw-data-table-toolbar">
+                        <div class="tw-data-table-toolbar-left">
+                            <div class="tw-data-table-search">
+                                <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
+                                <label for="artifact-search" class="sr-only">Search artifacts</label>
+                                <input type="search"
+                                       id="artifact-search"
+                                       x-model="search"
+                                       @input.debounce="handleSearch()"
+                                       class="tw-data-table-search-input"
+                                       placeholder="Search artifacts by name, component, or format...">
+                            </div>
                             <label for="artifact-type-filter" class="sr-only">Filter by type</label>
                             <select id="artifact-type-filter"
                                     x-model="typeFilter"
                                     @change="handleTypeFilter()"
-                                    class="tw-form-select">
+                                    class="tw-data-table-page-size-select">
                                 <option value="">All Types</option>
                                 <option value="sbom">SBOMs Only</option>
                                 <option value="vex">VEX Only</option>
                                 <option value="document">Documents Only</option>
                             </select>
-                        </div>
-                        <div class="md:col-span-3">
                             <label for="artifact-component-filter" class="sr-only">Filter by component</label>
                             <select id="artifact-component-filter"
                                     x-model="componentFilter"
                                     @change="handleComponentFilter()"
-                                    class="tw-form-select">
+                                    class="tw-data-table-page-size-select">
                                 <option value="">All Components</option>
                                 <template x-for="comp in uniqueComponents" :key="comp">
                                     <option :value="comp" x-text="comp"></option>
                                 </template>
                             </select>
                         </div>
+                        <div class="tw-data-table-toolbar-right">
+                            <div class="tw-data-table-page-size">
+                                <span>Show</span>
+                                <label for="artifact-page-size" class="sr-only">Entries per page</label>
+                                <select id="artifact-page-size"
+                                        x-model="pageSize"
+                                        @change="currentPage = 1"
+                                        class="tw-data-table-page-size-select">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span>entries</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                {# Results Summary #}
-                <div class="px-6 py-3 flex flex-wrap items-center justify-between gap-3 bg-background/50">
-                    <span class="text-text-muted text-sm">
-                        Showing <span x-text="filteredArtifacts.length"></span> of <span x-text="artifacts.length"></span> artifacts
-                    </span>
-                    <div class="flex items-center gap-2">
-                        <label for="artifact-page-size" class="text-text-muted text-sm">Items per page:</label>
-                        <select id="artifact-page-size"
-                                x-model="pageSize"
-                                @change="currentPage = 1"
-                                class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text">
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                    </div>
-                </div>
-                {# Artifacts Table #}
-                <div class="overflow-x-auto">
-                    <table class="tw-table w-full">
-                        <thead>
-                            <tr class="bg-background/50">
-                                <th class="px-4 py-3 text-left w-10"
-                                    :aria-sort="sortColumn === 'type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                    <button type="button"
-                                            class="tw-table-sortable"
-                                            :class="{ 'sorted-asc': sortColumn === 'type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'type' && sortDirection === 'desc' }"
-                                            @click="sort('type')">
-                                        Type
-                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
-                                    </button>
-                                </th>
-                                <th class="px-4 py-3 text-left"
-                                    :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                    <button type="button"
-                                            class="tw-table-sortable"
-                                            :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                            @click="sort('name')">
-                                        Name
-                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
-                                    </button>
-                                </th>
-                                <th class="px-4 py-3 text-left"
-                                    :aria-sort="sortColumn === 'component' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                    <button type="button"
-                                            class="tw-table-sortable"
-                                            :class="{ 'sorted-asc': sortColumn === 'component' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component' && sortDirection === 'desc' }"
-                                            @click="sort('component')">
-                                        Component
-                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
-                                    </button>
-                                </th>
-                                <th class="px-4 py-3 text-left"
-                                    :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                    <button type="button"
-                                            class="tw-table-sortable"
-                                            :class="{ 'sorted-asc': sortColumn === 'format' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'format' && sortDirection === 'desc' }"
-                                            @click="sort('format')">
-                                        Format
-                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
-                                    </button>
-                                </th>
-                                <th class="px-4 py-3 text-left"
-                                    :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                    <button type="button"
-                                            class="tw-table-sortable"
-                                            :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
-                                            @click="sort('version')">
-                                        Version
-                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
-                                    </button>
-                                </th>
-                                <th class="px-4 py-3 text-left w-28 tw-cell-date"
-                                    :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                    <button type="button"
-                                            class="tw-table-sortable"
-                                            :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
-                                            @click="sort('created_at')">
-                                        Created
-                                        <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
-                                    </button>
-                                </th>
-                                {% if can_edit and not is_latest %}
-                                    <th class="px-4 py-3 text-center text-xs font-semibold text-text-muted uppercase w-20">Actions</th>
-                                {% endif %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="artifact in paginatedArtifacts" :key="artifact.id">
-                                <tr class="hover:bg-background/50 transition-colors">
-                                    <td class="px-4 py-3">
-                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center"
-                                             :class="getArtifactIconClass(artifact)">
-                                            <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
-                                        </div>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex items-center gap-2">
-                                            <a :href="getArtifactUrl(artifact)"
-                                               class="text-primary font-medium hover:underline"
-                                               x-text="getArtifactName(artifact)"></a>
-                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full"
-                                                  :class="getArtifactBadgeClass(artifact)"
-                                                  x-text="getArtifactType(artifact).toUpperCase()"></span>
-                                        </div>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <a :href="getComponentUrl(artifact)"
-                                           class="text-text hover:text-primary transition-colors"
-                                           x-text="getArtifactComponent(artifact)"></a>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <span x-show="isArtifactTypeSbom(artifact)"
-                                              :class="getArtifactFormatClass(artifact)"
-                                              x-text="getArtifactFormat(artifact)"></span>
-                                        <span x-show="!isArtifactTypeSbom(artifact)"
-                                              class="tw-sbom-format text-text-muted bg-border/20 border"
-                                              style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)"
-                                              x-text="getArtifactFormat(artifact)"></span>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <span x-show="getArtifactVersion(artifact)"
-                                              class="text-text"
-                                              :title="getArtifactVersion(artifact)"
-                                              x-text="truncateText(getArtifactVersion(artifact) || '', 20)"></span>
-                                        <span x-show="!getArtifactVersion(artifact)" class="text-text-muted">—</span>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <span class="text-text-muted text-sm" x-text="getArtifactDate(artifact)"></span>
-                                    </td>
+                    {# Artifacts Table #}
+                    <div class="tw-data-table-container">
+                        <table class="tw-table">
+                            <thead>
+                                <tr>
+                                    <th class="w-10"
+                                        :aria-sort="sortColumn === 'type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'type' && sortDirection === 'desc' }"
+                                                @click="sort('type')">
+                                            Type
+                                            <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                        </button>
+                                    </th>
+                                    <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
+                                                @click="sort('name')">
+                                            Name
+                                            <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                        </button>
+                                    </th>
+                                    <th :aria-sort="sortColumn === 'component' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'component' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component' && sortDirection === 'desc' }"
+                                                @click="sort('component')">
+                                            Component
+                                            <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                        </button>
+                                    </th>
+                                    <th :aria-sort="sortColumn === 'format' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'format' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'format' && sortDirection === 'desc' }"
+                                                @click="sort('format')">
+                                            Format
+                                            <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                        </button>
+                                    </th>
+                                    <th :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
+                                                @click="sort('version')">
+                                            Version
+                                            <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                        </button>
+                                    </th>
+                                    <th class="tw-cell-date w-28"
+                                        :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                        <button type="button"
+                                                class="tw-table-sortable"
+                                                :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
+                                                @click="sort('created_at')">
+                                            Created
+                                            <span class="tw-table-sort-icon" aria-hidden="true"><i class="fas fa-caret-up"></i><i class="fas fa-caret-down"></i></span>
+                                        </button>
+                                    </th>
                                     {% if can_edit and not is_latest %}
-                                        <td class="px-4 py-3 text-center">
-                                            <button type="button"
-                                                    class="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                                                    title="Remove from release"
-                                                    aria-label="Remove artifact from release"
-                                                    @click="openDeleteModal(artifact)">
-                                                <i class="fas fa-trash" aria-hidden="true"></i>
-                                            </button>
+                                        <th class="tw-table-actions">
+                                            <span class="sr-only">Actions</span>
+                                        </th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="artifact in paginatedArtifacts" :key="artifact.id">
+                                    <tr class="hover:bg-background/50 transition-colors">
+                                        <td>
+                                            <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+                                                 :class="getArtifactIconClass(artifact)">
+                                                <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="flex items-center gap-2">
+                                                <a :href="getArtifactUrl(artifact)"
+                                                   class="text-primary font-medium hover:underline"
+                                                   x-text="getArtifactName(artifact)"></a>
+                                                <span class="px-2 py-0.5 text-xs font-medium rounded-full"
+                                                      :class="getArtifactBadgeClass(artifact)"
+                                                      x-text="getArtifactType(artifact).toUpperCase()"></span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <a :href="getComponentUrl(artifact)"
+                                               class="text-text hover:text-primary transition-colors"
+                                               x-text="getArtifactComponent(artifact)"></a>
+                                        </td>
+                                        <td>
+                                            <span x-show="isArtifactTypeSbom(artifact)"
+                                                  :class="getArtifactFormatClass(artifact)"
+                                                  x-text="getArtifactFormat(artifact)"></span>
+                                            <span x-show="!isArtifactTypeSbom(artifact)"
+                                                  class="tw-sbom-format text-text-muted bg-border/20 border"
+                                                  style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)"
+                                                  x-text="getArtifactFormat(artifact)"></span>
+                                        </td>
+                                        <td>
+                                            <span x-show="getArtifactVersion(artifact)"
+                                                  class="text-text"
+                                                  :title="getArtifactVersion(artifact)"
+                                                  x-text="truncateText(getArtifactVersion(artifact) || '', 20)"></span>
+                                            <span x-show="!getArtifactVersion(artifact)" class="text-text-muted">—</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-text-muted text-sm" x-text="getArtifactDate(artifact)"></span>
+                                        </td>
+                                        {% if can_edit and not is_latest %}
+                                            <td class="tw-table-actions">
+                                                {% actions_menu label="Artifact actions" %}
+                                                <button type="button"
+                                                        role="menuitem"
+                                                        class="tw-dropdown-item tw-dropdown-item-danger"
+                                                        @click="openDeleteModal(artifact)">
+                                                    <i class="fas fa-trash tw-dropdown-item-icon" aria-hidden="true"></i>Remove from release
+                                                </button>
+                                            {% endactions_menu %}
                                         </td>
                                     {% endif %}
                                 </tr>
@@ -227,110 +222,138 @@
                     </table>
                 </div>
                 {# Pagination #}
-                <div x-show="totalPages > 1" class="px-6 py-4 border-t border-border">
-                    {% include 'core/components/pagination_controls.html.j2' %}
+                <div class="tw-data-table-footer">
+                    <div class="tw-data-table-info">
+                        Showing <strong x-text="filteredArtifacts.length"></strong> of <strong x-text="artifacts.length"></strong> artifacts
+                    </div>
+                    <div x-show="totalPages > 1">{% include "components/tw/table_pager.html.j2" %}</div>
                 </div>
             </div>
         </div>
     </div>
-    {% if can_edit and not is_latest %}
-        {# Add Artifact Modal #}
-        <template x-teleport="body">
+</div>
+{% if can_edit and not is_latest %}
+    {# Add Artifact Modal #}
+    <template x-teleport="body">
+        <div x-show="showAddModal"
+             x-cloak
+             class="fixed inset-0 z-[100]"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="addArtifactModalLabel">
+            {# Backdrop #}
             <div x-show="showAddModal"
-                 x-cloak
-                 class="fixed inset-0 z-[100]"
-                 role="dialog"
-                 aria-modal="true"
-                 aria-labelledby="addArtifactModalLabel">
-                {# Backdrop #}
-                <div x-show="showAddModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     class="tw-modal-overlay"
-                     @click="closeAddModal()"></div>
-                {# Modal Content #}
-                <div class="tw-modal"
-                     x-show="showAddModal"
-                     x-trap.noscroll="showAddModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     @click.stop
-                     @keydown.escape="if(showAddModal) closeAddModal()">
-                    <div class="tw-modal-content tw-modal-xl">
-                        {# Modal Header #}
-                        <div class="tw-modal-header">
-                            <div class="flex items-center gap-3">
-                                <span class="tw-icon-chip"><i class="fas fa-plus" aria-hidden="true"></i></span>
-                                <h4 id="addArtifactModalLabel" class="tw-modal-title">Add Artifact to Release</h4>
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="tw-modal-overlay"
+                 @click="closeAddModal()"></div>
+            {# Modal Content #}
+            <div class="tw-modal"
+                 x-show="showAddModal"
+                 x-trap.noscroll="showAddModal"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 @click.stop
+                 @keydown.escape="if(showAddModal) closeAddModal()">
+                <div class="tw-modal-content tw-modal-xl">
+                    {# Modal Header #}
+                    <div class="tw-modal-header">
+                        <div class="flex items-center gap-3">
+                            <span class="tw-icon-chip"><i class="fas fa-plus" aria-hidden="true"></i></span>
+                            <h4 id="addArtifactModalLabel" class="tw-modal-title">Add Artifact to Release</h4>
+                        </div>
+                        <button type="button"
+                                class="tw-modal-close"
+                                @click="closeAddModal()"
+                                aria-label="Close">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    {# Modal Body #}
+                    <div class="tw-modal-body space-y-5">
+                        {# Search and Filter Controls #}
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                            <div class="md:col-span-6">
+                                <label for="modal-artifact-search" class="sr-only">Search available artifacts</label>
+                                <div class="relative">
+                                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none"></i>
+                                    <input type="text"
+                                           id="modal-artifact-search"
+                                           x-model="availableSearch"
+                                           class="tw-form-input !pl-9"
+                                           placeholder="Search by name, component, or format...">
+                                </div>
                             </div>
-                            <button type="button"
-                                    class="tw-modal-close"
-                                    @click="closeAddModal()"
-                                    aria-label="Close">
-                                <i class="fas fa-times" aria-hidden="true"></i>
+                            <div class="md:col-span-3">
+                                <label for="modal-artifact-type-filter" class="sr-only">Filter by type</label>
+                                <select id="modal-artifact-type-filter"
+                                        x-model="availableTypeFilter"
+                                        class="tw-form-select">
+                                    <option value="">All Types</option>
+                                    <option value="sbom">SBOMs Only</option>
+                                    <option value="vex">VEX Only</option>
+                                    <option value="document">Documents Only</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-3">
+                                <label for="modal-artifact-component-filter" class="sr-only">Filter by component</label>
+                                <select id="modal-artifact-component-filter"
+                                        x-model="availableComponentFilter"
+                                        class="tw-form-select">
+                                    <option value="">All Components</option>
+                                    <template x-for="comp in availableUniqueComponents" :key="comp">
+                                        <option :value="comp" x-text="comp"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                        {# Loading State #}
+                        {% loading_state message="Loading artifacts..." x_show="isLoadingAvailable" %}
+                        {# No Results #}
+                        <div x-show="!isLoadingAvailable && availableArtifacts.length === 0"
+                             class="flex flex-col items-center justify-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                                <i class="fas fa-inbox text-2xl text-text-muted"></i>
+                            </div>
+                            <h5 class="text-lg font-semibold text-text mb-2">No artifacts available</h5>
+                            <p class="text-text-muted text-sm">All artifacts have already been added to this release</p>
+                        </div>
+                        {# No Filtered Results #}
+                        <div x-show="!isLoadingAvailable && availableArtifacts.length > 0 && filteredAvailableArtifacts.length === 0"
+                             class="flex flex-col items-center justify-center py-12">
+                            <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
+                                <i class="fas fa-search text-2xl text-text-muted"></i>
+                            </div>
+                            <h5 class="text-lg font-semibold text-text mb-2">No matches found</h5>
+                            <p class="text-text-muted text-sm mb-4">No artifacts match your search criteria</p>
+                            <button class="tw-btn-ghost" @click="clearAvailableFilters()">
+                                <i class="fas fa-times mr-2"></i>Clear filters
                             </button>
                         </div>
-                        {# Modal Body #}
-                        <div class="tw-modal-body space-y-5">
-                            {# Search and Filter Controls #}
-                            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-                                <div class="md:col-span-6">
-                                    <label for="modal-artifact-search" class="sr-only">Search available artifacts</label>
-                                    <div class="relative">
-                                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none"></i>
-                                        <input type="text"
-                                               id="modal-artifact-search"
-                                               x-model="availableSearch"
-                                               class="tw-form-input !pl-9"
-                                               placeholder="Search by name, component, or format...">
-                                    </div>
-                                </div>
-                                <div class="md:col-span-3">
-                                    <label for="modal-artifact-type-filter" class="sr-only">Filter by type</label>
-                                    <select id="modal-artifact-type-filter"
-                                            x-model="availableTypeFilter"
-                                            class="tw-form-select">
-                                        <option value="">All Types</option>
-                                        <option value="sbom">SBOMs Only</option>
-                                        <option value="vex">VEX Only</option>
-                                        <option value="document">Documents Only</option>
-                                    </select>
-                                </div>
-                                <div class="md:col-span-3">
-                                    <label for="modal-artifact-component-filter" class="sr-only">Filter by component</label>
-                                    <select id="modal-artifact-component-filter"
-                                            x-model="availableComponentFilter"
-                                            class="tw-form-select">
-                                        <option value="">All Components</option>
-                                        <template x-for="comp in availableUniqueComponents" :key="comp">
-                                            <option :value="comp" x-text="comp"></option>
-                                        </template>
-                                    </select>
-                                </div>
-                            </div>
+                        {# Artifacts Table #}
+                        <div x-show="!isLoadingAvailable && filteredAvailableArtifacts.length > 0"
+                             class="tw-data-table flex-1 min-h-0">
                             {# Results Summary Bar #}
-                            <div x-show="!isLoadingAvailable"
-                                 class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-background/50 rounded-lg border border-border">
+                            <div class="tw-data-table-toolbar">
                                 <div class="flex items-center gap-4">
                                     <span class="text-text-muted text-sm flex items-center gap-2">
-                                        <i class="fas fa-list"></i>
+                                        <i class="fas fa-list" aria-hidden="true"></i>
                                         <span class="font-semibold text-text"
                                               x-text="filteredAvailableArtifacts.length"></span>
                                         of <span x-text="availableArtifacts.length"></span> artifacts
                                     </span>
-                                    <div x-show="selectedArtifacts.size > 0"
-                                         class="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full text-sm">
-                                        <i class="fas fa-check-circle text-primary"></i>
-                                        <span class="font-semibold text-primary" x-text="selectedArtifacts.size"></span>
-                                        <span class="text-primary">selected</span>
+                                    <div x-show="selectedArtifacts.size > 0" class="tw-badge-primary gap-1.5">
+                                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                        <span class="font-semibold" x-text="selectedArtifacts.size"></span>
+                                        <span>selected</span>
                                     </div>
                                 </div>
                                 <button type="button"
@@ -340,206 +363,176 @@
                                         @click="allFilteredSelected ? clearSelection() : selectAllFiltered()"
                                         x-text="allFilteredSelected ? 'Deselect All' : 'Select All Visible'"></button>
                             </div>
-                            {# Loading State #}
-                            {% loading_state message="Loading artifacts..." x_show="isLoadingAvailable" %}
-                            {# No Results #}
-                            <div x-show="!isLoadingAvailable && availableArtifacts.length === 0"
-                                 class="flex flex-col items-center justify-center py-12">
-                                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                                    <i class="fas fa-inbox text-2xl text-text-muted"></i>
-                                </div>
-                                <h5 class="text-lg font-semibold text-text mb-2">No artifacts available</h5>
-                                <p class="text-text-muted text-sm">All artifacts have already been added to this release</p>
-                            </div>
-                            {# No Filtered Results #}
-                            <div x-show="!isLoadingAvailable && availableArtifacts.length > 0 && filteredAvailableArtifacts.length === 0"
-                                 class="flex flex-col items-center justify-center py-12">
-                                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                                    <i class="fas fa-search text-2xl text-text-muted"></i>
-                                </div>
-                                <h5 class="text-lg font-semibold text-text mb-2">No matches found</h5>
-                                <p class="text-text-muted text-sm mb-4">No artifacts match your search criteria</p>
-                                <button class="tw-btn-ghost" @click="clearAvailableFilters()">
-                                    <i class="fas fa-times mr-2"></i>Clear filters
-                                </button>
-                            </div>
-                            {# Artifacts Table #}
-                            <div x-show="!isLoadingAvailable && filteredAvailableArtifacts.length > 0"
-                                 class="border border-border rounded-lg overflow-hidden flex-1 min-h-0">
-                                <div class="max-h-[50vh] overflow-y-auto">
-                                    <table class="tw-table w-full">
-                                        <thead class="sticky top-0 bg-surface z-10">
-                                            <tr>
-                                                <th class="px-4 py-3.5 text-left w-12">
+                            <div class="max-h-[50vh] overflow-y-auto">
+                                <table class="tw-table">
+                                    <thead class="sticky top-0 bg-surface z-10">
+                                        <tr>
+                                            <th class="w-12">
+                                                <input type="checkbox"
+                                                       class="tw-checkbox"
+                                                       :checked="allFilteredSelected"
+                                                       @change="toggleAllFiltered($event)"
+                                                       aria-label="Select all artifacts">
+                                            </th>
+                                            <th class="w-16"
+                                                :aria-sort="availableSortColumn === 'type' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                                <button type="button"
+                                                        class="tw-table-sortable"
+                                                        :class="{ 'sorted-asc': availableSortColumn === 'type' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'type' && availableSortDirection === 'desc' }"
+                                                        @click="setAvailableSort('type')">
+                                                    Type
+                                                    <span class="tw-table-sort-icon" aria-hidden="true">
+                                                        <i class="fas fa-caret-up"></i>
+                                                        <i class="fas fa-caret-down"></i>
+                                                    </span>
+                                                </button>
+                                            </th>
+                                            <th :aria-sort="availableSortColumn === 'name' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                                <button type="button"
+                                                        class="tw-table-sortable"
+                                                        :class="{ 'sorted-asc': availableSortColumn === 'name' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'name' && availableSortDirection === 'desc' }"
+                                                        @click="setAvailableSort('name')">
+                                                    Name
+                                                    <span class="tw-table-sort-icon" aria-hidden="true">
+                                                        <i class="fas fa-caret-up"></i>
+                                                        <i class="fas fa-caret-down"></i>
+                                                    </span>
+                                                </button>
+                                            </th>
+                                            <th :aria-sort="availableSortColumn === 'component' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                                <button type="button"
+                                                        class="tw-table-sortable"
+                                                        :class="{ 'sorted-asc': availableSortColumn === 'component' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'component' && availableSortDirection === 'desc' }"
+                                                        @click="setAvailableSort('component')">
+                                                    Component
+                                                    <span class="tw-table-sort-icon" aria-hidden="true">
+                                                        <i class="fas fa-caret-up"></i>
+                                                        <i class="fas fa-caret-down"></i>
+                                                    </span>
+                                                </button>
+                                            </th>
+                                            <th :aria-sort="availableSortColumn === 'format' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                                <button type="button"
+                                                        class="tw-table-sortable"
+                                                        :class="{ 'sorted-asc': availableSortColumn === 'format' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'format' && availableSortDirection === 'desc' }"
+                                                        @click="setAvailableSort('format')">
+                                                    Format
+                                                    <span class="tw-table-sort-icon" aria-hidden="true">
+                                                        <i class="fas fa-caret-up"></i>
+                                                        <i class="fas fa-caret-down"></i>
+                                                    </span>
+                                                </button>
+                                            </th>
+                                            <th :aria-sort="availableSortColumn === 'version' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                                <button type="button"
+                                                        class="tw-table-sortable"
+                                                        :class="{ 'sorted-asc': availableSortColumn === 'version' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'version' && availableSortDirection === 'desc' }"
+                                                        @click="setAvailableSort('version')">
+                                                    Version
+                                                    <span class="tw-table-sort-icon" aria-hidden="true">
+                                                        <i class="fas fa-caret-up"></i>
+                                                        <i class="fas fa-caret-down"></i>
+                                                    </span>
+                                                </button>
+                                            </th>
+                                            <th class="tw-cell-date w-28"
+                                                :aria-sort="availableSortColumn === 'created' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                                <button type="button"
+                                                        class="tw-table-sortable"
+                                                        :class="{ 'sorted-asc': availableSortColumn === 'created' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'created' && availableSortDirection === 'desc' }"
+                                                        @click="setAvailableSort('created')">
+                                                    Created
+                                                    <span class="tw-table-sort-icon" aria-hidden="true">
+                                                        <i class="fas fa-caret-up"></i>
+                                                        <i class="fas fa-caret-down"></i>
+                                                    </span>
+                                                </button>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-surface">
+                                        <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
+                                            <tr class="cursor-pointer transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                                :class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-background/70 border-l-2 border-l-transparent'"
+                                                tabindex="0"
+                                                @click="toggleArtifactSelection(artifact.id)"
+                                                @keydown.enter.prevent="toggleArtifactSelection(artifact.id)"
+                                                @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
+                                                <td>
                                                     <input type="checkbox"
                                                            class="tw-checkbox"
-                                                           :checked="allFilteredSelected"
-                                                           @change="toggleAllFiltered($event)"
-                                                           aria-label="Select all artifacts">
-                                                </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-16"
-                                                    :aria-sort="availableSortColumn === 'type' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                                    <button type="button"
-                                                            class="tw-table-sortable"
-                                                            :class="{ 'sorted-asc': availableSortColumn === 'type' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'type' && availableSortDirection === 'desc' }"
-                                                            @click="setAvailableSort('type')">
-                                                        Type
-                                                        <span class="tw-table-sort-icon" aria-hidden="true">
-                                                            <i class="fas fa-caret-up"></i>
-                                                            <i class="fas fa-caret-down"></i>
-                                                        </span>
-                                                    </button>
-                                                </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
-                                                    :aria-sort="availableSortColumn === 'name' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                                    <button type="button"
-                                                            class="tw-table-sortable"
-                                                            :class="{ 'sorted-asc': availableSortColumn === 'name' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'name' && availableSortDirection === 'desc' }"
-                                                            @click="setAvailableSort('name')">
-                                                        Name
-                                                        <span class="tw-table-sort-icon" aria-hidden="true">
-                                                            <i class="fas fa-caret-up"></i>
-                                                            <i class="fas fa-caret-down"></i>
-                                                        </span>
-                                                    </button>
-                                                </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
-                                                    :aria-sort="availableSortColumn === 'component' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                                    <button type="button"
-                                                            class="tw-table-sortable"
-                                                            :class="{ 'sorted-asc': availableSortColumn === 'component' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'component' && availableSortDirection === 'desc' }"
-                                                            @click="setAvailableSort('component')">
-                                                        Component
-                                                        <span class="tw-table-sort-icon" aria-hidden="true">
-                                                            <i class="fas fa-caret-up"></i>
-                                                            <i class="fas fa-caret-down"></i>
-                                                        </span>
-                                                    </button>
-                                                </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
-                                                    :aria-sort="availableSortColumn === 'format' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                                    <button type="button"
-                                                            class="tw-table-sortable"
-                                                            :class="{ 'sorted-asc': availableSortColumn === 'format' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'format' && availableSortDirection === 'desc' }"
-                                                            @click="setAvailableSort('format')">
-                                                        Format
-                                                        <span class="tw-table-sort-icon" aria-hidden="true">
-                                                            <i class="fas fa-caret-up"></i>
-                                                            <i class="fas fa-caret-down"></i>
-                                                        </span>
-                                                    </button>
-                                                </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider"
-                                                    :aria-sort="availableSortColumn === 'version' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                                    <button type="button"
-                                                            class="tw-table-sortable"
-                                                            :class="{ 'sorted-asc': availableSortColumn === 'version' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'version' && availableSortDirection === 'desc' }"
-                                                            @click="setAvailableSort('version')">
-                                                        Version
-                                                        <span class="tw-table-sort-icon" aria-hidden="true">
-                                                            <i class="fas fa-caret-up"></i>
-                                                            <i class="fas fa-caret-down"></i>
-                                                        </span>
-                                                    </button>
-                                                </th>
-                                                <th class="px-4 py-3.5 text-left text-xs font-semibold text-text-muted uppercase tracking-wider w-28 tw-cell-date"
-                                                    :aria-sort="availableSortColumn === 'created' ? (availableSortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                                    <button type="button"
-                                                            class="tw-table-sortable"
-                                                            :class="{ 'sorted-asc': availableSortColumn === 'created' && availableSortDirection === 'asc', 'sorted-desc': availableSortColumn === 'created' && availableSortDirection === 'desc' }"
-                                                            @click="setAvailableSort('created')">
-                                                        Created
-                                                        <span class="tw-table-sort-icon" aria-hidden="true">
-                                                            <i class="fas fa-caret-up"></i>
-                                                            <i class="fas fa-caret-down"></i>
-                                                        </span>
-                                                    </button>
-                                                </th>
+                                                           :checked="isSelected(artifact.id)"
+                                                           @click.stop="toggleArtifactSelection(artifact.id)"
+                                                           :aria-label="'Select ' + artifact.name">
+                                                </td>
+                                                <td>
+                                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+                                                         :class="getAvailableArtifactIconClass(artifact)">
+                                                        <i :class="getAvailableTypeIcon(artifact)" class="text-sm"></i>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <a :href="getAvailableArtifactUrl(artifact)"
+                                                       class="font-semibold text-primary hover:underline"
+                                                       @click.stop
+                                                       x-text="artifact.name"></a>
+                                                </td>
+                                                <td>
+                                                    <span class="text-text-muted" x-text="artifact.component?.name || '-'"></span>
+                                                </td>
+                                                <td>
+                                                    <span x-show="isArtifactSbom(artifact)"
+                                                          :class="getAvailableArtifactFormatClass(artifact)"
+                                                          x-text="getAvailableArtifactFormat(artifact)"></span>
+                                                    <span x-show="!isArtifactSbom(artifact)"
+                                                          class="tw-sbom-format text-text-muted bg-border/20 border"
+                                                          style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)"
+                                                          x-text="getAvailableArtifactFormat(artifact)"></span>
+                                                </td>
+                                                <td>
+                                                    <span x-show="artifact.version"
+                                                          class="text-text font-mono text-sm"
+                                                          :title="artifact.version"
+                                                          x-text="truncateText(artifact.version || '', 20)"></span>
+                                                    <span x-show="!artifact.version" class="text-text-muted">—</span>
+                                                </td>
+                                                <td class="tw-cell-date">
+                                                    <span class="text-text-muted text-sm"
+                                                          x-text="formatDate(artifact.created_at)"></span>
+                                                </td>
                                             </tr>
-                                        </thead>
-                                        <tbody class="bg-surface">
-                                            <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
-                                                <tr class="cursor-pointer transition-all duration-150 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                                    :class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-background/70 border-l-2 border-l-transparent'"
-                                                    tabindex="0"
-                                                    @click="toggleArtifactSelection(artifact.id)"
-                                                    @keydown.enter.prevent="toggleArtifactSelection(artifact.id)"
-                                                    @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
-                                                    <td class="px-4 py-3.5">
-                                                        <input type="checkbox"
-                                                               class="tw-checkbox"
-                                                               :checked="isSelected(artifact.id)"
-                                                               @click.stop="toggleArtifactSelection(artifact.id)"
-                                                               :aria-label="'Select ' + artifact.name">
-                                                    </td>
-                                                    <td class="px-4 py-3.5">
-                                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center"
-                                                             :class="getAvailableArtifactIconClass(artifact)">
-                                                            <i :class="getAvailableTypeIcon(artifact)" class="text-sm"></i>
-                                                        </div>
-                                                    </td>
-                                                    <td class="px-4 py-3.5">
-                                                        <a :href="getAvailableArtifactUrl(artifact)"
-                                                           class="font-semibold text-primary hover:underline"
-                                                           @click.stop
-                                                           x-text="artifact.name"></a>
-                                                    </td>
-                                                    <td class="px-4 py-3.5">
-                                                        <span class="text-text-muted" x-text="artifact.component?.name || '-'"></span>
-                                                    </td>
-                                                    <td class="px-4 py-3.5">
-                                                        <span x-show="isArtifactSbom(artifact)"
-                                                              :class="getAvailableArtifactFormatClass(artifact)"
-                                                              x-text="getAvailableArtifactFormat(artifact)"></span>
-                                                        <span x-show="!isArtifactSbom(artifact)"
-                                                              class="tw-sbom-format text-text-muted bg-border/20 border"
-                                                              style="border-color: color-mix(in srgb, var(--color-border) 60%, transparent)"
-                                                              x-text="getAvailableArtifactFormat(artifact)"></span>
-                                                    </td>
-                                                    <td class="px-4 py-3.5">
-                                                        <span x-show="artifact.version"
-                                                              class="text-text font-mono text-sm"
-                                                              :title="artifact.version"
-                                                              x-text="truncateText(artifact.version || '', 20)"></span>
-                                                        <span x-show="!artifact.version" class="text-text-muted">—</span>
-                                                    </td>
-                                                    <td class="px-4 py-3.5 tw-cell-date">
-                                                        <span class="text-text-muted text-sm"
-                                                              x-text="formatDate(artifact.created_at)"></span>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
-                                </div>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
-                        {# Modal Footer #}
-                        <div class="tw-modal-footer justify-between">
-                            <div class="text-sm text-text-muted flex items-center gap-2">
-                                <i class="fas fa-info-circle" aria-hidden="true"></i>
-                                <span x-show="selectedArtifacts.size > 0">
-                                    <span class="font-bold text-text" x-text="selectedArtifacts.size"></span> artifact<span x-show="selectedArtifacts.size !== 1">s</span> ready to add
-                                </span>
-                                <span x-show="selectedArtifacts.size === 0">Select artifacts to add to this release</span>
-                            </div>
-                            <div class="flex gap-3">
-                                <button type="button" class="tw-btn-ghost" @click="closeAddModal()">Cancel</button>
-                                <button type="button"
-                                        class="tw-btn-primary flex items-center gap-2"
-                                        @click="addSelectedArtifacts()"
-                                        :disabled="selectedArtifacts.size === 0 || isSubmitting"
-                                        :class="{ 'opacity-50 cursor-not-allowed': selectedArtifacts.size === 0 || isSubmitting }">
-                                    <span x-show="isSubmitting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
-                                    <i x-show="!isSubmitting" class="fas fa-plus"></i>
-                                    <span>Add to Release</span>
-                                </button>
-                            </div>
+                    </div>
+                    {# Modal Footer #}
+                    <div class="tw-modal-footer justify-between">
+                        <div class="text-sm text-text-muted flex items-center gap-2">
+                            <i class="fas fa-info-circle" aria-hidden="true"></i>
+                            <span x-show="selectedArtifacts.size > 0">
+                                <span class="font-bold text-text" x-text="selectedArtifacts.size"></span> artifact<span x-show="selectedArtifacts.size !== 1">s</span> ready to add
+                            </span>
+                            <span x-show="selectedArtifacts.size === 0">Select artifacts to add to this release</span>
+                        </div>
+                        <div class="flex gap-3">
+                            <button type="button" class="tw-btn-ghost" @click="closeAddModal()">Cancel</button>
+                            <button type="button"
+                                    class="tw-btn-primary flex items-center gap-2"
+                                    @click="addSelectedArtifacts()"
+                                    :disabled="selectedArtifacts.size === 0 || isSubmitting"
+                                    :class="{ 'opacity-50 cursor-not-allowed': selectedArtifacts.size === 0 || isSubmitting }">
+                                <span x-show="isSubmitting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
+                                <i x-show="!isSubmitting" class="fas fa-plus"></i>
+                                <span>Add to Release</span>
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
-        </template>
-        {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Remove Artifact' message='Are you sure you want to remove' item_name_expression="deleteTarget ? getArtifactName(deleteTarget) : ''" warning_message='This will only remove the artifact from this release. The original SBOM or document will not be deleted.' confirm_text='Remove' confirm_callback='confirmRemoveArtifact()' %}
-    {% endif %}
+        </div>
+    </template>
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Remove Artifact' message='Are you sure you want to remove' item_name_expression="deleteTarget ? getArtifactName(deleteTarget) : ''" warning_message='This will only remove the artifact from this release. The original SBOM or document will not be deleted.' confirm_text='Remove' confirm_callback='confirmRemoveArtifact()' %}
+{% endif %}
 </div>

@@ -6,42 +6,42 @@
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
-    <div class="space-y-6"
+    {% comment %}Page header, composed from the tw-page-header classes rather than the page_header tag: the freshness badge sits beside the title and the tag has no slot for it. The visibility state lives here because only the header's menu items read it.{% endcomment %}
+    <div class="tw-page-header"
          x-data="{ visibility: '{{ component.visibility|escapejs }}' }"
          @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
-        {# Page Header - matches product page pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-puzzle-piece"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <h1 class="text-2xl font-bold text-text">
-                            {% if component.has_crud_permissions %}
-                                {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
-                            {% else %}
-                                {{ component.name }}
-                            {% endif %}
-                        </h1>
-                        <div class="flex items-center gap-2 text-sm text-text-muted">
-                            {% include 'core/components/copyable_value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
-                        </div>
-                        {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
-                        {% if component.freshness.is_stale %}
-                            <span class="tw-badge-danger"
-                                  title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
-                                <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
-                            </span>
+        <div class="tw-page-header-lead">
+            <span class="tw-avatar tw-avatar-lg" aria-hidden="true">
+                <i class="fas fa-puzzle-piece"></i>
+            </span>
+            <div>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <h1 class="tw-page-header-title">
+                        {% if component.has_crud_permissions %}
+                            {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
+                        {% else %}
+                            {{ component.name }}
                         {% endif %}
+                    </h1>
+                    <div class="flex items-center gap-2">
+                        {% include 'core/components/copyable_value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
                     </div>
-                    {# Component Type Label #}
-                    <p class="text-text-muted text-sm m-0 mt-1">{{ component.component_type_display }} Component</p>
+                    {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
+                    {% if component.freshness.is_stale %}
+                        <span class="tw-badge-danger"
+                              title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
+                            <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
+                        </span>
+                    {% endif %}
                 </div>
+                {# Component Type Label #}
+                <p class="tw-page-header-subtitle">{{ component.component_type_display }} Component</p>
             </div>
-            {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
-            {% if component.has_crud_permissions or component.component_type == 'bom' %}
-                <div class="flex-shrink-0 flex items-stretch gap-2">
+        </div>
+        {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
+        {% if component.has_crud_permissions or component.component_type == 'bom' %}
+            <div class="tw-page-header-actions">
+                <div class="flex items-stretch gap-2">
                     {% if component.has_crud_permissions %}
                         {% url 'core:component_details_public' component.id as component_public_url %}
                         {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
@@ -102,20 +102,23 @@
                     {% endif %}
                 {% endactions_menu %}
             </div>
-        {% endif %}
-    </div>
+        </div>
+    {% endif %}
+</div>
+<div class="space-y-6">
     {# Stats Badges #}
     <div class="flex flex-wrap gap-2">
-        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-            <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
-            <span class="font-semibold text-text">
+        <div class="tw-metric-chip">
+            <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"
+               aria-hidden="true"></i>
+            <span class="tw-metric-chip-value">
                 {% if component.component_type == 'bom' %}
                     {{ component.sbom_count|default:0 }}
                 {% else %}
                     {{ component.document_count|default:0 }}
                 {% endif %}
             </span>
-            <span class="text-text-muted">
+            <span class="tw-metric-chip-label">
                 {% if component.component_type == 'bom' %}
                     BOMs
                 {% else %}
@@ -123,7 +126,7 @@
                 {% endif %}
             </span>
         </div>
-        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
+        <div class="tw-metric-chip">
             <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
                 <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
                 <span>
@@ -137,30 +140,30 @@
         </div>
         {# Latest-scan vulnerability summary (design review / mock). #}
         {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
-            <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_summary.critical or vuln_summary.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
-                <i class="fas fa-triangle-exclamation text-xs {% if vuln_summary.critical or vuln_summary.high %}text-danger{% else %}text-warning{% endif %}"></i>
+            <div class="tw-metric-chip {% if vuln_summary.critical or vuln_summary.high %}tw-metric-chip-danger{% else %}tw-metric-chip-warning{% endif %}">
+                <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
                 {% if vuln_summary.critical %}
-                    <span class="font-semibold text-danger">{{ vuln_summary.critical }} Critical</span>
+                    <span class="tw-metric-chip-value">{{ vuln_summary.critical }} Critical</span>
                 {% endif %}
                 {% if vuln_summary.high %}
                     {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
-                    <span class="font-semibold text-severity-high">{{ vuln_summary.high }} High</span>
+                    <span class="tw-metric-chip-value">{{ vuln_summary.high }} High</span>
                 {% endif %}
                 {% if vuln_summary.medium %}
                     {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
-                    <span class="font-semibold text-info">{{ vuln_summary.medium }} Medium</span>
+                    <span class="tw-metric-chip-value">{{ vuln_summary.medium }} Medium</span>
                 {% endif %}
                 {% if vuln_summary.low %}
                     {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
                         <span class="text-text-muted">·</span>
                     {% endif %}
-                    <span class="font-semibold text-text-muted">{{ vuln_summary.low }} Low</span>
+                    <span class="tw-metric-chip-value">{{ vuln_summary.low }} Low</span>
                 {% endif %}
                 {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
                 {% if vuln_summary.suppressed %}
-                    <span class="text-text-muted">· {{ vuln_summary.suppressed }} suppressed</span>
+                    <span class="tw-metric-chip-label">· {{ vuln_summary.suppressed }} suppressed</span>
                 {% endif %}
-                <span class="text-text-muted">· latest scan</span>
+                <span class="tw-metric-chip-label">· latest scan</span>
             </div>
         {% endif %}
     </div>

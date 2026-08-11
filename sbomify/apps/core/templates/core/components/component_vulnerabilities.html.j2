@@ -6,84 +6,89 @@
     {{ latest_vuln_states|json_script:"latest-vuln-states" }}
     {{ latest_vuln_suppressed|json_script:"latest-vuln-suppressed" }}
     {{ latest_vuln_kev|json_script:"latest-vuln-kev" }}
-    <div x-data="{ open: true, search: '', sevFilter: 'all', stateFilter: 'all', kevOnly: false, showSuppressed: false, page: 1, perPage: 5, terms: (window.parseJsonScript('latest-vuln-terms') || []), severities: (window.parseJsonScript('latest-vuln-severities') || []), states: (window.parseJsonScript('latest-vuln-states') || []), suppressedArr: (window.parseJsonScript('latest-vuln-suppressed') || []), kevArr: (window.parseJsonScript('latest-vuln-kev') || []), get sevOptions() { const order = ['critical', 'high', 'medium', 'low', 'info']; const present = new Set(this.severities); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, get stateOptions() { const order = ['open', 'in_triage', 'exploitable', 'resolved', 'not_affected', 'false_positive']; const present = new Set(this.states); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, stateLabel(v) { return ({ open: 'No decision', in_triage: 'Under investigation', exploitable: 'Affected', resolved: 'Fixed', not_affected: 'Not affected', false_positive: 'False positive' })[v] || v; }, get suppressedShown() { return this.showSuppressed || ['not_affected', 'false_positive'].includes(this.stateFilter); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.sevFilter === 'all' || this.severities[i] === this.sevFilter) && (this.stateFilter === 'all' || this.states[i] === this.stateFilter) && (!this.kevOnly || this.kevArr[i]) && (this.suppressedShown || !this.suppressedArr[i])); }, get suppressedTotal() { return this.suppressedArr.filter(Boolean).length; }, get total() { return this.filteredIdx.length; }, get pageCount() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.page - 1) * this.perPage, this.page * this.perPage)); }, get startIdx() { return this.total ? (this.page - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.page * this.perPage, this.total); }, }"
-         x-effect="search; sevFilter; stateFilter; kevOnly; showSuppressed; page = 1"
-         x-init="$watch('search', () => { page = 1 }); $watch('sevFilter', () => { page = 1 })"
-         class="tw-card">
-        <div class="px-6 py-4 border-b border-border cursor-pointer flex items-center justify-between gap-3"
-             @click="open = !open">
-            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <div x-data="{ open: true, search: '', sevFilter: 'all', stateFilter: 'all', kevOnly: false, showSuppressed: false, currentPage: 1, perPage: 5, terms: (window.parseJsonScript('latest-vuln-terms') || []), severities: (window.parseJsonScript('latest-vuln-severities') || []), states: (window.parseJsonScript('latest-vuln-states') || []), suppressedArr: (window.parseJsonScript('latest-vuln-suppressed') || []), kevArr: (window.parseJsonScript('latest-vuln-kev') || []), get sevOptions() { const order = ['critical', 'high', 'medium', 'low', 'info']; const present = new Set(this.severities); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, get stateOptions() { const order = ['open', 'in_triage', 'exploitable', 'resolved', 'not_affected', 'false_positive']; const present = new Set(this.states); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, stateLabel(v) { return ({ open: 'No decision', in_triage: 'Under investigation', exploitable: 'Affected', resolved: 'Fixed', not_affected: 'Not affected', false_positive: 'False positive' })[v] || v; }, get suppressedShown() { return this.showSuppressed || ['not_affected', 'false_positive'].includes(this.stateFilter); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.sevFilter === 'all' || this.severities[i] === this.sevFilter) && (this.stateFilter === 'all' || this.states[i] === this.stateFilter) && (!this.kevOnly || this.kevArr[i]) && (this.suppressedShown || !this.suppressedArr[i])); }, get suppressedTotal() { return this.suppressedArr.filter(Boolean).length; }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); }, }"
+         x-effect="search; sevFilter; stateFilter; kevOnly; showSuppressed; currentPage = 1"
+         x-init="$watch('search', () => { currentPage = 1 }); $watch('sevFilter', () => { currentPage = 1 })"
+         class="tw-collapsible-card">
+        <button type="button"
+                class="tw-collapsible-header w-full text-left"
+                @click="open = !open"
+                :aria-expanded="open">
+            <span class="tw-collapsible-title text-lg">
                 Vulnerabilities
                 {% if latest_vuln_version %}
                     <span class="font-normal text-text-muted text-sm">· {{ latest_vuln_version|truncatechars:24 }} (latest)</span>
                 {% endif %}
-            </h4>
-            <i class="fas fa-chevron-down text-text-muted transition-transform"
-               :class="open ? 'rotate-180' : ''"></i>
-        </div>
-        <div x-show="open" x-collapse>
+            </span>
+            <i class="fas fa-chevron-down tw-collapsible-icon"
+               :class="{ 'tw-collapsible-icon-open': open }"
+               aria-hidden="true"></i>
+        </button>
+        <div class="tw-collapsible-content" x-show="open" x-collapse>
             {# Search + severity filter toolbar #}
-            <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3">
-                <div class="tw-data-table-search max-w-xs">
-                    <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <label for="vuln-search" class="sr-only">Search vulnerabilities</label>
-                    <input type="search"
-                           id="vuln-search"
-                           x-model="search"
-                           placeholder="Search vulnerabilities..."
-                           class="tw-data-table-search-input" />
+            <div class="tw-data-table-toolbar">
+                <div class="tw-data-table-toolbar-left flex-wrap">
+                    <div class="tw-data-table-search max-w-xs">
+                        <i class="fas fa-search tw-data-table-search-icon"></i>
+                        <label for="vuln-search" class="sr-only">Search vulnerabilities</label>
+                        <input type="search"
+                               id="vuln-search"
+                               x-model="search"
+                               placeholder="Search vulnerabilities..."
+                               class="tw-data-table-search-input" />
+                    </div>
+                    <label for="vuln-sev-filter" class="sr-only">Filter by severity</label>
+                    <select id="vuln-sev-filter"
+                            x-model="sevFilter"
+                            class="tw-data-table-page-size-select">
+                        <option value="all">All Severities</option>
+                        <template x-for="v in sevOptions" :key="v">
+                            <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
+                        </template>
+                    </select>
+                    <label for="vuln-state-filter" class="sr-only">Filter by VEX analysis state</label>
+                    <select id="vuln-state-filter"
+                            x-model="stateFilter"
+                            class="tw-data-table-page-size-select">
+                        <option value="all">All States</option>
+                        <template x-for="v in stateOptions" :key="v">
+                            <option :value="v" x-text="stateLabel(v)"></option>
+                        </template>
+                    </select>
+                    <label class="inline-flex items-center gap-2 text-sm text-text cursor-pointer">
+                        <input type="checkbox" x-model="kevOnly" class="tw-checkbox" />
+                        KEV only
+                    </label>
+                    {% comment %}Suppressed rows are hidden by default so the working list matches the open counts; the toggle reveals them struck through with their VEX state. Picking a suppressing state in the filter implies visibility.{% endcomment %}
+                    <label class="inline-flex items-center gap-2 text-sm text-text cursor-pointer"
+                           x-show="suppressedTotal > 0">
+                        <input type="checkbox" x-model="showSuppressed" class="tw-checkbox" />
+                        Show suppressed (<span x-text="suppressedTotal"></span>)
+                    </label>
                 </div>
-                <label for="vuln-sev-filter" class="sr-only">Filter by severity</label>
-                <select id="vuln-sev-filter"
-                        x-model="sevFilter"
-                        class="tw-data-table-page-size-select">
-                    <option value="all">All Severities</option>
-                    <template x-for="v in sevOptions" :key="v">
-                        <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
-                    </template>
-                </select>
-                <label for="vuln-state-filter" class="sr-only">Filter by VEX analysis state</label>
-                <select id="vuln-state-filter"
-                        x-model="stateFilter"
-                        class="tw-data-table-page-size-select">
-                    <option value="all">All States</option>
-                    <template x-for="v in stateOptions" :key="v">
-                        <option :value="v" x-text="stateLabel(v)"></option>
-                    </template>
-                </select>
-                <label class="inline-flex items-center gap-2 text-sm text-text cursor-pointer">
-                    <input type="checkbox" x-model="kevOnly" class="tw-checkbox" />
-                    KEV only
-                </label>
-                {% comment %}Suppressed rows are hidden by default so the working list matches the open counts; the toggle reveals them struck through with their VEX state. Picking a suppressing state in the filter implies visibility.{% endcomment %}
-                <label class="inline-flex items-center gap-2 text-sm text-text cursor-pointer"
-                       x-show="suppressedTotal > 0">
-                    <input type="checkbox" x-model="showSuppressed" class="tw-checkbox" />
-                    Show suppressed (<span x-text="suppressedTotal"></span>)
-                </label>
             </div>
-            <div class="overflow-x-auto" x-cloak>
-                <table class="tw-table w-full">
+            <div class="tw-data-table-container" x-cloak>
+                <table class="tw-table">
                     <thead>
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Severity</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Advisory</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Package</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Fixed in</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Status</th>
+                            <th>Severity</th>
+                            <th>Advisory</th>
+                            <th>Package</th>
+                            <th>Fixed in</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for vuln in latest_vulns %}
                             <tr x-show="pageSet.has({{ forloop.counter0 }})">
-                                <td class="px-6 py-4">
+                                <td>
                                     {% if vuln.severity == 'critical' or vuln.severity == 'high' or vuln.severity == 'medium' or vuln.severity == 'low' %}
                                         <span class="tw-badge-severity-{{ vuln.severity|lower }}{% if vuln.vex_suppressed %} line-through{% endif %}">{{ vuln.severity|capfirst }}</span>
                                     {% else %}
-                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border{% if vuln.vex_suppressed %} line-through{% endif %}">{{ vuln.severity|title }}</span>
+                                        <span class="tw-badge-severity-unknown{% if vuln.vex_suppressed %} line-through{% endif %}">{{ vuln.severity|title }}</span>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4">
+                                <td>
                                     {% with vuln_url=vuln.id|advisory_url %}
                                         {% if vuln_url %}
                                             <a href="{{ vuln_url }}"
@@ -97,17 +102,17 @@
                                         {% endif %}
                                     {% endwith %}
                                     {% if vuln.kev %}
-                                        <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-danger text-white align-middle"
+                                        <span class="ml-1.5 tw-badge-solid-danger tw-badge-sm align-middle"
                                               title="In CISA's Known Exploited Vulnerabilities catalog">KEV</span>
                                     {% endif %}
                                     {% if vuln.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ vuln.aliases|join:", " }}</div>{% endif %}
                                 </td>
-                                <td class="px-6 py-4">
+                                <td>
                                     <span class="font-medium text-text">{{ vuln.package }}</span>
                                     {% if vuln.version %}<span class="text-text-muted">· {{ vuln.version }}</span>{% endif %}
                                     {% if vuln.ecosystem %}<span class="ml-2 tw-badge-secondary">{{ vuln.ecosystem }}</span>{% endif %}
                                 </td>
-                                <td class="px-6 py-4">
+                                <td>
                                     {% if vuln.fixed %}
                                         <span class="font-mono text-sm text-success">{{ vuln.fixed }}</span>
                                     {% else %}
@@ -115,7 +120,7 @@
                                               title="No fixed version reported by the scanner">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4">
+                                <td>
                                     {% if vuln.vex_suppressed %}
                                         <span class="text-info">
                                             {% if vuln.vex_state == 'false_positive' %}
@@ -142,15 +147,17 @@
                             </tr>
                         {% endfor %}
                         <tr x-show="total === 0">
-                            <td colspan="5" class="px-6 py-8 text-center text-text-muted">No vulnerabilities match your search.</td>
+                            <td colspan="5" class="text-center">
+                                <span class="text-text-muted">No vulnerabilities match your search.</span>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
             {# Footer: row count + full report on the left, pagination on the right #}
-            <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                <div class="flex items-center gap-4">
-                    <span class="text-sm text-text-muted">
+            <div class="tw-data-table-footer">
+                <div class="flex flex-wrap items-center gap-4">
+                    <span class="tw-data-table-info">
                         Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
                         <span x-show="!suppressedShown && suppressedTotal > 0"
                               x-text="'· ' + suppressedTotal + ' suppressed hidden'"></span>
@@ -162,21 +169,7 @@
                         </a>
                     {% endif %}
                 </div>
-                <div class="flex items-center gap-2" x-show="pageCount > 1">
-                    <button type="button"
-                            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
-                            :disabled="page === 1"
-                            @click="if (page > 1) page--">
-                        <i class="fas fa-chevron-left text-xs"></i>
-                    </button>
-                    <span class="text-sm text-text-muted">Page <span x-text="page"></span> / <span x-text="pageCount"></span></span>
-                    <button type="button"
-                            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
-                            :disabled="page === pageCount"
-                            @click="if (page < pageCount) page++">
-                        <i class="fas fa-chevron-right text-xs"></i>
-                    </button>
-                </div>
+                <div x-show="totalPages > 1">{% include "components/tw/table_pager.html.j2" %}</div>
             </div>
         </div>
     </div>

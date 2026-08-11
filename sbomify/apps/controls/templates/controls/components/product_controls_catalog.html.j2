@@ -4,9 +4,7 @@
     <div class="{% if not forloop.first %}mt-6 pt-6 border-t border-border/30{% endif %}">
         {# Catalog name + summary bar #}
         <div class="flex items-center gap-3 mb-3">
-            <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
-                {{ product_controls.catalog.name }} {{ product_controls.catalog.version }}
-            </span>
+            <span class="tw-badge-primary">{{ product_controls.catalog.name }} {{ product_controls.catalog.version }}</span>
             {% with summary=product_controls.summary %}
                 {% if summary %}
                     <div class="flex items-center gap-2 flex-1">
@@ -30,32 +28,33 @@
             {% endwith %}
         </div>
         {# Category accordion with inline status dropdowns #}
-        <div class="space-y-2" x-data="{}">
+        <div class="tw-accordion tw-accordion-sm" x-data="{}">
             {% for category in product_controls.categories %}
-                <div x-data="{ open: false }"
-                     class="border border-border/50 rounded-lg overflow-hidden">
+                <div x-data="{ open: false }" class="tw-accordion-item">
                     <button type="button"
-                            class="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-primary/5 transition-colors text-left"
+                            class="tw-accordion-trigger gap-3"
+                            :aria-expanded="open"
                             @click="open = !open">
                         <div class="flex items-center gap-2 min-w-0">
-                            <i class="fas {{ category.icon }} text-primary text-sm"></i>
+                            <i class="fas {{ category.icon }} text-primary text-sm"
+                               aria-hidden="true"></i>
                             <span class="font-medium text-text text-sm">{{ category.name }}</span>
                             <span class="text-text-muted text-xs">({{ category.controls|length }})</span>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-3 flex-shrink-0">
                             <div class="w-16 h-1.5 bg-border/50 rounded-full overflow-hidden hidden sm:block">
                                 <div class="h-full rounded-full {% if category.percentage >= 80 %}bg-success{% elif category.percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
                                      style="width: {{ category.percentage }}%"></div>
                             </div>
                             <span class="text-xs text-text-muted w-8 text-right">{{ category.percentage|floatformat:0 }}%</span>
-                            <i class="fas fa-chevron-right text-text-muted text-xs transition-transform"
-                               :class="{ 'rotate-90': open }"></i>
+                            <i class="fas fa-chevron-down tw-accordion-trigger-icon"
+                               aria-hidden="true"></i>
                         </div>
                     </button>
-                    <div x-show="open" x-collapse class="border-t border-border/50">
+                    <div class="tw-accordion-content" x-show="open" x-collapse>
                         {% for control in category.controls %}
-                            <div class="px-4 py-2.5 flex items-center gap-3 border-b border-border/30 last:border-b-0 hover:bg-background/50">
-                                <code class="text-xs font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">{{ control.control_id }}</code>
+                            <div class="py-2.5 flex items-center gap-3 border-b border-border/30 last:border-b-0 hover:bg-background/50">
+                                <code class="tw-code-inline tw-code-inline-primary flex-shrink-0">{{ control.control_id }}</code>
                                 <span class="text-sm text-text flex-1 min-w-0 truncate"
                                       title="{{ control.title }}">{{ control.title }}</span>
                                 {% if is_admin_or_owner %}

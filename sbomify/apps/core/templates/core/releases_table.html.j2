@@ -172,10 +172,10 @@
                                                 <template x-if="release.has_sboms">
                                                     <a :href="'{% url 'api-1:download_release' 0 %}'.replace('0', release.id)"
                                                        @click.stop
-                                                       class="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
+                                                       class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-primary"
                                                        title="Download release SBOM"
                                                        aria-label="Download release SBOM">
-                                                        <i class="fas fa-download text-sm" aria-hidden="true"></i>
+                                                        <i class="fas fa-download" aria-hidden="true"></i>
                                                     </a>
                                                 </template>
                                             </div>

@@ -1,4 +1,4 @@
-{% load static %}
+{% load design_system static %}
 {% load teams %}
 {# Custom Sidebar with Collapse Support #}
 {# Load user workspaces for switcher #}
@@ -41,13 +41,19 @@
             {% include "core/components/brand/logo.html.j2" with class="h-6 w-auto text-text" %}
         </a>
         {# Mobile Close Button #}
-        <button x-show="!sidebarCollapsed"
-                x-cloak
-                @click="sidebarMobileOpen = false"
-                class="lg:hidden absolute right-3 p-2 rounded-lg text-text-muted transition-colors duration-150 sidebar-link-hover"
-                aria-label="Close sidebar">
-            <i class="fas fa-times text-lg"></i>
-        </button>
+        {% comment %}
+            The wrapper owns the responsive display and position: tw-icon-btn
+            sets display itself, so lg:hidden on the button would lose to it.
+        {% endcomment %}
+        <div class="lg:hidden absolute right-3">
+            <button x-show="!sidebarCollapsed"
+                    x-cloak
+                    @click="sidebarMobileOpen = false"
+                    class="tw-icon-btn"
+                    aria-label="Close sidebar">
+                <i class="fas fa-times text-lg" aria-hidden="true"></i>
+            </button>
+        </div>
     </div>
     {# Team Selector #}
     {% with sidebar_team=request.session.current_team %}
@@ -93,7 +99,7 @@
                          x-transition:leave-start="opacity-100 translate-y-0"
                          x-transition:leave-end="opacity-0 translate-y-1"
                          @click.away="open = false"
-                         class="absolute bg-surface rounded-xl shadow-lg border border-border z-50 overflow-hidden"
+                         class="tw-dropdown tw-dropdown-flush"
                          :class="sidebarCollapsed ? 'left-full top-0 ml-2 w-64' : 'left-0 right-0 mt-2'"
                          role="menu">
                         {# Header #}
@@ -145,11 +151,8 @@
                                 <i class="fas fa-plus text-[10px]"></i>
                                 Create Workspace
                             </button>
-                            <a href="{% url 'teams:teams_dashboard' %}"
-                               class="flex items-center justify-center gap-2 w-full px-3 py-2 text-xs font-medium text-text-muted hover:text-text hover:bg-surface-hover rounded-lg transition-colors no-underline">
-                                <i class="fas fa-cog text-[10px]"></i>
-                                Manage Workspaces
-                            </a>
+                            {% url 'teams:teams_dashboard' as manage_workspaces_url %}
+                            {% button_link url=manage_workspaces_url text="Manage Workspaces" variant="ghost" size="sm" icon="fas fa-cog" class="w-full no-underline" %}
                         </div>
                     </div>
                 </div>

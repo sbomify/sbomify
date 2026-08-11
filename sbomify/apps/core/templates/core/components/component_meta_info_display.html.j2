@@ -20,7 +20,7 @@
                             <span class="font-semibold text-text"
                                   x-text="metadata.contact_profile.name"></span>
                             <template x-if="metadata.contact_profile.is_default">
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/20 text-text-muted">Default</span>
+                                <span class="tw-badge-secondary tw-badge-sm">Default</span>
                             </template>
                         </div>
                     </div>
@@ -86,7 +86,7 @@
                                     <div class="flex flex-wrap gap-2">
                                         <template x-for="license in metadata.licenses"
                                                   :key="typeof license === 'string' ? license : license.name">
-                                            <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border">
+                                            <span class="tw-tag">
                                                 <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
                                             </span>
                                         </template>
@@ -151,14 +151,18 @@
                                 <div class="flex flex-col gap-2">
                                     <template x-for="(contact, index) in metadata.supplier.contacts" :key="index">
                                         <div class="flex items-center flex-wrap gap-1">
-                                            <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border inline-flex items-center">
+                                            <span class="tw-tag">
                                                 <span x-text="contact.name"></span>
                                                 <template x-if="contact.email">
                                                     <span x-text="' (' + contact.email + ')'"></span>
                                                 </template>
-                                                <i x-show="showEditButton"
-                                                   class="far fa-times-circle ml-2 cursor-pointer text-text-muted hover:text-danger"
-                                                   @click="removeSupplierContact(index)"></i>
+                                                <button type="button"
+                                                        x-show="showEditButton"
+                                                        class="tw-tag-close"
+                                                        aria-label="Remove contact"
+                                                        @click="removeSupplierContact(index)">
+                                                    <i class="fas fa-times" aria-hidden="true"></i>
+                                                </button>
                                             </span>
                                         </div>
                                     </template>
@@ -223,7 +227,7 @@
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="license in metadata.licenses"
                                           :key="typeof license === 'string' ? license : license.name">
-                                    <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border">
+                                    <span class="tw-tag">
                                         <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
                                     </span>
                                 </template>
@@ -238,12 +242,16 @@
                         <template x-if="!isEmpty(metadata.authors)">
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="(author, index) in metadata.authors" :key="index">
-                                    <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border inline-flex items-center">
+                                    <span class="tw-tag">
                                         <span x-text="author.name"></span>
                                         <span x-text="' (' + author.email + ')'"></span>
-                                        <i x-show="showEditButton"
-                                           class="far fa-times-circle ml-2 cursor-pointer text-text-muted hover:text-danger"
-                                           @click="removeAuthor(index)"></i>
+                                        <button type="button"
+                                                x-show="showEditButton"
+                                                class="tw-tag-close"
+                                                aria-label="Remove author"
+                                                @click="removeAuthor(index)">
+                                            <i class="fas fa-times" aria-hidden="true"></i>
+                                        </button>
                                     </span>
                                 </template>
                             </div>

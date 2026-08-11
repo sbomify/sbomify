@@ -49,14 +49,14 @@
                 <div class="p-6">
                     <div class="flex flex-wrap gap-2">
                         {% for entry in rollup.top_vulnerable %}
-                            <span class="px-3 py-1.5 text-sm rounded-lg border border-danger/30 bg-danger/10 text-danger">
+                            <span class="tw-tag tw-tag-danger">
                                 {{ entry.name }}
                                 <span class="text-xs opacity-75">· {{ entry.components }} component{{ entry.components|pluralize }}</span>
                             </span>
                         {% endfor %}
                     </div>
                     <p class="text-xs text-text-muted mt-4 mb-0">
-                        CNSA 2.0 sets 2030–2033 transition deadlines for quantum-vulnerable algorithms; EO 14412
+                        CNSA 2.0 sets 2030 to 2033 transition deadlines for quantum-vulnerable algorithms; EO 14412
                         directs CBOM minimum-elements guidance by March 2027.
                     </p>
                 </div>
@@ -104,7 +104,7 @@
                                         {% if row.certificates.expired %}
                                             <span class="tw-badge tw-badge-danger">{{ row.certificates.expired }} expired</span>
                                         {% elif row.certificates.expiring_soon %}
-                                            <span class="px-2 py-1 text-xs font-semibold rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">{{ row.certificates.expiring_soon }} expiring</span>
+                                            <span class="tw-badge-severity-high">{{ row.certificates.expiring_soon }} expiring</span>
                                         {% else %}
                                             <span class="text-text-muted">{{ row.certificates.count }}</span>
                                         {% endif %}

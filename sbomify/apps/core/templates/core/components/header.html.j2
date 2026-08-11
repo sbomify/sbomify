@@ -5,13 +5,19 @@
         x-data="{ sidebarOpen: false, searchOpen: false }"
         role="banner">
     {# Mobile Sidebar Toggle #}
-    <button @click="sidebarOpen = !sidebarOpen; $dispatch('toggle-sidebar')"
-            class="lg:hidden p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
-            aria-label="Toggle sidebar navigation"
-            :aria-expanded="sidebarOpen"
-            aria-controls="sidebar">
-        <i class="fas fa-bars text-lg" aria-hidden="true"></i>
-    </button>
+    {% comment %}
+        The wrapper owns the responsive display: tw-icon-btn sets display
+        itself, so lg:hidden on the button would lose to it.
+    {% endcomment %}
+    <div class="lg:hidden">
+        <button @click="sidebarOpen = !sidebarOpen; $dispatch('toggle-sidebar')"
+                class="tw-icon-btn"
+                aria-label="Toggle sidebar navigation"
+                :aria-expanded="sidebarOpen"
+                aria-controls="sidebar">
+            <i class="fas fa-bars text-lg" aria-hidden="true"></i>
+        </button>
+    </div>
     {# Search Bar #}
     <div class="flex-1 max-w-xl">
         <div class="tw-search-input tw-search-input-hint"
@@ -35,10 +41,16 @@
                 </kbd>
             </div>
             {# Search Results Dropdown #}
+            {% comment %}
+                tw-dropdown-flush owns overflow, so the scroll cap lives on the
+                inner list element that the spotlight script renders into.
+            {% endcomment %}
             <div id="search-results-dropdown"
-                 class="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-lg shadow-xl py-2 max-h-96 overflow-y-auto hidden"
+                 class="tw-dropdown tw-dropdown-flush top-full left-0 right-0 mt-2 hidden"
                  role="listbox"
-                 aria-label="Search results"></div>
+                 aria-label="Search results">
+                <div id="search-results-list" class="max-h-96 overflow-y-auto py-2"></div>
+            </div>
         </div>
     </div>
     {# Action Buttons #}
@@ -112,7 +124,7 @@
              @keydown.escape.window="if(open) open = false"
              id="notifications-dropdown-container">
             <button @click="open = !open; if(open) $dispatch('notifications-open')"
-                    class="relative p-2 rounded-lg text-text-muted transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
+                    class="tw-icon-btn relative"
                     aria-label="View notifications"
                     :aria-expanded="open"
                     aria-haspopup="true">
@@ -130,19 +142,25 @@
                  x-transition:leave-start="opacity-100 translate-y-0"
                  x-transition:leave-end="opacity-0 translate-y-1"
                  @click.away="open = false"
-                 class="absolute right-0 mt-2 w-80 bg-surface border border-border rounded-xl shadow-xl z-50 overflow-hidden"
+                 class="tw-dropdown tw-dropdown-flush right-0 mt-2 w-80"
                  role="menu"
                  aria-orientation="vertical"
                  aria-label="Notifications"
                  id="notifications-dropdown">
                 {# Header #}
-                <div class="flex items-center justify-between px-4 py-3 border-b border-border bg-surface">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-border">
                     <div class="flex items-center gap-2">
                         <i class="fas fa-bell text-primary"></i>
                         <span class="text-sm font-semibold text-text">Notifications</span>
                     </div>
+                    {% comment %}
+                        Starts hidden inline: the notifications script shows it via
+                        style.display, because a `hidden` utility loses to the
+                        display set by tw-btn-ghost.
+                    {% endcomment %}
                     <button type="button"
-                            class="text-xs font-medium text-primary hover:text-primary-dark hidden px-2 py-1 rounded hover:bg-primary/5 transition-colors"
+                            class="tw-btn-ghost tw-btn-sm"
+                            style="display: none"
                             id="clearAllNotifications">Clear all</button>
                 </div>
                 {# Body #}
@@ -173,7 +191,7 @@
              class="relative"
              @keydown.escape.window="if(open) open = false">
             <button @click="open = !open"
-                    class="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary header-btn-hover"
+                    class="tw-btn-ghost"
                     :aria-expanded="open"
                     aria-haspopup="true"
                     aria-label="User menu">

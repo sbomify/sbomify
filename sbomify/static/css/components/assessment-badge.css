@@ -40,13 +40,13 @@
 }
 
 .assessment-modal .modal-header {
-  background-color: rgb(var(--color-surface));
-  border-bottom: 1px solid rgb(var(--color-border));
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   padding: 1rem 1.5rem;
 }
 
 .assessment-modal .modal-title {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   font-weight: 600;
 }
 
@@ -55,14 +55,14 @@
 }
 
 .assessment-modal .modal-footer {
-  background-color: rgb(var(--color-surface));
-  border-top: 1px solid rgb(var(--color-border));
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
   padding: 1rem 1.5rem;
 }
 
 /* Summary cards */
 .assessment-summary .summary-card {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--color-border);
   transition: transform 0.2s ease;
 }
 
@@ -82,16 +82,16 @@
 
 /* Plugin result cards */
 .plugin-result-card {
-  background-color: rgb(var(--color-surface));
+  background-color: var(--color-surface);
   transition: all 0.2s ease;
 }
 
 .plugin-result-card:hover {
-  background-color: rgb(var(--color-surface-hover));
+  background-color: var(--color-surface-hover);
 }
 
 .plugin-result-card .plugin-name {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .plugin-result-card .plugin-stats {
@@ -100,22 +100,22 @@
 
 /* Assessment plugins section */
 .assessment-plugins h6 {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   font-weight: 600;
-  border-bottom: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid var(--color-border);
   padding-bottom: 0.5rem;
 }
 
 /* Dark mode adjustments */
 .dark .assessment-modal .modal-content {
-  background-color: rgb(var(--color-surface));
+  background-color: var(--color-surface);
 }
 
 .dark .assessment-summary .summary-card {
-  border-color: rgb(var(--color-border));
+  border-color: var(--color-border);
 }
 
 .dark .plugin-result-card {
-  border-color: rgb(var(--color-border));
+  border-color: var(--color-border);
 }
 

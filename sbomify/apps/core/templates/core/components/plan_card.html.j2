@@ -38,23 +38,25 @@
                 {% endif %}
                 {% if custom_content %}<div class="py-2">{{ custom_content }}</div>{% endif %}
                 {% if warning_message %}
-                    <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/10 border border-warning/30"
-                         role="alert">
-                        <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
-                        <span class="text-text">{{ warning_message }}</span>
+                    <div class="tw-alert tw-alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle tw-alert-icon" aria-hidden="true"></i>
+                        <div class="tw-alert-content">
+                            <span>{{ warning_message }}</span>
+                        </div>
                     </div>
                 {% endif %}
                 {% if info_message %}
-                    <div class="flex items-start gap-3 p-4 rounded-lg bg-info/10 border border-info/30"
-                         role="alert">
-                        <i class="fas fa-info-circle text-info mt-0.5"></i>
-                        <span class="text-text">{{ info_message }}</span>
+                    <div class="tw-alert tw-alert-info" role="alert">
+                        <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                        <div class="tw-alert-content">
+                            <span>{{ info_message }}</span>
+                        </div>
                     </div>
                 {% endif %}
                 <div class="pt-4">
                     {% if form_controls %}<div class="mb-3">{{ form_controls }}</div>{% endif %}
                     <button type="button"
-                            class="w-full py-3 px-4 rounded-lg font-semibold transition-colors"
+                            class="w-full"
                             :class="buttonClasses"
                             :disabled="isButtonDisabled"
                             @click="handleAction">

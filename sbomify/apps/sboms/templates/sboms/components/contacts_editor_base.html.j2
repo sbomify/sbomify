@@ -2,25 +2,23 @@
 <template x-if="contacts && contacts.length">
     <div class="flex flex-wrap gap-2 mb-3">
         <template x-for="(contact, index) in contacts" :key="index">
-            <div class="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-full text-sm">
-                <span class="text-text" x-text="contact.name"></span>
-                <span x-show="contact.email"
-                      class="text-text-muted"
-                      x-text="'(' + contact.email + ')'"></span>
+            <span class="tw-tag tw-tag-primary">
+                <span x-text="contact.name"></span>
+                <span x-show="contact.email" x-text="'(' + contact.email + ')'"></span>
                 <button type="button"
-                        class="p-0.5 text-danger cursor-pointer hover:text-danger/80 transition-colors"
+                        class="tw-tag-close"
                         @click="removeContact(index)"
                         title="Remove contact"
                         :aria-label="'Remove ' + contact.name">
-                    <i class="far fa-times-circle" aria-hidden="true"></i>
+                    <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
-            </div>
+            </span>
         </template>
     </div>
 </template>
 <!-- Add Contact Form -->
 <template x-if="addingContact">
-    <div class="bg-background/50 rounded-xl p-4 border border-border mb-3">
+    <div class="tw-inset-card mb-3">
         <div class="mb-3">
             <label class="block text-sm font-medium text-text mb-1">
                 Name <span class="text-danger">*</span>
@@ -28,7 +26,7 @@
             <input type="text"
                    x-model="newContact.name"
                    class="tw-form-input"
-                   :class="{ 'border-danger': formErrors.name }"
+                   :class="{ 'tw-form-input-error': formErrors.name }"
                    placeholder="Enter name"
                    @keyup.enter="saveContact()">
             <template x-if="formErrors.name">
@@ -40,7 +38,7 @@
             <input type="email"
                    x-model="newContact.email"
                    class="tw-form-input"
-                   :class="{ 'border-danger': formErrors.email }"
+                   :class="{ 'tw-form-input-error': formErrors.email }"
                    placeholder="Enter email address"
                    @keyup.enter="saveContact()">
             <template x-if="formErrors.email">
@@ -52,7 +50,7 @@
             <input type="tel"
                    x-model="newContact.phone"
                    class="tw-form-input"
-                   :class="{ 'border-danger': formErrors.phone }"
+                   :class="{ 'tw-form-input-error': formErrors.phone }"
                    placeholder="Enter phone number"
                    @keyup.enter="saveContact()">
             <template x-if="formErrors.phone">

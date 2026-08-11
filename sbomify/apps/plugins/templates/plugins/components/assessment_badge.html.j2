@@ -73,23 +73,22 @@
                             <!-- Summary -->
                             <div class="mb-6">
                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    <div class="text-center p-4 rounded-lg"
-                                         :class="overallStatus === 'all_pass' ? 'bg-success/10' : 'bg-border/30'">
-                                        <div class="text-2xl font-bold text-success" x-text="passingCount"></div>
-                                        <div class="text-text-muted text-sm">Passing</div>
+                                    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
+                                        <span class="tw-stat-value" x-text="passingCount"></span>
+                                        <span class="tw-stat-label mt-1 mb-0">Passing</span>
                                     </div>
-                                    <div class="text-center p-4 rounded-lg"
-                                         :class="failingCount > 0 ? 'bg-warning/10' : 'bg-border/30'">
-                                        <div class="text-2xl font-bold text-warning" x-text="failingCount"></div>
-                                        <div class="text-text-muted text-sm">Failing</div>
+                                    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+                                        <span class="tw-stat-value" x-text="failingCount"></span>
+                                        <span class="tw-stat-label mt-1 mb-0">Failing</span>
                                     </div>
-                                    <div class="text-center p-4 rounded-lg bg-border/30">
-                                        <div class="text-2xl font-bold text-info" x-text="pendingCount"></div>
-                                        <div class="text-text-muted text-sm">Pending</div>
+                                    <div class="tw-stat-card tw-stat-card-compact"
+                                         style="--stat-accent: var(--color-info)">
+                                        <span class="tw-stat-value" x-text="pendingCount"></span>
+                                        <span class="tw-stat-label mt-1 mb-0">Pending</span>
                                     </div>
-                                    <div class="text-center p-4 rounded-lg bg-border/30">
-                                        <div class="text-2xl font-bold text-text-muted" x-text="totalAssessments"></div>
-                                        <div class="text-text-muted text-sm">Total</div>
+                                    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
+                                        <span class="tw-stat-value" x-text="totalAssessments"></span>
+                                        <span class="tw-stat-label mt-1 mb-0">Total</span>
                                     </div>
                                 </div>
                             </div>
@@ -129,9 +128,10 @@
                                                 </div>
                                                 <template x-if="plugin.status !== 'pending'">
                                                     <a :href="getPluginDetailUrl(plugin.name)"
-                                                       class="px-3 py-1.5 text-sm border border-primary text-primary rounded-lg hover:bg-primary/10 transition-colors no-underline"
-                                                       title="View findings">
-                                                        <i class="fas fa-arrow-right"></i>
+                                                       class="tw-icon-btn tw-icon-btn-primary no-underline"
+                                                       title="View findings"
+                                                       aria-label="View findings">
+                                                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
                                                     </a>
                                                 </template>
                                             </div>

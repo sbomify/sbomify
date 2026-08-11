@@ -57,7 +57,7 @@
             <p class="tc-prose mb-4">Combined artifacts covering everything in this release.</p>
             <div class="flex gap-3 flex-wrap">
                 {% if release.has_sboms %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                    <a class="tw-btn-outline no-underline"
                        href="{% url 'api-1:download_release' release.id %}"
                        title="Download release as CycloneDX">
                         <img src="{% static 'img/cyclonedx-logo.svg' %}"
@@ -65,9 +65,9 @@
                              class="h-5 w-auto dark:brightness-0 dark:invert"
                              width="20"
                              height="20">
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                        <i class="fas fa-download text-xs" aria-hidden="true"></i>
                     </a>
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                    <a class="tw-btn-outline no-underline"
                        href="{% url 'api-1:download_release' release.id %}?format=spdx"
                        title="Download release as SPDX">
                         <img src="{% static 'img/spdx-logo.svg' %}"
@@ -75,25 +75,25 @@
                              class="h-5 w-auto dark:brightness-0 dark:invert"
                              width="20"
                              height="20">
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                        <i class="fas fa-download text-xs" aria-hidden="true"></i>
                     </a>
                 {% endif %}
                 {% if release.has_vex %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                    <a class="tw-btn-outline no-underline"
                        href="{% url 'api-1:download_release_vex' release.id %}"
                        title="Download latest VEX (CycloneDX)">
-                        <i class="fas fa-file-contract text-info" aria-hidden="true"></i>
-                        <span class="text-sm font-semibold tracking-wide">VEX</span>
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                        <i class="fas fa-file-contract" aria-hidden="true"></i>
+                        <span>VEX</span>
+                        <i class="fas fa-download text-xs" aria-hidden="true"></i>
                     </a>
                 {% endif %}
                 {% if release.has_cbom %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                    <a class="tw-btn-outline no-underline"
                        href="{% url 'api-1:download_release_cbom' release.id %}"
                        title="Download CBOM (Cryptography BOM, CycloneDX)">
-                        <i class="fas fa-key text-success" aria-hidden="true"></i>
-                        <span class="text-sm font-semibold tracking-wide">CBOM</span>
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                        <i class="fas fa-key" aria-hidden="true"></i>
+                        <span>CBOM</span>
+                        <i class="fas fa-download text-xs" aria-hidden="true"></i>
                     </a>
                 {% endif %}
             </div>
@@ -103,48 +103,39 @@
     {% if vuln_posture.has_data %}
         {{ vuln_posture|json_script:"vuln-posture-data" }}
         <div class="tc-panel"
-             x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); }, sevPill(sev) { return { critical: 'bg-red-500/10 text-red-600', high: 'bg-orange-500/10 text-orange-600', medium: 'bg-yellow-500/10 text-yellow-700', low: 'bg-cyan-500/10 text-cyan-600' }[sev] || 'bg-border/40 text-text-muted'; } }"
+             x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); }, sevPill(sev) { return { critical: 'tw-badge-severity-critical', high: 'tw-badge-severity-high', medium: 'tw-badge-severity-medium', low: 'tw-badge-severity-low' }[sev] || 'tw-badge-severity-unknown'; } }"
              x-init="init()">
             <h2 class="tc-panel-title">Vulnerability posture</h2>
             <div class="space-y-5">
                 {# Severity breakdown (VEX applied) #}
                 <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-background border border-border">
-                        <div>
-                            <span class="text-xl font-bold text-text" x-text="data.counts.total"></span>
-                            <span class="block text-xs text-text-muted">Total</span>
-                        </div>
+                    <div class="tw-stat-card tw-stat-card-compact">
+                        <span class="tw-stat-value" x-text="data.counts.total"></span>
+                        <span class="tw-stat-label mt-1 mb-0">Total</span>
                     </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-red-600" x-text="data.counts.critical"></span>
-                            <span class="block text-xs text-text-muted">Critical</span>
-                        </div>
+                    <div class="tw-stat-card tw-stat-card-compact"
+                         style="--stat-accent: var(--color-severity-critical)">
+                        <span class="tw-stat-value" x-text="data.counts.critical"></span>
+                        <span class="tw-stat-label mt-1 mb-0">Critical</span>
                     </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-orange-500/5 border border-orange-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-orange-600" x-text="data.counts.high"></span>
-                            <span class="block text-xs text-text-muted">High</span>
-                        </div>
+                    <div class="tw-stat-card tw-stat-card-compact"
+                         style="--stat-accent: var(--color-severity-high)">
+                        <span class="tw-stat-value" x-text="data.counts.high"></span>
+                        <span class="tw-stat-label mt-1 mb-0">High</span>
                     </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-yellow-700" x-text="data.counts.medium"></span>
-                            <span class="block text-xs text-text-muted">Medium</span>
-                        </div>
+                    <div class="tw-stat-card tw-stat-card-compact"
+                         style="--stat-accent: var(--color-severity-medium)">
+                        <span class="tw-stat-value" x-text="data.counts.medium"></span>
+                        <span class="tw-stat-label mt-1 mb-0">Medium</span>
                     </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-cyan-600" x-text="data.counts.low"></span>
-                            <span class="block text-xs text-text-muted">Low</span>
-                        </div>
+                    <div class="tw-stat-card tw-stat-card-compact"
+                         style="--stat-accent: var(--color-severity-low)">
+                        <span class="tw-stat-value" x-text="data.counts.low"></span>
+                        <span class="tw-stat-label mt-1 mb-0">Low</span>
                     </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-background border border-border">
-                        <div>
-                            <span class="text-xl font-bold text-text-muted"
-                                  x-text="data.counts.unknown"></span>
-                            <span class="block text-xs text-text-muted">Unknown</span>
-                        </div>
+                    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
+                        <span class="tw-stat-value" x-text="data.counts.unknown"></span>
+                        <span class="tw-stat-label mt-1 mb-0">Unknown</span>
                     </div>
                 </div>
                 {# Suppression note #}
@@ -163,17 +154,16 @@
                     <template x-for="f in data.findings" :key="f.idx">
                         <div class="py-2.5 flex items-start gap-3"
                              :class="f.suppressed ? 'opacity-50' : ''">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase flex-shrink-0"
+                            <span class="flex-shrink-0"
                                   :class="sevPill(f.severity)"
                                   x-text="f.severity"></span>
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="font-mono text-sm text-text px-1.5 py-0.5 rounded bg-border/30"
-                                          x-text="f.id"></span>
+                                    <span class="tw-code-inline" x-text="f.id"></span>
                                     <span class="text-text-muted text-xs"
                                           x-show="f.component"
                                           x-text="f.component + (f.component_version ? ' ' + f.component_version : '')"></span>
-                                    <span class="tw-badge tw-badge-secondary text-xs"
+                                    <span class="tw-badge tw-badge-secondary"
                                           x-show="f.suppressed"
                                           x-text="f.state.replace(/_/g, ' ')"></span>
                                 </div>

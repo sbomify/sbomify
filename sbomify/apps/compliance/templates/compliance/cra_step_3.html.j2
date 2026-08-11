@@ -16,7 +16,7 @@
                         <i class="fas fa-clipboard-check text-xs"></i>
                         Security Checklist
                         <template x-if="unansweredCount > 0">
-                            <span class="ml-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-danger/10 text-danger"
+                            <span class="tw-badge-danger tw-badge-sm ml-1"
                                   x-text="unansweredCount + ' unanswered'"></span>
                         </template>
                     </button>
@@ -64,12 +64,12 @@
                                                 {# Part I/II badge (CRA Art 13(4), FAQ 4.1.3) #}
                                                 <span x-show="finding.is_mandatory"
                                                       x-cloak
-                                                      class="px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded bg-danger/10 text-danger"
-                                                      x-tooltip="'Part II — always mandatory (CRA Art 13(4))'">Mandatory</span>
+                                                      class="tw-badge-danger tw-badge-sm"
+                                                      x-tooltip="'Part II: always mandatory (CRA Art 13(4))'">Mandatory</span>
                                                 <span x-show="!finding.is_mandatory"
                                                       x-cloak
-                                                      class="px-1.5 py-0.5 text-[10px] font-semibold uppercase rounded bg-info/10 text-info"
-                                                      x-tooltip="'Part I — applicability based on risk assessment (CRA Art 13(4))'">Risk-based</span>
+                                                      class="tw-badge-info tw-badge-sm"
+                                                      x-tooltip="'Part I: applicability based on risk assessment (CRA Art 13(4))'">Risk-based</span>
                                                 <template x-if="finding.description">
                                                     <i class="fas fa-info-circle text-text-muted hover:text-primary cursor-help transition-colors flex-shrink-0"
                                                        x-tooltip.bottom="finding.description"></i>
@@ -96,25 +96,25 @@
                                          x-cloak
                                          role="status"
                                          aria-live="polite"
-                                         class="mt-2 rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm">
+                                         class="mt-2 tw-callout tw-callout-warning">
                                         {% include "compliance/components/_callout_regulatory_header.html.j2" with icon="fa-scale-balanced" title="Justification required" pill_label="CRA Art 13(4)" pill_href=cra_oj_url|add:"#d1e47-68-1" description="Marking a Part I requirement as Not Applicable only holds up if the reasoning is documented. This text is copied verbatim into the technical documentation package and Declaration of Conformity." %}
-                                        <div class="px-4 pt-3 pb-4">
+                                        <div class="tw-callout-body">
                                             <label class="sr-only" :for="`just-${finding.finding_id}`">Justification</label>
                                             <textarea x-model="finding.justification"
                                                       @input="debouncedPersist(finding)"
                                                       :id="`just-${finding.finding_id}`"
                                                       rows="3"
-                                                      class="tw-form-textarea w-full text-sm focus:border-amber-500 focus:ring-amber-500"
+                                                      class="tw-form-textarea w-full text-sm"
                                                       placeholder="e.g., This requirement is incompatible with the nature of the product because..."></textarea>
                                             <div class="mt-1.5 flex items-center justify-between gap-3 text-[11px]">
                                                 <span x-show="!finding.justification?.trim()"
-                                                      class="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
+                                                      class="flex items-center gap-1 text-warning font-medium">
                                                     <i class="fas fa-exclamation-circle"></i>
                                                     A non-empty justification is required before N/A is saved.
                                                 </span>
                                                 <span x-show="finding.justification?.trim()"
                                                       x-cloak
-                                                      class="flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+                                                      class="flex items-center gap-1 text-success font-medium">
                                                     <i class="fas fa-circle-check"></i>
                                                     Saved on next update
                                                 </span>
@@ -138,42 +138,36 @@
                             Vulnerability Disclosure
                         </h2>
                         <p class="text-sm text-text-muted mt-1 m-0">
-                            CRA Article 13 &amp; Annex I, Part II — coordinated disclosure policy and security contacts
+                            CRA Article 13 &amp; Annex I, Part II: coordinated disclosure policy and security contacts
                         </p>
                     </div>
                     <div class="p-6">
                         {# Security.txt Status Card #}
-                        <div class="mb-5 p-4 rounded-xl border {% if security_txt_enabled %}border-success/30 bg-success/5{% else %}border-warning/30 bg-warning/5{% endif %}">
-                            <div class="flex items-start gap-3">
-                                <span class="tw-icon-chip {% if security_txt_enabled %}tw-icon-chip-success{% else %}tw-icon-chip-warning{% endif %}">
-                                    <i class="fas {% if security_txt_enabled %}fa-check-circle{% else %}fa-file-shield{% endif %}"
-                                       aria-hidden="true"></i>
-                                </span>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center justify-between gap-2">
-                                        <h3 class="text-sm font-semibold text-text m-0">
-                                            security.txt
-                                            <span class="font-normal text-text-muted">(RFC 9116)</span>
-                                        </h3>
-                                    </div>
-                                    <p class="text-xs text-text-muted mt-1 m-0">
-                                        {% if security_txt_enabled %}
-                                            Served at <code class="text-xs px-1 py-0.5 rounded bg-border/30">/.well-known/security.txt</code> — satisfies Annex I, Part II, §5.
-                                        {% else %}
-                                            Required by Annex I, Part II, §5 for coordinated vulnerability disclosure.
-                                        {% endif %}
-                                    </p>
-                                </div>
-                                <a href="{% url 'teams:team_settings' team.key %}#trust-center"
-                                   class="tw-btn-outline-primary tw-btn-sm text-xs flex-shrink-0">
+                        <div class="tw-alert {% if security_txt_enabled %}tw-alert-success{% else %}tw-alert-warning{% endif %} mb-5">
+                            <i class="fas {% if security_txt_enabled %}fa-check-circle{% else %}fa-file-shield{% endif %} tw-alert-icon"
+                               aria-hidden="true"></i>
+                            <div class="tw-alert-content">
+                                <p class="tw-alert-title m-0">
+                                    security.txt
+                                    <span class="font-normal opacity-70">(RFC 9116)</span>
+                                </p>
+                                <p class="text-xs opacity-80 m-0">
                                     {% if security_txt_enabled %}
-                                        Manage
+                                        Served at <code class="tw-code-inline">/.well-known/security.txt</code>. Satisfies Annex I, Part II, §5.
                                     {% else %}
-                                        Set Up
+                                        Required by Annex I, Part II, §5 for coordinated vulnerability disclosure.
                                     {% endif %}
-                                    <i class="fas fa-arrow-right ml-1 text-[10px]"></i>
-                                </a>
+                                </p>
                             </div>
+                            <a href="{% url 'teams:team_settings' team.key %}#trust-center"
+                               class="tw-btn-outline-primary tw-btn-sm flex-shrink-0">
+                                {% if security_txt_enabled %}
+                                    Manage
+                                {% else %}
+                                    Set Up
+                                {% endif %}
+                                <i class="fas fa-arrow-right ml-1 text-[10px]"></i>
+                            </a>
                         </div>
                         {# CRA-specific: acknowledgment timeline (not covered by security.txt) #}
                         <div class="mt-1">
@@ -233,15 +227,13 @@
                                 <p class="tw-form-hint mt-1">Email for incident notifications to your CSIRT</p>
                             </div>
                         </div>
-                        <div class="flex items-center gap-3 px-4 py-3 bg-surface-hover rounded-lg">
+                        <label class="tw-select-row">
                             <input type="checkbox"
                                    x-model="enisaSrpRegistered"
                                    id="enisa-srp"
                                    class="tw-checkbox shrink-0">
-                            <label for="enisa-srp" class="text-text cursor-pointer select-none">
-                                Registered with ENISA Single Reporting Platform
-                            </label>
-                        </div>
+                            <span class="text-text select-none">Registered with ENISA Single Reporting Platform</span>
+                        </label>
                         <div>
                             <label class="tw-form-label" for="irp-url">Incident Response Plan URL</label>
                             <p class="text-xs text-text-muted mb-2">Link to your documented incident response procedure</p>

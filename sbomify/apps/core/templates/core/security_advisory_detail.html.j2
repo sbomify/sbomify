@@ -107,7 +107,7 @@
             {% if has_crud_permissions %}
                 <div class="flex gap-4">
                     <div class="flex flex-col items-center">
-                        <span class="w-8 h-8 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center text-primary shrink-0">
+                        <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-circle">
                             <i class="fas fa-pen text-xs" aria-hidden="true"></i>
                         </span>
                         <span class="w-px flex-1 bg-border/70 my-1"></span>
@@ -150,7 +150,7 @@
             {% for u in timeline %}
                 <div class="flex gap-4 group" x-data="{ editing: false }">
                     <div class="flex flex-col items-center">
-                        <span class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-text-muted shrink-0">
+                        <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-circle tw-icon-chip-neutral">
                             <i class="{{ u.icon }} text-xs" aria-hidden="true"></i>
                         </span>
                         {% if not forloop.last %}<span class="w-px flex-1 bg-border/70 my-1"></span>{% endif %}
@@ -194,7 +194,7 @@
                                           name="note"
                                           rows="2"
                                           required
-                                          class="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text resize-none transition-colors focus:outline-none focus:border-primary/60">{{ u.note }}</textarea>
+                                          class="tw-form-textarea">{{ u.note }}</textarea>
                                 <div class="flex items-center gap-2 mt-2">
                                     <button type="submit" class="tw-btn-primary tw-btn-sm">Save</button>
                                     <button type="button"
@@ -259,13 +259,13 @@
                             {% if advisory.advisory_type == 'workspace_notice' %}
                                 A workspace notice names no products.
                             {% else %}
-                                No products recorded yet — publishing a product advisory requires at least one.
+                                No products recorded yet. Publishing a product advisory requires at least one.
                             {% endif %}
                         </p>
                     {% endif %}
                     {% for product in advisory.products %}
-                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/20 text-text-muted border border-border/40">
-                            <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
+                        <span class="tw-chip-neutral">
+                            <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
                             {% if product.id %}
                                 <a href="{% url 'core:product_details' product.id %}"
                                    class="transition-colors hover:opacity-80">{{ product.name }}</a>
@@ -362,21 +362,23 @@
                                         becomes readable outside this workspace and is assigned a permanent
                                         tracking id.
                                     </p>
-                                    <fieldset class="space-y-2 pt-1">
+                                    <fieldset class="pt-1">
                                         <legend class="tw-form-label mb-1">Who can read it</legend>
-                                        {% for value, meta in publish_visibilities.items %}
-                                            <label class="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/40">
-                                                <input type="radio"
-                                                       name="visibility"
-                                                       value="{{ value }}"
-                                                       class="tw-radio mt-0.5"
-                                                       {% if forloop.first %}checked{% endif %} />
-                                                <span class="min-w-0">
-                                                    <span class="block text-sm font-medium text-text">{{ meta.label }}</span>
-                                                    <span class="block text-xs text-text-muted">{{ meta.help }}</span>
-                                                </span>
-                                            </label>
-                                        {% endfor %}
+                                        <div class="rounded-lg border border-border divide-y divide-border overflow-hidden">
+                                            {% for value, meta in publish_visibilities.items %}
+                                                <label class="tw-select-row">
+                                                    <input type="radio"
+                                                           name="visibility"
+                                                           value="{{ value }}"
+                                                           class="tw-radio mt-0.5"
+                                                           {% if forloop.first %}checked{% endif %} />
+                                                    <span class="min-w-0">
+                                                        <span class="block text-sm font-medium text-text">{{ meta.label }}</span>
+                                                        <span class="block text-xs text-text-muted">{{ meta.help }}</span>
+                                                    </span>
+                                                </label>
+                                            {% endfor %}
+                                        </div>
                                     </fieldset>
                                 </div>
                                 <div class="tw-modal-footer">
@@ -578,7 +580,7 @@
                                 <input type="hidden" name="intent" value="link_vex" />
                                 <div class="tw-modal-body space-y-4">
                                     <p class="text-sm text-text-muted">
-                                        Associate an existing VEX with this advisory. VEX statements are maintained per component — linking references the live statement rather than copying it.
+                                        Associate an existing VEX with this advisory. VEX statements are maintained per component. Linking references the live statement, not a copy.
                                     </p>
                                     {% if vex_candidates %}
                                         <div class="relative">
@@ -592,21 +594,24 @@
                                                    class="tw-form-input" />
                                         </div>
                                         <div class="space-y-2">
-                                            <template x-for="v in filtered" :key="v.id">
-                                                <label class="flex items-start gap-3 rounded-lg border border-border p-3 cursor-pointer transition-colors hover:border-primary/50">
-                                                    <input type="checkbox"
-                                                           name="vex_ids"
-                                                           :value="v.id"
-                                                           x-model="sel"
-                                                           class="tw-checkbox mt-0.5" />
-                                                    <span class="min-w-0">
-                                                        <span class="block text-sm font-medium text-text"
-                                                              x-text="v.product + ' — maintained VEX'"></span>
-                                                        <span class="block text-xs text-text-muted mt-0.5"
-                                                              x-text="v.format + ' · covers ' + v.coverage + ' · updated ' + v.updated"></span>
-                                                    </span>
-                                                </label>
-                                            </template>
+                                            <div class="rounded-lg border border-border divide-y divide-border overflow-hidden"
+                                                 x-show="filtered.length > 0">
+                                                <template x-for="v in filtered" :key="v.id">
+                                                    <label class="tw-select-row">
+                                                        <input type="checkbox"
+                                                               name="vex_ids"
+                                                               :value="v.id"
+                                                               x-model="sel"
+                                                               class="tw-checkbox mt-0.5" />
+                                                        <span class="min-w-0">
+                                                            <span class="block text-sm font-medium text-text"
+                                                                  x-text="v.product + ': maintained VEX'"></span>
+                                                            <span class="block text-xs text-text-muted mt-0.5"
+                                                                  x-text="v.format + ' · covers ' + v.coverage + ' · updated ' + v.updated"></span>
+                                                        </span>
+                                                    </label>
+                                                </template>
+                                            </div>
                                             <template x-if="filtered.length === 0">
                                                 <div class="rounded-lg border border-border bg-surface p-4 text-sm text-text-muted text-center">
                                                     No VEX matches your search.

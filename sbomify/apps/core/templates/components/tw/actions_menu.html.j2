@@ -29,17 +29,17 @@
      x-data="actionsMenu"
      @keydown.escape.window="closeAndFocus()"
      {{ attrs|safe }}>
+    {% comment %}
+        The stopped click keeps the press off a clickable table row, and off the
+        teleported menu's own click-outside handler, which would re-open it.
+    {% endcomment %}
     <button type="button"
-        x-ref="trigger"
-        class="{{ trigger_class|default:'tw-icon-btn tw-icon-btn-sm' }}"
-        {% comment %}
-            Stops the click reaching a clickable table row, and stops the
-            teleported menu's own click-outside handler from re-opening it.
-        {% endcomment %}
-        @click.stop="toggle()"
-        :aria-expanded="open"
-        aria-haspopup="true"
-        aria-label="{{ label|default:'Actions' }}">
+            x-ref="trigger"
+            class="{{ trigger_class|default:'tw-icon-btn tw-icon-btn-sm' }}"
+            @click.stop="toggle()"
+            :aria-expanded="open"
+            aria-haspopup="true"
+            aria-label="{{ label|default:'Actions' }}">
         <i class="{{ icon|default:'fas fa-ellipsis-vertical' }}"
            aria-hidden="true"></i>
     </button>

@@ -1,5 +1,6 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
+{% load design_system %}
 {% load django_vite %}
 {% load advisory_tags %}
 {% block title %}{{ component.get_component_type_display }}: {{ item.name }}{% endblock %}
@@ -10,235 +11,192 @@
           href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        {# Page Header - matches component page pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas {% if is_sbom_backed %}fa-file-code{% else %}fa-file-alt{% endif %}"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <h1 class="text-2xl font-bold text-text">{{ item.name }}</h1>
-                        <div class="flex items-center gap-2 text-sm text-text-muted">
-                            {% include 'core/components/copyable_value.html.j2' with value=item.id title="ID: "|add:item.id|add:" (click to copy)" %}
-                        </div>
-                    </div>
-                    {# Breadcrumb #}
-                    <nav aria-label="breadcrumb" class="mt-1">
-                        <ol class="flex items-center gap-2 text-sm text-text-muted">
-                            <li>
-                                <a href="{% url 'core:component_details' item.component_id %}"
-                                   class="text-primary hover:underline no-underline">{{ item.component_name }}</a>
-                            </li>
-                            <li class="text-text-muted">/</li>
-                            <li class="text-text" aria-current="page">
-                                {% if is_vex %}
-                                    VEX Details
-                                {% elif is_cbom %}
-                                    CBOM Details
-                                {% elif is_sbom_backed %}
-                                    SBOM Details
-                                {% else %}
-                                    Document Details
-                                {% endif %}
-                            </li>
-                        </ol>
-                    </nav>
-                </div>
-            </div>
-            {# Action Buttons #}
-            <div class="flex gap-2 flex-shrink-0">
-                {% if is_sbom_backed %}
-                    <a href="{% url 'sboms:sbom_download' item.id %}"
-                       class="tw-btn-secondary inline-flex items-center gap-2"
-                       title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} {% if is_vex %}VEX{% elif is_cbom %}CBOM{% else %}SBOM{% endif %}">
-                        {% if item.format == 'cyclonedx' %}
-                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt="CycloneDX"
-                                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                                 width="16"
-                                 height="16">
-                        {% elif item.format == 'spdx' %}
-                            <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt="SPDX"
-                                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                                 width="16"
-                                 height="16">
-                        {% endif %}
-                        <i class="fas fa-download"></i>
-                    </a>
-                {% elif item_type == 'documents' %}
-                    <a href="{% url 'documents:document_download' item.id %}"
-                       class="tw-btn-primary inline-flex items-center gap-2 no-underline">
-                        <i class="fas fa-download"></i>Download
-                    </a>
-                {% endif %}
-            </div>
-        </div>
-        {# Stats Badges #}
-        <div class="flex flex-wrap gap-2">
-            {% if is_sbom_backed %}
-                <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
-                    {% if item.format == 'cyclonedx' %}
-                        CYCLONEDX
-                    {% elif item.format == 'spdx' %}
-                        SPDX
-                    {% else %}
-                        {{ item.format|upper }}
-                    {% endif %}
-                    {{ item.format_version }}
-                </span>
-                {% if item.version %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-code-branch text-primary text-xs"></i>
-                        <span class="text-text-muted">Version:</span>
-                        <span class="font-semibold text-text" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                    </div>
-                {% endif %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                    <i class="fas fa-calendar text-primary text-xs"></i>
-                    <span class="text-text-muted">Uploaded:</span>
-                    <span class="font-semibold text-text">
-                        {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
-                    </span>
-                </div>
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-upload text-info text-xs"></i>
-                    <span class="text-info-muted">Source:</span>
-                    <span class="font-semibold text-info">{{ item.source_display }}</span>
-                </div>
-                {% if item.signature_blob_key %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
-                        <i class="fas fa-lock text-success text-xs"></i>
-                        <span class="font-semibold text-success">Signed</span>
-                    </div>
-                {% endif %}
-                {% if item.provenance_blob_key %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                        <i class="fas fa-shield-alt text-info text-xs"></i>
-                        <span class="font-semibold text-info">Provenance</span>
-                    </div>
-                {% endif %}
-            {% elif item_type == 'documents' %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-file text-info text-xs"></i>
-                    <span class="font-semibold text-info">{{ item.document_type|default:"Document" }}</span>
-                </div>
-                {% if item.version %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-code-branch text-primary text-xs"></i>
-                        <span class="text-text-muted">Version:</span>
-                        <span class="font-semibold text-text" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                    </div>
-                {% endif %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                    <i class="fas fa-calendar text-primary text-xs"></i>
-                    <span class="text-text-muted">Uploaded:</span>
-                    <span class="font-semibold text-text">
-                        {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
-                    </span>
-                </div>
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                    <i class="fas fa-upload text-primary text-xs"></i>
-                    <span class="text-text-muted">Source:</span>
-                    <span class="font-semibold text-text">{{ item.source_display }}</span>
-                </div>
-                {% if item.content_type %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-file-alt text-primary text-xs"></i>
-                        <span class="text-text-muted">Format:</span>
-                        <span class="font-semibold text-text">{{ item.content_type }}</span>
-                    </div>
-                {% endif %}
-                {% if item.file_size %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-weight text-primary text-xs"></i>
-                        <span class="text-text-muted">Size:</span>
-                        <span class="font-semibold text-text">{{ item.file_size|filesizeformat }}</span>
-                    </div>
-                {% endif %}
+    {% page_header title=item.name icon=header_icon mark="avatar" copy_values=header_copy_values breadcrumbs=breadcrumb_items %}
+    {% if is_sbom_backed %}
+        <a href="{% url 'sboms:sbom_download' item.id %}"
+           class="tw-btn-secondary"
+           title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} {% if is_vex %}VEX{% elif is_cbom %}CBOM{% else %}SBOM{% endif %}">
+            {% if item.format == 'cyclonedx' %}
+                <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                     alt="CycloneDX"
+                     class="h-4 w-auto dark:brightness-0 dark:invert"
+                     width="16"
+                     height="16">
+            {% elif item.format == 'spdx' %}
+                <img src="{% static 'img/spdx-logo.svg' %}"
+                     alt="SPDX"
+                     class="h-4 w-auto dark:brightness-0 dark:invert"
+                     width="16"
+                     height="16">
             {% endif %}
-        </div>
+            <i class="fas fa-download"></i>
+        </a>
+    {% elif item_type == 'documents' %}
+        <a href="{% url 'documents:document_download' item.id %}"
+           class="tw-btn-primary no-underline">
+            <i class="fas fa-download"></i>Download
+        </a>
+    {% endif %}
+{% endpage_header %}
+<div class="space-y-6">
+    {# Stats Badges #}
+    <div class="flex flex-wrap gap-2">
         {% if is_sbom_backed %}
-            {# Vulnerability Summary Section #}
-            {% if vulnerability_summary %}
-                <div class="tw-card">
-                    <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                            <i class="fas fa-shield-alt text-primary"></i>
-                            Vulnerability Scan
-                            <span class="text-sm font-normal text-text-muted ml-2">{{ vulnerability_summary.scan_date|date:"M d, Y" }}</span>
-                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ vulnerability_summary.provider|upper }}</span>
-                        </h4>
-                        <a href="{% url 'sboms:sbom_vulnerabilities' item.id %}"
-                           class="tw-btn-secondary text-sm no-underline inline-flex items-center gap-2 flex-shrink-0">
-                            <i class="fas fa-shield-alt"></i>Vulnerabilities
-                            <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
-                        </a>
-                    </div>
-                    <div class="p-6">
-                        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-3xl font-bold text-text leading-none">{{ vulnerability_summary.total }}</span>
-                                <span class="text-sm text-text-muted">total findings</span>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.critical }}</span> Critical
-                                </span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-severity-high-soft border border-severity-high-soft text-severity-high text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.high }}</span> High
-                                </span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-info/10 border border-info/20 text-info text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.medium }}</span> Medium
-                                </span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-border/40 text-text-muted text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.low }}</span> Low
-                                </span>
-                            </div>
+            <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
+                {% if item.format == 'cyclonedx' %}
+                    CYCLONEDX
+                {% elif item.format == 'spdx' %}
+                    SPDX
+                {% else %}
+                    {{ item.format|upper }}
+                {% endif %}
+                {{ item.format_version }}
+            </span>
+            {% if item.version %}
+                <div class="tw-metric-chip">
+                    <i class="fas fa-code-branch text-primary text-xs" aria-hidden="true"></i>
+                    <span class="tw-metric-chip-label">Version:</span>
+                    <span class="tw-metric-chip-value" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                </div>
+            {% endif %}
+            <div class="tw-metric-chip">
+                <i class="fas fa-calendar text-primary text-xs" aria-hidden="true"></i>
+                <span class="tw-metric-chip-label">Uploaded:</span>
+                <span class="tw-metric-chip-value">
+                    {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+                </span>
+            </div>
+            <div class="tw-metric-chip tw-metric-chip-info">
+                <i class="fas fa-upload text-xs" aria-hidden="true"></i>
+                <span class="tw-metric-chip-label">Source:</span>
+                <span class="tw-metric-chip-value">{{ item.source_display }}</span>
+            </div>
+            {% if item.signature_blob_key %}
+                <div class="tw-metric-chip tw-metric-chip-success">
+                    <i class="fas fa-lock text-xs" aria-hidden="true"></i>
+                    <span class="tw-metric-chip-value">Signed</span>
+                </div>
+            {% endif %}
+            {% if item.provenance_blob_key %}
+                <div class="tw-metric-chip tw-metric-chip-info">
+                    <i class="fas fa-shield-alt text-xs" aria-hidden="true"></i>
+                    <span class="tw-metric-chip-value">Provenance</span>
+                </div>
+            {% endif %}
+        {% elif item_type == 'documents' %}
+            <div class="tw-metric-chip tw-metric-chip-info">
+                <i class="fas fa-file text-xs" aria-hidden="true"></i>
+                <span class="tw-metric-chip-value">{{ item.document_type|default:"Document" }}</span>
+            </div>
+            {% if item.version %}
+                <div class="tw-metric-chip">
+                    <i class="fas fa-code-branch text-primary text-xs" aria-hidden="true"></i>
+                    <span class="tw-metric-chip-label">Version:</span>
+                    <span class="tw-metric-chip-value" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                </div>
+            {% endif %}
+            <div class="tw-metric-chip">
+                <i class="fas fa-calendar text-primary text-xs" aria-hidden="true"></i>
+                <span class="tw-metric-chip-label">Uploaded:</span>
+                <span class="tw-metric-chip-value">
+                    {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+                </span>
+            </div>
+            <div class="tw-metric-chip">
+                <i class="fas fa-upload text-primary text-xs" aria-hidden="true"></i>
+                <span class="tw-metric-chip-label">Source:</span>
+                <span class="tw-metric-chip-value">{{ item.source_display }}</span>
+            </div>
+            {% if item.content_type %}
+                <div class="tw-metric-chip">
+                    <i class="fas fa-file-alt text-primary text-xs" aria-hidden="true"></i>
+                    <span class="tw-metric-chip-label">Format:</span>
+                    <span class="tw-metric-chip-value">{{ item.content_type }}</span>
+                </div>
+            {% endif %}
+            {% if item.file_size %}
+                <div class="tw-metric-chip">
+                    <i class="fas fa-weight text-primary text-xs" aria-hidden="true"></i>
+                    <span class="tw-metric-chip-label">Size:</span>
+                    <span class="tw-metric-chip-value">{{ item.file_size|filesizeformat }}</span>
+                </div>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% if is_sbom_backed %}
+        {# Vulnerability Summary Section #}
+        {% if vulnerability_summary %}
+            <div class="tw-card">
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-shield-alt text-primary"></i>
+                        Vulnerability Scan
+                        <span class="text-sm font-normal text-text-muted ml-2">{{ vulnerability_summary.scan_date|date:"M d, Y" }}</span>
+                        <span class="tw-badge-secondary tw-badge-sm">{{ vulnerability_summary.provider|upper }}</span>
+                    </h4>
+                    <a href="{% url 'sboms:sbom_vulnerabilities' item.id %}"
+                       class="tw-btn-secondary text-sm no-underline inline-flex items-center gap-2 flex-shrink-0">
+                        <i class="fas fa-shield-alt"></i>Vulnerabilities
+                        <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
+                    </a>
+                </div>
+                <div class="p-6">
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-bold text-text leading-none">{{ vulnerability_summary.total }}</span>
+                            <span class="text-sm text-text-muted">total findings</span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+                            <span class="tw-badge-severity-critical">{{ vulnerability_summary.critical }} Critical</span>
+                            <span class="tw-badge-severity-high">{{ vulnerability_summary.high }} High</span>
+                            <span class="tw-badge-severity-medium">{{ vulnerability_summary.medium }} Medium</span>
+                            <span class="tw-badge-severity-low">{{ vulnerability_summary.low }} Low</span>
                         </div>
                     </div>
                 </div>
-            {% endif %}
-            {# VEX suppressions — the vulnerabilities this VEX artifact clears #}
-            {% if vex_suppressions is not None %}
-                {{ vex_suppression_terms|json_script:"vex-suppression-terms" }}
-                {{ vex_suppression_states|json_script:"vex-suppression-states" }}
-                <div x-data="{ search: '', statusFilter: 'all', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('vex-suppression-terms') || []), states: (window.parseJsonScript('vex-suppression-states') || []), get statusOptions() { return [...new Set(this.states)].filter(Boolean).sort(); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.states[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }"
-                     x-init="$watch('search', () => { currentPage = 1 }); $watch('statusFilter', () => { currentPage = 1 })"
-                     class="tw-card">
-                    <div class="px-6 py-4 border-b border-border">
-                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                            Suppressed vulnerabilities
-                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ vex_suppressions|length }}</span>
-                        </h4>
-                    </div>
-                    {% if vex_suppressions %}
-                        <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3">
-                            <div class="tw-data-table-search max-w-xs">
-                                <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <label for="vex-suppression-search" class="sr-only">Search suppressed vulnerabilities</label>
-                                <input type="search"
-                                       id="vex-suppression-search"
-                                       x-model="search"
-                                       placeholder="Search advisories..."
-                                       class="tw-data-table-search-input" />
+            </div>
+        {% endif %}
+        {# VEX suppressions — the vulnerabilities this VEX artifact clears #}
+        {% if vex_suppressions is not None %}
+            {{ vex_suppression_terms|json_script:"vex-suppression-terms" }}
+            {{ vex_suppression_states|json_script:"vex-suppression-states" }}
+            <div x-data="{ search: '', statusFilter: 'all', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('vex-suppression-terms') || []), states: (window.parseJsonScript('vex-suppression-states') || []), get statusOptions() { return [...new Set(this.states)].filter(Boolean).sort(); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.states[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }"
+                 x-init="$watch('search', () => { currentPage = 1 }); $watch('statusFilter', () => { currentPage = 1 })"
+                 class="tw-card">
+                <div class="tw-card-header">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        Suppressed vulnerabilities
+                        <span class="tw-badge-secondary tw-badge-sm">{{ vex_suppressions|length }}</span>
+                    </h4>
+                </div>
+                {% if vex_suppressions %}
+                    <div class="tw-data-table">
+                        <div class="tw-data-table-toolbar">
+                            <div class="tw-data-table-toolbar-left">
+                                <div class="tw-data-table-search max-w-xs">
+                                    <i class="fas fa-search tw-data-table-search-icon"></i>
+                                    <label for="vex-suppression-search" class="sr-only">Search suppressed vulnerabilities</label>
+                                    <input type="search"
+                                           id="vex-suppression-search"
+                                           x-model="search"
+                                           placeholder="Search advisories..."
+                                           class="tw-data-table-search-input" />
+                                </div>
+                                <label for="vex-status-filter" class="sr-only">Filter by status</label>
+                                <select id="vex-status-filter"
+                                        x-model="statusFilter"
+                                        class="tw-data-table-page-size-select">
+                                    <option value="all">All Statuses</option>
+                                    <template x-for="st in statusOptions" :key="st">
+                                        <option :value="st"
+                                                x-text="st.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())">
+                                        </option>
+                                    </template>
+                                </select>
                             </div>
-                            <label for="vex-status-filter" class="sr-only">Filter by status</label>
-                            <select id="vex-status-filter"
-                                    x-model="statusFilter"
-                                    class="tw-data-table-page-size-select">
-                                <option value="all">All Statuses</option>
-                                <template x-for="st in statusOptions" :key="st">
-                                    <option :value="st"
-                                            x-text="st.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())">
-                                    </option>
-                                </template>
-                            </select>
                         </div>
-                        <div class="overflow-x-auto" x-cloak>
-                            <table class="tw-table w-full table-fixed">
+                        <div class="tw-data-table-container" x-cloak>
+                            <table class="tw-table tw-table-fixed">
                                 <thead>
                                     <tr>
                                         <th class="w-1/4">Advisory</th>
@@ -294,55 +252,56 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                            <span class="text-sm text-text-muted">
+                        <div class="tw-data-table-footer">
+                            <span class="tw-data-table-info">
                                 Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
                             </span>
                             {% include "components/tw/table_pager.html.j2" %}
                         </div>
-                    {% else %}
-                        <div class="p-6 text-sm text-text-muted">
-                            This VEX document doesn't suppress any vulnerabilities (no <code>not_affected</code> or <code>false_positive</code> statements).
-                        </div>
-                    {% endif %}
-                </div>
-            {% endif %}
-            {# Cryptographic Assets (CBOM) — lazy-loaded; collapses when there are none #}
-            <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
-                 hx-trigger="load"
-                 hx-swap="outerHTML"></div>
-            {# Assessment Results Section — not shown for VEX (a VEX isn't an SBOM to verify) #}
-            {% if assessment_runs and not is_vex %}
-                <div>
-                    {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
-                    {% if can_triage %}
-                        {% include 'plugins/components/triage_modal.html.j2' %}
-                    {% endif %}
-                </div>
-            {% endif %}
-            {# Danger Zone #}
-            <div>
-                {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
-            </div>
-        {% elif item_type == 'documents' %}
-            {# Document Info Card #}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-file-alt text-primary"></i>
-                        Document Information
-                    </h4>
-                </div>
-                <div class="p-6 text-center py-12">
-                    <div class="w-16 h-16 rounded-full bg-info/10 flex items-center justify-center mx-auto mb-4">
-                        <i class="fas fa-file-alt text-3xl text-info"></i>
                     </div>
-                    <p class="text-text mb-2 font-medium">Document stored successfully</p>
-                    <p class="text-text-muted text-sm mb-0">Use the Download button above to access the file.</p>
-                </div>
+                {% else %}
+                    <div class="p-6 text-sm text-text-muted">
+                        This VEX document doesn't suppress any vulnerabilities (no <code>not_affected</code> or <code>false_positive</code> statements).
+                    </div>
+                {% endif %}
             </div>
         {% endif %}
-    </div>
+        {# Cryptographic Assets (CBOM) — lazy-loaded; collapses when there are none #}
+        <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+             hx-trigger="load"
+             hx-swap="outerHTML"></div>
+        {# Assessment Results Section — not shown for VEX (a VEX isn't an SBOM to verify) #}
+        {% if assessment_runs and not is_vex %}
+            <div>
+                {% include 'plugins/components/assessment_results_card.html.j2' with sbom_id=item.id assessment_runs=assessment_runs %}
+                {% if can_triage %}
+                    {% include 'plugins/components/triage_modal.html.j2' %}
+                {% endif %}
+            </div>
+        {% endif %}
+        {# Danger Zone #}
+        <div>
+            {% include 'components/sbom_danger_zone.html.j2' with sbom_id=item.id sbom_name=item.name component_id=component_id %}
+        </div>
+    {% elif item_type == 'documents' %}
+        {# Document Info Card #}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-file-alt text-primary"></i>
+                    Document Information
+                </h4>
+            </div>
+            <div class="p-6 text-center py-12">
+                <div class="w-16 h-16 rounded-full bg-info/10 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-file-alt text-3xl text-info"></i>
+                </div>
+                <p class="text-text mb-2 font-medium">Document stored successfully</p>
+                <p class="text-text-muted text-sm mb-0">Use the Download button above to access the file.</p>
+            </div>
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

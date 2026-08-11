@@ -80,9 +80,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center gap-4">
             <div class="min-w-0 flex-1">
                 <p class="text-text font-medium m-0">{{ item.name }}</p>
-                <p class="text-text-muted text-sm m-0 mt-1">
-                    The file exactly as it was published — sbomify never modifies artifacts.
-                </p>
+                <p class="text-text-muted text-sm m-0 mt-1">The file exactly as it was published. sbomify never modifies artifacts.</p>
             </div>
             <a href="{% if component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
                class="tw-btn-primary inline-flex items-center gap-2 no-underline flex-shrink-0">

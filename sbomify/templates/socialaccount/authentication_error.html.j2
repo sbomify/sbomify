@@ -5,19 +5,22 @@
         <h1 class="text-xl font-semibold text-danger mb-3">Authentication Error</h1>
         <p class="text-text-muted">There was a problem authenticating your account.</p>
     </div>
-    <div class="p-4 rounded-lg bg-danger/10 border border-danger/30 mb-4">
-        <h5 class="font-semibold text-danger mb-2">Error Details:</h5>
-        <p class="text-text font-medium">
-            {% if error_message %}
-                {{ error_message }}
-                {% if error_description %}<span class="block text-text-muted mt-2">{{ error_description }}</span>{% endif %}
-            {% elif auth_error %}
-                {{ auth_error.code|default:"Unknown Error" }}
-                {% if auth_error.exception %}<span class="block text-text-muted mt-2">{{ auth_error.exception }}</span>{% endif %}
-            {% else %}
-                An unknown error occurred.
-            {% endif %}
-        </p>
+    <div class="tw-alert tw-alert-danger mb-4" role="alert">
+        <i class="fas fa-times-circle tw-alert-icon" aria-hidden="true"></i>
+        <div class="tw-alert-content">
+            <p class="tw-alert-title">Error details</p>
+            <p class="text-sm m-0">
+                {% if error_message %}
+                    {{ error_message }}
+                    {% if error_description %}<span class="block mt-2">{{ error_description }}</span>{% endif %}
+                {% elif auth_error %}
+                    {{ auth_error.code|default:"Unknown Error" }}
+                    {% if auth_error.exception %}<span class="block mt-2">{{ auth_error.exception }}</span>{% endif %}
+                {% else %}
+                    An unknown error occurred.
+                {% endif %}
+            </p>
+        </div>
     </div>
     <div class="mt-4">
         <p class="text-text mb-2">Please try the following:</p>

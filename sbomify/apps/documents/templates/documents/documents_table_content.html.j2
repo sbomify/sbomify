@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load design_system %}
 {% if not documents %}
     <div class="flex flex-col items-center justify-center py-12 px-6">
         <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
@@ -94,7 +95,9 @@
                             </button>
                         </th>
                         <th class="hidden lg:table-cell">Releases</th>
-                        <th class="text-center">Actions</th>
+                        <th class="tw-table-actions">
+                            <span class="sr-only">Actions</span>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -139,54 +142,52 @@
                                     <span class="text-text-muted">—</span>
                                 </template>
                             </td>
-                            <td>
-                                <div class="flex items-center justify-center gap-1">
-                                    <a :href="'{% url 'documents:document_download' 'DOC_ID' %}'.replace('DOC_ID', item.document.id)"
-                                       title="Download"
-                                       aria-label="Download document"
-                                       class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
-                                        <i class="fas fa-download" aria-hidden="true"></i>
-                                    </a>
-                                    {% if has_crud_permissions %}
-                                        <button class="p-2 rounded-lg text-text-muted hover:bg-border/30 transition-colors"
-                                                title="Edit Document"
-                                                aria-label="Edit document"
-                                                @click="$dispatch('open-edit-document-modal'); editDocument(item.document.id)">
-                                            <i class="fas fa-edit" aria-hidden="true"></i>
-                                        </button>
-                                        <button type="button"
-                                                class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                                                title="Delete Document"
-                                                aria-label="Delete document"
-                                                @click="$dispatch('open-delete-document-modal', { displayName: item.document.name, formData: { document_id: item.document.id } })">
-                                            <i class="fas fa-trash" aria-hidden="true"></i>
-                                        </button>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                    <template x-if="paginatedData.length === 0 && search">
-                        <tr>
-                            <td colspan="6" class="text-center py-8 text-text-muted">
-                                <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                <p>No documents match your search</p>
-                                <button @click="search = ''"
-                                        class="mt-3 text-xs text-primary hover:underline">Clear search</button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-        <div class="tw-data-table-footer">
-            <div class="tw-data-table-info">
-                Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong> entries
-                <template x-if="search">
-                    <span>(filtered from <strong x-text="allDocuments.length"></strong> total)</span>
+                            <td class="tw-table-actions">
+                                {% actions_menu label="Document actions" width="w-56" %}
+                                <a :href="'{% url 'documents:document_download' 'DOC_ID' %}'.replace('DOC_ID', item.document.id)"
+                                   role="menuitem"
+                                   class="tw-dropdown-item no-underline">
+                                    <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>Download
+                                </a>
+                                {% if has_crud_permissions %}
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="tw-dropdown-item"
+                                            @click="$dispatch('open-edit-document-modal'); editDocument(item.document.id)">
+                                        <i class="fas fa-edit tw-dropdown-item-icon" aria-hidden="true"></i>Edit
+                                    </button>
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="tw-dropdown-item tw-dropdown-item-danger"
+                                            @click="$dispatch('open-delete-document-modal', { displayName: item.document.name, formData: { document_id: item.document.id } })">
+                                        <i class="fas fa-trash tw-dropdown-item-icon" aria-hidden="true"></i>Delete
+                                    </button>
+                                {% endif %}
+                            {% endactions_menu %}
+                        </td>
+                    </tr>
                 </template>
-            </div>
-            {% include "components/tw/table_pager.html.j2" %}
-        </div>
+                <template x-if="paginatedData.length === 0 && search">
+                    <tr>
+                        <td colspan="6" class="text-center py-8 text-text-muted">
+                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                            <p>No documents match your search</p>
+                            <button @click="search = ''"
+                                    class="mt-3 text-xs text-primary hover:underline">Clear search</button>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
     </div>
+    <div class="tw-data-table-footer">
+        <div class="tw-data-table-info">
+            Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong> entries
+            <template x-if="search">
+                <span>(filtered from <strong x-text="allDocuments.length"></strong> total)</span>
+            </template>
+        </div>
+        {% include "components/tw/table_pager.html.j2" %}
+    </div>
+</div>
 {% endif %}

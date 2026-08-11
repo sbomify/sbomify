@@ -1,4 +1,5 @@
 {# Individual assessment run collapsible card - rendered server-side #}
+{% load design_system %}
 {% load plugins_extras %}
 {% load advisory_tags %}
 {# Safely compute has_issues - run.result may be None for pending/running assessments #}
@@ -90,40 +91,40 @@
                                 </div>
                                 {% if run.status == 'failed' and run.error_message %}
                                     {# Error Message #}
-                                    <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
-                                        <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                        <div class="text-danger">{{ run.error_message }}</div>
-                                    </div>
+                                    {% alert variant="danger" message=run.error_message class="mb-4" %}
                                 {% endif %}
                                 {% if run.result.summary %}
                                     {# Security Summary - Severity grid #}
                                     <div class="mb-4">
                                         <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                            <div class="bg-danger/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-danger">{{ sev.critical|default:0 }}</div>
-                                                <small class="text-text-muted">Critical</small>
+                                            <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
+                                                <span class="tw-stat-value">{{ sev.critical|default:0 }}</span>
+                                                <span class="tw-stat-label mt-1 mb-0">Critical</span>
                                             </div>
-                                            <div class="bg-warning/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-warning">{{ sev.high|default:0 }}</div>
-                                                <small class="text-text-muted">High</small>
+                                            <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+                                                <span class="tw-stat-value">{{ sev.high|default:0 }}</span>
+                                                <span class="tw-stat-label mt-1 mb-0">High</span>
                                             </div>
-                                            <div class="bg-info/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-info">{{ sev.medium|default:0 }}</div>
-                                                <small class="text-text-muted">Medium</small>
+                                            <div class="tw-stat-card tw-stat-card-compact"
+                                                 style="--stat-accent: var(--color-severity-medium)">
+                                                <span class="tw-stat-value">{{ sev.medium|default:0 }}</span>
+                                                <span class="tw-stat-label mt-1 mb-0">Medium</span>
                                             </div>
-                                            <div class="bg-success/10 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-success">{{ sev.low|default:0 }}</div>
-                                                <small class="text-text-muted">Low</small>
+                                            <div class="tw-stat-card tw-stat-card-compact"
+                                                 style="--stat-accent: var(--color-severity-low)">
+                                                <span class="tw-stat-value">{{ sev.low|default:0 }}</span>
+                                                <span class="tw-stat-label mt-1 mb-0">Low</span>
                                             </div>
-                                            <div class="bg-border/30 p-3 rounded-lg text-center">
-                                                <div class="font-bold text-text">{{ security_total }}</div>
-                                                <small class="text-text-muted">Total</small>
+                                            <div class="tw-stat-card tw-stat-card-compact">
+                                                <span class="tw-stat-value">{{ security_total }}</span>
+                                                <span class="tw-stat-label mt-1 mb-0">Total</span>
                                             </div>
                                             {% if run.result.summary.suppressed_count %}
-                                                <div class="bg-info/10 p-3 rounded-lg text-center"
+                                                <div class="tw-stat-card tw-stat-card-compact"
+                                                     style="--stat-accent: var(--color-info)"
                                                      title="Findings suppressed by VEX (not_affected / false_positive)">
-                                                    <div class="font-bold text-info">{{ run.result.summary.suppressed_count }}</div>
-                                                    <small class="text-text-muted">VEX suppressed</small>
+                                                    <span class="tw-stat-value">{{ run.result.summary.suppressed_count }}</span>
+                                                    <span class="tw-stat-label mt-1 mb-0">VEX suppressed</span>
                                                 </div>
                                             {% endif %}
                                         </div>
@@ -161,16 +162,14 @@
                                                                 {% if finding.severity == 'critical' or finding.severity == 'high' or finding.severity == 'medium' or finding.severity == 'low' %}
                                                                     <span class="tw-badge-severity-{{ finding.severity|lower }}">{{ finding.severity|upper }}</span>
                                                                 {% else %}
-                                                                    <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ finding.severity|upper }}</span>
+                                                                    <span class="tw-badge-severity-unknown">{{ finding.severity|upper }}</span>
                                                                 {% endif %}
                                                             {% endif %}
                                                             {# CVSS score #}
-                                                            {% if finding.cvss_score is not None %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border">CVSS: {{ finding.cvss_score }}</span>
-                                                            {% endif %}
+                                                            {% if finding.cvss_score is not None %}<span class="tw-chip-neutral">CVSS: {{ finding.cvss_score }}</span>{% endif %}
                                                             {% comment %}A malicious package is a different decision from a vulnerable one: rip it out now rather than schedule a patch. Shown ahead of severity because the severity is not the point, and the OpenSSF records carry none at all.{% endcomment %}
                                                             {% if finding.malicious %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
+                                                                <span class="tw-badge-solid-danger tw-badge-sm uppercase tracking-wide"
                                                                       title="Malicious package: remove it rather than upgrade">
                                                                     <i class="fas fa-skull-crossbones mr-1"></i>Malicious
                                                                 </span>
@@ -178,34 +177,34 @@
                                                             {# CISA KEV: confirmed exploited in the wild #}
                                                             {% comment %}EPSS is the likelihood half of the pair: CVSS says how bad, EPSS says how likely. Rendered as the raw 0..1 probability to three decimals, which is how FIRST publishes it. Both badges test "is not None" rather than truthiness, because 0.0 is a real score for either and would otherwise vanish.{% endcomment %}
                                                             {% if finding.epss_score is not None %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-surface text-text-muted border border-border"
+                                                                <span class="tw-chip-neutral"
                                                                       title="EPSS: probability of exploitation in the next 30 days">EPSS: {{ finding.epss_score|floatformat:"-3" }}</span>
                                                             {% endif %}
                                                             {% if finding.kev %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger text-white"
+                                                                <span class="tw-badge-solid-danger tw-badge-sm uppercase tracking-wide"
                                                                       title="In CISA's Known Exploited Vulnerabilities catalog">KEV</span>
                                                             {% endif %}
                                                             {% if finding.euvd %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide rounded bg-danger/80 text-white"
+                                                                <span class="tw-badge-solid-danger tw-badge-sm uppercase tracking-wide"
                                                                       title="In ENISA's EUVD exploited vulnerabilities list">EU KEV</span>
                                                             {% endif %}
                                                             {# VEX analysis state #}
                                                             {% if finding.analysis_state %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-info/10 text-info border border-info/30"
+                                                                <span class="tw-badge-info"
                                                                       title="{{ finding.analysis_justification|default:'' }} {{ finding.analysis_detail|default:'' }}">
                                                                     <i class="fas fa-clipboard-check mr-0.5"></i>{{ finding.analysis_state }}
                                                                 </span>
                                                             {% endif %}
                                                             {# Stale: a component-wide suppression asserted for a different version of this package #}
                                                             {% if finding.analysis_stale %}
-                                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-warning/10 text-warning border border-warning/30"
-                                                                      title="This suppression was asserted for a different version of this package — re-review whether it still applies">
+                                                                <span class="tw-badge-warning"
+                                                                      title="This suppression was asserted for a different version of this package. Re-review whether it still applies">
                                                                     <i class="fas fa-triangle-exclamation mr-0.5"></i>re-review
                                                                 </span>
                                                             {% endif %}
                                                             {% if can_triage and run.category == 'security' %}
                                                                 <button type="button"
-                                                                        class="px-2 py-0.5 text-xs rounded border border-border text-text-muted hover:text-primary hover:border-primary"
+                                                                        class="tw-btn-outline tw-btn-sm"
                                                                         @click="$dispatch('open-triage', { id: '{{ finding.id|escapejs }}', purl: '{{ finding.component.purl|default:''|escapejs }}', state: '{{ finding.analysis_state|default:''|escapejs }}', justification: '{{ finding.analysis_justification|default:''|escapejs }}', detail: '{{ finding.analysis_detail|default:''|escapejs }}', aliases: '{{ finding.aliases|default:''|join:','|escapejs }}' })">
                                                                     <i class="fas fa-stethoscope mr-1"></i>Triage
                                                                 </button>
@@ -220,9 +219,7 @@
                                                                     {% if finding.component.version %}@{{ finding.component.version }}{% endif %}
                                                                 </span>
                                                                 {% if finding.component.ecosystem %}
-                                                                    <span class="tw-badge-secondary ml-1"
-                                                                          style="font-size: 0.65rem;
-                                                                                 padding: 0.1rem 0.35rem">{{ finding.component.ecosystem }}</span>
+                                                                    <span class="tw-badge-secondary tw-badge-sm ml-1">{{ finding.component.ecosystem }}</span>
                                                                 {% endif %}
                                                             </div>
                                                         {% endif %}
@@ -235,9 +232,9 @@
                                                                             <a href="{{ alias_url }}"
                                                                                target="_blank"
                                                                                rel="noopener noreferrer"
-                                                                               class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-primary hover:underline no-underline">{{ alias }}</a>
+                                                                               class="tw-code-inline tw-code-inline-primary hover:underline no-underline">{{ alias }}</a>
                                                                         {% else %}
-                                                                            <span class="px-1.5 py-0.5 text-xs rounded bg-surface border border-border text-text-muted">{{ alias }}</span>
+                                                                            <span class="tw-code-inline">{{ alias }}</span>
                                                                         {% endif %}
                                                                     {% endwith %}
                                                                 {% endfor %}
@@ -383,38 +380,36 @@
                             </div>
                             {% if run.status == 'failed' and run.error_message %}
                                 {# Error Message #}
-                                <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4">
-                                    <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                    <div class="text-danger">{{ run.error_message }}</div>
-                                </div>
+                                {% alert variant="danger" message=run.error_message class="mb-4" %}
                             {% endif %}
                             {% if run.result.summary %}
                                 {# Compliance Findings Summary - Compact grid #}
                                 <div class="mb-4">
                                     <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
-                                        <div class="bg-success/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-success">{{ run.result.summary.pass_count|default:0 }}</div>
-                                            <small class="text-text-muted">Pass</small>
+                                        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
+                                            <span class="tw-stat-value">{{ run.result.summary.pass_count|default:0 }}</span>
+                                            <span class="tw-stat-label mt-1 mb-0">Pass</span>
                                         </div>
-                                        <div class="bg-warning/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-warning">{{ run.result.summary.fail_count|default:0 }}</div>
-                                            <small class="text-text-muted">Fail</small>
+                                        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
+                                            <span class="tw-stat-value">{{ run.result.summary.fail_count|default:0 }}</span>
+                                            <span class="tw-stat-label mt-1 mb-0">Fail</span>
                                         </div>
-                                        <div class="bg-danger/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-danger">{{ run.result.summary.error_count|default:0 }}</div>
-                                            <small class="text-text-muted">Error</small>
+                                        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
+                                            <span class="tw-stat-value">{{ run.result.summary.error_count|default:0 }}</span>
+                                            <span class="tw-stat-label mt-1 mb-0">Error</span>
                                         </div>
-                                        <div class="bg-info/10 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-info">{{ run.result.summary.warning_count|default:0 }}</div>
-                                            <small class="text-text-muted">Warn</small>
+                                        <div class="tw-stat-card tw-stat-card-compact"
+                                             style="--stat-accent: var(--color-info)">
+                                            <span class="tw-stat-value">{{ run.result.summary.warning_count|default:0 }}</span>
+                                            <span class="tw-stat-label mt-1 mb-0">Warn</span>
                                         </div>
-                                        <div class="bg-border/30 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-text-muted">{{ run.result.summary.info_count|default:0 }}</div>
-                                            <small class="text-text-muted">Info</small>
+                                        <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
+                                            <span class="tw-stat-value">{{ run.result.summary.info_count|default:0 }}</span>
+                                            <span class="tw-stat-label mt-1 mb-0">Info</span>
                                         </div>
-                                        <div class="bg-border/30 p-3 rounded-lg text-center">
-                                            <div class="font-bold text-text">{{ run.result.summary.total_findings|default:0 }}</div>
-                                            <small class="text-text-muted">Total</small>
+                                        <div class="tw-stat-card tw-stat-card-compact">
+                                            <span class="tw-stat-value">{{ run.result.summary.total_findings|default:0 }}</span>
+                                            <span class="tw-stat-label mt-1 mb-0">Total</span>
                                         </div>
                                     </div>
                                 </div>

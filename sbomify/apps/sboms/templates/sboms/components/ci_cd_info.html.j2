@@ -71,13 +71,15 @@ leaves it empty and the button is not offered rather than 500ing the page.
                         Run this in your repository. The wizard detects your CI platform and package
                         manager, then writes the pipeline configuration for you.
                     </p>
-                    <div class="relative bg-[#1e1e1e] rounded-lg overflow-hidden">
-                        <pre class="p-4 m-0 overflow-x-auto"><code id="ci-cd-command-{{ component.id }}" class="text-sm text-white">docker run --rm -it \
+                    <div class="tw-code-block">
+                        <div class="tw-code-block-content">
+                            <pre><code id="ci-cd-command-{{ component.id }}">docker run --rm -it \
   -v "$(pwd):/github/workspace" \
   -w /github/workspace \
   -e SBOMIFY_TOKEN=<span x-text="token || '$SBOMIFY_TOKEN'">$SBOMIFY_TOKEN</span> \
   ghcr.io/sbomify/sbomify-action \
   sbomify-action wizard</code></pre>
+                        </div>
                         <div class="absolute top-2 right-2">
                             {% include "core/components/copyable_value.html.j2" with copy_from="ci-cd-command-"|add:component.id title="Copy command" hide_value=True %}
                         </div>
@@ -85,7 +87,7 @@ leaves it empty and the button is not offered rather than 500ing the page.
                     {# Before minting: the command reads an env var the reader may already have. #}
                     <div x-show="!token" class="mt-4 flex flex-wrap items-center gap-3">
                         {% if not ci_token_url %}
-                            <span class="text-xs text-text-muted">Set <code class="px-1 py-0.5 bg-border/30 rounded">SBOMIFY_TOKEN</code> to a token from Settings → API tokens.</span>
+                            <span class="text-xs text-text-muted">Set <code class="tw-code-inline">SBOMIFY_TOKEN</code> to a token from Settings → API tokens.</span>
                         {% endif %}
                         {% if ci_token_url %}
                             <button type="button"
@@ -96,7 +98,7 @@ leaves it empty and the button is not offered rather than 500ing the page.
                                 <span x-show="!minting"><i class="fas fa-key mr-2"></i>Add a 7-day token</span>
                                 <span x-show="minting" x-cloak>Creating…</span>
                             </button>
-                            <span class="text-xs text-text-muted">Or set <code class="px-1 py-0.5 bg-border/30 rounded">SBOMIFY_TOKEN</code> yourself.</span>
+                            <span class="text-xs text-text-muted">Or set <code class="tw-code-inline">SBOMIFY_TOKEN</code> yourself.</span>
                         {% endif %}
                     </div>
                     {# After minting: say what it can do and when it stops, because it is now on screen. #}

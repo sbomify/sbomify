@@ -1,5 +1,5 @@
 {% load widget_tweaks %}
-<div class="entity-card bg-surface border border-border rounded-xl overflow-hidden"
+<div class="entity-card tw-card overflow-hidden"
      x-data="contactEntity('{{ form.prefix|escapejs }}')"
      x-show="!deleted"
      x-transition:enter="transition ease-out duration-300"
@@ -16,74 +16,59 @@
          x-transition
          class="cursor-pointer hover:bg-background/30 transition-colors"
          @click="editing = true">
-        <div class="flex">
-            {# Role indicator bar #}
-            <div class="flex flex-col flex-shrink-0 w-1 rounded-l-xl overflow-hidden">
-                <div class="flex-grow transition-colors"
-                     :class="isManufacturer ? 'bg-text-muted' : 'bg-transparent'"></div>
-                <div class="flex-grow transition-colors"
-                     :class="isSupplier ? 'bg-text-muted' : 'bg-transparent'"></div>
-                <div class="flex-grow transition-colors"
-                     :class="isAuthor ? 'bg-text-muted' : 'bg-transparent'"></div>
-            </div>
-            {# Main content #}
-            <div class="flex-grow p-4">
-                <div class="flex items-start gap-3">
-                    {# Entity icon #}
-                    <span class="tw-icon-chip tw-icon-chip-neutral">
-                        <i class="fas fa-building" aria-hidden="true"></i>
-                    </span>
-                    {# Entity info #}
-                    <div class="flex-grow min-w-0">
-                        <div class="flex items-center gap-2 mb-1">
-                            <h6 class="m-0 font-semibold text-text truncate"
-                                x-text="name || (isAuthorOnly ? 'Authors' : 'New Entity')"></h6>
-                            {# Role badges #}
-                            <div class="flex gap-1 flex-wrap flex-shrink-0">
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-border/30 text-text-muted uppercase tracking-wide"
-                                      x-show="isManufacturer">Manufacturer</span>
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-border/30 text-text-muted uppercase tracking-wide"
-                                      x-show="isSupplier">Supplier</span>
-                                <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-border/30 text-text-muted uppercase tracking-wide"
-                                      x-show="isAuthor">Author</span>
-                            </div>
-                        </div>
-                        {# Details row #}
-                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-muted">
-                            <span x-show="email" class="flex items-center">
-                                <i class="fas fa-envelope mr-1.5 text-xs opacity-60"></i>
-                                <span x-text="email" class="truncate max-w-[180px]"></span>
-                            </span>
-                            <span class="flex items-center"
-                                  :class="activeContactsCount === 0 ? 'text-danger font-medium' : ''">
-                                <i class="fas fa-users mr-1.5 text-xs opacity-60"></i>
-                                <span x-text="activeContactsCount + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
-                                <i class="fas fa-exclamation-circle ml-1 text-xs"
-                                   x-show="activeContactsCount === 0"></i>
-                            </span>
-                        </div>
-                        {# Role required warning #}
-                        <div class="text-danger text-xs font-medium mt-2 flex items-center gap-1"
-                             x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <span>Role required</span>
+        <div class="p-4">
+            <div class="flex items-start gap-3">
+                {# Entity icon #}
+                <span class="tw-icon-chip tw-icon-chip-neutral">
+                    <i class="fas fa-building" aria-hidden="true"></i>
+                </span>
+                {# Entity info #}
+                <div class="flex-grow min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <h6 class="m-0 font-semibold text-text truncate"
+                            x-text="name || (isAuthorOnly ? 'Authors' : 'New Entity')"></h6>
+                        {# Role badges #}
+                        <div class="flex gap-1 flex-wrap flex-shrink-0">
+                            <span class="tw-badge tw-badge-sm" x-show="isManufacturer">Manufacturer</span>
+                            <span class="tw-badge tw-badge-sm" x-show="isSupplier">Supplier</span>
+                            <span class="tw-badge tw-badge-sm" x-show="isAuthor">Author</span>
                         </div>
                     </div>
-                    {# Action buttons #}
-                    <div class="flex items-center gap-1 flex-shrink-0">
-                        <button type="button"
-                                class="tw-icon-btn tw-icon-btn-sm"
-                                @click.stop="editing = true"
-                                title="Edit entity">
-                            <i class="fas fa-pen text-xs"></i>
-                        </button>
-                        <button type="button"
-                                class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
-                                @click.stop="removeEntity"
-                                title="Remove entity">
-                            <i class="fas fa-trash-alt text-xs"></i>
-                        </button>
+                    {# Details row #}
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-muted">
+                        <span x-show="email" class="flex items-center">
+                            <i class="fas fa-envelope mr-1.5 text-xs opacity-60"></i>
+                            <span x-text="email" class="truncate max-w-[180px]"></span>
+                        </span>
+                        <span class="flex items-center"
+                              :class="activeContactsCount === 0 ? 'text-danger font-medium' : ''">
+                            <i class="fas fa-users mr-1.5 text-xs opacity-60"></i>
+                            <span x-text="activeContactsCount + ' contact' + (activeContactsCount !== 1 ? 's' : '')"></span>
+                            <i class="fas fa-exclamation-circle ml-1 text-xs"
+                               x-show="activeContactsCount === 0"></i>
+                        </span>
                     </div>
+                    {# Role required warning #}
+                    <div class="tw-form-error"
+                         x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
+                        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                        <span>Role required</span>
+                    </div>
+                </div>
+                {# Action buttons #}
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button type="button"
+                            class="tw-icon-btn tw-icon-btn-sm"
+                            @click.stop="editing = true"
+                            title="Edit entity">
+                        <i class="fas fa-pen text-xs"></i>
+                    </button>
+                    <button type="button"
+                            class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
+                            @click.stop="removeEntity"
+                            title="Remove entity">
+                        <i class="fas fa-trash-alt text-xs"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -93,11 +78,11 @@
         <div class="p-5">
             {# Role Selection #}
             <div class="mb-5 pb-4 border-b border-border">
-                <label class="block text-sm font-medium text-text mb-3">
+                <label class="tw-form-label">
                     Entity Role(s) <span class="text-danger">*</span>
                 </label>
                 <div class="flex gap-6 flex-wrap">
-                    <label class="flex items-center gap-2.5 cursor-pointer group"
+                    <label class="flex items-center gap-3"
                            :class="!canSelectManufacturer && !isManufacturer ? 'opacity-50' : ''"
                            :title="!canSelectManufacturer && !isManufacturer ? 'Another entity is already assigned as manufacturer' : 'The organization that created or manufactured the component'">
                         <input type="checkbox"
@@ -107,9 +92,9 @@
                                x-model="isManufacturer"
                                :disabled="!canSelectManufacturer && !isManufacturer"
                                {% if form.instance.is_manufacturer or not form.instance.pk %}checked{% endif %}>
-                        <span class="text-sm text-text group-hover:text-primary transition-colors">Manufacturer</span>
+                        <span class="text-sm text-text">Manufacturer</span>
                     </label>
-                    <label class="flex items-center gap-2.5 cursor-pointer group"
+                    <label class="flex items-center gap-3"
                            :class="!canSelectSupplier && !isSupplier ? 'opacity-50' : ''"
                            :title="!canSelectSupplier && !isSupplier ? 'Another entity is already assigned as supplier' : 'The organization that provided the component'">
                         <input type="checkbox"
@@ -119,33 +104,35 @@
                                x-model="isSupplier"
                                :disabled="!canSelectSupplier && !isSupplier"
                                {% if form.instance.is_supplier or not form.instance.pk %}checked{% endif %}>
-                        <span class="text-sm text-text group-hover:text-primary transition-colors">Supplier</span>
+                        <span class="text-sm text-text">Supplier</span>
                     </label>
-                    <label class="flex items-center gap-2.5 cursor-pointer group"
-                           title="Group of individual authors">
+                    <label class="flex items-center gap-3" title="Group of individual authors">
                         <input type="checkbox"
                                class="tw-checkbox"
                                name="{{ form.prefix }}-is_author"
                                id="{{ form.prefix }}-role-author"
                                x-model="isAuthor"
                                {% if form.instance.is_author or not form.instance.pk %}checked{% endif %}>
-                        <span class="text-sm text-text group-hover:text-primary transition-colors">Author</span>
+                        <span class="text-sm text-text">Author</span>
                     </label>
                 </div>
-                <div class="text-danger text-sm mt-3 flex items-center gap-1"
+                <div class="tw-form-error"
                      x-show="!isManufacturer && !isSupplier && !isAuthor && touched">
-                    <i class="fas fa-exclamation-circle"></i>
+                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
                     <span>Please select at least one role</span>
                 </div>
             </div>
             {# Author-only message #}
-            <div class="flex items-start gap-3 p-3 rounded-lg bg-info/5 border border-info/20 mb-5 text-sm"
+            <div class="tw-alert tw-alert-info mb-5"
+                 role="alert"
                  x-show="isAuthorOnly"
                  x-transition>
-                <i class="fas fa-info-circle text-info mt-0.5"></i>
-                <p class="m-0 text-text-muted">
-                    <strong class="text-text">Author Entity:</strong> No organization name or email required—just add the author contacts below.
-                </p>
+                <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">
+                        <strong>Author entity:</strong> No organization name or email required. Just add the author contacts below.
+                    </p>
+                </div>
             </div>
             {# Hidden fields for author-only entities #}
             <template x-if="isAuthorOnly">
@@ -159,8 +146,7 @@
                  x-show="!isAuthorOnly"
                  x-transition>
                 <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-text mb-1.5"
-                           for="{{ form.name.id_for_label }}">
+                    <label class="tw-form-label" for="{{ form.name.id_for_label }}">
                         Entity Name <span class="text-danger" x-show="!isAuthorOnly">*</span>
                     </label>
                     <input type="text"
@@ -172,15 +158,10 @@
                            x-model.trim="name"
                            :required="!deleted && !isAuthorOnly"
                            maxlength="255">
-                    {% if form.name.errors %}
-                        <div class="text-danger text-sm mt-1 flex items-center gap-1">
-                            <i class="fas fa-exclamation-circle text-xs"></i>{{ form.name.errors.0 }}
-                        </div>
-                    {% endif %}
+                    {% if form.name.errors %}<p class="tw-form-error">{{ form.name.errors.0 }}</p>{% endif %}
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-text mb-1.5"
-                           for="{{ form.email.id_for_label }}">
+                    <label class="tw-form-label" for="{{ form.email.id_for_label }}">
                         Email Address <span class="text-danger" x-show="!isAuthorOnly">*</span>
                     </label>
                     <input type="email"
@@ -191,15 +172,10 @@
                            x-model.trim="email"
                            :required="!deleted && !isAuthorOnly"
                            value="{{ form.email.value|default:'' }}">
-                    {% if form.email.errors %}
-                        <div class="text-danger text-sm mt-1 flex items-center gap-1">
-                            <i class="fas fa-exclamation-circle text-xs"></i>{{ form.email.errors.0 }}
-                        </div>
-                    {% endif %}
+                    {% if form.email.errors %}<p class="tw-form-error">{{ form.email.errors.0 }}</p>{% endif %}
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-text mb-1.5"
-                           for="{{ form.phone.id_for_label }}">Phone Number</label>
+                    <label class="tw-form-label" for="{{ form.phone.id_for_label }}">Phone Number</label>
                     <input type="text"
                            name="{{ form.phone.html_name }}"
                            id="{{ form.phone.id_for_label }}"
@@ -209,21 +185,19 @@
                            x-model.trim="phone">
                 </div>
                 <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-text mb-1.5"
-                           for="{{ form.address.id_for_label }}">Address</label>
+                    <label class="tw-form-label" for="{{ form.address.id_for_label }}">Address</label>
                     <textarea name="{{ form.address.html_name }}"
                               id="{{ form.address.id_for_label }}"
-                              class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors resize-none"
+                              class="tw-form-textarea"
                               rows="2"
                               placeholder="123 Main Street, City, State, Country"
                               x-model.trim="address">{{ form.address.value|default:'' }}</textarea>
                 </div>
                 <div class="md:col-span-2">
-                    <label class="block text-sm font-medium text-text mb-1.5"
-                           for="{{ form.website_urls_text.id_for_label }}">Website URLs</label>
+                    <label class="tw-form-label" for="{{ form.website_urls_text.id_for_label }}">Website URLs</label>
                     <textarea name="{{ form.website_urls_text.html_name }}"
                               id="{{ form.website_urls_text.id_for_label }}"
-                              class="w-full px-3 py-2 border border-border rounded-lg bg-background text-text font-mono text-sm placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors resize-none"
+                              class="tw-form-textarea font-mono"
                               rows="2"
                               x-model="websites"
                               placeholder="Enter one URL per line&#10;https://example.com">{{ form.website_urls_text.value|default:'' }}</textarea>
@@ -237,8 +211,7 @@
                             <i class="fas fa-users text-text-muted mr-1.5"></i>Contacts
                         </h6>
                         <span class="text-danger text-xs">*</span>
-                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text"
-                              x-text="activeContactsCount">0</span>
+                        <span class="tw-badge tw-badge-sm" x-text="activeContactsCount">0</span>
                     </div>
                     <button type="button"
                             class="tw-btn-secondary tw-btn-sm"
@@ -248,15 +221,21 @@
                     </button>
                 </div>
                 {# Contact warnings #}
-                <div class="flex items-start gap-2 p-3 rounded-lg bg-warning/5 border border-warning/20 mb-3 text-sm"
+                <div class="tw-alert tw-alert-warning mb-3"
+                     role="alert"
                      x-show="activeContactsCount === 0 && !contactsTouched">
-                    <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
-                    <p class="m-0 text-text-muted">Add at least one contact person for this entity.</p>
+                    <i class="fas fa-exclamation-triangle tw-alert-icon" aria-hidden="true"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">Add at least one contact person for this entity.</p>
+                    </div>
                 </div>
-                <div class="flex items-start gap-2 p-3 rounded-lg bg-danger/5 border border-danger/20 mb-3 text-sm"
+                <div class="tw-alert tw-alert-danger mb-3"
+                     role="alert"
                      x-show="activeContactsCount === 0 && contactsTouched">
-                    <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                    <p class="m-0 text-danger">Missing contacts: Please add at least one contact person.</p>
+                    <i class="fas fa-exclamation-circle tw-alert-icon" aria-hidden="true"></i>
+                    <div class="tw-alert-content">
+                        <p class="text-sm m-0">Missing contacts: add at least one contact person.</p>
+                    </div>
                 </div>
                 {# Contacts list #}
                 <div class="contacts-list bg-background/50 rounded-lg border border-border overflow-hidden"
@@ -267,9 +246,6 @@
                             {% include "teams/contact_profiles/forms/contact.html.j2" with form=contact_form parent_prefix=form.prefix %}
                         {% endfor %}
                     {% endif %}
-                    <template x-if="false">
-                        <div class="contact-template"></div>
-                    </template>
                 </div>
             </div>
             {# Editor Actions #}

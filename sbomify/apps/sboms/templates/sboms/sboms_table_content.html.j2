@@ -96,7 +96,9 @@
                                 </span>
                             </button>
                         </th>
-                        <th class="text-center">Actions</th>
+                        <th class="tw-table-actions">
+                            <span class="sr-only">Actions</span>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -157,20 +159,18 @@
                                     <template x-if="item.vuln && item.vuln.total > 0">
                                         <div class="flex items-center gap-1.5 flex-wrap">
                                             <template x-if="item.vuln.critical > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-danger/10 text-danger"
+                                                <span class="tw-badge-severity-critical"
                                                       x-text="item.vuln.critical + ' Critical'"></span>
                                             </template>
                                             <template x-if="item.vuln.high > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-severity-high-soft text-severity-high"
-                                                      x-text="item.vuln.high + ' High'"></span>
+                                                <span class="tw-badge-severity-high" x-text="item.vuln.high + ' High'"></span>
                                             </template>
                                             <template x-if="item.vuln.medium > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-info/10 text-info"
+                                                <span class="tw-badge-severity-medium"
                                                       x-text="item.vuln.medium + ' Medium'"></span>
                                             </template>
                                             <template x-if="item.vuln.low > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-surface text-text-muted border border-border"
-                                                      x-text="item.vuln.low + ' Low'"></span>
+                                                <span class="tw-badge-severity-low" x-text="item.vuln.low + ' Low'"></span>
                                             </template>
                                         </div>
                                     </template>
@@ -222,20 +222,18 @@
                                      x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version">
                                 </div>
                             </td>
-                            <td>
-                                <div class="flex items-center justify-center gap-1">
-                                    {% comment %}
-                                    `from_public=true` flag tells SbomDownloadView to render the friendly
-                                    gated-access page instead of a generic 403 when a public visitor hits a
-                                    gated SBOM. Internal downloads omit the flag.
-                                    {% endcomment %}
-                                    <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id){% if is_public_view %} + '?from_public=true'{% endif %}"
-                                       title="Download"
-                                       aria-label="Download SBOM"
-                                       class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
-                                        <i class="fas fa-download" aria-hidden="true"></i>
-                                    </a>
-                                </div>
+                            <td class="tw-table-actions">
+                                {% comment %}
+                                `from_public=true` flag tells SbomDownloadView to render the friendly
+                                gated-access page instead of a generic 403 when a public visitor hits a
+                                gated SBOM. Internal downloads omit the flag.
+                                {% endcomment %}
+                                <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id){% if is_public_view %} + '?from_public=true'{% endif %}"
+                                   title="Download"
+                                   aria-label="Download SBOM"
+                                   class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-primary no-underline">
+                                    <i class="fas fa-download" aria-hidden="true"></i>
+                                </a>
                             </td>
                         </tr>
                     </template>
@@ -253,28 +251,12 @@
                 </tbody>
             </table>
         </div>
-        <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-            <span class="text-sm text-text-muted">
-                Showing <span x-text="startItem"></span> to <span x-text="endItem"></span> of <span x-text="filteredData.length"></span>
-                <template x-if="search"><span>(filtered from <span x-text="allSboms.length"></span> total)</span></template>
-            </span>
-            <div class="flex items-center gap-2" x-show="totalPages > 1">
-                <button type="button"
-                        class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
-                        :disabled="currentPage === 1"
-                        @click="goToPage(currentPage - 1)"
-                        aria-label="Previous page">
-                    <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
-                </button>
-                <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
-                <button type="button"
-                        class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
-                        :disabled="currentPage === totalPages"
-                        @click="goToPage(currentPage + 1)"
-                        aria-label="Next page">
-                    <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
-                </button>
+        <div class="tw-data-table-footer">
+            <div class="tw-data-table-info">
+                Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong>
+                <template x-if="search"><span>(filtered from <strong x-text="allSboms.length"></strong> total)</span></template>
             </div>
+            <div x-show="totalPages > 1">{% include "components/tw/table_pager.html.j2" %}</div>
         </div>
     </div>
 {% endif %}

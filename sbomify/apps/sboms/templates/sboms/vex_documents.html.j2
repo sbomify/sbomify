@@ -1,3 +1,4 @@
+{% load design_system %}
 {% comment %}
 VEX Documents card for the component detail page. Lists the VEX documents
 uploaded for the component (file uploader or API); the sbomify-triage overlay
@@ -22,7 +23,9 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                             <th class="hidden md:table-cell">Source</th>
                             <th>Suppresses</th>
                             <th class="hidden lg:table-cell tw-cell-date">Created</th>
-                            <th class="text-center">Actions</th>
+                            <th class="tw-table-actions">
+                                <span class="sr-only">Actions</span>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -53,81 +56,79 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                                     {% endif %}
                                 </td>
                                 <td class="hidden lg:table-cell text-text-muted text-sm tw-cell-date">{{ doc.created_at|date:"M j, Y" }}</td>
-                                <td>
-                                    <div class="flex items-center justify-center gap-1">
-                                        <a href="{% url 'sboms:sbom_download' doc.id %}"
-                                           title="Download"
-                                           aria-label="Download VEX document"
-                                           class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
-                                            <i class="fas fa-download" aria-hidden="true"></i>
-                                        </a>
-                                        {% if has_crud_permissions %}
-                                            <button type="button"
-                                                    title="Delete"
-                                                    aria-label="Delete VEX document"
-                                                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                                                    @click="confirmId='{{ doc.id|escapejs }}'; confirmName='{{ doc.name|escapejs }}'">
-                                                <i class="fas fa-trash" aria-hidden="true"></i>
-                                            </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="p-6 text-text-muted text-sm">
-                No VEX documents uploaded yet. Use <strong>Upload Artifact</strong> above and choose
-                <strong>VEX</strong>, or push one via the API.
-            </div>
-        {% endif %}
-    </div>
-    {% comment %}
+                                <td class="tw-table-actions">
+                                    {% actions_menu label="VEX document actions" %}
+                                    <a href="{% url 'sboms:sbom_download' doc.id %}"
+                                       role="menuitem"
+                                       class="tw-dropdown-item no-underline">
+                                        <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>Download
+                                    </a>
+                                    {% if has_crud_permissions %}
+                                        <button type="button"
+                                                role="menuitem"
+                                                class="tw-dropdown-item tw-dropdown-item-danger"
+                                                @click="confirmId='{{ doc.id|escapejs }}'; confirmName='{{ doc.name|escapejs }}'">
+                                            <i class="fas fa-trash tw-dropdown-item-icon" aria-hidden="true"></i>Delete
+                                        </button>
+                                    {% endif %}
+                                {% endactions_menu %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="p-6 text-text-muted text-sm">
+            No VEX documents uploaded yet. Use <strong>Upload Artifact</strong> above and choose
+            <strong>VEX</strong>, or push one via the API.
+        </div>
+    {% endif %}
+</div>
+{% comment %}
     Not teleported: HTMX only wires hx-* on content present at swap time, and
     x-teleport moves this out after that, so the form would fall back to a
     native submit. The container is a top-level card, so a fixed-position modal
     here still overlays correctly.
-    {% endcomment %}
-    {% if has_crud_permissions %}
-        <div x-show="confirmId"
-             x-cloak
-             class="fixed inset-0 z-[100]"
-             role="dialog"
-             aria-modal="true"
-             @keydown.escape="confirmId=''">
-            <div class="tw-modal-overlay" @click="confirmId=''"></div>
-            <div class="tw-modal tw-modal-sm" x-trap.noscroll="confirmId" @click.stop>
-                <div class="tw-modal-content tw-modal-sm">
-                    <div class="tw-modal-header">
-                        <h4 class="tw-modal-title">Delete VEX document</h4>
-                        <button type="button"
-                                class="tw-modal-close"
-                                aria-label="Close"
-                                @click="confirmId=''">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <form hx-post="{% url 'sboms:component_vex_documents' component_id %}"
-                          hx-swap="none"
-                          @htmx:after-request="confirmId=''">
-                        {% csrf_token %}
-                        <input type="hidden" name="_method" value="DELETE">
-                        <input type="hidden" name="sbom_id" :value="confirmId">
-                        <div class="tw-modal-body">
-                            <p class="text-text text-sm">
-                                Permanently delete <span class="font-medium" x-text="confirmName"></span>? Its
-                                suppressions stop applying and the finding counts recompute. This cannot be undone.
-                            </p>
-                        </div>
-                        <div class="tw-modal-footer flex justify-end gap-2">
-                            <button type="button" class="tw-btn-secondary" @click="confirmId=''">Cancel</button>
-                            <button type="submit" class="tw-btn-danger">Delete</button>
-                        </div>
-                    </form>
+{% endcomment %}
+{% if has_crud_permissions %}
+    <div x-show="confirmId"
+         x-cloak
+         class="fixed inset-0 z-[100]"
+         role="dialog"
+         aria-modal="true"
+         @keydown.escape="confirmId=''">
+        <div class="tw-modal-overlay" @click="confirmId=''"></div>
+        <div class="tw-modal tw-modal-sm" x-trap.noscroll="confirmId" @click.stop>
+            <div class="tw-modal-content tw-modal-sm">
+                <div class="tw-modal-header">
+                    <h4 class="tw-modal-title">Delete VEX document</h4>
+                    <button type="button"
+                            class="tw-modal-close"
+                            aria-label="Close"
+                            @click="confirmId=''">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
                 </div>
+                <form hx-post="{% url 'sboms:component_vex_documents' component_id %}"
+                      hx-swap="none"
+                      @htmx:after-request="confirmId=''">
+                    {% csrf_token %}
+                    <input type="hidden" name="_method" value="DELETE">
+                    <input type="hidden" name="sbom_id" :value="confirmId">
+                    <div class="tw-modal-body">
+                        <p class="text-text text-sm">
+                            Permanently delete <span class="font-medium" x-text="confirmName"></span>? Its
+                            suppressions stop applying and the finding counts recompute. This cannot be undone.
+                        </p>
+                    </div>
+                    <div class="tw-modal-footer flex justify-end gap-2">
+                        <button type="button" class="tw-btn-secondary" @click="confirmId=''">Cancel</button>
+                        <button type="submit" class="tw-btn-danger">Delete</button>
+                    </div>
+                </form>
             </div>
         </div>
-    {% endif %}
+    </div>
+{% endif %}
 </div>

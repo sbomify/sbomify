@@ -108,7 +108,11 @@
                                     </span>
                                 </button>
                             </th>
-                            {% if can_edit or can_delete %}<th class="text-center">Actions</th>{% endif %}
+                            {% if can_edit or can_delete %}
+                                <th class="tw-table-actions">
+                                    <span class="sr-only">Actions</span>
+                                </th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -142,82 +146,82 @@
                                           x-text="formatDate(release.created_at)"></span>
                                 </td>
                                 {% if can_edit or can_delete %}
-                                    <td class="text-center">
-                                        <div class="flex items-center justify-center gap-1">
-                                            {% if can_edit %}
-                                                <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm"
-                                                        title="Edit"
-                                                        @click="openEditModal(release)">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                            {% endif %}
-                                            {% if can_delete %}
-                                                <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
-                                                        title="Delete"
-                                                        @click="openDeleteModal(release)">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                {% endif %}
-                            </tr>
-                        </template>
-                        <template x-if="sortedReleases.length === 0 && search">
-                            <tr>
-                                <td colspan="{% if can_edit or can_delete %}6{% else %}5{% endif %}"
-                                    class="text-center py-8 text-text-muted">
-                                    <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                    <p class="m-0">
-                                        No results found for "<span x-text="search"></span>"
-                                    </p>
+                                    <td class="tw-table-actions">
+                                        {% actions_menu label="Release actions" %}
+                                        {% if can_edit %}
+                                            <button type="button"
+                                                    role="menuitem"
+                                                    class="tw-dropdown-item"
+                                                    @click="openEditModal(release)">
+                                                <i class="fas fa-edit tw-dropdown-item-icon" aria-hidden="true"></i>Edit
+                                            </button>
+                                        {% endif %}
+                                        {% if can_delete %}
+                                            <button type="button"
+                                                    role="menuitem"
+                                                    class="tw-dropdown-item tw-dropdown-item-danger"
+                                                    @click="openDeleteModal(release)">
+                                                <i class="fas fa-trash tw-dropdown-item-icon" aria-hidden="true"></i>Delete
+                                            </button>
+                                        {% endif %}
+                                    {% endactions_menu %}
                                 </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-            {# Footer with Info and Pagination #}
-            <div class="tw-data-table-footer"
-                 x-show="!isLoading && releases.length > 0">
-                <div class="tw-data-table-info">
-                    Showing <strong x-text="sortedReleases.length > 0 ? 1 : 0"></strong> to <strong x-text="sortedReleases.length"></strong> of <strong x-text="filteredReleases.length"></strong> entries
-                    <template x-if="search">
-                        <span>(filtered from <strong x-text="releases.length"></strong> total)</span>
+                            {% endif %}
+                        </tr>
                     </template>
-                </div>
-                <nav class="tw-pagination" x-show="totalPages > 1">
-                    <button class="tw-pagination-btn tw-pagination-btn-nav"
-                            :disabled="currentPage === 1"
-                            @click="goToPage(currentPage - 1)">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <template x-for="page in visiblePages" :key="'page-' + page">
-                        <template x-if="page === '...'">
-                            <span class="tw-pagination-ellipsis">...</span>
-                        </template>
-                        <template x-if="page !== '...'">
-                            <button class="tw-pagination-btn"
-                                    :class="{ 'tw-pagination-btn-active': currentPage === page }"
-                                    @click="goToPage(page)"
-                                    x-text="page"></button>
-                        </template>
+                    <template x-if="sortedReleases.length === 0 && search">
+                        <tr>
+                            <td colspan="{% if can_edit or can_delete %}6{% else %}5{% endif %}"
+                                class="text-center py-8 text-text-muted">
+                                <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                                <p class="m-0">
+                                    No results found for "<span x-text="search"></span>"
+                                </p>
+                            </td>
+                        </tr>
                     </template>
-                    <button class="tw-pagination-btn tw-pagination-btn-nav"
-                            :disabled="currentPage === totalPages"
-                            @click="goToPage(currentPage + 1)">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </nav>
+                </tbody>
+            </table>
+        </div>
+        {# Footer with Info and Pagination #}
+        <div class="tw-data-table-footer"
+             x-show="!isLoading && releases.length > 0">
+            <div class="tw-data-table-info">
+                Showing <strong x-text="sortedReleases.length > 0 ? 1 : 0"></strong> to <strong x-text="sortedReleases.length"></strong> of <strong x-text="filteredReleases.length"></strong> entries
+                <template x-if="search">
+                    <span>(filtered from <strong x-text="releases.length"></strong> total)</span>
+                </template>
             </div>
+            <nav class="tw-pagination" x-show="totalPages > 1">
+                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                        :disabled="currentPage === 1"
+                        @click="goToPage(currentPage - 1)">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <template x-for="page in visiblePages" :key="'page-' + page">
+                    <template x-if="page === '...'">
+                        <span class="tw-pagination-ellipsis">...</span>
+                    </template>
+                    <template x-if="page !== '...'">
+                        <button class="tw-pagination-btn"
+                                :class="{ 'tw-pagination-btn-active': currentPage === page }"
+                                @click="goToPage(page)"
+                                x-text="page"></button>
+                    </template>
+                </template>
+                <button class="tw-pagination-btn tw-pagination-btn-nav"
+                        :disabled="currentPage === totalPages"
+                        @click="goToPage(currentPage + 1)">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </nav>
         </div>
     </div>
-    {% if can_create or can_edit %}
-        {% include 'core/components/release_form_modal.html.j2' %}
-    {% endif %}
-    {% if can_delete %}
-        {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Release' message='Are you sure you want to delete release' item_name_expression="deleteTarget?.name" warning_message='This action cannot be undone. The release and all its artifact associations will be permanently removed.' confirm_text='Delete Release' confirm_callback='confirmDeleteRelease()' %}
-    {% endif %}
+</div>
+{% if can_create or can_edit %}
+    {% include 'core/components/release_form_modal.html.j2' %}
+{% endif %}
+{% if can_delete %}
+    {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Release' message='Are you sure you want to delete release' item_name_expression="deleteTarget?.name" warning_message='This action cannot be undone. The release and all its artifact associations will be permanently removed.' confirm_text='Delete Release' confirm_callback='confirmDeleteRelease()' %}
+{% endif %}
 </div>

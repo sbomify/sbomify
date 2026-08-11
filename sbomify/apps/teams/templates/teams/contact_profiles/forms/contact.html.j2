@@ -13,8 +13,8 @@
     <div class="flex items-start gap-3 p-3">
         {# Contact avatar #}
         <div class="flex-shrink-0 mt-1">
-            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                <i class="fas fa-user text-primary text-xs"></i>
+            <div class="tw-avatar tw-avatar-sm">
+                <i class="fas fa-user text-xs"></i>
             </div>
         </div>
         {# Contact fields #}
@@ -31,7 +31,7 @@
                            maxlength="255"
                            :required="!deleted && editing"
                            aria-label="Contact Name">
-                    {% if form.name.errors %}<div class="text-danger text-xs mt-1">{{ form.name.errors.0 }}</div>{% endif %}
+                    {% if form.name.errors %}<p class="tw-form-error">{{ form.name.errors.0 }}</p>{% endif %}
                 </div>
                 {# Email field #}
                 <div class="flex-grow min-w-[160px]">
@@ -43,7 +43,7 @@
                            placeholder="Email"
                            maxlength="254"
                            aria-label="Contact Email">
-                    {% if form.email.errors %}<div class="text-danger text-xs mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+                    {% if form.email.errors %}<p class="tw-form-error">{{ form.email.errors.0 }}</p>{% endif %}
                 </div>
                 {# Phone field #}
                 <div class="w-32 flex-shrink-0">
@@ -99,7 +99,7 @@
         {# Remove button #}
         <div class="flex-shrink-0">
             <button type="button"
-                    class="tw-icon-btn tw-icon-btn-sm hover:text-danger hover:bg-danger/10"
+                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                     @click="removeContact"
                     title="Remove contact"
                     aria-label="Remove contact">

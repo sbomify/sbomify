@@ -17,11 +17,10 @@
                             {% csrf_token %}
                             {% for hidden in invite_user_form.hidden_fields %}{{ hidden }}{% endfor %}
                             {% if invite_user_form.non_field_errors %}
-                                <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4"
-                                     role="alert">
-                                    <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                    <div class="text-danger">
-                                        {% for error in invite_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                                <div class="tw-alert tw-alert-danger mb-4" role="alert">
+                                    <i class="fas fa-times-circle tw-alert-icon" aria-hidden="true"></i>
+                                    <div class="tw-alert-content">
+                                        {% for error in invite_user_form.non_field_errors %}<p class="text-sm m-0">{{ error }}</p>{% endfor %}
                                     </div>
                                 </div>
                             {% endif %}

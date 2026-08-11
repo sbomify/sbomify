@@ -15,29 +15,27 @@
 {% endcomment %}
 <div role="alert"
      aria-live="polite"
-     class="mb-4 rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm"
+     class="mb-4 tw-callout tw-callout-warning"
      data-testid="cra-stale-banner">
-    <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 shrink-0"
-             aria-hidden="true">
-            <i class="fas fa-triangle-exclamation text-sm text-amber-700 dark:text-amber-300"></i>
-        </div>
-        <div class="flex-1 min-w-0 pt-0.5">
+    <div class="tw-callout-header">
+        <span class="tw-icon-chip tw-icon-chip-warning tw-icon-chip-circle"
+              aria-hidden="true">
+            <i class="fas fa-triangle-exclamation"></i>
+        </span>
+        <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 flex-wrap">
                 <span class="font-semibold text-sm text-text">Assessment is out of scope</span>
-                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-500/70">
-                    Scope changed
-                </span>
+                <span class="tw-badge-warning tw-badge-sm">Scope changed</span>
             </div>
             <p class="text-xs text-text-muted mt-1 m-0 leading-snug">
                 The product's CRA scope screening now says CRA does not apply to this product.
                 This assessment is preserved on disk but cannot be edited or exported until
-                it is reconciled. Re-run the scope screening — flipping CRA back on will
-                auto-restore this assessment to where you left off.
+                it is reconciled. Re-run the scope screening. Flipping CRA back on restores
+                this assessment to where you left off.
             </p>
         </div>
     </div>
-    <div class="px-4 pt-3 pb-4 flex flex-wrap items-center gap-2">
+    <div class="tw-callout-body flex flex-wrap items-center gap-2">
         <a href="{% url 'compliance:cra_scope_screening' product_id=product_id %}"
            class="tw-btn tw-btn-primary tw-btn-sm"
            data-testid="cra-stale-rescope">

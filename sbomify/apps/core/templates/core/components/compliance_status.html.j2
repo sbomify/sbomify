@@ -1,3 +1,4 @@
+{% load design_system %}
 {% comment %}
 Compliance Status Component
 Displays compliance status for various SBOM standards.
@@ -25,17 +26,11 @@ Parameters:
                 <span class="text-sm text-text-muted">standards met</span>
             </div>
             {% if standards_met == total_standards %}
-                <span class="px-2.5 py-1 bg-success/10 text-success text-xs font-medium rounded-full">
-                    <i class="fas fa-check mr-1"></i>All compliant
-                </span>
+                {% badge text="All compliant" variant="success" icon="fas fa-check" %}
             {% elif standards_met > 0 %}
-                <span class="px-2.5 py-1 bg-warning/10 text-warning text-xs font-medium rounded-full">
-                    <i class="fas fa-exclamation-triangle mr-1"></i>Partial
-                </span>
+                {% badge text="Partial" variant="warning" icon="fas fa-exclamation-triangle" %}
             {% else %}
-                <span class="px-2.5 py-1 bg-danger/10 text-danger text-xs font-medium rounded-full">
-                    <i class="fas fa-times mr-1"></i>Non-compliant
-                </span>
+                {% badge text="Non-compliant" variant="danger" icon="fas fa-times" %}
             {% endif %}
         </div>
         {# Progress Bars for Each Standard #}

@@ -157,7 +157,9 @@ function renderNotifications(): void {
     listContainer.innerHTML = '';
     // Show empty state
     emptyContainer.classList.remove('hidden');
-    if (clearAllButton) clearAllButton.classList.add('hidden');
+    // The button carries tw-btn-ghost, which sets display itself, so a
+    // `hidden` class would lose to it; toggle the inline style instead.
+    if (clearAllButton) clearAllButton.style.display = 'none';
     if (badge) {
       badge.classList.add('hidden');
       badge.textContent = '';
@@ -166,7 +168,7 @@ function renderNotifications(): void {
   }
 
   emptyContainer.classList.add('hidden');
-  if (clearAllButton) clearAllButton.classList.remove('hidden');
+  if (clearAllButton) clearAllButton.style.display = '';
   // Update badge with count
   if (badge) {
     badge.classList.remove('hidden');

@@ -1,4 +1,5 @@
 {% extends "compliance/cra_wizard_base.html.j2" %}
+{% load design_system %}
 {% block step_wrapper %}
     <div x-data="craStep4()">
         {{ step_data_json|json_script:"step-data" }}
@@ -89,7 +90,7 @@
                 </div>
                 <div class="p-6">
                     {# Contact profile selector #}
-                    <div class="p-4 rounded-xl border border-border/50 bg-background/50 mb-4">
+                    <div class="tw-inset-card mb-4">
                         <div class="flex items-center justify-between gap-4 mb-3">
                             <label class="tw-form-label m-0" for="support-contact">
                                 <i class="fas fa-address-book text-primary mr-1.5"></i>Select from Contact Profiles
@@ -107,7 +108,7 @@
                             <template x-for="contact in (stepData.contacts || [])" :key="contact.id">
                                 <option :value="String(contact.id)"
                                         :selected="String(contact.id) === String(supportContactId)"
-                                        x-text="contact.name + ' (' + contact.email + ') — ' + contact.profile_name">
+                                        x-text="contact.name + ' (' + contact.email + '), ' + contact.profile_name">
                                 </option>
                             </template>
                         </select>
@@ -138,7 +139,7 @@
                                    class="tw-form-input w-full"
                                    placeholder="https://example.com/support">
                         </div>
-                        <div x-data="{ showPresets: false }" class="relative">
+                        <div>
                             <label class="tw-form-label" for="support-hours">Availability</label>
                             <div class="flex gap-2">
                                 <input type="text"
@@ -146,89 +147,82 @@
                                        x-model="supportHours"
                                        class="tw-form-input w-full"
                                        placeholder="Mon-Fri 9:00-17:00 UTC">
+                                {% actions_menu label="Quick presets" icon="fas fa-clock" trigger_class="tw-icon-btn tw-icon-btn-stretch" width="w-56" %}
                                 <button type="button"
-                                        @click="showPresets = !showPresets"
-                                        class="tw-btn-outline-primary tw-btn-sm text-xs flex-shrink-0"
-                                        x-tooltip="'Quick presets'">
-                                    <i class="fas fa-clock"></i>
-                                </button>
-                            </div>
-                            <div x-show="showPresets"
-                                 x-cloak
-                                 x-transition
-                                 @click.outside="showPresets = false"
-                                 class="absolute right-0 top-full mt-1 z-10 p-1.5 rounded-lg border border-border bg-card shadow-lg min-w-[200px]">
-                                <button type="button"
-                                        @click="supportHours = 'Mon-Fri 09:00-17:00 UTC'; showPresets = false"
-                                        class="w-full text-left text-xs px-3 py-1.5 rounded hover:bg-primary/5 text-text">
+                                        role="menuitem"
+                                        class="tw-dropdown-item"
+                                        @click="supportHours = 'Mon-Fri 09:00-17:00 UTC'">
                                     Mon-Fri 09:00-17:00 UTC
                                 </button>
                                 <button type="button"
-                                        @click="supportHours = 'Mon-Fri 09:00-17:00 CET'; showPresets = false"
-                                        class="w-full text-left text-xs px-3 py-1.5 rounded hover:bg-primary/5 text-text">
+                                        role="menuitem"
+                                        class="tw-dropdown-item"
+                                        @click="supportHours = 'Mon-Fri 09:00-17:00 CET'">
                                     Mon-Fri 09:00-17:00 CET
                                 </button>
                                 <button type="button"
-                                        @click="supportHours = '24/7'; showPresets = false"
-                                        class="w-full text-left text-xs px-3 py-1.5 rounded hover:bg-primary/5 text-text">
-                                    24/7
-                                </button>
+                                        role="menuitem"
+                                        class="tw-dropdown-item"
+                                        @click="supportHours = '24/7'">24/7</button>
                                 <button type="button"
-                                        @click="supportHours = '24/7 via support portal'; showPresets = false"
-                                        class="w-full text-left text-xs px-3 py-1.5 rounded hover:bg-primary/5 text-text">
+                                        role="menuitem"
+                                        class="tw-dropdown-item"
+                                        @click="supportHours = '24/7 via support portal'">
                                     24/7 via support portal
                                 </button>
                                 <button type="button"
-                                        @click="supportHours = 'Business hours (local time)'; showPresets = false"
-                                        class="w-full text-left text-xs px-3 py-1.5 rounded hover:bg-primary/5 text-text">
+                                        role="menuitem"
+                                        class="tw-dropdown-item"
+                                        @click="supportHours = 'Business hours (local time)'">
                                     Business hours (local time)
                                 </button>
-                            </div>
+                            {% endactions_menu %}
                         </div>
                     </div>
                 </div>
             </div>
-            {# Data & Decommissioning #}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-trash-can text-primary"></i>
-                        Data &amp; Decommissioning
-                    </h2>
-                    <p class="text-sm text-text-muted mt-1">Describe how users can securely remove the product and delete their data</p>
-                </div>
-                <div class="p-6">
-                    <label class="tw-form-label" for="data-deletion">Data Deletion Instructions</label>
-                    <p class="text-xs text-text-muted mb-2">
-                        Step-by-step instructions for users to delete their data when decommissioning the product
-                    </p>
-                    <textarea id="data-deletion"
-                              x-model="dataDeletionInstructions"
-                              rows="4"
-                              class="tw-form-textarea w-full"
-                              placeholder="Describe how users can delete their data..."></textarea>
-                </div>
+        </div>
+        {# Data & Decommissioning #}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h2 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-trash-can text-primary"></i>
+                    Data &amp; Decommissioning
+                </h2>
+                <p class="text-sm text-text-muted mt-1">Describe how users can securely remove the product and delete their data</p>
+            </div>
+            <div class="p-6">
+                <label class="tw-form-label" for="data-deletion">Data Deletion Instructions</label>
+                <p class="text-xs text-text-muted mb-2">
+                    Step-by-step instructions for users to delete their data when decommissioning the product
+                </p>
+                <textarea id="data-deletion"
+                          x-model="dataDeletionInstructions"
+                          rows="4"
+                          class="tw-form-textarea w-full"
+                          placeholder="Describe how users can delete their data..."></textarea>
             </div>
         </div>
-        {# Footer navigation #}
-        <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
-            {% if step > 1 %}
-                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
-                   class="tw-btn-secondary">
-                    <i class="fas fa-arrow-left mr-2"></i> Back
-                </a>
-            {% else %}
-                <div>{# spacer #}</div>
-            {% endif %}
-            <button type="button"
-                    @click="save()"
-                    :disabled="!canContinue || isSaving"
-                    class="tw-btn-primary">
-                <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
-                <span x-show="isSaving" x-cloak>
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
-                Saving...</span>
-            </button>
-        </div>
     </div>
+    {# Footer navigation #}
+    <div class="flex justify-between items-center mt-8 pt-6 border-t border-border">
+        {% if step > 1 %}
+            <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step|add:'-1' %}"
+               class="tw-btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Back
+            </a>
+        {% else %}
+            <div>{# spacer #}</div>
+        {% endif %}
+        <button type="button"
+                @click="save()"
+                :disabled="!canContinue || isSaving"
+                class="tw-btn-primary">
+            <span x-show="!isSaving">Save &amp; Continue <i class="fas fa-arrow-right ml-2"></i></span>
+            <span x-show="isSaving" x-cloak>
+                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
+            Saving...</span>
+        </button>
+    </div>
+</div>
 {% endblock step_wrapper %}

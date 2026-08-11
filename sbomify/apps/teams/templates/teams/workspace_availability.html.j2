@@ -8,10 +8,9 @@
                     <p class="text-xs uppercase text-text-muted font-semibold tracking-wider mb-2">Workspace availability</p>
                     <h1 class="text-2xl font-bold text-text mb-3">{{ availability.team_name }} is full right now</h1>
                     <p class="text-lg text-text-muted mb-6">{{ error_message }}</p>
-                    <div class="flex items-start gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg mb-6"
-                         role="alert">
-                        <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
-                        <div class="text-text">
+                    <div class="tw-alert tw-alert-warning mb-6" role="alert">
+                        <i class="fas fa-exclamation-triangle tw-alert-icon" aria-hidden="true"></i>
+                        <div class="tw-alert-content">
                             {% if availability.member_limit %}
                                 The {{ availability.plan_name }} plan allows {{ availability.member_limit }} member{{ availability.member_limit|pluralize }}.
                                 This workspace currently has {{ availability.current_members }} member{{ availability.current_members|pluralize }}.

@@ -25,10 +25,10 @@
                                         {# Background ring #}
                                         <svg class="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
                                             <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" class="text-border" stroke-width="8" />
-                                            <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" :class="compliancePercent >= 80 ? 'text-green-500' : compliancePercent >= 50 ? 'text-amber-500' : 'text-red-500'" stroke-width="8" stroke-linecap="round" :stroke-dasharray="2 * Math.PI * 40" :stroke-dashoffset="2 * Math.PI * 40 * (1 - compliancePercent / 100)" />
+                                            <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" :class="compliancePercent >= 80 ? 'text-success' : compliancePercent >= 50 ? 'text-warning' : 'text-danger'" stroke-width="8" stroke-linecap="round" :stroke-dasharray="2 * Math.PI * 40" :stroke-dashoffset="2 * Math.PI * 40 * (1 - compliancePercent / 100)" />
                                         </svg>
                                         <span class="absolute text-2xl font-bold"
-                                              :class="compliancePercent >= 80 ? 'text-green-600' : compliancePercent >= 50 ? 'text-amber-600' : 'text-red-600'"
+                                              :class="compliancePercent >= 80 ? 'text-success' : compliancePercent >= 50 ? 'text-warning' : 'text-danger'"
                                               x-text="compliancePercent + '%'"></span>
                                     </div>
                                     <span class="block text-xs text-text-muted mt-1">Controls Satisfied</span>
@@ -38,11 +38,11 @@
                                         <span class="font-medium text-text" x-text="satisfiedCount"></span> / <span x-text="totalControls"></span> controls satisfied
                                     </p>
                                     <p x-show="controlsSummary['not-satisfied']">
-                                        <span class="text-red-600 font-medium"
+                                        <span class="text-danger font-medium"
                                               x-text="controlsSummary['not-satisfied']"></span> not satisfied
                                     </p>
                                     <p x-show="controlsSummary['unanswered']">
-                                        <span class="text-amber-600 font-medium"
+                                        <span class="text-warning font-medium"
                                               x-text="controlsSummary['unanswered']"></span> unanswered
                                     </p>
                                 </div>
@@ -55,7 +55,7 @@
                                 </div>
                                 <div class="w-full h-2.5 bg-surface-hover rounded-full overflow-hidden">
                                     <div class="h-full rounded-full transition-all duration-500"
-                                         :class="compliancePercent >= 80 ? 'bg-green-500' : compliancePercent >= 50 ? 'bg-amber-500' : 'bg-red-500'"
+                                         :class="compliancePercent >= 80 ? 'bg-success' : compliancePercent >= 50 ? 'bg-warning' : 'bg-danger'"
                                          :style="'width: ' + compliancePercent + '%'"></div>
                                 </div>
                             </div>
@@ -65,7 +65,7 @@
                                           :key="s.num">
                                     <div class="flex items-center gap-2 text-sm">
                                         <i class="fas text-xs"
-                                           :class="steps[s.num]?.complete ? 'fa-check-circle text-green-600' : 'fa-circle text-text-muted'"></i>
+                                           :class="steps[s.num]?.complete ? 'fa-check-circle text-success' : 'fa-circle text-text-muted'"></i>
                                         <span class="text-text">
                                             <span class="text-text-muted" x-text="'Step ' + s.num + ':'"></span>
                                             <span x-text="s.name"></span>
@@ -93,7 +93,7 @@
                                 Sign the Declaration of Conformity
                             </h2>
                             <p class="text-sm text-text-muted mt-1">
-                                CRA Annex V Section 8 — captured once and embedded in the rendered DoC. Saving marks the DoC stale; click <em>Generate Declaration of Conformity</em> below to refresh it.
+                                CRA Annex V Section 8. Captured once and embedded in the rendered DoC. Saving marks the DoC stale; click <em>Generate Declaration of Conformity</em> below to refresh it.
                             </p>
                         </div>
                         <div class="p-6 space-y-4">
@@ -129,7 +129,7 @@
                                     <div class="border border-border rounded-lg bg-white"
                                          style="height: 160px">
                                         <canvas x-ref="canvas"
-                                                aria-label="Signature pad — draw your signature with mouse or touch"
+                                                aria-label="Signature pad. Draw your signature with mouse or touch"
                                                 class="w-full h-full block touch-none"></canvas>
                                     </div>
                                     <p class="text-xs text-text-muted mt-1 m-0">
@@ -294,12 +294,13 @@
                     </template>
                     {# Mark Assessment Complete — uses fa-circle-check (solid, high-contrast) instead of fa-flag-checkered which vanished against bg-green-100 in light mode. #}
                     <template x-if="overallReady">
-                        <div class="tw-card border-green-300 dark:border-green-700">
+                        <div class="tw-card">
                             <div class="p-6">
                                 <div class="flex items-start gap-4">
-                                    <div class="shrink-0 w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-                                        <i class="fas fa-circle-check text-xl text-green-600 dark:text-green-400"></i>
-                                    </div>
+                                    <span class="tw-icon-chip tw-icon-chip-success tw-icon-chip-circle shrink-0"
+                                          aria-hidden="true">
+                                        <i class="fas fa-circle-check"></i>
+                                    </span>
                                     <div class="flex-1">
                                         <h3 class="font-semibold text-text m-0">Ready to Complete</h3>
                                         <p class="text-sm text-text-muted mt-1">

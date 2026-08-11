@@ -1,4 +1,5 @@
 {% load static %}
+{% load design_system %}
 <div x-data="documentUpload('{{ component_id }}')"
      x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false')); documentTypeSubcategories = JSON.parse(document.getElementById('document-type-subcategories-{{ component_id }}').textContent)"
      x-cloak>
@@ -18,12 +19,7 @@
             </h4>
         </button>
         <div class="p-6" x-show="expanded" x-collapse>
-            <div class="flex items-start gap-3 p-4 bg-info/5 border border-info/20 rounded-lg mb-6">
-                <i class="fas fa-info-circle text-info mt-0.5"></i>
-                <p class="text-text-muted text-sm m-0">
-                    <strong class="text-text">Document Upload:</strong> Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload.
-                </p>
-            </div>
+            {% alert variant="info" title="Document upload" message="Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload." class="mb-6" %}
             <div class="mb-4">
                 <label for="document-version"
                        class="block text-sm font-medium text-text mb-1">
@@ -110,42 +106,38 @@
                           rows="3"
                           placeholder="Brief description of this document (optional)"></textarea>
             </div>
-            <div class="border-2 border-dashed rounded-xl p-8 text-center transition-colors"
-                 :class="{ 'border-primary bg-primary/5': isDragOver, 'border-success bg-success/5': selectedFile && !isUploading, 'border-border': !isDragOver && !selectedFile }"
-                 @drop.prevent="handleDrop($event)"
+            <div @drop.prevent="handleDrop($event)"
                  @dragover.prevent="isDragOver = true"
                  @dragleave.prevent="isDragOver = false"
                  @dragenter.prevent>
                 <template x-if="!selectedFile && !isUploading">
-                    <div>
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                            <i class="fas fa-cloud-upload-alt text-2xl text-primary"></i>
+                    <label class="tw-file-upload"
+                           :class="{ 'tw-file-upload-active': isDragOver }">
+                        <input type="file"
+                               accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml"
+                               class="tw-form-input sr-only"
+                               @change="handleFileSelect($event)">
+                        <div class="tw-file-upload-icon">
+                            <i class="fas fa-cloud-upload-alt text-2xl" aria-hidden="true"></i>
                         </div>
-                        <p class="text-text mb-2">
-                            <strong>Drop your document file here</strong> or
-                            <label class="text-primary cursor-pointer hover:underline">
-                                <input type="file"
-                                       accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml"
-                                       class="tw-form-input hidden"
-                                       @change="handleFileSelect($event)">
-                                click to browse
-                            </label>
+                        <p class="tw-file-upload-text">
+                            <strong>Drop your document file here</strong> or <span class="text-primary font-medium">click to browse</span>
                         </p>
-                        <p class="text-text-muted text-sm m-0">Supports PDF, Word, text, markdown, and other document formats (max 50MB)</p>
-                    </div>
+                        <p class="tw-file-upload-hint">Supports PDF, Word, text, markdown, and other document formats (max 50MB)</p>
+                    </label>
                 </template>
                 <template x-if="selectedFile && !isUploading">
-                    <div class="flex items-center justify-center gap-4">
-                        <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-success">
-                            <i class="fas fa-file-alt text-xl" aria-hidden="true"></i>
+                    <div class="tw-file-preview">
+                        <span class="tw-file-preview-icon">
+                            <i class="fas fa-file-alt" aria-hidden="true"></i>
                         </span>
-                        <div class="text-left">
-                            <p class="font-medium text-text m-0" x-text="selectedFile.name"></p>
-                            <p class="text-text-muted text-sm m-0"
+                        <div class="tw-file-preview-info text-left">
+                            <p class="tw-file-preview-name m-0" x-text="selectedFile.name"></p>
+                            <p class="tw-file-preview-size m-0"
                                x-text="formatFileSize(selectedFile.size)"></p>
                         </div>
                         <button type="button"
-                                class="p-2 rounded-lg text-text-muted hover:bg-border/30 transition-colors"
+                                class="tw-icon-btn"
                                 title="Remove file"
                                 aria-label="Remove selected file"
                                 @click="clearSelectedFile()">
@@ -154,9 +146,9 @@
                     </div>
                 </template>
                 <template x-if="isUploading">
-                    <div class="flex flex-col items-center gap-3">
+                    <div class="tw-file-upload">
                         {% include "components/tw/spinner.html.j2" with size="md" %}
-                        <p class="text-text-muted m-0">Uploading and processing document...</p>
+                        <p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
                     </div>
                 </template>
             </div>

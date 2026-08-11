@@ -28,15 +28,15 @@
               hx-swap="none">
             {% csrf_token %}
             {# Brand Colors Section #}
-            <div class="bg-background/50 border border-border rounded-xl p-5 mb-4">
-                <div class="flex items-start justify-between gap-3 mb-4">
+            <div class="tw-inset-card mb-4">
+                <div class="tw-section-header justify-between">
                     <div class="flex items-start gap-3">
                         <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
                             <i class="fas fa-swatchbook" aria-hidden="true"></i>
                         </span>
                         <div>
-                            <h6 class="text-base font-semibold text-text m-0">Brand Colors</h6>
-                            <p class="text-text-muted text-sm m-0">Define your primary brand colors for consistent visual identity</p>
+                            <h6 class="tw-section-header-title">Brand Colors</h6>
+                            <p class="tw-section-header-subtitle">Define your primary brand colors for consistent visual identity</p>
                         </div>
                     </div>
                     <button type="button"
@@ -45,10 +45,10 @@
                         <i class="fas fa-undo mr-1"></i>Reset
                     </button>
                 </div>
-                <div class="ml-11">
+                <div class="tw-section-body">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {# Primary Brand Color #}
-                        <div class="bg-background border border-border rounded-xl p-5">
+                        <div class="tw-inset-card">
                             <div class="flex items-start gap-4">
                                 <div class="relative group">
                                     <div class="w-20 h-20 rounded-xl border-2 border-border overflow-hidden shadow-sm group-hover:shadow-md transition-shadow cursor-pointer"
@@ -66,14 +66,14 @@
                                 </div>
                                 <div class="flex-1 pt-1">
                                     <label for="brand-color" class="text-sm font-semibold text-text block mb-2">Primary Brand Color</label>
-                                    <code class="text-xs font-mono bg-border/30 text-text-muted px-2 py-1 rounded inline-block mb-2"
+                                    <code class="tw-code-inline inline-block mb-2"
                                           x-text="displayColor('brand_color')"></code>
                                     <p class="text-text-muted text-xs m-0">Headers, navigation, primary elements</p>
                                 </div>
                             </div>
                         </div>
                         {# Accent Color #}
-                        <div class="bg-background border border-border rounded-xl p-5">
+                        <div class="tw-inset-card">
                             <div class="flex items-start gap-4">
                                 <div class="relative group">
                                     <div class="w-20 h-20 rounded-xl border-2 border-border overflow-hidden shadow-sm group-hover:shadow-md transition-shadow cursor-pointer"
@@ -91,7 +91,7 @@
                                 </div>
                                 <div class="flex-1 pt-1">
                                     <label for="accent-color" class="text-sm font-semibold text-text block mb-2">Accent Color</label>
-                                    <code class="text-xs font-mono bg-border/30 text-text-muted px-2 py-1 rounded inline-block mb-2"
+                                    <code class="tw-code-inline inline-block mb-2"
                                           x-text="displayColor('accent_color')"></code>
                                     <p class="text-text-muted text-xs m-0">Buttons, links, highlights</p>
                                 </div>
@@ -101,20 +101,20 @@
                 </div>
             </div>
             {# Visual Assets Section #}
-            <div class="bg-background/50 border border-border rounded-xl p-5 mb-4"
+            <div class="tw-inset-card mb-4"
                  @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)"
                  @file-removed.window="removeFile($event.detail.field)"
                  @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
-                <div class="flex items-start gap-3 mb-4">
+                <div class="tw-section-header">
                     <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
                         <i class="fas fa-images" aria-hidden="true"></i>
                     </span>
                     <div>
-                        <h6 class="text-base font-semibold text-text m-0">Visual Assets</h6>
-                        <p class="text-text-muted text-sm m-0">Upload your brand assets for public content</p>
+                        <h6 class="tw-section-header-title">Visual Assets</h6>
+                        <p class="tw-section-header-subtitle">Upload your brand assets for public content</p>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 ml-11">
+                <div class="tw-section-body grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="tw-form-label">Brand Icon</label>
                         {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
@@ -134,17 +134,17 @@
                 </div>
             </div>
             {# Display Preferences Section #}
-            <div class="bg-background/50 border border-border rounded-xl p-5">
-                <div class="flex items-start gap-3 mb-4">
+            <div class="tw-inset-card">
+                <div class="tw-section-header">
                     <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral">
                         <i class="fas fa-eye" aria-hidden="true"></i>
                     </span>
                     <div>
-                        <h6 class="text-base font-semibold text-text m-0">Display Preferences</h6>
-                        <p class="text-text-muted text-sm m-0">Toggle workspace branding on or off</p>
+                        <h6 class="tw-section-header-title">Display Preferences</h6>
+                        <p class="tw-section-header-subtitle">Toggle workspace branding on or off</p>
                     </div>
                 </div>
-                <div class="ml-11">
+                <div class="tw-section-body">
                     <label class="inline-flex items-center gap-2 cursor-pointer">
                         <input type="checkbox"
                                id="branding-enabled-toggle"

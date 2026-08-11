@@ -109,7 +109,7 @@
                     <div class="px-8 sm:px-10 pt-10 sm:pt-12 pb-8 sm:pb-10 text-center">
                         <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Welcome, {{ first_name }}</h1>
                         <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">
-                            Know exactly what's inside your software — and keep it secure.
+                            Know exactly what's inside your software, and keep it secure.
                         </p>
                         <!-- Value highlights -->
                         <div class="flex flex-col gap-3 mb-8 text-left">
@@ -127,7 +127,7 @@
                             </div>
                         </div>
                         <a href="{% url 'teams:onboarding_wizard' %}?step=setup"
-                           class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline">
+                           class="tw-btn-primary tw-btn-lg w-full no-underline">
                             Get Started
                             <i class="fas fa-arrow-right text-sm"></i>
                         </a>
@@ -276,11 +276,11 @@
                                 </div>
                             </div>
                             <!-- Auto-create note -->
-                            <div class="flex items-start gap-2.5 mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                                <i class="fas fa-magic text-primary/60 text-xs mt-0.5"></i>
-                                <p class="text-xs text-text-muted leading-relaxed">
-                                    We'll set up a sample product and component so you can start exploring right away.
-                                </p>
+                            <div class="tw-alert tw-alert-info mt-6" role="alert">
+                                <i class="fas fa-magic tw-alert-icon" aria-hidden="true"></i>
+                                <div class="tw-alert-content">
+                                    <p class="text-sm m-0">We'll set up a sample product and component so you can start exploring right away.</p>
+                                </div>
                             </div>
                             <!-- Footer -->
                             <div class="flex items-center justify-between mt-8 pt-6 border-t border-border/50">
@@ -288,9 +288,7 @@
                                    class="text-sm text-text-muted hover:text-text no-underline transition-colors flex items-center gap-1.5">
                                     <i class="fas fa-arrow-left text-xs"></i> Back
                                 </a>
-                                <button type="submit"
-                                        class="btn-primary-action py-2.5 px-8 text-sm font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                                        :disabled="!canSubmit">
+                                <button type="submit" class="tw-btn-primary" :disabled="!canSubmit">
                                     <span x-show="!isSubmitting" class="flex items-center gap-2">
                                         Create Workspace
                                         <i class="fas fa-arrow-right text-xs"></i>
@@ -347,7 +345,7 @@
                         </div>
                         <!-- Actions -->
                         <a href="{{ next_url|default:'/dashboard' }}"
-                           class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline mb-3">
+                           class="tw-btn-primary tw-btn-lg w-full no-underline mb-3">
                             Continue
                             <i class="fas fa-arrow-right text-sm"></i>
                         </a>
@@ -371,21 +369,18 @@
                 <div class="flex items-center justify-center gap-4 mb-10">
                     <span class="text-sm font-medium transition-colors"
                           :class="billingPeriod === 'monthly' ? 'text-text' : 'text-text-muted'">Monthly</span>
-                    <button @click="billingPeriod = billingPeriod === 'monthly' ? 'annual' : 'monthly'"
-                            class="relative w-14 h-7 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 border border-border"
-                            :class="billingPeriod === 'annual' ? 'bg-primary border-primary' : 'bg-text-muted/20'"
-                            role="switch"
-                            aria-label="Toggle annual billing"
-                            :aria-checked="billingPeriod === 'annual'">
-                        <span class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md border border-border/50 transition-transform"
-                              :class="billingPeriod === 'annual' ? 'translate-x-7' : 'translate-x-0'"></span>
-                    </button>
+                    <input type="checkbox"
+                           class="tw-toggle"
+                           role="switch"
+                           aria-label="Toggle annual billing"
+                           :checked="billingPeriod === 'annual'"
+                           @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'">
                     <span class="text-sm font-medium transition-colors flex items-center gap-2"
                           :class="billingPeriod === 'annual' ? 'text-text' : 'text-text-muted'">
                         Annual
                         <template x-for="plan in plans.filter(p => p.key === 'business' && p.annual_savings_percent)"
                                   :key="plan.key">
-                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-success/10 text-success"
+                            <span class="tw-badge-success"
                                   x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'"></span>
                         </template>
                     </span>
@@ -527,7 +522,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="plan" :value="selectedPlan">
                     <button type="submit"
-                            class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="tw-btn-primary tw-btn-lg w-full"
                             :disabled="!selectedPlan">
                         <span x-show="selectedPlan === 'business'">Start Free Trial</span>
                         <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>

@@ -1525,34 +1525,6 @@ html.no-transitions * {
   color: var(--color-text);
 }
 
-/* Primary action button - works in both light and dark mode */
-.btn-primary-action {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: white !important;
-  box-shadow: 0 10px 25px -5px color-mix(in oklab, var(--color-primary) 40%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.15) inset;
-}
-
-.btn-primary-action:hover:not(:disabled) {
-  box-shadow: 0 15px 35px -5px color-mix(in oklab, var(--color-primary) 50%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.2) inset;
-}
-
-.btn-primary-action:disabled {
-  background: linear-gradient(135deg, rgb(156 163 175) 0%, rgb(107 114 128) 100%);
-  box-shadow: none;
-}
-
-:root.light .btn-primary-action {
-  box-shadow: 0 10px 25px -5px color-mix(in oklab, var(--color-primary) 35%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.05);
-}
-
-:root.light .btn-primary-action:hover:not(:disabled) {
-  box-shadow: 0 15px 35px -5px color-mix(in oklab, var(--color-primary) 45%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.08);
-}
-
 /* Theme button hover state - gradient for inactive theme buttons */
 .theme-button-hover:hover {
   background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;

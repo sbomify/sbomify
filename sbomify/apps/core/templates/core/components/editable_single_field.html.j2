@@ -16,13 +16,15 @@
                        @keyup.enter="updateField()"
                        @keyup.escape="cancelEdit()">
             </template>
-            <button class="p-1.5 rounded text-success hover:bg-success/10 transition-colors"
+            <button type="button"
+                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-success"
                     title="Save"
                     aria-label="Save"
                     @click="updateField()">
                 <i class="fas fa-check" aria-hidden="true"></i>
             </button>
-            <button class="p-1.5 rounded text-danger hover:bg-danger/10 transition-colors"
+            <button type="button"
+                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
                     title="Cancel"
                     aria-label="Cancel"
                     @click="cancelEdit()">

@@ -1,5 +1,6 @@
 {% load widget_tweaks %}
-<div class="bg-gradient-to-r from-blue-600 to-blue-700 py-12 mb-8">
+{% load design_system %}
+<div class="bg-gradient-to-r from-primary to-primary-dark py-12 mb-8">
     <div class="max-w-3xl mx-auto px-4 text-center">
         <h1 class="text-3xl md:text-4xl font-bold text-white mb-4">Let's Talk Enterprise</h1>
         <p class="text-lg text-white/80 mb-6">
@@ -24,10 +25,18 @@
             <div x-data="{ show: true }"
                  x-show="show"
                  x-transition
-                 class="mb-4 p-4 rounded-lg flex items-center justify-between {% if message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% elif message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
-                <span>{{ message }}</span>
+                 role="alert"
+                 class="tw-alert {% if message.tags == 'success' %}tw-alert-success{% elif message.tags == 'error' %}tw-alert-danger{% else %}tw-alert-info{% endif %} tw-alert-dismissible mb-4">
+                {% if message.tags == 'success' %}
+                    <i class="fas fa-check-circle tw-alert-icon" aria-hidden="true"></i>
+                {% elif message.tags == 'error' %}
+                    <i class="fas fa-times-circle tw-alert-icon" aria-hidden="true"></i>
+                {% else %}
+                    <i class="fas fa-info-circle tw-alert-icon" aria-hidden="true"></i>
+                {% endif %}
+                <div class="tw-alert-content">{{ message }}</div>
                 <button type="button"
-                        class="text-current opacity-70 hover:opacity-100"
+                        class="tw-alert-close"
                         aria-label="Dismiss message"
                         @click="show = false">
                     <i class="fas fa-times" aria-hidden="true"></i>
@@ -35,8 +44,8 @@
             </div>
         {% endfor %}
     {% endif %}
-    <div class="bg-surface rounded-xl shadow-lg border border-border overflow-hidden">
-        <div class="p-8">
+    <div class="tw-card">
+        <div class="tw-card-body">
             <div class="text-center mb-8">
                 <h2 class="text-2xl font-bold text-text mb-2">Tell Us About Your Needs</h2>
                 <p class="text-text-muted">We'll get back to you within 1-2 business days with a custom proposal.</p>
@@ -45,9 +54,9 @@
                 {% csrf_token %}
                 <div class="mb-8">
                     <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                            <i class="fas fa-building"></i>
-                        </div>
+                        <span class="tw-icon-chip">
+                            <i class="fas fa-building" aria-hidden="true"></i>
+                        </span>
                         <h3 class="text-lg font-semibold text-text">Company Information</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -85,9 +94,9 @@
                 </div>
                 <div class="mb-8">
                     <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                            <i class="fas fa-user"></i>
-                        </div>
+                        <span class="tw-icon-chip">
+                            <i class="fas fa-user" aria-hidden="true"></i>
+                        </span>
                         <h3 class="text-lg font-semibold text-text">Contact Information</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -141,9 +150,9 @@
                 </div>
                 <div class="mb-8">
                     <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                            <i class="fas fa-tasks"></i>
-                        </div>
+                        <span class="tw-icon-chip">
+                            <i class="fas fa-tasks" aria-hidden="true"></i>
+                        </span>
                         <h3 class="text-lg font-semibold text-text">Implementation Details</h3>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -171,9 +180,9 @@
                 </div>
                 <div class="mb-8">
                     <div class="flex items-center gap-3 mb-4 pb-3 border-b border-border">
-                        <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                            <i class="fas fa-comment-alt"></i>
-                        </div>
+                        <span class="tw-icon-chip">
+                            <i class="fas fa-comment-alt" aria-hidden="true"></i>
+                        </span>
                         <h3 class="text-lg font-semibold text-text">Tell Us More</h3>
                     </div>
                     <div>
@@ -199,9 +208,9 @@
                 {% if turnstile_site_key and not debug %}
                     <div class="mb-6">
                         <div class="flex items-center gap-3 mb-3 pb-2 border-b border-border">
-                            <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
-                                <i class="fas fa-shield-alt"></i>
-                            </div>
+                            <span class="tw-icon-chip">
+                                <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                            </span>
                             <h3 class="text-lg font-semibold text-text">Security Verification</h3>
                         </div>
                         <div class="cf-turnstile"
@@ -214,10 +223,7 @@
                         {% endif %}
                     </div>
                 {% else %}
-                    <div class="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-6 flex items-center gap-2">
-                        <i class="fas fa-exclamation-triangle text-warning" aria-hidden="true"></i>
-                        <span class="text-warning"><strong>Development Mode:</strong> Turnstile verification is not configured. In production, this form will include spam protection.</span>
-                    </div>
+                    {% alert variant="warning" title="Development mode" message="Turnstile verification is not configured. In production, this form includes spam protection." class="mb-6" %}
                     {% render_field form.cf_turnstile_response %}
                 {% endif %}
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-border">

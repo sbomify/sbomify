@@ -54,7 +54,7 @@
                                     <div class="font-medium {% if onboarding.has_product %}text-text-muted line-through{% else %}text-text{% endif %}">
                                         Create a product
                                     </div>
-                                    <div class="text-sm text-text-muted">The thing you ship — it groups your components together.</div>
+                                    <div class="text-sm text-text-muted">The thing you ship. It groups your components together.</div>
                                 </div>
                                 {% if not onboarding.has_product and has_crud_permissions %}
                                     <button type="button"
@@ -135,7 +135,7 @@
                     <div class="px-6 py-4 border-b border-border">
                         <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
                             Needs attention
-                            <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-danger/10 text-danger">{{ dashboard.needs_attention|length }}</span>
+                            <span class="tw-badge-danger tw-badge-sm">{{ dashboard.needs_attention|length }}</span>
                         </h4>
                     </div>
                     <div class="divide-y divide-border">
@@ -145,7 +145,7 @@
                                     <span class="tw-badge-severity-{{ finding.severity|lower }}">{{ finding.severity|capfirst }}</span>
                                 {% else %}
                                     {# unknown / info / malicious carry no band on the severity scale #}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-border/40 text-text-muted border border-border">{{ finding.severity|capfirst }}</span>
+                                    <span class="tw-badge-severity-unknown">{{ finding.severity|capfirst }}</span>
                                 {% endif %}
                                 {% with finding_url=finding.id|advisory_url %}
                                     {% if finding_url %}
