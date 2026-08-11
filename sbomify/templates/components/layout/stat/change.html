@@ -1,0 +1,9 @@
+{% comment %}
+The delta beside a number: an arrow and a figure. Direction is a file
+(c-layout.stat.change-up and c-layout.stat.change-down), which passes its ink
+through variant_class; bare, the change inherits the card's text colour, which
+is what a delta with no direction should do. The arrow goes in the slot.
+{% endcomment %}
+<c-vars variant_class class />
+<span class="inline-flex items-baseline gap-1 text-[0.8125rem] font-semibold tabular-nums mt-[var(--stat-change-mt,0.5rem)] {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

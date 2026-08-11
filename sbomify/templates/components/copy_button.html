@@ -1,0 +1,33 @@
+{% comment %}
+The standalone copy control: a labelled button that puts value on the clipboard
+and confirms in place for two seconds.
+
+label and copied_text are props rather than the slot because the button reads
+as one string or the other depending on its own state, which a slot cannot
+express. Both are server-rendered as well as bound, so the resting label is on
+the page before Alpine reaches it.
+
+The copied state repaints background, border and text at once, so it renders as
+one complete Alpine binding rather than a class layered over the resting one:
+two utilities for the same property would be resolved by stylesheet order, not
+by which is "on". The icons are two elements rather than one swapped class, so
+each carries its own colour and neither has to fight the other's. The focus
+ring is the library floor; the tw-* rule never had one.
+{% endcomment %}
+<c-vars value label="Copy" copied_text="Copied!" class />
+<button type="button"
+        class="group inline-flex items-center gap-2 px-3.5 py-2 text-[0.8125rem] font-medium rounded-lg border border-solid cursor-pointer transition-all duration-200 active:scale-[0.97] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+        :class="copied ? 'bg-success border-success text-white' : 'bg-surface border-border text-text hover:bg-[color-mix(in_oklab,var(--color-primary)_5%,transparent)] hover:border-primary hover:text-primary'"
+        x-data="{ copied: false }"
+        :aria-label="copied ? '{{ copied_text|escapejs }}' : '{{ label|escapejs }}'"
+        @click="navigator.clipboard.writeText('{{ value|escapejs }}'); copied = true; setTimeout(() => copied = false, 2000)"
+        {{ attrs }}>
+    <i x-show="!copied"
+       class="fas fa-copy text-xs text-text-muted transition-all duration-200 group-hover:text-primary"
+       aria-hidden="true"></i>
+    <i x-show="copied"
+       x-cloak
+       class="fas fa-check text-xs text-white"
+       aria-hidden="true"></i>
+    <span x-text="copied ? '{{ copied_text|escapejs }}' : '{{ label|escapejs }}'">{{ label }}</span>
+</button>

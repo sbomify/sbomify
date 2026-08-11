@@ -1,0 +1,30 @@
+{% comment %}
+Determinate progress: a flat accent bar on a quiet track. The fill is static,
+the width transition is the only motion.
+
+value is a percentage and drives both the fill and aria-valuenow. label_text
+renders the header row above the track, label left and tabular value right, and
+names the track for a screen reader.
+
+The accent runs on --progress-accent, which the bar already defaults to the
+primary token. variant is one conditional segment that only sets the property,
+so the bar's own colour utility never changes. The header is a sibling of the
+track, not a wrapper, exactly as it was.
+{% endcomment %}
+<c-vars value size variant label_text class />
+{% if label_text %}
+    <div class="flex items-baseline justify-between gap-3 mb-1.5 text-xs font-semibold text-text-muted">
+        <span>{{ label_text }}</span>
+        <span class="tabular-nums text-text">{{ value }}%</span>
+    </div>
+{% endif %}
+<div class="w-full rounded-full overflow-hidden bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)] {% if size == 'sm' %}h-1.5{% elif size == 'lg' %}h-3{% else %}h-2{% endif %}{% if class %} {{ class }}{% endif %}"
+     role="progressbar"
+     aria-valuenow="{{ value }}"
+     aria-valuemin="0"
+     aria-valuemax="100"
+     {% if label_text %}aria-label="{{ label_text }}"{% endif %}
+     {{ attrs }}>
+    <div class="h-full rounded-full transition-[width] duration-500 bg-[var(--progress-accent,var(--color-primary))] {% if variant == 'success' %}[--progress-accent:var(--color-success)]{% elif variant == 'warning' %}[--progress-accent:var(--color-warning)]{% elif variant == 'danger' %}[--progress-accent:var(--color-danger)]{% endif %}"
+         style="width: {{ value }}%"></div>
+</div>

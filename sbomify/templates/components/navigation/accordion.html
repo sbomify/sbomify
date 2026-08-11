@@ -1,0 +1,15 @@
+{% comment %}
+One bordered container of divided sections, filled with
+c-navigation.accordion-item children.
+
+density="sm" is the compact rail for a category list inside a card; it marks
+the container with data-accordion-sm, which every item reads for its padding,
+the same descendant relationship the .tw-accordion-sm rules had. Open state is
+an Alpine expression the caller owns, so one x-data can keep a single section
+of the stack open.
+{% endcomment %}
+<c-vars density class />
+<div class="bg-surface rounded-xl overflow-hidden border border-solid border-border{% if class %} {{ class }}{% endif %}"
+     {% if density == 'sm' %}data-accordion-sm{% endif %}
+     {{ attrs }}>{{ slot }}
+</div>

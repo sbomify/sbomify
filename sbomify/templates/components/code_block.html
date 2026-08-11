@@ -1,0 +1,45 @@
+{% comment %}
+A block of code with a copy control.
+
+code is a prop, not the slot: whitespace inside a pre element is content, and a
+slot would fold the template's own indentation into the snippet. language names
+the highlighter class the page's highlighter looks for.
+
+The bar holding the copy control is one element with two recipes: with a
+filename it is the header band above the code, without one it is a box in the
+block's top-right corner. That keeps a single copy button in the file rather
+than one per placement, and it means the control stays put while a capped block
+scrolls under it.
+
+The copied state repaints background, border and text at once, so it renders as
+one complete Alpine binding rather than a class layered over the resting one:
+two utilities for the same property would be resolved by stylesheet order, not
+by which is "on". The focus ring is the library floor; the tw-* rules never had
+one here.
+{% endcomment %}
+<c-vars code language filename max_height copyable="true" class />
+<div class="relative overflow-hidden bg-background border border-solid border-border rounded-[0.625rem]{% if class %} {{ class }}{% endif %}"
+     x-data="{ copied: false }"
+     {{ attrs }}>
+    {% if filename or copyable != "false" %}
+        <div class="flex items-center {% if filename %}justify-between px-4 py-2.5 bg-surface border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% else %}absolute top-2 right-2 z-10{% endif %}">
+            {% if filename %}
+                <span class="text-xs font-semibold uppercase tracking-[0.05em] text-text-muted">{{ filename }}</span>
+            {% endif %}
+            {% if copyable != "false" %}
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border border-solid cursor-pointer transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                        :class="copied ? 'bg-success border-success text-white' : 'bg-transparent border-transparent text-text-muted hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] hover:border-[color-mix(in_oklab,var(--color-primary)_20%,transparent)] hover:text-primary'"
+                        :aria-label="copied ? 'Copied' : 'Copy code'"
+                        @click="navigator.clipboard.writeText($root.querySelector('code').textContent).then(() => { copied = true; setTimeout(() => copied = false, 2000) })">
+                    <i :class="copied ? 'fas fa-check' : 'fas fa-copy'" aria-hidden="true"></i>
+                    <span x-text="copied ? 'Copied' : 'Copy'">Copy</span>
+                </button>
+            {% endif %}
+        </div>
+    {% endif %}
+    <div class="p-4 {% if max_height %}overflow-auto{% else %}overflow-x-auto{% endif %}"
+         {% if max_height %}style="max-height: {{ max_height }}"{% endif %}>
+        <pre class="m-0 font-mono text-[0.8125rem] leading-[1.6] text-text"><code class="font-mono{% if language %} language-{{ language }}{% endif %}">{{ code }}</code></pre>
+    </div>
+</div>

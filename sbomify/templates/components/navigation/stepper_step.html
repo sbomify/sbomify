@@ -1,0 +1,16 @@
+{% comment %}
+One step on a stepper rail: the circle and its caption.
+
+state is where the flow has got to (completed, active, or neither), and it
+renders as one conditional segment on the circle, so a step never carries two
+fills. The slot is what goes in the circle, a number or a tick; label is the
+caption beside it, which the active step brightens.
+{% endcomment %}
+<c-vars state label class />
+<div class="flex items-center{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <span class="relative shrink-0 flex items-center justify-center w-10 h-10 rounded-full text-sm font-semibold transition-all duration-300 {% if state == 'active' %}bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] text-white shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-primary)_20%,transparent)]{% elif state == 'completed' %}bg-[linear-gradient(135deg,var(--color-success)_0%,var(--color-success-dark)_100%)] text-white{% else %}bg-border text-text-muted{% endif %}">{{ slot }}</span>
+    {% if label %}
+        <span class="ml-3 text-sm font-medium transition-colors duration-200 {% if state == 'active' %}text-text{% else %}text-text-muted{% endif %}">{{ label }}</span>
+    {% endif %}
+</div>

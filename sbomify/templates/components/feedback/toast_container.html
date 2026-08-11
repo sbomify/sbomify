@@ -1,0 +1,51 @@
+{% comment %}
+The live region every toast lands in. Pages never build a notification by hand:
+they dispatch a `toast` event with { type, title, message, duration } and this
+container renders it.
+
+The surface below repeats the recipe in c-feedback.toast because Alpine builds
+it in the browser from the event payload, so there is nothing for the
+server-rendered component to wrap. The two must move together: the static
+utilities are identical, and only the accent, the icon glyph and the text are
+bound. Cotton's :: escape is for attributes on a c- tag; the Alpine bindings
+below sit on plain HTML, which cotton passes through untouched.
+
+The container is a singleton the base template renders once, so it takes no
+props: it owns its own corner of the viewport and needs no placement from a
+caller.
+{% endcomment %}
+<div id="toast-container"
+     x-data="{ toasts: [], counter: 0, addToast(toast) { const id = `toast-${Date.now()}-${this.counter++}`; this.toasts.push({ id, ...toast }); setTimeout(() => this.removeToast(id), toast.duration || 3000); }, removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); } }"
+     @toast.window="addToast($event.detail)"
+     aria-live="polite"
+     aria-label="Notifications"
+     class="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+    <template x-for="toast in toasts" :key="toast.id">
+        <div x-data="{ show: true }"
+             x-show="show"
+             x-init="setTimeout(() => show = false, Math.max(0, (toast.duration || 3000) - 200))"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 translate-x-8"
+             x-transition:enter-end="opacity-100 translate-x-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 translate-x-0"
+             x-transition:leave-end="opacity-0 translate-x-8"
+             class="pointer-events-auto flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl border border-solid border-border shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] min-w-80 max-w-md animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)]"
+             :class="{ '[--toast-accent:var(--color-success)]': toast.type === 'success', '[--toast-accent:var(--color-warning)]': toast.type === 'warning', '[--toast-accent:var(--color-danger)]': toast.type === 'error', '[--toast-accent:var(--color-primary)]': !toast.type || toast.type === 'info' }">
+            <i class="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-sm text-[var(--toast-accent,var(--color-primary))] bg-[color-mix(in_oklab,var(--toast-accent,var(--color-primary))_12%,transparent)]"
+               :class="{ 'fas fa-check-circle': toast.type === 'success', 'fas fa-exclamation-triangle': toast.type === 'warning', 'fas fa-times-circle': toast.type === 'error', 'fas fa-info-circle': !toast.type || toast.type === 'info' }"
+               aria-hidden="true"></i>
+            <div class="flex-1 min-w-0">
+                <p class="text-[0.9375rem] font-semibold text-text mb-0.5"
+                   x-text="toast.title"></p>
+                <p class="text-sm leading-[1.4] text-text-muted" x-text="toast.message"></p>
+            </div>
+            <button type="button"
+                    class="shrink-0 flex items-center justify-center w-7 h-7 -my-1 -mr-1 ml-0 rounded-md text-text-muted transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-text focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                    @click="show = false; $nextTick(() => removeToast(toast.id))"
+                    aria-label="Dismiss">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+    </template>
+</div>

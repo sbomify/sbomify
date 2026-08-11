@@ -1,0 +1,10 @@
+{% comment %}
+The SBOM format badge. It is its own shell in the stylesheet, not a tw-badge, so
+it does not nest c-badges.badge. There are two formats and pages interpolate the
+one they were given, so the colour is a format prop rather than two files. A
+format the app does not know keeps the shape with no tint, exactly as the old
+class pair did.
+{% endcomment %}
+<c-vars format class />
+<span class="inline-flex items-center px-2.5 py-1 text-[0.6875rem] font-bold tracking-[0.03em] rounded-md whitespace-nowrap transition-all duration-150 {% if format == 'cyclonedx' %}text-[#0d9488] bg-[rgb(20_184_166/0.1)] border border-solid border-[rgb(20_184_166/0.25)] hover:bg-[rgb(20_184_166/0.15)]{% elif format == 'spdx' %}text-[#7c3aed] bg-[rgb(139_92_246/0.1)] border border-solid border-[rgb(139_92_246/0.25)] hover:bg-[rgb(139_92_246/0.15)]{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

@@ -78,23 +78,10 @@ class DesignSystemView(LoginRequiredMixin, View):
                 "text",
                 "text-muted",
             ],
-            # Alpine handlers come from here, not inline in the template: an `attrs`
-            # string containing double quotes cannot survive a template tag argument
-            # (the HTML parser splits it into junk attributes).
-            "demo_toasts": [
-                {
-                    "label": "Success toast",
-                    "variant": "success",
-                    "attrs": "@click=\"$dispatch('toast', "
-                    "{ type: 'success', title: 'Saved', message: 'Component updated.' })\"",
-                },
-                {
-                    "label": "Error toast",
-                    "variant": "danger",
-                    "attrs": "@click=\"$dispatch('toast', "
-                    "{ type: 'danger', title: 'Failed', message: 'Could not parse the SBOM.' })\"",
-                },
-            ],
+            # The toast demo's Alpine handlers now live in the template: a cotton
+            # component takes @click directly, so the attrs string this context used
+            # to carry (a template tag argument could not hold its double quotes) is
+            # gone.
             "demo_select_rows": [
                 {
                     "name": "BSI TR-03183-2 v2.1",

@@ -51,8 +51,10 @@ document is how that language ships as components.
 6. **Attribute passthrough is sacred.** `hx-*`, `@click`, `aria-*`, `data-*`
    flow through untouched. Caller `class` merges after the component's own
    classes and is for layout only (width, grid placement), never to fight a
-   component-owned property. Inside a component file, Alpine's `:class` and
-   `:style` are written `::class` and `::style` (cotton's escape).
+   component-owned property. Cotton reads a leading `:` as its dynamic-prop
+   prefix **on `<c-*>` tags only**, so Alpine's `:class` and `:style` there are
+   written `::class` and `::style`; on plain HTML elements inside a component
+   they need no escape and pass through untouched.
 7. **Polymorphic where the element genuinely varies.** The buttons base
    renders `<a>` when `href` is set, `<button>` otherwise, with the two
    branches in lockstep in one file. Apply the same pattern only where the

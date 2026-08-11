@@ -1,0 +1,26 @@
+{% comment %}
+A chip, a title and one optional line under it, introducing a block inside a
+card. The block itself goes in c-layout.section-body, which indents it to the
+title's left edge.
+
+level renders the title as h2 or h3 so a page keeps one heading outline; the
+two branches differ only in the element and must stay in lockstep. accent is
+the chip's, and reaches c-chips.icon-chip untouched. The slot sits under the
+subtitle, for the rare header that carries a badge or a note of its own.
+{% endcomment %}
+<c-vars title subtitle icon accent level class />
+<div class="flex items-start gap-3 mb-4{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if icon %}
+        <c-chips.icon-chip size="sm" accent="{{ accent }}" aria-hidden="true"><i class="{{ icon }}"></i></c-chips.icon-chip>
+    {% endif %}
+    <div>
+        {% if level == "2" %}
+            <h2 class="text-base font-semibold text-text m-0">{{ title }}</h2>
+        {% else %}
+            <h3 class="text-base font-semibold text-text m-0">{{ title }}</h3>
+        {% endif %}
+        {% if subtitle %}<p class="text-sm text-text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
+        {{ slot }}
+    </div>
+</div>

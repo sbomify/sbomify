@@ -1,0 +1,17 @@
+{% comment %}
+A body cell.
+
+end right-aligns it, for a trailing status, visibility or actions column, and
+marks it so an equal-width table leaves its alignment alone. date keeps a date
+on one line: "10 Aug 2026" broken across two lines reads as two values. Stacked
+content inside the cell still stacks, in a block or flex wrapper.
+
+variant_class carries a column's own gutter recipe (the actions column states
+its width and its narrow-screen padding), and it replaces the default one, so
+only one padding rule ever lands on a side.
+{% endcomment %}
+<c-vars end date variant_class class />
+<td class="p-5 text-sm text-text border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] transition-[background-color] duration-150 {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %}{% if end %} text-right{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
+    {% if end %}data-cell-end{% endif %}
+    {{ attrs }}>{{ slot }}
+</td>

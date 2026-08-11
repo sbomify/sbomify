@@ -1,0 +1,44 @@
+{% comment %}
+Render probe for the cotton navigation set. Unit tests render this file with a
+small context of lists and assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-navigation.tabs :tabs="probe_tabs" active="overview" class="mb-4" data-probe="tabs" />
+<c-navigation.tabs-pills :tabs="probe_tabs" active="sboms" class="mb-4" data-probe="pills" />
+<c-navigation.tabs>
+<c-navigation.tab panel="hand" active badge="7" @click="pick('hand')" hx-get="/probe/hand">Hand built</c-navigation.tab>
+<c-navigation.tab panel="quiet">Quiet tab</c-navigation.tab>
+<c-navigation.tab panel="settings" icon="fas fa-gear" aria-label="Settings" />
+</c-navigation.tabs>
+<c-navigation.breadcrumbs :items="probe_crumbs" class="mb-2" data-probe="crumbs" />
+<c-navigation.pagination :current="3" :total="8" :page_range="probe_page_range" base_url="/components" class="mt-2" data-probe="pager" />
+<c-navigation.pagination :current="1" :total="1" :page_range="probe_single_page" base_url="/single" data-probe="single" />
+<c-navigation.pagination :current="2" :total="4" :page_range="probe_short_range" base_url="/numbers" show_prev_next="" data-probe="numbers" />
+<c-navigation.page-link href="/probe/page-link" hx-boost="false">Standalone link</c-navigation.page-link>
+<c-navigation.stepper data-probe="stepper">
+<c-navigation.stepper-step state="completed" label="Scope"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
+<c-navigation.stepper-connector completed />
+<c-navigation.stepper-step state="active" label="Assessment">2</c-navigation.stepper-step>
+<c-navigation.stepper-connector />
+<c-navigation.stepper-step label="Declaration" class="ml-1" data-probe="step">3</c-navigation.stepper-step>
+</c-navigation.stepper>
+<c-navigation.stepper-vertical class="mt-4" data-probe="vertical">
+<c-navigation.stepper-step state="completed" label="Upload">1</c-navigation.stepper-step>
+<c-navigation.stepper-connector completed />
+<c-navigation.stepper-step label="Publish">2</c-navigation.stepper-step>
+</c-navigation.stepper-vertical>
+<c-navigation.accordion class="mb-4" x-data="{ open: 'org' }" data-probe="accordion">
+<c-navigation.accordion-item label="Organisational controls" state="open === 'org'" @click="open = open === 'org' ? '' : 'org'">
+<p class="m-0">Policies, roles and supplier relationships.</p>
+</c-navigation.accordion-item>
+<c-navigation.accordion-item state="open === 'tech'" @click="open = open === 'tech' ? '' : 'tech'" data-probe="item">
+<c-slot name="label">
+<span class="flex items-center gap-2">Technological controls</span>
+</c-slot>
+<p class="m-0">Access control and cryptography.</p>
+</c-navigation.accordion-item>
+</c-navigation.accordion>
+<c-navigation.accordion density="sm" data-probe="compact">
+<c-navigation.accordion-item label="Compact section">
+<p class="m-0">Always open without a state.</p>
+</c-navigation.accordion-item>
+</c-navigation.accordion>

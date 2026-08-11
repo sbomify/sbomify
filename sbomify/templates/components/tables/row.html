@@ -1,0 +1,9 @@
+{% comment %}
+A body row. The whole row tints on hover, and the last row drops its cells'
+bottom rule so the table ends on the shell's edge rather than on a hairline.
+The cells carry the ink and the padding; the row only reacts to the pointer.
+{% endcomment %}
+<c-vars class />
+<tr class="transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] last:[&_td]:border-b-0{% if class %} {{ class }}{% endif %}"
+    {{ attrs }}>{{ slot }}
+</tr>

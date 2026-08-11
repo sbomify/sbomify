@@ -1,0 +1,62 @@
+{% comment %}
+Render probe for the cotton layout set. Unit tests render this file with the
+few lists a view would build (breadcrumbs, copy values, choice options) and
+assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box" hx-get="/probe/header" data-probe="page-header">
+<c-buttons.secondary size="sm">Assign component</c-buttons.secondary>
+<c-buttons.primary size="sm">New release</c-buttons.primary>
+</c-layout.page-header>
+<c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Vault" :breadcrumbs="probe_breadcrumbs" :copy_values="probe_copy_values" editable_item_type="product" editable_item_id="probe-product"></c-layout.page-header>
+<c-layout.page-header title="Flush header" flush class="max-w-3xl"></c-layout.page-header>
+<c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
+<c-layout.section-header level="2" accent="success" icon="fas fa-envelope-open-text" title="Pending invitations" data-probe="section-h2" />
+<c-layout.section-body class="space-y-3">
+<p class="m-0">Indented to the title's left edge.</p>
+</c-layout.section-body>
+<c-layout.stat-card data-probe="stat-plain">
+<c-layout.stat.label>Total products</c-layout.stat.label>
+<c-layout.stat.row>
+<c-layout.stat.value>1,234</c-layout.stat.value>
+<c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
+</c-layout.stat.row>
+</c-layout.stat-card>
+<c-layout.stat-card accent="danger" icon="fas fa-shield-halved">
+<c-layout.stat.label>Vulnerabilities</c-layout.stat.label>
+<c-layout.stat.row>
+<c-layout.stat.value>17</c-layout.stat.value>
+<c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
+</c-layout.stat.row>
+</c-layout.stat-card>
+<c-layout.stat-card accent="warning" icon="fas fa-clock" class="lg:col-span-2" @click="drill()">
+<c-layout.stat.label>Stale scans</c-layout.stat.label>
+<c-layout.stat.value>4</c-layout.stat.value>
+</c-layout.stat-card>
+<c-layout.stat-card compact accent="success">
+<c-layout.stat.value>41</c-layout.stat.value>
+<c-layout.stat.label>Ready</c-layout.stat.label>
+</c-layout.stat-card>
+<c-layout.stat-card compact>
+<c-layout.stat.value>51</c-layout.stat.value>
+<c-layout.stat.label>Total</c-layout.stat.label>
+</c-layout.stat-card>
+<c-layout.stat.change data-probe="bare-change">unchanged</c-layout.stat.change>
+<c-layout.choice-group name="probe-severity" label="Severity" :options="probe_choices" selected="medium" hint="Pick the band it reports under." required data-probe="choice-options"></c-layout.choice-group>
+<c-layout.choice-group name="probe-visibility" class="max-w-md">
+<c-layout.choice name="probe-visibility" value="public" accent="info" icon="fas fa-globe" checked>Public</c-layout.choice>
+<c-layout.choice name="probe-visibility" value="private" accent="secondary" icon="fas fa-lock" disabled>Private</c-layout.choice>
+</c-layout.choice-group>
+<c-layout.select-row>
+<div class="flex-1 min-w-0">
+    <label class="font-medium text-text" for="probe-row-1">BSI TR-03183-2</label>
+</div>
+<input type="checkbox" id="probe-row-1" checked>
+</c-layout.select-row>
+<c-layout.select-row disabled>
+<span>Dependency Track</span>
+<input type="checkbox" id="probe-row-2" disabled>
+</c-layout.select-row>
+<c-layout.select-row x_data="{ showDeleteModal: false }" class="rounded-b-xl" hx-get="/probe/row" @keydown.enter="open()">
+<span>CNSA 2.0</span>
+<input type="checkbox" id="probe-row-3">
+</c-layout.select-row>

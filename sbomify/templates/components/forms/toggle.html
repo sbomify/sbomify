@@ -1,0 +1,20 @@
+{% comment %}
+A switch and its label, in plain Tailwind utilities. It is a checkbox: the
+track and the knob are the real input and its ::before, so the state the user
+sees is the state that submits. Use it for a setting that takes effect on the
+spot; use c-forms.checkbox inside a form that is saved as a whole.
+
+The label dims itself from the input's own disabled state through :has(), so
+there is nothing to keep in sync.
+{% endcomment %}
+<c-vars name id checked disabled class />
+<label class="inline-flex items-center gap-3 text-sm text-text cursor-pointer has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60{% if class %} {{ class }}{% endif %}">
+    <input type="checkbox"
+           {% if id or name %}id="{% firstof id name %}"{% endif %}
+           {% if name %}name="{{ name }}"{% endif %}
+           class="relative w-12 h-6.5 shrink-0 appearance-none cursor-pointer bg-border rounded-full transition-all duration-250 before:content-[''] before:absolute before:top-0.75 before:left-0.75 before:w-5 before:h-5 before:rounded-full before:bg-white before:shadow-[0_1px_3px_rgb(0_0_0/0.2)] before:transition-all before:duration-250 hover:not-checked:not-disabled:bg-[color-mix(in_oklab,var(--color-text-muted)_50%,transparent)] checked:bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] checked:before:translate-x-[1.375rem] focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_25%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
+           {% if checked %}checked{% endif %}
+           {% if disabled %}disabled{% endif %}
+           {{ attrs }}>
+    {% if slot %}<span>{{ slot }}</span>{% endif %}
+</label>

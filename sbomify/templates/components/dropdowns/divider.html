@@ -1,0 +1,7 @@
+{% comment %}
+The hairline between two groups of items inside a panel.
+{% endcomment %}
+<c-vars class />
+<div class="h-px my-1.5 bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+</div>

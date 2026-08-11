@@ -72,28 +72,28 @@
 </p>
 <p class="tw-data-label mb-2">Sizes</p>
 <div class="flex flex-wrap items-center gap-4 mb-5">
-    <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-key" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip"><i class="fas fa-credit-card" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-lg"><i class="fas fa-cube" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-xl"><i class="fas fa-box" aria-hidden="true"></i></span>
+    <c-chips.icon-chip size="sm"><i class="fas fa-key" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip><i class="fas fa-credit-card" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip size="lg"><i class="fas fa-cube" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip size="xl"><i class="fas fa-box" aria-hidden="true"></i></c-chips.icon-chip>
 </div>
 <p class="tw-data-label mb-2">Accents</p>
 <div class="flex flex-wrap items-center gap-4 mb-5">
-    <span class="tw-icon-chip"><i class="fas fa-cube" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-plus" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-info"><i class="fas fa-circle-info" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-success"><i class="fas fa-check" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-warning"><i class="fas fa-clock" aria-hidden="true"></i></span>
-    <span class="tw-icon-chip tw-icon-chip-danger"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
+    <c-chips.icon-chip><i class="fas fa-cube" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip accent="neutral"><i class="fas fa-plus" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip accent="info"><i class="fas fa-circle-info" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip accent="success"><i class="fas fa-check" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip accent="warning"><i class="fas fa-clock" aria-hidden="true"></i></c-chips.icon-chip>
+    <c-chips.icon-chip accent="danger"><i class="fas fa-shield-halved" aria-hidden="true"></i></c-chips.icon-chip>
 </div>
-<p class="tw-data-label mb-2">Circular — the medallion above a destructive confirmation</p>
+<p class="tw-data-label mb-2">Circular, the medallion above a destructive confirmation</p>
 <div class="flex flex-wrap items-center gap-4">
-    <span class="tw-icon-chip tw-icon-chip-xl tw-icon-chip-circle tw-icon-chip-danger">
-        <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
-    </span>
-    <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-circle tw-icon-chip-neutral">
-        <i class="fas fa-inbox" aria-hidden="true"></i>
-    </span>
+    <c-chips.icon-chip size="xl" circle accent="danger">
+    <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+    </c-chips.icon-chip>
+    <c-chips.icon-chip size="lg" circle accent="neutral">
+    <i class="fas fa-inbox" aria-hidden="true"></i>
+    </c-chips.icon-chip>
 </div>
 {% endcard %}
 <h2 id="metric-chips" class="text-xl font-semibold text-text mb-4">Metric chips</h2>
@@ -103,61 +103,67 @@
     a muted label and a value.
 </p>
 <div class="flex flex-wrap gap-2">
-    <span class="tw-metric-chip">
-        <i class="fas fa-puzzle-piece text-text-muted" aria-hidden="true"></i>
-        <span class="tw-metric-chip-value">12</span>
-        <span class="tw-metric-chip-label">Components</span>
-    </span>
-    <span class="tw-metric-chip">
-        <i class="fas fa-tag text-text-muted" aria-hidden="true"></i>
-        <span class="tw-metric-chip-value">4</span>
-        <span class="tw-metric-chip-label">Releases</span>
-    </span>
-    <span class="tw-metric-chip">
-        <i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
-        <span class="tw-metric-chip-label">Scanned</span>
-        <span class="tw-metric-chip-value">3h ago</span>
-    </span>
-    <span class="tw-metric-chip tw-metric-chip-info">
-        <i class="fas fa-file-code" aria-hidden="true"></i>
-        <span class="tw-metric-chip-value">9</span>
-        <span class="tw-metric-chip-label">SBOMs</span>
-    </span>
-    <span class="tw-metric-chip tw-metric-chip-success">
-        <i class="fas fa-circle-check" aria-hidden="true"></i>
-        <span class="tw-metric-chip-value">41</span>
-        <span class="tw-metric-chip-label">Passed</span>
-    </span>
-    <span class="tw-metric-chip tw-metric-chip-warning">
-        <i class="fas fa-clock" aria-hidden="true"></i>
-        <span class="tw-metric-chip-value">4</span>
-        <span class="tw-metric-chip-label">Stale</span>
-    </span>
-    <span class="tw-metric-chip tw-metric-chip-danger">
-        <i class="fas fa-shield-halved" aria-hidden="true"></i>
-        <span class="tw-metric-chip-value">3</span>
-        <span class="tw-metric-chip-label">Critical</span>
-    </span>
+    <c-chips.metric-chip>
+    <i class="fas fa-puzzle-piece text-text-muted" aria-hidden="true"></i>
+    <c-chips.metric.value>12</c-chips.metric.value>
+    <c-chips.metric.label>Components</c-chips.metric.label>
+    </c-chips.metric-chip>
+    <c-chips.metric-chip>
+    <i class="fas fa-tag text-text-muted" aria-hidden="true"></i>
+    <c-chips.metric.value>4</c-chips.metric.value>
+    <c-chips.metric.label>Releases</c-chips.metric.label>
+    </c-chips.metric-chip>
+    <c-chips.metric-chip>
+    <i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
+    <c-chips.metric.label>Scanned</c-chips.metric.label>
+    <c-chips.metric.value>3h ago</c-chips.metric.value>
+    </c-chips.metric-chip>
+    <c-chips.metric-chip accent="info">
+    <i class="fas fa-file-code" aria-hidden="true"></i>
+    <c-chips.metric.value>9</c-chips.metric.value>
+    <c-chips.metric.label>SBOMs</c-chips.metric.label>
+    </c-chips.metric-chip>
+    <c-chips.metric-chip accent="success">
+    <i class="fas fa-circle-check" aria-hidden="true"></i>
+    <c-chips.metric.value>41</c-chips.metric.value>
+    <c-chips.metric.label>Passed</c-chips.metric.label>
+    </c-chips.metric-chip>
+    <c-chips.metric-chip accent="warning">
+    <i class="fas fa-clock" aria-hidden="true"></i>
+    <c-chips.metric.value>4</c-chips.metric.value>
+    <c-chips.metric.label>Stale</c-chips.metric.label>
+    </c-chips.metric-chip>
+    <c-chips.metric-chip accent="danger">
+    <i class="fas fa-shield-halved" aria-hidden="true"></i>
+    <c-chips.metric.value>3</c-chips.metric.value>
+    <c-chips.metric.label>Critical</c-chips.metric.label>
+    </c-chips.metric-chip>
 </div>
 <p class="text-sm text-text-muted mt-4 mb-0">
-    Accents recolour the chip through <code class="tw-code-inline">--metric-chip-accent</code>. The label
+    An accent recolours the fill, the border and the text together. The label
     stays muted; the value and icon take the accent.
 </p>
 {% endcard %}
 <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
 {% card class="mb-8" %}
-{% page_header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box" %}
-{% button text="Assign component" variant="secondary" icon="fas fa-plus" size="sm" %}
-{% button text="New release" variant="primary" size="sm" %}
-{% endpage_header %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/layout/). The actions are the slot, so they
+    are real button components.
+{% endcomment %}
+<c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box">
+<c-buttons.secondary size="sm"><i class="fas fa-plus" aria-hidden="true"></i> <span>Assign component</span></c-buttons.secondary>
+<c-buttons.primary size="sm">New release</c-buttons.primary>
+</c-layout.page-header>
 <p class="text-sm text-text-muted mb-6">
-    Every main page opens with this, called as <code class="tw-code-inline">page_header</code>. Block content
-    becomes the actions on the right; a page with none still closes the tag. Put it above the page's content
-    stack, not inside it, so the gap under the title is the same on every page.
+    Every main page opens with this, called as <code class="tw-code-inline">c-layout.page-header</code>. The
+    slot becomes the actions on the right; a page with none still closes the tag. Put it above the page's
+    content stack, not inside it, so the gap under the title is the same on every page. Inside a
+    <code class="tw-code-inline">space-y-*</code> stack, pass <code class="tw-code-inline">flush</code>.
 </p>
-{% page_header mark="avatar" icon="fas fa-cube" title="Acme Gateway" breadcrumbs=demo_breadcrumbs copy_values=demo_copy_values editable_item_type="product" editable_item_id="ds-demo" %}
-{% button text="New release" variant="primary" size="sm" %}
-{% endpage_header %}
+<c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Gateway" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
+<c-buttons.primary size="sm">New release</c-buttons.primary>
+</c-layout.page-header>
 <p class="text-sm text-text-muted mb-6">
     The detail-page shape of the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
     chip for the avatar mark. <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers
@@ -166,14 +172,18 @@
     <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
 </p>
 <hr class="my-6 border-border">
-<div class="tw-section-header">
-    <span class="tw-icon-chip tw-icon-chip-sm"><i class="fas fa-plus-circle" aria-hidden="true"></i></span>
-    <div>
-        <h3 class="tw-section-header-title">Generate a new token</h3>
-        <p class="tw-section-header-subtitle">Tokens are shown once and cannot be retrieved later.</p>
-    </div>
-</div>
-<div class="tw-section-body">{% input name="ds-section-token" label="Token name" placeholder="ci-pipeline" %}</div>
+<c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
+<c-layout.section-body>
+<c-forms.field label="Token name" for="ds-section-token">
+<c-forms.input name="ds-section-token" placeholder="ci-pipeline" />
+</c-forms.field>
+</c-layout.section-body>
+<p class="text-sm text-text-muted mt-6 mb-0">
+    A section header introduces a block inside a card.
+    <code class="tw-code-inline">c-layout.section-body</code> indents that block to the title's left edge and
+    drops the indent on a narrow screen. Pass <code class="tw-code-inline">level="2"</code> when the page
+    needs the title as an h2.
+</p>
 {% endcard %}
 {# ── Controls ──────────────────────────────────────────────────────────── #}
 <h2 id="buttons" class="text-xl font-semibold text-text mb-4">Buttons</h2>
@@ -214,36 +224,65 @@
 {% endcard %}
 <h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/forms/). c-forms.field composes the label, the
+    control and the one line under it; the control carries its own state, so the
+    message and the border it goes with are written where each is read.
+{% endcomment %}
 <p class="text-sm text-text-muted mb-4">
     Every input in the app comes from here — including email, password and number, which are the
     text input with a <code class="tw-code-inline">type</code>.
 </p>
 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-    {% input name="ds-text" label="Text" placeholder="Acme Gateway" hint="Shown under the field." %}
-    {% input name="ds-email" label="Email" type="email" placeholder="you@example.com" %}
-    {% input name="ds-password" label="Password" type="password" value="hunter2" %}
-    {% input name="ds-number" label="Number" type="number" value="42" %}
-    {% input name="ds-required" label="Required" required=True placeholder="Cannot be blank" %}
-    {% input name="ds-error" label="With error" value="not-an-email" error="Enter a valid email address." %}
-    {% input name="ds-disabled" label="Disabled" value="Read only" disabled=True %}
-    {% select name="ds-select" label="Select" options=demo_select_options selected="document" hint="Pick an artifact type." %}
+    <c-forms.field label="Text" for="ds-text" hint="Shown under the field.">
+    <c-forms.input name="ds-text" placeholder="Acme Gateway" />
+    </c-forms.field>
+    <c-forms.field label="Email" for="ds-email">
+    <c-forms.input name="ds-email" type="email" placeholder="you@example.com" />
+    </c-forms.field>
+    <c-forms.field label="Password" for="ds-password">
+    <c-forms.input name="ds-password" type="password" value="hunter2" />
+    </c-forms.field>
+    <c-forms.field label="Number" for="ds-number">
+    <c-forms.input name="ds-number" type="number" value="42" />
+    </c-forms.field>
+    <c-forms.field label="Required" for="ds-required" required>
+    <c-forms.input name="ds-required" placeholder="Cannot be blank" required />
+    </c-forms.field>
+    <c-forms.field label="With error" for="ds-error" error="Enter a valid email address.">
+    <c-forms.input name="ds-error" value="not-an-email" state="error" />
+    </c-forms.field>
+    <c-forms.field label="Disabled" for="ds-disabled">
+    <c-forms.input name="ds-disabled" value="Read only" disabled />
+    </c-forms.field>
+    <c-forms.field label="Select" for="ds-select" hint="Pick an artifact type.">
+    <c-forms.select name="ds-select" :options="demo_select_options" selected="document" />
+    </c-forms.field>
 </div>
 <div class="mt-5">
-    {% textarea name="ds-textarea" label="Textarea" rows=3 placeholder="Describe this component…" %}
+    <c-forms.field label="Textarea" for="ds-textarea">
+    <c-forms.textarea name="ds-textarea" rows="3" placeholder="Describe this component…" />
+    </c-forms.field>
 </div>
 <div class="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3">
-    {% checkbox name="ds-checkbox" label="Checkbox" checked=True %}
-    {% checkbox name="ds-checkbox-off" label="Unchecked" %}
-    {% checkbox name="ds-checkbox-disabled" label="Disabled" disabled=True %}
-    {% radio name="ds-radio" value="cyclonedx" label="CycloneDX" checked=True %}
-    {% radio name="ds-radio" value="spdx" label="SPDX" %}
-    {% toggle name="ds-toggle" label="Toggle on" checked=True %}
-    {% toggle name="ds-toggle-off" label="Toggle off" %}
-    {% toggle name="ds-toggle-disabled" label="Disabled" disabled=True %}
+    <c-forms.checkbox name="ds-checkbox" checked>Checkbox</c-forms.checkbox>
+    <c-forms.checkbox name="ds-checkbox-off">Unchecked</c-forms.checkbox>
+    <c-forms.checkbox name="ds-checkbox-disabled" disabled>Disabled</c-forms.checkbox>
+    <c-forms.radio name="ds-radio" value="cyclonedx" checked>CycloneDX</c-forms.radio>
+    <c-forms.radio name="ds-radio" value="spdx">SPDX</c-forms.radio>
+    <c-forms.toggle name="ds-toggle" checked>Toggle on</c-forms.toggle>
+    <c-forms.toggle name="ds-toggle-off">Toggle off</c-forms.toggle>
+    <c-forms.toggle name="ds-toggle-disabled" disabled>Disabled</c-forms.toggle>
 </div>
 {% endcard %}
 <h2 id="choice-group" class="text-xl font-semibold text-text mb-4">Choice group</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/layout/). The label and the hint are
+    c-forms.field's, so a group of tiles reads like every other field.
+{% endcomment %}
 <p class="text-sm text-text-muted mb-4">
     Radios as tiles, for a short set of values that carry an icon and a colour elsewhere. Each option wears the
     accent its badge wears, so choosing one looks like the badge it produces. Selection is painted with
@@ -251,43 +290,39 @@
     Longer or free-form lists stay in <code class="tw-code-inline">select</code>.
 </p>
 <div class="space-y-5 max-w-2xl">
-    {% choice_group name="ds-severity" label="Severity" options=demo_severity_choices selected="medium" %}
-    {% choice_group name="ds-status" label="Status" options=demo_status_choices selected="fix_in_progress" hint="Helper text sits under the group." %}
+    <c-layout.choice-group name="ds-severity" label="Severity" :options="demo_severity_choices" selected="medium" />
+    <c-layout.choice-group name="ds-status" label="Status" :options="demo_status_choices" selected="fix_in_progress" hint="Helper text sits under the group." />
+    <c-layout.choice-group name="ds-scope" label="Written by hand">
+    <c-layout.choice name="ds-scope" value="workspace" accent="primary" icon="fas fa-people-group" checked>Workspace</c-layout.choice>
+    <c-layout.choice name="ds-scope" value="product" accent="violet" icon="fas fa-cube">Product</c-layout.choice>
+    <c-layout.choice name="ds-scope" value="archived" accent="secondary" icon="fas fa-box-archive" disabled>Archived</c-layout.choice>
+    </c-layout.choice-group>
 </div>
+<p class="text-sm text-text-muted mt-4 mb-0">
+    Options come from the view as a list, which is how a page hands over a field's choices. With no options the
+    group renders its slot, so a fixed set can be written as tiles in the template.
+</p>
 {% endcard %}
 <h2 id="search" class="text-xl font-semibold text-text mb-4">Search input</h2>
 {% card class="mb-8" %}
-<div class="max-w-md" x-data="{ q: 'gateway' }">
-    <div class="tw-search-input">
-        <i class="fas fa-search tw-search-input-icon" aria-hidden="true"></i>
-        <input type="search"
-               class="tw-form-input"
-               placeholder="Search products, components…"
-               x-model="q"
-               aria-label="Search">
-        <button type="button"
-                class="tw-search-input-clear"
-                x-show="q"
-                @click="q = ''"
-                aria-label="Clear search">
-            <i class="fas fa-times" aria-hidden="true"></i>
-        </button>
-    </div>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/forms/). model names the Alpine property the
+    field reads and writes, so the clear button knows what to empty.
+{% endcomment %}
+<div x-data="{ q: 'gateway' }">
+    <c-forms.search-input model="q" placeholder="Search products, components…" class="max-w-md" aria-label="Search" />
 </div>
 {% endcard %}
 <h2 id="file-upload" class="text-xl font-semibold text-text mb-4">File upload</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/forms/). The drag state stays with the caller:
+    over drives the active recipe, and the drop handlers land on the panel.
+{% endcomment %}
 <div x-data="{ over: false }">
-    <label class="tw-file-upload"
-           :class="{ 'tw-file-upload-active': over }"
-           @dragover.prevent="over = true"
-           @dragleave.prevent="over = false"
-           @drop.prevent="over = false">
-        <i class="fas fa-cloud-arrow-up tw-file-upload-icon" aria-hidden="true"></i>
-        <span class="tw-file-upload-text">Drop an SBOM here, or click to choose</span>
-        <span class="tw-file-upload-hint">CycloneDX or SPDX, JSON or XML</span>
-        <input type="file" class="tw-form-input sr-only">
-    </label>
+    <c-forms.file-upload active="over" hint="CycloneDX or SPDX, JSON or XML" @dragover.prevent="over = true" @dragleave.prevent="over = false" @drop.prevent="over = false">Drop an SBOM here, or click to choose</c-forms.file-upload>
 </div>
 {% endcard %}
 <h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
@@ -306,103 +341,148 @@
     Containers sit still — no hover lift, no shadow swap. Cards compose: a card holds library components,
     it does not hold bespoke markup.
 </p>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/cards/).
+{% endcomment %}
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-    {% card title="Default card" subtitle="Header, body, hairline border" %}
+    <c-cards.card title="Default card" subtitle="Header, body, hairline border">
     <p class="text-sm text-text m-0">The plain container. Use it for anything that is not a dashboard panel.</p>
-{% endcard %}
-{% card variant="dashboard" title="Dashboard card" subtitle="The workspace panel" %}
-{% progress value=72 label_text="NTIA compliance" %}
-{% endcard %}
-{% card variant="danger" title="Danger zone" subtitle="Irreversible actions" %}
-{% button text="Delete product" variant="danger" icon="fas fa-trash" size="sm" %}
-{% endcard %}
+    </c-cards.card>
+    <c-cards.dashboard title="Dashboard card" subtitle="The workspace panel">
+    <c-progress value="72" label_text="NTIA compliance" />
+    </c-cards.dashboard>
+    <c-cards.dangerzone title="Danger zone" subtitle="Irreversible actions">
+    <c-buttons.danger size="sm">
+    <i class="fas fa-trash" aria-hidden="true"></i> <span>Delete product</span>
+    </c-buttons.danger>
+    </c-cards.dangerzone>
 </div>
-{% card title="Inset panels" subtitle="The quiet sub-panel inside a card body" class="mb-8" %}
-<div class="tw-inset-card">
-    <p class="text-sm text-text m-0 mb-3">
-        An inset card is sunken, not raised: a tinted background, a hairline border, no shadow.
-    </p>
-    <div class="tw-inset-card">
-        <p class="text-sm text-text-muted m-0">One nesting level stays legible: the inner panel goes solid.</p>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <c-cards.card title="Footer band" subtitle="A named slot for the actions a card ends with">
+    <p class="text-sm text-text m-0">The default slot is the body; name a slot footer and the band appears under it.</p>
+    <c-slot name="footer">
+    <div class="flex items-center justify-end gap-2">
+        <c-buttons.ghost size="sm">Cancel</c-buttons.ghost>
+        <c-buttons.primary size="sm">Save</c-buttons.primary>
     </div>
+    </c-slot>
+    </c-cards.card>
+    <c-cards.card>
+    <c-slot name="header">
+    <c-cards.header class="flex items-center justify-between gap-3">
+    <h3 class="text-lg font-semibold text-text m-0">Header built by hand</h3>
+    <c-buttons.icon label="Panel actions" size="sm">
+    <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
+    </c-buttons.icon>
+    </c-cards.header>
+    </c-slot>
+    <p class="text-sm text-text m-0">
+        header, body and footer are components too, for a card whose header is not a title and a subtitle.
+    </p>
+    </c-cards.card>
 </div>
-{% endcard %}
+<c-cards.card title="Inset panels" subtitle="The quiet sub-panel inside a card body" class="mb-8">
+<c-cards.inset>
+<p class="text-sm text-text m-0 mb-3">
+    An inset card is sunken, not raised: a tinted background, a hairline border, no shadow.
+</p>
+<c-cards.inset>
+<p class="text-sm text-text-muted m-0">One nesting level stays legible: the inner panel goes solid.</p>
+</c-cards.inset>
+</c-cards.inset>
+</c-cards.card>
 <h2 id="collapsible" class="text-xl font-semibold text-text mb-4">Collapsible card</h2>
+<p class="text-sm text-text-muted mb-4">
+    The trigger is a real button, and the open state is an Alpine expression the page owns, so one
+    x-data can keep a single panel of a stack open.
+</p>
 <div class="space-y-3 mb-8" x-data="{ open: 'links' }">
     {% for row in demo_collapsible %}
-        <div class="tw-collapsible-card">
-            <button type="button"
-                    class="tw-collapsible-header"
-                    @click="open = open === '{{ row.id }}' ? '' : '{{ row.id }}'"
-                    :aria-expanded="open === '{{ row.id }}'">
-                <span class="tw-collapsible-title">{{ row.label }}</span>
-                <i class="fas fa-chevron-down tw-collapsible-icon"
-                   :class="{ 'tw-collapsible-icon-open': open === '{{ row.id }}' }"
-                   aria-hidden="true"></i>
-            </button>
-            <div class="tw-collapsible-content"
-                 x-show="open === '{{ row.id }}'"
-                 x-collapse>
-                <div class="tw-collapsible-body">
-                    <p class="text-sm text-text-muted m-0">Panel content for {{ row.label|lower }}.</p>
-                </div>
-            </div>
-        </div>
+        <c-cards.collapsible>
+        <c-cards.collapsible-trigger state="open === '{{ row.id }}'" @click="open = open === '{{ row.id }}' ? '' : '{{ row.id }}'">{{ row.label }}</c-cards.collapsible-trigger>
+        <c-cards.collapsible-body state="open === '{{ row.id }}'">
+        <p class="text-sm text-text-muted m-0">Panel content for {{ row.label|lower }}.</p>
+        </c-cards.collapsible-body>
+        </c-cards.collapsible>
     {% endfor %}
+</div>
+<p class="tw-data-label mb-3">Levels</p>
+<div class="space-y-3 mb-8" x-data="{ open: '' }">
+    <c-cards.collapsible level="success">
+    <c-cards.collapsible-trigger state="open === 'success'" @click="open = open === 'success' ? '' : 'success'">Clean run</c-cards.collapsible-trigger>
+    <c-cards.collapsible-body state="open === 'success'">
+    <p class="text-sm text-text-muted m-0">A verdict only repaints the border, so a stack of results stays calm.</p>
+    </c-cards.collapsible-body>
+    </c-cards.collapsible>
+    <c-cards.collapsible level="warning">
+    <c-cards.collapsible-trigger state="open === 'warning'" @click="open = open === 'warning' ? '' : 'warning'">Findings to review</c-cards.collapsible-trigger>
+    <c-cards.collapsible-body state="open === 'warning'">
+    <p class="text-sm text-text-muted m-0">Levels are a prop, not a file each: they are one scale a page picks from.</p>
+    </c-cards.collapsible-body>
+    </c-cards.collapsible>
+    <c-cards.collapsible level="danger">
+    <c-cards.collapsible-trigger state="open === 'danger'" @click="open = open === 'danger' ? '' : 'danger'">Scan failed</c-cards.collapsible-trigger>
+    <c-cards.collapsible-body state="open === 'danger'">
+    <p class="text-sm text-text-muted m-0">Leave the level off and the card keeps the neutral border.</p>
+    </c-cards.collapsible-body>
+    </c-cards.collapsible>
 </div>
 <h2 id="accordion" class="text-xl font-semibold text-text mb-4">Accordion</h2>
 <p class="text-sm text-text-muted mb-4">
     One bordered container of divided collapsible sections. The compact density
-    (<code class="tw-code-inline">tw-accordion-sm</code>) is for category lists inside a card, like the
+    (<code class="tw-code-inline">density="sm"</code>) is for category lists inside a card, like the
     controls catalogue.
 </p>
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-    <div class="tw-accordion" x-data="{ open: 'a-org' }">
-        {% for row in demo_accordion %}
-            <div class="tw-accordion-item">
-                <button type="button"
-                        class="tw-accordion-trigger"
-                        @click="open = open === 'a-{{ row.id }}' ? '' : 'a-{{ row.id }}'"
-                        :aria-expanded="open === 'a-{{ row.id }}'">
-                    <span>{{ row.label }}</span>
-                    <i class="fas fa-chevron-down tw-accordion-trigger-icon"
-                       aria-hidden="true"></i>
-                </button>
-                <div class="tw-accordion-content"
-                     x-show="open === 'a-{{ row.id }}'"
-                     x-collapse>
-                    <p class="m-0">{{ row.body }}</p>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-    <div class="tw-accordion tw-accordion-sm" x-data="{ open: 'b-org' }">
-        {% for row in demo_accordion %}
-            <div class="tw-accordion-item">
-                <button type="button"
-                        class="tw-accordion-trigger"
-                        @click="open = open === 'b-{{ row.id }}' ? '' : 'b-{{ row.id }}'"
-                        :aria-expanded="open === 'b-{{ row.id }}'">
-                    <span>{{ row.label }}</span>
-                    <i class="fas fa-chevron-down tw-accordion-trigger-icon"
-                       aria-hidden="true"></i>
-                </button>
-                <div class="tw-accordion-content"
-                     x-show="open === 'b-{{ row.id }}'"
-                     x-collapse>
-                    <p class="m-0">{{ row.body }}</p>
-                </div>
-            </div>
-        {% endfor %}
-    </div>
+    <c-navigation.accordion x-data="{ open: 'a-org' }">
+    {% for row in demo_accordion %}
+        <c-navigation.accordion-item label="{{ row.label }}" state="open === 'a-{{ row.id }}'" @click="open = open === 'a-{{ row.id }}' ? '' : 'a-{{ row.id }}'">
+        <p class="m-0">{{ row.body }}</p>
+        </c-navigation.accordion-item>
+    {% endfor %}
+    </c-navigation.accordion>
+    <c-navigation.accordion density="sm" x-data="{ open: 'b-org' }">
+    {% for row in demo_accordion %}
+        <c-navigation.accordion-item label="{{ row.label }}" state="open === 'b-{{ row.id }}'" @click="open = open === 'b-{{ row.id }}' ? '' : 'b-{{ row.id }}'">
+        <p class="m-0">{{ row.body }}</p>
+        </c-navigation.accordion-item>
+    {% endfor %}
+    </c-navigation.accordion>
 </div>
 <h2 id="modals" class="text-xl font-semibold text-text mb-4">Modals</h2>
 {% card class="mb-8" %}
-<div x-data="{ open: false }">
-    {% button text="Open modal" variant="primary" attrs='@click="open = true"' %}
-    {% modal id="ds-modal" title="Assign a component" size="md" alpine_show="open" %}
-    {% input name="ds-modal-name" label="Component name" placeholder="acme-gateway-core" %}
-{% endmodal %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/modal.html). The body is the slot and the
+    actions are the named footer slot, so both hold real components.
+{% endcomment %}
+<p class="text-sm text-text-muted mb-4">
+    The dialog teleports to the body, so no scrolling ancestor can clip it, and
+    <code class="tw-code-inline">show</code> names the Alpine boolean the page already keeps.
+</p>
+<div class="flex flex-wrap gap-2" x-data="{ open: false, wide: false }">
+    <c-buttons.primary @click="open = true">Open modal</c-buttons.primary>
+    <c-buttons.secondary @click="wide = true">Open large modal</c-buttons.secondary>
+    <c-modal id="ds-modal" title="Assign a component">
+    <c-forms.field label="Component name" for="ds-modal-name" hint="Pick a name your team will recognise.">
+    <c-forms.input name="ds-modal-name" placeholder="acme-gateway-core" />
+    </c-forms.field>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+    <c-buttons.primary @click="open = false">Assign</c-buttons.primary>
+    </c-slot>
+    </c-modal>
+    <c-modal id="ds-modal-wide" title="Release contents" icon="fas fa-tag" size="lg" show="wide">
+    <p class="text-sm text-text-muted m-0">
+        Sizes are <code class="tw-code-inline">sm</code>, the default,
+        <code class="tw-code-inline">lg</code>, <code class="tw-code-inline">xl</code> and
+        <code class="tw-code-inline">wide</code>. The header icon is the library chip.
+    </p>
+    <c-slot name="footer">
+    <c-buttons.secondary @click="wide = false">Close</c-buttons.secondary>
+    </c-slot>
+    </c-modal>
 </div>
 <p class="text-sm text-text-muted mt-4 mb-0">
     The app-wide confirm dialog is already in the base template — dispatch
@@ -410,261 +490,274 @@
 </p>
 {% endcard %}
 <h2 id="select-rows" class="text-xl font-semibold text-text mb-4">Selectable rows</h2>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/layout/). The control and the body are the
+    slot, so the checkbox is the real form component.
+{% endcomment %}
 <p class="text-sm text-text-muted mb-4">
     A list where the whole row toggles its control. The selected state reads from
     <code class="tw-code-inline">:has(:checked)</code>, so it cannot fall out of step with the checkbox, and the
-    row keeps a real control for keyboard and form submission — the row click is a pointer convenience.
-    A disabled row loses both the hover and the pointer.
+    row keeps a real control for keyboard and form submission. The row click is a pointer convenience on top,
+    and it stands aside when the click already landed on something interactive. A disabled row loses both the
+    hover and the pointer.
 </p>
 <div class="border border-border rounded-xl divide-y divide-border/50 overflow-hidden mb-8">
     {% for row in demo_select_rows %}
-        <div class="tw-select-row{% if row.disabled %} opacity-50 grayscale{% endif %}"
-             @click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.toggle.click()"
-             x-data>
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center flex-wrap gap-2 mb-1">
-                    <label class="font-medium text-text cursor-pointer"
-                           for="ds-row-{{ forloop.counter }}">{{ row.name }}</label>
-                    <span class="tw-badge-secondary text-xs">{{ row.version }}</span>
-                    {% if row.beta %}<span class="tw-badge-info text-xs">Beta</span>{% endif %}
-                </div>
-                <p class="text-text-muted text-sm m-0">{{ row.description }}</p>
+        <c-layout.select-row :disabled="row.disabled">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center flex-wrap gap-2 mb-1">
+                <label class="font-medium text-text cursor-pointer"
+                       for="ds-row-{{ forloop.counter }}">{{ row.name }}</label>
+                <c-badges.secondary>{{ row.version }}</c-badges.secondary>
+                {% if row.beta %}<c-badges.info>Beta</c-badges.info>{% endif %}
             </div>
-            <div class="flex-shrink-0">
-                <input type="checkbox"
-                       id="ds-row-{{ forloop.counter }}"
-                       class="tw-checkbox"
-                       x-ref="toggle"
-                       {% if row.checked %}checked{% endif %}
-                       {% if row.disabled %}disabled{% endif %}>
-            </div>
+            <p class="text-text-muted text-sm m-0">{{ row.description }}</p>
         </div>
+        <c-forms.checkbox name="ds-row-{{ forloop.counter }}" :checked="row.checked" :disabled="row.disabled" class="flex-shrink-0" />
+        </c-layout.select-row>
     {% endfor %}
 </div>
 <h2 id="empty-states" class="text-xl font-semibold text-text mb-4">Empty states</h2>
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     {% card %}
-{% empty_state icon="fas fa-cube" title="No components yet" message="Create your first component to start collecting SBOMs and documents." action_text="Add component" action_url="#empty-states" %}
+    {% comment %}
+        This section renders through the cotton component library
+        (sbomify/templates/components/feedback/). The actions are the slot, so they
+        are real button components.
+    {% endcomment %}
+    <c-feedback.empty-state icon="fas fa-cube" title="No components yet" message="Create your first component to start collecting SBOMs and documents.">
+    <c-buttons.primary href="#empty-states">Add component</c-buttons.primary>
+    </c-feedback.empty-state>
 {% endcard %}
 {% card %}
-{% empty_state compact=True icon="fas fa-tag" title="No releases yet" message="Tag a release when you ship." action_text="Create a release" action_url="#empty-states" action_variant="secondary" secondary_text="or read the docs" secondary_url="#empty-states" %}
+<c-feedback.empty-state compact icon="fas fa-tag" title="No releases yet" message="Tag a release when you ship." secondary_text="or read the docs" secondary_url="#empty-states">
+<c-buttons.secondary href="#empty-states">Create a release</c-buttons.secondary>
+</c-feedback.empty-state>
 {% endcard %}
 </div>
 {# ── Data ──────────────────────────────────────────────────────────────── #}
 <h2 id="tables" class="text-xl font-semibold text-text mb-4">Tables</h2>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/tables/). A table is nested, not configured: the
+    shell holds a toolbar, a table and a footer, and the table holds a head, rows
+    and cells.
+{% endcomment %}
 <p class="text-sm text-text-muted mb-4">
-    <code class="tw-code-inline">tw-data-table</code> is the shell (toolbar, scroll container, footer);
-    <code class="tw-code-inline">tw-table</code> styles the table itself. Wide tables scroll inside
-    <code class="tw-code-inline">tw-data-table-container</code> — never on the page body.
+    The shell holds the toolbar, the table and the footer. A wide table scrolls inside the table
+    component, never on the page body. Inside a card, pass <code class="tw-code-inline">nested</code> and
+    the shell drops its own frame. The sortable header and the pager read the Alpine state a table page
+    already keeps, so the demo below really sorts and pages.
 </p>
-<div class="tw-data-table mb-8">
-    <div class="tw-data-table-toolbar">
-        <div class="tw-data-table-toolbar-left">
-            <div class="tw-data-table-search">
-                <i class="fas fa-search tw-data-table-search-icon" aria-hidden="true"></i>
-                <label for="ds-table-search" class="sr-only">Search components</label>
-                <input type="search"
-                       id="ds-table-search"
-                       class="tw-data-table-search-input"
-                       placeholder="Search components…">
-            </div>
-        </div>
-        <div class="tw-data-table-toolbar-right">
-            <div class="tw-data-table-page-size">
-                <span>Show</span>
-                <label for="ds-table-per-page" class="sr-only">Entries per page</label>
-                <select id="ds-table-per-page" class="tw-data-table-page-size-select">
-                    <option>10</option>
-                    <option>25</option>
-                </select>
-                <span>entries</span>
-            </div>
-        </div>
-    </div>
-    <div class="tw-data-table-container">
-        <table class="tw-table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Format</th>
-                    <th>Latest version</th>
-                    <th>Vulnerabilities</th>
-                    <th class="text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="font-medium text-text">acme-gateway-core</td>
-                    <td>
-                        <span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span>
-                    </td>
-                    <td class="font-mono">11.2.4</td>
-                    <td>{% badge text="3 high" variant="warning" %}</td>
-                    <td class="text-right">{% icon_button icon="fas fa-ellipsis-vertical" label="Actions" %}</td>
-                </tr>
-                <tr>
-                    <td class="font-medium text-text">acme-vault-core</td>
-                    <td>
-                        <span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span>
-                    </td>
-                    <td class="font-mono">3.0.1</td>
-                    <td>{% badge text="Clean" variant="success" %}</td>
-                    <td class="text-right">{% icon_button icon="fas fa-ellipsis-vertical" label="Actions" %}</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-    <div class="tw-data-table-footer">
-        <span class="tw-data-table-info">Showing 1 to 2 of 2</span>
-    </div>
-</div>
+<c-tables.shell class="mb-8" x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
+<c-tables.toolbar>
+<c-tables.search id="ds-table-search" label="Search components" placeholder="Search components…" />
+<c-slot name="right">
+<c-tables.page-size id="ds-table-per-page">
+<option>10</option>
+<option>25</option>
+</c-tables.page-size>
+</c-slot>
+</c-tables.toolbar>
+<c-tables.table fixed>
+<c-tables.head>
+<c-tables.header-cell sort="name">Name</c-tables.header-cell>
+<c-tables.header-cell>Format</c-tables.header-cell>
+<c-tables.header-cell sort="updated" date>Updated</c-tables.header-cell>
+<c-tables.header-cell sort="vulnerabilities" end>Vulnerabilities</c-tables.header-cell>
+<c-tables.actions-cell as="th" />
+</c-tables.head>
+<tbody>
+    <c-tables.row>
+    <c-tables.cell class="font-medium">acme-gateway-core</c-tables.cell>
+    <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+    <c-tables.cell date>10 Aug 2026</c-tables.cell>
+    <c-tables.cell end>{% badge text="3 high" variant="warning" %}</c-tables.cell>
+    <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
+    </c-tables.row>
+    <c-tables.row>
+    <c-tables.cell class="font-medium">acme-vault-core</c-tables.cell>
+    <c-tables.cell><span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span></c-tables.cell>
+    <c-tables.cell date>2 Aug 2026</c-tables.cell>
+    <c-tables.cell end>{% badge text="Clean" variant="success" %}</c-tables.cell>
+    <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
+    </c-tables.row>
+</tbody>
+</c-tables.table>
+<c-tables.footer>
+<c-tables.info>Showing <strong>1</strong> to <strong>2</strong> of <strong>6</strong> entries</c-tables.info>
+<c-tables.pager />
+</c-tables.footer>
+</c-tables.shell>
 <h2 id="pagination" class="text-xl font-semibold text-text mb-4">Pagination</h2>
 {% card class="mb-8" %}
-{% pagination current=3 total=8 page_range=demo_page_range base_url="#pagination" %}
+<c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
 <p class="text-sm text-text-muted mt-4 mb-0">
     The compact Alpine pager for client-side tables lives in
     <code class="tw-code-inline">components/tw/table_pager.html.j2</code>.
 </p>
 {% endcard %}
 <h2 id="stats" class="text-xl font-semibold text-text mb-4">Stat cards</h2>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/layout/). The parts are components, so the
+    number, its label and the delta each carry their own recipe.
+{% endcomment %}
 <p class="text-sm text-text-muted mb-4">
-    Laying the cards out is the page's job (a grid utility). <code class="tw-code-inline">tw-stat-row</code>
-    is the wrapper <em>inside</em> a card that sits the delta on the value's baseline.
+    Laying the cards out is the page's job (a grid utility).
+    <code class="tw-code-inline">c-layout.stat.row</code> is the wrapper <em>inside</em> a card that sits the
+    delta on the value's baseline.
 </p>
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <div class="tw-stat-card">
-        <p class="tw-stat-label">Total products</p>
-        <div class="tw-stat-row">
-            <span class="tw-stat-value">1,234</span>
-            <span class="tw-stat-change tw-stat-change-up">
-                <i class="fas fa-arrow-up" aria-hidden="true"></i> 12%
-            </span>
-        </div>
-    </div>
-    <div class="tw-stat-card tw-stat-accent-danger">
-        <span class="tw-stat-icon"><i class="fas fa-shield-halved" aria-hidden="true"></i></span>
-        <p class="tw-stat-label">Vulnerabilities</p>
-        <div class="tw-stat-row">
-            <span class="tw-stat-value">17</span>
-            <span class="tw-stat-change tw-stat-change-down">
-                <i class="fas fa-arrow-down" aria-hidden="true"></i> 5
-            </span>
-        </div>
-    </div>
-    <div class="tw-stat-card tw-stat-accent-success">
-        <span class="tw-stat-icon"><i class="fas fa-circle-check" aria-hidden="true"></i></span>
-        <p class="tw-stat-label">NTIA compliant</p>
-        <span class="tw-stat-value">96%</span>
-    </div>
-    <div class="tw-stat-card tw-stat-accent-warning">
-        <span class="tw-stat-icon"><i class="fas fa-clock" aria-hidden="true"></i></span>
-        <p class="tw-stat-label">Stale scans</p>
-        <span class="tw-stat-value">4</span>
-    </div>
+    <c-layout.stat-card>
+    <c-layout.stat.label>Total products</c-layout.stat.label>
+    <c-layout.stat.row>
+    <c-layout.stat.value>1,234</c-layout.stat.value>
+    <c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
+    </c-layout.stat.row>
+    </c-layout.stat-card>
+    <c-layout.stat-card accent="danger" icon="fas fa-shield-halved">
+    <c-layout.stat.label>Vulnerabilities</c-layout.stat.label>
+    <c-layout.stat.row>
+    <c-layout.stat.value>17</c-layout.stat.value>
+    <c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
+    </c-layout.stat.row>
+    </c-layout.stat-card>
+    <c-layout.stat-card accent="success" icon="fas fa-circle-check">
+    <c-layout.stat.label>NTIA compliant</c-layout.stat.label>
+    <c-layout.stat.value>96%</c-layout.stat.value>
+    </c-layout.stat-card>
+    <c-layout.stat-card accent="warning" icon="fas fa-clock">
+    <c-layout.stat.label>Stale scans</c-layout.stat.label>
+    <c-layout.stat.value>4</c-layout.stat.value>
+    </c-layout.stat-card>
 </div>
-<p class="tw-data-label mb-3">Compact — the dense metric strip above a table</p>
+<p class="tw-data-label mb-3">Compact, the dense metric strip above a table</p>
 <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
-    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-danger">
-        <span class="tw-stat-value">3</span>
-        <span class="tw-stat-label mt-1 mb-0">At risk</span>
-    </div>
-    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-warning">
-        <span class="tw-stat-value">7</span>
-        <span class="tw-stat-label mt-1 mb-0">Needs review</span>
-    </div>
-    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-success">
-        <span class="tw-stat-value">41</span>
-        <span class="tw-stat-label mt-1 mb-0">Ready</span>
-    </div>
-    <div class="tw-stat-card tw-stat-card-compact">
-        <span class="tw-stat-value">51</span>
-        <span class="tw-stat-label mt-1 mb-0">Total</span>
-    </div>
-    <div class="tw-stat-card tw-stat-card-compact tw-stat-accent-muted">
-        <span class="tw-stat-value">—</span>
-        <span class="tw-stat-label mt-1 mb-0">Unscanned</span>
-    </div>
+    <c-layout.stat-card compact accent="danger">
+    <c-layout.stat.value>3</c-layout.stat.value>
+    <c-layout.stat.label>At risk</c-layout.stat.label>
+    </c-layout.stat-card>
+    <c-layout.stat-card compact accent="warning">
+    <c-layout.stat.value>7</c-layout.stat.value>
+    <c-layout.stat.label>Needs review</c-layout.stat.label>
+    </c-layout.stat-card>
+    <c-layout.stat-card compact accent="success">
+    <c-layout.stat.value>41</c-layout.stat.value>
+    <c-layout.stat.label>Ready</c-layout.stat.label>
+    </c-layout.stat-card>
+    <c-layout.stat-card compact>
+    <c-layout.stat.value>51</c-layout.stat.value>
+    <c-layout.stat.label>Total</c-layout.stat.label>
+    </c-layout.stat-card>
+    <c-layout.stat-card compact accent="muted">
+    <c-layout.stat.value>—</c-layout.stat.value>
+    <c-layout.stat.label>Unscanned</c-layout.stat.label>
+    </c-layout.stat-card>
 </div>
 <p class="text-sm text-text-muted mb-8">
-    The number takes the card's accent. A Tailwind colour utility on
-    <code class="tw-code-inline">tw-stat-value</code> would be dead — component classes are unlayered and
-    emitted after the utilities, so they win at equal specificity.
+    The accent is one custom property on the card. The icon takes it, and in a compact card so does the number,
+    so a strip reads as colour first. The parts read that property themselves, which is why a compact card's
+    label and value never repeat what the card already knows.
 </p>
 <h2 id="severity" class="text-xl font-semibold text-text mb-4">Severity badges</h2>
 {% card class="mb-8" %}
 <p class="text-sm text-text-muted mb-4">
-    One class per CVSS band, replacing the five-branch <code class="tw-code-inline">if/elif</code> chains.
-    Squarer and uppercase so the shape carries the "this is a severity" signal, not just the colour.
+    One component for the whole scale: pass the band as <code class="tw-code-inline">level</code>, so pages
+    never write a five-branch <code class="tw-code-inline">if/elif</code> chain. Squarer and uppercase so the
+    shape carries the "this is a severity" signal, not just the colour.
 </p>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/badges/).
+{% endcomment %}
 <div class="flex flex-wrap gap-2">
     {% for severity in demo_severities %}
-        <span class="tw-badge-severity-{{ severity.level }}">{{ severity.label }}</span>
+        <c-badges.severity level="{{ severity.level }}">{{ severity.label }}</c-badges.severity>
     {% endfor %}
 </div>
 {% endcard %}
 <h2 id="progress" class="text-xl font-semibold text-text mb-4">Progress</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/progress.html). The variant only sets
+    --progress-accent, so the bar keeps one colour utility whatever it reads.
+{% endcomment %}
 <div class="space-y-4">
-    {% progress value=72 label_text="Default (primary accent)" %}
-    {% progress value=100 variant="success" label_text="Success" %}
-    {% progress value=45 variant="warning" label_text="Warning" %}
-    {% progress value=15 variant="danger" label_text="Danger" %}
+    <c-progress value="72" label_text="Default (primary accent)" />
+    <c-progress value="100" variant="success" label_text="Success" />
+    <c-progress value="45" variant="warning" label_text="Warning" />
+    <c-progress value="15" variant="danger" label_text="Danger" />
     <div class="space-y-2 pt-2">
-        {% progress value=60 size="sm" %}
-        {% progress value=60 %}
-        {% progress value=60 size="lg" %}
+        <c-progress value="60" size="sm" />
+        <c-progress value="60" />
+        <c-progress value="60" size="lg" />
     </div>
 </div>
 {% endcard %}
 <h2 id="badges" class="text-xl font-semibold text-text mb-4">Badges</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/badges/).
+{% endcomment %}
 <div class="flex flex-wrap gap-2 mb-4">
-    {% badge text="Primary" variant="primary" %}
-    {% badge text="Secondary" variant="secondary" %}
-    {% badge text="Success" variant="success" %}
-    {% badge text="Warning" variant="warning" %}
-    {% badge text="Danger" variant="danger" %}
-    {% badge text="Info" variant="info" %}
-    {% badge text="Accent" variant="accent" %}
-    {% badge text="Violet" variant="violet" %}
-    {% badge text="With icon" variant="info" icon="fas fa-star" %}
-    {% badge text="Pill" variant="primary" pill=True %}
+    <c-badges.primary>Primary</c-badges.primary>
+    <c-badges.secondary>Secondary</c-badges.secondary>
+    <c-badges.success>Success</c-badges.success>
+    <c-badges.warning>Warning</c-badges.warning>
+    <c-badges.danger>Danger</c-badges.danger>
+    <c-badges.info>Info</c-badges.info>
+    <c-badges.accent>Accent</c-badges.accent>
+    <c-badges.violet>Violet</c-badges.violet>
+    <c-badges.info><i class="fas fa-star mr-1" aria-hidden="true"></i> With icon</c-badges.info>
+    <c-badges.primary pill>Pill</c-badges.primary>
 </div>
 <p class="tw-data-label mb-2">Solid</p>
 <div class="flex flex-wrap items-center gap-2 mb-2">
-    {% badge text="KEV" variant="solid-danger" class="tw-badge-sm" %}
-    {% badge text="Malicious" variant="solid-danger" class="tw-badge-sm" %}
-    {% badge text="3" variant="solid-danger" %}
+    <c-badges.solid-danger size="sm">KEV</c-badges.solid-danger>
+    <c-badges.solid-danger size="sm">Malicious</c-badges.solid-danger>
+    <c-badges.solid-danger>3</c-badges.solid-danger>
 </div>
 <p class="text-sm text-text-muted mb-4">
     Solid fill is reserved for confirmed-exploitation alarms and alert counters. Everything else stays a tint.
 </p>
 <p class="tw-data-label mb-2">SBOM format</p>
 <div class="flex flex-wrap gap-2">
-    <span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span>
-    <span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span>
+    <c-badges.format format="cyclonedx">CycloneDX</c-badges.format>
+    <c-badges.format format="spdx">SPDX</c-badges.format>
 </div>
 {% endcard %}
 <h2 id="tags" class="text-xl font-semibold text-text mb-4">Tags</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/tags/).
+{% endcomment %}
 <div class="flex flex-wrap gap-2">
-    {% tag text="Neutral" %}
-    {% tag text="Primary" variant="primary" %}
-    {% tag text="Success" variant="success" %}
-    {% tag text="Warning" variant="warning" %}
-    {% tag text="Danger" variant="danger" %}
-    {% tag text="Python" icon="fab fa-python" %}
-    {% tag text="Removable" removable=True %}
+    <c-tags.tag>Neutral</c-tags.tag>
+    <c-tags.primary>Primary</c-tags.primary>
+    <c-tags.success>Success</c-tags.success>
+    <c-tags.warning>Warning</c-tags.warning>
+    <c-tags.danger>Danger</c-tags.danger>
+    <c-tags.tag><i class="fab fa-python" aria-hidden="true"></i> Python</c-tags.tag>
+    <c-tags.tag removable label="Removable">Removable</c-tags.tag>
 </div>
 {% endcard %}
 {# ── Feedback ──────────────────────────────────────────────────────────── #}
 <h2 id="alerts" class="text-xl font-semibold text-text mb-4">Alerts</h2>
 {% card class="mb-8" %}
+{% comment %}
+    Alerts, callouts, toasts, loading states and empty states render through the
+    cotton component library (sbomify/templates/components/feedback/).
+{% endcomment %}
 <div class="space-y-3">
-    {% alert variant="success" title="Saved" message="Your changes have been saved." %}
-    {% alert variant="warning" message="Review your settings before continuing." dismissible=True %}
-    {% alert variant="danger" title="Upload failed" message="The SBOM could not be parsed." %}
-    {% alert variant="info" message="New features are available in this release." %}
+    <c-feedback.alert variant="success" title="Saved">Your changes have been saved.</c-feedback.alert>
+    <c-feedback.alert variant="warning" dismissible>Review your settings before continuing.</c-feedback.alert>
+    <c-feedback.alert variant="danger" title="Upload failed">The SBOM could not be parsed.</c-feedback.alert>
+    <c-feedback.alert variant="info">New features are available in this release.</c-feedback.alert>
 </div>
 {% endcard %}
 <h2 id="callouts" class="text-xl font-semibold text-text mb-4">Callouts</h2>
@@ -674,49 +767,48 @@
     that carries controls. The accent tints the full hairline border, never a side border.
 </p>
 <div class="space-y-4">
-    <div class="tw-callout tw-callout-warning">
-        <div class="tw-callout-header">
-            <span class="tw-icon-chip tw-icon-chip-warning tw-icon-chip-circle">
-                <i class="fas fa-scale-balanced" aria-hidden="true"></i>
-            </span>
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center flex-wrap gap-2">
-                    <h3 class="text-sm font-semibold text-text m-0">Reporting obligation</h3>
-                    {% badge text="CRA Article 14" variant="warning" class="tw-badge-sm" %}
-                </div>
-                <p class="text-sm text-text-muted m-0 mt-1">Actively exploited vulnerabilities must be reported within 24 hours.</p>
-            </div>
+    <c-feedback.callout variant="warning">
+    <c-feedback.callout-header>
+    <span class="tw-icon-chip tw-icon-chip-warning tw-icon-chip-circle">
+        <i class="fas fa-scale-balanced" aria-hidden="true"></i>
+    </span>
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center flex-wrap gap-2">
+            <h3 class="text-sm font-semibold text-text m-0">Reporting obligation</h3>
+            {% badge text="CRA Article 14" variant="warning" class="tw-badge-sm" %}
         </div>
-        <div class="tw-callout-body">
-            {% checkbox name="ds-callout-ack" label="This product has a coordinated disclosure policy." %}
-        </div>
+        <p class="text-sm text-text-muted m-0 mt-1">Actively exploited vulnerabilities must be reported within 24 hours.</p>
     </div>
-    <div class="tw-callout">
-        <div class="tw-callout-header">
-            <span class="tw-icon-chip tw-icon-chip-neutral tw-icon-chip-circle">
-                <i class="fas fa-circle-info" aria-hidden="true"></i>
-            </span>
-            <div class="flex-1 min-w-0">
-                <h3 class="text-sm font-semibold text-text m-0">Assessment scope</h3>
-                <p class="text-sm text-text-muted m-0 mt-1">Without an accent the callout keeps the plain hairline.</p>
-            </div>
-        </div>
-        <div class="tw-callout-body">
-            <p class="text-sm text-text-muted m-0">The body carries form controls or explanatory copy.</p>
-        </div>
+    </c-feedback.callout-header>
+    <c-feedback.callout-body>
+    {% checkbox name="ds-callout-ack" label="This product has a coordinated disclosure policy." %}
+    </c-feedback.callout-body>
+    </c-feedback.callout>
+    <c-feedback.callout>
+    <c-feedback.callout-header>
+    <span class="tw-icon-chip tw-icon-chip-neutral tw-icon-chip-circle">
+        <i class="fas fa-circle-info" aria-hidden="true"></i>
+    </span>
+    <div class="flex-1 min-w-0">
+        <h3 class="text-sm font-semibold text-text m-0">Assessment scope</h3>
+        <p class="text-sm text-text-muted m-0 mt-1">Without an accent the callout keeps the plain hairline.</p>
     </div>
+    </c-feedback.callout-header>
+    <c-feedback.callout-body>
+    <p class="text-sm text-text-muted m-0">The body carries form controls or explanatory copy.</p>
+    </c-feedback.callout-body>
+    </c-feedback.callout>
 </div>
 {% endcard %}
 <h2 id="toasts" class="text-xl font-semibold text-text mb-4">Toasts</h2>
 {% card class="mb-8" %}
 <p class="text-sm text-text-muted mb-4">
     The container is already in the base template. Dispatch a <code class="tw-code-inline">toast</code>
-    event — never build a notification by hand.
+    event. Never build a notification by hand.
 </p>
 <div class="flex flex-wrap gap-2">
-    {% for toast in demo_toasts %}
-        {% button text=toast.label variant=toast.variant size="sm" attrs=toast.attrs %}
-    {% endfor %}
+    <c-buttons.success size="sm" @click="$dispatch('toast', { type: 'success', title: 'Saved', message: 'Component updated.' })">Success toast</c-buttons.success>
+    <c-buttons.danger size="sm" @click="$dispatch('toast', { type: 'error', title: 'Failed', message: 'Could not parse the SBOM.' })">Error toast</c-buttons.danger>
 </div>
 {% endcard %}
 <h2 id="loading" class="text-xl font-semibold text-text mb-4">Loading states</h2>
@@ -727,82 +819,122 @@
         {% spinner size="md" %}
         {% spinner size="lg" %}
     </div>
-    <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners — never a bespoke one.</p>
+    <p class="text-sm text-text-muted mt-4 mb-0">Use the brand loader for spinners. Never a bespoke one.</p>
 {% endcard %}
 {% card title="Loading panel" %}
-{% loading_state message="Loading artifacts…" %}
-{% loading_state row=True message="Refreshing…" %}
+<c-feedback.loading message="Loading artifacts…" />
+<c-feedback.loading row message="Refreshing…" />
 <p class="text-sm text-text-muted m-0">
-    The placeholder an HTMX panel shows while its content is in flight —
-    <code class="tw-code-inline">{% templatetag openblock %} loading_state {% templatetag closeblock %}</code>,
-    or <code class="tw-code-inline">row=True</code> beside a skeleton block.
+    The placeholder an HTMX panel shows while its content is in flight. Use
+    <code class="tw-code-inline">&lt;c-feedback.loading&gt;</code>, or
+    <code class="tw-code-inline">row</code> beside a skeleton block.
 </p>
 {% endcard %}
 {% card title="Skeletons" %}
 <div class="flex items-start gap-3">
-    {% skeleton type="avatar" %}
-    <div class="flex-1">{% skeleton type="paragraph" %}</div>
+    <c-feedback.skeleton type="avatar" />
+    <div class="flex-1">
+        <c-feedback.skeleton type="paragraph" />
+    </div>
 </div>
-<div class="mt-4 flex gap-2">{% skeleton type="button" width="7rem" %}</div>
+<div class="mt-4 flex gap-2">
+    <c-feedback.skeleton type="button" width="7rem" />
+</div>
 {% endcard %}
 </div>
 {# ── Navigation ────────────────────────────────────────────────────────── #}
 <h2 id="tabs" class="text-xl font-semibold text-text mb-4">Tabs</h2>
 {% card class="mb-8" %}
-{% tabs tabs=demo_tabs active="overview" %}
-<div class="mt-6">{% tabs tabs=demo_tabs active="sboms" variant="pills" %}</div>
+<c-navigation.tabs :tabs="demo_tabs" active="overview" />
+<div class="mt-6">
+    <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
+</div>
 {% endcard %}
 <h2 id="breadcrumbs" class="text-xl font-semibold text-text mb-4">Breadcrumbs</h2>
 {% card class="mb-8" %}
-{% breadcrumbs items=demo_breadcrumbs %}
+<c-navigation.breadcrumbs :items="demo_breadcrumbs" />
 {% endcard %}
 <h2 id="dropdowns" class="text-xl font-semibold text-text mb-4">Dropdowns</h2>
 {% card class="mb-8" %}
+<p class="text-sm text-text-muted mb-4">
+    The panel a menu sits on. It owns the surface, the menu role and the arrow, home and end key
+    handling; the page owns the trigger, the open state and where the panel is anchored.
+</p>
 <div class="flex flex-wrap gap-3">
-    {% dropdown id="ds-dropdown" trigger_text="Actions" items=demo_dropdown_items %}
-    {% dropdown id="ds-dropdown-icon" trigger_icon="fas fa-ellipsis-vertical" items=demo_dropdown_items align="right" %}
+    <div class="relative inline-block"
+         x-data="{ open: false }"
+         @click.away="open = false"
+         @keydown.escape="open = false">
+        <c-buttons.secondary @click="open = !open" @keydown.arrow-down.prevent="open = true; $nextTick(function () { $el.parentElement.querySelector('[role=menuitem]')?.focus() })" ::aria-expanded="open" aria-haspopup="true">
+        Actions
+        <i class="fas fa-chevron-down text-xs transition-transform"
+           :class="{ 'rotate-180': open }"
+           aria-hidden="true"></i>
+        </c-buttons.secondary>
+        <c-dropdowns.dropdown class="left-0 mt-1 w-56" x-show="open" x-cloak x-transition @click="open = false">
+        <c-dropdowns.header>Component</c-dropdowns.header>
+        {% for item in demo_dropdown_items %}
+            {% if item.divider %}
+                <c-dropdowns.divider />
+            {% elif item.danger %}
+                <c-dropdowns.item-danger icon="{{ item.icon }}">{{ item.label }}</c-dropdowns.item-danger>
+            {% else %}
+                <c-dropdowns.item icon="{{ item.icon }}">{{ item.label }}</c-dropdowns.item>
+            {% endif %}
+        {% endfor %}
+        </c-dropdowns.dropdown>
+    </div>
+    <div class="relative inline-block"
+         x-data="{ open: false }"
+         @click.away="open = false"
+         @keydown.escape="open = false">
+        <c-buttons.secondary aria-label="More actions" @click="open = !open" ::aria-expanded="open" aria-haspopup="true">
+        <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
+        </c-buttons.secondary>
+        <c-dropdowns.dropdown class="right-0 mt-1 w-56" x-show="open" x-cloak x-transition @click="open = false">
+        <c-dropdowns.item icon="fas fa-pen">Rename</c-dropdowns.item>
+        <c-dropdowns.item icon="fas fa-copy" href="#dropdowns">Duplicate</c-dropdowns.item>
+        <c-dropdowns.divider />
+        <c-dropdowns.item-danger icon="fas fa-trash">Delete</c-dropdowns.item-danger>
+        </c-dropdowns.dropdown>
+    </div>
 </div>
 <p class="tw-data-label mt-6 mb-3">Flush panels</p>
 <p class="text-sm text-text-muted mb-4">
-    <code class="tw-code-inline">tw-dropdown-flush</code> removes the inset padding, so sections and option
-    lists run edge to edge and the radius clips them. It owns overflow: scrolling content goes on an inner
-    element.
+    A flush panel drops the inset padding, so sections and option lists run edge to edge and the radius
+    clips them. It owns overflow: scrolling content goes on an inner element.
 </p>
 <div class="flex flex-wrap items-start gap-6">
     <div class="relative w-64 h-28">
-        <div class="tw-dropdown w-64">
-            <button type="button" class="tw-dropdown-item">
-                <i class="fas fa-pen tw-dropdown-item-icon" aria-hidden="true"></i>Edit
-            </button>
-            <button type="button" class="tw-dropdown-item">
-                <i class="fas fa-copy tw-dropdown-item-icon" aria-hidden="true"></i>Duplicate
-            </button>
-        </div>
+        <c-dropdowns.dropdown class="w-64">
+        <c-dropdowns.item icon="fas fa-pen">Edit</c-dropdowns.item>
+        <c-dropdowns.item icon="fas fa-copy">Duplicate</c-dropdowns.item>
+        </c-dropdowns.dropdown>
     </div>
     <div class="relative w-72 h-52">
-        <div class="tw-dropdown tw-dropdown-flush w-72">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-border/50">
-                <span class="text-sm font-semibold text-text">Notifications</span>
-                {% badge text="3" variant="solid-danger" %}
+        <c-dropdowns.dropdown flush role="" class="w-72">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-border/50">
+            <span class="text-sm font-semibold text-text">Notifications</span>
+            {% badge text="3" variant="solid-danger" %}
+        </div>
+        <div class="max-h-24 overflow-y-auto">
+            <div class="px-4 py-2.5 border-b border-border/50">
+                <p class="text-sm text-text m-0">SBOM uploaded to acme-gateway-core</p>
+                <p class="text-xs text-text-muted m-0 mt-0.5">2 minutes ago</p>
             </div>
-            <div class="max-h-24 overflow-y-auto">
-                <div class="px-4 py-2.5 border-b border-border/50">
-                    <p class="text-sm text-text m-0">SBOM uploaded to acme-gateway-core</p>
-                    <p class="text-xs text-text-muted m-0 mt-0.5">2 minutes ago</p>
-                </div>
-                <div class="px-4 py-2.5 border-b border-border/50">
-                    <p class="text-sm text-text m-0">Vulnerability scan finished</p>
-                    <p class="text-xs text-text-muted m-0 mt-0.5">1 hour ago</p>
-                </div>
-                <div class="px-4 py-2.5">
-                    <p class="text-sm text-text m-0">Release v2.4.0 tagged</p>
-                    <p class="text-xs text-text-muted m-0 mt-0.5">Yesterday</p>
-                </div>
+            <div class="px-4 py-2.5 border-b border-border/50">
+                <p class="text-sm text-text m-0">Vulnerability scan finished</p>
+                <p class="text-xs text-text-muted m-0 mt-0.5">1 hour ago</p>
             </div>
-            <div class="px-4 py-2 border-t border-border/50 text-center">
-                <a href="#dropdowns" class="text-sm text-primary hover:underline">View all</a>
+            <div class="px-4 py-2.5">
+                <p class="text-sm text-text m-0">Release v2.4.0 tagged</p>
+                <p class="text-xs text-text-muted m-0 mt-0.5">Yesterday</p>
             </div>
         </div>
+        <div class="px-4 py-2 border-t border-border/50 text-center">
+            <a href="#dropdowns" class="text-sm text-primary hover:underline">View all</a>
+        </div>
+        </c-dropdowns.dropdown>
     </div>
 </div>
 {% endcard %}
@@ -813,81 +945,67 @@
     rather than a list, so a menu can mix links with HTMX and Alpine actions — and the menu is teleported out
     to the body, so one opened from the last row of a scrolling table is neither clipped nor off screen.
 </p>
-<div class="tw-data-table-container border border-border rounded-lg">
-    <table class="tw-table">
-        <thead>
-            <tr>
-                <th>Product</th>
-                <th class="tw-cell-date">Updated</th>
-                <th class="tw-table-actions">
-                    <span class="sr-only">Actions</span>
-                </th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for product in demo_menu_rows %}
-                <tr>
-                    <td>{{ product }}</td>
-                    <td class="tw-cell-date text-text-muted text-sm">10 Aug 2026, 14:32</td>
-                    <td class="tw-table-actions">
-                        {% actions_menu label="Product actions" width="w-56" %}
-                        <div class="tw-dropdown-header">Advisories</div>
-                        <a href="#actions-menu"
-                           role="menuitem"
-                           class="tw-dropdown-item no-underline">
-                            <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>Add security advisory
-                        </a>
-                        <div class="tw-dropdown-divider"></div>
-                        <div class="tw-dropdown-header">Download</div>
-                        <a href="#actions-menu"
-                           role="menuitem"
-                           class="tw-dropdown-item no-underline">
-                            <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>SBOM · CycloneDX
-                        </a>
-                        <a href="#actions-menu"
-                           role="menuitem"
-                           class="tw-dropdown-item no-underline">
-                            <i class="fas fa-download tw-dropdown-item-icon" aria-hidden="true"></i>SBOM · SPDX
-                        </a>
-                    {% endactions_menu %}
-                </td>
-            </tr>
-        {% endfor %}
-    </tbody>
-</table>
-</div>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/actions_menu.html). The trigger is the library
+    icon button and the panel is the floating dropdown, so the menu restates
+    neither; the items are the slot, which is what lets them mix links, HTMX and
+    Alpine.
+{% endcomment %}
+<c-tables.shell>
+<c-tables.table>
+<c-tables.head>
+<c-tables.header-cell>Product</c-tables.header-cell>
+<c-tables.header-cell date>Updated</c-tables.header-cell>
+<c-tables.actions-cell as="th" />
+</c-tables.head>
+<tbody>
+    {% for product in demo_menu_rows %}
+        <c-tables.row>
+        <c-tables.cell>{{ product }}</c-tables.cell>
+        <c-tables.cell date class="text-text-muted">10 Aug 2026, 14:32</c-tables.cell>
+        <c-tables.actions-cell>
+        <c-actions-menu label="Product actions" width="w-56">
+        <c-dropdowns.header>Advisories</c-dropdowns.header>
+        <c-dropdowns.item icon="fas fa-shield-halved" href="#actions-menu">Add security advisory</c-dropdowns.item>
+        <c-dropdowns.divider />
+        <c-dropdowns.header>Download</c-dropdowns.header>
+        <c-dropdowns.item icon="fas fa-download" href="#actions-menu">SBOM · CycloneDX</c-dropdowns.item>
+        <c-dropdowns.item icon="fas fa-download" href="#actions-menu">SBOM · SPDX</c-dropdowns.item>
+        </c-actions-menu>
+        </c-tables.actions-cell>
+        </c-tables.row>
+    {% endfor %}
+</tbody>
+</c-tables.table>
+</c-tables.shell>
 {% endcard %}
 <h2 id="stepper" class="text-xl font-semibold text-text mb-4">Stepper</h2>
 {% card class="mb-8" %}
-<div class="tw-stepper">
-    <div class="tw-stepper-item">
-        <span class="tw-stepper-circle tw-stepper-circle-completed"><i class="fas fa-check" aria-hidden="true"></i></span>
-        <span class="tw-stepper-label">Scope</span>
-    </div>
-    <span class="tw-stepper-connector tw-stepper-connector-completed"></span>
-    <div class="tw-stepper-item">
-        <span class="tw-stepper-circle tw-stepper-circle-active">2</span>
-        <span class="tw-stepper-label tw-stepper-label-active">Assessment</span>
-    </div>
-    <span class="tw-stepper-connector"></span>
-    <div class="tw-stepper-item">
-        <span class="tw-stepper-circle">3</span>
-        <span class="tw-stepper-label">Declaration</span>
-    </div>
-</div>
+<c-navigation.stepper>
+<c-navigation.stepper-step state="completed" label="Scope"><i class="fas fa-check" aria-hidden="true"></i></c-navigation.stepper-step>
+<c-navigation.stepper-connector completed />
+<c-navigation.stepper-step state="active" label="Assessment">2</c-navigation.stepper-step>
+<c-navigation.stepper-connector />
+<c-navigation.stepper-step label="Declaration">3</c-navigation.stepper-step>
+</c-navigation.stepper>
 {% endcard %}
 {# ── Misc ──────────────────────────────────────────────────────────────── #}
 <h2 id="avatars" class="text-xl font-semibold text-text mb-4">Avatars</h2>
 {% card class="mb-8" %}
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/avatar.html).
+{% endcomment %}
 <div class="flex flex-wrap items-end gap-4">
-    {% avatar initials="JD" size="sm" %}
-    {% avatar initials="AB" %}
-    {% avatar initials="CD" size="lg" %}
-    {% avatar initials="EF" size="xl" %}
-    {% avatar %}
-    {% avatar initials="ON" status="online" %}
-    {% avatar initials="BS" status="busy" %}
-    {% avatar initials="OF" status="offline" %}
+    <c-avatar initials="JD" size="sm" />
+    <c-avatar initials="AB" />
+    <c-avatar initials="CD" size="lg" />
+    <c-avatar initials="EF" size="xl" />
+    <c-avatar />
+    <c-avatar initials="ON" status="online" />
+    <c-avatar initials="BS" status="busy" />
+    <c-avatar initials="OF" status="offline" />
 </div>
 <p class="tw-data-label mt-6 mb-2">Accent</p>
 <p class="text-sm text-text-muted mb-3">
@@ -895,18 +1013,36 @@
     ancestor; unset, it falls back to primary.
 </p>
 <div class="flex flex-wrap items-center gap-4">
-    {% avatar initials="PR" %}
-    <div style="--avatar-accent: var(--color-success)">{% avatar initials="OK" %}</div>
-    <div style="--avatar-accent: var(--color-warning)">{% avatar initials="ST" %}</div>
+    <c-avatar initials="PR" />
+    <c-avatar initials="OK" style="--avatar-accent: var(--color-success)" />
+    <div style="--avatar-accent: var(--color-warning)">
+        <c-avatar initials="ST" />
+    </div>
 </div>
 {% endcard %}
 <h2 id="copy" class="text-xl font-semibold text-text mb-4">Code &amp; tokens</h2>
+{% comment %}
+    This section renders through the cotton component library
+    (sbomify/templates/components/code_block.html, token_display.html and
+    copy_button.html). Each owns its own copied state, which is why the copied
+    look is one whole Alpine binding rather than a class laid over the resting
+    one.
+{% endcomment %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     {% card title="Code block" %}
-    {% code_block code=demo_code language="bash" filename="upload.sh" %}
+    <c-code-block :code="demo_code" language="bash" filename="upload.sh" />
+    <p class="text-sm text-text-muted mt-4 mb-0">
+        Without a filename the copy control sits in the block's top-right corner instead of a header band.
+    </p>
 {% endcard %}
 {% card title="Token display" %}
-{% token_display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked=True %}
+<c-token-display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked />
+<p class="tw-data-label mt-6 mb-2">Copy button</p>
+<p class="text-sm text-text-muted mb-3">
+    The standalone control, for a value that is already on the page. It confirms in place for two
+    seconds rather than raising a toast.
+</p>
+<c-copy-button value="https://sbomify.com/t/acme-corp" />
 <p class="tw-data-label mt-6 mb-2">Inline copy</p>
 <p class="text-sm text-text-muted mb-3">
     An identifier you click to copy. It confirms in place with its own

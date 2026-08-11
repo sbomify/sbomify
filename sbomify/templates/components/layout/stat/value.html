@@ -1,0 +1,9 @@
+{% comment %}
+The number. Tabular figures, so a strip of cards does not jitter as the values
+change. The ink is a custom property that falls back to the body text colour:
+the compact card points it at the card's accent, which is where a dense strip
+carries its meaning.
+{% endcomment %}
+<c-vars class />
+<span class="block text-4xl font-bold leading-none tracking-[-0.03em] tabular-nums text-[color:var(--stat-value-color,var(--color-text))]{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

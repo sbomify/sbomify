@@ -1,0 +1,47 @@
+{% comment %}
+The row and header actions menu: the "meatball" trigger and the panel it opens.
+
+The items are the slot, not a list prop, because real menus mix links, HTMX
+buttons and Alpine dispatches. Write them with c-dropdowns.item,
+c-dropdowns.item-danger, c-dropdowns.header and c-dropdowns.divider; the panel
+itself is c-dropdowns.dropdown in its floating form, so this file owns the
+trigger, the open state and the positioning and restates none of their recipes.
+
+The menu is teleported to the body rather than positioned inside its row: a
+data table scrolls horizontally, which clips on both axes, so a menu opened
+from the last row was cut off at the container's edge. The actionsMenu Alpine
+component positions it against the trigger and closes it on any scroll, since a
+fixed panel does not follow a scrolling ancestor.
+
+stretch makes the trigger as tall as the control beside it, for the action row
+of a page header. The two branches below differ only in the trigger's shape and
+must stay in lockstep: they cannot be one call because the stretch recipe
+replaces the size one rather than adding to it.
+{% endcomment %}
+<c-vars label="Actions" icon="fas fa-ellipsis-vertical" width="w-60" stretch class />
+<div class="relative inline-flex shrink-0{% if class %} {{ class }}{% endif %}"
+     x-data="actionsMenu"
+     @keydown.escape.window="closeAndFocus()"
+     {{ attrs }}>
+    {% comment %}
+        The stopped click keeps the press off a clickable table row, and off the
+        teleported menu's own click-outside handler, which would re-open it.
+
+        class is blanked below: it is layout for the wrapper, and the trigger and
+        the panel would otherwise take it as their own.
+    {% endcomment %}
+    {% with class="" %}
+        {% if stretch %}
+            <c-buttons.icon label="{{ label }}" stretch x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="true">
+            <i class="{{ icon }}" aria-hidden="true"></i>
+            </c-buttons.icon>
+        {% else %}
+            <c-buttons.icon label="{{ label }}" size="sm" x-ref="trigger" @click.stop="toggle()" ::aria-expanded="open" aria-haspopup="true">
+            <i class="{{ icon }}" aria-hidden="true"></i>
+            </c-buttons.icon>
+        {% endif %}
+        <template x-teleport="body">
+            <c-dropdowns.dropdown floating class="{{ width }}" aria-label="{{ label }}" x-ref="menu" x-show="open" x-cloak ::style="style" @click="close()" @click.outside="close()">{{ slot }}</c-dropdowns.dropdown>
+        </template>
+    {% endwith %}
+</div>

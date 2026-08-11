@@ -1,0 +1,15 @@
+{% comment %}
+The label over a control, in plain Tailwind utilities. The text is the slot;
+required is a prop so the asterisk reads the same on every field.
+
+for is a declared prop rather than a passthrough attribute so an unset id
+renders no attribute at all, which is what c-forms.field needs when a group of
+radios has no single control to point at.
+{% endcomment %}
+<c-vars for required class />
+<label class="block text-sm font-medium text-text mb-2 tracking-[-0.01em]{% if class %} {{ class }}{% endif %}"
+       {% if for %}for="{{ for }}"{% endif %}
+       {{ attrs }}>
+    {{ slot }}
+    {% if required %}<span class="text-danger">*</span>{% endif %}
+</label>

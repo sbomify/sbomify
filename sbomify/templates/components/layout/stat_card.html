@@ -1,0 +1,26 @@
+{% comment %}
+The instrument readout: a still surface, tabular numerals and a flat tinted
+icon chip. Containers do not move, so there is no hover lift. The parts go in
+the slot as c-layout.stat.label and c-layout.stat.value, with the delta on the
+value's baseline inside a c-layout.stat.row.
+
+accent is a prop, not a file: it sets one custom property that the icon and the
+compact number read, so a file per accent would carry no recipe of its own.
+
+compact is the dense strip above a table: the number over its label, centred,
+and the number in the card's accent. It retunes its parts by setting the custom
+properties they read, the way the stylesheet did it with descendant selectors,
+so the parts of a compact card never repeat "compact" at the call site.
+
+The icon is the icon chip's tint at this card's own radius, which is why it is
+written out rather than nested: c-chips.icon-chip owns a radius per size, and a
+second one from here would leave two on the same element.
+{% endcomment %}
+<c-vars accent icon compact class />
+<div class="flex flex-col bg-surface rounded-xl border border-solid border-border shadow-[var(--shadow-card)] {% if compact %}px-4 py-3 items-center text-center [--stat-value-color:var(--stat-accent,var(--color-text))] [--stat-label-mt:0.25rem] [--stat-label-mb:0px]{% else %}px-6 py-5{% endif %}{% if accent == 'success' %} [--stat-accent:var(--color-success)]{% elif accent == 'warning' %} [--stat-accent:var(--color-warning)]{% elif accent == 'danger' %} [--stat-accent:var(--color-danger)]{% elif accent == 'muted' %} [--stat-accent:var(--color-text-muted)]{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if icon %}
+        <span class="shrink-0 flex items-center justify-center w-10 h-10 mb-1.5 rounded-[0.625rem] bg-[color-mix(in_oklab,var(--stat-accent,var(--color-primary))_12%,transparent)] text-[color:var(--stat-accent,var(--color-primary))]"><i class="{{ icon }}" aria-hidden="true"></i></span>
+    {% endif %}
+    {{ slot }}
+</div>
