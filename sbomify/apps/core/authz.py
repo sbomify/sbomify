@@ -74,25 +74,29 @@ DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
 twice already, and a named tier makes moving it again a one-line change."""
 
-PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT, ROLE_GUEST)
-"""Upload artifacts — granted to OIDC/CI ``bot`` identities and, per #468, to
-guests (so a low-trust member can contribute artifacts without management
-rights)."""
+PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+"""Upload artifacts and cut/tag releases — the CI publish workflow, granted to
+OIDC/CI ``bot`` identities alongside owners and admins.
 
-RELEASE_PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""Cut and tag a release — the release half of the CI publish workflow. Granted
-to OIDC/CI ``bot`` identities (the action creates a release and tags its uploaded
-artifacts to it) alongside owners and admins. Guests are excluded: they may
-contribute artifacts (``PUBLISH``) but not cut releases. Renaming or deleting a
-release stays the stricter ``MANAGE`` / ``DELETE`` tiers."""
+Guests were briefly in this tier (#468) so a low-trust member could contribute
+artifacts. That grant is withdrawn: ``guest`` is an *external* trust-center role
+and holds no capability at all. The former ``RELEASE_PUBLISH`` tier existed only
+to keep guests out of release-cutting while leaving them artifact upload; with
+guests holding nothing, it was identical to this tier and has been removed."""
 
-# Order mirrors the predominant call-site literal ``["guest", "owner", "admin"]``
-# (membership is order-independent, but the parity keeps the claim above honest).
-READ_MEMBER: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN)
-"""Any workspace member may read internal (non-public) workspace data."""
+# ``READ_INTERNAL``/``READ_INTERNAL_OR_BOT`` were ``READ_MEMBER``/``READ_MEMBER_OR_BOT``.
+# Renamed because the tier means "internal roles only, guests excluded", which
+# "READ_MEMBER" no longer conveys once guests are external — and would be
+# actively misleading next to a role literally named ``member`` (#468).
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+"""Read internal (non-public) workspace data. Internal roles only — a guest is
+an external trust-center visitor and must not be able to enumerate a workspace's
+private inventory. Guests reach restricted content solely through the
+attribute-based ``component:access`` path (visibility + NDA + approved request),
+which this tier does not govern."""
 
-READ_MEMBER_OR_BOT: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""``READ_MEMBER`` plus the CI/OIDC ``bot``: reading releases is part of the
+READ_INTERNAL_OR_BOT: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+"""``READ_INTERNAL`` plus the CI/OIDC ``bot``: reading releases is part of the
 publish workflow (the action checks whether a release already exists before
 creating it), so a bot must reach release reads that other internal reads still
 deny it."""
