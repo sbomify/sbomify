@@ -34,6 +34,33 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# Ceiling on how much captured stderr reaches a log line. Generous enough that
+# a real scanner failure fits whole, bounded so a scanner looping on per-package
+# warnings cannot emit a megabyte-wide record.
+_STDERR_LOG_LIMIT = 2000
+
+
+def _collapse_for_log(text: str) -> str:
+    """Fold multi-line captured output into a single log-safe line.
+
+    The log pipeline splits records on newlines, so a multi-line stderr arrives
+    as one line per line and only the first survives as part of the message
+    that names it. osv-scanner opens with a progress line, which is how a
+    failed scan came through staging as
+
+        [OSV] Scanner returned code 127: Starting filesystem walk for root: /
+
+    — the exit code preserved and the reason for it discarded.
+
+    Truncation keeps the tail rather than the head: a scanner that dies has
+    usually said why in its last few lines, and it is the head that is
+    boilerplate.
+    """
+    joined = " | ".join(line.strip() for line in (text or "").splitlines() if line.strip())
+    if len(joined) <= _STDERR_LOG_LIMIT:
+        return joined
+    return f"...{joined[-_STDERR_LOG_LIMIT:]}"
+
 
 class OSVPlugin(AssessmentPlugin):
     """OSV vulnerability scanning plugin.
@@ -58,6 +85,15 @@ class OSVPlugin(AssessmentPlugin):
     # vulnerabilities. Every other code means the scan itself did not run to
     # completion, so its (empty) output says nothing about the SBOM.
     SUCCESS_EXIT_CODES = (0, 1)
+    # Except this one: 128 is "no package sources found", which is the scanner
+    # working correctly and having nothing to match — the case
+    # ``_create_no_packages_result`` already exists for. Staging bears that out:
+    # every exit-128 run was followed by the no-packages skip firing on its
+    # stderr, while only exit 127 fell through to a clean result. Treating it as
+    # a hard failure would turn a deliberate "Nothing scanned" into a
+    # high-severity Scan Error for documents whose PURLs the scanner does not
+    # recognise.
+    NO_PACKAGE_SOURCES_EXIT_CODE = 128
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
@@ -122,6 +158,16 @@ class OSVPlugin(AssessmentPlugin):
         try:
             # Execute osv-scanner
             stdout, stderr, returncode = self._execute_scanner(scanner_path, scan_path, timeout)
+
+            # "Nothing to scan" is reported as an exit code as well as on
+            # stderr, and it is not a failure — checked before the abort guard
+            # so it keeps the skipped result rather than being reclassified as
+            # a high-severity error.
+            if returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
+                logger.warning(
+                    f"[OSV] Scan of SBOM {sbom_id} found no package sources; reporting as skipped rather than clean"
+                )
+                return self._create_no_packages_result()
 
             # A scanner that aborted produces no findings for the same reason a
             # clean SBOM does — an empty result set — so the two are
@@ -363,7 +409,7 @@ class OSVPlugin(AssessmentPlugin):
         # which the scan is abandoned, and a line that reads as non-fatal for an
         # outcome the caller treats as fatal is what makes a log hard to trust.
         if process.returncode not in self.SUCCESS_EXIT_CODES:
-            logger.error(f"[OSV] Scanner returned code {process.returncode}: {process.stderr}")
+            logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
 
         return process.stdout, process.stderr, process.returncode
 

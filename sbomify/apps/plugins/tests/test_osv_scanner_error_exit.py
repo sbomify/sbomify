@@ -51,9 +51,11 @@ def _scanner_exiting(returncode: int, stdout: str = "", stderr: str = "") -> Any
 
 
 class TestAnAbortedScanIsAnError:
-    # 127 and 128 are what staging actually produced; the guard is written
-    # against "not a success code" rather than against these two values.
-    @pytest.mark.parametrize("returncode", [2, 127, 128, 255])
+    # 128 is deliberately absent: osv-scanner uses it for "no package sources
+    # found", which is the scanner working and having nothing to match. It has
+    # its own case below. The guard is written against "not a success code"
+    # rather than against the specific values seen in the wild.
+    @pytest.mark.parametrize("returncode", [2, 127, 255])
     def test_a_failing_exit_code_does_not_report_clean(self, plugin: OSVPlugin, sbom_file, returncode: int) -> None:
         """The defect itself: any exit outside {0, 1} used to fall through to a
         0-findings result that read as "no known vulnerabilities"."""
@@ -106,6 +108,18 @@ class TestTheSuccessPathIsUntouched:
         assert result["summary"]["error_count"] == 0
         assert result["summary"]["total_findings"] == 1
 
+    def test_exit_128_is_a_skip_not_an_error(self, plugin: OSVPlugin, sbom_file) -> None:
+        """osv-scanner reserves 128 for "no package sources found". Staging
+        bears out the semantics: every exit-128 run was followed by the
+        no-packages skip firing on its stderr, while only exit 127 fell through
+        to a clean result. Treating it as a failure turns a deliberate "Nothing
+        scanned" into a high-severity Scan Error."""
+        with patch("subprocess.run", return_value=_scanner_exiting(128)):
+            result = _as_dict(plugin.assess("test-sbom", sbom_file))
+
+        assert result["metadata"]["skipped"] is True
+        assert result["summary"]["error_count"] == 0
+
     def test_the_no_packages_skip_still_fires(self, plugin: OSVPlugin, sbom_file) -> None:
         """Exit 0 with nothing recognised stays a skip, not an error — the two
         guards answer different questions and both have to survive."""
@@ -138,3 +152,42 @@ class TestItDoesNotRenderAsPassing:
             result = _as_dict(plugin.assess("test-sbom", sbom_file))
 
         assert _is_run_passing(self._run(result)) is False
+
+
+@pytest.mark.django_db
+class TestItResolvesNothing:
+    """The layer the original fix stopped short of.
+
+    Withholding the badge was only half the problem: the run still reached the
+    vulnerability lifecycle, which reads a completed run with no findings as
+    evidence that everything previously open is now fixed.
+    """
+
+    def _run(self, result: dict[str, Any]):
+        from sbomify.apps.plugins.models import AssessmentRun, RunStatus
+
+        return AssessmentRun(
+            plugin_name="osv",
+            category="security",
+            status=RunStatus.COMPLETED.value,
+            result=result,
+        )
+
+    def test_a_failed_scan_is_not_treated_as_evidence(self, plugin: OSVPlugin, sbom_file) -> None:
+        from sbomify.apps.plugins.lifecycle import run_scanned
+
+        with patch("subprocess.run", return_value=_scanner_exiting(127)):
+            result = _as_dict(plugin.assess("test-sbom", sbom_file))
+
+        assert run_scanned(self._run(result)) is False
+
+    def test_a_clean_scan_still_is(self, plugin: OSVPlugin, sbom_file) -> None:
+        """The regression that would hurt most: a real scan of a real SBOM with
+        nothing wrong still has to resolve what it no longer reports."""
+        from sbomify.apps.plugins.lifecycle import run_scanned
+
+        clean = _scanner_exiting(0, stderr="Scanned /tmp/x.cdx.json file and found 412 packages\n")
+        with patch("subprocess.run", return_value=clean):
+            result = _as_dict(plugin.assess("test-sbom", sbom_file))
+
+        assert run_scanned(self._run(result)) is True
