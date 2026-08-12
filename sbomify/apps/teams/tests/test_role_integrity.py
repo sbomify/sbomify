@@ -11,6 +11,8 @@ which builds the schema straight from the models — constraints included — so
 CheckConstraint is present either way.
 """
 
+import os
+
 import pytest
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -51,8 +53,13 @@ class TestRoleIntegrity:
     def test_every_supported_role_is_writable(self, django_user_model):
         """The constraint must admit exactly the canonical set — no more, no less.
 
-        Catches a role added to TEAMS_SUPPORTED_ROLES without the matching
-        migration, which would otherwise fail only at runtime for that role.
+        Scope, precisely: the suite runs with ``--nomigrations`` (see the module
+        docstring), so the schema — constraint included — is built from the
+        models, which read ``TEAMS_SUPPORTED_ROLES``. That makes this a check of
+        model/settings coherence, NOT of migration coherence: a role added to
+        settings without a migration would still pass here, because the
+        constraint under test was generated from the same setting.
+        ``test_models_and_migrations_agree`` is what covers that gap.
         """
         team = Team.objects.create(name="All Roles Workspace")
         for index, (role, _label) in enumerate(settings.TEAMS_SUPPORTED_ROLES):
@@ -64,3 +71,37 @@ class TestRoleIntegrity:
                 member._is_oidc_bot_provisioning = True
             member.save()
             assert Member.objects.filter(team=team, user=user, role=role).exists()
+
+
+def test_models_and_migrations_agree():
+    """No model change is left without a migration.
+
+    ``--nomigrations`` builds the test schema straight from the models, so every
+    constraint test in this file passes whether or not the migration history
+    describes the same thing — which is the mismatch that actually hurts, since
+    production's schema comes from the migrations alone.
+
+    Run in a SUBPROCESS on purpose. ``--nomigrations`` works by patching the
+    migration loader for the whole session, so calling ``makemigrations --check``
+    in-process reports "no changes" no matter how far the models have drifted —
+    the first version of this test did exactly that and passed against a role
+    deliberately added without a migration. A fresh interpreter has no such
+    patch, and ``--check`` compares models to the migration files on disk rather
+    than to a database, so it needs no test DB.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[4]
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "manage.py", "makemigrations", "--check", "--dry-run"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": "sbomify.test_settings"},
+    )
+    assert result.returncode == 0, (
+        "Models have changes with no migration. Run `manage.py makemigrations`.\n"
+        f"{result.stdout}\n{result.stderr}"
+    )
