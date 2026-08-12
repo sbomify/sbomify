@@ -104,8 +104,13 @@ def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
         .first()
     )
     if revoked_request:
-        # Also ensure guest membership is removed (in case deletion failed)
-        Member.objects.filter(team=team, user=user, role=ROLE_GUEST).delete()
+        # Ensure the guest membership is gone (in case revocation's own deletion
+        # failed). ``member`` was already fetched above, so only issue the write
+        # when there is actually a guest row to remove — this is a read path, and
+        # an unconditional DELETE took row locks on every check for a revoked
+        # user, almost always deleting nothing.
+        if member is not None and member.role == ROLE_GUEST:
+            Member.objects.filter(team=team, user=user, role=ROLE_GUEST).delete()
         return False, False
 
     if member:

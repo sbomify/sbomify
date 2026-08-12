@@ -312,12 +312,21 @@ class TestGuestIsExternalOnly:
         assert granting == [], f"guest is external-only but still holds: {granting}"
 
     def test_guest_cannot_list_internal_products(self, team_with_business_plan, guest_with_access):
-        """Internal inventory must not be enumerable by an external visitor."""
+        """Internal inventory must not be enumerable by an external visitor.
+
+        Note this endpoint ALSO carries an inline ``_is_guest_member`` deny-check,
+        so it 403s with or without the tier change. It is kept as an end-to-end
+        assertion of the product behaviour; the tier itself is pinned by
+        ``test_guest_holds_no_role_capability`` and by
+        ``test_guest_cannot_read_workspace_billing_usage``, whose endpoint has no
+        inline guest check and is therefore gated solely by the read tier.
+        """
         client = self._client(team_with_business_plan, guest_with_access)
         response = client.get("/api/v1/products")
         assert response.status_code == 403
 
     def test_guest_cannot_list_internal_components(self, team_with_business_plan, guest_with_access):
+        """See the note on test_guest_cannot_list_internal_products."""
         client = self._client(team_with_business_plan, guest_with_access)
         response = client.get("/api/v1/components")
         assert response.status_code == 403
@@ -409,9 +418,12 @@ class TestGuestCannotLeakAcrossWorkspaces:
 
         assert response.status_code == 200
         body = response.json()
-        assert "Vendor Private Product" not in response.content.decode()
-        # Their own (empty) workspace is all they should be counted for.
+        # Their own (empty) workspace is all they should be counted for; the
+        # vendor's product must not be included in the totals. (Asserting the
+        # product *name* is absent would be vacuous — this payload carries counts
+        # and upload names, never product names.)
         assert body["total_products"] == 0
+        assert body["total_components"] == 0
 
     def test_component_releases_hides_other_workspace_private_products(self, team_with_business_plan, guest_of_vendor):
         """A gated component is publicly viewable; its private product names are not."""
@@ -452,3 +464,59 @@ class TestGuestCannotLeakAcrossWorkspaces:
         assert "Vendor Secret Product" not in response.content.decode()
         # And the release itself is withheld, not merely its product name.
         assert response.json()["items"] == []
+
+
+@pytest.mark.django_db
+class TestReleaseDisclosureIsConsistent:
+    """All five "which releases contain this artifact" endpoints share one policy.
+
+    If the caller cannot see the product, they do not see its releases — not even
+    with the product fields blanked, because release names and descriptions
+    routinely carry the product codename. Previously three different policies were
+    enforced across these endpoints, and two of them handed private product names
+    to anonymous callers.
+    """
+
+    @pytest.fixture
+    def public_component_in_private_release(self, team_with_business_plan):
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM, Product
+
+        component = Component.objects.create(
+            name="Public Face",
+            team=team_with_business_plan,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PUBLIC,
+        )
+        sbom = SBOM.objects.create(
+            name="public-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            component=component,
+            source="api",
+        )
+        secret = Product.objects.create(team=team_with_business_plan, name="Project Zephyr", is_public=False)
+        release = Release.objects.create(product=secret, name="zephyr-2.1-rc3")
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
+        return component, sbom
+
+    def test_anonymous_never_sees_private_product_via_any_release_listing(self, public_component_in_private_release):
+        from django.test import Client
+
+        component, sbom = public_component_in_private_release
+        client = Client()  # unauthenticated
+
+        for url in (
+            f"/api/v1/components/{component.id}/releases",
+            f"/api/v1/components/{component.id}/sboms",
+            f"/api/v1/components/{component.id}/documents",
+            f"/api/v1/sboms/{sbom.id}/releases",
+        ):
+            response = client.get(url)
+            assert response.status_code == 200, f"{url} -> {response.status_code}"
+            body = response.content.decode()
+            assert "Project Zephyr" not in body, f"private product name leaked via {url}"
+            # The release name itself carries the codename, so withholding the
+            # product field alone would not be enough.
+            assert "zephyr-2.1-rc3" not in body, f"private release leaked via {url}"

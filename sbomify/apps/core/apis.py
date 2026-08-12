@@ -2338,7 +2338,7 @@ def list_component_releases(
     # ``is_internal_member`` above, which only says they are a non-guest of
     # whatever workspace their session points at — for a gated component that let
     # an owner of workspace B read the private product names of workspace X.
-    has_workspace_access = can(request, "release:read", component)
+    has_workspace_access = can(request, "release:read", component).allowed
 
     try:
         # Find all releases that have artifacts from this component
@@ -2370,16 +2370,20 @@ def list_component_releases(
             Release.objects.filter(id__in=release_ids).select_related("product").order_by("-released_at", "-created_at")
         )
 
+        # Withhold releases of non-public products from callers outside this
+        # component's workspace. Filter BEFORE paginating: doing it per-row after
+        # the page was cut made the counts describe rows the caller never sees,
+        # so a page could come back empty with has_next=true — and
+        # _paginate_queryset's contract is that clients stop on an empty page,
+        # which would hide the genuinely public releases further down.
+        if not has_workspace_access:
+            releases_queryset = releases_queryset.filter(product__is_public=True)
+
         # Apply pagination
         paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
 
         response_data = []
         for release in paginated_releases:
-            # Non-public releases are only listed to members of the component's
-            # own workspace.
-            if not has_workspace_access and not release.product.is_public:
-                continue
-
             # Count artifacts for this release
             artifact_count = release.artifacts.count()
 
@@ -3383,7 +3387,8 @@ def download_release(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Guest members can read release artifacts if they have access
+        # Non-public product: internal members only. Guests hold no read tier;
+        # public products already returned above.
         if not can(request, "release:read", release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3963,13 +3968,14 @@ def list_document_releases(
         if not can(request, "document:read", document.component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    # Whether the requester is a member of the document's workspace. Non-members
-    # reach this endpoint whenever the component is public or gated, so private
-    # product names and IDs must be withheld from them. This mirrors
-    # list_sbom_releases; without it the two endpoints disagreed on the same
-    # policy and this one disclosed private product names to anyone who could see
-    # a gated document — including guests, who now hold no read tier at all.
-    has_workspace_access = can(request, "document:read", document.component).allowed
+    # One disclosure policy across every "which releases contain this artifact"
+    # endpoint: if the caller cannot see the product, they do not see its releases
+    # at all. Blanking product_id/product_name was not enough — release names and
+    # descriptions routinely carry the product codename, so the identity stayed
+    # reconstructible, and a UI building a link from an empty product_id rendered
+    # a broken href. Filtered before pagination so the counts describe rows the
+    # caller can actually receive.
+    has_workspace_access = can(request, "release:read", document.component).allowed
 
     # Get all releases containing this document
     release_artifacts_queryset = (
@@ -3977,6 +3983,8 @@ def list_document_releases(
         .select_related("release", "release__product")
         .order_by("-release__released_at", "-release__created_at")
     )
+    if not has_workspace_access:
+        release_artifacts_queryset = release_artifacts_queryset.filter(release__product__is_public=True)
 
     # Apply pagination
     paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
@@ -3984,7 +3992,6 @@ def list_document_releases(
     items = []
     for artifact in paginated_artifacts:
         product = artifact.release.product
-        reveal_product = product.is_public or has_workspace_access
         items.append(
             {
                 "id": str(artifact.release.id),
@@ -3992,8 +3999,8 @@ def list_document_releases(
                 "description": artifact.release.description,
                 "is_prerelease": artifact.release.is_prerelease,
                 "is_latest": artifact.release.is_latest,
-                "product_id": str(product.id) if reveal_product else "",
-                "product_name": product.name if reveal_product else "",
+                "product_id": str(product.id),
+                "product_name": product.name,
                 "is_public": product.is_public,
             }
         )
@@ -4143,16 +4150,17 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Reaching a non-public component here means the attribute-based path
-        # allowed it (public/gated + approved request + signed NDA), not that
-        # the caller holds a role — guests hold no tier.
+        # PRIVATE component: internal members only. This is a role check, not
+        # the gated/NDA path — public and gated components already returned
+        # above via public_access_allowed. Guests hold no read tier, so they
+        # are denied here and reach gated content through that earlier branch.
         if not can(request, "sbom:read", sbom.component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    # Whether the requester is a member of the SBOM's workspace. Non-members may
-    # reach this endpoint when the component is public/gated, so private product
-    # names and IDs must be withheld from them to avoid leaking private products.
-    has_workspace_access = can(request, "sbom:read", sbom.component).allowed
+    # Same disclosure policy as the sibling release listings: a caller who cannot
+    # see the product does not see its releases at all. Filtered before pagination
+    # so the counts describe rows the caller can actually receive.
+    has_workspace_access = can(request, "release:read", sbom.component).allowed
 
     # Get all releases containing this SBOM
     release_artifacts_queryset = (
@@ -4160,6 +4168,8 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
         .select_related("release", "release__product")
         .order_by("-release__released_at", "-release__created_at")
     )
+    if not has_workspace_access:
+        release_artifacts_queryset = release_artifacts_queryset.filter(release__product__is_public=True)
 
     # Apply pagination
     paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
@@ -4167,7 +4177,6 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     items = []
     for artifact in paginated_artifacts:
         product = artifact.release.product
-        reveal_product = product.is_public or has_workspace_access
         items.append(
             {
                 "id": str(artifact.release.id),
@@ -4175,8 +4184,8 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
                 "description": artifact.release.description,
                 "is_prerelease": artifact.release.is_prerelease,
                 "is_latest": artifact.release.is_latest,
-                "product_id": str(product.id) if reveal_product else "",
-                "product_name": product.name if reveal_product else "",
+                "product_id": str(product.id),
+                "product_name": product.name,
                 "is_public": product.is_public,
             }
         )
@@ -4378,11 +4387,18 @@ def list_component_sboms(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Reaching a non-public component here means the attribute-based path
-        # allowed it (public/gated + approved request + signed NDA), not that
-        # the caller holds a role — guests hold no tier.
+        # PRIVATE component: internal members only. This is a role check, not
+        # the gated/NDA path — public and gated components already returned
+        # above via public_access_allowed. Guests hold no read tier, so they
+        # are denied here and reach gated content through that earlier branch.
         if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # Same disclosure policy as the standalone release listings: the nested
+    # releases[] below must not name a product this caller cannot see. Both
+    # endpoints are reachable unauthenticated whenever the component is public or
+    # gated, so without this an anonymous caller read private product names.
+    has_workspace_access = can(request, "release:read", component).allowed
 
     try:
         from collections import defaultdict
@@ -4476,9 +4492,12 @@ def list_component_sboms(
         # 3. Release artifacts — one query, indexed into a per-SBOM list.
         releases_by_sbom: dict[str, list[dict[str, Any]]] = defaultdict(list)
         try:
-            for artifact in ReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
+            artifact_releases_qs = ReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
                 "release", "release__product"
-            ):
+            )
+            if not has_workspace_access:
+                artifact_releases_qs = artifact_releases_qs.filter(release__product__is_public=True)
+            for artifact in artifact_releases_qs:
                 releases_by_sbom[str(artifact.sbom_id)].append(
                     {
                         "id": str(artifact.release.id),
@@ -4680,11 +4699,18 @@ def list_component_documents(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Reaching a non-public component here means the attribute-based path
-        # allowed it (public/gated + approved request + signed NDA), not that
-        # the caller holds a role — guests hold no tier.
+        # PRIVATE component: internal members only. This is a role check, not
+        # the gated/NDA path — public and gated components already returned
+        # above via public_access_allowed. Guests hold no read tier, so they
+        # are denied here and reach gated content through that earlier branch.
         if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # Same disclosure policy as the standalone release listings: the nested
+    # releases[] below must not name a product this caller cannot see. Both
+    # endpoints are reachable unauthenticated whenever the component is public or
+    # gated, so without this an anonymous caller read private product names.
+    has_workspace_access = can(request, "release:read", component).allowed
 
     try:
         from sbomify.apps.documents.models import Document
@@ -4702,6 +4728,8 @@ def list_component_documents(
             release_artifacts = ReleaseArtifact.objects.filter(document=document).select_related(
                 "release", "release__product"
             )
+            if not has_workspace_access:
+                release_artifacts = release_artifacts.filter(release__product__is_public=True)
 
             for artifact in release_artifacts:
                 releases.append(
