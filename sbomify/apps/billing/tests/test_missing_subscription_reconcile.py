@@ -89,6 +89,24 @@ class TestTheClientTellsTheCasesApart:
         """Existing ``except StripeError`` handlers must keep catching it."""
         assert issubclass(StripeResourceMissingError, StripeError)
 
+    def test_the_log_names_the_code_it_classified_on(self) -> None:
+        """Without the code in the line, the log says a request was invalid
+        without saying which way, and the branch taken looks arbitrary."""
+        from sbomify.apps.billing import stripe_client as stripe_client_module
+
+        err = stripe.error.InvalidRequestError("No such subscription: 'sub_gone'", param="id", code="resource_missing")
+
+        with (
+            patch("stripe.Subscription.retrieve", side_effect=err),
+            patch.object(stripe_client_module.logger, "error") as error_log,
+            pytest.raises(StripeResourceMissingError),
+        ):
+            StripeClient().get_subscription("sub_gone")
+
+        logged = error_log.call_args_list[0]
+        assert "code=%s" in logged.args[0]
+        assert "resource_missing" in logged.args
+
 
 @pytest.mark.django_db
 class TestTheSweepStopsAsking:
@@ -111,6 +129,36 @@ class TestTheSweepStopsAsking:
         _run_sweep(second_sweep)
 
         second_sweep.assert_not_called()
+
+    def test_the_marker_records_which_id_went_missing(self) -> None:
+        """A bare timestamp cannot say what it was about, which is what makes
+        the re-entry below possible."""
+        team = _expired_trial_team()
+
+        _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["stripe_subscription_missing_id"] == "sub_gone"
+
+    def test_a_new_subscription_re_enters_the_sweep(self) -> None:
+        """The footgun in parking by timestamp alone: a workspace given a new
+        subscription would stay parked forever if nobody thought to clear the
+        marker, and the new subscription would never sync."""
+        team = _expired_trial_team()
+        _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
+
+        team.refresh_from_db()
+        limits = team.billing_plan_limits
+        limits["stripe_subscription_id"] = "sub_replacement"
+        team.billing_plan_limits = limits
+        team.save()
+
+        subscription = MagicMock()
+        subscription.status = "active"
+        get_subscription = MagicMock(return_value=subscription)
+        _run_sweep(get_subscription)
+
+        get_subscription.assert_called_once_with("sub_replacement")
 
     def test_the_plan_is_left_alone(self) -> None:
         """Deliberately not decided here. Downgrading a workspace because a

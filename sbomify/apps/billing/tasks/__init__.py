@@ -248,7 +248,14 @@ def check_stale_trials_task() -> None:
             # Already known to point at nothing. Re-asking produces the same
             # answer every sweep, which is what turned one broken reference
             # into a permanent daily error line per team.
-            if limits.get("stripe_subscription_missing_at"):
+            #
+            # Only skipped while the id is still the one that went missing: a
+            # workspace given a new subscription has to re-enter the sweep even
+            # if nobody cleared the marker, or parking it would quietly become
+            # permanent.
+            if limits.get("stripe_subscription_missing_at") and limits.get(
+                "stripe_subscription_missing_id"
+            ) == limits.get("stripe_subscription_id"):
                 continue
             trial_end = limits.get("trial_end")
             if trial_end and trial_end < now_timestamp:
@@ -310,15 +317,25 @@ def check_stale_trials_task() -> None:
             # vanished is a billing decision, not something a sync task should
             # infer, so the marker parks the retry and leaves the plan alone.
             limits["stripe_subscription_missing_at"] = timezone.now().isoformat()
+            # Recorded alongside the timestamp so the skip can be tied to the id
+            # it was about. If the workspace is later given a new subscription
+            # and nobody thinks to clear the marker, a bare timestamp would keep
+            # it out of the sweep forever and the new subscription would never
+            # sync.
+            limits["stripe_subscription_missing_id"] = subscription_id
             team.billing_plan_limits = limits
             team.save(update_fields=["billing_plan_limits"])
             # Logged once, on the sweep that discovers it, because the marker
             # above keeps the team out of every sweep after this one.
+            #
+            # The subscription id is deliberately not in the message. It is
+            # stored on the row for whoever reconciles this, and the workspace
+            # key is enough to find that row — putting a billing identifier
+            # into log aggregation buys nothing and CodeQL flags it.
             logger.error(
-                "Workspace %s references subscription %s which does not exist at Stripe; "
+                "Workspace %s references a subscription that does not exist at Stripe; "
                 "parked pending manual reconciliation",
                 team.key,
-                subscription_id,
             )
             missing_count += 1
         except StripeError as e:

@@ -83,13 +83,18 @@ def handle_stripe_errors(func: F) -> F:
             logger.error("Card error: code=%s, param=%s", e.code, e.param)
             raise StripeError(f"Card error: {e.user_message}") from e
         except stripe.error.InvalidRequestError as e:
-            logger.error("Invalid Stripe request: param=%s, message=%s", e.param, str(e))
+            # ``code`` is what the branch below keys on, so it belongs in the
+            # line too — otherwise the log says a request was invalid without
+            # saying which way, and the classification that follows looks
+            # arbitrary to whoever is reading back.
+            code = getattr(e, "code", None)
+            logger.error("Invalid Stripe request: code=%s, param=%s, message=%s", code, e.param, str(e))
             # Separated from its siblings so a caller can tell "the id I stored
             # refers to nothing" apart from "this request was malformed". Both
             # are terminal, but only the first is a statement about our own
             # data, and only the first is worth reconciling instead of
             # reporting.
-            if getattr(e, "code", None) == "resource_missing":
+            if code == "resource_missing":
                 raise StripeResourceMissingError("Referenced object does not exist at the payment provider.") from e
             raise StripeError("Invalid request to payment provider.") from e
         except stripe.error.AuthenticationError as e:
