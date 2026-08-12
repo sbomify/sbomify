@@ -82,7 +82,10 @@ def notify_billing_managers(team: Team, notification_fn: Callable[..., Any], *ar
         team: Team instance
         notification_fn: Callable(team, member, *args, **kwargs)
     """
-    for member in Member.objects.filter(team=team, role__in=ADMINISTER):
+    # select_related("user"): the notification functions read member.user (see
+    # billing.email_notifications._get_base_context), so without it each recipient
+    # costs an extra query — and this now fans out to admins as well as owners.
+    for member in Member.objects.filter(team=team, role__in=ADMINISTER).select_related("user"):
         notification_fn(team, member, *args, **kwargs)
 
 

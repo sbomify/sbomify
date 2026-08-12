@@ -4,7 +4,7 @@ Owner-level invitation created
 
 You're receiving this because owner-level access grants full control of the workspace, including billing and the ability to remove other owners.
 
-If this wasn't expected, review your workspace members: {{ base_url }}{% url 'teams:team_settings' team.key %}#members
+If this wasn't expected, review your workspace members: {{ base_url }}{% url 'teams:team_settings_tab' team_key=team.key tab='members' %}
 
 Cheers,
 The sbomify Team
