@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import uuid
 from collections.abc import Sequence
@@ -7,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpRequest
@@ -1330,6 +1332,18 @@ def get_team(request: HttpRequest, team_key: str) -> tuple[int, Any]:
 # Internal endpoints (no auth required - secured at proxy level)
 internal_router = Router(tags=["Internal"], auth=None)
 
+# How long an on-demand TLS decision is reused before the database is consulted
+# again. Caddy asks once per TLS handshake against an unprovisioned hostname, so
+# a client retrying in a loop turns into one query per handshake without this.
+#
+# The two directions carry different risk, hence different windows. A stale
+# *allow* means a certificate is issued for a workspace that has just gone
+# private, which the proxy layer still gates on; a stale *deny* means a
+# newly-created trust center waits for its first certificate, which the user is
+# sitting in front of. So denials expire quickly and approvals are held longer.
+ON_DEMAND_TLS_ALLOW_CACHE_SECONDS = 300
+ON_DEMAND_TLS_DENY_CACHE_SECONDS = 60
+
 
 @internal_router.get("/domains", response={200: None, 404: None})
 def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
@@ -1359,8 +1373,6 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
     """
     from urllib.parse import urlparse
 
-    logger.info(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
-
     # Sanitize and normalize domain input using urlparse
     # This handles cases where input might include protocol, port, or path
     # Note: urlparse requires a scheme to identify hostname, so we add one if missing
@@ -1381,6 +1393,45 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
         logger.warning(f"On-demand TLS denied: failed to parse domain '{domain}': {e}")
         return 404, None
 
+    # Answered from cache before the query and before the log line: a hostname
+    # being probed in a loop is the case this endpoint sees most, and repeating
+    # the lookup and the warning for every handshake is what made it the
+    # single loudest source of traffic and log volume in production.
+    cache_key = _on_demand_tls_cache_key(domain_normalized)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return (200, None) if cached else (404, None)
+
+    logger.info(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
+
+    status = _resolve_on_demand_tls(domain_normalized)
+    cache.set(
+        cache_key,
+        status == 200,
+        timeout=(ON_DEMAND_TLS_ALLOW_CACHE_SECONDS if status == 200 else ON_DEMAND_TLS_DENY_CACHE_SECONDS),
+    )
+    return status, None
+
+
+def _on_demand_tls_cache_key(domain_normalized: str) -> str:
+    """Cache key for an on-demand TLS decision.
+
+    The hostname is hashed rather than interpolated: it is attacker-controlled,
+    and memcached rejects keys containing spaces or control characters, so a
+    probe crafted around that would otherwise raise instead of being denied.
+    """
+    return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
+
+
+def _resolve_on_demand_tls(domain_normalized: str) -> int:
+    """Decide whether ``domain_normalized`` may be issued a certificate.
+
+    Split from the endpoint so the decision can be cached without the cache
+    having to reproduce the branching. Returns the HTTP status Caddy reads:
+    200 to issue, 404 to refuse.
+    """
+    from urllib.parse import urlparse
+
     # Check if domain is the main application domain
     if settings.APP_BASE_URL:
         try:
@@ -1391,7 +1442,7 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
             app_domain = parsed_app.hostname
             if app_domain and domain_normalized == app_domain.lower():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (main application domain)")
-                return 200, None
+                return 200
         except (ValueError, AttributeError):
             # Invalid APP_BASE_URL - continue to check custom domains
             logger.warning(f"Failed to parse APP_BASE_URL: {settings.APP_BASE_URL}")
@@ -1405,9 +1456,9 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
         if slug and 3 <= len(slug) <= 63 and _SLUG_PATTERN.match(slug):
             if Team.objects.filter(slug=slug, is_public=True).exists():
                 logger.info(f"On-demand TLS approved: {domain_normalized} (trust center subdomain)")
-                return 200, None
+                return 200
         logger.warning(f"On-demand TLS denied: {domain_normalized} (unknown trust center slug)")
-        return 404, None
+        return 404
 
     # Check if domain exists and belongs to Business/Enterprise team
     is_allowed = Team.objects.filter(
@@ -1416,10 +1467,10 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
 
     if is_allowed:
         logger.info(f"On-demand TLS approved: {domain_normalized} (custom domain)")
-        return 200, None
+        return 200
     else:
         logger.warning(f"On-demand TLS denied: {domain_normalized} (not found in allowed domains)")
-        return 404, None
+        return 404
 
 
 def _supplier_team(request: HttpRequest, team_key: str, action: str) -> tuple[int, Any]:
