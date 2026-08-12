@@ -441,3 +441,54 @@ def test_the_control_and_the_body_stay_in_the_slot(rendered: str) -> None:
     row = rendered[rendered.index("BSI TR-03183-2") :]
     assert '<input type="checkbox" id="probe-row-1"' in row
     assert 'for="probe-row-1"' in rendered
+
+
+def _layout_probe(rendered: str, name: str) -> str:
+    """The element carrying data-probe=name, from its tag open to the next one."""
+    marker = f'data-probe="{name}"'
+    assert marker in rendered, f"probe {name} missing"
+    start = rendered.rindex("<", 0, rendered.index(marker))
+    return rendered[start : rendered.index(">", rendered.index(marker)) + 1]
+
+
+def test_action_tile_with_href_is_an_anchor_and_carries_its_accent(rendered: str) -> None:
+    tile = _layout_probe(rendered, "tile-link")
+    assert tile.startswith("<a ")
+    assert 'href="/upload"' in tile
+    # One prop drives the tint: the hover fill, the hover border, the hovered
+    # title and the nested chip all read these two properties.
+    assert "[--tile-accent:var(--color-success)]" in tile
+    assert "[--chip-accent:var(--color-success)]" in tile
+    assert "hover:bg-[color-mix(in_oklab,var(--tile-accent)_5%,transparent)]" in tile
+
+
+def test_action_tile_without_href_is_a_button_and_keeps_its_handler(rendered: str) -> None:
+    tile = _layout_probe(rendered, "tile-button")
+    assert tile.startswith("<button ")
+    assert '@click="open()"' in tile
+    # No accent named, so the primary recipe is the resting one.
+    assert "[--tile-accent:var(--color-primary)]" in tile
+
+
+def test_action_tile_disabled_is_neither_a_link_nor_a_control(rendered: str) -> None:
+    tile = _layout_probe(rendered, "tile-disabled")
+    assert tile.startswith("<div ")
+    assert "cursor-not-allowed" in tile
+    assert "opacity-60" in tile
+    # The trailing slot replaces the chevron with whatever says why.
+    disabled_block = rendered[rendered.index('data-probe="tile-disabled"') :][:1400]
+    assert "Soon" in disabled_block
+    assert "fa-chevron-right" not in disabled_block
+
+
+def test_data_box_puts_the_binding_on_the_value_not_a_span(rendered: str) -> None:
+    bound = rendered[rendered.index('data-probe="databox-bound"') :][:400]
+    assert "px-3 py-2 rounded-lg bg-border/10 border border-border/30" in _layout_probe(rendered, "databox-bound")
+    assert 'x-text="fmt(item.released)"' in bound
+    assert '<div class="text-xs text-text-muted">Release</div>' in bound
+
+
+def test_data_box_renders_a_static_value_from_the_slot(rendered: str) -> None:
+    static = rendered[rendered.index('data-probe="databox-static"') :][:400]
+    assert "1.4.0" in static
+    assert "x-text" not in static.split("</div>")[1]

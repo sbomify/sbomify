@@ -726,6 +726,36 @@
         dispatch <code class="tw-code-inline">confirm:show</code> rather than building another modal.
     </p>
     </c-cards.card>
+    <h2 id="action-tiles" class="text-xl font-semibold text-text mb-4">Action tiles &amp; data boxes</h2>
+    <c-cards.card class="mb-8">
+    <p class="text-sm text-text-muted mb-4">
+        A row in a list of things to do: icon chip, name, one line under it, chevron. With
+        <code class="tw-code-inline">href</code> it is an anchor, without one a button, so an action that navigates and
+        one that opens a dialog are the same row. One <code class="tw-code-inline">accent</code> drives the hover fill,
+        the hover border, the hovered title and the chip.
+    </p>
+    <div class="space-y-3 mb-6 max-w-xl">
+        <c-layout.action-tile href="#action-tiles" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a new software bill of materials" />
+        <c-layout.action-tile icon="fas fa-cube" title="Create product" description="Opens a dialog, so this one is a button" />
+        <c-layout.action-tile href="#action-tiles" accent="orange" icon="fas fa-shield-alt" title="Run vulnerability scan" description="Scan your SBOMs for vulnerabilities" />
+        <c-layout.action-tile disabled icon="fas fa-file-alt" title="Generate report" description="Coming soon">
+        <c-slot name="trailing">
+        <c-badges.secondary size="sm">Soon</c-badges.secondary>
+        </c-slot>
+        </c-layout.action-tile>
+    </div>
+    <p class="tw-data-label mb-2">Data boxes</p>
+    <p class="text-sm text-text-muted mb-4">
+        A label over its value, boxed. Quieter than a metric chip, which is a pill in a strip; this is a cell in a grid
+        of facts. Bound values use <code class="tw-code-inline">value_x_text</code> so the binding lands on the value
+        itself.
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 max-w-xl">
+        <c-layout.data-box label="Release">4 Aug 2026</c-layout.data-box>
+        <c-layout.data-box label="End of Support">4 Aug 2028</c-layout.data-box>
+        <c-layout.data-box label="End of Life">4 Aug 2030</c-layout.data-box>
+    </div>
+    </c-cards.card>
     <h2 id="select-rows" class="text-xl font-semibold text-text mb-4">Selectable rows</h2>
     {% comment %}
     This section renders through the cotton component library

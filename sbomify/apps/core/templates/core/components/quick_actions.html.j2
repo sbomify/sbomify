@@ -23,79 +23,22 @@ by create_modals.html.j2 which should be included in the base template.
 </c-cards.header>
 </c-slot>
 <div class="space-y-3">
-    {# Upload SBOM #}
-    <a href="{% if upload_sbom_url %}{{ upload_sbom_url }}{% else %}{% url 'core:components_dashboard' %}{% endif %}"
-       class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-success/5 hover:border-success/30 transition-all group">
-        <c-chips.icon-chip accent="success">
-        <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
-        </c-chips.icon-chip>
-        <div class="flex-1">
-            <span class="text-sm font-medium text-text group-hover:text-success transition-colors">Upload SBOM</span>
-            <p class="text-xs text-text-muted">Add a new software bill of materials</p>
-        </div>
-        <i class="fas fa-chevron-right text-text-muted group-hover:text-success transition-colors"></i>
-    </a>
-    {# Create Product - Opens modal via Alpine event #}
+    {# The URL is settled before the tag: an inline {% if %} inside an attribute is one djlint reformat away from arriving with newlines in it. #}
+    {% url 'core:components_dashboard' as components_url %}
+    <c-layout.action-tile href="{{ upload_sbom_url|default:components_url }}" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a new software bill of materials" />
+    {# Create Product and Add Component open a dialog, so they are buttons. #}
     {% if has_crud_permissions %}
-        <button type="button"
-                @click="$dispatch('open-product-modal')"
-                class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group text-left">
-            <c-chips.icon-chip>
-            <i class="fas fa-cube" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div class="flex-1">
-                <span class="text-sm font-medium text-text group-hover:text-primary transition-colors">Create Product</span>
-                <p class="text-xs text-text-muted">Add a new product to your workspace</p>
-            </div>
-            <i class="fas fa-chevron-right text-text-muted group-hover:text-primary transition-colors"></i>
-        </button>
-        {# Add Component - Opens modal via Alpine event #}
-        <button type="button"
-                @click="$dispatch('open-component-modal')"
-                class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-info/5 hover:border-info/30 transition-all group text-left">
-            <c-chips.icon-chip accent="info">
-            <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
-            </c-chips.icon-chip>
-            <div class="flex-1">
-                <span class="text-sm font-medium text-text group-hover:text-info transition-colors">Add Component</span>
-                <p class="text-xs text-text-muted">Create a new SBOM or document component</p>
-            </div>
-            <i class="fas fa-chevron-right text-text-muted group-hover:text-info transition-colors"></i>
-        </button>
+        <c-layout.action-tile icon="fas fa-cube" title="Create Product" description="Add a new product to your workspace" @click="$dispatch('open-product-modal')" />
+        <c-layout.action-tile accent="info" icon="fas fa-puzzle-piece" title="Add Component" description="Create a new SBOM or document component" @click="$dispatch('open-component-modal')" />
     {% endif %}
-    {# Run Vulnerability Scan #}
-    <a href="{% if vulnerability_scans_url %}{{ vulnerability_scans_url }}{% else %}{% url 'vulnerability_scanning:vulnerability_scans' current_team.key %}{% endif %}"
-       class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-accent-orange/5 hover:border-accent-orange/30 transition-all group">
-        <c-chips.icon-chip style="--chip-accent: var(--color-accent-orange)">
-        <i class="fas fa-shield-alt" aria-hidden="true"></i>
-        </c-chips.icon-chip>
-        <div class="flex-1">
-            <span class="text-sm font-medium text-text group-hover:text-accent-orange transition-colors">Run Vulnerability Scan</span>
-            <p class="text-xs text-text-muted">Scan your SBOMs for vulnerabilities</p>
-        </div>
-        <i class="fas fa-chevron-right text-text-muted group-hover:text-accent-orange transition-colors"></i>
-    </a>
-    <a href="{% url 'sboms:workspace_crypto' current_team.key %}"
-       class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-accent/5 hover:border-accent/30 transition-all group">
-        <c-chips.icon-chip style="--chip-accent: var(--color-accent)">
-        <i class="fas fa-lock" aria-hidden="true"></i>
-        </c-chips.icon-chip>
-        <div class="flex-1">
-            <span class="text-sm font-medium text-text group-hover:text-accent transition-colors">Crypto Readiness</span>
-            <p class="text-xs text-text-muted">Quantum readiness across all components</p>
-        </div>
-        <i class="fas fa-chevron-right text-text-muted group-hover:text-accent transition-colors"></i>
-    </a>
+    {% url 'vulnerability_scanning:vulnerability_scans' current_team.key as scans_url %}
+    <c-layout.action-tile href="{{ vulnerability_scans_url|default:scans_url }}" accent="orange" icon="fas fa-shield-alt" title="Run Vulnerability Scan" description="Scan your SBOMs for vulnerabilities" />
+    <c-layout.action-tile href="{% url 'sboms:workspace_crypto' current_team.key %}" accent="violet" icon="fas fa-lock" title="Crypto Readiness" description="Quantum readiness across all components" />
     {# Generate Report - placeholder for future feature #}
-    <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed">
-        <c-chips.icon-chip accent="neutral">
-        <i class="fas fa-file-alt" aria-hidden="true"></i>
-        </c-chips.icon-chip>
-        <div class="flex-1">
-            <span class="text-sm font-medium text-text-muted">Generate Report</span>
-            <p class="text-xs text-text-muted">Coming soon</p>
-        </div>
-        <c-badges.secondary size="sm">Soon</c-badges.secondary>
-    </div>
+    <c-layout.action-tile disabled icon="fas fa-file-alt" title="Generate Report" description="Coming soon">
+    <c-slot name="trailing">
+    <c-badges.secondary size="sm">Soon</c-badges.secondary>
+    </c-slot>
+    </c-layout.action-tile>
 </div>
 </c-cards.card>

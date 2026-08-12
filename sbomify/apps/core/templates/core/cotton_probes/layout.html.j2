@@ -89,3 +89,13 @@ assert on the output; it is not routed anywhere.
 <input type="text" id="probe-row-4-config">
 <input type="checkbox" id="probe-row-4" x-ref="toggle" x-model="enabled">
 </c-layout.select-row>
+{# Action tiles and data boxes, added when the dashboard's quick actions and the metadata boxes were componentized. #}
+<c-layout.action-tile href="/upload" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a bill of materials" data-probe="tile-link" />
+<c-layout.action-tile icon="fas fa-cube" title="Create product" description="Opens a dialog" data-probe="tile-button" @click="open()" />
+<c-layout.action-tile disabled icon="fas fa-file-alt" title="Generate report" description="Coming soon" data-probe="tile-disabled">
+<c-slot name="trailing">
+<c-badges.secondary size="sm">Soon</c-badges.secondary>
+</c-slot>
+</c-layout.action-tile>
+<c-layout.data-box label="Release" value_x_text="fmt(item.released)" data-probe="databox-bound" />
+<c-layout.data-box label="Version" data-probe="databox-static">1.4.0</c-layout.data-box>

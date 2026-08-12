@@ -25,6 +25,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "collapsible", "label": "Collapsible card", "group": "Containers"},
     {"id": "accordion", "label": "Accordion", "group": "Containers"},
     {"id": "modals", "label": "Modals", "group": "Containers"},
+    {"id": "action-tiles", "label": "Action tiles", "group": "Containers"},
     {"id": "select-rows", "label": "Selectable rows", "group": "Containers"},
     {"id": "empty-states", "label": "Empty states", "group": "Containers"},
     {"id": "tables", "label": "Tables", "group": "Data"},
