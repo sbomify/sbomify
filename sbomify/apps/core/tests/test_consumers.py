@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from sbomify.apps.core.consumers import WS_CLOSE_POLICY_VIOLATION, WorkspaceConsumer
+from sbomify.apps.core.consumers import (
+    WS_CLOSE_POLICY_VIOLATION,
+    WS_CLOSE_SERVICE_RESTART,
+    WorkspaceConsumer,
+)
 
 
 class TestWorkspaceConsumer:
@@ -279,10 +283,10 @@ class TestBrokerOutageHandling:
         with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
             await consumer.connect()
 
-        consumer.close.assert_called_once_with(code=1012)
+        consumer.close.assert_called_once_with(code=WS_CLOSE_SERVICE_RESTART)
         # Accepted first, deliberately: a close sent before the handshake
         # completes is an HTTP 403 refusal that carries no code at all, so the
-        # 1012 asserted above would never have reached the client.
+        # code asserted above would never have reached the client.
         consumer.accept.assert_awaited_once()
 
     @pytest.mark.asyncio

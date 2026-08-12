@@ -61,6 +61,12 @@ async def _drive(user, *, group_add_error=None, monkeypatch=None) -> list[dict]:
     }
 
     if group_add_error is not None:
+        # Patching the shared channel layer without monkeypatch would leak the
+        # broken group_add into every test that ran after this one. Stated as a
+        # requirement rather than left to fail on None, so a caller that forgets
+        # the fixture gets told why instead of an AttributeError.
+        assert monkeypatch is not None, "group_add_error requires the monkeypatch fixture to undo the patch"
+
         from channels.layers import get_channel_layer
 
         monkeypatch.setattr(get_channel_layer(), "group_add", AsyncMock(side_effect=group_add_error))
