@@ -125,3 +125,30 @@ def sample_contact_profile_with_contacts(
         profile.delete()
     except ContactProfile.DoesNotExist:
         pass
+
+
+@pytest.fixture
+def sample_team_with_member_role(
+    sample_team: Team,
+    sample_user: User,  # noqa: F811
+) -> Generator[Member, Any, None]:
+    """A day-to-day contributor. Mutually exclusive with the fixtures above.
+
+    Named ``..._with_member_role`` rather than following the
+    ``sample_team_with_<role>_member`` pattern, which would read as
+    ``..._with_member_member``.
+    """
+    try:
+        membership = Member.objects.get(user=sample_user, team=sample_team)
+        membership.role = "member"
+        membership.is_default_team = True
+        membership.save()
+    except Member.DoesNotExist:
+        membership = Member(user=sample_user, team=sample_team, role="member", is_default_team=True)
+        membership.save()
+    yield membership
+
+    try:
+        membership.delete()
+    except Member.DoesNotExist:
+        pass

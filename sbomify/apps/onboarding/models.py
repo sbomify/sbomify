@@ -103,15 +103,21 @@ class OnboardingStatus(models.Model):
             self.save(update_fields=["welcome_email_sent", "welcome_email_sent_at"])
 
     @property
-    def user_role(self) -> str:
-        """Get the user's role in their primary workspace."""
+    def user_role(self) -> str | None:
+        """The user's role in their primary workspace, or None if they have none.
+
+        Returned ``"member"`` before that was a real role — harmless while the
+        value matched nothing, but now it would claim a role the user does not
+        hold. Callers only compare against ``"owner"``, for which None behaves
+        identically.
+        """
         from sbomify.apps.teams.models import Member
 
         try:
             member = Member.objects.get(user=self.user, is_default_team=True)
             return member.role
         except Member.DoesNotExist:
-            return "member"
+            return None
 
     @property
     def days_since_signup(self) -> int:

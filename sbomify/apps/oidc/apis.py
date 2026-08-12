@@ -220,7 +220,7 @@ def _component_for_management(request: HttpRequest, component_id: str) -> Any | 
     from sbomify.apps.sboms.models import Component
 
     component = Component.objects.filter(pk=component_id).select_related("team").first()
-    if component is None or not can(request, "component:manage", component):
+    if component is None or not can(request, "component:manage_publishers", component):
         return None
     return component
 

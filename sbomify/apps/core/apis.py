@@ -23,7 +23,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
-from sbomify.apps.core.authz import READ_INTERNAL, can
+from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
@@ -207,7 +207,10 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
     if not member:
         return False
 
-    return member.role in ["owner", "admin"]
+    # MANAGE, from the tier — not a second hardcoded list. _build_item_base
+    # computes the same flag via can(..., "*:manage"), and the two disagreeing
+    # would render an edit button the API then refuses (or hide one it allows).
+    return member.role in MANAGE
 
 
 def _private_items_allowed(team: Team) -> bool:
@@ -828,6 +831,15 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
     if not can(request, "product:manage", product):
         return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
 
+    # Changing what the world can see is ADMINISTER, not MANAGE — the same
+    # carve-out shape as DELETE. Only checked when the value actually changes, so
+    # a member editing a product's name is not blocked by a field they left alone.
+    if payload.is_public != product.is_public and not can(request, "product:set_visibility", product):
+        return 403, {
+            "detail": "Only owners and admins can change a product's visibility",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
+
     try:
         with transaction.atomic():
             if payload.is_public is False and not _private_items_allowed(product.team):
@@ -882,6 +894,16 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
             # Validate public/private constraints before making changes
             new_is_public = update_data.get("is_public", product.is_public)
+
+            # Changing what the world can see is ADMINISTER, not MANAGE. Only
+            # checked when the value actually changes, so a member patching an
+            # unrelated field is unaffected. This also covers the cascade below,
+            # which pushes the product's visibility onto its components.
+            if new_is_public != product.is_public and not can(request, "product:set_visibility", product):
+                return 403, {
+                    "detail": "Only owners and admins can change a product's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions when trying to make items private
             if not new_is_public and product.is_public and not _private_items_allowed(product.team):
@@ -1761,6 +1783,15 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                     # If neither visibility nor is_public is provided, keep current visibility
                     new_visibility = component.visibility  # type: ignore[assignment]
 
+            # Changing what the world can see is ADMINISTER, not MANAGE — the
+            # same carve-out shape as DELETE. Checked only when the value
+            # actually changes, so a member editing metadata is unaffected.
+            if new_visibility != component.visibility and not can(request, "component:set_visibility", component):
+                return 403, {
+                    "detail": "Only owners and admins can change a component's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
+
             # Check billing plan restrictions
             if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):  # type: ignore[comparison-overlap]
                 current_visibility = component.visibility
@@ -1873,6 +1904,20 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     new_visibility = Component.Visibility.PUBLIC
                 else:
                     new_visibility = Component.Visibility.PRIVATE
+
+            # Changing what the world can see is ADMINISTER, not MANAGE — the
+            # same carve-out shape as DELETE. Checked only when the value
+            # actually changes, so a member patching metadata is unaffected.
+            # This is also the path TogglePublicStatusView delegates to.
+            if (
+                new_visibility is not None
+                and new_visibility != component.visibility
+                and not can(request, "component:set_visibility", component)
+            ):
+                return 403, {
+                    "detail": "Only owners and admins can change a component's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions when trying to make items private or gated
             if new_visibility is not None and new_visibility in (

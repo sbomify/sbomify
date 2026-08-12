@@ -507,6 +507,18 @@ class Member(models.Model):
         indexes = [
             models.Index(fields=["team", "role"], name="teams_member_team_role_idx"),
         ]
+        constraints = [
+            # ``choices`` is not enforced by the database and ``save()`` skips
+            # full_clean(), which is how ``role="member"`` survived for years as a
+            # value the code did not recognise — accepted by every persistence
+            # path, matched by no role check, and worked around by comments in
+            # three files. This constraint is what stops another one appearing:
+            # it covers bulk_create(), raw SQL, fixtures and admin actions alike.
+            models.CheckConstraint(
+                check=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
+                name="member_role_is_supported",
+            ),
+        ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
@@ -566,11 +578,12 @@ class Invitation(models.Model):
         # ValidationError before the DB throws IntegrityError.
         #
         # We deliberately do NOT override ``save()`` to call
-        # ``full_clean()``: that would also enforce ``choices`` at the
-        # Python level, breaking legacy rows / tests that have written
-        # non-canonical role values (``"member"`` was historically used
-        # by some fixtures and remains silently stored because Django
-        # CharField choices aren't DB-enforced). The security-critical
+        # ``full_clean()``: that would enforce every field's ``choices`` at the
+        # Python level on paths that never asked for validation. Role values are
+        # now guarded at the database instead — ``Member`` carries a
+        # ``member_role_is_supported`` CheckConstraint, which is what finally
+        # closed the gap that let ``role="member"`` exist for years as a value
+        # the code did not recognise. The security-critical
         # case (``role="bot"``) is locked in by the DB constraint.
         super().clean()
         if self.role == "bot":

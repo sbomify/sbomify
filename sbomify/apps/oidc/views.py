@@ -11,7 +11,7 @@ Business-logic ORM calls (creating / deleting bindings, listing them
 for a component) live in ``sbomify.apps.oidc.services`` and the views
 are thin dispatch over ``ServiceResult[T]``. The one exception is the
 ``_component_or_error`` helper, which resolves a ``Component`` row
-directly so the permission check (``can(.., "component:manage", ..)``) can run
+directly so the permission check (``can(.., "component:manage_publishers", ..)``) can run
 before any service call — keeping permission checks in the view
 layer matches the rest of the codebase.
 """
@@ -72,7 +72,7 @@ class _TrustedPublishersBase(GuestAccessBlockedMixin, LoginRequiredMixin, View):
 
     def _component_or_error(self, request: HttpRequest, component_id: str) -> Component | None:
         component = Component.objects.filter(pk=component_id).select_related("team").first()
-        if component is None or not can(request, "component:manage", component):
+        if component is None or not can(request, "component:manage_publishers", component):
             self._error = htmx_error_response("Component not found or insufficient permissions.")
             return None
         return component

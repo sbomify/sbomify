@@ -100,19 +100,21 @@ class TestComponentAccessMethods:
     def test_can_be_accessed_by_private(
         self, private_component, team_with_business_plan, owner_user, member_user, guest_user
     ):
-        """Private components are only accessible by team owners/admins."""
+        """Private components are internal: every internal role reads them, guests do not.
+
+        This test used to hedge, because ``role="member"`` was a value the code
+        did not recognise and nobody could say what it should mean. It is a real
+        role now — a day-to-day contributor — so it reads its own workspace's
+        private components, and the answer is no longer a matter of opinion.
+        """
         Member.objects.create(team=team_with_business_plan, user=owner_user, role="owner")
-        Member.objects.create(team=team_with_business_plan, user=member_user, role="member") # Regular member? 
-        # Note: logic says if member.role in ("owner", "admin"). Regular "member" usually can see private? 
-        # Let's check implementation of can_be_accessed_by for PRIVATE:
-        # member.role in ("owner", "admin") -> True. "member" role -> False?
-        # Re-checking implementation from step 14 diff:
-        # if self.visibility == self.Visibility.PRIVATE: ... member.role in ("owner", "admin")
+        Member.objects.create(team=team_with_business_plan, user=member_user, role="member")
 
         assert private_component.can_be_accessed_by(None) is False
-        assert private_component.can_be_accessed_by(guest_user) is False # Not member
+        # A guest is external and holds no read tier.
+        assert private_component.can_be_accessed_by(guest_user) is False
         assert private_component.can_be_accessed_by(owner_user) is True
-        assert private_component.can_be_accessed_by(member_user) is False # Based on current implementation
+        assert private_component.can_be_accessed_by(member_user) is True
 
     def test_can_be_accessed_by_gated(
         self, gated_component, team_with_business_plan, owner_user, guest_user

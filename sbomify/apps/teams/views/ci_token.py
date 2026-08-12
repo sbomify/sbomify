@@ -61,10 +61,12 @@ class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # so on its own it answers a different question: whether the caller is
         # an owner or admin of whatever workspace they happen to have selected.
         #
-        # A legacy role="member" row is currently refused a few layers down, by
-        # can("workspace:read") inside get_team. That closes it, but it means
-        # this endpoint is right because of how another layer's read tier
-        # happens to be drawn. Minting a credential should not depend on that.
+        # The explicit check below is what refuses a non-ADMINISTER caller, and
+        # it has to be: `member` is a real role now and holds the read tier, so
+        # the can("workspace:read") call inside get_team that used to turn such
+        # callers away no longer does. Minting a workspace-level CI credential is
+        # ADMINISTER — unlike a personal token, it is not tied to one person's
+        # own capabilities and does not expire with their membership.
         user = cast(User, request.user)
         if not Member.objects.filter(user=user, team__key=team_key, role__in=self.allowed_roles).exists():
             return JsonResponse({"detail": "Forbidden"}, status=403)
