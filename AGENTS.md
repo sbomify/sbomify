@@ -211,16 +211,44 @@ htmx_error_from_exception(error: DomainError)                # converts DomainEr
 
 | Layer     | Technology                           | Responsibility                                   |
 | --------- | ------------------------------------ | ------------------------------------------------ |
-| Structure | Django/Jinja2 templates (`.html.j2`) | HTML generation, server-side logic               |
-| Styling   | Tailwind CSS                         | Visual presentation via `tw-*` component classes |
+| Structure | Components (`sbomify/templates/components/`) | The HTML every page composes         |
+| Styling   | Tailwind utilities, inside components | Visual presentation                             |
 | State     | Alpine.js                            | Component state, client-side interactivity       |
 | Updates   | HTMX                                 | Partial page updates, form submissions           |
 
+**UI is composed from the component library. This is not optional.**
+`docs/component-library.md` is the contract: read it before writing or
+changing any page, and read the components you are about to use, since the
+file is the parameter contract. `docs/design-system.md` remains the design
+language behind them (tokens, motion, copy rules). The living gallery at
+`/design-system/` (DEBUG-only, URL name `core:design_system`) renders every
+component; it is built from the components themselves, so a broken component
+breaks the gallery first.
+
+```html
+{# No load tag: <c-dir.name> works in any template #}
+<c-tables.shell>
+  <c-tables.toolbar>
+    <c-tables.search id="things-search" label="Search things" x-model="search" />
+  </c-tables.toolbar>
+  <c-tables.table fixed>…</c-tables.table>
+</c-tables.shell>
+
+<c-buttons.primary size="sm" hx-get="{% url 'core:new_thing' %}">New thing</c-buttons.primary>
+```
+
 Key patterns:
 
-- **Design system (mandatory for ALL UI work)**: `docs/design-system.md` is the contract — read it before writing or changing any template, style, or component. The living gallery at `/design-system/` (DEBUG-only, URL name `core:design_system`) renders every component in one view. Use the shared components; never hand-roll UI that exists; never hardcode colors — use the CSS custom-property tokens; new variants extend via the documented parameterization (`--btn-accent` etc.), and every library change ships with a gallery demo.
-- **Tailwind component classes**: `tw-btn-primary`, `tw-badge-success`, `tw-form-input`, `tw-card-*`, `tw-data-table` — defined in `sbomify/assets/css/tailwind.src.css`
-- **Jinja2 component macros**: Reusable UI in `sbomify/apps/core/templates/components/tw/` (button, card, modal, input, badge, etc.) — the macro file is the parameter contract
+- **Never hand-roll a control, container or status chip.** If the library
+  lacks it, add it there (with a gallery demo and a render test), never on the
+  page. Layout, page copy and genuinely unique widgets stay page-local.
+- **Never write a `tw-*` class in new work.** Those classes still exist and
+  still work for the pages not yet migrated, but they are the old layer; do
+  not delete them and do not add callers.
+- **Migrating an existing page**: follow "Building a page from the library" in
+  `docs/component-library.md`. Protect the page with an e2e snapshot test
+  first if it has none, then change structure only, so the baselines can prove
+  the render did not move.
 - **Server data to Alpine.js**: Use `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')` — never client-side fetch
 - **HTMX partials**: Views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
 - **Dark mode**: `.dark` class on `<html>` element (not `[data-bs-theme]`)

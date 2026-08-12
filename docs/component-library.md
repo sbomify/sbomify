@@ -73,6 +73,10 @@ document is how that language ships as components.
 10. **Keyframes and tokens stay in `tailwind.src.css`.** They are not
     component classes. Do not delete or edit any `tw-*` class: pages still
     consume them until page migration removes their last callers.
+11. **State the server cannot know goes on a data attribute, never on a
+    class.** A row Alpine builds from JSON has no server-rendered variant to
+    pick, so the component carries every recipe keyed by an attribute and the
+    caller binds only the state. See "Runtime variants" below.
 
 ## Translating a `tw-*` family (how the buttons did it)
 
@@ -91,6 +95,52 @@ document is how that language ships as components.
    variant shadow because the pseudo-class adds specificity.
 4. Keep the visual result byte-identical. The e2e baselines are the referee
    and they must not move in this phase.
+
+## Runtime variants: recipes stay in the component
+
+Some values only exist in the browser. A table whose rows are built by Alpine
+from `json_script` has no server render per row, so the server cannot choose
+`c-badges.danger` over `c-badges.success`, and a client-side pager has no
+current page for the view to mark active.
+
+The wrong fix is to hand the page a class expression
+(`:class="'tw-badge-' + variant"`): the recipe leaves the library, the legacy
+class survives, and the two drift. The right fix is the one the sortable table
+header already used: **the component owns every recipe, keyed by a data
+attribute, and the caller binds only state.**
+
+```html
+{# The page: binds the value, never a class #}
+<c-badges.dynamic ::data-variant="advisory.severity_variant"
+                  x-text="titleCase(advisory.severity)" />
+
+<c-navigation.page-button ::data-active="currentPage === page"
+                          @click="goToPage(page)" x-text="page" />
+```
+
+```html
+{# The component: every recipe, selected by the attribute #}
+<span data-variant="{{ variant }}"
+      class="… text-text-muted bg-[…border 30%…]
+             data-[variant=danger]:text-danger data-[variant=danger]:bg-[…danger 12%…]
+             data-[variant=success]:text-success …">{{ slot }}</span>
+```
+
+Three properties make this the pattern rather than a workaround:
+
+- The resting classes are the fallback, so a value the component does not know
+  (a new status from the server) renders neutral instead of unstyled.
+- Native state uses the native attribute: `disabled` on a button gets
+  `disabled:` utilities, not `data-disabled`. The look cannot drift from the
+  state that drives it.
+- Tailwind sees every recipe as a literal in the source, so it compiles. A
+  computed class name never appears in the source and is never generated.
+
+Current users: `c-badges.dynamic` (severity, status and publication in the
+advisories list), `c-navigation.page-button` (client-paged tables), and
+`c-tables.header-cell`'s sort carets (`data-sort`). Reach for a named variant
+component every other time: `c-badges.danger` is clearer than a bound
+attribute when the server knows the value.
 
 ## Testing pattern
 
@@ -124,11 +174,95 @@ uv run djlint <touched .j2 files> --reformat && uv run djlint <touched .j2 files
 The full build, e2e suite, and both-theme gallery review run once over
 everything at the end of the phase, not per set.
 
+## Building a page from the library
+
+This is the playbook the migrated pages follow. `core/products_table.html.j2`,
+`core/components_table.html.j2`, `core/releases_table.html.j2` and
+`core/security_advisories_table.html.j2` are worked examples; read the nearest
+one before starting.
+
+**The target.** A page contributes data, layout and behaviour. Structure comes
+from components. When you are done the template should contain no `tw-*`
+class; if one is left, say why in your report rather than hiding it.
+
+**1. Protect the page before you touch it.** If it has e2e coverage, that is
+your referee. If it does not, add a snapshot test FIRST and run it, so the
+baseline captures today's render:
+
+```python
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
+class TestThingListSnapshot:
+    def test_thing_list_snapshot(self, authenticated_page, thing_fixture, snapshot, width):
+        authenticated_page.goto("/things/")
+        authenticated_page.wait_for_load_state("networkidle")
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+```
+
+Keep the test: the page gains the coverage it never had. Give the fixture
+enough rows to reach a second page if the table pages, so the pager is covered.
+
+**2. Read the components you are about to use**, not just this document. The
+file is the parameter contract, and several take slots rather than params.
+
+**3. Compose.** A table is the shell and its parts; a dialog is `c-modal` with
+its actions in the `footer` slot. Alpine and HTMX attributes pass straight
+through: keep `x-data`, `x-model`, `@click`, `hx-*` exactly as they were.
+
+**4. Keep the data and behaviour identical.** Do not rewrite an Alpine
+expression, rename state, or change what a view sends while migrating. One
+kind of change at a time; the referee cannot tell you which change moved a
+pixel.
+
+**5. Verify, then read the diff images if anything moved.**
+
+```bash
+uv run djlint <touched .j2> --reformat && uv run djlint <touched .j2> --lint
+bun run copy-deps && bun x vite build          # components changed → rebuild
+docker compose -f docker-compose.tests.yml exec -T tests uv run python manage.py collectstatic --noinput
+docker compose -f docker-compose.tests.yml exec -T tests uv run pytest <the page's e2e test> -q
+uv run pytest sbomify/apps/core/tests/test_cotton_*.py sbomify/apps/core/tests/test_design_system*.py -q
+```
+
+### Traps these migrations actually hit
+
+- **A card around a table double-frames it.** `c-tables.shell` draws its own
+  surface, border and radius, and `c-cards.card` adds body padding, so the
+  table that used to sit flush ends up inset. Use the shell alone; keep the
+  card for the empty state, which does want padding.
+- **Line-height drift.** Tailwind's `text-*` utilities carry a line-height;
+  most old `tw-*` rules set only `font-size` and inherited 1.5. A component
+  translated without `leading-[1.5]` renders 1-2px short per line, and the
+  error compounds down a table. Where a component states its own line-height
+  (`tw-chip-neutral` used 1.25), match that instead. If a migration shows rows
+  creeping upward, this is why.
+- **A missing component is a component, not an exception.** `+3 more` had nine
+  callers and no component; the toolbar filter select had three. Build it,
+  with its gallery demo and render test, rather than reaching for the legacy
+  class.
+- **The mobile viewport flips on a pixel.** At 375 a page that now fits the
+  viewport loses its scrollbar, which widens the layout by ~5px and shifts
+  sticky chrome you never touched. Confirm the content itself is unchanged
+  before regenerating that baseline.
+- **The browser caches error pages.** After fixing a template error, a stale
+  500 page can persist; cache-bust the URL before concluding the fix failed.
+- **Test pins are part of the change.** The render-contract tests pin exact
+  recipe strings. If you correct a recipe, update its pin in the same commit;
+  a failing pin is the test doing its job.
+
+### What stays hand-rolled
+
+Layout (grids, spacing stacks), one-off page copy, and genuinely unique
+widgets. Compose those from utilities. The line: the moment markup looks like
+a control, a container or a status chip, it belongs to the library.
+
 ## Phase boundaries
 
-In this phase: components, gallery swaps, probes, tests. Not in this phase:
-migrating app pages, deleting `tw-*` CSS, porting the legacy date picker
-(`sbomify/templates/components/date_picker.html.j2`, a Django template that
-cotton ignores; leave it in place), or new visual design. If a faithful
-translation is impossible without one of those, stop and record it in your
-report instead.
+Not part of a page migration: deleting `tw-*` CSS (pages you have not migrated
+still consume it), porting the legacy date picker
+(`sbomify/templates/components/date_picker.html.j2`, a Django template cotton
+ignores; leave it), redesigning anything, or changing view logic beyond the
+context a component needs. If a faithful migration is impossible without one
+of those, stop and record it in your report.

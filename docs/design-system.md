@@ -1,5 +1,17 @@
 # sbomify Design System
 
+> **Building or changing a page? Start with `docs/component-library.md`.**
+> Pages compose components from `sbomify/templates/components/`
+> (`<c-buttons.primary>`, `<c-tables.shell>`, …), which carry their own
+> Tailwind utilities. This document is the design language those components
+> are built from: tokens, spacing, motion, accessibility and the copy rules.
+> Read it when you are building or changing a **component**, or when you need
+> to know why something looks the way it does.
+>
+> The `tw-*` classes and `{% ... %}` macros below are the previous layer. They
+> still work and still serve the pages not yet migrated, so nothing here is
+> dead, but do not add new callers: new work composes components.
+
 The contract for **all** UI work in this codebase — for humans, Claude sessions, and any other coding agent. Read this before writing or changing any template, style, or component. The living gallery at `/design-system/` (URL name `core:design_system`, registered only when `DEBUG=True`) renders every component in one view; this document is the written contract behind it.
 
 ## The rules
