@@ -14,7 +14,7 @@
         workspace, including billing and the ability to remove other owners.
     </p>
     <p style="text-align: center; margin: 32px 0;">
-        <a href="{{ base_url }}{% url 'teams:team_settings' team.key %}#members"
+        <a href="{{ base_url }}{% url 'teams:team_settings_tab' team_key=team.key tab='members' %}"
            class="button">Review workspace members</a>
     </p>
 {% endblock %}
