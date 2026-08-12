@@ -560,6 +560,29 @@ class TestDependencyChecking:
         orchestrator = PluginOrchestrator()
         assert orchestrator._is_passing(run) is True
 
+    def test_is_passing_tolerates_warnings_when_a_pass_exists(self, test_sbom, db) -> None:
+        """The dependency gate must NOT treat warnings as blocking.
+
+        The verification plugin deliberately emits per-source warnings instead
+        of failures so that one verified source (say, provenance) satisfies
+        the attestation requirement even while another source (a detached
+        signature) is absent; its aggregating summary is the designed fail
+        signal. A gate that blocked on warnings would fail BSI attestation
+        for every provenance-verified unsigned SBOM.
+        """
+        orchestrator = PluginOrchestrator()
+        run = AssessmentRun.objects.create(
+            sbom=test_sbom,
+            plugin_name="sbom-verification",
+            plugin_version="1.0.0",
+            plugin_config_hash="",
+            category="attestation",
+            run_reason="on_upload",
+            status="completed",
+            result={"summary": {"pass_count": 3, "fail_count": 0, "error_count": 0, "warning_count": 4}},
+        )
+        assert orchestrator._is_passing(run) is True
+
     def test_is_passing_with_failures(self, test_sbom, db) -> None:
         """Test _is_passing returns False when there are failures."""
         run = AssessmentRun.objects.create(

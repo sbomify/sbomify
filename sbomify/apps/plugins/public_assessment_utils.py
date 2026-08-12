@@ -15,6 +15,7 @@ from django.db.utils import NotSupportedError
 
 from .models import AssessmentRun, RegisteredPlugin
 from .sdk.enums import AssessmentCategory, RunStatus
+from .verdict import compliance_summary_passing
 
 if TYPE_CHECKING:
     from sbomify.apps.core.models import Component, Product
@@ -144,8 +145,14 @@ def _is_run_passing(run: AssessmentRun) -> bool:
     with open criticals would earn a green shield. Mirrors the orchestrator's
     dependency-gate predicate.
 
-    Compliance-style runs additionally require at least one actual pass:
-    a warnings-only result (``pass_count == 0``) asserts nothing worth a badge.
+    Compliance-style runs additionally require at least one actual pass and no
+    warnings. The badge literally claims every check passed; a run whose
+    per-component elements all warn (everything exempt) still passes its
+    document-level checks, and rendering "All checks passed" over live
+    warnings asserts something the run did not establish. The dependency gate
+    in ``orchestrator._is_passing`` shares the same implementation but
+    tolerates warnings — see ``verdict.compliance_summary_passing`` for why
+    the two consumers differ on exactly that axis.
     """
     if run.status != RunStatus.COMPLETED.value:
         return False
@@ -154,25 +161,15 @@ def _is_run_passing(run: AssessmentRun) -> bool:
 
     result = run.result or {}
     summary = result.get("summary", {})
-    fail_count: int = summary.get("fail_count", 0)
-    error_count: int = summary.get("error_count", 0)
-    if fail_count != 0 or error_count != 0:
-        return False
 
     if run.category == AssessmentCategory.SECURITY.value:
+        if summary.get("fail_count", 0) != 0 or summary.get("error_count", 0) != 0:
+            return False
         by_severity = summary.get("by_severity") or {}
         findings_total = sum(v for v in by_severity.values() if isinstance(v, int))
         return findings_total == 0 and not summary.get("malicious_count")
 
-    # ``pass_count`` was added to summary payloads later, so a run predating it
-    # carries no key at all. ``orchestrator._is_passing`` distinguishes that from
-    # a present-and-zero count and lets the legacy run pass; reading a default of
-    # 0 here did not, so the same run satisfied a dependency gate and showed no
-    # public badge. The two encode one judgement and now answer alike.
-    pass_count = summary.get("pass_count")
-    if pass_count is None:
-        return True
-    return bool(pass_count)
+    return compliance_summary_passing(summary, warnings_block=True)
 
 
 def _passing_assessment_from_run(run: AssessmentRun, plugin_info: dict[str, tuple[str, str]]) -> PassingAssessment:
