@@ -65,6 +65,59 @@ BACKFILL_CUTOFF_HOURS = 24
 # that closes the gap without anyone having to intervene.
 UNSUPPORTED_INPUT_SKIP_HOURS = 24
 
+
+def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> set[str]:
+    """SBOMs whose *latest* run said the scanner could not read the input.
+
+    Keyed on the latest run rather than on any run in the window, because a
+    later scan changes the answer: an SBOM rejected at 09:00, made scannable by
+    a server upgrade, and scanned successfully at 10:00 would otherwise stay out
+    of the sweep until the original rejection aged out — a paid workspace
+    missing a full day of new advisories on an artifact the scanner can now
+    read.
+
+    Narrowed by ``result_skipped`` before the JSON path is touched. ``result``
+    routinely runs to several MB and every JSON-path read de-TOASTs the whole
+    value, which is why that column was denormalised in the first place; without
+    the pre-filter this sweep would de-TOAST every completed run in the window,
+    across every plugin and team, once an hour.
+    """
+    from ..models import AssessmentRun
+
+    latest_by_sbom: dict[str, tuple[Any, bool]] = {}
+    rows = (
+        AssessmentRun.objects.filter(
+            plugin_name=plugin_name,
+            created_at__gte=since,
+            status="completed",
+            sbom__component__team_id__in=team_ids,
+        )
+        .order_by("sbom_id", "-created_at", "-id")
+        .values_list("sbom_id", "created_at", "result_skipped")
+    )
+    for sbom_id, created_at, skipped in rows:
+        latest_by_sbom.setdefault(str(sbom_id), (created_at, bool(skipped)))
+
+    # Only the latest run per SBOM survives above, and only a skipped one can
+    # carry the marker — so the JSON read below is at most one row per SBOM
+    # still in play rather than every run in the window.
+    candidates = [sbom_id for sbom_id, (_created, skipped) in latest_by_sbom.items() if skipped]
+    if not candidates:
+        return set()
+
+    return {
+        str(sbom_id)
+        for sbom_id in AssessmentRun.objects.filter(
+            plugin_name=plugin_name,
+            created_at__gte=since,
+            status="completed",
+            result_skipped=True,
+            sbom_id__in=candidates,
+            result__metadata__unsupported_input=True,
+        ).values_list("sbom_id", flat=True)
+    }
+
+
 # Retry delays for RetryLaterError (in milliseconds)
 # These delays give external systems time to process:
 # - 1st retry: 2 minutes
@@ -1193,15 +1246,7 @@ def _run_scheduled_security_scans(
         # long enough that the retry cost stops mattering.
         incapable_cutoff = now - timedelta(hours=UNSUPPORTED_INPUT_SKIP_HOURS)
         if incapable_cutoff < cutoff:
-            recent_sbom_ids.update(
-                AssessmentRun.objects.filter(
-                    plugin_name=plugin_name,
-                    created_at__gte=incapable_cutoff,
-                    status="completed",
-                    sbom__component__team_id__in=team_ids,
-                    result__metadata__unsupported_input=True,
-                ).values_list("sbom_id", flat=True)
-            )
+            recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
         # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
         # with at least one ReleaseArtifact link is eligible — the scan will

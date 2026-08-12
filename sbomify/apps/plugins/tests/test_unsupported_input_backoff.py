@@ -68,7 +68,12 @@ def scannable_sbom(sample_team_with_owner_member):
 
 
 def _run_at_age(sbom: SBOM, *, hours_ago: float, metadata: dict) -> AssessmentRun:
-    """A completed DT run backdated past the hourly skip window."""
+    """A completed DT run backdated past the hourly skip window.
+
+    ``result_skipped`` is denormalised from ``result`` by the model's save, so
+    creating the row the ordinary way is what keeps the fixture honest — the
+    sweep narrows on that column before it reads the JSON.
+    """
     run = AssessmentRun.objects.create(
         sbom=sbom,
         plugin_name="dependency-track",
@@ -186,3 +191,57 @@ class TestTheMarkerTheBackoffReads:
         as_dict = result.model_dump() if hasattr(result, "model_dump") else dataclasses.asdict(result)
 
         assert "unsupported_input" not in as_dict["metadata"]
+
+
+@pytest.mark.django_db
+class TestALaterScanClearsTheBackoff:
+    """Keyed on the SBOM's latest run, not on any run in the window."""
+
+    def test_a_successful_rescan_puts_it_back_in_the_sweep(self, scannable_sbom, monkeypatch) -> None:
+        """The defect: an SBOM rejected at 09:00, made scannable by a server
+        upgrade and scanned successfully at 10:00, stayed out of the hourly
+        sweep until the original rejection aged out — a paid workspace missing
+        a day of new advisories on an artifact the scanner can now read."""
+        _run_at_age(scannable_sbom, hours_ago=6, metadata={"skipped": True, "unsupported_input": True})
+        _run_at_age(scannable_sbom, hours_ago=5, metadata={"scanner": "dependency-track"})
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_a_later_rejection_still_backs_off(self, scannable_sbom, monkeypatch) -> None:
+        """The order matters, not merely the presence of a success."""
+        _run_at_age(scannable_sbom, hours_ago=5, metadata={"scanner": "dependency-track"})
+        _run_at_age(scannable_sbom, hours_ago=4, metadata={"skipped": True, "unsupported_input": True})
+
+        assert _sweep(monkeypatch) == []
+
+
+@pytest.mark.django_db
+class TestItDoesNotReadTheFatBlobForEveryRun:
+    """``result`` runs to several MB and a JSON-path read de-TOASTs all of it,
+    which is why ``result_skipped`` exists as a plain column. The sweep narrows
+    on that column first so the hourly cron does not de-TOAST every completed
+    run in the window."""
+
+    def test_unskipped_runs_are_excluded_before_the_json_read(self, scannable_sbom, monkeypatch) -> None:
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        _run_at_age(scannable_sbom, hours_ago=2, metadata={"scanner": "dependency-track"})
+
+        # None rather than False: the model only records a bool when the result
+        # actually carries a ``skipped`` key. The pre-filter matches on True, so
+        # either falsy value is excluded — asserting "not True" is what the
+        # query relies on, and asserting False would have been wrong.
+        run = AssessmentRun.objects.get(sbom=scannable_sbom)
+        assert run.result_skipped is not True, "a successful run must not be marked skipped"
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_the_marker_run_is_marked_skipped(self, scannable_sbom, monkeypatch) -> None:
+        """If the denormalised column and the JSON ever disagree, the pre-filter
+        silently drops the SBOM out of the backoff."""
+        from sbomify.apps.plugins.models import AssessmentRun
+
+        _run_at_age(scannable_sbom, hours_ago=2, metadata={"skipped": True, "unsupported_input": True})
+
+        assert AssessmentRun.objects.get(sbom=scannable_sbom).result_skipped is True
+        assert _sweep(monkeypatch) == []
