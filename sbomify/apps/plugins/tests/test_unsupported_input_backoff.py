@@ -249,8 +249,8 @@ class TestItDoesNotReadTheFatBlobForEveryRun:
 
 @pytest.mark.django_db
 class TestOnlyTheLatestRunsMarkerCounts:
-    """"Latest run" has to mean the latest run, not "the latest run was skipped
-    and something in the window carried the marker".
+    """The latest run has to mean the latest run — not "the latest run was
+    skipped and something in the window carried the marker".
 
     Selecting the JSON read by SBOM id rather than by run id left that gap: an
     SBOM whose most recent run is a different kind of skip stayed backed off on
