@@ -93,15 +93,23 @@ class TestTheWarningItProduces:
         return path
 
     def _scanner_warning(self, sbom_file: Path) -> str:
+        """The line naming the exit code, whatever level it is emitted at.
+
+        It moved from warning to error when an aborted scan stopped being
+        advisory and started abandoning the run; this reads both so the
+        assertions below are about the message rather than the level.
+        """
         failed = subprocess.CompletedProcess(args=[], returncode=127, stdout="", stderr=REAL_STDERR)
 
         with (
             patch("subprocess.run", return_value=failed),
             patch.object(osv_module.logger, "warning") as warning,
+            patch.object(osv_module.logger, "error") as error,
         ):
             OSVPlugin().assess("test-sbom", sbom_file)
 
-        return next(call.args[0] for call in warning.call_args_list if "Scanner returned code" in call.args[0])
+        calls = list(warning.call_args_list) + list(error.call_args_list)
+        return next(call.args[0] for call in calls if "Scanner returned code" in call.args[0])
 
     def test_the_logged_warning_carries_the_cause(self, sbom_file: Path) -> None:
         assert "permission denied" in self._scanner_warning(sbom_file)

@@ -81,6 +81,19 @@ class OSVPlugin(AssessmentPlugin):
     VERSION = "1.0.0"
     DEFAULT_TIMEOUT = 300
     DEFAULT_SCANNER_PATH = "/usr/local/bin/osv-scanner"
+    # osv-scanner exits 0 when it matched nothing and 1 when it found
+    # vulnerabilities. Every other code means the scan itself did not run to
+    # completion, so its (empty) output says nothing about the SBOM.
+    SUCCESS_EXIT_CODES = (0, 1)
+    # Except this one: 128 is "no package sources found", which is the scanner
+    # working correctly and having nothing to match — the case
+    # ``_create_no_packages_result`` already exists for. Staging bears that out:
+    # every exit-128 run was followed by the no-packages skip firing on its
+    # stderr, while only exit 127 fell through to a clean result. Treating it as
+    # a hard failure would turn a deliberate "Nothing scanned" into a
+    # high-severity Scan Error for documents whose PURLs the scanner does not
+    # recognise.
+    NO_PACKAGE_SOURCES_EXIT_CODE = 128
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
@@ -145,6 +158,28 @@ class OSVPlugin(AssessmentPlugin):
         try:
             # Execute osv-scanner
             stdout, stderr, returncode = self._execute_scanner(scanner_path, scan_path, timeout)
+
+            # "Nothing to scan" is reported as an exit code as well as on
+            # stderr, and it is not a failure — checked before the abort guard
+            # so it keeps the skipped result rather than being reclassified as
+            # a high-severity error.
+            if returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
+                logger.warning(
+                    f"[OSV] Scan of SBOM {sbom_id} found no package sources; reporting as skipped rather than clean"
+                )
+                return self._create_no_packages_result()
+
+            # A scanner that aborted produces no findings for the same reason a
+            # clean SBOM does — an empty result set — so the two are
+            # indistinguishable downstream unless the exit code is checked
+            # first. Falling through here published "0 vulnerabilities found"
+            # for SBOMs osv-scanner never actually scanned.
+            if returncode not in self.SUCCESS_EXIT_CODES:
+                logger.error(f"[OSV] Scan of SBOM {sbom_id} failed with exit code {returncode}; reporting as error")
+                return self._create_error_result(
+                    f"osv-scanner exited with code {returncode} without completing the scan. "
+                    "No vulnerability result can be inferred from this run."
+                )
 
             # Parse results into findings
             findings = self._parse_scan_output(stdout, returncode)
@@ -367,9 +402,14 @@ class OSVPlugin(AssessmentPlugin):
             cwd=str(absolute_path.parent),
         )
 
-        # Exit code 0 = no vulns, 1 = vulns found, other = error
-        if process.returncode not in (0, 1):
-            logger.warning(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
+        # Exit code 0 = no vulns, 1 = vulns found, other = error.
+        #
+        # Error rather than warning: this used to be advisory, because the run
+        # carried on and published a result regardless. It is now the point at
+        # which the scan is abandoned, and a line that reads as non-fatal for an
+        # outcome the caller treats as fatal is what makes a log hard to trust.
+        if process.returncode not in self.SUCCESS_EXIT_CODES:
+            logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
 
         return process.stdout, process.stderr, process.returncode
 
