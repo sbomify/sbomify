@@ -263,11 +263,11 @@ def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable, cause: BaseException | N
         cache.delete(_JWKS_FALLBACK_CACHE_KEY)
         raise error from cause
 
-        # Describes the condition rather than asserting one: this path is
-        # reached for an unreachable host, an unparseable body and a
-        # document that failed validation, and only the first is an
-        # outage. ``error`` already names which.
-        logger.warning("Serving last-known-good JWKS; no usable fresh document (%s)", error)
+    # Describes the condition rather than asserting one: this path is reached
+    # for an unreachable host, an unparseable body and a document that failed
+    # validation, and only the first is an outage. ``error`` already names
+    # which.
+    logger.warning("Serving last-known-good JWKS; no usable fresh document (%s)", error)
     _JWKS_SOURCE.served_from_fallback = True
     return cast(dict[str, Any], fallback)
 

@@ -112,6 +112,10 @@ def mock_github_jwks(mocker, rsa_keypair: dict[str, Any]) -> Any:
 
     cache.delete("sbomify:trusted:oidc:github:jwks")
     cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+    # The last-known-good slot too. It lives for 24h, so a test that warms it
+    # would otherwise leak into every later test in the session and make the
+    # cold-cache and outage cases pass or fail on execution order.
+    cache.delete("sbomify:trusted:oidc:github:jwks:last_known_good")
     mock_response = MagicMock()
     mock_response.json.return_value = {"keys": [rsa_keypair["jwk"]]}
     mock_response.raise_for_status.return_value = None

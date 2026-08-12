@@ -261,3 +261,35 @@ class TestTheMalformedBodyBranchIsReachable:
 
         with pytest.raises(OIDCJWKSUnavailable, match="not parseable"):
             _fetch_github_jwks()
+
+
+class TestServingTheFallbackIsAnnounced:
+    """The absence of this test is why the log line silently became dead code.
+
+    An edit left it indented inside the invalid-entry branch, after the raise,
+    so the fallback was served with nothing written anywhere — the deployment
+    would have been running on stale keys with no signal at all, which is the
+    opposite of what this whole change is for.
+    """
+
+    def test_a_warning_names_the_condition(self, mocker, mock_github_jwks) -> None:
+        from sbomify.apps.oidc import utils as oidc_utils
+
+        _fetch_github_jwks()
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+
+        # mocker.patch.object returns the mock itself, not a context manager.
+        warning = mocker.patch.object(oidc_utils.logger, "warning")
+        _fetch_github_jwks()
+
+        assert any("last-known-good" in call.args[0] for call in warning.call_args_list)
+
+    def test_a_fresh_fetch_says_nothing(self, mocker, mock_github_jwks) -> None:
+        """It must not fire on the ordinary path, or it stops meaning anything."""
+        from sbomify.apps.oidc import utils as oidc_utils
+
+        warning = mocker.patch.object(oidc_utils.logger, "warning")
+        _fetch_github_jwks()
+
+        assert not [c for c in warning.call_args_list if "last-known-good" in c.args[0]]
