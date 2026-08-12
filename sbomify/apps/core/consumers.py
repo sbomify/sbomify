@@ -77,6 +77,16 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         except Exception as exc:
             logger.warning(f"WebSocket accept failed for workspace {self.workspace_key}: {exc!r}")
             logger.debug("accept traceback", exc_info=True)
+            # Returning without answering at all leaves the handshake pending:
+            # no 101 and no close frame, so the browser waits out its own
+            # timeout and onclose never delivers a code the client can act on,
+            # while this consumer sits in await_many_dispatch holding its
+            # channel. Best-effort, since whatever broke the accept will often
+            # break this too — but an unanswered handshake is the worse end.
+            try:
+                await self.close(code=WS_CLOSE_SERVICE_RESTART)
+            except Exception:
+                logger.debug("close after failed accept also failed", exc_info=True)
             return
 
         # Check if user is authenticated
