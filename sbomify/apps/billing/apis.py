@@ -24,7 +24,6 @@ from .billing_helpers import (
     get_community_plan_limits,
     handle_community_downgrade_visibility,
     release_checkout_lock,
-    require_team_owner,
 )
 from .models import BillingPlan
 from .schemas import ChangePlanRequest, ChangePlanResponse, PlanSchema, UsageSchema
@@ -100,9 +99,13 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
     try:
         team = Team.objects.get(key=team_key)
 
-        is_owner, error_msg = require_team_owner(team, request.user)
-        if not is_owner:
-            return 403, {"detail": error_msg}
+        # Route through can() rather than require_billing_manager: this endpoint
+        # accepts personal access tokens, and can() is the only place token
+        # action scopes are enforced. A hand-rolled ORM role check would let a
+        # narrowly-scoped token (e.g. publish-only) change the plan — and a
+        # downgrade flips private products and components public.
+        if not can(request, "billing:manage", team):
+            return 403, {"detail": "Only workspace owners and admins can change billing plans"}
 
         plan = BillingPlan.objects.get(key=data.plan)
         stripe_client = get_stripe_client()

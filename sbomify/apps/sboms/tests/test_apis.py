@@ -3768,8 +3768,8 @@ def test_download_sbom_with_fallback_filename(
 
 
 @pytest.mark.django_db
-def test_delete_sbom_api_admin_forbidden(sample_sbom: SBOM):  # noqa: F811
-    """Deleting an SBOM is owner-only (#468); an admin gets 403 and the SBOM survives."""
+def test_delete_sbom_api_admin_allowed(sample_sbom: SBOM):  # noqa: F811
+    """Deleting an SBOM is the DELETE tier (owner + admin)."""
     from django.contrib.auth import get_user_model
 
     from sbomify.apps.teams.models import Member
@@ -3782,8 +3782,8 @@ def test_delete_sbom_api_admin_forbidden(sample_sbom: SBOM):  # noqa: F811
     client.force_login(admin)
     response = client.delete(reverse("api-1:delete_sbom", kwargs={"sbom_id": sample_sbom.id}))
 
-    assert response.status_code == 403
-    assert SBOM.objects.filter(id=sample_sbom.id).exists()
+    assert response.status_code == 204
+    assert not SBOM.objects.filter(id=sample_sbom.id).exists()
 
 
 @pytest.mark.django_db

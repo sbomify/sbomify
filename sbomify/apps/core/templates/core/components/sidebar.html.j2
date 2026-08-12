@@ -218,7 +218,7 @@
                     {% include "core/components/sidebar_link.html.j2" with url=advisories_url icon="fa-shield-halved" label="Security Advisories" match="core:security_advisor" %}
                 </li>
                 {# Plugins — visible to owner/admin only #}
-                {% if request.session.current_team.role == "owner" or request.session.current_team.role == "admin" %}
+                {% if can_administer %}
                     <li>
                         {% url 'plugins:plugins_page' as plugins_url %}
                         {% include "core/components/sidebar_link.html.j2" with url=plugins_url icon="fa-plug" label="Plugins" match="plugins:plugins_page" %}

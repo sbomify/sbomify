@@ -1,23 +1,28 @@
 """Single authorization decision point.
 
 ``can(actor, action, resource)`` is the one front door for authorization. It maps
-a named ``action`` to the capability the codebase already enforces, then
-**delegates** to the existing checks — ``verify_item_access`` (role-based) and
-``check_component_access`` (resource-attribute-based) — so its decision is
-identical to the scattered inline role checks it is meant to replace.
+a named ``action`` to a capability tier, then **delegates** to the enforcement
+primitives — ``verify_item_access`` (role-based) and ``check_component_access``
+(resource-attribute-based).
 
-Authorization is consolidated here with no behaviour change to role checks: the
-call sites use ``can``, and a ruff banned-api rule blocks new direct
-``verify_item_access`` imports outside the authz core, so role checks don't
-scatter again. ``can`` still delegates to ``verify_item_access`` /
-``check_component_access`` — it unifies the two, it doesn't replace them.
+Authorization is consolidated here: call sites use ``can``, and a ruff
+banned-api rule blocks new direct ``verify_item_access`` imports outside the
+authz core, so role checks don't scatter again. ``can`` still delegates to
+``verify_item_access`` / ``check_component_access`` — it unifies the two, it
+doesn't replace them.
 
 ``can`` also enforces API-token **action scopes** (#215): when the actor is a
 request authenticated by a scoped access token, the action must be in the
 token's scopes (a set of action strings) or the decision is denied *before* the
 role/ABAC check — scope can only narrow, never widen. An unscoped (``NULL``)
-token is full-capability (legacy default). Growing finer workspace roles (#468)
-is the remaining future work.
+token is full-capability (legacy default).
+
+Finer workspace roles (#468): admins were raised to near-owners — the only
+capability they lack is deleting the workspace. Deletion of domain resources,
+workspace settings, billing and member management all moved from owner-only to
+``ADMINISTER``. The remaining owner-exclusive rule, *an admin may not remove an
+owner*, is relational rather than a capability and therefore is NOT expressible
+here; it lives in the member-removal guards in ``teams.views``.
 
 Why a facade instead of a rewrite: every inline check passed a raw role list
 (``["owner", "admin"]``) to ``verify_item_access``. Naming the role sets as
@@ -38,21 +43,36 @@ ROLE_ADMIN = "admin"
 ROLE_GUEST = "guest"
 ROLE_BOT = "bot"
 
-# Capability tiers: the role sets the current checks grant. Each is exactly an
-# ``allowed_roles`` list used at today's call sites, so an action that maps to a
-# tier is behaviour-identical to the inline check it replaces.
-ADMINISTER: tuple[str, ...] = (ROLE_OWNER,)
-"""Owner-only: billing, member management, workspace settings/deletion."""
+# Capability tiers: the named role sets every action is granted to. These tuples
+# are the ONLY place roles are enumerated — call sites, view ``allowed_roles``
+# and template capability flags all derive from them, so widening a tier widens
+# every gate that uses it.
+#
+# Invariant: the human roles form a linear ladder, guest ⊂ admin ⊂ owner. No role
+# may hold a capability a more-privileged role lacks. ``bot`` sits outside the
+# ladder — it is a synthetic OIDC publishing identity that can publish releases
+# without being able to read most internal data. ``test_role_ladder_is_upward_closed``
+# enforces the invariant; keeping it is what stops this degenerating into
+# per-role permission soup where "what can an admin do" needs a codebase search.
+OWNER_ONLY: tuple[str, ...] = (ROLE_OWNER,)
+"""Reserved to the workspace owner. Deliberately tiny: deleting the workspace is
+the only *capability* an admin lacks. The other owner-exclusive rule — an admin
+may not remove an owner — is relational (it depends on the target member's role,
+not just the actor's), so it cannot be expressed as a tier and lives in the
+member-removal guards instead."""
+
+ADMINISTER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+"""Workspace governance: settings, custom domain, trust-center config, branding,
+billing, member management, integrations, and visibility changes. Admins are
+near-owners; see ``OWNER_ONLY`` for the two things they can't do."""
 
 MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
-"""Create/update products, components, releases, and artifact metadata (admins
-included). Destructive *deletion* of a domain resource is the separate, stricter
-``DELETE`` tier (#468)."""
+"""Create/update products, components, releases, and artifact metadata."""
 
-DELETE: tuple[str, ...] = (ROLE_OWNER,)
-"""Owner-only deletion of a domain resource (product / component / release /
-SBOM / document). Carved out of ``MANAGE`` so admins can create and edit but not
-destroy (#468)."""
+DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+"""Deletion of a domain resource (product / component / release / SBOM /
+document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
+twice already, and a named tier makes moving it again a one-line change."""
 
 PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT, ROLE_GUEST)
 """Upload artifacts — granted to OIDC/CI ``bot`` identities and, per #468, to
@@ -78,6 +98,44 @@ creating it), so a bot must reach release reads that other internal reads still
 deny it."""
 
 
+# Human-facing explanation of each role, ordered most- to least-privileged.
+# Deliberately kept beside the capability table above: the workspace members page
+# is the only place a user ever learns what a role means, so a tier change and
+# its explanation have to move together or the UI quietly starts lying.
+# ``bot`` is omitted — it is a synthetic OIDC publishing identity, never assigned
+# by a human and never shown in role pickers.
+ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
+    (
+        ROLE_OWNER,
+        "Owner",
+        "Full control of the workspace. Everything an admin can do, plus deleting "
+        "the workspace and removing other owners.",
+    ),
+    (
+        ROLE_ADMIN,
+        "Admin",
+        "Runs the workspace day to day: create, edit and delete products, "
+        "components and releases; upload artifacts; manage workspace settings, "
+        "the Trust Center, integrations, members and billing. Cannot remove an "
+        "owner or delete the workspace.",
+    ),
+    (
+        ROLE_GUEST,
+        "Guest",
+        "Limited access, granted through the Trust Center rather than invited "
+        "directly. Can view workspace data and upload artifacts, but cannot "
+        "create or manage products, components, releases or any settings. Also "
+        "reaches gated documents they have been approved for and signed the NDA "
+        "for.",
+    ),
+)
+# NOTE: keep the guest text above in step with the tiers — guests currently hold
+# READ_MEMBER (internal reads) and PUBLISH (artifact upload), which is why it
+# does NOT say "external, public content only". #468 narrows guest to a purely
+# external trust-center role; this description must be rewritten in the same
+# change, or the members page will understate what a guest can reach.
+
+
 @dataclass(frozen=True)
 class Decision:
     """Outcome of an authorization check. Truthy iff access is allowed."""
@@ -92,9 +150,10 @@ class Decision:
 # action ("<resource>:<verb>") -> the role tuple it requires. These mirror the
 # allowed_roles lists at today's call sites exactly.
 _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
-    # owner-only administration
+    # owner-only
+    "workspace:delete": OWNER_ONLY,
+    # owner + admin governance
     "workspace:administer": ADMINISTER,
-    "workspace:delete": ADMINISTER,
     "billing:manage": ADMINISTER,
     "member:manage": ADMINISTER,
     "component:administer": ADMINISTER,
@@ -111,7 +170,7 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # to it). Owners and admins keep it; bots gain it; guests stay out.
     "release:create": RELEASE_PUBLISH,
     "release:tag": RELEASE_PUBLISH,
-    # owner-only deletion of domain resources (#468) — stricter than MANAGE
+    # deletion of domain resources — owner + admin
     "product:delete": DELETE,
     "component:delete": DELETE,
     "release:delete": DELETE,

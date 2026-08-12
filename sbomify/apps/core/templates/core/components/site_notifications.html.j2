@@ -1,6 +1,6 @@
 <!-- Site-wide notifications/alerts that require urgent user action -->
 {% with team=request.session.current_team %}
-    {% if team and team.billing_plan_limits and team.billing_plan_limits.subscription_status == 'past_due' and is_owner %}
+    {% if team and team.billing_plan_limits and team.billing_plan_limits.subscription_status == 'past_due' and can_administer %}
         {% if team.is_in_grace_period %}
             <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 mb-6 rounded-xl bg-warning/10 border border-warning/30 shadow-sm">
                 <div class="flex items-start gap-3">

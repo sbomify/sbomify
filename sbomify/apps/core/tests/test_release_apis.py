@@ -1982,8 +1982,8 @@ def test_release_with_unicode_version(
 
 
 @pytest.mark.django_db
-def test_delete_release_admin_forbidden(sample_team_with_owner_member: Member):  # noqa: F811
-    """Deleting a release is owner-only (#468); an admin gets 403 and the release survives."""
+def test_delete_release_admin_allowed(sample_team_with_owner_member: Member):  # noqa: F811
+    """Deleting a release is the DELETE tier (owner + admin)."""
     from django.contrib.auth import get_user_model
 
     team = sample_team_with_owner_member.team
@@ -1996,8 +1996,8 @@ def test_delete_release_admin_forbidden(sample_team_with_owner_member: Member): 
     client.force_login(admin)
     response = client.delete(reverse("api-1:delete_release", kwargs={"release_id": release.id}))
 
-    assert response.status_code == 403
-    assert Release.objects.filter(id=release.id).exists()
+    assert response.status_code == 204
+    assert not Release.objects.filter(id=release.id).exists()
 
 
 def test_download_filename_sanitizes_user_names():

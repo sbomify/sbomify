@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from django.core.cache import cache
 from django.utils import timezone
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.teams.models import Member
 from sbomify.logging import getLogger
 
@@ -26,15 +27,19 @@ RATE_LIMIT = 5
 RATE_LIMIT_PERIOD = 60
 
 
-def require_team_owner(team: Team, user: Any) -> tuple[bool, str]:
-    """Check if user is an owner of the team.
+def require_billing_manager(team: Team, user: Any) -> tuple[bool, str]:
+    """Check if user may manage the team's billing.
+
+    Billing is the ``ADMINISTER`` tier (owners and admins), not owner-only:
+    admins are near-owners, differing only in that they cannot remove an owner
+    or delete the workspace.
 
     Returns:
-        (True, "") if user is owner, (False, error_message) otherwise.
+        (True, "") if permitted, (False, error_message) otherwise.
     """
-    is_owner = team.members.filter(member__user=user, member__role="owner").exists()
-    if not is_owner:
-        return False, "Only workspace owners can change billing plans"
+    permitted = team.members.filter(member__user=user, member__role__in=ADMINISTER).exists()
+    if not permitted:
+        return False, "Only workspace owners and admins can change billing plans"
     return True, ""
 
 
@@ -66,15 +71,18 @@ def generate_webhook_id(event: Any, obj: Any, prefix: str = "sub") -> str:
     return f"{prefix}_noid_{deterministic_hash}"
 
 
-def notify_team_owners(team: Team, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
-    """Send a notification to all team owners.
+def notify_billing_managers(team: Team, notification_fn: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
+    """Send a notification to everyone who can act on it — owners and admins.
+
+    Notifications follow the capability: admins control the subscription, so a
+    past-due or plan-limit notice that only reached owners would go to people who
+    may not be the ones able to fix it.
 
     Args:
         team: Team instance
         notification_fn: Callable(team, member, *args, **kwargs)
     """
-    team_owners = Member.objects.filter(team=team, role="owner")
-    for member in team_owners:
+    for member in Member.objects.filter(team=team, role__in=ADMINISTER):
         notification_fn(team, member, *args, **kwargs)
 
 

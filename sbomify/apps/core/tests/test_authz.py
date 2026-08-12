@@ -50,18 +50,29 @@ def _resource_for(res_key, team, component):
     return component
 
 
-# (action, resource, expected-allowed per role) — the role->capability matrix,
-# written to match what the inline checks grant today.
+# (action, resource, expected-allowed per role) — the role->capability matrix.
+# This is the authoritative statement of who can do what; a tier change that
+# isn't reflected here is a bug in one of the two.
 _MATRIX = {
-    "workspace:administer": ("team", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    # Admins are near-owners: workspace governance, member management, billing
+    # and deletion of domain resources are all theirs.
+    "workspace:administer": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "billing:manage": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "member:manage": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
     "component:manage": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    # #468: deleting a domain resource is owner-only (carved out of MANAGE).
-    "component:delete": ("component", {"owner": True, "admin": False, "guest": False, "bot": False}),
-    "product:delete": ("product", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    "component:delete": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "product:delete": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "release:delete": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "sbom:delete": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    "document:delete": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
+    # ...except the two OWNER_ONLY carve-outs. Deleting the workspace is the only
+    # capability an admin lacks; "an admin may not remove an owner" is relational
+    # and lives in the member-removal guards, not here.
+    "workspace:delete": ("team", {"owner": True, "admin": False, "guest": False, "bot": False}),
     # #468: guests may upload artifacts (joined the PUBLISH tier).
     "artifact:publish": ("component", {"owner": True, "admin": True, "guest": True, "bot": True}),
     "workspace:read": ("team", {"owner": True, "admin": True, "guest": True, "bot": False}),
-    "component:administer": ("component", {"owner": True, "admin": False, "guest": False, "bot": False}),
+    "component:administer": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
     "product:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": False}),
     # CI/OIDC publish workflow: a release-cutting bot reads (to check existence),
     # creates, and tags releases — but cannot rename or delete them. Guests stay
@@ -88,6 +99,44 @@ def test_role_capability_matrix(workspace, action, role, expected):
     assert bool(decision) is expected
     # ...and (not decision) mirrors the legacy `if not verify_item_access(...)`.
     assert (not decision) is (not expected)
+
+
+# The human role ladder, least- to most-privileged. ``bot`` is deliberately
+# absent: it is a synthetic OIDC publishing identity that sits outside the
+# ladder (it can publish releases but cannot read most internal data), so
+# including it would make the invariant below meaningless.
+_ROLE_LADDER = (authz.ROLE_GUEST, authz.ROLE_ADMIN, authz.ROLE_OWNER)
+
+
+@pytest.mark.parametrize("action", sorted(authz._ROLE_ACTIONS))
+def test_role_ladder_is_upward_closed(action):
+    """No role may hold a capability that a more-privileged role lacks.
+
+    Every battle-tested permission model (GitLab, Sentry, GitHub) is a ladder
+    where each role is a superset of the one below. Keeping that invariant is
+    what stops the model degenerating into per-role permission soup, where
+    answering "can an admin do X" requires reading every call site. A carve-out
+    that breaks inheritance fails here rather than in production.
+    """
+    granted = authz._ROLE_ACTIONS[action]
+    holders = [role in granted for role in _ROLE_LADDER]
+    # Once a role on the ladder is granted the action, every role above it must
+    # be too — i.e. the boolean sequence is non-decreasing.
+    assert holders == sorted(holders), (
+        f"{action!r} breaks role inheritance: granted to {sorted(set(granted) & set(_ROLE_LADDER))} "
+        f"but not to every more-privileged role (ladder: {' < '.join(_ROLE_LADDER)})"
+    )
+
+
+def test_role_descriptions_cover_every_human_role():
+    """The members page explains roles from ROLE_DESCRIPTIONS; a role missing
+    there is invisible to users even though it is assignable."""
+    described = {role for role, _label, _desc in authz.ROLE_DESCRIPTIONS}
+    human_roles = {authz.ROLE_OWNER, authz.ROLE_ADMIN, authz.ROLE_GUEST}
+    assert described == human_roles
+    assert authz.ROLE_BOT not in described  # synthetic identity, never shown
+    for _role, label, description in authz.ROLE_DESCRIPTIONS:
+        assert label and description.strip().endswith(".")
 
 
 @pytest.mark.django_db

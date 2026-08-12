@@ -1,0 +1,12 @@
+Owner-level invitation created
+
+{% if actor.get_full_name %}{{ actor.get_full_name }}{% else %}{{ actor.email }}{% endif %} invited {{ invited_email }} to join the workspace {{ team.name }} as an owner.
+
+You're receiving this because owner-level access grants full control of the workspace, including billing and the ability to remove other owners.
+
+If this wasn't expected, review your workspace members: {{ base_url }}{% url 'teams:team_settings' team.key %}#members
+
+Cheers,
+The sbomify Team
+
+Questions? We're here to help: {{ base_url }}/support/contact/

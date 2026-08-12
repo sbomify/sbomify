@@ -1,0 +1,20 @@
+{% extends "core/emails/base.html.j2" %}
+{% block title %}An owner-level invitation was created for your workspace{% endblock %}
+{% block content %}
+    <h1>Owner-level invitation created</h1>
+    <p>
+        {# djlint:off #}
+        {% if actor.get_full_name %}{{ actor.get_full_name }}{% else %}{{ actor.email }}{% endif %}
+        {# djlint:on #}
+        invited <strong>{{ invited_email }}</strong> to join the workspace
+        <strong>{{ team.name }}</strong> as an <strong>owner</strong>.
+    </p>
+    <p>
+        You're receiving this because owner-level access grants full control of the
+        workspace, including billing and the ability to remove other owners.
+    </p>
+    <p style="text-align: center; margin: 32px 0;">
+        <a href="{{ base_url }}{% url 'teams:team_settings' team.key %}#members"
+           class="button">Review workspace members</a>
+    </p>
+{% endblock %}
