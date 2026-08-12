@@ -34,6 +34,33 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
+# Ceiling on how much captured stderr reaches a log line. Generous enough that
+# a real scanner failure fits whole, bounded so a scanner looping on per-package
+# warnings cannot emit a megabyte-wide record.
+_STDERR_LOG_LIMIT = 2000
+
+
+def _collapse_for_log(text: str) -> str:
+    """Fold multi-line captured output into a single log-safe line.
+
+    The log pipeline splits records on newlines, so a multi-line stderr arrives
+    as one line per line and only the first survives as part of the message
+    that names it. osv-scanner opens with a progress line, which is how a
+    failed scan came through staging as
+
+        [OSV] Scanner returned code 127: Starting filesystem walk for root: /
+
+    — the exit code preserved and the reason for it discarded.
+
+    Truncation keeps the tail rather than the head: a scanner that dies has
+    usually said why in its last few lines, and it is the head that is
+    boilerplate.
+    """
+    joined = " | ".join(line.strip() for line in (text or "").splitlines() if line.strip())
+    if len(joined) <= _STDERR_LOG_LIMIT:
+        return joined
+    return f"...{joined[-_STDERR_LOG_LIMIT:]}"
+
 
 class OSVPlugin(AssessmentPlugin):
     """OSV vulnerability scanning plugin.
@@ -342,7 +369,7 @@ class OSVPlugin(AssessmentPlugin):
 
         # Exit code 0 = no vulns, 1 = vulns found, other = error
         if process.returncode not in (0, 1):
-            logger.warning(f"[OSV] Scanner returned code {process.returncode}: {process.stderr}")
+            logger.warning(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
 
         return process.stdout, process.stderr, process.returncode
 
