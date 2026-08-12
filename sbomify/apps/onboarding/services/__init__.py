@@ -254,15 +254,26 @@ class OnboardingEmailService:
             ).values_list("user_id", "email_type")
         )
 
-        skipped_no_status = 0
+        backfilled_status = 0
         skipped_errors = 0
         for member in primary_owners:
             try:
-                try:
-                    status = OnboardingStatus.objects.get(user=member.user)
-                except OnboardingStatus.DoesNotExist:
-                    skipped_no_status += 1
-                    continue
+                # The row is created by a signal on user creation, so a primary
+                # owner without one predates that signal or was made by a path
+                # that bypassed it. Every other call site in this app reaches
+                # for it with get_or_create; this one used a bare get and
+                # counted the miss, which meant those owners were stepped over
+                # on every run and the count was reported without saying who or
+                # ever converging.
+                #
+                # Creating it changes no mail. A fresh row has
+                # welcome_email_sent=False, and all four should_receive_*
+                # predicates gate on that, so a long-standing user does not
+                # suddenly enter a drip sequence — it makes the data consistent
+                # and stops a daily warning nobody could act on.
+                status, created = OnboardingStatus.objects.get_or_create(user=member.user)
+                if created:
+                    backfilled_status += 1
 
                 user_id = member.user.id
 
@@ -297,10 +308,13 @@ class OnboardingEmailService:
                 skipped_errors += 1
                 logger.error("Error processing onboarding sequence for user %s: %s", member.user.id, e, exc_info=True)
 
-        if skipped_no_status:
-            logger.warning(
-                "Skipped %d primary owners with missing OnboardingStatus during sequence processing",
-                skipped_no_status,
+        if backfilled_status:
+            # Info, not warning: the gap is now closed by the time this is
+            # written, and the count converges to zero instead of being
+            # restated every day.
+            logger.info(
+                "Backfilled OnboardingStatus for %d primary owners during sequence processing",
+                backfilled_status,
             )
         if skipped_errors:
             logger.error(
