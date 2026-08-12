@@ -1,24 +1,2 @@
-{% if crumbs %}
-    <nav aria-label="breadcrumb" class="mb-6">
-        <ol class="tw-breadcrumb list-none m-0 p-0">
-            {% for crumb in crumbs %}
-                <li class="flex items-center">
-                    {% if not forloop.first %}<span class="tw-breadcrumb-separator" aria-hidden="true">›</span>{% endif %}
-                    {% if crumb.url and not crumb.active %}
-                        <a href="{{ crumb.url }}"
-                           class="tw-breadcrumb-item no-underline"
-                           {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
-                            <i class="{{ crumb.icon }} opacity-80" aria-hidden="true"></i>{{ crumb.name }}
-                        </a>
-                    {% else %}
-                        <span class="tw-breadcrumb-current flex items-center gap-1"
-                              {% if crumb.active %}aria-current="page"{% endif %}
-                              {% if crumb.title %}title="{{ crumb.title }}"{% endif %}>
-                            <i class="{{ crumb.icon }} opacity-80" aria-hidden="true"></i>{{ crumb.name }}
-                        </span>
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ol>
-    </nav>
-{% endif %}
+{# The public trail, built by the breadcrumb tag: one crumb per level, each with its own mark. #}
+{% if crumbs %}<c-navigation.breadcrumbs :items="crumbs" class="mb-6" />{% endif %}

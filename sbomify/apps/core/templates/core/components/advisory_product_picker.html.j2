@@ -46,20 +46,13 @@
                 </button>
             </div>
         </div>
-        <div class="tw-search-input mb-2">
-            <i class="fas fa-magnifying-glass tw-search-input-icon"
-               aria-hidden="true"></i>
-            <input type="search"
-                   class="tw-form-input"
-                   placeholder="Filter products and versions…"
-                   aria-label="Filter products and versions"
-                   :value="filter"
-                   @input="setFilter($event.target.value)">
-        </div>
+        <c-forms.search-input icon="fas fa-magnifying-glass" placeholder="Filter products and versions…" class="mb-2" aria-label="Filter products and versions" ::value="filter" @input="setFilter($event.target.value)" />
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {# Products #}
             <div class="rounded-lg border border-border overflow-hidden">
-                <p class="tw-data-label px-3 py-2 m-0 border-b border-border bg-muted/30">Products</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.06em] text-text-muted px-3 py-2 m-0 border-b border-border bg-muted/30">
+                    Products
+                </p>
                 <div class="max-h-80 overflow-y-auto divide-y divide-border/60 select-none">
                     <p x-show="!visibleProducts.length"
                        x-cloak
@@ -86,12 +79,7 @@
                                  @click="toggleProduct(index, $event, visibleProducts)"
                                  @keydown.space.prevent="toggleProduct(index, undefined, visibleProducts)"
                                  @keydown.enter.prevent="toggleProduct(index, undefined, visibleProducts)">
-                                <input type="checkbox"
-                                       class="tw-checkbox shrink-0 pointer-events-none"
-                                       tabindex="-1"
-                                       aria-hidden="true"
-                                       :checked="isProductSelected(product.id)"
-                                       x-effect="$el.indeterminate = isPartiallySelected(product)">
+                                <c-forms.checkbox-input class="pointer-events-none" tabindex="-1" aria-hidden="true" ::checked="isProductSelected(product.id)" x-effect="$el.indeterminate = isPartiallySelected(product)" />
                                 <i class="fas fa-cube text-xs text-text-muted shrink-0"
                                    aria-hidden="true"></i>
                                 <span class="truncate" x-text="product.name"></span>
@@ -113,7 +101,7 @@
             {# Versions of the open product #}
             <div class="rounded-lg border border-border overflow-hidden">
                 <div class="flex items-center justify-between gap-3 px-3 py-2 border-b border-border bg-muted/30">
-                    <p class="tw-data-label m-0 min-w-0 truncate">
+                    <p class="text-xs font-semibold uppercase tracking-[0.06em] text-text-muted m-0 min-w-0 truncate">
                         <span x-show="!activeProduct" x-cloak>Versions</span>
                         <span x-show="activeProduct" x-cloak x-text="activeProduct?.name"></span>
                     </p>
@@ -156,11 +144,7 @@
                                  @click="toggleRelease(activeProduct, rIndex, $event, activeReleases)"
                                  @keydown.space.prevent="toggleRelease(activeProduct, rIndex, undefined, activeReleases)"
                                  @keydown.enter.prevent="toggleRelease(activeProduct, rIndex, undefined, activeReleases)">
-                                <input type="checkbox"
-                                       class="tw-checkbox shrink-0 pointer-events-none"
-                                       tabindex="-1"
-                                       aria-hidden="true"
-                                       :checked="isReleaseSelected(release.id)">
+                                <c-forms.checkbox-input class="pointer-events-none" tabindex="-1" aria-hidden="true" ::checked="isReleaseSelected(release.id)" />
                                 <span class="truncate font-mono"
                                       :title="release.label"
                                       x-text="release.label"></span>

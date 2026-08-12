@@ -61,7 +61,7 @@ def _classes(rendered: str, tag: str, marker: str) -> set[str]:
 
 def test_label_recipe_and_required_marker(rendered: str) -> None:
     label = _chunk(rendered, "label", "Standalone label")
-    assert "block text-sm font-medium text-text mb-2 tracking-[-0.01em]" in label
+    assert "block text-sm leading-[1.5] font-medium text-text mb-2 tracking-[-0.01em]" in label
     assert 'for="probe-standalone"' in label
     assert '<span class="text-danger">*</span>' in label
 
@@ -74,8 +74,8 @@ def test_label_without_for_or_required_renders_neither(rendered: str) -> None:
 
 
 def test_hint_and_error_recipes(rendered: str) -> None:
-    assert "block text-xs text-text-muted mt-1.5" in _chunk(rendered, "p", "Standalone hint")
-    assert "flex items-center gap-1 text-xs text-danger mt-1.5" in _chunk(rendered, "p", "Standalone error")
+    assert "block text-xs leading-[1.5] text-text-muted mt-1.5" in _chunk(rendered, "p", "Standalone hint")
+    assert "flex items-center gap-1 text-xs leading-[1.5] text-danger mt-1.5" in _chunk(rendered, "p", "Standalone error")
 
 
 def test_error_slot_carries_nested_markup(rendered: str) -> None:
@@ -283,6 +283,27 @@ def test_checkbox_without_a_slot_renders_no_text(rendered: str) -> None:
     assert 'x-ref="all"' in label
 
 
+def test_bare_checkbox_input_is_the_same_control_without_a_label(rendered: str) -> None:
+    box = _open_tag(rendered, "input", 'id="probe-check-input"')
+    labelled = _open_tag(rendered, "input", 'id="probe-check"')
+    recipe = "w-5 h-5 shrink-0 relative appearance-none"
+    assert recipe in box
+    assert recipe in labelled
+    assert TICK in box
+    assert DASH in box
+    # The row around it is the control, so the box takes no pointer of its own
+    # and the caller's class lands on the input rather than on a label.
+    assert "pointer-events-none" in box
+    assert 'tabindex="-1"' in box
+    assert ':checked="isSelected(row.id)"' in box
+
+
+def test_bare_checkbox_input_has_no_label_around_it(rendered: str) -> None:
+    at = rendered.index('id="probe-check-input"')
+    opening = rendered.rindex("<", 0, at)
+    assert not rendered[:opening].rstrip().endswith("<label")
+
+
 def test_radio_marks_selection_by_thickening_its_own_border(rendered: str) -> None:
     radio = _open_tag(rendered, "input", 'value="cyclonedx"')
     assert "rounded-full" in radio
@@ -295,6 +316,14 @@ def test_radio_marks_selection_by_thickening_its_own_border(rendered: str) -> No
 def test_radio_group_shares_a_name(rendered: str) -> None:
     assert _open_tag(rendered, "input", 'value="spdx"').count('name="probe-radio"') == 1
     assert "disabled" in _open_tag(rendered, "input", 'value="spdx"')
+
+
+def test_bound_radio_value_replaces_the_static_attribute(rendered: str) -> None:
+    """Alpine only writes a bound value onto a radio with no value attribute."""
+    radio = _open_tag(rendered, "input", 'data-probe="radio-bound"')
+    assert ':value="proc.value"' in radio
+    assert 'value=""' not in radio
+    assert 'x-model="procedure"' in radio
 
 
 def test_toggle_track_and_knob_are_the_input_and_its_pseudo_element(rendered: str) -> None:
@@ -319,6 +348,8 @@ def test_search_input_precedes_the_icon_so_peer_can_reach_it(rendered: str) -> N
     field = _chunk(rendered, "div", 'placeholder="Search products, components…"')
     assert field.index('type="search"') < field.index("fa-search")
     assert "peer w-full py-3 pl-11 pr-4" in field
+    # The old rule set only a font-size and inherited 1.5, so the field states it.
+    assert "text-sm leading-[1.5]" in field
     assert "peer-focus:text-primary" in field
     assert "pointer-events-none" in field
 
@@ -374,7 +405,11 @@ def test_file_upload_keeps_the_drop_handlers_on_the_panel(rendered: str) -> None
 
 def test_file_upload_icon_grows_with_the_panel(rendered: str) -> None:
     panel = _chunk(rendered, "label", 'id="probe-upload"')
-    assert "fas fa-cloud-arrow-up w-16 h-16" in panel
+    # The medallion is the span, not the mark: Font Awesome's unlayered
+    # display:inline-block outranks a flex utility on the same element, and the
+    # circle collapsed to a pill. The glyph is 1.5rem inside a 4rem circle.
+    assert '<span class="w-16 h-16 flex items-center justify-center rounded-full' in panel
+    assert '<i class="fas fa-cloud-arrow-up text-2xl"' in panel
     assert "group-hover:scale-110" in panel
     assert (
         "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,"
@@ -390,3 +425,61 @@ def test_file_upload_text_hint_and_hidden_input(rendered: str) -> None:
     assert 'class="sr-only"' in panel
     assert 'accept=".json,.xml"' in panel
     assert '@change="pick($event)"' in panel
+
+
+def test_file_upload_static_is_the_panel_without_the_picker(rendered: str) -> None:
+    """The upload-in-flight state keeps the zone's shape and drops the input."""
+    panel = _chunk(rendered, "div", 'data-probe="upload-static"')
+    assert "group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl" in panel
+    assert REST_ZONE in panel
+    # Nothing to pick, so nothing to click or type into.
+    assert "cursor-pointer" not in panel
+    assert 'type="file"' not in panel
+    # The slot is the whole content: no main line, no hint, no mark.
+    assert "text-[0.9375rem] font-medium text-text text-center" not in panel
+    assert "Uploading and processing document..." in panel
+
+
+def _preview(rendered: str) -> str:
+    """The whole preview row. _chunk stops at the first closing div, which is
+    the row's own text column, so the row is sliced up to the probe after it."""
+    start = rendered.index('data-probe="file-preview"')
+    return rendered[start : rendered.index("probe-bound-state", start)]
+
+
+def test_file_preview_carries_its_own_row(rendered: str) -> None:
+    row = _chunk(rendered, "div", 'data-probe="file-preview"')
+    assert "flex items-center gap-3 mt-4 px-4 py-3 bg-surface border border-solid border-border rounded-lg" in row
+    assert "w-10 h-10 rounded-md bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] text-primary" in row
+
+
+def test_file_preview_name_clips_and_size_stays_quiet(rendered: str) -> None:
+    row = _preview(rendered)
+    assert '<p class="text-[0.875rem] font-medium text-text truncate m-0"><span x-text="picked.name">' in row
+    assert '<p class="text-[0.75rem] text-text-muted m-0"><span x-text="formatFileSize(picked.size)">' in row
+    # The lines state a size and inherit their line-height, as a table cell does.
+    assert "text-sm" not in row
+    assert "text-xs" not in row
+
+
+def test_file_preview_action_slot_holds_a_real_button(rendered: str) -> None:
+    row = _preview(rendered)
+    assert 'aria-label="Remove selected file"' in row
+    assert '@click="clearSelectedFile()"' in row
+
+
+def test_input_carries_the_runtime_state_recipes(rendered: str) -> None:
+    """An editor whose validity is client state binds data-state, never a class."""
+    field = _open_tag(rendered, "input", 'name="probe-bound-state"')
+    assert ':data-state="formErrors.name ? \'error\' : \'\'"' in field
+    assert "data-[state=error]:border-danger" in field
+    assert "data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]" in field
+    assert "data-[state=success]:border-success" in field
+    # The resting recipe is still the fallback, so an empty state renders plain.
+    assert "border-border" in field
+
+
+def test_textarea_carries_the_runtime_state_recipes(rendered: str) -> None:
+    field = _open_tag(rendered, "textarea", 'name="probe-bound-textarea"')
+    assert "data-[state=error]:border-danger" in field
+    assert "data-[state=success]:border-success" in field

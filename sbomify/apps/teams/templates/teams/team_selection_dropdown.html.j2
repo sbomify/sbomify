@@ -15,59 +15,44 @@
         </button>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
             {# Desktop Toggle #}
-            {% comment %}The responsive split lives on a wrapper: tw-btn-ghost owns display, so hidden/md:flex utilities on the button itself would silently lose.{% endcomment %}
+            {% comment %}The responsive split lives on a wrapper: the button owns display, so hidden/md:flex utilities on the button itself would silently lose.{% endcomment %}
             <div class="hidden md:block">
-                <button class="tw-btn-ghost"
-                        type="button"
-                        @click="open = !open"
-                        title="Switch workspace"
-                        aria-label="Select workspace">
-                    <span class="tw-icon-chip tw-icon-chip-sm">
-                        <i class="fas fa-building" aria-hidden="true"></i>
+                <c-buttons.ghost @click="open = !open" title="Switch workspace" aria-label="Select workspace">
+                <c-chips.icon-chip size="sm">
+                <i class="fas fa-building" aria-hidden="true"></i>
+                </c-chips.icon-chip>
+                <div class="text-left">
+                    <span class="text-xs text-text-muted block">Workspace</span>
+                    <span class="text-sm font-semibold text-text">
+                        {% if request.session.current_team %}
+                            {{ request.session.current_team.name|workspace_display }}
+                        {% else %}
+                            Select Workspace
+                        {% endif %}
                     </span>
-                    <div class="text-left">
-                        <span class="text-xs text-text-muted block">Workspace</span>
-                        <span class="text-sm font-semibold text-text">
-                            {% if request.session.current_team %}
-                                {{ request.session.current_team.name|workspace_display }}
-                            {% else %}
-                                Select Workspace
-                            {% endif %}
-                        </span>
-                    </div>
-                    {% if request.session.current_team %}<span class="w-2 h-2 bg-success rounded-full"></span>{% endif %}
-                    <i class="fas fa-chevron-down text-text-muted text-xs ml-1 transition-transform"
-                       :class="open ? 'rotate-180' : ''"></i>
-                </button>
+                </div>
+                {% if request.session.current_team %}<span class="w-2 h-2 bg-success rounded-full"></span>{% endif %}
+                <i class="fas fa-chevron-down text-text-muted text-xs ml-1 transition-transform"
+                   :class="open ? 'rotate-180' : ''"></i>
+                </c-buttons.ghost>
             </div>
             {# Dropdown Menu #}
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-100"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-75"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 class="tw-dropdown right-0 mt-2 w-64"
-                 role="menu"
-                 aria-label="Switch workspace"
-                 @click.away="open = false">
-                <div class="tw-dropdown-header">Switch Workspace</div>
-                {% for t_key, t_info in available_workspaces.items %}
-                    <a class="tw-dropdown-item justify-between no-underline"
-                       {% if current_workspace_key == t_key %}aria-current="true"{% endif %}
-                       role="menuitem"
-                       href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}">
-                        <div class="flex items-center gap-2.5">
-                            <span class="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <i class="fas fa-building text-primary text-xs"></i>
-                            </span>
-                            <span>{{ t_info.name|workspace_display }}</span>
-                        </div>
-                        {% if current_workspace_key == t_key %}<i class="fas fa-check text-success"></i>{% endif %}
-                    </a>
-                {% endfor %}
-            </div>
+            <c-dropdowns.dropdown class="right-0 mt-2 w-64" aria-label="Switch workspace" x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" @click.away="open = false">
+            <c-dropdowns.header>Switch Workspace</c-dropdowns.header>
+            {% for t_key, t_info in available_workspaces.items %}
+                <c-dropdowns.item class="justify-between" href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}"
+                {% if current_workspace_key == t_key %}aria-current="true"{% endif %}
+                >
+                <div class="flex items-center gap-2.5">
+                    <span class="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-building text-primary text-xs"></i>
+                    </span>
+                    <span>{{ t_info.name|workspace_display }}</span>
+                </div>
+                {% if current_workspace_key == t_key %}<i class="fas fa-check text-success"></i>{% endif %}
+                </c-dropdowns.item>
+            {% endfor %}
+            </c-dropdowns.dropdown>
         {% endwith %}
     </div>
 </div>

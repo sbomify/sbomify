@@ -105,6 +105,52 @@ class TestComponentDetailsPublicSnapshot:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("width", [1920, 992, 576, 375])
+class TestComponentItemSnapshot:
+    """One artifact of a component: the SBOM page with its scan summary, and the
+    document page with its stored-file card. The VEX and CBOM classes below
+    cover the same template's other two artifact kinds."""
+
+    def test_component_item_sbom_snapshot(
+        self,
+        authenticated_page: Page,
+        sbom_component_details,
+        snapshot,
+        width: int,
+    ) -> None:
+        from sbomify.apps.sboms.models import SBOM
+
+        sbom = SBOM.objects.get(component=sbom_component_details)
+
+        authenticated_page.goto(f"/components/{sbom_component_details.id}/sboms/{sbom.id}/")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+    def test_component_item_document_snapshot(
+        self,
+        authenticated_page: Page,
+        document_component_details,
+        snapshot,
+        width: int,
+    ) -> None:
+        from sbomify.apps.documents.models import Document
+
+        document = Document.objects.get(component=document_component_details)
+
+        authenticated_page.goto(f"/components/{document_component_details.id}/documents/{document.id}/")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
 class TestComponentArtifactsSnapshot:
     """The View-all artifacts page introduced with the component redesign."""
 

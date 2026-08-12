@@ -144,6 +144,41 @@
         stays muted; the value and icon take the accent.
     </p>
     </c-cards.card>
+    <h2 id="assessment-pills" class="text-xl font-semibold text-text mb-4">Assessment pills</h2>
+    <c-cards.card class="mb-8">
+    <p class="text-sm text-text-muted mb-4">
+        One plugin's verdict in an artifacts table. The verdict is computed in the browser, so the
+        caller binds <c-code-inline>data-status</c-code-inline> and the pill holds every recipe.
+    </p>
+    <div class="flex flex-wrap items-center gap-2">
+        <c-chips.assessment status="pass">
+        <i class="fas fa-check" aria-hidden="true"></i>
+        <span>NTIA</span>
+        </c-chips.assessment>
+        <c-chips.assessment status="fail">
+        <i class="fas fa-xmark" aria-hidden="true"></i>
+        <span>CRA</span>
+        </c-chips.assessment>
+        <c-chips.assessment status="pending">
+        <i class="fas fa-clock" aria-hidden="true"></i>
+        <span>PQC</span>
+        </c-chips.assessment>
+        <c-chips.assessment status="error">
+        <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+        <span>SPDX</span>
+        </c-chips.assessment>
+        <c-chips.assessment>+2</c-chips.assessment>
+        <c-chips.assessment status="summary-fail">
+        <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+        <span>3 Failed</span>
+        </c-chips.assessment>
+    </div>
+    <p class="text-sm text-text-muted mt-4 mb-0">
+        With no status the pill is the quiet border tint, which is what the
+        <c-code-inline>+N more</c-code-inline> counter after a truncated run wants, and what an
+        unrecognised status falls back to.
+    </p>
+    </c-cards.card>
     <h2 id="page-header" class="text-xl font-semibold text-text mb-4">Page &amp; section headers</h2>
     <c-cards.card class="mb-8">
     {% comment %}
@@ -162,12 +197,19 @@
         <code class="tw-code-inline">space-y-*</code> stack, pass <code class="tw-code-inline">flush</code>.
     </p>
     <c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Gateway" :breadcrumbs="demo_breadcrumbs" :copy_values="demo_copy_values" editable_item_type="product" editable_item_id="ds-demo">
+    <c-slot name="meta">
+    <c-badges.danger>
+    <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
+    </c-badges.danger>
+    </c-slot>
     <c-buttons.primary size="sm">New release</c-buttons.primary>
     </c-layout.page-header>
     <p class="text-sm text-text-muted mb-6">
         The detail-page shape of the same header. <code class="tw-code-inline">mark="avatar"</code> swaps the
-        chip for the avatar mark. <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers
-        beside the title. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
+        chip for the avatar mark, which is <code class="tw-code-inline">c-avatar</code> wearing the page's icon.
+        <code class="tw-code-inline">copy_values</code> adds click-to-copy identifiers beside the title, and the
+        named <code class="tw-code-inline">meta</code> slot puts a status the title is qualified by on the same
+        line. <code class="tw-code-inline">breadcrumbs</code> replaces the subtitle. Set
         <code class="tw-code-inline">editable_item_type</code> and
         <code class="tw-code-inline">editable_item_id</code> to render the title as the inline editable field.
     </p>
@@ -178,11 +220,42 @@
     <c-forms.input name="ds-section-token" placeholder="ci-pipeline" />
     </c-forms.field>
     </c-layout.section-body>
+    <c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)" class="mt-6">
+    <c-slot name="actions">
+    <c-buttons.primary size="sm">
+    <i class="fas fa-plus mr-1.5" aria-hidden="true"></i>Add entity
+    </c-buttons.primary>
+    </c-slot>
+    </c-layout.section-header>
     <p class="text-sm text-text-muted mt-6 mb-0">
         A section header introduces a block inside a card.
         <code class="tw-code-inline">c-layout.section-body</code> indents that block to the title's left edge and
         drops the indent on a narrow screen. Pass <code class="tw-code-inline">level="2"</code> when the page
-        needs the title as an h2.
+        needs the title as an h2, and fill the named
+        <code class="tw-code-inline">actions</code> slot for the control the section is headed by.
+    </p>
+    <hr class="my-6 border-border">
+    {% comment %} The steps sit in their own block, the way a page nests them in its form: the
+    first-of-type rule that drops the leading hairline reads the section's position
+    among its siblings. {% endcomment %}
+    <div>
+        <c-layout.form-section step="1" title="What it is" description="A title is all a draft needs.">
+        <c-forms.field label="Title" for="ds-form-section-title">
+        <c-forms.input name="ds-form-section-title" placeholder="e.g. Improper authentication in SAML assertion handling" />
+        </c-forms.field>
+        </c-layout.form-section>
+        <c-layout.form-section step="2" accent="neutral" title="What else is known" description="Optional. You can add these later.">
+        <c-forms.field label="CVE or reference" for="ds-form-section-cve">
+        <c-forms.input name="ds-form-section-cve" placeholder="CVE-2026-0000" />
+        </c-forms.field>
+        </c-layout.form-section>
+    </div>
+    <p class="text-sm text-text-muted mt-6 mb-0">
+        A long form's steps: <code class="tw-code-inline">c-layout.form-section</code> puts what the step is on
+        the left and its fields on the right, stacking into one column below 64rem. Each step draws the rule
+        above it, so the first one drops it from its position rather than from a prop. Pass
+        <code class="tw-code-inline">step</code> for the number, or <code class="tw-code-inline">icon</code> for a
+        mark; <code class="tw-code-inline">accent</code> reaches the chip untouched.
     </p>
     </c-cards.card>
     {# ── Controls ──────────────────────────────────────────────────────────── #}
@@ -197,6 +270,7 @@
         <c-buttons.primary>Primary</c-buttons.primary>
         <c-buttons.secondary>Secondary</c-buttons.secondary>
         <c-buttons.ghost>Ghost</c-buttons.ghost>
+        <c-buttons.ghost-danger>Ghost danger</c-buttons.ghost-danger>
         <c-buttons.gradient>Gradient</c-buttons.gradient>
         <c-buttons.success>Success</c-buttons.success>
         <c-buttons.warning>Warning</c-buttons.warning>
@@ -208,6 +282,7 @@
         <c-buttons.outline-primary>Outline primary</c-buttons.outline-primary>
         <c-buttons.outline-warning>Outline warning</c-buttons.outline-warning>
         <c-buttons.outline-danger>Outline danger</c-buttons.outline-danger>
+        <c-buttons.outline-success>Outline success</c-buttons.outline-success>
     </div>
     <p class="tw-data-label mb-3">Sizes, states and links</p>
     <div class="flex flex-wrap items-center gap-2">
@@ -220,7 +295,12 @@
         <c-buttons.icon label="Edit"><i class="fas fa-pen" aria-hidden="true"></i></c-buttons.icon>
         <c-buttons.icon label="Delete" variant="danger"><i class="fas fa-trash" aria-hidden="true"></i></c-buttons.icon>
         <c-buttons.icon label="Actions" size="sm"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon>
+        <c-buttons.icon label="Download SBOM" variant="primary" size="sm" href="#buttons"><i class="fas fa-download" aria-hidden="true"></i></c-buttons.icon>
     </div>
+    <p class="text-sm text-text-muted mt-4 mb-0">
+        An icon button with an href is an anchor, for the row controls that are links: the download
+        beside an artifact, the arrow through to its detail page.
+    </p>
     </c-cards.card>
     <h2 id="forms" class="text-xl font-semibold text-text mb-4">Form controls</h2>
     <c-cards.card class="mb-8">
@@ -275,6 +355,22 @@
         <c-forms.toggle name="ds-toggle-off">Toggle off</c-forms.toggle>
         <c-forms.toggle name="ds-toggle-disabled" disabled>Disabled</c-forms.toggle>
     </div>
+    <p class="text-sm text-text-muted mt-5 mb-3">
+        An editor whose validity is only known in the browser binds
+        <c-code-inline>data-state</c-code-inline> instead of the prop, and the control holds the same two
+        recipes keyed on it.
+    </p>
+    <p class="text-sm text-text-muted mt-5 mb-3">
+        A row that is itself the control takes the box alone: the row carries the role, the checked state and
+        the keyboard, and a label around the box would forward a second click into it.
+    </p>
+    <div class="flex items-center gap-2.5 max-w-xs px-3 py-2 rounded-lg border border-border"
+         role="checkbox"
+         tabindex="0"
+         aria-checked="true">
+        <c-forms.checkbox-input class="pointer-events-none" tabindex="-1" aria-hidden="true" checked />
+        <span class="text-sm text-text">Row is the control</span>
+    </div>
     </c-cards.card>
     <h2 id="choice-group" class="text-xl font-semibold text-text mb-4">Choice group</h2>
     <c-cards.card class="mb-8">
@@ -297,6 +393,19 @@
         <c-layout.choice name="ds-scope" value="product" accent="violet" icon="fas fa-cube">Product</c-layout.choice>
         <c-layout.choice name="ds-scope" value="archived" accent="secondary" icon="fas fa-box-archive" disabled>Archived</c-layout.choice>
         </c-layout.choice-group>
+        <div x-data="{ answer: 'satisfied' }">
+            <c-layout.choice-group label="Answered in the browser">
+            <c-layout.choice value="satisfied" accent="success" icon="fas fa-check" x_checked="answer === 'satisfied'" x_click="answer = 'satisfied'" x_name="'ds-bound'">Satisfied</c-layout.choice>
+            <c-layout.choice value="not-satisfied" accent="danger" icon="fas fa-times" x_checked="answer === 'not-satisfied'" x_click="answer = 'not-satisfied'" x_name="'ds-bound'">Not Satisfied</c-layout.choice>
+            <c-layout.choice value="not-applicable" accent="secondary" x_checked="answer === 'not-applicable'" x_click="answer = 'not-applicable'" x_name="'ds-bound'">N/A</c-layout.choice>
+            </c-layout.choice-group>
+            <p class="text-xs text-text-muted mt-2 m-0">
+                A tile whose answer only exists in the browser binds the real input through
+                <c-code-inline>x_checked</c-code-inline>, <c-code-inline>x_click</c-code-inline> and
+                <c-code-inline>x_name</c-code-inline>, never a class: the highlight still comes from
+                <c-code-inline>:has(:checked)</c-code-inline>.
+            </p>
+        </div>
     </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
         Options come from the view as a list, which is how a page hands over a field's choices. With no options the
@@ -324,6 +433,23 @@
     <div x-data="{ over: false }">
         <c-forms.file-upload active="over" hint="CycloneDX or SPDX, JSON or XML" @dragover.prevent="over = true" @dragleave.prevent="over = false" @drop.prevent="over = false">Drop an SBOM here, or click to choose</c-forms.file-upload>
     </div>
+    {% comment %}
+    The two states that replace the zone: the picked file, and the upload in
+    flight. static is the same panel with no picker in it.
+    {% endcomment %}
+    <c-forms.file-preview>
+    <c-slot name="name">simple-document.pdf</c-slot>
+    <c-slot name="size">1.2 MB</c-slot>
+    <c-slot name="action">
+    <c-buttons.icon label="Remove selected file" title="Remove file">
+    <i class="fas fa-times" aria-hidden="true"></i>
+    </c-buttons.icon>
+    </c-slot>
+    </c-forms.file-preview>
+    <c-forms.file-upload static class="mt-4">
+    <c-feedback.spinner size="md" />
+    <p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
+    </c-forms.file-upload>
     </c-cards.card>
     <h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
     <c-cards.card class="mb-8">
@@ -358,6 +484,42 @@
         </c-buttons.danger>
         </c-cards.dangerzone>
     </div>
+    <p class="text-sm text-text-muted mb-4">
+        A danger zone that opens and closes takes its band and its panel as parts: the band is the control, so it
+        carries the click and the expanded state, and the panel carries the collapse, because the padding has to
+        sit on the element that animates.
+    </p>
+    <div class="mb-8" x-data="{ zoneOpen: false }">
+        <c-cards.dangerzone flush>
+        <c-slot name="header">
+        <c-cards.dangerzone-header class="cursor-pointer select-none" role="button" tabindex="0" ::aria-expanded="zoneOpen" @click="zoneOpen = !zoneOpen" @keydown.enter.prevent="zoneOpen = !zoneOpen">
+        <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
+        <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
+            Danger Zone
+            <i class="fas fa-chevron-down ml-auto text-sm transition-transform duration-200"
+               :class="zoneOpen ? '' : '-rotate-90'"
+               aria-hidden="true"></i>
+        </h4>
+        </c-cards.dangerzone-header>
+        </c-slot>
+        <c-cards.dangerzone-body x-show="zoneOpen" x-collapse>
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <c-chips.icon-chip accent="danger">
+                <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                </c-chips.icon-chip>
+                <div>
+                    <h6 class="font-semibold text-text m-0">Delete product</h6>
+                    <p class="text-text-muted text-sm m-0 mt-1">Permanently remove this product and all associated data</p>
+                </div>
+            </div>
+            <c-buttons.danger>
+            <i class="fas fa-trash-alt" aria-hidden="true"></i> <span>Delete product</span>
+            </c-buttons.danger>
+        </div>
+        </c-cards.dangerzone-body>
+        </c-cards.dangerzone>
+    </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <c-cards.card title="Footer band" subtitle="A named slot for the actions a card ends with">
         <p class="text-sm text-text m-0">The default slot is the body; name a slot footer and the band appears under it.</p>
@@ -382,6 +544,24 @@
         </p>
         </c-cards.card>
     </div>
+    <c-cards.card flush class="mb-8">
+    <c-slot name="header">
+    <c-cards.header>
+    <h3 class="text-lg font-semibold text-text m-0">Flush body</h3>
+    <p class="text-sm text-text-muted mt-0.5 m-0">
+        For content that owns its padding: a data table that has to run to the card's edge, or a list of rows.
+    </p>
+    </c-cards.header>
+    </c-slot>
+    <c-layout.select-row class="border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]">
+    <c-forms.checkbox name="ds-flush-row-1" checked />
+    <span class="text-sm text-text">Rows reach both edges</span>
+    </c-layout.select-row>
+    <c-layout.select-row>
+    <c-forms.checkbox name="ds-flush-row-2" />
+    <span class="text-sm text-text">No body band between them and the card</span>
+    </c-layout.select-row>
+    </c-cards.card>
     <c-cards.card title="Inset panels" subtitle="The quiet sub-panel inside a card body" class="mb-8">
     <c-cards.inset>
     <p class="text-sm text-text m-0 mb-3">
@@ -428,6 +608,28 @@
         </c-cards.collapsible-body>
         </c-cards.collapsible>
     </div>
+    <p class="tw-data-label mb-3">Row of its own</p>
+    <div class="space-y-3 mb-4" x-data="{ open: '' }">
+        <c-cards.collapsible level="warning">
+        <c-cards.collapsible-trigger bare state="open === 'bare'" @click="open = open === 'bare' ? '' : 'bare'">
+        <div class="flex items-center gap-3 flex-grow min-w-0">
+            <span class="font-semibold text-text">OSV Vulnerability Scanner</span>
+            <c-badges.secondary>
+            <i class="fas fa-shield-alt mr-1" aria-hidden="true"></i>7 Vulnerabilities
+            </c-badges.secondary>
+            <span class="text-text-muted text-sm hidden md:inline">7 findings</span>
+        </div>
+        </c-cards.collapsible-trigger>
+        <c-cards.collapsible-body state="open === 'bare'">
+        <p class="text-sm text-text-muted m-0">The panel is unchanged; only the header row differs.</p>
+        </c-cards.collapsible-body>
+        </c-cards.collapsible>
+    </div>
+    <p class="text-sm text-text-muted mb-8">
+        <code class="tw-code-inline">bare</code> drops the trigger's title wrapper for a header that is a name
+        plus its status chips: the row builds its own line, and the weight belongs to the name inside it rather
+        than to everything standing beside it.
+    </p>
     <h2 id="accordion" class="text-xl font-semibold text-text mb-4">Accordion</h2>
     <p class="text-sm text-text-muted mb-4">
         One bordered container of divided collapsible sections. The compact density
@@ -450,6 +652,24 @@
         {% endfor %}
         </c-navigation.accordion>
     </div>
+    <p class="text-sm text-text-muted mb-4">
+        <code class="tw-code-inline">c-navigation.disclosure</code> is the same section opened by the browser
+        rather than by Alpine, for a page that keeps no state: a details element, the chevron turning on
+        <code class="tw-code-inline">open</code>. Use it for a snippet or an explanation a page reveals on demand.
+    </p>
+    <div class="mb-8 max-w-2xl">
+        <c-navigation.accordion density="sm">
+        <c-navigation.disclosure label_class="flex items-center gap-2">
+        <c-slot name="label">
+        <i class="fas fa-code text-text-muted" aria-hidden="true"></i>Configure your GitHub Actions workflow
+        </c-slot>
+        <p class="m-0">The step that mints a token and uploads the SBOM.</p>
+        </c-navigation.disclosure>
+        <c-navigation.disclosure label="Open on arrival" open>
+        <p class="m-0">A section that starts open carries the native attribute.</p>
+        </c-navigation.disclosure>
+        </c-navigation.accordion>
+    </div>
     <h2 id="modals" class="text-xl font-semibold text-text mb-4">Modals</h2>
     <c-cards.card class="mb-8">
     {% comment %}
@@ -460,10 +680,15 @@
     <p class="text-sm text-text-muted mb-4">
         The dialog teleports to the body, so no scrolling ancestor can clip it, and
         <code class="tw-code-inline">show</code> names the Alpine boolean the page already keeps.
+        A dialog inside an HTMX-swapped partial passes
+        <c-code-inline>teleport="false"</c-code-inline> and stays where it was written, which is what
+        keeps its form wired.
     </p>
-    <div class="flex flex-wrap gap-2" x-data="{ open: false, wide: false }">
+    <div class="flex flex-wrap gap-2"
+         x-data="{ open: false, wide: false, removeTarget: null }">
         <c-buttons.primary @click="open = true">Open modal</c-buttons.primary>
         <c-buttons.secondary @click="wide = true">Open large modal</c-buttons.secondary>
+        <c-buttons.secondary @click="removeTarget = { name: 'acme-gateway-core' }">Open row dialog</c-buttons.secondary>
         <c-modal id="ds-modal" title="Assign a component">
         <c-forms.field label="Component name" for="ds-modal-name" hint="Pick a name your team will recognise.">
         <c-forms.input name="ds-modal-name" placeholder="acme-gateway-core" />
@@ -483,10 +708,22 @@
         <c-buttons.secondary @click="wide = false">Close</c-buttons.secondary>
         </c-slot>
         </c-modal>
+        <c-modal id="ds-modal-row" title="Remove component" icon="fas fa-unlink" show="removeTarget" close="removeTarget = null" style="--chip-accent: var(--color-danger)">
+        <p class="text-sm text-text m-0">
+            Remove <strong x-text="removeTarget?.name"></strong> from this product?
+        </p>
+        <c-slot name="footer">
+        <c-buttons.secondary @click="removeTarget = null">Cancel</c-buttons.secondary>
+        <c-buttons.danger @click="removeTarget = null">Remove</c-buttons.danger>
+        </c-slot>
+        </c-modal>
     </div>
     <p class="text-sm text-text-muted mt-4 mb-0">
-        The app-wide confirm dialog is already in the base template — dispatch
-        <code class="tw-code-inline">confirm:show</code> rather than building another modal.
+        A dialog whose open state is the row it acts on passes
+        <code class="tw-code-inline">close</code>, because
+        <code class="tw-code-inline">removeTarget !== null = false</code> is not a statement; escape, the
+        backdrop and the close button all run it. The app-wide confirm dialog is already in the base template —
+        dispatch <code class="tw-code-inline">confirm:show</code> rather than building another modal.
     </p>
     </c-cards.card>
     <h2 id="select-rows" class="text-xl font-semibold text-text mb-4">Selectable rows</h2>
@@ -517,7 +754,30 @@
             <c-forms.checkbox name="ds-row-{{ forloop.counter }}" :checked="row.checked" :disabled="row.disabled" class="flex-shrink-0" />
             </c-layout.select-row>
         {% endfor %}
+        {# toggle_ref: a row whose body holds fields of its own still toggles its switch. #}
+        <c-layout.select-row toggle_ref="toggle" x_data="{ enabled: true }">
+        <div class="flex-1 min-w-0">
+            <div class="flex items-center flex-wrap gap-2 mb-1">
+                <label class="font-medium text-text cursor-pointer" for="ds-row-config">Dependency Track</label>
+                <c-badges.secondary>v1.1.0</c-badges.secondary>
+            </div>
+            <p class="text-text-muted text-sm m-0">Scans CycloneDX SBOMs for known vulnerabilities.</p>
+            <div x-show="enabled" class="mt-4 pt-4 border-t border-border">
+                <c-forms.label for="ds-row-config-server">Server</c-forms.label>
+                <c-forms.select id="ds-row-config-server">
+                <option value="">-- Default --</option>
+                </c-forms.select>
+            </div>
+        </div>
+        <div class="flex-shrink-0">
+            <c-forms.checkbox-input id="ds-row-config" x-ref="toggle" x-model="enabled" checked />
+        </div>
+        </c-layout.select-row>
     </div>
+    <p class="text-sm text-text-muted mb-8">
+        <code class="tw-code-inline">toggle_ref</code> names the switch the row toggles. Without it the row clicks
+        the first input it contains, which is the wrong one once the body has fields of its own.
+    </p>
     <h2 id="empty-states" class="text-xl font-semibold text-text mb-4">Empty states</h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <c-cards.card>
@@ -535,6 +795,10 @@
         <c-buttons.secondary href="#empty-states">Create a release</c-buttons.secondary>
         </c-feedback.empty-state>
         </c-cards.card>
+        <c-cards.card>
+        {# The small medallion carries the small mark, and a panel inside a detail view often has only the one line. #}
+        <c-feedback.empty-state compact icon="fas fa-address-card" icon_size="sm" icon_variant="neutral" message="No entities in this profile" />
+        </c-cards.card>
     </div>
     {# ── Data ──────────────────────────────────────────────────────────────── #}
     <h2 id="tables" class="text-xl font-semibold text-text mb-4">Tables</h2>
@@ -547,7 +811,9 @@
     <p class="text-sm text-text-muted mb-4">
         The shell holds the toolbar, the table and the footer. A wide table scrolls inside the table
         component, never on the page body. Inside a card, pass <code class="tw-code-inline">nested</code> and
-        the shell drops its own frame. The sortable header and the pager read the Alpine state a table page
+        the shell drops its own frame. <c-code-inline>fixed</c-code-inline> gives every
+        column an equal share and centres the middle ones; <c-code-inline>sized</c-code-inline> fixes the
+        layout and leaves alignment alone, for a table whose header cells state their own widths. The sortable header and the pager read the Alpine state a table page
         already keeps, so the demo below really sorts and pages.
     </p>
     <c-tables.shell class="mb-8" x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
@@ -595,6 +861,13 @@
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
     <p class="text-sm text-text-muted mt-4 mb-6">
         The server-rendered pager: the view knows the current page and every control is a link.
+    </p>
+    <p class="tw-data-label mb-2">Paging a filtered list</p>
+    <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" query="days=30" label="Scan pagination" />
+    <p class="text-sm text-text-muted mt-4 mb-6">
+        <c-code-inline>query</c-code-inline> rides along on every link, so paging a filtered table keeps the
+        filter instead of silently resetting it. <c-code-inline>label</c-code-inline> names the pager where a
+        page carries more than one.
     </p>
     <p class="tw-data-label mb-2">Paged in the browser</p>
     <nav class="flex items-center gap-1"
@@ -698,6 +971,19 @@
             <c-badges.severity level="{{ severity.level }}">{{ severity.label }}</c-badges.severity>
         {% endfor %}
     </div>
+    <div class="flex flex-wrap items-center gap-2 mt-6">
+        <c-badges.severity-dynamic level="critical">Critical</c-badges.severity-dynamic>
+        <c-badges.severity-dynamic level="high">High</c-badges.severity-dynamic>
+        <c-badges.severity-dynamic level="medium">Medium</c-badges.severity-dynamic>
+        <c-badges.severity-dynamic level="low">Low</c-badges.severity-dynamic>
+        <c-badges.severity-dynamic>Unknown</c-badges.severity-dynamic>
+    </div>
+    <p class="text-sm text-text-muted mt-2 mb-0">
+        <c-code-inline>c-badges.severity-dynamic</c-code-inline> is the same scale for a findings list Alpine
+        builds from JSON: the caller binds <c-code-inline>::data-level</c-code-inline> and the recipes stay in
+        the component. Where the server knows the band, pass it as
+        <c-code-inline>level</c-code-inline>.
+    </p>
     </c-cards.card>
     <h2 id="progress" class="text-xl font-semibold text-text mb-4">Progress</h2>
     <c-cards.card class="mb-8">
@@ -736,6 +1022,15 @@
         <c-badges.info><i class="fas fa-star mr-1" aria-hidden="true"></i> With icon</c-badges.info>
         <c-badges.primary pill>Pill</c-badges.primary>
     </div>
+    <p class="tw-data-label mb-2">Badge as a control</p>
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+        <c-badges.action><i class="fas fa-rotate-right mr-1" aria-hidden="true"></i>Re-run</c-badges.action>
+        <c-badges.action disabled><i class="fas fa-check mr-1" aria-hidden="true"></i>Queued</c-badges.action>
+    </div>
+    <p class="text-sm text-text-muted mb-4">
+        A real button wearing the secondary tint, for the control that belongs to a row of badges: the re-run
+        beside an assessment run's metadata. A control standing on its own is a button.
+    </p>
     <p class="tw-data-label mb-2">Solid</p>
     <div class="flex flex-wrap items-center gap-2 mb-2">
         <c-badges.solid-danger size="sm">KEV</c-badges.solid-danger>
@@ -757,6 +1052,7 @@
         <c-badges.dynamic variant="info">Medium</c-badges.dynamic>
         <c-badges.dynamic>Low</c-badges.dynamic>
         <c-badges.dynamic variant="success" size="sm">Resolved</c-badges.dynamic>
+        <c-badges.dynamic variant="violet">VEX</c-badges.dynamic>
     </div>
     <p class="text-sm text-text-muted mb-6">
         For rows Alpine builds from JSON, where the server never sees the value. The caller binds
@@ -790,6 +1086,10 @@
         <c-tags.tag href="#tags"><i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i> Linked tag</c-tags.tag>
         <c-tags.tag removable label="Removable">Removable</c-tags.tag>
     </div>
+    <p class="text-sm text-text-muted mt-4 mb-0">
+        A tag an editor builds from Alpine names itself in the browser, so it passes
+        <c-code-inline>remove_label</c-code-inline> the expression instead of the words.
+    </p>
     </c-cards.card>
     {# ── Feedback ──────────────────────────────────────────────────────────── #}
     <h2 id="alerts" class="text-xl font-semibold text-text mb-4">Alerts</h2>
@@ -803,7 +1103,32 @@
         <c-feedback.alert variant="warning" dismissible>Review your settings before continuing.</c-feedback.alert>
         <c-feedback.alert variant="danger" title="Upload failed">The SBOM could not be parsed.</c-feedback.alert>
         <c-feedback.alert variant="info">New features are available in this release.</c-feedback.alert>
+        <c-feedback.alert variant="success" title="security.txt">
+        Served at <c-code-inline>/.well-known/security.txt</c-code-inline>. Fill the named action slot with the
+        control that resolves the notice and it sits at the end of the row.
+        <c-slot name="action">
+        <c-buttons.outline-primary size="sm" class="shrink-0">Manage</c-buttons.outline-primary>
+        </c-slot>
+        </c-feedback.alert>
+        <c-feedback.alert variant="info" title="Processing vulnerability scan">
+        <c-slot name="mark">
+        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+        </c-slot>
+        <c-slot name="body">
+        <p class="mb-2">
+            A notice that explains itself at length fills the named body slot instead of the default
+            one: several paragraphs, a preformatted error or a control cannot live inside a paragraph.
+        </p>
+        <c-buttons.secondary>
+        <i class="fas fa-sync-alt mr-2" aria-hidden="true"></i>Refresh page
+        </c-buttons.secondary>
+        </c-slot>
+        </c-feedback.alert>
     </div>
+    <p class="text-sm text-text-muted mt-4 mb-0">
+        The named mark slot replaces the glyph, for a notice marked by the brand loader rather than
+        an icon.
+    </p>
     </c-cards.card>
     <h2 id="callouts" class="text-xl font-semibold text-text mb-4">Callouts</h2>
     <c-cards.card class="mb-8">
@@ -894,10 +1219,33 @@
     <div class="mt-6">
         <c-navigation.tabs-pills :tabs="demo_tabs" active="sboms" />
     </div>
+    <p class="text-sm text-text-muted mt-6 mb-2">
+        The segmented control wears the same pills, for buttons that switch what is already on screen
+        rather than select a panel: it is a group, so every button stays in the tab order, and which
+        one is chosen is client state bound to <c-code-inline>data-active</c-code-inline>.
+    </p>
+    <div x-data="{ chart: 'timeline' }" class="flex">
+        <c-navigation.segmented>
+        <c-navigation.segment ::data-active="chart === 'timeline'" @click="chart = 'timeline'">
+        <i class="fas fa-chart-line mr-1" aria-hidden="true"></i>Timeline
+        </c-navigation.segment>
+        <c-navigation.segment ::data-active="chart === 'severity'" @click="chart = 'severity'">
+        <i class="fas fa-chart-bar mr-1" aria-hidden="true"></i>Severity
+        </c-navigation.segment>
+        <c-navigation.segment ::data-active="chart === 'providers'" @click="chart = 'providers'">
+        <i class="fas fa-chart-pie mr-1" aria-hidden="true"></i>Providers
+        </c-navigation.segment>
+        </c-navigation.segmented>
+    </div>
     </c-cards.card>
     <h2 id="breadcrumbs" class="text-xl font-semibold text-text mb-4">Breadcrumbs</h2>
     <c-cards.card class="mb-8">
     <c-navigation.breadcrumbs :items="demo_breadcrumbs" />
+    <p class="text-sm text-text-muted mt-4 mb-2">
+        A crumb may carry an icon, which the public trails use. The last crumb is the current page: it
+        renders as text and says so with <code class="tw-code-inline">aria-current</code>.
+    </p>
+    <c-navigation.breadcrumbs :items="demo_marked_breadcrumbs" />
     </c-cards.card>
     <h2 id="dropdowns" class="text-xl font-semibold text-text mb-4">Dropdowns</h2>
     <c-cards.card class="mb-8">
@@ -1008,7 +1356,8 @@
         {% for product in demo_menu_rows %}
             <c-tables.row>
             <c-tables.cell>{{ product }}</c-tables.cell>
-            <c-tables.cell date class="text-text-muted">10 Aug 2026, 14:32</c-tables.cell>
+            {# muted is the cell's own ink segment: a caller class would fight it. #}
+            <c-tables.cell date muted>10 Aug 2026, 14:32</c-tables.cell>
             <c-tables.actions-cell>
             <c-actions-menu label="Product actions" width="w-56">
             <c-dropdowns.header>Advisories</c-dropdowns.header>
@@ -1032,8 +1381,12 @@
     <c-navigation.stepper-connector completed />
     <c-navigation.stepper-step state="active" label="Assessment">2</c-navigation.stepper-step>
     <c-navigation.stepper-connector />
-    <c-navigation.stepper-step label="Declaration">3</c-navigation.stepper-step>
+    <c-navigation.stepper-step label="Declaration" label_class="hidden sm:inline">3</c-navigation.stepper-step>
     </c-navigation.stepper>
+    <p class="text-sm text-text-muted mt-4 mb-0">
+        A long rail hides its captions on a narrow screen and keeps the circles:
+        <c-code-inline>label_class="hidden sm:inline"</c-code-inline> on each step, as the CRA wizard does.
+    </p>
     </c-cards.card>
     {# ── Misc ──────────────────────────────────────────────────────────────── #}
     <h2 id="avatars" class="text-xl font-semibold text-text mb-4">Avatars</h2>
@@ -1051,6 +1404,16 @@
         <c-avatar initials="ON" status="online" />
         <c-avatar initials="BS" status="busy" />
         <c-avatar initials="OF" status="offline" />
+    </div>
+    <p class="tw-data-label mt-6 mb-2">Icon mark</p>
+    <p class="text-sm text-text-muted mb-3">
+        The slot is the mark for a subject that is not a person, which is the round mark a detail page opens
+        with: <code class="tw-code-inline">c-layout.page-header</code> with
+        <code class="tw-code-inline">mark="avatar"</code> renders exactly this.
+    </p>
+    <div class="flex flex-wrap items-center gap-4">
+        <c-avatar size="lg"><i class="fas fa-shield-halved"></i></c-avatar>
+        <c-avatar size="lg" style="--avatar-accent: var(--color-success)"><i class="fas fa-tag"></i></c-avatar>
     </div>
     <p class="tw-data-label mt-6 mb-2">Accent</p>
     <p class="text-sm text-text-muted mb-3">
@@ -1079,6 +1442,12 @@
         <p class="text-sm text-text-muted mt-4 mb-0">
             Without a filename the copy control sits in the block's top-right corner instead of a header band.
         </p>
+        <p class="text-sm text-text-muted mt-4 mb-0">
+            Its inline twin is <c-code-inline>c-code-inline</c-code-inline>, for a path or a flag set in running
+            text: <c-code-inline>/.well-known/security.txt</c-code-inline>. Pass
+            <c-code-inline>accent="primary"</c-code-inline> for the identifier chip
+            (<c-code-inline accent="primary">CRA-13-4</c-code-inline>).
+        </p>
         </c-cards.card>
         <c-cards.card title="Token display">
         <c-token-display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked />
@@ -1100,8 +1469,8 @@
         </div>
         <p class="tw-data-label mt-6 mb-2">Inline code</p>
         <p class="text-sm text-text-muted mb-0">
-            A neutral identifier in prose: <code class="tw-code-inline">pkg:npm/left-pad</code>. A control ID gets
-            the brand tint: <code class="tw-code-inline tw-code-inline-primary">A.5.13</code>.
+            A neutral identifier in prose: <c-code-inline>pkg:npm/left-pad</c-code-inline>. A control ID gets
+            the brand tint: <c-code-inline accent="primary">A.5.13</c-code-inline>.
         </p>
         </c-cards.card>
     </div>

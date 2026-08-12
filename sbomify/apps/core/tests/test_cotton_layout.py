@@ -14,6 +14,7 @@ PAGE_HEADER = "flex flex-wrap items-start justify-between gap-4"
 PAGE_ACTIONS = "flex flex-wrap items-center gap-2"
 SECTION_HEADER = "flex items-start gap-3 mb-4"
 SECTION_BODY = "sm:ml-11"
+FORM_SECTION = "grid gap-y-4 gap-x-12 py-8"
 STAT_CARD = "flex flex-col bg-surface rounded-xl"
 STAT_ICON = "shrink-0 flex items-center justify-center w-10 h-10"
 STAT_LABEL = "block text-xs font-semibold uppercase"
@@ -90,11 +91,19 @@ def test_chip_mark_is_the_icon_chip_at_its_large_size(rendered: str) -> None:
     assert "var(--chip-accent,var(--color-primary))" in chip
 
 
-def test_avatar_mark_replaces_the_chip(rendered: str) -> None:
-    mark = _classes(rendered, "relative shrink-0 flex items-center justify-center", "fas fa-cube")
-    assert "w-14 h-14 rounded-full" in mark
+def test_avatar_mark_is_the_avatar_component_wearing_the_icon(rendered: str) -> None:
+    mark = _classes(rendered, "relative flex items-center justify-center shrink-0", "fas fa-cube")
+    assert "rounded-full" in mark
+    assert "w-14 h-14 text-lg" in mark
     assert "var(--avatar-accent,var(--color-primary))" in mark
     assert "w-12 h-12" not in mark
+
+
+def test_meta_slot_sits_on_the_title_line(rendered: str) -> None:
+    row = rendered[rendered.index("Acme Registry") :]
+    row = row[: row.index("</div>")]
+    assert 'data-probe="header-meta"' in row
+    assert "text-danger" in row
 
 
 def test_actions_render_only_when_the_slot_has_content(rendered: str) -> None:
@@ -111,14 +120,16 @@ def test_page_header_forwards_attrs(rendered: str) -> None:
 
 def test_breadcrumbs_replace_the_subtitle(rendered: str) -> None:
     assert 'aria-label="Breadcrumb"' in rendered
-    assert _classes(rendered, "text-sm text-text-muted mt-1", ">Products</a>") == "text-sm text-text-muted mt-1"
-    assert ">Products</a>" in rendered
-    assert ">Acme Vault</span>" in rendered
+    assert _classes(rendered, "text-sm text-text-muted mt-1", "Products</a>") == "text-sm text-text-muted mt-1"
+    assert "Products</a>" in rendered
+    assert "Acme Vault</span>" in rendered
 
 
 def test_copy_values_render_beside_the_title(rendered: str) -> None:
     assert "DLyQjCBkNJkB" in rendered
-    assert "tw-inline-copy" in rendered
+    # The identifier chip is c-inline-copy, which confirms from a data attribute.
+    assert 'data-copied="false"' in rendered
+    assert "font-mono text-[0.8125rem] text-text bg-background" in rendered
 
 
 def test_editable_params_render_the_inline_field_instead_of_plain_text(rendered: str) -> None:
@@ -131,7 +142,7 @@ def test_editable_params_render_the_inline_field_instead_of_plain_text(rendered:
 def test_section_header_shell_and_parts(rendered: str) -> None:
     assert _classes(rendered, SECTION_HEADER, "Generate a new token") == SECTION_HEADER
     assert '<h3 class="text-base font-semibold text-text m-0">Generate a new token</h3>' in rendered
-    assert '<p class="text-sm text-text-muted mt-0.5">Tokens are shown once' in rendered
+    assert '<p class="text-sm leading-[1.5] text-text-muted mt-0.5">Tokens are shown once' in rendered
 
 
 def test_section_header_chip_is_the_icon_chip_at_its_small_size(rendered: str) -> None:
@@ -144,6 +155,19 @@ def test_level_two_swaps_the_heading_element(rendered: str) -> None:
     assert '<h3 class="text-base font-semibold text-text m-0">Pending invitations' not in rendered
 
 
+def test_section_header_actions_sit_after_the_title_block(rendered: str) -> None:
+    """The action follows the title block rather than the chip, and the title
+    block only claims the free space when there is an action to push against."""
+    header = rendered.index('data-probe="section-actioned"')
+    assert rendered.index("Entities", header) < rendered.index("Add entity", header)
+    assert '<div class="flex-1">' in rendered[header : rendered.index("Add entity", header)]
+
+
+def test_section_header_without_actions_leaves_the_title_block_unstretched(rendered: str) -> None:
+    plain = rendered.index("Generate a new token")
+    assert "flex-1" not in rendered[rendered.rindex(SECTION_HEADER, 0, plain) : plain]
+
+
 def test_section_header_accent_reaches_the_chip(rendered: str) -> None:
     chip = _classes(rendered, "shrink-0 flex items-center justify-center w-8 h-8", "fas fa-envelope-open-text")
     assert "bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] text-success" in chip
@@ -152,6 +176,51 @@ def test_section_header_accent_reaches_the_chip(rendered: str) -> None:
 def test_section_body_indents_to_the_titles_edge_and_merges_caller_class(rendered: str) -> None:
     body = _classes(rendered, SECTION_BODY, "Indented to the title's left edge.")
     assert body == f"{SECTION_BODY} space-y-3"
+
+
+# ── Form section ───────────────────────────────────────────────────────────
+
+
+def test_form_section_is_two_columns_above_the_breakpoint(rendered: str) -> None:
+    section = _classes(rendered, FORM_SECTION, "What it is")
+    assert "lg:grid-cols-[15rem_minmax(0,1fr)]" in section
+
+
+def test_form_section_draws_the_rule_above_itself_and_the_first_drops_it(rendered: str) -> None:
+    """The separator is each step's own top border, so the leading one is
+    removed by position rather than by a prop the caller keeps in step."""
+    section = _classes(rendered, FORM_SECTION, "What it is")
+    assert "border-t border-solid border-border" in section
+    assert "first-of-type:border-t-0 first-of-type:pt-0" in section
+
+
+def test_form_section_title_and_description_recipes(rendered: str) -> None:
+    assert '<h2 class="flex items-center gap-2.5 text-base leading-[1.5] font-semibold text-text m-0">' in rendered
+    assert '<p class="text-sm leading-[1.5] text-text-muted mt-1.5">A title is all a draft needs.</p>' in rendered
+
+
+def test_form_section_step_number_rides_the_small_icon_chip(rendered: str) -> None:
+    chip = _classes(rendered, "shrink-0 flex items-center justify-center w-8 h-8", "What it is")
+    assert "text-sm rounded-md" in chip
+    assert "var(--chip-accent,var(--color-primary))" in chip
+    # The number is the chip's content, not a prop it renders beside itself.
+    marker = _opening(rendered, "shrink-0 flex items-center justify-center w-8 h-8", "What it is")
+    assert "1" in marker.rsplit("</span>", 1)[0]
+
+
+def test_form_section_icon_replaces_the_number_and_accent_reaches_the_chip(rendered: str) -> None:
+    chip = _classes(rendered, "shrink-0 flex items-center justify-center w-8 h-8", "fas fa-list-check")
+    assert "bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)] text-text-muted" in chip
+
+
+def test_form_section_without_a_mark_renders_no_chip(rendered: str) -> None:
+    heading = rendered[rendered.index('data-probe="form-section-bare"') : rendered.index("No mark")]
+    assert "w-8 h-8" not in heading
+
+
+def test_form_section_merges_caller_class_and_forwards_attrs(rendered: str) -> None:
+    assert "max-w-5xl" in _classes(rendered, FORM_SECTION, "What it affects")
+    assert 'data-probe="form-section-step"' in _opening(rendered, FORM_SECTION, "What it is")
 
 
 # ── Stat card ──────────────────────────────────────────────────────────────
@@ -227,9 +296,9 @@ def test_stat_card_forwards_attrs_and_caller_class(rendered: str) -> None:
 
 
 def test_choice_group_label_and_hint_come_from_the_form_field(rendered: str) -> None:
-    assert _classes(rendered, "block text-sm font-medium text-text mb-2", "Severity")
+    assert _classes(rendered, "block text-sm leading-[1.5] font-medium text-text mb-2", "Severity")
     assert '<span class="text-danger">*</span>' in rendered
-    assert _classes(rendered, "block text-xs text-text-muted mt-1.5", "Pick the band")
+    assert _classes(rendered, "block text-xs leading-[1.5] text-text-muted mt-1.5", "Pick the band")
     assert ">Pick the band it reports under." in rendered
 
 
@@ -287,6 +356,35 @@ def test_choice_icon_takes_the_tiles_accent(rendered: str) -> None:
     assert '<i class="fas fa-angle-up text-sm text-[color:var(--choice-accent,var(--color-text-muted))]"' in rendered
 
 
+def test_bound_tile_drives_the_real_control_not_a_class(rendered: str) -> None:
+    """A tile the browser resolves binds the input; the look still comes from :has()."""
+    tile = _opening(rendered, CHOICE, "<span>Satisfied</span>")
+    # Autoescaping writes the quotes as entities; the browser hands Alpine the
+    # decoded attribute, so the binding still reads `'finding-' + finding.id`.
+    assert ':name="&#x27;finding-&#x27; + finding.id"' in tile
+    assert 'name=""' not in tile
+    assert ':checked="state(finding) === &#x27;satisfied&#x27;"' in tile
+    assert '@click="setStatus(finding, &#x27;satisfied&#x27;)"' in tile
+    assert ":class" not in tile
+
+
+def test_bound_tile_puts_label_bindings_on_the_label(rendered: str) -> None:
+    """style and title describe the tile, so they stay on the label with attrs."""
+    label = _opening(rendered, CHOICE, "<span>N/A</span>")
+    opening = label[: label.index("<input")]
+    assert ":style=" in opening
+    assert "--choice-accent: var(--color-warning)" in opening
+    assert ':title="finding.hint"' in opening
+    assert ':disabled="finding.is_mandatory"' in label
+    assert ':disabled="finding.is_mandatory"' not in opening
+
+
+def test_an_unbound_tile_emits_no_alpine_attributes(rendered: str) -> None:
+    tile = _opening(rendered, CHOICE, "<span>Public</span>")
+    assert ":name=" not in tile
+    assert ":checked=" not in tile
+
+
 def test_a_group_without_options_renders_its_tiles_from_the_slot(rendered: str) -> None:
     group = rendered[rendered.index('name="probe-visibility"') :]
     assert "<span>Public</span>" in group
@@ -321,6 +419,15 @@ def test_alpine_state_arrives_as_one_scope(rendered: str) -> None:
     assert 'hx-get="/probe/row"' in opening
     assert '@keydown.enter="open()"' in opening
     assert "rounded-b-xl" in _classes(rendered, SELECT_ROW, "CNSA 2.0")
+
+
+def test_toggle_ref_points_the_row_click_at_its_own_switch(rendered: str) -> None:
+    """A row whose body holds inputs of its own must not toggle the first of them."""
+    opening = _opening(rendered, SELECT_ROW, "OSV Vulnerability Scanner")
+    assert "$event.target.closest('a, button, select, input, textarea, label')" in opening
+    assert "$refs.toggle.click()" in opening
+    assert "$el.querySelector('input')" not in opening
+    assert 'x-data="{ enabled: false }"' in opening
 
 
 def test_disabled_dims_the_row_while_the_control_blocks_it(rendered: str) -> None:

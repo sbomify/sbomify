@@ -23,6 +23,7 @@ on the output; it is not routed anywhere.
     <c-tables.cell class="font-medium">Plain body cell</c-tables.cell>
     <c-tables.cell date>10 Aug 2026</c-tables.cell>
     <c-tables.cell end hx-get="/probe">Right cell</c-tables.cell>
+    <c-tables.cell muted>Muted cell</c-tables.cell>
     <c-tables.actions-cell @click.stop><c-buttons.icon label="Component actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
     </c-tables.row>
 </tbody>
@@ -43,6 +44,16 @@ on the output; it is not routed anywhere.
 <tbody>
     <c-tables.row>
     <c-tables.cell>Unfixed body cell</c-tables.cell>
+    </c-tables.row>
+</tbody>
+</c-tables.table>
+<c-tables.table sized data-probe="table-sized">
+<c-tables.head>
+<c-tables.header-cell class="w-1/4">Sized head</c-tables.header-cell>
+</c-tables.head>
+<tbody>
+    <c-tables.row>
+    <c-tables.cell>Sized body cell</c-tables.cell>
     </c-tables.row>
 </tbody>
 </c-tables.table>

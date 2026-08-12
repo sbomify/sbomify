@@ -39,8 +39,11 @@ def test_nested_shell_drops_its_own_frame(rendered: str) -> None:
 
 
 def test_toolbar_recipe(rendered: str) -> None:
-    band = [part for part in rendered.split("<div") if "justify-between gap-4 p-4" in part][0]
+    # px-4 py-4, never p-4: the public base's pre-Tailwind utilities.css carries
+    # an !important .p-4 that would repad the band there.
+    band = [part for part in rendered.split("<div") if "justify-between gap-4 px-4 py-4" in part][0]
     assert "flex flex-wrap items-center" in band
+    assert " p-4 " not in band
     assert "bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)]" in band
     assert "border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]" in band
 
@@ -53,7 +56,7 @@ def test_toolbar_renders_the_right_group_only_when_it_is_filled(rendered: str) -
 
 def test_search_field_recipe_and_label_pairing(rendered: str) -> None:
     field = _element_holding(rendered, "input", 'id="probe-search"')
-    for bit in ("py-2 pr-3 pl-9", "min-w-[240px]", "bg-surface", "rounded-lg", "placeholder:text-text-muted"):
+    for bit in ("py-2 pr-3 pl-9", "min-w-[240px]", "bg-surface", "rounded-[0.5rem]", "placeholder:text-text-muted"):
         assert bit in field
     assert "focus:outline-none focus:border-primary" in field
     assert "focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]" in field
@@ -91,6 +94,14 @@ def test_fixed_table_centres_every_middle_column(rendered: str) -> None:
     assert "[&_td:not(:first-child):not(:last-child):not([data-cell-end])>.flex]:justify-center" in fixed
 
 
+def test_sized_table_fixes_the_layout_without_imposing_alignment(rendered: str) -> None:
+    """A table whose header cells state their own widths keeps its values left."""
+    sized = _element_holding(rendered, "table", 'data-probe="table-sized"')
+    assert "table-fixed" in sized
+    assert "text-center" not in sized
+    assert "justify-center" not in sized
+
+
 def test_plain_table_stays_content_sized(rendered: str) -> None:
     plain = _element_holding(rendered, "table", "Unfixed body cell")
     assert "w-full border-separate border-spacing-0" in plain
@@ -107,7 +118,7 @@ def test_header_cell_band_recipe(rendered: str) -> None:
     cell = _element_holding(rendered, "th", "Unsorted head")
     for bit in (
         "px-5 py-4",
-        "text-xs leading-[1.5] font-semibold uppercase tracking-[0.05em]",
+        "text-[0.75rem] font-semibold uppercase tracking-[0.05em]",
         "text-text-muted bg-background",
         "border-b border-solid border-border",
         "sticky top-0 z-[1]",
@@ -173,7 +184,7 @@ def test_row_tints_on_hover_and_the_last_row_loses_its_rule(rendered: str) -> No
 def test_body_cell_recipe(rendered: str) -> None:
     cell = _element_holding(rendered, "td", "Plain body cell")
     for bit in (
-        "p-5 text-sm leading-[1.5] text-text",
+        "px-5 py-5 text-[0.875rem] text-text",
         "border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]",
         "transition-[background-color] duration-150",
         "first:pl-4 last:pr-4 max-sm:px-2",
@@ -182,6 +193,14 @@ def test_body_cell_recipe(rendered: str) -> None:
         assert bit in cell
     assert "text-right" not in cell
     assert "whitespace-nowrap" not in cell
+
+
+def test_cell_muted_replaces_the_ink_rather_than_stacking_on_it(rendered: str) -> None:
+    """Two colours would be settled by stylesheet order, so the ink is one segment."""
+    muted = _element_holding(rendered, "td", "Muted cell")
+    assert "px-5 py-5 text-[0.875rem] text-text-muted border-b" in muted
+    plain = _element_holding(rendered, "td", "Plain body cell")
+    assert "text-text-muted" not in plain
 
 
 def test_cell_end_and_date_segments(rendered: str) -> None:
@@ -206,7 +225,7 @@ def test_actions_cell_states_its_own_column_gutters(rendered: str) -> None:
     body = _element_holding(rendered, "td", "Component actions")
     assert "w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" in body
     assert "max-sm:px-2" not in body
-    assert "p-5 text-sm leading-[1.5] text-text" in body
+    assert "px-5 py-5 text-[0.875rem] text-text" in body
     header = _element_holding(rendered, "th", "Row actions")
     assert "w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" in header
     assert "max-sm:px-2" not in header

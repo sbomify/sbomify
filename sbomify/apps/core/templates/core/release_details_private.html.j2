@@ -1,115 +1,110 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
-{% load design_system %}
 {% load django_vite %}
 {% block title %}sbomify Product: {{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block content %}
-    {% page_header title=release.name icon="fas fa-tag" mark="avatar" editable_item_type=header_editable_type editable_item_id=release.id copy_values=header_copy_values breadcrumbs=breadcrumb_items attrs=release.is_latest|yesno:'style="--avatar-accent: var(--color-success)",' %}
+    {# The latest release wears the success accent on its mark; the property inherits, so it rides on the header. #}
+    {% if release.is_latest %}
+        {% firstof "--avatar-accent: var(--color-success)" as header_style %}
+    {% endif %}
+    <c-layout.page-header title="{{ release.name }}" icon="fas fa-tag" mark="avatar" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" style="{{ header_style }}">
     {# Download Buttons - Desktop; the mobile card below repeats them #}
     {% if release.has_sboms or release.has_vex or release.has_cbom %}
         <div class="hidden lg:flex gap-2">
             {% if release.has_sboms %}
-                <a class="tw-btn-secondary no-underline"
-                   href="{% url 'api-1:download_release' release.id %}"
-                   title="Download as CycloneDX">
-                    <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                         alt="CycloneDX"
-                         class="h-4 w-auto dark:brightness-0 dark:invert"
-                         width="16"
-                         height="16">
-                    <i class="fas fa-download" aria-hidden="true"></i>
-                </a>
-                <a class="tw-btn-secondary no-underline"
-                   href="{% url 'api-1:download_release' release.id %}?format=spdx"
-                   title="Download as SPDX">
-                    <img src="{% static 'img/spdx-logo.svg' %}"
-                         alt="SPDX"
-                         class="h-4 w-auto dark:brightness-0 dark:invert"
-                         width="16"
-                         height="16">
-                    <i class="fas fa-download" aria-hidden="true"></i>
-                </a>
+                <c-buttons.secondary href="{% url 'api-1:download_release' release.id %}" title="Download as CycloneDX">
+                <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                     alt="CycloneDX"
+                     class="h-4 w-auto dark:brightness-0 dark:invert"
+                     width="16"
+                     height="16">
+                <i class="fas fa-download" aria-hidden="true"></i>
+                </c-buttons.secondary>
+                <c-buttons.secondary href="{% url 'api-1:download_release' release.id %}?format=spdx" title="Download as SPDX">
+                <img src="{% static 'img/spdx-logo.svg' %}"
+                     alt="SPDX"
+                     class="h-4 w-auto dark:brightness-0 dark:invert"
+                     width="16"
+                     height="16">
+                <i class="fas fa-download" aria-hidden="true"></i>
+                </c-buttons.secondary>
             {% endif %}
             {% if release.has_vex %}
-                <a class="tw-btn-secondary no-underline"
-                   href="{% url 'api-1:download_release_vex' release.id %}"
-                   title="Download latest VEX (CycloneDX)">
-                    <span class="text-sm font-semibold tracking-wide">VEX</span>
-                    <i class="fas fa-download" aria-hidden="true"></i>
-                </a>
+                <c-buttons.secondary href="{% url 'api-1:download_release_vex' release.id %}" title="Download latest VEX (CycloneDX)">
+                <span class="text-sm font-semibold tracking-wide">VEX</span>
+                <i class="fas fa-download" aria-hidden="true"></i>
+                </c-buttons.secondary>
             {% endif %}
             {% if release.has_cbom %}
-                <a class="tw-btn-secondary no-underline"
-                   href="{% url 'api-1:download_release_cbom' release.id %}"
-                   title="Download CBOM (Cryptography BOM, CycloneDX)">
-                    <span class="text-sm font-semibold tracking-wide">CBOM</span>
-                    <i class="fas fa-download" aria-hidden="true"></i>
-                </a>
+                <c-buttons.secondary href="{% url 'api-1:download_release_cbom' release.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)">
+                <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                <i class="fas fa-download" aria-hidden="true"></i>
+                </c-buttons.secondary>
             {% endif %}
         </div>
     {% endif %}
-{% endpage_header %}
-<div class="space-y-6">
-    {# Description #}
-    {% if release.description %}
-        <p class="text-text-muted text-sm m-0">
-            {% if release.has_crud_permissions and not release.is_latest %}
-                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
-            {% else %}
-                {{ release.description }}
-            {% endif %}
-        </p>
-    {% elif release.has_crud_permissions and not release.is_latest %}
-        <p class="text-text-muted text-sm m-0">
-            {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
-        </p>
-    {% endif %}
-    {# Stats Badges #}
-    <div class="flex flex-wrap gap-2">
-        {% if release.is_latest %}
-            <div class="tw-metric-chip tw-metric-chip-success">
+    </c-layout.page-header>
+    <div class="space-y-6">
+        {# Description #}
+        {% if release.description %}
+            <p class="text-text-muted text-sm m-0">
+                {% if release.has_crud_permissions and not release.is_latest %}
+                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
+                {% else %}
+                    {{ release.description }}
+                {% endif %}
+            </p>
+        {% elif release.has_crud_permissions and not release.is_latest %}
+            <p class="text-text-muted text-sm m-0">
+                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
+            </p>
+        {% endif %}
+        {# Stats Badges #}
+        <div class="flex flex-wrap gap-2">
+            {% if release.is_latest %}
+                <c-chips.metric-chip accent="success">
                 <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>
-                <span class="tw-metric-chip-value">Latest Release</span>
-            </div>
-        {% endif %}
-        {% if release.version %}
-            <div class="tw-metric-chip">
+                <c-chips.metric.value>Latest Release</c-chips.metric.value>
+                </c-chips.metric-chip>
+            {% endif %}
+            {% if release.version %}
+                <c-chips.metric-chip>
                 <i class="fas fa-code-branch text-primary text-xs" aria-hidden="true"></i>
-                <span class="tw-metric-chip-label">Version:</span>
-                <span class="tw-metric-chip-value">{{ release.version }}</span>
-            </div>
-        {% endif %}
-        <div class="tw-metric-chip">
+                <c-chips.metric.label>Version:</c-chips.metric.label>
+                <c-chips.metric.value>{{ release.version }}</c-chips.metric.value>
+                </c-chips.metric-chip>
+            {% endif %}
+            <c-chips.metric-chip>
             <i class="fas fa-calendar text-primary text-xs" aria-hidden="true"></i>
-            <span class="tw-metric-chip-label">Released:</span>
-            <span class="tw-metric-chip-value">
-                {% if release.has_crud_permissions and not release.is_latest %}
-                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' field_name='released_at' field_type='datetime' display_value=release.released_at|default_if_none:release.created_at|date:'M d, Y' %}
-                {% else %}
-                    {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
-                {% endif %}
-            </span>
-        </div>
-        <div class="tw-metric-chip">
+            <c-chips.metric.label>Released:</c-chips.metric.label>
+            <c-chips.metric.value>
+            {% if release.has_crud_permissions and not release.is_latest %}
+                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' field_name='released_at' field_type='datetime' display_value=release.released_at|default_if_none:release.created_at|date:'M d, Y' %}
+            {% else %}
+                {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
+            {% endif %}
+            </c-chips.metric.value>
+            </c-chips.metric-chip>
+            <c-chips.metric-chip>
             <i class="fas fa-calendar-plus text-primary text-xs" aria-hidden="true"></i>
-            <span class="tw-metric-chip-label">Created:</span>
-            <span class="tw-metric-chip-value">
-                {% if release.has_crud_permissions and not release.is_latest %}
-                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.created_at|date:'Y-m-d\\TH:i' field_name='created_at' field_type='datetime' display_value=release.created_at|date:'M d, Y' %}
-                {% else %}
-                    {{ release.created_at|date:"M d, Y" }}
-                {% endif %}
-            </span>
-        </div>
-        <div class="tw-metric-chip tw-metric-chip-info">
+            <c-chips.metric.label>Created:</c-chips.metric.label>
+            <c-chips.metric.value>
+            {% if release.has_crud_permissions and not release.is_latest %}
+                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.created_at|date:'Y-m-d\\TH:i' field_name='created_at' field_type='datetime' display_value=release.created_at|date:'M d, Y' %}
+            {% else %}
+                {{ release.created_at|date:"M d, Y" }}
+            {% endif %}
+            </c-chips.metric.value>
+            </c-chips.metric-chip>
+            <c-chips.metric-chip accent="info">
             <i class="fas fa-puzzle-piece text-xs" aria-hidden="true"></i>
-            <span class="tw-metric-chip-value">{{ release.artifacts.count }}</span>
-            <span class="tw-metric-chip-label">Artifact{{ release.artifacts.count|pluralize }}</span>
+            <c-chips.metric.value>{{ release.artifacts.count }}</c-chips.metric.value>
+            <c-chips.metric.label>Artifact{{ release.artifacts.count|pluralize }}</c-chips.metric.label>
+            </c-chips.metric-chip>
         </div>
-    </div>
-    {# Download Release Card - Mobile Only #}
-    {% if release.has_sboms or release.has_vex or release.has_cbom %}
-        <div class="tw-card lg:hidden">
+        {# Download Release Card - Mobile Only #}
+        {% if release.has_sboms or release.has_vex or release.has_cbom %}
+            <c-cards.card flush class="lg:hidden">
             <div class="px-6 py-4 border-b border-border">
                 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
                     <i class="fas fa-download text-primary"></i>
@@ -124,58 +119,50 @@
                 {% endif %}
                 <div class="flex justify-center gap-3 flex-wrap">
                     {% if release.has_sboms %}
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
-                           href="{% url 'api-1:download_release' release.id %}"
-                           title="Download as CycloneDX">
-                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt="CycloneDX"
-                                 class="h-[18px] w-auto dark:brightness-0 dark:invert"
-                                 width="18"
-                                 height="18">
-                            <i class="fas fa-download" aria-hidden="true"></i>
-                        </a>
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
-                           href="{% url 'api-1:download_release' release.id %}?format=spdx"
-                           title="Download as SPDX">
-                            <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt="SPDX"
-                                 class="h-[18px] w-auto dark:brightness-0 dark:invert"
-                                 width="18"
-                                 height="18">
-                            <i class="fas fa-download" aria-hidden="true"></i>
-                        </a>
+                        <c-buttons.secondary href="{% url 'api-1:download_release' release.id %}" title="Download as CycloneDX">
+                        <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                             alt="CycloneDX"
+                             class="h-[18px] w-auto dark:brightness-0 dark:invert"
+                             width="18"
+                             height="18">
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        </c-buttons.secondary>
+                        <c-buttons.secondary href="{% url 'api-1:download_release' release.id %}?format=spdx" title="Download as SPDX">
+                        <img src="{% static 'img/spdx-logo.svg' %}"
+                             alt="SPDX"
+                             class="h-[18px] w-auto dark:brightness-0 dark:invert"
+                             width="18"
+                             height="18">
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        </c-buttons.secondary>
                     {% endif %}
                     {% if release.has_vex %}
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
-                           href="{% url 'api-1:download_release_vex' release.id %}"
-                           title="Download latest VEX (CycloneDX)">
-                            <span class="text-sm font-semibold tracking-wide">VEX</span>
-                            <i class="fas fa-download" aria-hidden="true"></i>
-                        </a>
+                        <c-buttons.secondary href="{% url 'api-1:download_release_vex' release.id %}" title="Download latest VEX (CycloneDX)">
+                        <span class="text-sm font-semibold tracking-wide">VEX</span>
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        </c-buttons.secondary>
                     {% endif %}
                     {% if release.has_cbom %}
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 no-underline"
-                           href="{% url 'api-1:download_release_cbom' release.id %}"
-                           title="Download CBOM (Cryptography BOM, CycloneDX)">
-                            <span class="text-sm font-semibold tracking-wide">CBOM</span>
-                            <i class="fas fa-download" aria-hidden="true"></i>
-                        </a>
+                        <c-buttons.secondary href="{% url 'api-1:download_release_cbom' release.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)">
+                        <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        </c-buttons.secondary>
                     {% endif %}
                 </div>
             </div>
-        </div>
-    {% endif %}
-    {# Release Artifacts #}
-    <div>
-        {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest %}
-    </div>
-    {# Danger Zone #}
-    {% if release.has_crud_permissions and not release.is_latest %}
+            </c-cards.card>
+        {% endif %}
+        {# Release Artifacts #}
         <div>
-            {% include 'components/release_danger_zone.html.j2' with release_id=release.id product_id=release.product.id release_name=release.name %}
+            {% include 'core/components/release_artifacts.html.j2' with release_id=release.id product_id=release.product.id can_edit=release.has_crud_permissions is_latest=release.is_latest %}
         </div>
-    {% endif %}
-</div>
+        {# Danger Zone #}
+        {% if release.has_crud_permissions and not release.is_latest %}
+            <div>
+                {% include 'components/release_danger_zone.html.j2' with release_id=release.id product_id=release.product.id release_name=release.name %}
+            </div>
+        {% endif %}
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

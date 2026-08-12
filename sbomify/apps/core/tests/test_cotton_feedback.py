@@ -89,6 +89,42 @@ def test_alert_dismiss_keeps_its_alpine_hook_and_label(rendered: str) -> None:
     assert 'aria-label="Dismiss"' in button
 
 
+def test_alert_action_slot_is_the_rows_last_item(rendered: str) -> None:
+    """The control that resolves the notice sits after the message, not in it."""
+    body = _section(rendered, "alert-actioned")
+    message = body.index('<p class="text-sm m-0">')
+    action = body.index("Manage")
+    assert message < action
+    # Outside the content column, so the row's flex puts it at the end.
+    assert body.index("</div>", message) < action
+
+
+def test_alert_body_slot_replaces_the_paragraph(rendered: str) -> None:
+    """A notice that explains itself at length cannot live inside a p element."""
+    body = _section(rendered, "alert-body")
+    assert '<p class="text-sm m-0">' not in body
+    assert '<p class="mb-2">No vulnerability scan data found for this SBOM.</p>' in body
+    assert "<pre" in body
+    # The title still leads the column.
+    assert body.index("No Scan Data Available") < body.index("<pre")
+
+
+def test_alert_mark_slot_replaces_the_glyph(rendered: str) -> None:
+    """A scan in flight is marked by the brand loader, which is not a glyph class."""
+    marked = _section(rendered, "alert-marked")
+    assert "brand-loader-stand-in" in marked
+    assert "fa-info-circle" not in marked
+    # It keeps the glyph's box and ink, so the row does not shift under it.
+    assert "shrink-0 w-5 h-5 mt-0.5 text-[var(--alert-accent,currentColor)]" in marked
+
+
+def test_alert_without_an_action_renders_nothing_after_the_message(rendered: str) -> None:
+    plain = _section(rendered, "alert-info")
+    # From the message to the next alert's root: only closing tags in between.
+    tail = plain[plain.index("Info body") : plain.index("<div")]
+    assert tail.count("<") == tail.count("</")
+
+
 def test_alert_title_and_slot_render(rendered: str) -> None:
     body = _section(rendered, "alert-success")
     assert '<p class="font-semibold mb-1">Saved</p>' in body
@@ -142,7 +178,7 @@ def test_empty_state_padding_segments_never_conflict(rendered: str) -> None:
 
 def test_empty_state_medallion_default_recipe(rendered: str) -> None:
     medallion = _section(rendered, "empty-default")
-    assert "w-20 h-20 mb-6" in medallion
+    assert "w-20 h-20 text-2xl mb-6" in medallion
     assert "text-primary" in medallion
     assert "color-mix(in_oklab,var(--color-primary)_15%,transparent)" in medallion
 
@@ -154,6 +190,19 @@ def test_empty_state_medallion_size_and_tone_segments(rendered: str) -> None:
     assert "color-mix(in_oklab,var(--color-border)_30%,transparent)" in medallion
     assert "text-text-muted" in medallion
     assert "text-primary" not in medallion
+
+
+def test_empty_state_mark_takes_its_size_from_the_medallion(rendered: str) -> None:
+    """The mark carries no size of its own, so the small medallion holds the
+    small mark rather than the full-size one shrunk into it."""
+    assert '<i class="fas fa-cube" aria-hidden="true">' in _section(rendered, "empty-default")
+    assert '<i class="fas fa-address-card" aria-hidden="true">' in _section(rendered, "empty-untitled")
+
+
+def test_empty_state_without_a_title_writes_no_heading(rendered: str) -> None:
+    untitled = _section(rendered, "empty-untitled")
+    assert "<h3" not in untitled
+    assert "No entities in this profile" in untitled
 
 
 def test_empty_state_title_message_and_secondary_link(rendered: str) -> None:

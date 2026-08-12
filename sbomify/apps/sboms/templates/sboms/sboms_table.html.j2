@@ -12,25 +12,25 @@
          data-page-size="{% if full_view %}10{% else %}5{% endif %}"
          {% if not full_view %}data-default-sort="type"{% endif %}>
         {% if not is_public_view %}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        {% if full_view %}
-                            Artifacts &amp; security
-                        {% else %}
-                            Latest artifacts &amp; security
-                        {% endif %}
-                    </h4>
-                    {% if show_view_all %}
-                        <a href="{% url 'sboms:component_artifacts' component_id %}"
-                           class="tw-btn-secondary text-sm no-underline">
-                            View all {{ total_artifact_count }}
-                            <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
-                        </a>
+            {# The shell draws the frame itself, so the table needs no card around it. #}
+            <c-tables.shell>
+            <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    {% if full_view %}
+                        Artifacts &amp; security
+                    {% else %}
+                        Latest artifacts &amp; security
                     {% endif %}
-                </div>
-                <div class="p-0">{% include 'sboms/sboms_table_content.html.j2' %}</div>
+                </h4>
+                {% if show_view_all %}
+                    <c-buttons.secondary href="{% url 'sboms:component_artifacts' component_id %}">
+                    View all {{ total_artifact_count }}
+                    <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
+                    </c-buttons.secondary>
+                {% endif %}
             </div>
+            {% include 'sboms/sboms_table_content.html.j2' %}
+            </c-tables.shell>
         {% else %}
             <div>{% include 'sboms/sboms_table_content.html.j2' %}</div>
         {% endif %}

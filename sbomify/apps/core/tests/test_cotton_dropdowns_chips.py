@@ -16,6 +16,7 @@ PANEL = "min-w-48"
 ITEM = "group flex items-center gap-3"
 ICON_CHIP = "shrink-0 flex items-center justify-center"
 METRIC_CHIP = "inline-flex items-center gap-1.5"
+ASSESSMENT = "inline-flex items-center justify-center gap-1"
 
 
 @pytest.fixture(scope="module")
@@ -263,7 +264,9 @@ def test_icon_chip_forwards_attrs_and_caller_class(rendered: str) -> None:
 
 def test_metric_chip_shares_the_pill_shell(rendered: str) -> None:
     chip = _classes(rendered, METRIC_CHIP, "Components")
-    assert chip.startswith("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm")
+    assert chip.startswith(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5]"
+    )
 
 
 def test_metric_chip_default_is_the_bordered_surface(rendered: str) -> None:
@@ -299,3 +302,71 @@ def test_metric_chip_slot_keeps_the_callers_order(rendered: str) -> None:
 def test_metric_chip_forwards_attrs_and_caller_class(rendered: str) -> None:
     assert _classes(rendered, METRIC_CHIP, "SBOMs").endswith("ml-2")
     assert "@click=\"filter('sboms')\"" in _opening(rendered, METRIC_CHIP, "SBOMs")
+
+
+# ── Assessment pills ─────────────────────────────────────────────────────────
+
+
+def test_assessment_pill_shares_one_shell(rendered: str) -> None:
+    pill = _classes(rendered, ASSESSMENT, "NTIA")
+    assert pill.startswith(
+        "inline-flex items-center justify-center gap-1 px-2 py-1 text-[0.6875rem] leading-[1.5] "
+        "font-semibold rounded-md whitespace-nowrap border border-solid"
+    )
+    assert "[&_i]:text-[0.625rem]" in pill
+
+
+def test_assessment_pill_without_a_status_is_the_quiet_tint(rendered: str) -> None:
+    pill = _opening(rendered, ASSESSMENT, "+2")
+    assert 'data-status=""' in pill
+    classes = _classes(rendered, ASSESSMENT, "+2")
+    assert "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)]" in classes
+    assert "border-[color-mix(in_oklab,var(--color-border)_40%,transparent)]" in classes
+
+
+@pytest.mark.parametrize(
+    ("marker", "token"),
+    [("NTIA", "success"), ("PQC", "info"), ("SPDX", "danger")],
+)
+def test_assessment_pill_token_recipes_are_keyed_by_the_attribute(rendered: str, marker: str, token: str) -> None:
+    pill = _classes(rendered, ASSESSMENT, marker)
+    status = {"success": "pass", "info": "pending", "danger": "error"}[token]
+    assert f"data-[status={status}]:bg-[color-mix(in_oklab,var(--color-{token})_10%,transparent)]" in pill
+    assert f"data-[status={status}]:border-[color-mix(in_oklab,var(--color-{token})_25%,transparent)]" in pill
+    assert f"data-[status={status}]:hover:bg-[color-mix(in_oklab,var(--color-{token})_15%,transparent)]" in pill
+
+
+def test_assessment_pill_keeps_the_literal_ambers_and_reds(rendered: str) -> None:
+    """fail and summary-fail were raw values in the stylesheet, not the tokens."""
+    pill = _classes(rendered, ASSESSMENT, "CRA")
+    assert "data-[status=fail]:text-[#b45309]" in pill
+    assert "data-[status=fail]:bg-[rgb(245_158_11/0.12)]" in pill
+    assert "data-[status=summary-fail]:text-[#dc2626]" in pill
+    assert "data-[status=summary-fail]:bg-[rgb(239_68_68/0.1)]" in pill
+
+
+def test_assessment_pill_carries_every_recipe_whatever_the_status(rendered: str) -> None:
+    """The recipes are the component's, so a bound status has them all to pick from."""
+    for marker in ("NTIA", "+2", "Bound"):
+        pill = _classes(rendered, ASSESSMENT, marker)
+        for status in ("pass", "fail", "pending", "error", "summary-fail"):
+            assert f"data-[status={status}]:" in pill
+
+
+def test_assessment_pill_every_status_brings_its_own_hover(rendered: str) -> None:
+    """Without one the fallback's hover would outrank the status at hover time."""
+    pill = _classes(rendered, ASSESSMENT, "NTIA")
+    for status in ("pass", "fail", "pending", "error", "summary-fail"):
+        assert f"data-[status={status}]:hover:bg-" in pill
+
+
+def test_assessment_pill_binds_state_not_classes(rendered: str) -> None:
+    pill = _opening(rendered, ASSESSMENT, "Bound")
+    assert ':data-status="plugin.status"' in pill
+    assert 'x-text="plugin.display_name"' in pill
+    assert ":class=" not in pill
+
+
+def test_assessment_pill_forwards_attrs_and_caller_class(rendered: str) -> None:
+    assert _classes(rendered, ASSESSMENT, "+2").endswith("ml-1")
+    assert 'title="2 more assessments"' in _opening(rendered, ASSESSMENT, "+2")

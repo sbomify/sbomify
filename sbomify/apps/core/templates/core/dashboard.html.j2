@@ -2,11 +2,10 @@
 {% load static %}
 {% load django_vite %}
 {% load advisory_tags %}
-{% load design_system %}
 {% block title %}sbomify Dashboard{% endblock %}
 {% block dashboard_content %}
     {# The greeting is this page's title: it is the security picture, not a page label. #}
-    {% page_header title=greeting subtitle=page_subtitle %}{% endpage_header %}
+    <c-layout.page-header title="{{ greeting }}" subtitle="{{ page_subtitle }}" />
     <div class="space-y-6">
         {% if dashboard.is_first_visit %}
             {# First visit — a flowing onboarding hero: soft surface, illustration bleeds in. #}
@@ -57,9 +56,7 @@
                                     <div class="text-sm text-text-muted">The thing you ship. It groups your components together.</div>
                                 </div>
                                 {% if not onboarding.has_product and has_crud_permissions %}
-                                    <button type="button"
-                                            @click="$dispatch('open-product-modal')"
-                                            class="tw-btn-primary tw-btn-sm flex-shrink-0">Create product</button>
+                                    <c-buttons.primary size="sm" class="flex-shrink-0" @click="$dispatch('open-product-modal')">Create product</c-buttons.primary>
                                 {% endif %}
                             </div>
                         </div>
@@ -82,9 +79,7 @@
                                     <div class="text-sm text-text-muted">What your pipeline pushes SBOMs to.</div>
                                 </div>
                                 {% if not onboarding.has_component and has_crud_permissions %}
-                                    <button type="button"
-                                            @click="$dispatch('open-component-modal')"
-                                            class="tw-btn-primary tw-btn-sm flex-shrink-0">Add component</button>
+                                    <c-buttons.primary size="sm" class="flex-shrink-0" @click="$dispatch('open-component-modal')">Add component</c-buttons.primary>
                                 {% endif %}
                             </div>
                         </div>
@@ -112,9 +107,7 @@
                                     </div>
                                 </div>
                                 {% if onboarding.first_component %}
-                                    <button type="button"
-                                            @click="$dispatch('open-cicd')"
-                                            class="tw-btn-primary tw-btn-sm mt-3">Connect CI/CD</button>
+                                    <c-buttons.primary size="sm" class="mt-3" @click="$dispatch('open-cicd')">Connect CI/CD</c-buttons.primary>
                                 {% endif %}
                             </div>
                         </div>
@@ -131,54 +124,57 @@
         {% else %}
             {# Needs attention — the worst non-suppressed findings across the workspace #}
             {% if dashboard.needs_attention %}
-                <div class="tw-card">
-                    <div class="px-6 py-4 border-b border-border">
-                        <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
-                            Needs attention
-                            <span class="tw-badge-danger tw-badge-sm">{{ dashboard.needs_attention|length }}</span>
-                        </h4>
-                    </div>
-                    <div class="divide-y divide-border">
-                        {% for finding in dashboard.needs_attention %}
-                            <div class="px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                {% if finding.severity == 'critical' or finding.severity == 'high' or finding.severity == 'medium' or finding.severity == 'low' %}
-                                    <span class="tw-badge-severity-{{ finding.severity|lower }}">{{ finding.severity|capfirst }}</span>
+                {# flush: the findings own their gutters, so the list runs to the card's edge. #}
+                <c-cards.card flush>
+                <c-slot name="header">
+                <c-cards.header>
+                <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
+                    Needs attention
+                    <c-badges.danger size="sm">{{ dashboard.needs_attention|length }}</c-badges.danger>
+                </h4>
+                </c-cards.header>
+                </c-slot>
+                <div class="divide-y divide-border">
+                    {% for finding in dashboard.needs_attention %}
+                        <div class="px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {% comment %} unknown / info / malicious are off the CVSS scale, and the
+                            badge renders them in its neutral band. {% endcomment %}
+                            <c-badges.severity level="{{ finding.severity|lower }}">{{ finding.severity|capfirst }}</c-badges.severity>
+                            {% with finding_url=finding.id|advisory_url %}
+                                {% if finding_url %}
+                                    <a href="{{ finding_url }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="font-mono text-sm text-primary hover:underline">{{ finding.id }}</a>
                                 {% else %}
-                                    {# unknown / info / malicious carry no band on the severity scale #}
-                                    <span class="tw-badge-severity-unknown">{{ finding.severity|capfirst }}</span>
+                                    <span class="font-mono text-sm text-text-muted">{{ finding.id }}</span>
                                 {% endif %}
-                                {% with finding_url=finding.id|advisory_url %}
-                                    {% if finding_url %}
-                                        <a href="{{ finding_url }}"
-                                           target="_blank"
-                                           rel="noopener noreferrer"
-                                           class="font-mono text-sm text-primary hover:underline">{{ finding.id }}</a>
-                                    {% else %}
-                                        <span class="font-mono text-sm text-text-muted">{{ finding.id }}</span>
-                                    {% endif %}
-                                {% endwith %}
-                                <span class="text-sm text-text font-medium">{{ finding.package }}</span>
-                                {% if finding.version %}<span class="text-sm text-text-muted">· {{ finding.version }}</span>{% endif %}
-                                <span class="text-sm text-text-muted">
-                                    in <span class="font-medium text-text">{{ finding.component_name }}</span>
-                                    {% if finding.scanned_at %}· scanned {{ finding.scanned_at|timesince }} ago{% endif %}
-                                </span>
-                                <a href="{% url 'core:component_details' finding.component_id %}"
-                                   class="ml-auto text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                    Review<i class="fas fa-arrow-right text-xs"></i>
-                                </a>
-                            </div>
-                        {% endfor %}
-                    </div>
+                            {% endwith %}
+                            <span class="text-sm text-text font-medium">{{ finding.package }}</span>
+                            {% if finding.version %}<span class="text-sm text-text-muted">· {{ finding.version }}</span>{% endif %}
+                            <span class="text-sm text-text-muted">
+                                in <span class="font-medium text-text">{{ finding.component_name }}</span>
+                                {% if finding.scanned_at %}· scanned {{ finding.scanned_at|timesince }} ago{% endif %}
+                            </span>
+                            <a href="{% url 'core:component_details' finding.component_id %}"
+                               class="ml-auto text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
+                                Review<i class="fas fa-arrow-right text-xs"></i>
+                            </a>
+                        </div>
+                    {% endfor %}
                 </div>
+                </c-cards.card>
             {% endif %}
         {% endif %}
         {# Vulnerability Trends #}
-        <div class="tw-card">
-            <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">{% loading_state message="Loading vulnerability trends..." %}</div>
+        {# flush: the panel HTMX swaps in brings its own padding. #}
+        <c-cards.card flush>
+        <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <c-feedback.loading message="Loading vulnerability trends..." />
         </div>
+        </c-cards.card>
     </div>
 {% endblock %}
 {% block scripts %}

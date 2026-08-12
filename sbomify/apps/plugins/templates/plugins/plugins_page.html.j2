@@ -2,39 +2,39 @@
 {% load design_system %}
 {% block title %}sbomify Plugins{% endblock %}
 {% block dashboard_content %}
-    {% page_header title="Plugins" subtitle="Assessment plugins for this workspace." icon="fas fa-plug" %}{% endpage_header %}
+    <c-layout.page-header title="Plugins" subtitle="Assessment plugins for this workspace." icon="fas fa-plug" />
     <div class="space-y-6">
         {# Summary Bar — loaded lazily, refreshes when plugin settings are saved #}
-        <div class="tw-card px-5 py-3"
-             id="plugins-summary"
-             hx-get="{% url 'plugins:plugins_summary' %}"
-             hx-trigger="load, refreshPluginSettings from:body"
-             hx-swap="innerHTML"></div>
+        <c-cards.card flush class="px-5 py-3" id="plugins-summary" hx-get="{% url 'plugins:plugins_summary' %}" hx-trigger="load, refreshPluginSettings from:body" hx-swap="innerHTML" />
         {# Plugin Content (loaded via HTMX) #}
         <div id="plugins-page-content"
              hx-get="{% url 'plugins:team_plugin_settings' team.key %}"
              hx-trigger="load"
              hx-swap="innerHTML">
             {# Skeleton Loading State #}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <div class="flex items-center gap-3">
-                        {% skeleton type="avatar" %}
-                        <div class="flex-1">{% skeleton type="paragraph" lines=2 %}</div>
-                    </div>
-                </div>
-                <div class="p-6">
-                    <div class="space-y-3">
-                        {% for i in "123456" %}
-                            <div class="flex items-start gap-4">
-                                {% skeleton type="avatar" %}
-                                <div class="flex-1">{% skeleton type="paragraph" lines=2 %}</div>
-                                {% skeleton type="button" width="3rem" height="1.5rem" %}
-                            </div>
-                        {% endfor %}
+            <c-cards.card flush>
+            <div class="px-6 py-4 border-b border-border">
+                <div class="flex items-center gap-3">
+                    <c-feedback.skeleton type="avatar" />
+                    <div class="flex-1">
+                        <c-feedback.skeleton type="paragraph" lines="2" />
                     </div>
                 </div>
             </div>
+            <div class="p-6">
+                <div class="space-y-3">
+                    {% for i in "123456" %}
+                        <div class="flex items-start gap-4">
+                            <c-feedback.skeleton type="avatar" />
+                            <div class="flex-1">
+                                <c-feedback.skeleton type="paragraph" lines="2" />
+                            </div>
+                            <c-feedback.skeleton type="button" width="3rem" height="1.5rem" />
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            </c-cards.card>
         </div>
     </div>
 {% endblock dashboard_content %}

@@ -363,15 +363,29 @@
                Accent Color: Buttons, links, highlights
                =========================================== */
 
-            /* Links use accent color */
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
+            /* Links use accent color.
+               [data-button] is a library button rendered as an anchor: it carries
+               its own recipe, and the tw-btn-* names in this list are the same
+               exclusion for the buttons that have not been migrated yet. */
+            .public-page a:not([data-button]):not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
                 color: var(--accent-color);
                 text-decoration: none;
                 transition: color 0.15s ease;
             }
 
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
+            .public-page a:not([data-button]):not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
                 color: var(--accent-color-dark);
+            }
+
+            /* Library buttons build their whole recipe from --color-primary, which
+               the app stylesheet owns and loads after this block. Handing them the
+               workspace accent as that token is the same substitution the tw-btn-*
+               rules below make by hand, done once and only on the button, so the
+               recipe itself stays in the component. */
+            .public-page [data-button] {
+                --color-primary: var(--accent-color);
+                --color-primary-light: var(--accent-color-light);
+                --color-primary-dark: var(--accent-color-dark);
             }
 
             /* Primary buttons use accent color */

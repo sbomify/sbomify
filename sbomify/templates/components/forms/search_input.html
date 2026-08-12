@@ -22,7 +22,7 @@ which goes in the slot along with anything else that sits over the field.
            {% if id or name %}id="{% firstof id name %}"{% endif %}
            {% if name %}name="{{ name }}"{% endif %}
            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
-           class="peer w-full py-3 pl-11 {% if hint %}pr-14{% else %}pr-4{% endif %} bg-surface border-[1.5px] border-solid border-border rounded-lg text-text text-sm transition-all duration-200 placeholder:text-text-muted hover:not-focus:border-border-light focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]"
+           class="peer w-full py-3 pl-11 {% if hint %}pr-14{% else %}pr-4{% endif %} bg-surface border-[1.5px] border-solid border-border rounded-lg text-text text-sm leading-[1.5] transition-all duration-200 placeholder:text-text-muted hover:not-focus:border-border-light focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]"
            {% if model %}x-model="{{ model }}"{% endif %}
            {{ attrs }}>
     <i class="{{ icon }} absolute left-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none transition-[color] duration-200 peer-focus:text-primary"

@@ -1,0 +1,20 @@
+{% comment %}
+An identifier in running text: a CVE id, a purl, a control number, the name of
+a flag. The block form with a copy control is c-code-block; this is the one you
+drop mid-sentence.
+
+accent="primary" is the brand tint, for an identifier that is also a link
+target (a control id, a linked advisory). Without it the chip takes the border
+tint and the body ink, which is what a plain identifier wants.
+
+The size is em, not rem, so the chip tracks whatever it is sitting in, and no
+line-height is stated: the old rule set none either, and an inline chip that
+fixes its leading changes the height of the line around it.
+
+The radius is written 0.25rem rather than `rounded`: the public base still
+loads the pre-Tailwind static/css/utilities.css, whose `.rounded` is an
+!important 0.375rem and would round this chip differently there.
+{% endcomment %}
+<c-vars accent class />
+<code class="px-1.5 py-0.5 font-mono text-[0.8125em] rounded-[0.25rem] {% if accent == 'primary' %}text-[color-mix(in_oklab,var(--color-primary)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_35%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</code>

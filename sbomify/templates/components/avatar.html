@@ -2,6 +2,11 @@
 A person, as an image or as their initials. With neither it falls back to the
 generic user mark, so a row never renders an empty circle.
 
+The slot is the mark for a subject that is not a person: the round mark a
+detail page opens with carries the icon of the thing it is about (an advisory's
+shield, a product's cube). Image, initials, slot, fallback are one branch, so
+exactly one mark ever renders.
+
 The tint runs on --avatar-accent with a primary fallback. Custom properties
 inherit, so the caller sets it on the avatar or on any ancestor:
 style="--avatar-accent: var(--color-warning)". It is not a prop, it is an
@@ -25,6 +30,8 @@ status dot's colour is a second one.
              class="w-full h-full object-cover rounded-full">
     {% elif initials %}
         {{ initials }}
+    {% elif slot.strip %}
+        {{ slot }}
     {% else %}
         <i class="fas fa-user" aria-hidden="true"></i>
     {% endif %}

@@ -34,7 +34,7 @@
                         <i class="fas fa-lock" aria-hidden="true"></i>Gated access
                     </span>
                 {% endif %}
-                {% if component.is_global %}<span class="tw-badge tw-badge-info">Workspace-wide</span>{% endif %}
+                {% if component.is_global %}<c-badges.info>Workspace-wide</c-badges.info>{% endif %}
             </div>
             <h1 class="tc-detail-title">{{ component.name }}</h1>
             <div class="tc-detail-meta">
@@ -54,80 +54,53 @@
         <div class="mb-5"
              {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
             {% if needs_nda_signing %}
-                <div class="tw-alert tw-alert-warning" role="alert">
-                    <i class="fas fa-file-signature tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            <strong>NDA Required:</strong>
-                            {% if is_new_nda_version %}
-                                New version of the NDA is available. Please sign the updated NDA to access this component.
-                            {% else %}
-                                Please sign the NDA to access this component.
-                            {% endif %}
-                        </p>
-                    </div>
-                    <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
-                       class="tw-btn-primary">
-                        <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
-                    </a>
-                </div>
+                <c-feedback.alert variant="warning" icon="fas fa-file-signature">
+                <strong>NDA Required:</strong>
+                {% if is_new_nda_version %}
+                    New version of the NDA is available. Please sign the updated NDA to access this component.
+                {% else %}
+                    Please sign the NDA to access this component.
+                {% endif %}
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:sign_nda' team.key nda_access_request_id %}">
+                <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
+                </c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
             {% elif user_has_gated_access %}
-                <div class="tw-alert tw-alert-success" role="alert">
-                    <i class="fas fa-check-circle tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            <strong>Access Granted:</strong> You have access to download from this component.
-                        </p>
-                    </div>
-                </div>
+                <c-feedback.alert variant="success" icon="fas fa-check-circle">
+                <strong>Access Granted:</strong> You have access to download from this component.
+                </c-feedback.alert>
             {% elif pending_request_needs_nda %}
-                <div class="tw-alert tw-alert-warning" role="alert">
-                    <i class="fas fa-file-signature tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
-                        </p>
-                    </div>
-                    <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
-                       class="tw-btn-primary">
-                        <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
-                    </a>
-                </div>
+                <c-feedback.alert variant="warning" icon="fas fa-file-signature">
+                <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:sign_nda' team.key pending_request_id %}">
+                <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
+                </c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
             {% elif access_request_status == 'pending' %}
-                <div class="tw-alert tw-alert-info"
-                     role="alert"
-                     style="--alert-accent: var(--color-info)">
-                    <i class="fas fa-clock tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            <strong>Access Request Pending:</strong> Your request for access is being reviewed.
-                        </p>
-                    </div>
-                </div>
+                {# Info, not the primary accent the variant carries: waiting is not a brand moment. #}
+                <c-feedback.alert icon="fas fa-clock" style="--alert-accent: var(--color-info)">
+                <strong>Access Request Pending:</strong> Your request for access is being reviewed.
+                </c-feedback.alert>
             {% elif access_request_status == 'rejected' %}
-                <div class="tw-alert tw-alert-danger" role="alert">
-                    <i class="fas fa-times-circle tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
-                        </p>
-                    </div>
-                    <a href="{% url 'documents:request_access' team.key %}"
-                       class="tw-btn-primary">Request Access Again</a>
-                </div>
+                <c-feedback.alert variant="danger" icon="fas fa-times-circle">
+                <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:request_access' team.key %}">Request Access Again</c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
             {% else %}
-                <div class="tw-alert tw-alert-warning" role="alert">
-                    <i class="fas fa-lock tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            <strong>Gated Component:</strong> This component requires approval to download.
-                        </p>
-                    </div>
-                    <a href="{% url 'documents:request_access' team.key %}"
-                       class="tw-btn-primary">
-                        <i class="fas fa-key" aria-hidden="true"></i> Request Access
-                    </a>
-                </div>
+                <c-feedback.alert variant="warning" icon="fas fa-lock">
+                <strong>Gated Component:</strong> This component requires approval to download.
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:request_access' team.key %}">
+                <i class="fas fa-key" aria-hidden="true"></i> Request Access
+                </c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
             {% endif %}
         </div>
     {% endif %}

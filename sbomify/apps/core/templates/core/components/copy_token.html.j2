@@ -1,47 +1,13 @@
 {# Tailwind Copy Token Component #}
-{# Usage: {% include 'core/components/copy_token.html.j2' with token=token_value %} #}
-{# Optional: show_alert=True to show the warning banner #}
+{# Usage: include this partial with token=token_value #}
+{# Optional: show_alert=True for the warning banner, allow_toggle=True for the reveal control #}
 {% if show_alert %}
-    <div class="tw-token-alert">
-        <div class="tw-token-alert-icon">
-            <i class="fas fa-exclamation-triangle"></i>
-        </div>
-        <div class="tw-token-alert-content">
-            <div class="tw-token-alert-title">Copy your token now!</div>
-            <div class="tw-token-alert-text">You won't be able to see this token again after leaving this page.</div>
-        </div>
-    </div>
+    <c-feedback.alert variant="warning" title="Copy your token now!" class="mb-4">
+    You won't be able to see this token again after leaving this page.
+    </c-feedback.alert>
 {% endif %}
-<div class="tw-token-display" x-data="{ copied: false, masked: false }">
-    {% if label %}
-        <div class="tw-token-display-label">
-            <span class="tw-token-display-label-text">{{ label }}</span>
-        </div>
-    {% endif %}
-    <div class="tw-token-display-wrapper">
-        <div class="tw-token-display-value"
-             :class="{ 'tw-token-display-masked': masked }"
-             x-ref="tokenValue">{{ token }}</div>
-        <div class="tw-token-display-actions">
-            <button type="button"
-                    class="tw-token-action-btn"
-                    :class="{ 'copied': copied }"
-                    @click="navigator.clipboard.writeText($refs.tokenValue.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)"
-                    title="Copy token"
-                    :aria-label="copied ? 'Copied!' : 'Copy token'">
-                <i x-show="!copied" class="far fa-copy" aria-hidden="true"></i>
-                <i x-show="copied" x-cloak class="fas fa-check" aria-hidden="true"></i>
-            </button>
-            {% if allow_toggle %}
-                <button type="button"
-                        class="tw-token-action-btn"
-                        @click="masked = !masked"
-                        :title="masked ? 'Show token' : 'Hide token'"
-                        :aria-label="masked ? 'Show token' : 'Hide token'">
-                    <i x-show="!masked" class="far fa-eye-slash" aria-hidden="true"></i>
-                    <i x-show="masked" x-cloak class="far fa-eye" aria-hidden="true"></i>
-                </button>
-            {% endif %}
-        </div>
-    </div>
-</div>
+{% comment %}
+    The reveal control is the display's own: allow_toggle asks for it, and the
+    component draws both the blur and the eye that lifts it.
+{% endcomment %}
+<c-token-display label="{{ label }}" token="{{ token }}" :masked="allow_toggle" />

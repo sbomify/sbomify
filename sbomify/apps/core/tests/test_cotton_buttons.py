@@ -29,6 +29,7 @@ def _button_holding(rendered: str, marker: str) -> str:
         ("Delete", "var(--color-danger)_0%,var(--color-danger-dark)_100%"),
         ("Cancel", "bg-surface"),
         ("Quiet", "hover:bg-surface"),
+        ("Revoke all", "hover:bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] hover:text-danger"),
         ("Shiny", "var(--color-accent-pink)_50%"),
     ],
 )
@@ -43,10 +44,19 @@ def test_filled_variants_carry_their_recipe(rendered: str, marker: str, recipe_b
         ("Choose", "border-[1.5px] border-solid border-primary"),
         ("Hold", "border-[1.5px] border-solid border-warning"),
         ("Remove", "border-[1.5px] border-solid border-danger"),
+        ("Approve", "border-[1.5px] border-solid border-success"),
     ],
 )
 def test_outline_variants_carry_their_border(rendered: str, marker: str, recipe_bit: str) -> None:
     assert recipe_bit in _button_holding(rendered, marker)
+
+
+def test_outline_success_fills_with_the_success_gradient_on_hover(rendered: str) -> None:
+    """The green outline the controls catalogue used to reach for with --btn-accent."""
+    approve = _button_holding(rendered, "Approve")
+    assert "hover:bg-[linear-gradient(135deg,var(--color-success)_0%,var(--color-success-dark)_100%)]" in approve
+    assert "text-success" in approve
+    assert "text-primary" not in approve
 
 
 def test_shared_shell_structure_present_once_per_button(rendered: str) -> None:
@@ -56,7 +66,7 @@ def test_shared_shell_structure_present_once_per_button(rendered: str) -> None:
 
 
 def test_default_size_segment(rendered: str) -> None:
-    assert "px-5 py-2.5 min-h-11 text-sm rounded-lg" in _button_holding(rendered, "Save")
+    assert "px-5 py-2.5 min-h-11 text-sm rounded-[0.5rem]" in _button_holding(rendered, "Save")
 
 
 def test_small_and_large_size_segments(rendered: str) -> None:
@@ -104,6 +114,18 @@ def test_icon_button_variant_size_label_and_stretch_segments(rendered: str) -> N
     stretchy = _button_holding(rendered, 'aria-label="Stretchy"')
     assert "w-12 h-full min-h-10" in stretchy
     assert "hover:scale-105" not in stretchy
+
+
+def test_icon_button_with_href_renders_an_anchor(rendered: str) -> None:
+    anchors = [part for part in rendered.split("<a ") if 'aria-label="Download artifact"' in part]
+    assert anchors, "the icon button's href branch did not render an anchor"
+    anchor = anchors[0].split(">")[0]
+    assert 'href="/sbom/download/1"' in anchor
+    assert "w-9 h-9 text-sm rounded-md" in anchor
+    assert "bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] text-primary" in anchor
+    # An anchor cannot be disabled, so the affordance stays on the button branch.
+    assert "disabled" not in anchor
+    assert " download" in anchor
 
 
 def test_variant_with_href_renders_an_anchor(rendered: str) -> None:

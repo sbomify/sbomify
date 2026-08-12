@@ -4,6 +4,7 @@ from playwright.sync_api import Page
 
 from sbomify.apps.core.tests.e2e.fixtures import *  # noqa: F403
 from sbomify.apps.security_advisories.models import SecurityAdvisory
+from sbomify.apps.security_advisories.services.advisories import create_advisory
 
 
 @pytest.fixture
@@ -49,6 +50,71 @@ class TestSecurityAdvisoriesListSnapshot:
         width: int,
     ) -> None:
         authenticated_page.goto("/security-advisories/")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.fixture
+def advisory_detail(team_with_business_plan, sample_user, product_factory):  # noqa: F811
+    """One advisory carrying everything the detail page renders: a severity, a
+    description, a CVE, an affected product and an opening timeline entry."""
+    product = product_factory("Acme Gateway")
+    result = create_advisory(
+        team_with_business_plan,
+        sample_user,
+        title="Path traversal in the Acme Gateway upload handler",
+        severity="high",
+        description=(
+            "A crafted upload path escapes the storage directory and can overwrite files "
+            "the service can write to. Only deployments with uploads enabled are affected."
+        ),
+        identifier="CVE-2026-0001",
+        remediation_status="investigating",
+        products=[product],
+    )
+    yield SecurityAdvisory.objects.get(id=result.value)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
+class TestSecurityAdvisoryDetailSnapshot:
+    """One advisory: the clamped header, the timeline with its composer and the
+    details sidebar with the affected product and the reference list."""
+
+    def test_security_advisory_detail_snapshot(
+        self,
+        authenticated_page: Page,
+        advisory_detail,
+        snapshot,
+        width: int,
+    ) -> None:
+        authenticated_page.goto(f"/security-advisories/{advisory_detail.id}/")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)
+        current = snapshot.take_screenshot(authenticated_page, width=width)
+
+        snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("width", [1920, 992, 576, 375])
+class TestSecurityAdvisoryNewSnapshot:
+    """The new advisory form. The product_details fixture gives the affected
+    products picker a product with three versions, so both panes have rows."""
+
+    def test_security_advisory_new_snapshot(
+        self,
+        authenticated_page: Page,
+        product_details,  # noqa: F811
+        snapshot,
+        width: int,
+    ) -> None:
+        authenticated_page.goto("/security-advisories/new/")
         authenticated_page.wait_for_load_state("networkidle")
 
         baseline = snapshot.get_or_create_baseline_screenshot(authenticated_page, width=width)

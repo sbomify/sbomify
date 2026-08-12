@@ -3,33 +3,17 @@
         <span :class="{ 'block': isTextarea }"
               class="inline-flex items-center gap-1">
             <template x-if="isTextarea">
-                <textarea x-model="fieldValue"
-                          class="tw-form-textarea text-sm"
-                          :placeholder="placeholder"
-                          rows="3"
-                          @keyup.escape="cancelEdit()"></textarea>
+                <c-forms.textarea x-model="fieldValue" ::placeholder="placeholder" rows="3" @keyup.escape="cancelEdit()" />
             </template>
             <template x-if="!isTextarea">
-                <input x-model="fieldValue"
-                       :type="inputType"
-                       class="tw-form-input"
-                       @keyup.enter="updateField()"
-                       @keyup.escape="cancelEdit()">
+                <c-forms.input x-model="fieldValue" ::type="inputType" @keyup.enter="updateField()" @keyup.escape="cancelEdit()" />
             </template>
-            <button type="button"
-                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-success"
-                    title="Save"
-                    aria-label="Save"
-                    @click="updateField()">
-                <i class="fas fa-check" aria-hidden="true"></i>
-            </button>
-            <button type="button"
-                    class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger"
-                    title="Cancel"
-                    aria-label="Cancel"
-                    @click="cancelEdit()">
-                <i class="fas fa-times" aria-hidden="true"></i>
-            </button>
+            <c-buttons.icon label="Save" variant="success" size="sm" title="Save" @click="updateField()">
+            <i class="fas fa-check" aria-hidden="true"></i>
+            </c-buttons.icon>
+            <c-buttons.icon label="Cancel" variant="danger" size="sm" title="Cancel" @click="cancelEdit()">
+            <i class="fas fa-times" aria-hidden="true"></i>
+            </c-buttons.icon>
         </span>
     </template>
     <template x-if="!isEditing">

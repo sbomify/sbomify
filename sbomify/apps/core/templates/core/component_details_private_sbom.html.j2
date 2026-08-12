@@ -1,13 +1,14 @@
 {% extends "core/component_details_private_base.html.j2" %}
 {% load static %}
 {% load django_vite %}
-{% load design_system %}
 {% block content_after_header %}
     {# Artifacts & security — the SBOM versions list leads the page, with vulnerabilities shown per version (design review p9: "one wholistic view at the top"). #}
     <div id="sboms-table-container"
          hx-get="{% url 'sboms:sboms_table' component.id %}"
          hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
-         hx-swap="innerHTML">{% loading_state message="Loading SBOMs..." compact=True %}</div>
+         hx-swap="innerHTML">
+        <c-feedback.loading message="Loading SBOMs..." compact />
+    </div>
     {# Vulnerabilities drill-down for the latest SBOM — hidden when the latest scan is clean #}
     {% include "core/components/component_vulnerabilities.html.j2" %}
     {# CBOM issues drill-down for the latest CBOM — hidden when crypto assessments are clean #}

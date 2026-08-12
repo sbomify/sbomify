@@ -89,6 +89,15 @@ def test_body_band_is_the_padded_region(rendered: str) -> None:
     assert 'class="p-6"' in _open_tag(rendered, "Standalone body")
 
 
+def test_flush_card_drops_the_padded_body(rendered: str) -> None:
+    """Content that owns its padding sits straight on the card surface."""
+    card = _card_holding(rendered, "Flush body")
+    assert '<div class="p-6"' not in card
+    assert "<div>Flush body" in card
+    # The header band is unaffected: only the body is dropped.
+    assert "border-b border-solid" in card
+
+
 def test_footer_slot_renders_the_footer_band(rendered: str) -> None:
     footer = _open_tag(rendered, "Footer actions")
     assert "px-6 py-4 border-t border-solid" in footer
@@ -178,6 +187,41 @@ def test_dangerzone_icon_prop_overrides_the_warning_default(rendered: str) -> No
     assert 'class="fas fa-skull text-danger"' in header
 
 
+def test_dangerzone_header_part_paints_the_same_band_as_the_title_header(rendered: str) -> None:
+    trigger = _open_tag(rendered, "Danger zone trigger")
+    title_band = _open_tag(rendered, "Danger zone", depth=1)
+    for bit in (
+        "flex items-center gap-3",
+        "border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)]",
+        "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-danger)_8%,transparent)_0%,"
+        "color-mix(in_oklab,var(--color-danger)_12%,transparent)_100%)]",
+        "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-danger)_50%,transparent)]",
+    ):
+        assert bit in trigger
+        assert bit in title_band
+
+
+def test_dangerzone_header_part_carries_the_control_attributes(rendered: str) -> None:
+    trigger = _open_tag(rendered, "Danger zone trigger")
+    assert 'role="button"' in trigger
+    assert 'tabindex="0"' in trigger
+    assert ':aria-expanded="isExpanded"' in trigger
+    assert '@click="toggle()"' in trigger
+    assert "cursor-pointer select-none" in trigger
+
+
+def test_dangerzone_body_part_takes_the_collapse_on_the_padded_element(rendered: str) -> None:
+    body = _open_tag(rendered, "Collapsible danger body")
+    assert "p-6 bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)]" in body
+    assert 'x-show="isExpanded"' in body
+    assert "x-collapse" in body
+
+
+def test_flush_dangerzone_emits_no_padded_body_of_its_own(rendered: str) -> None:
+    card = _card_holding(rendered, "Collapsible danger body")
+    assert card.count("p-6 bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)]") == 1
+
+
 def test_inset_is_sunken_not_raised(rendered: str) -> None:
     inset = _open_tag(rendered, "Outer inset")
     assert "rounded-xl border border-solid border-border p-4" in inset
@@ -233,6 +277,15 @@ def test_collapsible_trigger_turns_the_chevron_over(rendered: str) -> None:
     assert '<i class="fas fa-chevron-down text-text-muted transition-transform duration-300"' in trigger
     assert ":class=\"expanded ? 'rotate-180' : ''\"" in trigger
     assert '<span class="flex items-center gap-3 font-semibold text-text">Clean run</span>' in trigger
+
+
+def test_bare_trigger_puts_the_row_straight_into_the_button(rendered: str) -> None:
+    trigger = _button_holding(rendered, "Bare row")
+    assert '<span class="flex items-center gap-3 font-semibold text-text">' not in trigger
+    assert '<div class="flex items-center gap-3 flex-grow min-w-0">' in trigger
+    # The chevron and the state binding are the trigger's own either way.
+    assert '<i class="fas fa-chevron-down text-text-muted transition-transform duration-300"' in trigger
+    assert ':aria-expanded="expanded"' in trigger
 
 
 def test_collapsible_body_collapses_the_clipped_wrapper(rendered: str) -> None:

@@ -27,6 +27,10 @@ PROBE_CONTEXT = {
         {"label": "Acme Widget", "url": "/products/1"},
         {"label": "Releases"},
     ],
+    "probe_marked_crumbs": [
+        {"label": "Trust Center", "url": "/public/workspace/acme", "icon": "fas fa-shield-alt"},
+        {"label": "Acme Widget", "url": "/public/product/1", "icon": "fas fa-box", "title": "Acme Widget 2026"},
+    ],
     "probe_page_range": [1, 2, 3, "…", 8],
     "probe_single_page": [1],
     "probe_short_range": [1, 2, 3, 4],
@@ -173,7 +177,27 @@ def test_breadcrumb_links_lead_to_the_current_page_as_text(rendered: str) -> Non
     crumbs = _chunk(rendered, "nav", 'data-probe="crumbs"')
     assert '<a href="/products"' in crumbs
     assert "text-text-muted hover:text-text transition-colors" in crumbs
-    assert '<span class="text-text font-medium">Releases</span>' in crumbs
+    current = _open_tag(rendered, "span", "Releases")
+    assert 'class="text-text font-medium"' in current
+    assert 'aria-current="page"' in current
+
+
+def test_breadcrumb_without_icons_keeps_its_plain_labels(rendered: str) -> None:
+    crumbs = _chunk(rendered, "nav", 'data-probe="crumbs"')
+    assert "flex items-center gap-1" not in crumbs
+
+
+def test_breadcrumb_icon_brings_its_own_row_layout(rendered: str) -> None:
+    trail = _chunk(rendered, "nav", 'data-probe="marked-crumbs"')
+    link = _open_tag(rendered, "a", '"/public/workspace/acme"')
+    assert "text-text-muted hover:text-text transition-colors flex items-center gap-1" in link
+    assert '<i class="fas fa-shield-alt opacity-80" aria-hidden="true">' in trail
+
+
+def test_breadcrumb_title_names_a_shortened_label(rendered: str) -> None:
+    current = _open_tag(rendered, "span", '"Acme Widget 2026"')
+    assert 'title="Acme Widget 2026"' in current
+    assert 'aria-current="page"' in current
 
 
 # ── Pagination ────────────────────────────────────────────────────────────
@@ -282,6 +306,12 @@ def test_step_takes_class_and_attrs(rendered: str) -> None:
     assert 'class="flex items-center ml-1"' in step
 
 
+def test_label_class_lands_on_the_caption_only(rendered: str) -> None:
+    """A narrow rail hides its captions; the circles and the step keep their layout."""
+    assert 'text-text-muted hidden sm:inline">Declaration</span>' in rendered
+    assert "hidden sm:inline" not in _open_tag(rendered, "div", 'data-probe="step"')
+
+
 def test_connector_fills_only_when_completed(rendered: str) -> None:
     stepper = _between(rendered, 'data-probe="stepper"', 'data-probe="vertical"')
     rails = [part for part in stepper.split("<span") if VERTICAL_RAIL in part]
@@ -358,6 +388,15 @@ def test_label_slot_replaces_the_label_prop(rendered: str) -> None:
     assert 'data-probe="item"' in trigger
 
 
+def test_label_class_lands_on_the_label_and_nowhere_else(rendered: str) -> None:
+    """A rich row reaches the trigger's full width from the label, its flex item."""
+    trigger = _chunk(rendered, "button", "Technological controls")
+    assert '<span class="flex flex-1 items-center justify-between gap-3 min-w-0 mr-3">' in trigger
+    assert "flex-1" not in trigger[: trigger.index("<span")]
+    # A label with no class of its own carries no class attribute at all.
+    assert "<span >Organisational controls</span>" in _chunk(rendered, "button", "Organisational controls")
+
+
 def test_panel_collapses_on_the_same_expression(rendered: str) -> None:
     panel = _chunk(rendered, "div", "Policies, roles and supplier relationships.")
     assert "px-6 pb-5 text-sm leading-[1.6] text-text-muted" in panel
@@ -368,6 +407,50 @@ def test_a_section_without_a_state_stays_open(rendered: str) -> None:
     panel = _chunk(rendered, "div", "Always open without a state.")
     assert "x-show" not in panel
     assert ":aria-expanded" not in _chunk(rendered, "button", "Compact section")
+
+
+# ── Disclosure ────────────────────────────────────────────────────────────
+
+
+def test_disclosure_is_a_details_element_divided_like_an_accordion_item(rendered: str) -> None:
+    section = _chunk(rendered, "details", "Configure the workflow")
+    assert (
+        "group border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] last:border-b-0"
+        in section
+    )
+    assert 'data-probe="disclosure"' in section
+
+
+def test_disclosure_summary_carries_the_trigger_recipe_and_the_density_hook(rendered: str) -> None:
+    section = _chunk(rendered, "details", "Configure the workflow")
+    assert "flex w-full cursor-pointer items-center justify-between px-6 py-5 text-left" in section
+    assert "hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]" in section
+    assert "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in section
+    assert "[[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:py-3" in section
+    # The compact size is the bare font-size: text-sm would bring 1.4286 where
+    # the stylesheet's compact trigger inherited 1.5.
+    assert "[[data-accordion-sm]_&]:text-[0.875rem]" in section
+
+
+def test_disclosure_chevron_turns_on_the_native_open_state(rendered: str) -> None:
+    section = _chunk(rendered, "details", "Configure the workflow")
+    chevron = "fas fa-chevron-down text-text-muted transition-transform duration-300 group-open:rotate-180"
+    assert chevron in section
+    assert "x-show" not in section
+    assert ":aria-expanded" not in section
+
+
+def test_disclosure_label_slot_and_label_class(rendered: str) -> None:
+    section = _chunk(rendered, "details", "Configure the workflow")
+    assert '<span class="flex items-center gap-2">' in section
+    assert "flex items-center gap-2" not in section[: section.index("<summary")]
+
+
+def test_disclosure_open_prop_renders_the_native_attribute(rendered: str) -> None:
+    closed = _open_tag(rendered, "details", 'data-probe="disclosure"')
+    opened = _open_tag(rendered, "details", 'data-probe="disclosure-open"')
+    assert " open" not in closed
+    assert " open" in opened
 
 
 def _nav_probe(rendered: str, name: str) -> str:
@@ -395,3 +478,64 @@ def test_page_ellipsis_is_not_a_control(rendered: str) -> None:
     ell = _nav_probe(rendered, "page-ellipsis")
     assert ell.startswith("<span ")
     assert 'aria-hidden="true"' in ell
+
+
+# ── Filtered pager and segmented control ──────────────────────────────────
+
+
+def test_filtered_pager_keeps_its_filters_and_takes_its_own_name(rendered: str) -> None:
+    pager = _open_tag(rendered, "nav", 'data-probe="filtered"')
+    assert 'aria-label="Scan pagination"' in pager
+    filtered = rendered[rendered.index('data-probe="filtered"') : rendered.index('data-probe="segmented"')]
+    # Previous, next and every numbered link keep the filter; the current page
+    # is a span, so it carries no query at all. The separator is an entity
+    # because it is interpolated, which is the escaping the URL wants anyway.
+    assert 'href="?page=1&amp;days=30"' in filtered
+    assert 'href="?page=3&amp;days=30"' in filtered
+    assert 'href="?page=4&amp;days=30"' in filtered
+    assert filtered.count("days=30") == 5
+    assert "?page=2" not in filtered
+
+
+def test_unfiltered_pager_links_carry_no_stray_separator(rendered: str) -> None:
+    pager = _between(rendered, 'data-probe="pager"', 'data-probe="single"')
+    assert "&amp;" not in pager
+
+
+def test_segmented_is_a_group_wearing_the_pills_tray(rendered: str) -> None:
+    tray = _nav_probe(rendered, "segmented")
+    assert tray.startswith("<div ")
+    assert 'role="group"' in tray
+    assert "flex gap-0 bg-background p-1 rounded-lg mt-2" in tray
+    assert "role=\"tablist\"" not in tray
+
+
+def test_segment_states_hang_off_data_active(rendered: str) -> None:
+    seg = _nav_probe(rendered, "segment")
+    assert seg.startswith("<button ")
+    assert 'data-active="false"' in seg
+    assert ':data-active="chart === \'timeline\'"' in seg
+    assert "@click=\"pick('timeline')\"" in seg
+    assert "data-[active=true]:text-primary data-[active=true]:bg-surface" in seg
+    assert "data-[active=true]:hover:bg-surface" in seg
+    assert "data-[active=true]:shadow-[var(--shadow-xs)]" in seg
+
+
+def test_segment_resting_ink_is_not_the_important_utility(rendered: str) -> None:
+    seg = _nav_probe(rendered, "segment")
+    # text-text-muted is !important in tailwind.src.css and would outrank the
+    # chosen segment's colour, so the resting ink is the arbitrary form.
+    assert "text-[color:var(--color-text-muted)]" in seg
+    assert " text-text-muted" not in seg
+
+
+def test_segment_states_its_line_height_and_the_pill_shape(rendered: str) -> None:
+    seg = _nav_probe(rendered, "segment")
+    assert "px-5 py-3.5 text-sm leading-[1.5] font-medium rounded-md" in seg
+    assert "border-b" not in seg
+
+
+def test_segment_is_never_taken_out_of_the_tab_order(rendered: str) -> None:
+    seg = _nav_probe(rendered, "segment")
+    assert "tabindex" not in seg
+    assert "aria-selected" not in seg

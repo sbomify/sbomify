@@ -13,6 +13,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "typography", "label": "Typography", "group": "Foundations"},
     {"id": "icon-chips", "label": "Icon chips", "group": "Foundations"},
     {"id": "metric-chips", "label": "Metric chips", "group": "Foundations"},
+    {"id": "assessment-pills", "label": "Assessment pills", "group": "Foundations"},
     {"id": "page-header", "label": "Page & section headers", "group": "Foundations"},
     {"id": "buttons", "label": "Buttons", "group": "Controls"},
     {"id": "forms", "label": "Form controls", "group": "Controls"},
@@ -150,6 +151,10 @@ class DesignSystemView(LoginRequiredMixin, View):
                 {"label": "Products", "url": "#"},
                 {"label": "Acme Widget", "url": "#"},
                 {"label": "Releases"},
+            ],
+            "demo_marked_breadcrumbs": [
+                {"label": "Acme Trust Center", "url": "#", "icon": "fas fa-shield-alt"},
+                {"label": "Acme Widget", "url": "#", "icon": "fas fa-box"},
             ],
             "demo_tabs": [
                 {"id": "overview", "label": "Overview", "icon": "fas fa-chart-line"},

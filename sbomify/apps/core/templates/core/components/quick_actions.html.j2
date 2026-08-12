@@ -10,78 +10,92 @@ Parameters:
 Note: Product/Component creation uses Alpine.js events that are handled
 by create_modals.html.j2 which should be included in the base template.
 {% endcomment %}
-<div class="tw-card h-full flex flex-col">
-    <div class="px-6 py-4 border-b border-border">
-        <h3 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-bolt text-warning"></i>
-            Quick Actions
-        </h3>
-    </div>
-    <div class="p-6 flex-1">
-        <div class="space-y-3">
-            {# Upload SBOM #}
-            <a href="{% if upload_sbom_url %}{{ upload_sbom_url }}{% else %}{% url 'core:components_dashboard' %}{% endif %}"
-               class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-success/5 hover:border-success/30 transition-all group">
-                <span class="tw-icon-chip tw-icon-chip-success"><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i></span>
-                <div class="flex-1">
-                    <span class="text-sm font-medium text-text group-hover:text-success transition-colors">Upload SBOM</span>
-                    <p class="text-xs text-text-muted">Add a new software bill of materials</p>
-                </div>
-                <i class="fas fa-chevron-right text-text-muted group-hover:text-success transition-colors"></i>
-            </a>
-            {# Create Product - Opens modal via Alpine event #}
-            {% if has_crud_permissions %}
-                <button type="button"
-                        @click="$dispatch('open-product-modal')"
-                        class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group text-left">
-                    <span class="tw-icon-chip"><i class="fas fa-cube" aria-hidden="true"></i></span>
-                    <div class="flex-1">
-                        <span class="text-sm font-medium text-text group-hover:text-primary transition-colors">Create Product</span>
-                        <p class="text-xs text-text-muted">Add a new product to your workspace</p>
-                    </div>
-                    <i class="fas fa-chevron-right text-text-muted group-hover:text-primary transition-colors"></i>
-                </button>
-                {# Add Component - Opens modal via Alpine event #}
-                <button type="button"
-                        @click="$dispatch('open-component-modal')"
-                        class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-info/5 hover:border-info/30 transition-all group text-left">
-                    <span class="tw-icon-chip tw-icon-chip-info"><i class="fas fa-puzzle-piece" aria-hidden="true"></i></span>
-                    <div class="flex-1">
-                        <span class="text-sm font-medium text-text group-hover:text-info transition-colors">Add Component</span>
-                        <p class="text-xs text-text-muted">Create a new SBOM or document component</p>
-                    </div>
-                    <i class="fas fa-chevron-right text-text-muted group-hover:text-info transition-colors"></i>
-                </button>
-            {% endif %}
-            {# Run Vulnerability Scan #}
-            <a href="{% if vulnerability_scans_url %}{{ vulnerability_scans_url }}{% else %}{% url 'vulnerability_scanning:vulnerability_scans' current_team.key %}{% endif %}"
-               class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-accent-orange/5 hover:border-accent-orange/30 transition-all group">
-                <span class="tw-icon-chip"
-                      style="--chip-accent: var(--color-accent-orange)"><i class="fas fa-shield-alt" aria-hidden="true"></i></span>
-                <div class="flex-1">
-                    <span class="text-sm font-medium text-text group-hover:text-accent-orange transition-colors">Run Vulnerability Scan</span>
-                    <p class="text-xs text-text-muted">Scan your SBOMs for vulnerabilities</p>
-                </div>
-                <i class="fas fa-chevron-right text-text-muted group-hover:text-accent-orange transition-colors"></i>
-            </a>
-            <a href="{% url 'sboms:workspace_crypto' current_team.key %}"
-               class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-accent/5 hover:border-accent/30 transition-all group">
-                <span class="tw-icon-chip" style="--chip-accent: var(--color-accent)"><i class="fas fa-lock" aria-hidden="true"></i></span>
-                <div class="flex-1">
-                    <span class="text-sm font-medium text-text group-hover:text-accent transition-colors">Crypto Readiness</span>
-                    <p class="text-xs text-text-muted">Quantum readiness across all components</p>
-                </div>
-                <i class="fas fa-chevron-right text-text-muted group-hover:text-accent transition-colors"></i>
-            </a>
-            {# Generate Report - placeholder for future feature #}
-            <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed">
-                <span class="tw-icon-chip tw-icon-chip-neutral"><i class="fas fa-file-alt" aria-hidden="true"></i></span>
-                <div class="flex-1">
-                    <span class="text-sm font-medium text-text-muted">Generate Report</span>
-                    <p class="text-xs text-text-muted">Coming soon</p>
-                </div>
-                <span class="tw-badge-secondary tw-badge-sm">Soon</span>
-            </div>
+{# djlint:off H037 #}
+{# body_class is a cotton prop, not a second class attribute. #}
+<c-cards.card class="h-full flex flex-col" body_class="flex-1">
+{# djlint:on #}
+<c-slot name="header">
+<c-cards.header>
+<h3 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-bolt text-warning"></i>
+    Quick Actions
+</h3>
+</c-cards.header>
+</c-slot>
+<div class="space-y-3">
+    {# Upload SBOM #}
+    <a href="{% if upload_sbom_url %}{{ upload_sbom_url }}{% else %}{% url 'core:components_dashboard' %}{% endif %}"
+       class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-success/5 hover:border-success/30 transition-all group">
+        <c-chips.icon-chip accent="success">
+        <i class="fas fa-cloud-upload-alt" aria-hidden="true"></i>
+        </c-chips.icon-chip>
+        <div class="flex-1">
+            <span class="text-sm font-medium text-text group-hover:text-success transition-colors">Upload SBOM</span>
+            <p class="text-xs text-text-muted">Add a new software bill of materials</p>
         </div>
+        <i class="fas fa-chevron-right text-text-muted group-hover:text-success transition-colors"></i>
+    </a>
+    {# Create Product - Opens modal via Alpine event #}
+    {% if has_crud_permissions %}
+        <button type="button"
+                @click="$dispatch('open-product-modal')"
+                class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-primary/5 hover:border-primary/30 transition-all group text-left">
+            <c-chips.icon-chip>
+            <i class="fas fa-cube" aria-hidden="true"></i>
+            </c-chips.icon-chip>
+            <div class="flex-1">
+                <span class="text-sm font-medium text-text group-hover:text-primary transition-colors">Create Product</span>
+                <p class="text-xs text-text-muted">Add a new product to your workspace</p>
+            </div>
+            <i class="fas fa-chevron-right text-text-muted group-hover:text-primary transition-colors"></i>
+        </button>
+        {# Add Component - Opens modal via Alpine event #}
+        <button type="button"
+                @click="$dispatch('open-component-modal')"
+                class="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-info/5 hover:border-info/30 transition-all group text-left">
+            <c-chips.icon-chip accent="info">
+            <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+            </c-chips.icon-chip>
+            <div class="flex-1">
+                <span class="text-sm font-medium text-text group-hover:text-info transition-colors">Add Component</span>
+                <p class="text-xs text-text-muted">Create a new SBOM or document component</p>
+            </div>
+            <i class="fas fa-chevron-right text-text-muted group-hover:text-info transition-colors"></i>
+        </button>
+    {% endif %}
+    {# Run Vulnerability Scan #}
+    <a href="{% if vulnerability_scans_url %}{{ vulnerability_scans_url }}{% else %}{% url 'vulnerability_scanning:vulnerability_scans' current_team.key %}{% endif %}"
+       class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-accent-orange/5 hover:border-accent-orange/30 transition-all group">
+        <c-chips.icon-chip style="--chip-accent: var(--color-accent-orange)">
+        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+        </c-chips.icon-chip>
+        <div class="flex-1">
+            <span class="text-sm font-medium text-text group-hover:text-accent-orange transition-colors">Run Vulnerability Scan</span>
+            <p class="text-xs text-text-muted">Scan your SBOMs for vulnerabilities</p>
+        </div>
+        <i class="fas fa-chevron-right text-text-muted group-hover:text-accent-orange transition-colors"></i>
+    </a>
+    <a href="{% url 'sboms:workspace_crypto' current_team.key %}"
+       class="flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 hover:bg-accent/5 hover:border-accent/30 transition-all group">
+        <c-chips.icon-chip style="--chip-accent: var(--color-accent)">
+        <i class="fas fa-lock" aria-hidden="true"></i>
+        </c-chips.icon-chip>
+        <div class="flex-1">
+            <span class="text-sm font-medium text-text group-hover:text-accent transition-colors">Crypto Readiness</span>
+            <p class="text-xs text-text-muted">Quantum readiness across all components</p>
+        </div>
+        <i class="fas fa-chevron-right text-text-muted group-hover:text-accent transition-colors"></i>
+    </a>
+    {# Generate Report - placeholder for future feature #}
+    <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed">
+        <c-chips.icon-chip accent="neutral">
+        <i class="fas fa-file-alt" aria-hidden="true"></i>
+        </c-chips.icon-chip>
+        <div class="flex-1">
+            <span class="text-sm font-medium text-text-muted">Generate Report</span>
+            <p class="text-xs text-text-muted">Coming soon</p>
+        </div>
+        <c-badges.secondary size="sm">Soon</c-badges.secondary>
     </div>
 </div>
+</c-cards.card>

@@ -1026,8 +1026,12 @@
             deleteInput.value = '';
         }
     } else {
-        // Create new contact card using Tailwind classes (matching contact.html.j2 template)
-        // This template is static and contains no user-provided content
+        // Create new contact card (matching contact.html.j2 template)
+        // This template is static and contains no user-provided content.
+        // The class strings below are what c-avatar, c-forms.input,
+        // c-forms.checkbox-input and c-buttons.icon render: this row has no
+        // server pass to build it, so it carries their recipes literally and
+        // has to be updated whenever contact.html.j2 or those components are.
         newRow = document.createElement('div');
         newRow.className = 'contact-card border-b border-border last:border-b-0';
         newRow.setAttribute('x-data', 'contactEntry()');
@@ -1036,45 +1040,50 @@
         newRow.setAttribute('x-transition:enter-start', 'opacity-0');
         newRow.setAttribute('x-transition:enter-end', 'opacity-100');
 
+        const avatarClass = "relative flex items-center justify-center shrink-0 rounded-full font-semibold bg-[linear-gradient(135deg,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_20%,transparent)_0%,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_10%,transparent)_100%)] text-[color:var(--avatar-accent,var(--color-primary))] w-8 h-8 text-xs";
+        const inputClass = "w-full px-4 py-3 bg-surface border-[1.5px] border-solid rounded-lg text-text text-sm leading-[1.5] transition-all duration-200 placeholder:text-text-muted hover:not-focus:not-disabled:border-border-light focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-background border-border focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]";
+        const checkboxClass = "w-5 h-5 shrink-0 relative appearance-none cursor-pointer bg-surface border-[1.5px] border-solid border-border rounded-md transition-all duration-150 after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-11 after:h-11 after:rounded-lg hover:not-checked:not-disabled:border-[color-mix(in_oklab,var(--color-primary)_50%,transparent)] hover:not-checked:not-disabled:bg-[color-mix(in_oklab,var(--color-primary)_5%,transparent)] checked:bg-primary checked:border-primary checked:bg-[length:100%_100%] checked:bg-[url('data:image/svg+xml,%3csvg%20viewBox=%220%200%2016%2016%22%20fill=%22white%22%20xmlns=%22http://www.w3.org/2000/svg%22%3e%3cpath%20d=%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22/%3e%3c/svg%3e')] indeterminate:bg-primary indeterminate:border-primary indeterminate:bg-[length:100%_100%] indeterminate:bg-[url('data:image/svg+xml,%3csvg%20viewBox=%220%200%2016%2016%22%20fill=%22none%22%20xmlns=%22http://www.w3.org/2000/svg%22%3e%3cpath%20d=%22M4.5%208h7%22%20stroke=%22white%22%20stroke-width=%222%22%20stroke-linecap=%22round%22/%3e%3c/svg%3e')] focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_25%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed";
+        const removeButtonClass = "inline-flex items-center justify-center border border-solid transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] focus-visible:border-[color-mix(in_oklab,var(--color-primary)_30%,transparent)] focus-visible:text-text disabled:opacity-50 disabled:cursor-not-allowed w-9 h-9 text-sm rounded-md text-danger border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)] hover:border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] hover:text-danger hover:scale-105 active:scale-95";
+
         // Build the template using DOM methods for clarity
         const template = `
             <input type="hidden" name="${newPrefix}-id" id="id_${newPrefix}-id">
             <input type="hidden" name="${newPrefix}-DELETE" x-model="deleted" value="">
             <div class="flex items-start gap-3 p-3">
                 <div class="flex-shrink-0 mt-1">
-                    <div class="tw-avatar tw-avatar-sm">
-                        <i class="fas fa-user text-xs"></i>
+                    <div class="${avatarClass}">
+                        <i class="fas fa-user" aria-hidden="true"></i>
                     </div>
                 </div>
                 <div class="flex-grow min-w-0">
                     <div class="flex flex-wrap gap-2 mb-2">
                         <div class="flex-grow min-w-[120px]">
-                            <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="tw-form-input" placeholder="Name *" maxlength="255" :required="!deleted && editing" aria-label="Contact Name">
+                            <input type="text" name="${newPrefix}-name" id="id_${newPrefix}-name" class="${inputClass}" placeholder="Name *" maxlength="255" :required="!deleted && editing" aria-label="Contact Name">
                         </div>
                         <div class="flex-grow min-w-[160px]">
-                            <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="tw-form-input" placeholder="Email" maxlength="254" aria-label="Contact Email">
+                            <input type="email" name="${newPrefix}-email" id="id_${newPrefix}-email" class="${inputClass}" placeholder="Email" maxlength="254" aria-label="Contact Email">
                         </div>
                         <div class="w-32 flex-shrink-0">
-                            <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="tw-form-input" placeholder="Phone" aria-label="Contact Phone">
+                            <input type="text" name="${newPrefix}-phone" id="id_${newPrefix}-phone" class="${inputClass}" placeholder="Phone" aria-label="Contact Phone">
                         </div>
                     </div>
                     <div class="flex flex-wrap gap-4">
                         <label class="flex items-center gap-1.5 cursor-pointer text-xs group">
-                            <input type="checkbox" name="${newPrefix}-is_author" id="id_${newPrefix}-is_author" class="tw-checkbox" x-model="isAuthor">
+                            <input type="checkbox" name="${newPrefix}-is_author" id="id_${newPrefix}-is_author" value="1" class="${checkboxClass}" x-model="isAuthor">
                             <span class="text-text-muted group-hover:text-text transition-colors"><i class="fas fa-pen-fancy mr-1 text-text-muted"></i>Author</span>
                         </label>
                         <label class="flex items-center gap-1.5 cursor-pointer text-xs group" :title="securityContactDisabled && !isSecurityContact ? 'Another contact is already designated as security contact' : 'Security/vulnerability reporting contact'" :class="securityContactDisabled && !isSecurityContact ? 'opacity-50' : ''">
-                            <input type="checkbox" name="${newPrefix}-is_security_contact" id="id_${newPrefix}-is_security_contact" class="tw-checkbox" x-model="isSecurityContact" :disabled="securityContactDisabled && !isSecurityContact">
+                            <input type="checkbox" name="${newPrefix}-is_security_contact" id="id_${newPrefix}-is_security_contact" value="1" class="${checkboxClass}" x-model="isSecurityContact" :disabled="securityContactDisabled && !isSecurityContact">
                             <span class="text-text-muted group-hover:text-text transition-colors"><i class="fas fa-shield-halved mr-1 text-text-muted"></i>Security</span>
                         </label>
                         <label class="flex items-center gap-1.5 cursor-pointer text-xs group">
-                            <input type="checkbox" name="${newPrefix}-is_technical_contact" id="id_${newPrefix}-is_technical_contact" class="tw-checkbox" x-model="isTechnicalContact">
+                            <input type="checkbox" name="${newPrefix}-is_technical_contact" id="id_${newPrefix}-is_technical_contact" value="1" class="${checkboxClass}" x-model="isTechnicalContact">
                             <span class="text-text-muted group-hover:text-text transition-colors"><i class="fas fa-code mr-1 text-text-muted"></i>Technical</span>
                         </label>
                     </div>
                 </div>
                 <div class="flex-shrink-0">
-                    <button type="button" class="tw-icon-btn tw-icon-btn-sm tw-icon-btn-danger" @click="removeContact" title="Remove contact" aria-label="Remove contact">
+                    <button type="button" class="${removeButtonClass}" aria-label="Remove contact" @click="removeContact" title="Remove contact">
                         <i class="fas fa-times text-xs"></i>
                     </button>
                 </div>

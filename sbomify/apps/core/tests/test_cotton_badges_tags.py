@@ -136,27 +136,79 @@ def test_pill_rounds_the_severity_shape(rendered: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ("label", "recipe_bit"),
+    ("label", "level", "token"),
     [
-        ("CycloneDX", "text-[#0d9488] bg-[rgb(20_184_166/0.1)]"),
-        ("SPDX", "text-[#7c3aed] bg-[rgb(139_92_246/0.1)]"),
+        ("Runtime critical", "critical", "var(--color-severity-critical)"),
+        ("Runtime low", "low", "var(--color-severity-low)"),
     ],
 )
-def test_format_prop_picks_the_format_colour(rendered: str, label: str, recipe_bit: str) -> None:
+def test_severity_dynamic_keys_every_band_off_the_attribute(
+    rendered: str, label: str, level: str, token: str
+) -> None:
     badge = _badge(rendered, label)
+    assert f'data-level="{level}"' in badge
+    assert f"data-[level={level}]:text-[color-mix(in_oklab,{token}_70%,var(--color-text))]" in badge
+    assert f"data-[level={level}]:bg-[color-mix(in_oklab,{token}_12%,transparent)]" in badge
+    assert f"data-[level={level}]:border-[color-mix(in_oklab,{token}_20%,transparent)]" in badge
+
+
+def test_severity_dynamic_rests_on_the_unknown_band(rendered: str) -> None:
+    badge = _badge(rendered, "Runtime unknown")
+    assert 'data-level="unknown"' in badge
+    assert "text-[color-mix(in_oklab,var(--color-text-muted)_70%,var(--color-text))]" in badge
+    assert "bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)]" in badge
+
+
+def test_severity_dynamic_shares_the_severity_shape(rendered: str) -> None:
+    badge = _badge(rendered, "Runtime critical")
+    assert "px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]" in badge
+    assert "rounded-full" not in badge
+
+
+def test_severity_dynamic_forwards_class_and_alpine_bindings(rendered: str) -> None:
+    badge = _badge(rendered, "Runtime low")
+    assert "shrink-0" in badge
+    assert ':data-level="f.severity"' in badge
+    assert 'x-text="f.severity"' in badge
+
+
+@pytest.mark.parametrize(
+    ("label", "fmt", "recipe_bit"),
+    [
+        ("CycloneDX", "cyclonedx", "data-[format=cyclonedx]:text-[#0d9488]"),
+        ("SPDX", "spdx", "data-[format=spdx]:text-[#7c3aed]"),
+    ],
+)
+def test_format_prop_writes_the_attribute_that_picks_the_colour(
+    rendered: str, label: str, fmt: str, recipe_bit: str
+) -> None:
+    badge = _badge(rendered, label)
+    assert f'data-format="{fmt}"' in badge
     assert recipe_bit in badge
     assert "text-[0.6875rem] font-bold tracking-[0.03em] rounded-md whitespace-nowrap" in badge
 
 
 def test_format_hover_tint_travels_with_the_variant(rendered: str) -> None:
-    assert "hover:bg-[rgb(20_184_166/0.15)]" in _badge(rendered, "CycloneDX")
-    assert "hover:bg-[rgb(139_92_246/0.15)]" in _badge(rendered, "SPDX")
+    assert "data-[format=cyclonedx]:hover:bg-[rgb(20_184_166/0.15)]" in _badge(rendered, "CycloneDX")
+    assert "data-[format=spdx]:hover:bg-[rgb(139_92_246/0.15)]" in _badge(rendered, "SPDX")
 
 
 def test_unknown_format_keeps_the_shape_without_a_tint(rendered: str) -> None:
+    """Every tint is keyed on the attribute, so an unknown format matches none of them."""
     swid = _badge(rendered, "SWID")
     assert "inline-flex items-center px-2.5 py-1" in swid
-    assert "border-[rgb" not in swid
+    assert 'data-format="swid"' in swid
+    classes = swid[swid.index('class="') + 7 :]
+    classes = classes[: classes.index('"')]
+    unkeyed = [bit for bit in classes.split() if "rgb(" in bit and not bit.startswith("data-[format=")]
+    assert not unkeyed, f"a format tint lands without its attribute: {unkeyed}"
+
+
+def test_format_badge_carries_both_recipes_so_a_bound_value_can_pick_either(rendered: str) -> None:
+    """The rows of an artifacts table are built by Alpine, which binds data-format only."""
+    badge = _badge(rendered, "SWID")
+    assert "data-[format=cyclonedx]:bg-[rgb(20_184_166/0.1)]" in badge
+    assert "data-[format=spdx]:bg-[rgb(139_92_246/0.1)]" in badge
 
 
 def test_format_badge_is_not_the_badge_shell(rendered: str) -> None:
@@ -234,7 +286,10 @@ def test_dynamic_badge_keeps_every_recipe_and_binds_only_the_variant(rendered: s
     assert "data-[variant=danger]:text-danger" in danger
     assert "data-[variant=success]:text-success" in danger
     # And the neutral tint is the resting state, so an unknown variant degrades quietly.
-    assert "text-text-muted" in danger
+    # Written as an arbitrary value: the text-text-muted utility is !important, which
+    # would outrank every variant recipe and leave each one with neutral text.
+    assert "text-[color:var(--color-text-muted)]" in danger
+    assert " text-text-muted" not in danger
 
 
 def test_dynamic_badge_defaults_to_the_neutral_variant(rendered: str) -> None:
@@ -243,6 +298,15 @@ def test_dynamic_badge_defaults_to_the_neutral_variant(rendered: str) -> None:
 
 def test_dynamic_badge_size_segment_matches_the_named_badges(rendered: str) -> None:
     assert "px-1.5 py-0.5 text-[0.625rem] leading-[1.5]" in _probe(rendered, "dyn-sm")
+
+
+def test_dynamic_badge_carries_the_violet_artifact_recipe(rendered: str) -> None:
+    """The artifact-type column picks violet for VEX, so the dynamic badge must hold it."""
+    violet = _probe(rendered, "dyn-violet")
+    assert 'data-variant="violet"' in violet
+    assert "data-[variant=violet]:text-accent" in violet
+    assert "data-[variant=violet]:bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)]" in violet
+    assert "data-[variant=violet]:border-[color-mix(in_oklab,var(--color-accent)_20%,transparent)]" in violet
 
 
 def test_neutral_chip_recipe(rendered: str) -> None:
@@ -256,3 +320,56 @@ def test_tag_renders_an_anchor_with_href_and_no_underline(rendered: str) -> None
     assert tag.startswith("<a ")
     assert 'href="/components/x"' in tag
     assert "no-underline" in tag
+
+
+def test_tag_remove_label_binds_the_accessible_name(rendered: str) -> None:
+    """A tag an editor builds names itself in the browser, so the name is bound."""
+    section = rendered[rendered.index('data-probe="tag-bound-remove"') :]
+    button = section[section.index("<button") : section.index("</button>")]
+    # Autoescaped, which the HTML parser decodes back before Alpine reads it.
+    assert ':aria-label="&#x27;Remove &#x27; + tag.name"' in button
+    assert "aria-label=\"Remove \"" not in button
+    assert 'title="Remove license"' in button
+    assert '@click.stop="removeTag(index)"' in button
+
+
+# ── The badge that is a control ────────────────────────────────────────────
+
+
+def _action(rendered: str, probe: str) -> str:
+    """The one button whose opening tag holds the probe marker."""
+    chunks = [part.split("</button>")[0] for part in rendered.split("<button")]
+    holders = [chunk for chunk in chunks if probe in chunk]
+    assert holders, f"no button holds {probe!r}"
+    return holders[0]
+
+
+def test_action_badge_is_a_real_button_wearing_the_secondary_tint(rendered: str) -> None:
+    action = _action(rendered, "badge-action")
+    assert 'type="button"' in action
+    assert "text-text-muted bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]" in action
+    assert "border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]" in action
+    # The only thing that says it can be pressed, and the state it can be in.
+    assert "hover:text-primary" in action
+    assert "disabled:opacity-50" in action
+
+
+def test_action_badge_keeps_the_shared_shell_and_its_size_segment(rendered: str) -> None:
+    action = _action(rendered, "badge-action")
+    assert "inline-flex items-center font-semibold transition-all duration-150 border border-solid" in action
+    assert "px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]" in action
+    small = _action(rendered, "badge-action-sm")
+    assert "px-1.5 py-0.5 text-[0.625rem] leading-[1.5]" in small
+    assert "px-3 py-1 " not in small
+
+
+def test_action_badge_forwards_its_bindings(rendered: str) -> None:
+    action = _action(rendered, "badge-action")
+    assert ':disabled="busy"' in action
+    assert '@click="rerun()"' in action
+
+
+def test_the_other_badges_stay_spans(rendered: str) -> None:
+    """type is what makes the shell a button; nothing else asks for one."""
+    assert _badge(rendered, "Secondary").startswith(" class=")
+    assert "<button" not in _badge(rendered, "Secondary")

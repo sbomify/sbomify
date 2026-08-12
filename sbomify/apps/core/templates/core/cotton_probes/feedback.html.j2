@@ -8,6 +8,24 @@ attributes reach the root element.
 <c-feedback.alert variant="success" title="Saved" data-probe="alert-success">Success body</c-feedback.alert>
 <c-feedback.alert variant="warning" dismissible data-probe="alert-warning">Warning body</c-feedback.alert>
 <c-feedback.alert variant="danger" icon="fas fa-bomb" class="mb-4" hx-get="/probe" @click.stop="fire()" data-probe="alert-danger">Danger body</c-feedback.alert>
+<c-feedback.alert variant="success" title="security.txt" data-probe="alert-actioned">
+Served at the well-known path.
+<c-slot name="action">
+<c-buttons.outline-primary size="sm" href="/settings" class="shrink-0">Manage</c-buttons.outline-primary>
+</c-slot>
+</c-feedback.alert>
+<c-feedback.alert variant="warning" title="No Scan Data Available" data-probe="alert-body">
+<c-slot name="body">
+<p class="mb-2">No vulnerability scan data found for this SBOM.</p>
+<pre class="mt-2 p-4">scanner said no</pre>
+</c-slot>
+</c-feedback.alert>
+<c-feedback.alert variant="info" title="Processing" data-probe="alert-marked">
+<c-slot name="mark">
+<span class="brand-loader-stand-in"></span>
+</c-slot>
+Still scanning.
+</c-feedback.alert>
 <c-feedback.callout variant="warning" class="mb-2" data-probe="callout-warning">
 <c-feedback.callout-header data-probe="callout-header"><span>Callout heading</span></c-feedback.callout-header>
 <c-feedback.callout-body class="flex flex-wrap gap-2" data-probe="callout-body"><span>Callout controls</span></c-feedback.callout-body>
@@ -19,6 +37,7 @@ attributes reach the root element.
 <c-buttons.primary href="/components/new">Add component</c-buttons.primary>
 </c-feedback.empty-state>
 <c-feedback.empty-state compact icon_size="sm" icon_variant="neutral" title="No releases yet" data-probe="empty-compact" />
+<c-feedback.empty-state compact icon="fas fa-address-card" icon_size="sm" icon_variant="neutral" message="No entities in this profile" data-probe="empty-untitled" />
 <c-feedback.skeleton data-probe="skeleton-text" />
 <c-feedback.skeleton type="title" data-probe="skeleton-title" />
 <c-feedback.skeleton type="avatar" data-probe="skeleton-avatar" />

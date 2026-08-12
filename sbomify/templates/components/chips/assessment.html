@@ -1,0 +1,23 @@
+{% comment %}
+The assessment pill in an artifacts table: one plugin's verdict, the "+N more"
+after a truncated run of them, and the "N Failed" summary that follows when the
+truncation hid a failure.
+
+The verdict is only known in the browser: the rows are built by Alpine from a
+JSON projection, so the server never renders a row and cannot pick a variant
+component. The caller binds one attribute and nothing else:
+
+    <c-chips.assessment ::data-status="plugin.status">…</c-chips.assessment>
+
+Every recipe lives here, keyed by data-status, and an unknown or missing status
+falls back to the quiet border tint, which is also what "+N more" wants. Each
+recipe carries its hover with it, so the fallback's hover can never win over a
+status that has one.
+
+summary-fail keeps the literal reds the stylesheet used: they are raw values
+there, not the danger token, and the two do not resolve to the same colour.
+{% endcomment %}
+<c-vars status class />
+<span data-status="{{ status }}"
+      class="inline-flex items-center justify-center gap-1 px-2 py-1 text-[0.6875rem] leading-[1.5] font-semibold rounded-md whitespace-nowrap border border-solid transition-all duration-150 [&_i]:text-[0.625rem] text-text-muted bg-[color-mix(in_oklab,var(--color-border)_20%,transparent)] border-[color-mix(in_oklab,var(--color-border)_40%,transparent)] hover:bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] data-[status=pass]:text-success data-[status=pass]:bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] data-[status=pass]:border-[color-mix(in_oklab,var(--color-success)_25%,transparent)] data-[status=pass]:hover:bg-[color-mix(in_oklab,var(--color-success)_15%,transparent)] data-[status=fail]:text-[#b45309] data-[status=fail]:bg-[rgb(245_158_11/0.12)] data-[status=fail]:border-[rgb(245_158_11/0.3)] data-[status=fail]:hover:bg-[rgb(245_158_11/0.18)] data-[status=pending]:text-info data-[status=pending]:bg-[color-mix(in_oklab,var(--color-info)_10%,transparent)] data-[status=pending]:border-[color-mix(in_oklab,var(--color-info)_25%,transparent)] data-[status=pending]:hover:bg-[color-mix(in_oklab,var(--color-info)_15%,transparent)] data-[status=error]:text-danger data-[status=error]:bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] data-[status=error]:border-[color-mix(in_oklab,var(--color-danger)_25%,transparent)] data-[status=error]:hover:bg-[color-mix(in_oklab,var(--color-danger)_15%,transparent)] data-[status=summary-fail]:text-[#dc2626] data-[status=summary-fail]:bg-[rgb(239_68_68/0.1)] data-[status=summary-fail]:border-[rgb(239_68_68/0.25)] data-[status=summary-fail]:hover:bg-[rgb(239_68_68/0.15)]{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

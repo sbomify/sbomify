@@ -33,8 +33,10 @@ on the output; it is not routed anywhere.
 <c-forms.checkbox name="probe-check-off">Checkbox off</c-forms.checkbox>
 <c-forms.checkbox name="probe-check-disabled" disabled class="w-full">Checkbox disabled</c-forms.checkbox>
 <c-forms.checkbox name="probe-check-bare" aria-label="Select all" x-ref="all" />
+<c-forms.checkbox-input name="probe-check-input" class="pointer-events-none" tabindex="-1" aria-hidden="true" ::checked="isSelected(row.id)" />
 <c-forms.radio name="probe-radio" value="cyclonedx" checked>CycloneDX</c-forms.radio>
 <c-forms.radio name="probe-radio" value="spdx" disabled>SPDX</c-forms.radio>
+<c-forms.radio name="probe-procedure" x_value="proc.value" x-model="procedure" data-probe="radio-bound">Bound value</c-forms.radio>
 <c-forms.field label="Format" hint="A group has no single control to point at.">
 <c-forms.radio name="probe-format" value="cyclonedx">CycloneDX</c-forms.radio>
 <c-forms.radio name="probe-format" value="spdx">SPDX</c-forms.radio>
@@ -47,3 +49,18 @@ on the output; it is not routed anywhere.
 </c-forms.search-input>
 <c-forms.file-upload name="probe-upload" accept=".json,.xml" active="over" on_change="pick($event)" hint="CycloneDX or SPDX, JSON or XML" @dragover.prevent="over = true" @dragleave.prevent="over = false" @drop.prevent="over = false">Drop an SBOM here, or click to choose</c-forms.file-upload>
 <c-forms.file-upload name="probe-upload-plain" icon="fas fa-file-arrow-up">Choose a document</c-forms.file-upload>
+<c-forms.file-upload static data-probe="upload-static">
+<c-feedback.spinner size="md" />
+<p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
+</c-forms.file-upload>
+<c-forms.file-preview data-probe="file-preview">
+<c-slot name="name"><span x-text="picked.name"></span></c-slot>
+<c-slot name="size"><span x-text="formatFileSize(picked.size)"></span></c-slot>
+<c-slot name="action">
+<c-buttons.icon label="Remove selected file" @click="clearSelectedFile()">
+<i class="fas fa-times" aria-hidden="true"></i>
+</c-buttons.icon>
+</c-slot>
+</c-forms.file-preview>
+<c-forms.input name="probe-bound-state" ::data-state="formErrors.name ? 'error' : ''" x-model="name" />
+<c-forms.textarea name="probe-bound-textarea" ::data-state="formErrors.text ? 'error' : ''" />

@@ -1,42 +1,15 @@
 {% comment %}
-    Finding status toggle: three radios rendered as tw-choice tiles
+    Finding status toggle: three radios rendered as library choice tiles
     (Satisfied / Not Satisfied / N/A). Visual state is driven by
     `buttonState(finding)` so the `_pendingNA` rule lives in exactly one
-    place; do not re-derive it in this template. The pending-NA
-    intermediate paints through --choice-accent, the component's
-    documented override path. Used inside an x-for loop with `finding`
-    variable in scope.
+    place; do not re-derive it in this template. The tiles bind the real
+    control through x_name / x_checked / x_disabled / x_click, because the
+    answer only exists in the browser. The pending-NA intermediate paints
+    through --choice-accent, the component's documented override path.
+    Used inside an x-for loop with `finding` variable in scope.
 {% endcomment %}
-<div class="tw-choice-group shrink-0"
-     role="radiogroup"
-     aria-label="Finding status">
-    <label class="tw-choice tw-choice-success">
-        <input type="radio"
-               value="satisfied"
-               :name="'finding-status-' + finding.finding_id"
-               :checked="buttonState(finding) === 'satisfied'"
-               @click="setFindingStatus(finding, 'satisfied')">
-        <i class="fas fa-check tw-choice-icon" aria-hidden="true"></i>
-        <span>Satisfied</span>
-    </label>
-    <label class="tw-choice tw-choice-danger">
-        <input type="radio"
-               value="not-satisfied"
-               :name="'finding-status-' + finding.finding_id"
-               :checked="buttonState(finding) === 'not-satisfied'"
-               @click="setFindingStatus(finding, 'not-satisfied')">
-        <i class="fas fa-times tw-choice-icon" aria-hidden="true"></i>
-        <span>Not Satisfied</span>
-    </label>
-    <label class="tw-choice tw-choice-secondary"
-           :style="buttonState(finding) === 'pending-na' ? '--choice-accent: var(--color-warning)' : ''"
-           :title="finding.is_mandatory ? 'Part II controls are always mandatory (CRA Art 13(4))' : buttonState(finding) === 'pending-na' ? 'Awaiting justification: provide one to commit N/A' : 'Mark as not applicable'">
-        <input type="radio"
-               value="not-applicable"
-               :name="'finding-status-' + finding.finding_id"
-               :disabled="finding.is_mandatory"
-               :checked="buttonState(finding) === 'not-applicable' || buttonState(finding) === 'pending-na'"
-               @click="setFindingStatus(finding, 'not-applicable')">
-        <span>N/A</span>
-    </label>
-</div>
+<c-layout.choice-group class="shrink-0" aria-label="Finding status">
+<c-layout.choice value="satisfied" accent="success" icon="fas fa-check" x_name="'finding-status-' + finding.finding_id" x_checked="buttonState(finding) === 'satisfied'" x_click="setFindingStatus(finding, 'satisfied')">Satisfied</c-layout.choice>
+<c-layout.choice value="not-satisfied" accent="danger" icon="fas fa-times" x_name="'finding-status-' + finding.finding_id" x_checked="buttonState(finding) === 'not-satisfied'" x_click="setFindingStatus(finding, 'not-satisfied')">Not Satisfied</c-layout.choice>
+<c-layout.choice value="not-applicable" accent="secondary" x_name="'finding-status-' + finding.finding_id" x_checked="buttonState(finding) === 'not-applicable' || buttonState(finding) === 'pending-na'" x_disabled="finding.is_mandatory" x_click="setFindingStatus(finding, 'not-applicable')" ::style="buttonState(finding) === 'pending-na' ? '--choice-accent: var(--color-warning)' : ''" ::title="finding.is_mandatory ? 'Part II controls are always mandatory (CRA Art 13(4))' : buttonState(finding) === 'pending-na' ? 'Awaiting justification: provide one to commit N/A' : 'Mark as not applicable'">N/A</c-layout.choice>
+</c-layout.choice-group>

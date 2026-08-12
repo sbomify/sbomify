@@ -87,6 +87,18 @@ def test_modal_backdrop_closes_and_the_panel_stops_the_click(rendered: str) -> N
     assert "@click.stop" in section
 
 
+def test_close_prop_replaces_the_show_assignment_everywhere(rendered: str) -> None:
+    root = _probe(rendered, "modal-close")
+    assert '@keydown.escape="removeTarget = null"' in root
+    section = _section(rendered, "modal-close")
+    dialog = section[: section.index("</template>")]
+    # Backdrop and close button run the same expression as escape does.
+    assert dialog.count('@click="removeTarget = null"') == 2
+    assert "removeTarget = false" not in dialog
+    # The open state itself is untouched: it still only reads.
+    assert 'x-show="removeTarget"' in root
+
+
 def test_modal_header_icon_is_the_library_chip_at_its_own_size(rendered: str) -> None:
     large = _section(rendered, "modal-lg")
     assert "var(--chip-accent,var(--color-primary))_12%" in large
@@ -98,6 +110,13 @@ def test_modal_header_icon_is_the_library_chip_at_its_own_size(rendered: str) ->
 def test_modal_close_button_is_optional_and_labelled(rendered: str) -> None:
     assert 'aria-label="Close"' in _section(rendered, "modal-default")
     assert 'aria-label="Close"' not in _section(rendered, "modal-sm")
+
+
+def test_modal_role_is_a_prop_so_a_confirmation_can_interrupt(rendered: str) -> None:
+    """A second role in attrs would be a duplicate attribute the browser drops."""
+    root = _probe(rendered, "modal-alert")
+    assert 'role="alertdialog"' in root
+    assert 'role="dialog"' not in root
 
 
 def test_modal_without_a_title_renders_no_header(rendered: str) -> None:
@@ -159,6 +178,12 @@ def test_avatar_renders_initials_image_or_the_fallback_mark(rendered: str) -> No
     assert 'alt="Jane Doe"' in image
     assert "w-full h-full object-cover rounded-full" in image
     assert 'class="fas fa-user"' in _section(rendered, "avatar-fallback")
+
+
+def test_avatar_slot_is_the_mark_for_a_subject_that_is_not_a_person(rendered: str) -> None:
+    icon = _section(rendered, "avatar-icon")
+    assert 'class="fas fa-shield-halved"' in icon
+    assert "fa-user" not in icon
 
 
 @pytest.mark.parametrize(
@@ -297,6 +322,25 @@ def test_code_block_copyable_false_renders_no_control(rendered: str) -> None:
     assert "absolute top-2 right-2" not in section
 
 
+# --- inline code ----------------------------------------------------------
+
+
+def test_code_inline_is_the_neutral_chip_by_default(rendered: str) -> None:
+    chip = _probe(rendered, "code-inline-plain")
+    assert "px-1.5 py-0.5 font-mono text-[0.8125em] rounded" in chip
+    assert "text-text bg-[color-mix(in_oklab,var(--color-border)_35%,transparent)]" in chip
+    assert ">/.well-known/security.txt</code>" in _section(rendered, "code-inline-plain")
+
+
+def test_code_inline_accent_replaces_the_whole_tint(rendered: str) -> None:
+    chip = _probe(rendered, "code-inline-primary")
+    assert "bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]" in chip
+    assert "text-[color-mix(in_oklab,var(--color-primary)_70%,var(--color-text))]" in chip
+    assert "var(--color-border)_35%" not in chip
+    assert chip.count("bg-[color-mix") == 1
+    assert "ml-1" in chip
+
+
 # --- token display --------------------------------------------------------
 
 
@@ -380,6 +424,55 @@ def test_copy_button_forwards_attrs_and_class(rendered: str) -> None:
     button = _probe(rendered, "copy-labelled")
     assert '@click.stop="track()"' in button
     assert "ml-2" in button
+
+
+# --- inline copy ----------------------------------------------------------
+
+
+def test_inline_copy_is_a_monospace_chip_a_keyboard_can_reach(rendered: str) -> None:
+    chip = _probe(rendered, "inline-copy")
+    assert "<button" in chip
+    assert 'type="button"' in chip
+    assert "group inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono" in chip
+    assert "text-[0.8125rem] text-text bg-background border border-solid border-border rounded-md" in chip
+    # No line-height: an arbitrary font-size attaches none to cancel, and the
+    # public pages read 1.6 where the app reads 1.5.
+    assert "leading-" not in chip
+    assert "focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in chip
+
+
+def test_inline_copy_confirms_from_a_data_attribute_not_a_class(rendered: str) -> None:
+    chip = _probe(rendered, "inline-copy")
+    assert 'data-copied="false"' in chip
+    assert ':data-copied="copied"' in chip
+    assert "data-[copied=true]:bg-success" in chip
+    assert "data-[copied=true]:border-success" in chip
+    assert "data-[copied=true]:text-white" in chip
+
+
+def test_inline_copy_icon_reads_the_same_marker_from_the_group(rendered: str) -> None:
+    section = _section(rendered, "inline-copy")
+    assert "text-[0.6875rem] text-text-muted transition-all duration-150 group-hover:text-primary" in section
+    assert "group-data-[copied=true]:text-white" in section
+    assert ":class=\"copied ? 'fa-check' : 'fa-copy'\"" in section
+
+
+def test_inline_copy_announces_the_result_to_a_screen_reader(rendered: str) -> None:
+    section = _section(rendered, "inline-copy")
+    assert 'role="status"' in section
+    assert 'aria-live="polite"' in section
+    assert "x-text=\"copied ? 'Copied to clipboard' : ''\"" in section
+
+
+def test_inline_copy_carries_the_value_in_its_slot(rendered: str) -> None:
+    section = _section(rendered, "inline-copy")
+    assert '<span x-text="value" class="min-w-0 break-all">DLyQjCBkNJkB</span>' in section
+
+
+def test_inline_copy_forwards_attrs_and_class(rendered: str) -> None:
+    chip = _probe(rendered, "inline-copy")
+    assert '@click="copyToClipboard()"' in chip
+    assert "ml-2" in _probe(rendered, "inline-copy-classed")
 
 
 # --- actions menu ---------------------------------------------------------

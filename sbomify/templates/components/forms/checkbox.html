@@ -4,25 +4,18 @@ input, so the text is part of the hit area and no id is needed to tie them
 together; id is still rendered when name or id is given, for a label elsewhere
 on the page to point at.
 
-Every state is drawn on the real input: checked, indeterminate, focus and
-disabled are pseudo-classes, never a styled sibling. The control is
-appearance-none, so the browser's own tick and dash never render and both are
-drawn here; the indeterminate mark is listed after the tick because Tailwind
-emits it later and an indeterminate box is usually checked too.
+The control itself is c-forms.checkbox-input, which every state is drawn on;
+this file adds the label around it and nothing else. A row that is its own
+control reaches for that component directly.
 
-The box stays 1.25rem while an invisible ::after stretches the touch target to
-44px. class lands on the wrapping label (layout); everything else, including
+class lands on the wrapping label (layout) and is blanked for the control, which
+would otherwise take the label's layout as its own; everything else, including
 x-model and @change, lands on the input.
 {% endcomment %}
 <c-vars name id value="1" checked disabled class />
 <label class="flex items-center gap-3{% if class %} {{ class }}{% endif %}">
-    <input type="checkbox"
-           {% if id or name %}id="{% firstof id name %}"{% endif %}
-           {% if name %}name="{{ name }}"{% endif %}
-           value="{{ value }}"
-           class="w-5 h-5 shrink-0 relative appearance-none cursor-pointer bg-surface border-[1.5px] border-solid border-border rounded-md transition-all duration-150 after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-11 after:h-11 after:rounded-lg hover:not-checked:not-disabled:border-[color-mix(in_oklab,var(--color-primary)_50%,transparent)] hover:not-checked:not-disabled:bg-[color-mix(in_oklab,var(--color-primary)_5%,transparent)] checked:bg-primary checked:border-primary checked:bg-[length:100%_100%] checked:bg-[url('data:image/svg+xml,%3csvg%20viewBox=%220%200%2016%2016%22%20fill=%22white%22%20xmlns=%22http://www.w3.org/2000/svg%22%3e%3cpath%20d=%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22/%3e%3c/svg%3e')] indeterminate:bg-primary indeterminate:border-primary indeterminate:bg-[length:100%_100%] indeterminate:bg-[url('data:image/svg+xml,%3csvg%20viewBox=%220%200%2016%2016%22%20fill=%22none%22%20xmlns=%22http://www.w3.org/2000/svg%22%3e%3cpath%20d=%22M4.5%208h7%22%20stroke=%22white%22%20stroke-width=%222%22%20stroke-linecap=%22round%22/%3e%3c/svg%3e')] focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_25%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed"
-           {% if checked %}checked{% endif %}
-           {% if disabled %}disabled{% endif %}
-           {{ attrs }}>
+    {% with class="" %}
+        <c-forms.checkbox-input name="{{ name }}" id="{{ id }}" value="{{ value }}" :checked="checked" :disabled="disabled" :attrs="attrs" />
+    {% endwith %}
     {% if slot %}<span class="text-sm text-text">{{ slot }}</span>{% endif %}
 </label>

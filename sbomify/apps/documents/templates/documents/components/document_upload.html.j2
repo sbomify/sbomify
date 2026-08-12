@@ -1,176 +1,140 @@
-{% load static %}
-{% load design_system %}
 <div x-data="documentUpload('{{ component_id }}')"
      x-init="expanded = localStorage.getItem('document-upload-expanded') !== 'false'; $watch('expanded', val => localStorage.setItem('document-upload-expanded', val ? 'true' : 'false')); documentTypeSubcategories = JSON.parse(document.getElementById('document-type-subcategories-{{ component_id }}').textContent)"
      x-cloak>
     <script type="application/json"
             id="document-type-subcategories-{{ component_id }}">{{ document_type_subcategories_json|safe }}</script>
-    <div class="tw-card">
-        <button type="button"
-                class="px-6 py-4 border-b border-border cursor-pointer select-none w-full text-left"
-                :aria-expanded="expanded"
-                @click="expanded = !expanded">
-            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                <i class="fas fa-upload" aria-hidden="true"></i>
-                Upload Document File
-                <i class="fas ml-auto text-sm"
-                   :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"
-                   aria-hidden="true"></i>
-            </h4>
-        </button>
-        <div class="p-6" x-show="expanded" x-collapse>
-            {% alert variant="info" title="Document upload" message="Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload." class="mb-6" %}
-            <div class="mb-4">
-                <label for="document-version"
-                       class="block text-sm font-medium text-text mb-1">
-                    Version <span class="text-danger">*</span>
-                </label>
-                <input id="document-version"
-                       x-model="documentVersion"
-                       type="text"
-                       class="tw-form-input"
-                       placeholder="e.g., 1.0, v2.1, latest"
-                       required>
-                <p class="text-text-muted text-xs mt-1">Specify the version of this document</p>
+    <c-cards.card flush>
+    <c-slot name="header">
+    <button type="button"
+            class="px-6 py-4 border-b border-border cursor-pointer select-none w-full text-left"
+            :aria-expanded="expanded"
+            @click="expanded = !expanded">
+        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+            <i class="fas fa-upload" aria-hidden="true"></i>
+            Upload Document File
+            <i class="fas ml-auto text-sm"
+               :class="expanded ? 'fa-chevron-up' : 'fa-chevron-down'"
+               aria-hidden="true"></i>
+        </h4>
+    </button>
+    </c-slot>
+    <div class="p-6" x-show="expanded" x-collapse>
+        <c-feedback.alert variant="info" title="Document upload" class="mb-6">
+        Upload documents like specifications, manuals, reports, compliance documents, or any file related to your component. You can specify a version and description during upload.
+        </c-feedback.alert>
+        <div class="mb-4">
+            <label for="document-version"
+                   class="block text-sm font-medium text-text mb-1">
+                Version <span class="text-danger">*</span>
+            </label>
+            <c-forms.input id="document-version" type="text" placeholder="e.g., 1.0, v2.1, latest" required x-model="documentVersion" />
+            <p class="text-text-muted text-xs mt-1">Specify the version of this document</p>
+        </div>
+        <div class="mb-4">
+            <label for="document-type" class="block text-sm font-medium text-text mb-1">Document Type</label>
+            <c-forms.select id="document-type" x-model="documentType" @change="documentSubcategory = ''">
+            <option value="">Select document type (optional)</option>
+            <optgroup label="Technical Documentation">
+                <option value="specification">Specification</option>
+                <option value="manual">Manual</option>
+                <option value="readme">README</option>
+                <option value="documentation">Documentation</option>
+                <option value="build-instructions">Build Instructions</option>
+                <option value="configuration">Configuration</option>
+            </optgroup>
+            <optgroup label="Legal and Compliance">
+                <option value="license">License</option>
+                <option value="compliance">Compliance</option>
+                <option value="evidence">Evidence</option>
+            </optgroup>
+            <optgroup label="Release Information">
+                <option value="changelog">Changelog</option>
+                <option value="release-notes">Release Notes</option>
+            </optgroup>
+            <optgroup label="Security Documents">
+                <option value="security-advisory">Security Advisory</option>
+                <option value="vulnerability-report">Vulnerability Report</option>
+                <option value="threat-model">Threat Model</option>
+                <option value="risk-assessment">Risk Assessment</option>
+                <option value="pentest-report">Penetration Test Report</option>
+            </optgroup>
+            <optgroup label="Analysis Reports">
+                <option value="static-analysis">Static Analysis Report</option>
+                <option value="dynamic-analysis">Dynamic Analysis Report</option>
+                <option value="quality-metrics">Quality Metrics</option>
+                <option value="maturity-report">Maturity Report</option>
+                <option value="report">Report</option>
+            </optgroup>
+            <optgroup label="Other">
+                <option value="other">Other</option>
+            </optgroup>
+            </c-forms.select>
+            <p class="text-text-muted text-xs mt-1">
+                Select the type of document you're uploading. This helps with SBOM generation and compliance.
+            </p>
+        </div>
+        <template x-for="(subcategoryInfo, docType) in documentTypeSubcategories"
+                  :key="docType">
+            <div class="mb-4" x-show="documentType === docType">
+                <label :for="'document-subcategory-' + docType"
+                       class="block text-sm font-medium text-text mb-1"
+                       x-text="subcategoryInfo.label"></label>
+                <c-forms.select x-model="documentSubcategory" ::id="'document-subcategory-' + docType" ::name="subcategoryInfo.field_name">
+                <option value="">Select subcategory (optional)</option>
+                <template x-for="[value, label] in subcategoryInfo.choices" :key="value">
+                    <option :value="value" x-text="label"></option>
+                </template>
+                </c-forms.select>
+                <p class="text-text-muted text-xs mt-1">Select a subcategory for auto-detection and badging.</p>
             </div>
-            <div class="mb-4">
-                <label for="document-type" class="block text-sm font-medium text-text mb-1">Document Type</label>
-                <select id="document-type"
-                        x-model="documentType"
-                        class="tw-form-select"
-                        @change="documentSubcategory = ''">
-                    <option value="">Select document type (optional)</option>
-                    <optgroup label="Technical Documentation">
-                        <option value="specification">Specification</option>
-                        <option value="manual">Manual</option>
-                        <option value="readme">README</option>
-                        <option value="documentation">Documentation</option>
-                        <option value="build-instructions">Build Instructions</option>
-                        <option value="configuration">Configuration</option>
-                    </optgroup>
-                    <optgroup label="Legal and Compliance">
-                        <option value="license">License</option>
-                        <option value="compliance">Compliance</option>
-                        <option value="evidence">Evidence</option>
-                    </optgroup>
-                    <optgroup label="Release Information">
-                        <option value="changelog">Changelog</option>
-                        <option value="release-notes">Release Notes</option>
-                    </optgroup>
-                    <optgroup label="Security Documents">
-                        <option value="security-advisory">Security Advisory</option>
-                        <option value="vulnerability-report">Vulnerability Report</option>
-                        <option value="threat-model">Threat Model</option>
-                        <option value="risk-assessment">Risk Assessment</option>
-                        <option value="pentest-report">Penetration Test Report</option>
-                    </optgroup>
-                    <optgroup label="Analysis Reports">
-                        <option value="static-analysis">Static Analysis Report</option>
-                        <option value="dynamic-analysis">Dynamic Analysis Report</option>
-                        <option value="quality-metrics">Quality Metrics</option>
-                        <option value="maturity-report">Maturity Report</option>
-                        <option value="report">Report</option>
-                    </optgroup>
-                    <optgroup label="Other">
-                        <option value="other">Other</option>
-                    </optgroup>
-                </select>
-                <p class="text-text-muted text-xs mt-1">
-                    Select the type of document you're uploading. This helps with SBOM generation and compliance.
-                </p>
-            </div>
-            <template x-for="(subcategoryInfo, docType) in documentTypeSubcategories"
-                      :key="docType">
-                <div class="mb-4" x-show="documentType === docType">
-                    <label :for="'document-subcategory-' + docType"
-                           class="block text-sm font-medium text-text mb-1"
-                           x-text="subcategoryInfo.label"></label>
-                    <select :id="'document-subcategory-' + docType"
-                            x-model="documentSubcategory"
-                            class="tw-form-select"
-                            :name="subcategoryInfo.field_name">
-                        <option value="">Select subcategory (optional)</option>
-                        <template x-for="[value, label] in subcategoryInfo.choices" :key="value">
-                            <option :value="value" x-text="label"></option>
-                        </template>
-                    </select>
-                    <p class="text-text-muted text-xs mt-1">Select a subcategory for auto-detection and badging.</p>
-                </div>
+        </template>
+        <div class="mb-4">
+            <label for="document-description"
+                   class="block text-sm font-medium text-text mb-1">Description</label>
+            <c-forms.textarea id="document-description" rows="3" placeholder="Brief description of this document (optional)" x-model="documentDescription" />
+        </div>
+        <div @drop.prevent="handleDrop($event)"
+             @dragover.prevent="isDragOver = true"
+             @dragleave.prevent="isDragOver = false"
+             @dragenter.prevent>
+            <template x-if="!selectedFile && !isUploading">
+                <c-forms.file-upload active="isDragOver" accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml" icon="fas fa-cloud-upload-alt" on_change="handleFileSelect($event)" hint="Supports PDF, Word, text, markdown, and other document formats (max 50MB)">
+                <strong>Drop your document file here</strong> or <span class="text-primary font-medium">click to browse</span>
+                </c-forms.file-upload>
             </template>
-            <div class="mb-4">
-                <label for="document-description"
-                       class="block text-sm font-medium text-text mb-1">Description</label>
-                <textarea id="document-description"
-                          x-model="documentDescription"
-                          class="tw-form-textarea"
-                          rows="3"
-                          placeholder="Brief description of this document (optional)"></textarea>
-            </div>
-            <div @drop.prevent="handleDrop($event)"
-                 @dragover.prevent="isDragOver = true"
-                 @dragleave.prevent="isDragOver = false"
-                 @dragenter.prevent>
-                <template x-if="!selectedFile && !isUploading">
-                    <label class="tw-file-upload"
-                           :class="{ 'tw-file-upload-active': isDragOver }">
-                        <input type="file"
-                               accept=".pdf,.doc,.docx,.txt,.md,.html,.json,.xml,.yaml,.yml"
-                               class="tw-form-input sr-only"
-                               @change="handleFileSelect($event)">
-                        <div class="tw-file-upload-icon">
-                            <i class="fas fa-cloud-upload-alt text-2xl" aria-hidden="true"></i>
-                        </div>
-                        <p class="tw-file-upload-text">
-                            <strong>Drop your document file here</strong> or <span class="text-primary font-medium">click to browse</span>
-                        </p>
-                        <p class="tw-file-upload-hint">Supports PDF, Word, text, markdown, and other document formats (max 50MB)</p>
-                    </label>
-                </template>
-                <template x-if="selectedFile && !isUploading">
-                    <div class="tw-file-preview">
-                        <span class="tw-file-preview-icon">
-                            <i class="fas fa-file-alt" aria-hidden="true"></i>
-                        </span>
-                        <div class="tw-file-preview-info text-left">
-                            <p class="tw-file-preview-name m-0" x-text="selectedFile.name"></p>
-                            <p class="tw-file-preview-size m-0"
-                               x-text="formatFileSize(selectedFile.size)"></p>
-                        </div>
-                        <button type="button"
-                                class="tw-icon-btn"
-                                title="Remove file"
-                                aria-label="Remove selected file"
-                                @click="clearSelectedFile()">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                </template>
-                <template x-if="isUploading">
-                    <div class="tw-file-upload">
-                        {% include "components/tw/spinner.html.j2" with size="md" %}
-                        <p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
-                    </div>
-                </template>
-            </div>
             <template x-if="selectedFile && !isUploading">
-                <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mt-4">
-                    <p class="text-text-muted text-sm m-0 flex items-center gap-2">
-                        <i class="fas fa-info-circle"></i>
-                        Review your document details and click "Save Document" to upload.
-                    </p>
-                    <div class="flex gap-3">
-                        <button type="button" class="tw-btn-secondary" @click="clearSelectedFile()">Cancel</button>
-                        <button type="button"
-                                class="tw-btn-primary"
-                                :disabled="!isFormValid"
-                                :class="{ 'opacity-50 cursor-not-allowed': !isFormValid }"
-                                @click="saveDocument()">
-                            <i class="fas fa-save mr-2"></i>
-                            Save Document
-                        </button>
-                    </div>
-                </div>
+                <c-forms.file-preview>
+                <c-slot name="name"><span x-text="selectedFile.name"></span></c-slot>
+                <c-slot name="size"><span x-text="formatFileSize(selectedFile.size)"></span></c-slot>
+                <c-slot name="action">
+                <c-buttons.icon label="Remove selected file" title="Remove file" @click="clearSelectedFile()">
+                <i class="fas fa-times" aria-hidden="true"></i>
+                </c-buttons.icon>
+                </c-slot>
+                </c-forms.file-preview>
+            </template>
+            <template x-if="isUploading">
+                <c-forms.file-upload static>
+                <c-feedback.spinner size="md" />
+                <p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
+                </c-forms.file-upload>
             </template>
         </div>
+        <template x-if="selectedFile && !isUploading">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mt-4">
+                <p class="text-text-muted text-sm m-0 flex items-center gap-2">
+                    <i class="fas fa-info-circle"></i>
+                    Review your document details and click "Save Document" to upload.
+                </p>
+                <div class="flex gap-3">
+                    <c-buttons.secondary @click="clearSelectedFile()">Cancel</c-buttons.secondary>
+                    <c-buttons.primary ::disabled="!isFormValid" ::class="{ 'opacity-50 cursor-not-allowed': !isFormValid }" @click="saveDocument()">
+                    <i class="fas fa-save mr-2"></i>
+                    Save Document
+                    </c-buttons.primary>
+                </div>
+            </div>
+        </template>
     </div>
+    </c-cards.card>
 </div>

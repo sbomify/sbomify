@@ -55,19 +55,13 @@
         <div class="flex items-center justify-center gap-4 mb-10">
             <span class="text-sm font-medium transition-colors"
                   :class="billingPeriod === 'monthly' ? 'text-text' : 'text-text-muted'">Monthly</span>
-            <input type="checkbox"
-                   class="tw-toggle"
-                   role="switch"
-                   aria-label="Toggle annual billing"
-                   :checked="billingPeriod === 'annual'"
-                   @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'">
+            <c-forms.toggle role="switch" aria-label="Toggle annual billing" ::checked="billingPeriod === 'annual'" @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'" />
             <span class="text-sm font-medium transition-colors flex items-center gap-2"
                   :class="billingPeriod === 'annual' ? 'text-text' : 'text-text-muted'">
                 Annual
                 <template x-for="plan in plans.filter(p => p.key === 'business' && p.annual_savings_percent)"
                           :key="plan.key">
-                    <span class="tw-badge-success"
-                          x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'"></span>
+                    <c-badges.success x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'" />
                 </template>
             </span>
         </div>
@@ -207,15 +201,13 @@
               class="w-full max-w-md">
             {% csrf_token %}
             <input type="hidden" name="plan" :value="selectedPlan">
-            <button type="submit"
-                    class="tw-btn-primary tw-btn-lg w-full"
-                    :disabled="!selectedPlan">
-                <span x-show="selectedPlan === 'business'">Start Free Trial</span>
-                <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
-                <span x-show="selectedPlan === 'community'">Continue with Community</span>
-                <span x-show="!selectedPlan">Select a plan to continue</span>
-                <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
-            </button>
+            <c-buttons.primary type="submit" size="lg" class="w-full" ::disabled="!selectedPlan">
+            <span x-show="selectedPlan === 'business'">Start Free Trial</span>
+            <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
+            <span x-show="selectedPlan === 'community'">Continue with Community</span>
+            <span x-show="!selectedPlan">Select a plan to continue</span>
+            <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
+            </c-buttons.primary>
         </form>
         <p class="text-center text-text-muted/60 text-xs mt-6">You can change your plan anytime from workspace settings.</p>
     </div>

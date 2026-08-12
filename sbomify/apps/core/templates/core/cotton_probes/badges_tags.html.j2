@@ -22,6 +22,10 @@ and assert on the output; it is not routed anywhere.
 <c-badges.severity level="unknown">Unknown</c-badges.severity>
 <c-badges.severity level="not-a-band">Off scale</c-badges.severity>
 <c-badges.severity level="high" pill>Rounded high</c-badges.severity>
+{# The runtime twin of the severity scale: the band arrives as a data attribute. #}
+<c-badges.severity-dynamic level="critical">Runtime critical</c-badges.severity-dynamic>
+<c-badges.severity-dynamic>Runtime unknown</c-badges.severity-dynamic>
+<c-badges.severity-dynamic level="low" class="shrink-0" ::data-level="f.severity" x-text="f.severity">Runtime low</c-badges.severity-dynamic>
 <c-badges.format format="cyclonedx">CycloneDX</c-badges.format>
 <c-badges.format format="spdx">SPDX</c-badges.format>
 <c-badges.format format="swid">SWID</c-badges.format>
@@ -37,5 +41,10 @@ and assert on the output; it is not routed anywhere.
 <c-badges.dynamic variant="danger" data-probe="dyn-danger">Critical</c-badges.dynamic>
 <c-badges.dynamic data-probe="dyn-default">Low</c-badges.dynamic>
 <c-badges.dynamic variant="success" size="sm" data-probe="dyn-sm">Resolved</c-badges.dynamic>
+<c-badges.dynamic variant="violet" data-probe="dyn-violet">VEX</c-badges.dynamic>
+<c-tags.tag removable remove_label="'Remove ' + tag.name" remove_title="Remove license" remove_click="removeTag(index)" data-probe="tag-bound-remove">Bound tag</c-tags.tag>
 <c-chips.neutral data-probe="chip-neutral">+3 more</c-chips.neutral>
 <c-tags.tag href="/components/x" data-probe="tag-link">Linked tag</c-tags.tag>
+{# The badge that is a control: a real button wearing the secondary tint. #}
+<c-badges.action data-probe="badge-action" ::disabled="busy" @click="rerun()"><i class="fas fa-rotate-right mr-1"></i>Re-run</c-badges.action>
+<c-badges.action size="sm" data-probe="badge-action-sm">Re-run</c-badges.action>

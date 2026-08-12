@@ -6,52 +6,36 @@
         role="banner">
     {# Mobile Sidebar Toggle #}
     {% comment %}
-        The wrapper owns the responsive display: tw-icon-btn sets display
+        The wrapper owns the responsive display: the icon button sets display
         itself, so lg:hidden on the button would lose to it.
     {% endcomment %}
     <div class="lg:hidden">
-        <button @click="sidebarOpen = !sidebarOpen; $dispatch('toggle-sidebar')"
-                class="tw-icon-btn"
-                aria-label="Toggle sidebar navigation"
-                :aria-expanded="sidebarOpen"
-                aria-controls="sidebar">
-            <i class="fas fa-bars text-lg" aria-hidden="true"></i>
-        </button>
+        <c-buttons.icon label="Toggle sidebar navigation" aria-controls="sidebar" @click="sidebarOpen = !sidebarOpen; $dispatch('toggle-sidebar')" ::aria-expanded="sidebarOpen">
+        <i class="fas fa-bars text-lg" aria-hidden="true"></i>
+        </c-buttons.icon>
     </div>
     {# Search Bar #}
     <div class="flex-1 max-w-xl">
-        <div class="tw-search-input tw-search-input-hint"
-             x-data="{ focused: false }">
-            <label for="navbar-search-input" class="sr-only">Search products and components</label>
-            <i class="fas fa-search tw-search-input-icon"
-               :class="focused ? 'text-primary' : ''"
-               aria-hidden="true"></i>
-            <input type="search"
-                   id="navbar-search-input"
-                   placeholder="Search products, components..."
-                   @focus="focused = true"
-                   @blur="focused = false"
-                   autocomplete="off"
-                   role="searchbox"
-                   aria-describedby="search-hint">
-            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <kbd id="search-hint"
-                     class="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-normal opacity-45 text-text-muted rounded border border-current">
-                    <span aria-hidden="true">⌘</span><span class="sr-only">Command</span>K
-                </kbd>
-            </div>
-            {# Search Results Dropdown #}
-            {% comment %}
-                tw-dropdown-flush owns overflow, so the scroll cap lives on the
-                inner list element that the spotlight script renders into.
-            {% endcomment %}
-            <div id="search-results-dropdown"
-                 class="tw-dropdown tw-dropdown-flush top-full left-0 right-0 mt-2 hidden"
-                 role="listbox"
-                 aria-label="Search results">
-                <div id="search-results-list" class="max-h-96 overflow-y-auto py-2"></div>
-            </div>
+        {% comment %}
+            The field colours its own magnifier from the input's focus, so the
+            shortcut hint and the results panel are all this has to add.
+        {% endcomment %}
+        <c-forms.search-input id="navbar-search-input" placeholder="Search products, components..." hint autocomplete="off" role="searchbox" aria-describedby="search-hint" aria-label="Search products and components">
+        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+            <kbd id="search-hint"
+                 class="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-normal opacity-45 text-text-muted rounded border border-current">
+                <span aria-hidden="true">⌘</span><span class="sr-only">Command</span>K
+            </kbd>
         </div>
+        {# Search Results Dropdown #}
+        {% comment %}
+            The flush panel owns overflow, so the scroll cap lives on the inner
+            list element that the spotlight script renders into.
+        {% endcomment %}
+        <c-dropdowns.dropdown flush role="listbox" id="search-results-dropdown" class="top-full left-0 right-0 mt-2 hidden" aria-label="Search results">
+        <div id="search-results-list" class="max-h-96 overflow-y-auto py-2"></div>
+        </c-dropdowns.dropdown>
+        </c-forms.search-input>
     </div>
     {# Action Buttons #}
     <div class="flex items-center gap-2 ml-auto"
@@ -64,56 +48,24 @@
                     <div x-data="{ open: false }"
                          class="relative"
                          @keydown.escape.window="if(open) open = false">
-                        <button @click="open = !open"
-                                class="tw-btn-primary gap-2"
-                                :aria-expanded="open"
-                                aria-haspopup="true"
-                                aria-label="Create new item">
-                            <i class="fas fa-plus" aria-hidden="true"></i>
-                            <span class="hidden sm:inline">New</span>
-                            <i class="fas fa-chevron-down text-xs hidden sm:inline transition-transform duration-200"
-                               :class="open ? 'rotate-180' : ''"
-                               aria-hidden="true"></i>
-                        </button>
-                        <div x-show="open"
-                             x-cloak
-                             x-transition:enter="transition ease-out duration-150"
-                             x-transition:enter-start="opacity-0 translate-y-1"
-                             x-transition:enter-end="opacity-100 translate-y-0"
-                             x-transition:leave="transition ease-in duration-100"
-                             x-transition:leave-start="opacity-100 translate-y-0"
-                             x-transition:leave-end="opacity-0 translate-y-1"
-                             @click.away="open = false"
-                             @keydown.arrow-down.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx < items.length - 1) items[idx + 1].focus();"
-                             @keydown.arrow-up.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus();"
-                             @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
-                             @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()"
-                             class="tw-dropdown right-0 mt-2 w-48"
-                             role="menu"
-                             aria-orientation="vertical"
-                             aria-label="Create options">
-                            <button type="button"
-                                    @click="open = false; $dispatch('open-product-modal')"
-                                    class="tw-dropdown-item"
-                                    role="menuitem">
-                                <i class="fas fa-cube tw-dropdown-item-icon" aria-hidden="true"></i>
-                                Product
-                            </button>
-                            <button type="button"
-                                    @click="open = false; $dispatch('open-component-modal')"
-                                    class="tw-dropdown-item"
-                                    role="menuitem">
-                                <i class="fas fa-puzzle-piece tw-dropdown-item-icon" aria-hidden="true"></i>
-                                Component
-                            </button>
-                            <a href="{% url 'core:security_advisory_new' %}"
-                               @click="open = false"
-                               class="tw-dropdown-item"
-                               role="menuitem">
-                                <i class="fas fa-shield-halved tw-dropdown-item-icon" aria-hidden="true"></i>
-                                Advisory
-                            </a>
-                        </div>
+                        <c-buttons.primary aria-label="Create new item" aria-haspopup="true" @click="open = !open" ::aria-expanded="open">
+                        <i class="fas fa-plus" aria-hidden="true"></i>
+                        <span class="hidden sm:inline">New</span>
+                        <i class="fas fa-chevron-down text-xs hidden sm:inline transition-transform duration-200"
+                           :class="open ? 'rotate-180' : ''"
+                           aria-hidden="true"></i>
+                        </c-buttons.primary>
+                        <c-dropdowns.dropdown class="right-0 mt-2 w-48" aria-label="Create options" x-show="open" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1" @click.away="open = false">
+                        <c-dropdowns.item icon="fas fa-cube" @click="open = false; $dispatch('open-product-modal')">
+                        Product
+                        </c-dropdowns.item>
+                        <c-dropdowns.item icon="fas fa-puzzle-piece" @click="open = false; $dispatch('open-component-modal')">
+                        Component
+                        </c-dropdowns.item>
+                        <c-dropdowns.item icon="fas fa-shield-halved" href="{% url 'core:security_advisory_new' %}" @click="open = false">
+                        Advisory
+                        </c-dropdowns.item>
+                        </c-dropdowns.dropdown>
                     </div>
                 {% endif %}
             {% endif %}
@@ -123,168 +75,119 @@
              class="relative"
              @keydown.escape.window="if(open) open = false"
              id="notifications-dropdown-container">
-            <button @click="open = !open; if(open) $dispatch('notifications-open')"
-                    class="tw-icon-btn relative"
-                    aria-label="View notifications"
-                    :aria-expanded="open"
-                    aria-haspopup="true">
-                <i class="fas fa-bell text-lg" aria-hidden="true"></i>
-                <span id="notifications-badge"
-                      class="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1.5 bg-danger text-white text-[10px] font-bold rounded-full hidden flex items-center justify-center shadow-sm"
-                      aria-label="New notifications"></span>
-            </button>
-            <div x-show="open"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0 translate-y-1"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100 translate-y-0"
-                 x-transition:leave-end="opacity-0 translate-y-1"
-                 @click.away="open = false"
-                 class="tw-dropdown tw-dropdown-flush right-0 mt-2 w-80"
-                 role="menu"
-                 aria-orientation="vertical"
-                 aria-label="Notifications"
-                 id="notifications-dropdown">
-                {# Header #}
-                <div class="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <div class="flex items-center gap-2">
-                        <i class="fas fa-bell text-primary"></i>
-                        <span class="text-sm font-semibold text-text">Notifications</span>
-                    </div>
-                    {% comment %}
-                        Starts hidden inline: the notifications script shows it via
-                        style.display, because a `hidden` utility loses to the
-                        display set by tw-btn-ghost.
-                    {% endcomment %}
-                    <button type="button"
-                            class="tw-btn-ghost tw-btn-sm"
-                            style="display: none"
-                            id="clearAllNotifications">Clear all</button>
+            <c-buttons.icon label="View notifications" class="relative" aria-haspopup="true" @click="open = !open; if(open) $dispatch('notifications-open')" ::aria-expanded="open">
+            <i class="fas fa-bell text-lg" aria-hidden="true"></i>
+            <span id="notifications-badge"
+                  class="absolute -top-0.5 -right-0.5 min-w-5 h-5 px-1.5 bg-danger text-white text-[10px] font-bold rounded-full hidden flex items-center justify-center shadow-sm"
+                  aria-label="New notifications"></span>
+            </c-buttons.icon>
+            <c-dropdowns.dropdown flush class="right-0 mt-2 w-80" aria-label="Notifications" id="notifications-dropdown" x-show="open" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1" @click.away="open = false">
+            {# Header #}
+            <div class="flex items-center justify-between px-4 py-3 border-b border-border">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-bell text-primary"></i>
+                    <span class="text-sm font-semibold text-text">Notifications</span>
                 </div>
-                {# Body #}
-                <div class="max-h-96 overflow-y-auto">
-                    {# Loading State #}
-                    <div id="notifications-loading"
-                         class="flex flex-col items-center justify-center py-12 px-4">
-                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary mb-3" %}
-                        <p class="text-sm text-text-muted">Loading notifications...</p>
-                    </div>
-                    {# Notifications List #}
-                    <div id="notifications-list"></div>
-                    {# Empty State #}
-                    <div id="notifications-empty" class="hidden">
-                        <div class="flex flex-col items-center justify-center py-12 px-6">
-                            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-success/20 to-success/5 flex items-center justify-center mb-4">
-                                <i class="fas fa-check text-2xl text-success"></i>
-                            </div>
-                            <p class="text-sm font-semibold text-text mb-1">You're all caught up!</p>
-                            <p class="text-xs text-text-muted text-center">No new notifications at the moment.</p>
+                {% comment %}
+                    Starts hidden inline: the notifications script shows it via
+                    style.display, because a `hidden` utility loses to the
+                    display the button sets itself.
+                {% endcomment %}
+                <c-buttons.ghost size="sm" id="clearAllNotifications" style="display: none">Clear all</c-buttons.ghost>
+            </div>
+            {# Body #}
+            <div class="max-h-96 overflow-y-auto">
+                {# Loading State #}
+                <div id="notifications-loading"
+                     class="flex flex-col items-center justify-center py-12 px-4">
+                    <c-feedback.spinner size="lg" class="mb-3" />
+                    <p class="text-sm text-text-muted">Loading notifications...</p>
+                </div>
+                {# Notifications List #}
+                <div id="notifications-list"></div>
+                {# Empty State #}
+                <div id="notifications-empty" class="hidden">
+                    <div class="flex flex-col items-center justify-center py-12 px-6">
+                        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-success/20 to-success/5 flex items-center justify-center mb-4">
+                            <i class="fas fa-check text-2xl text-success"></i>
                         </div>
+                        <p class="text-sm font-semibold text-text mb-1">You're all caught up!</p>
+                        <p class="text-xs text-text-muted text-center">No new notifications at the moment.</p>
                     </div>
                 </div>
             </div>
+            </c-dropdowns.dropdown>
         </div>
         {# User Dropdown #}
         <div x-data="{ open: false }"
              class="relative"
              @keydown.escape.window="if(open) open = false">
-            <button @click="open = !open"
-                    class="tw-btn-ghost"
-                    :aria-expanded="open"
-                    aria-haspopup="true"
-                    aria-label="User menu">
-                <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-transparent transition-all duration-200"
-                     :class="open ? 'ring-primary/30' : ''">
-                    <i class="fas fa-user text-primary text-sm" aria-hidden="true"></i>
-                </div>
-                <span class="hidden md:block text-sm font-medium text-text">
-                    {{ request.user.first_name|default:request.user.email }}
-                </span>
-                <i class="fas fa-chevron-down text-xs text-text-muted hidden md:block transition-transform duration-200"
-                   :class="open ? 'rotate-180' : ''"
-                   aria-hidden="true"></i>
-            </button>
-            <div x-show="open"
-                 x-cloak
-                 x-transition:enter="transition ease-out duration-150"
-                 x-transition:enter-start="opacity-0 translate-y-1"
-                 x-transition:enter-end="opacity-100 translate-y-0"
-                 x-transition:leave="transition ease-in duration-100"
-                 x-transition:leave-start="opacity-100 translate-y-0"
-                 x-transition:leave-end="opacity-0 translate-y-1"
-                 @click.away="open = false"
-                 @keydown.arrow-down.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx < items.length - 1) items[idx + 1].focus();"
-                 @keydown.arrow-up.prevent="const items = [...$el.querySelectorAll('[role=menuitem]')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus();"
-                 @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
-                 @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()"
-                 class="tw-dropdown right-0 mt-2 w-64"
-                 role="menu"
-                 aria-orientation="vertical"
-                 aria-label="User options">
-                {# User Info #}
-                <div class="px-4 py-3 border-b border-border">
-                    <p class="text-sm font-medium text-text">{{ request.user.get_full_name|default:request.user.email }}</p>
-                    <p class="text-xs text-text-muted truncate">{{ request.user.email }}</p>
-                </div>
-                {# Profile Settings Link — link directly to team settings#account to avoid redirect losing fragment #}
-                {% if request.session.current_team and request.session.current_team.key %}
-                    <a href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}#account"
-                       class="tw-dropdown-item"
-                       role="menuitem">
-                        <i class="fas fa-user-edit tw-dropdown-item-icon" aria-hidden="true"></i>
-                        Profile Settings
-                    </a>
-                {% else %}
-                    <a href="{% url 'core:settings' %}"
-                       class="tw-dropdown-item"
-                       role="menuitem">
-                        <i class="fas fa-user-edit tw-dropdown-item-icon" aria-hidden="true"></i>
-                        Profile Settings
-                    </a>
-                {% endif %}
-                {# Theme Selector #}
-                <div class="px-4 py-3 border-t border-border mt-2">
-                    <p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2"
-                       id="theme-label">Theme</p>
-                    <div x-data="{ theme: window.themeManager?.getTheme() || 'dark', setTheme(t) { this.theme = t; window.themeManager?.setTheme(t); } }"
-                         class="flex gap-1 p-1 bg-border/20 rounded-lg"
-                         role="radiogroup"
-                         aria-labelledby="theme-label">
-                        <button @click="setTheme('light')"
-                                :class="theme === 'light' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
-                                class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                role="radio"
-                                :aria-checked="theme === 'light'">
-                            <i class="fas fa-sun mr-1" aria-hidden="true"></i> Light
-                        </button>
-                        <button @click="setTheme('dark')"
-                                :class="theme === 'dark' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
-                                class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                role="radio"
-                                :aria-checked="theme === 'dark'">
-                            <i class="fas fa-moon mr-1" aria-hidden="true"></i> Dark
-                        </button>
-                        <button @click="setTheme('system')"
-                                :class="theme === 'system' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
-                                class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                role="radio"
-                                :aria-checked="theme === 'system'">
-                            <i class="fas fa-desktop mr-1" aria-hidden="true"></i> Auto
-                        </button>
-                    </div>
-                </div>
-                {# Logout #}
-                <div class="border-t border-border mt-2 pt-2">
-                    <a href="{% url 'core:logout' %}"
-                       class="tw-dropdown-item tw-dropdown-item-danger"
-                       role="menuitem">
-                        <i class="fas fa-sign-out-alt tw-dropdown-item-icon" aria-hidden="true"></i>
-                        Sign out
-                    </a>
+            <c-buttons.ghost aria-label="User menu" aria-haspopup="true" @click="open = !open" ::aria-expanded="open">
+            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-transparent transition-all duration-200"
+                 :class="open ? 'ring-primary/30' : ''">
+                <i class="fas fa-user text-primary text-sm" aria-hidden="true"></i>
+            </div>
+            <span class="hidden md:block text-sm font-medium text-text">
+                {{ request.user.first_name|default:request.user.email }}
+            </span>
+            <i class="fas fa-chevron-down text-xs text-text-muted hidden md:block transition-transform duration-200"
+               :class="open ? 'rotate-180' : ''"
+               aria-hidden="true"></i>
+            </c-buttons.ghost>
+            <c-dropdowns.dropdown class="right-0 mt-2 w-64" aria-label="User options" x-show="open" x-cloak x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 translate-y-1" @click.away="open = false">
+            {# User Info #}
+            <div class="px-4 py-3 border-b border-border">
+                <p class="text-sm font-medium text-text">{{ request.user.get_full_name|default:request.user.email }}</p>
+                <p class="text-xs text-text-muted truncate">{{ request.user.email }}</p>
+            </div>
+            {# Profile Settings Link — link directly to team settings#account to avoid redirect losing fragment #}
+            {% if request.session.current_team and request.session.current_team.key %}
+                <c-dropdowns.item icon="fas fa-user-edit" href="{% url 'teams:team_settings' team_key=request.session.current_team.key %}#account">
+                Profile Settings
+                </c-dropdowns.item>
+            {% else %}
+                <c-dropdowns.item icon="fas fa-user-edit" href="{% url 'core:settings' %}">
+                Profile Settings
+                </c-dropdowns.item>
+            {% endif %}
+            {# Theme Selector #}
+            <div class="px-4 py-3 border-t border-border mt-2">
+                <p class="text-xs font-medium text-text-muted uppercase tracking-wider mb-2"
+                   id="theme-label">Theme</p>
+                <div x-data="{ theme: window.themeManager?.getTheme() || 'dark', setTheme(t) { this.theme = t; window.themeManager?.setTheme(t); } }"
+                     class="flex gap-1 p-1 bg-border/20 rounded-lg"
+                     role="radiogroup"
+                     aria-labelledby="theme-label">
+                    <button @click="setTheme('light')"
+                            :class="theme === 'light' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
+                            class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                            role="radio"
+                            :aria-checked="theme === 'light'">
+                        <i class="fas fa-sun mr-1" aria-hidden="true"></i> Light
+                    </button>
+                    <button @click="setTheme('dark')"
+                            :class="theme === 'dark' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
+                            class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                            role="radio"
+                            :aria-checked="theme === 'dark'">
+                        <i class="fas fa-moon mr-1" aria-hidden="true"></i> Dark
+                    </button>
+                    <button @click="setTheme('system')"
+                            :class="theme === 'system' ? 'bg-primary text-white shadow-sm' : 'text-text-muted theme-button-hover'"
+                            class="flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                            role="radio"
+                            :aria-checked="theme === 'system'">
+                        <i class="fas fa-desktop mr-1" aria-hidden="true"></i> Auto
+                    </button>
                 </div>
             </div>
+            {# Logout #}
+            <div class="border-t border-border mt-2 pt-2">
+                <c-dropdowns.item-danger icon="fas fa-sign-out-alt" href="{% url 'core:logout' %}">
+                Sign out
+                </c-dropdowns.item-danger>
+            </div>
+            </c-dropdowns.dropdown>
         </div>
     </div>
 </header>

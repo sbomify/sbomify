@@ -1,0 +1,17 @@
+{% comment %}
+The severity badge for a band only the browser knows: a findings list Alpine
+builds from a JSON projection, where the server never renders the row and so
+cannot pick c-badges.severity's level.
+
+The caller binds one data attribute and nothing else:
+
+    <c-badges.severity-dynamic ::data-level="f.severity" x-text="f.severity" />
+
+c-badges.severity is the one to reach for everywhere the server knows the
+band. This is its runtime twin: same shell, same shape, the same five recipes,
+selected by data-level instead of by a prop. A band the component does not know
+falls back to the unknown tint, so a new value from a scanner renders quietly
+rather than unstyled.
+{% endcomment %}
+<c-vars level="unknown" pill class />
+<c-badges.badge shape="severity" data-level="{{ level }}" variant_class="text-[color-mix(in_oklab,var(--color-text-muted)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)] border-[color-mix(in_oklab,var(--color-text-muted)_20%,transparent)] data-[level=critical]:text-[color-mix(in_oklab,var(--color-severity-critical)_70%,var(--color-text))] data-[level=critical]:bg-[color-mix(in_oklab,var(--color-severity-critical)_12%,transparent)] data-[level=critical]:border-[color-mix(in_oklab,var(--color-severity-critical)_20%,transparent)] data-[level=high]:text-[color-mix(in_oklab,var(--color-severity-high)_70%,var(--color-text))] data-[level=high]:bg-[color-mix(in_oklab,var(--color-severity-high)_12%,transparent)] data-[level=high]:border-[color-mix(in_oklab,var(--color-severity-high)_20%,transparent)] data-[level=medium]:text-[color-mix(in_oklab,var(--color-severity-medium)_70%,var(--color-text))] data-[level=medium]:bg-[color-mix(in_oklab,var(--color-severity-medium)_12%,transparent)] data-[level=medium]:border-[color-mix(in_oklab,var(--color-severity-medium)_20%,transparent)] data-[level=low]:text-[color-mix(in_oklab,var(--color-severity-low)_70%,var(--color-text))] data-[level=low]:bg-[color-mix(in_oklab,var(--color-severity-low)_12%,transparent)] data-[level=low]:border-[color-mix(in_oklab,var(--color-severity-low)_20%,transparent)]" :pill="pill" class="{{ class }}" :attrs="attrs">{{ slot }}</c-badges.badge>

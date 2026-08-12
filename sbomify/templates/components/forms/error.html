@@ -4,6 +4,6 @@ the slot sits beside the text. The control carries the matching border itself
 (state="error"); this only writes the words.
 {% endcomment %}
 <c-vars class />
-<p class="flex items-center gap-1 text-xs text-danger mt-1.5{% if class %} {{ class }}{% endif %}"
+<p class="flex items-center gap-1 text-xs leading-[1.5] text-danger mt-1.5{% if class %} {{ class }}{% endif %}"
    {{ attrs }}>{{ slot }}
 </p>

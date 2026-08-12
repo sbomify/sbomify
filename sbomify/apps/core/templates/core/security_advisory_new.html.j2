@@ -1,76 +1,53 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load design_system %}
 {% block title %}sbomify New Advisory{% endblock %}
 {% comment %}
     The New Advisory form. It was a modal, but the affected-products picker is a
     filterable tree with range selection that needs room: in a modal the scope
     line and the version list fell under the fold on a short window.
 
-    Three steps in one form, laid out with tw-form-section — what the step is on
-    the left, its fields on the right, a hairline between. No cards: the sections
-    are the structure, and boxing each one made three panels out of one form.
+    Three steps in one form, laid out with c-layout.form-section — what the step
+    is on the left, its fields on the right, a hairline between. No cards: the
+    sections are the structure, and boxing each one made three panels out of one
+    form.
 {% endcomment %}
 {% block dashboard_content %}
+    {% url 'core:security_advisories_dashboard' as advisories_url %}
     <div class="max-w-5xl">
-        <div class="tw-page-header">
-            <div class="tw-page-header-lead">
-                <span class="tw-icon-chip tw-icon-chip-lg">
-                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h1 class="tw-page-header-title">New advisory</h1>
-                    <p class="tw-page-header-subtitle">Opens as a draft. The first timeline entry shows this status.</p>
-                </div>
-            </div>
-            <div class="tw-page-header-actions">
-                {% url 'core:security_advisories_dashboard' as advisories_url %}
-                {% button_link text="Back to advisories" url=advisories_url variant="ghost" icon="fas fa-arrow-left" size="sm" %}
-            </div>
-        </div>
+        <c-layout.page-header title="New advisory" subtitle="Opens as a draft. The first timeline entry shows this status." icon="fas fa-shield-halved">
+        <c-buttons.ghost href="{{ advisories_url }}" size="sm">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i><span>Back to advisories</span>
+        </c-buttons.ghost>
+        </c-layout.page-header>
         <form method="post" action="{% url 'core:security_advisory_new' %}">
             {% csrf_token %}
-            <div class="tw-form-section">
-                <div>
-                    <h2 class="tw-form-section-title">
-                        <span class="tw-icon-chip tw-icon-chip-sm" aria-hidden="true">1</span>
-                        What it is
-                    </h2>
-                    <p class="tw-form-section-description">A title is all a draft needs.</p>
-                </div>
-                <div class="space-y-5">
-                    {% input name="title" label="Title" required=True placeholder="e.g. Improper authentication in SAML assertion handling" %}
-                    {% choice_group name="severity" label="Severity" options=severity_options selected="medium" %}
-                    {% choice_group name="remediation_status" label="Status" options=status_options selected="identified" hint="Where the work stands now." %}
-                </div>
+            <c-layout.form-section step="1" title="What it is" description="A title is all a draft needs.">
+            <div class="space-y-5">
+                <c-forms.field label="Title" for="title" required>
+                <c-forms.input name="title" required placeholder="e.g. Improper authentication in SAML assertion handling" />
+                </c-forms.field>
+                <c-layout.choice-group name="severity" label="Severity" :options="severity_options" selected="medium" />
+                <c-layout.choice-group name="remediation_status" label="Status" :options="status_options" selected="identified" hint="Where the work stands now." />
             </div>
-            <div class="tw-form-section">
-                <div>
-                    <h2 class="tw-form-section-title">
-                        <span class="tw-icon-chip tw-icon-chip-sm" aria-hidden="true">2</span>
-                        What it affects
-                    </h2>
-                    <p class="tw-form-section-description">Tick a product to cover every version. Open one to pick versions.</p>
-                </div>
-                <div>{% include "core/components/advisory_product_picker.html.j2" %}</div>
+            </c-layout.form-section>
+            <c-layout.form-section step="2" title="What it affects" description="Tick a product to cover every version. Open one to pick versions.">
+            <div>{% include "core/components/advisory_product_picker.html.j2" %}</div>
+            </c-layout.form-section>
+            <c-layout.form-section step="3" accent="neutral" title="What else is known" description="Optional. You can add these later.">
+            <div class="space-y-5">
+                <input type="hidden" name="type" value="cve">
+                <c-forms.field label="CVE or reference" for="vulnerability_id">
+                <c-forms.input name="vulnerability_id" placeholder="CVE-2026-0000" />
+                </c-forms.field>
+                <c-forms.field label="Description" for="description">
+                <c-forms.textarea name="description" rows="4" placeholder="What is the problem, and who does it affect?" />
+                </c-forms.field>
             </div>
-            <div class="tw-form-section">
-                <div>
-                    <h2 class="tw-form-section-title">
-                        <span class="tw-icon-chip tw-icon-chip-sm tw-icon-chip-neutral"
-                              aria-hidden="true">3</span>
-                        What else is known
-                    </h2>
-                    <p class="tw-form-section-description">Optional. You can add these later.</p>
-                </div>
-                <div class="space-y-5">
-                    <input type="hidden" name="type" value="cve">
-                    {% input name="vulnerability_id" label="CVE or reference" placeholder="CVE-2026-0000" %}
-                    {% textarea name="description" label="Description" rows=4 placeholder="What is the problem, and who does it affect?" %}
-                </div>
-            </div>
+            </c-layout.form-section>
             <div class="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-6">
-                {% button_link text="Cancel" url=advisories_url variant="ghost" %}
-                {% button text="Create advisory" variant="primary" type="submit" icon="fas fa-plus" %}
+                <c-buttons.ghost href="{{ advisories_url }}"><span>Cancel</span></c-buttons.ghost>
+                <c-buttons.primary type="submit">
+                <i class="fas fa-plus" aria-hidden="true"></i><span>Create advisory</span>
+                </c-buttons.primary>
             </div>
         </form>
     </div>

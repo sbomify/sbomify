@@ -1,30 +1,28 @@
 {# CRA Wizard Step Progress Bar #}
 {# Expects: step (int), step_names (dict), completed_steps (list), assessment_id (str) #}
+{# A completed step is a link back to it: the anchor wraps the step, because a #}
+{# step is not a link everywhere else the rail is used. #}
 <nav aria-label="Wizard progress" class="mb-8">
-    <div class="tw-stepper">
-        {% for step_num, step_label in step_names.items %}
-            {% if step_num in completed_steps and step_num != step %}
-                <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step_num %}"
-                   class="tw-stepper-item">
-                    <span class="tw-stepper-circle tw-stepper-circle-completed">
-                        <i class="fas fa-check text-xs" aria-hidden="true"></i>
-                    </span>
-                    <span class="tw-stepper-label hidden sm:inline">{{ step_label }}</span>
-                </a>
-            {% elif step_num == step %}
-                <span class="tw-stepper-item" aria-current="step">
-                    <span class="tw-stepper-circle tw-stepper-circle-active">{{ step_num }}</span>
-                    <span class="tw-stepper-label tw-stepper-label-active hidden sm:inline">{{ step_label }}</span>
-                </span>
+    <c-navigation.stepper>
+    {% for step_num, step_label in step_names.items %}
+        {% if step_num in completed_steps and step_num != step %}
+            <a href="{% url 'compliance:cra_step' assessment_id=assessment_id step=step_num %}">
+                <c-navigation.stepper-step state="completed" label="{{ step_label }}" label_class="hidden sm:inline">
+                <i class="fas fa-check text-xs" aria-hidden="true"></i>
+                </c-navigation.stepper-step>
+            </a>
+        {% elif step_num == step %}
+            <c-navigation.stepper-step state="active" label="{{ step_label }}" label_class="hidden sm:inline" aria-current="step">{{ step_num }}</c-navigation.stepper-step>
+        {% else %}
+            <c-navigation.stepper-step label="{{ step_label }}" label_class="hidden sm:inline">{{ step_num }}</c-navigation.stepper-step>
+        {% endif %}
+        {% if not forloop.last %}
+            {% if step_num in completed_steps %}
+                <c-navigation.stepper-connector completed />
             {% else %}
-                <span class="tw-stepper-item">
-                    <span class="tw-stepper-circle">{{ step_num }}</span>
-                    <span class="tw-stepper-label hidden sm:inline">{{ step_label }}</span>
-                </span>
+                <c-navigation.stepper-connector />
             {% endif %}
-            {% if not forloop.last %}
-                <span class="tw-stepper-connector{% if step_num in completed_steps %} tw-stepper-connector-completed{% endif %}"></span>
-            {% endif %}
-        {% endfor %}
-    </div>
+        {% endif %}
+    {% endfor %}
+    </c-navigation.stepper>
 </nav>

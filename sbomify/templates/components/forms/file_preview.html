@@ -1,0 +1,31 @@
+{% comment %}
+The row a drop zone becomes once a file is picked: the file's mark, its name
+over its size, and the control that clears it. It is the resting state of
+c-forms.file-upload, not a variant of it, so it is its own file.
+
+name and size are named slots rather than props because the file is client
+state: an Alpine editor puts a bound span in each, and a server-rendered
+attachment puts plain text. The name line clips with an ellipsis, so a long
+file name never widens the row.
+
+action is the trailing control, a real button component the caller wires
+(@click="clearSelectedFile()"). It is a slot for the same reason every other
+action is: it must stay a c-buttons.icon, not a prop this file re-implements.
+
+The two lines state their font-size bare, as a table cell does: the old rules
+set a size and let the line-height inherit, and stating one here would re-typeset
+the row wherever the surrounding text is not 1.5.
+{% endcomment %}
+<c-vars icon="fas fa-file-alt" class />
+<div class="flex items-center gap-3 mt-4 px-4 py-3 bg-surface border border-solid border-border rounded-lg{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <span class="flex items-center justify-center w-10 h-10 rounded-md bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] text-primary">
+        <i class="{{ icon }}" aria-hidden="true"></i>
+    </span>
+    <div class="flex-1 min-w-0 text-left">
+        {% if name %}<p class="text-[0.875rem] font-medium text-text truncate m-0">{{ name }}</p>{% endif %}
+        {% if size %}<p class="text-[0.75rem] text-text-muted m-0">{{ size }}</p>{% endif %}
+        {{ slot }}
+    </div>
+    {% if action %}{{ action }}{% endif %}
+</div>
