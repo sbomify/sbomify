@@ -59,6 +59,12 @@ class _PluginInfo(TypedDict):
 # Only SBOMs created within this window will be queued for assessment
 BACKFILL_CUTOFF_HOURS = 24
 
+# How long a scheduled sweep leaves an SBOM alone after a plugin reported it
+# could not read the input at all (``metadata.unsupported_input``). Re-running
+# sooner just repeats the rejection; a day still picks up a scanner upgrade
+# that closes the gap without anyone having to intervene.
+UNSUPPORTED_INPUT_SKIP_HOURS = 24
+
 # Retry delays for RetryLaterError (in milliseconds)
 # These delays give external systems time to process:
 # - 1st retry: 2 minutes
@@ -1164,7 +1170,8 @@ def _run_scheduled_security_scans(
         # within the skip window. Scan-once-per-SBOM model — we no longer
         # dedup per (sbom, release) pair because one scan covers all the
         # SBOM's current releases via the AssessmentRun.releases M2M.
-        cutoff = timezone.now() - timedelta(hours=skip_hours)
+        now = timezone.now()
+        cutoff = now - timedelta(hours=skip_hours)
         recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
                 plugin_name=plugin_name,
@@ -1173,6 +1180,28 @@ def _run_scheduled_security_scans(
                 sbom__component__team_id__in=team_ids,
             ).values_list("sbom_id", flat=True)
         )
+
+        # An SBOM the scanner has declared itself incapable of reading will get
+        # the same answer on the next sweep, so the ordinary skip window is the
+        # wrong clock for it: at skip_hours=1 that is a full re-upload every
+        # hour, rejected every hour, for as long as the artifact exists.
+        #
+        # Backed off rather than blocked, because the capability gap closes on
+        # its own — Dependency Track gains CycloneDX 1.7 in a later release, and
+        # the SBOM becomes scannable with no change here and no operator action.
+        # A day is short enough that a server upgrade is picked up promptly and
+        # long enough that the retry cost stops mattering.
+        incapable_cutoff = now - timedelta(hours=UNSUPPORTED_INPUT_SKIP_HOURS)
+        if incapable_cutoff < cutoff:
+            recent_sbom_ids.update(
+                AssessmentRun.objects.filter(
+                    plugin_name=plugin_name,
+                    created_at__gte=incapable_cutoff,
+                    status="completed",
+                    sbom__component__team_id__in=team_ids,
+                    result__metadata__unsupported_input=True,
+                ).values_list("sbom_id", flat=True)
+            )
 
         # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
         # with at least one ReleaseArtifact link is eligible — the scan will
