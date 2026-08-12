@@ -179,7 +179,9 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     # one person. Carved out of component:manage for the same reason.
     "component:manage_publishers": ADMINISTER,
     # owner + admin management (the dominant capability)
-    "workspace:manage": MANAGE,
+    # Workspace configuration — contact profiles, suppliers. NOT "create a
+    # thing in this workspace": that is product:create / component:create.
+    "workspace:manage": ADMINISTER,
     "product:create": MANAGE,
     "product:manage": MANAGE,
     "component:create": MANAGE,

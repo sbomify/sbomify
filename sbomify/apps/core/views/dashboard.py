@@ -8,6 +8,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 
+from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.teams.models import Member
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
 
@@ -50,7 +51,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if needs_plan_selection(team, request.user):
             return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
 
-        has_crud_permissions = current_team.get("role") in ["owner", "admin"]
+        has_crud_permissions = current_team.get("role") in MANAGE
 
         from django.utils import timezone
 

@@ -17,6 +17,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -33,6 +34,10 @@ from .access_schemas import (
     NDASignRequest,
 )
 from .content_safety import apply_safe_download_headers
+
+# Anyone already in the workspace, internal or external — they do not need to
+# ask for access they already have.
+ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
 User = get_user_model()
 log = logging.getLogger(__name__)
@@ -180,7 +185,7 @@ def create_access_request(
         # Check if user already has access
         try:
             member = Member.objects.get(team=team, user=user)
-            if member.role in ("owner", "admin", "guest"):
+            if member.role in ANY_MEMBER_ROLES:
                 return 200, {
                     "detail": "Already has access",
                     "access_request": None,

@@ -20,7 +20,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
-from sbomify.apps.core.authz import ADMINISTER
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
@@ -37,6 +37,10 @@ from sbomify.apps.teams.utils import (
     switch_active_workspace,
     update_user_teams_session,
 )
+
+# Anyone already in the workspace, internal or external — they do not need to
+# ask for access they already have.
+ANY_MEMBER_ROLES = READ_INTERNAL + (ROLE_GUEST,)
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +252,7 @@ class AccessRequestView(View):
         if request.user.is_authenticated:
             try:
                 member = Member.objects.get(team=team, user=request.user)
-                if member.role in ("owner", "admin", "guest"):
+                if member.role in ANY_MEMBER_ROLES:
                     messages.info(request, "You already have access to gated components in this workspace.")
                     return redirect("core:workspace_public", workspace_key=team_key)
             except Member.DoesNotExist:
@@ -333,7 +337,7 @@ class AccessRequestView(View):
         # Check if user already has access
         try:
             member = Member.objects.get(team=team, user=user)
-            if member.role in ("owner", "admin", "guest"):
+            if member.role in ANY_MEMBER_ROLES:
                 messages.info(request, "You already have access to gated components in this workspace.")
                 return redirect("core:workspace_public", workspace_key=team_key)
         except Member.DoesNotExist:

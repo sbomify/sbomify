@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
-from sbomify.apps.core.authz import ADMINISTER, ROLE_DESCRIPTIONS
+from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
@@ -98,7 +98,10 @@ PLAN_LIMITS = {
 
 @method_decorator(never_cache, name="dispatch")
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = list(ADMINISTER)
+    # MANAGE so members can reach the tabs they are allowed (API tokens, Account).
+    # Which sections they actually see is decided per-tab by visible_tabs(), and
+    # every POST sub-action re-checks ADMINISTER for itself.
+    allowed_roles = list(MANAGE)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Take ``tab`` off the URL and hold it, rather than pass it to a handler.

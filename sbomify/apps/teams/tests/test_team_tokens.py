@@ -240,18 +240,17 @@ class TestTeamTokensView:
         assert "deprecated" not in content.lower()
         assert "no forced cutover" in content
 
-    def test_legacy_member_role_is_forbidden(self, client: Client, sample_team_with_owner_member):
-        """Legacy ``role="member"`` is now rejected by the tokens view.
+    def test_member_role_can_manage_own_tokens(self, client: Client, sample_team_with_owner_member):
+        """``member`` reaches the tokens page — deliberately, and this test was inverted.
 
-        Django CharField choices aren't DB-enforced, so historical
-        ``Member(role="member")`` rows (from fixtures + earlier
-        migrations) were silently accepted into ``TeamTokensView``
-        when ``allowed_roles`` listed ``"member"``. Removing it is a
-        deliberate tightening: the canonical role list
-        (``TEAMS_SUPPORTED_ROLES``) is the source of truth, and
-        token-management is owner/admin only. This test pins the
-        tightened behaviour so a future re-introduction has to update
-        the canonical list first.
+        It previously asserted 403, because ``role="member"`` was a value the code
+        did not recognise and the tightening note here said such rows "were never
+        meant to have token-management privileges". ``member`` is a real role now,
+        and tokens are workspace-scoped only (``core:settings`` redirects creation
+        here), so without this a member cannot obtain a credential to upload from
+        CI — one of the things the role exists to do. The page is strictly
+        per-user: it lists, creates and revokes only the caller's own tokens, and
+        a token can never exceed its holder's role.
         """
         from django.contrib.auth import get_user_model
 
@@ -262,6 +261,21 @@ class TestTeamTokensView:
         Member.objects.create(team=team, user=member_user, role="member")
 
         setup_authenticated_client_session(client, team, member_user)
+
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        assert response.status_code == 200
+
+    def test_guest_cannot_manage_tokens(self, client: Client, sample_team_with_owner_member):
+        """Guests are external and hold no tier, so the page stays closed to them."""
+        from django.contrib.auth import get_user_model
+
+        team = sample_team_with_owner_member.team
+
+        User = get_user_model()
+        guest = User.objects.create_user(username="tokens-guest", email="tokens-guest@example.com", password="test")
+        Member.objects.create(team=team, user=guest, role="guest")
+
+        setup_authenticated_client_session(client, team, guest)
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
         assert response.status_code == 403

@@ -119,10 +119,47 @@ class TestMemberCannotOverstep:
         product.refresh_from_db()
         assert product.is_public is False
 
-    def test_member_cannot_reach_workspace_settings(self, member_client):
+    def test_member_sees_only_their_own_settings_sections(self, member_client):
+        """Settings admits members, but per-tab filtering decides what they see.
+
+        A member needs the API tokens tab (token creation is workspace-scoped
+        only), so the page itself cannot be closed to them. ``visible_tabs()``
+        is what keeps them out of General, Trust Center, Billing and the rest.
+        """
+        from sbomify.apps.teams.settings_tabs import visible_tabs
+
         client, team = member_client
+        tabs = {tab.key for tab in visible_tabs("member", billing_enabled=True)}
+        assert tabs == {"tokens", "account"}, tabs
+
         response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
-        assert response.status_code == 403
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "Trust Center" not in body
+        assert "Branding" not in body
+
+    def test_member_cannot_change_workspace_settings(self, member_client):
+        """Reaching the page is not the same as being able to act on it.
+
+        Needs a paid plan and is_public=False to be a real test: the model default
+        is True, and Team.save() force-sets is_public back to True when the plan
+        cannot be private — so on a community workspace this would assert on state
+        the model controls rather than on the guard.
+        """
+        client, team = member_client
+        team.billing_plan = "business"
+        team.is_public = False
+        team.save(update_fields=["billing_plan", "is_public"])
+        team.refresh_from_db()
+        assert team.is_public is False, "setup failed: workspace should start private"
+
+        response = client.post(
+            reverse("teams:team_settings", kwargs={"team_key": team.key}),
+            {"visibility_action": "update", "is_public": ["false", "true"]},
+        )
+        assert response.status_code in (302, 403)
+        team.refresh_from_db()
+        assert team.is_public is False, "a member must not be able to publish the workspace"
 
     def test_member_cannot_invite(self, member_client):
         client, team = member_client

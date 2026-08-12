@@ -11,6 +11,7 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.apis import get_product, patch_product
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductPatchSchema
 from sbomify.apps.tea.mappers import get_product_tei_urn
@@ -49,7 +50,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             from sbomify.apps.compliance.permissions import check_cra_access
 
             team_role = current_team.get("role")
-            has_cra_access = team_role in ("owner", "admin") and check_cra_access(billing_plan_key=team_billing_plan)
+            has_cra_access = team_role in ADMINISTER and check_cra_access(billing_plan_key=team_billing_plan)
 
             if has_cra_access:
                 cra = CRAAssessment.objects.filter(
@@ -97,7 +98,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
             logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
 
-        is_admin_or_owner = current_team.get("role") in ("owner", "admin")
+        is_admin_or_owner = current_team.get("role") in ADMINISTER
 
         # Components-and-security table + severity rollup, and the releases strip.
         from sbomify.apps.core.services.product_page import (

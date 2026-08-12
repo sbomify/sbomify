@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import number_to_random_token
 
@@ -149,7 +150,7 @@ def remove_access_requests_on_guest_upgrade(sender, instance, created, **kwargs)
     # This handles both cases:
     # 1. We know they were a guest (old_role == "guest")
     # 2. We don't know the old role but they have access requests (indicating they were likely a guest)
-    if instance.role in ("admin", "owner"):
+    if instance.role in READ_INTERNAL:
         try:
             from sbomify.apps.documents.access_models import AccessRequest
             from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache

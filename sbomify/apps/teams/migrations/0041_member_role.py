@@ -18,8 +18,13 @@ from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
 
-SUPPORTED_ROLES = [role for role, _label in settings.TEAMS_SUPPORTED_ROLES]
-INVITABLE_ROLES = [role for role, _label in settings.TEAMS_INVITABLE_ROLES]
+# Frozen deliberately, NOT read from settings.TEAMS_SUPPORTED_ROLES. A historical
+# migration must describe the world as it was at this point in history: if a
+# later release adds a role, a settings-derived predicate would silently change
+# what this sweep spares while the AddConstraint below keeps the old list, and a
+# replay from zero would fail on rows it previously migrated cleanly.
+SUPPORTED_ROLES = ["owner", "admin", "member", "guest", "bot"]
+INVITABLE_ROLES = ["owner", "admin", "member", "guest"]
 
 
 def normalise_unrecognised_roles(apps, schema_editor):
@@ -35,6 +40,22 @@ def normalise_unrecognised_roles(apps, schema_editor):
     """
     Member = apps.get_model("teams", "Member")
     Invitation = apps.get_model("teams", "Invitation")
+
+    # Report the promotions. Rows that already held role="member" are NOT
+    # changed — making that value real is the point of this migration — but
+    # yesterday they matched no role check at all, and today they carry
+    # READ_INTERNAL, MANAGE and PUBLISH. That is a capability grant to accounts
+    # nobody re-authorized, so it must leave a trace rather than being inferred
+    # later from behaviour. Review this list and demote anyone who should not
+    # have it; there is no way for the migration to tell.
+    promoted = list(Member.objects.filter(role="member").values("id", "team__key", "user__email"))
+    if promoted:
+        logger.warning(
+            "Migration 0041: %s pre-existing role='member' row(s) become real members "
+            "(internal read + create/edit + artifact upload). Review: %s",
+            len(promoted),
+            promoted,
+        )
 
     stale_members = Member.objects.exclude(role__in=SUPPORTED_ROLES)
     for row in stale_members.values("id", "team__key", "user__email", "role"):

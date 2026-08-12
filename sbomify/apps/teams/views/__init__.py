@@ -25,7 +25,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
-from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY, ROLE_OWNER
+from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY, READ_INTERNAL, ROLE_GUEST, ROLE_OWNER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -457,7 +457,7 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
                 update_user_teams_session(request, request.user)
 
                 # If user was upgraded from guest to admin/owner, remove their access requests
-                if old_role == "guest" and invitation.role in ("admin", "owner"):
+                if old_role == ROLE_GUEST and invitation.role in READ_INTERNAL:
                     from sbomify.apps.documents.access_models import AccessRequest
                     from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
 

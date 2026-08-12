@@ -634,7 +634,7 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     try:
         # Check if user has permission to create products in this team
         team = Team.objects.get(id=team_id)
-        if not can(request, "workspace:manage", team):
+        if not can(request, "product:create", team):
             return 403, {"detail": "Only owners and admins can create products", "error_code": ErrorCode.FORBIDDEN}
 
         allow_private = _private_items_allowed(team)
@@ -1576,7 +1576,7 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     try:
         # Check if user has permission to create components in this team
         team = Team.objects.get(id=team_id)
-        if not can(request, "workspace:manage", team):
+        if not can(request, "component:create", team):
             return 403, {"detail": "Only owners and admins can create components", "error_code": ErrorCode.FORBIDDEN}
 
         if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]

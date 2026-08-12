@@ -41,7 +41,9 @@
             {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
             {% if component.has_crud_permissions or component.component_type == 'bom' %}
                 <div class="flex-shrink-0 flex items-stretch gap-2">
-                    {% if component.has_crud_permissions %}
+                    {# ADMINISTER, not MANAGE: a member maintains a component but does
+                       not decide the world can see it, so do not offer the control. #}
+                    {% if can_administer %}
                         {% url 'core:component_details_public' component.id as component_public_url %}
                         {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
                     {% endif %}
@@ -91,12 +93,16 @@
                                         <i class="fas fa-gears w-4 text-text-muted" aria-hidden="true"></i>CI/CD integration…
                                     </button>
                                 {% endif %}
-                                <button type="button"
-                                        role="menuitem"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                        @click="compMenu = false; $dispatch('open-trusted-publishers')">
-                                    <i class="fas fa-shield-halved w-4 text-text-muted" aria-hidden="true"></i>Trusted publishers…
-                                </button>
+                                {# ADMINISTER: a trusted-publisher binding is a standing publish
+                                   grant to an external repo, so members must not be offered it. #}
+                                {% if can_administer %}
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
+                                            @click="compMenu = false; $dispatch('open-trusted-publishers')">
+                                        <i class="fas fa-shield-halved w-4 text-text-muted" aria-hidden="true"></i>Trusted publishers…
+                                    </button>
+                                {% endif %}
                                 {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
                                 <button type="button"
                                         role="menuitem"
