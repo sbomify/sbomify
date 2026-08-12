@@ -44,11 +44,14 @@ class MCPAuthError(ToolError):
     """
 
 
-# Reused across requests. ``SimpleRateThrottle`` keys its sliding window on the
-# token pk via ``get_cache_key``, so a shared instance is safe; the same pattern
-# is used for the NinjaAPI-level throttle in ``sbomify/apis.py``.
-_throttle = AccessTokenRateThrottle()
-_write_throttle = AccessTokenHeavyRateThrottle()
+class MCPRateLimitedError(MCPAuthError):
+    """Raised when a *valid* token is over its rate limit.
+
+    Distinct from a credential failure so ``tools/list`` can tell the two
+    apart: a bad token means advertise nothing, but a throttled one must get
+    an error it can retry — an empty catalogue would be cached by the client
+    as "this server has no tools".
+    """
 
 
 @dataclass(frozen=True)
@@ -145,8 +148,16 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     # The MCP app bypasses NinjaAPI, so its global throttle never runs here.
     # Re-apply it against the same sliding window: an agent and a CI job using
     # the same token share one budget, which is what an operator would expect.
-    if not await sync_to_async(_throttle.allow_request)(stub):
-        raise MCPAuthError("Rate limit exceeded for this access token. Retry shortly.")
+    #
+    # A fresh instance per check, never a shared module-level one: ninja's
+    # SimpleRateThrottle keeps per-request scratch (self.key/history/now) on
+    # the instance, and MCP requests each run in their own executor thread, so
+    # concurrent calls on a shared instance would write one token's window
+    # under another token's key. The budget itself is unaffected — the sliding
+    # window lives in the cache, keyed on the token pk.
+    throttle = AccessTokenRateThrottle()
+    if not await sync_to_async(throttle.allow_request)(stub):
+        raise MCPRateLimitedError("Rate limit exceeded for this access token. Retry shortly.")
 
     return Principal(user=user, token=record, request=stub)
 
@@ -157,10 +168,12 @@ async def throttle_write(principal: Principal, *, tool: str) -> None:
     Mirrors the REST API, where artifact uploads carry
     ``AccessTokenHeavyRateThrottle`` alongside the global throttle. The separate
     ``cache_key_prefix`` keeps the two sliding windows independent, so they do
-    not double-count each other.
+    not double-count each other. Fresh instance per check for the same reason
+    as in ``authenticate``.
     """
-    if not await sync_to_async(_write_throttle.allow_request)(principal.request):
-        raise MCPAuthError(f"Write rate limit exceeded for this access token ({tool}). Retry shortly.")
+    throttle = AccessTokenHeavyRateThrottle()
+    if not await sync_to_async(throttle.allow_request)(principal.request):
+        raise MCPRateLimitedError(f"Write rate limit exceeded for this access token ({tool}). Retry shortly.")
 
 
 def require(principal: Principal, action: str, resource: Any) -> None:

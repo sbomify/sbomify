@@ -11,6 +11,7 @@ import os
 from contextlib import AsyncExitStack
 from typing import Any
 
+from asgiref.sync import ThreadSensitiveContext
 from django.core.asgi import get_asgi_application
 from starlette.types import Receive, Scope, Send
 
@@ -53,7 +54,16 @@ class MCPRouter:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get("path", "")
         if path == MCP_PATH_PREFIX or path.startswith(f"{MCP_PATH_PREFIX}/"):
-            await self.mcp_app(scope, receive, send)
+            # Django's ASGIHandler opens a ThreadSensitiveContext per request;
+            # this dispatch happens before Django, so without one here every
+            # thread-sensitive sync call from every concurrent MCP request —
+            # all ORM work via database_sync_to_async — shares asgiref's single
+            # process-wide executor thread. One agent parsing a large SBOM
+            # would then head-of-line-block every other MCP call in the worker.
+            # A per-request context gives each request its own executor, the
+            # same isolation Django requests get.
+            async with ThreadSensitiveContext():
+                await self.mcp_app(scope, receive, send)
         else:
             await self.django_app(scope, receive, send)
 
