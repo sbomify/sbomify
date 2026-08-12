@@ -69,15 +69,16 @@ _MATRIX = {
     # capability an admin lacks; "an admin may not remove an owner" is relational
     # and lives in the member-removal guards, not here.
     "workspace:delete": ("team", {"owner": True, "admin": False, "guest": False, "bot": False}),
-    # #468: guests may upload artifacts (joined the PUBLISH tier).
-    "artifact:publish": ("component", {"owner": True, "admin": True, "guest": True, "bot": True}),
-    "workspace:read": ("team", {"owner": True, "admin": True, "guest": True, "bot": False}),
+    # Guests hold NO capability — they are external trust-center visitors and
+    # reach restricted content only through the ABAC component:access path.
+    # Every guest column below being False is the point of this table.
+    "artifact:publish": ("component", {"owner": True, "admin": True, "guest": False, "bot": True}),
+    "workspace:read": ("team", {"owner": True, "admin": True, "guest": False, "bot": False}),
     "component:administer": ("component", {"owner": True, "admin": True, "guest": False, "bot": False}),
-    "product:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": False}),
+    "product:read": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),
     # CI/OIDC publish workflow: a release-cutting bot reads (to check existence),
-    # creates, and tags releases — but cannot rename or delete them. Guests stay
-    # out of create/tag (they may upload artifacts, not cut releases).
-    "release:read": ("product", {"owner": True, "admin": True, "guest": True, "bot": True}),
+    # creates, and tags releases — but cannot rename or delete them.
+    "release:read": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
     "release:create": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
     "release:tag": ("product", {"owner": True, "admin": True, "guest": False, "bot": True}),
     "release:manage": ("product", {"owner": True, "admin": True, "guest": False, "bot": False}),

@@ -126,18 +126,12 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
     (
         ROLE_GUEST,
         "Guest",
-        "Limited access, granted through the Trust Center rather than invited "
-        "directly. Can view workspace data and upload artifacts, but cannot "
-        "create or manage products, components, releases or any settings. Also "
-        "reaches gated documents they have been approved for and signed the NDA "
-        "for.",
+        "External access, granted through the Trust Center rather than invited "
+        "directly. Sees your public pages, plus any gated documents they have "
+        "been approved for and signed the NDA for. Cannot see anything else in "
+        "the workspace.",
     ),
 )
-# NOTE: keep the guest text above in step with the tiers — guests currently hold
-# READ_MEMBER (internal reads) and PUBLISH (artifact upload), which is why it
-# does NOT say "external, public content only". #468 narrows guest to a purely
-# external trust-center role; this description must be rewritten in the same
-# change, or the members page will understate what a guest can reach.
 
 
 @dataclass(frozen=True)
@@ -171,28 +165,27 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "sbom:manage": MANAGE,
     "document:manage": MANAGE,
     # release publishing — the CI/OIDC bot's job (create a release, tag artifacts
-    # to it). Owners and admins keep it; bots gain it; guests stay out.
-    "release:create": RELEASE_PUBLISH,
-    "release:tag": RELEASE_PUBLISH,
+    # to it), alongside owners and admins.
+    "release:create": PUBLISH,
+    "release:tag": PUBLISH,
     # deletion of domain resources — owner + admin
     "product:delete": DELETE,
     "component:delete": DELETE,
     "release:delete": DELETE,
     "sbom:delete": DELETE,
     "document:delete": DELETE,
-    # artifact upload — allows OIDC/CI bot identities and guests (#468)
+    # artifact upload — owners, admins and OIDC/CI bot identities
     "artifact:publish": PUBLISH,
     # VEX publishing rewrites the workspace's stored vulnerability posture (the
-    # re-annotated scan summaries feed every dashboard), so guests are excluded;
-    # owners, admins and the CI/OIDC bot keep it.
-    "artifact:publish_vex": RELEASE_PUBLISH,
-    # any-member read of internal (non-public) workspace data
-    "workspace:read": READ_MEMBER,
-    "component:read_internal": READ_MEMBER,
-    "product:read": READ_MEMBER,
-    "release:read": READ_MEMBER_OR_BOT,
-    "document:read": READ_MEMBER,
-    "sbom:read": READ_MEMBER,
+    # re-annotated scan summaries feed every dashboard).
+    "artifact:publish_vex": PUBLISH,
+    # internal reads — guests are external and hold none of these
+    "workspace:read": READ_INTERNAL,
+    "component:read_internal": READ_INTERNAL,
+    "product:read": READ_INTERNAL,
+    "release:read": READ_INTERNAL_OR_BOT,
+    "document:read": READ_INTERNAL,
+    "sbom:read": READ_INTERNAL,
 }
 
 # Actions authorized by resource attributes (visibility / NDA / access request)

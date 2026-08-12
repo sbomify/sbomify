@@ -175,14 +175,17 @@ def test_vex_reissues_coexist_latest_by_created_at(
 
 
 @pytest.mark.django_db
-def test_guest_can_upload_sbom_but_not_vex(
+def test_guest_cannot_upload_any_artifact(
     guest_api_client,  # noqa: F811
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
 ):
-    """A VEX rewrites the workspace's stored vulnerability posture (dashboards read
-    the re-annotated summaries), so the guest role may contribute plain artifacts
-    but not publish a VEX."""
+    """Guests are external trust-center visitors and publish nothing.
+
+    They briefly held the PUBLISH tier (#468) so a low-trust member could
+    contribute artifacts without management rights. That grant is withdrawn: a
+    guest holds no capability at all, so plain SBOMs are refused alongside VEX.
+    Anyone who needs to contribute gets an internal role."""
     from sbomify.apps.teams.models import Member
 
     mocker.patch("boto3.resource")
@@ -216,7 +219,7 @@ def test_guest_can_upload_sbom_but_not_vex(
     assert rv.status_code == 403, rv.content
 
     rs = client.post(base, data=sbom_doc, content_type="application/json", **headers)
-    assert rs.status_code == 201, rs.content
+    assert rs.status_code == 403, rs.content
 
 
 @pytest.mark.django_db

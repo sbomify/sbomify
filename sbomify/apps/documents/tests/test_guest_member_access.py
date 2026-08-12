@@ -72,9 +72,7 @@ def guest_with_access(team_with_business_plan, guest_user, company_nda_document)
 class TestGuestMemberGatedAccess:
     """Test guest member access to gated components."""
 
-    def test_guest_can_access_gated_component(
-        self, guest_with_access, team_with_business_plan
-    ):
+    def test_guest_can_access_gated_component(self, guest_with_access, team_with_business_plan):
         """Test that guest with access can view gated component."""
         gated_component = Component.objects.create(
             name="Gated Component",
@@ -88,6 +86,7 @@ class TestGuestMemberGatedAccess:
         request.user = guest_with_access
         # Mock is_authenticated property
         from unittest.mock import PropertyMock
+
         type(request.user).is_authenticated = PropertyMock(return_value=True)
 
         result = check_component_access(request, gated_component)
@@ -95,9 +94,7 @@ class TestGuestMemberGatedAccess:
         assert result.has_access is True
         assert result.reason == "gated_access_granted"
 
-    def test_guest_cannot_access_private_component(
-        self, guest_with_access, team_with_business_plan
-    ):
+    def test_guest_cannot_access_private_component(self, guest_with_access, team_with_business_plan):
         """Test that guest cannot access private component."""
         private_component = Component.objects.create(
             name="Private Component",
@@ -111,6 +108,7 @@ class TestGuestMemberGatedAccess:
         request.user = guest_with_access
         # Mock is_authenticated property
         from unittest.mock import PropertyMock
+
         type(request.user).is_authenticated = PropertyMock(return_value=True)
         request.session = {"current_team": {"id": team_with_business_plan.id, "key": team_with_business_plan.key}}
 
@@ -119,9 +117,7 @@ class TestGuestMemberGatedAccess:
         assert result.has_access is False
         assert result.reason == "private_access_denied"
 
-    def test_guest_can_access_public_component(
-        self, guest_with_access, team_with_business_plan
-    ):
+    def test_guest_can_access_public_component(self, guest_with_access, team_with_business_plan):
         """Test that guest can access public component."""
         public_component = Component.objects.create(
             name="Public Component",
@@ -135,6 +131,7 @@ class TestGuestMemberGatedAccess:
         request.user = guest_with_access
         # Mock is_authenticated property
         from unittest.mock import PropertyMock
+
         type(request.user).is_authenticated = PropertyMock(return_value=True)
 
         result = check_component_access(request, public_component)
@@ -246,9 +243,7 @@ class TestGuestMemberExclusion:
         self, authenticated_api_client, team_with_business_plan, guest_with_access, sample_user
     ):
         """Test that guest members are not included in team members API."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         client, access_token = authenticated_api_client
         client.force_login(sample_user)
@@ -286,3 +281,82 @@ class TestGuestMemberExclusion:
         assert guest_with_access.email not in member_emails
         # Owner should be in list
         assert sample_user.email in member_emails
+
+
+@pytest.mark.django_db
+class TestGuestIsExternalOnly:
+    """A guest holds no role capability — only the trust-center (ABAC) path.
+
+    Guests used to sit in the READ_MEMBER tier, so the API handed them internal,
+    non-public workspace data even though GuestAccessBlockedMixin kept them out
+    of the equivalent web pages. They were also granted artifact upload. Both are
+    withdrawn: a guest is an external visitor who reaches restricted content
+    solely by being approved for it and signing the NDA.
+
+    The two halves are tested together on purpose — revoking too much would be as
+    much of a bug as revoking too little.
+    """
+
+    def _client(self, team, user):
+        from django.test import Client
+
+        client = Client()
+        setup_authenticated_client_session(client, team, user)
+        return client
+
+    def test_guest_holds_no_role_capability(self, team_with_business_plan, guest_with_access):
+        """The tier table itself: no action grants a guest anything."""
+        from sbomify.apps.core.authz import _ROLE_ACTIONS, ROLE_GUEST
+
+        granting = [action for action, roles in _ROLE_ACTIONS.items() if ROLE_GUEST in roles]
+        assert granting == [], f"guest is external-only but still holds: {granting}"
+
+    def test_guest_cannot_list_internal_products(self, team_with_business_plan, guest_with_access):
+        """Internal inventory must not be enumerable by an external visitor."""
+        client = self._client(team_with_business_plan, guest_with_access)
+        response = client.get("/api/v1/products")
+        assert response.status_code == 403
+
+    def test_guest_cannot_list_internal_components(self, team_with_business_plan, guest_with_access):
+        client = self._client(team_with_business_plan, guest_with_access)
+        response = client.get("/api/v1/components")
+        assert response.status_code == 403
+
+    def test_guest_cannot_read_workspace_billing_usage(self, team_with_business_plan, guest_with_access):
+        client = self._client(team_with_business_plan, guest_with_access)
+        response = client.get(f"/api/v1/billing/usage/?team_key={team_with_business_plan.key}")
+        assert response.status_code == 403
+
+    def test_guest_cannot_publish_artifacts(self, team_with_business_plan, guest_with_access):
+        """The PUBLISH grant added under #468 is withdrawn."""
+        from sbomify.apps.core.authz import can
+
+        component = Component.objects.create(team=team_with_business_plan, name="guest-publish-check")
+        assert can(guest_with_access, "artifact:publish", component).allowed is False
+
+    def test_guest_keeps_gated_component_access(self, team_with_business_plan, guest_with_access):
+        """The half that must NOT change: approved + NDA-signed still gets in."""
+        gated = Component.objects.create(
+            name="Still Reachable",
+            team=team_with_business_plan,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.GATED,
+        )
+        request = RequestFactory().get("/")
+        request.user = guest_with_access
+
+        result = check_component_access(request, gated)
+        assert result.has_access is True
+        assert result.reason == "gated_access_granted"
+
+    def test_guest_still_denied_private_component(self, team_with_business_plan, guest_with_access):
+        private = Component.objects.create(
+            name="Still Hidden",
+            team=team_with_business_plan,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PRIVATE,
+        )
+        request = RequestFactory().get("/")
+        request.user = guest_with_access
+
+        assert check_component_access(request, private).has_access is False

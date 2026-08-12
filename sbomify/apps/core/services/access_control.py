@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from django.http import HttpRequest
 
+from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.models import Component
@@ -88,18 +89,19 @@ def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
     if revoked_request:
         # User's access has been revoked, deny access
         # Also ensure guest membership is removed (in case deletion failed)
-        Member.objects.filter(team=team, user=user, role="guest").delete()
+        Member.objects.filter(team=team, user=user, role=ROLE_GUEST).delete()
         return False, False
 
     # Optimize: Check member first (most common case for owners/admins)
     # This avoids querying AccessRequest if user is already a member
     member = Member.objects.filter(team=team, user=user).select_related("team", "user").first()
     if member:
-        if member.role in ("owner", "admin"):
-            # Owners/admins have full access without signing NDA
-            # (revoked requests don't apply to owners/admins as they're not guest access)
+        if member.role in READ_INTERNAL:
+            # Internal members have full access without signing an NDA — the NDA
+            # gates *external* access, and they can already read the workspace.
+            # (Revoked requests don't apply to them; those are guest access.)
             return True, False
-        if member.role == "guest":
+        if member.role == ROLE_GUEST:
             # Guest members must have signed the current NDA
             if not _user_has_signed_current_nda(user, team):
                 return False, True  # Access denied, needs to re-sign NDA
@@ -228,7 +230,7 @@ def check_component_access(
                 requires_access_request=False,
             )
 
-        if verify_item_access(request, component, ["owner", "admin"]):
+        if verify_item_access(request, component, list(READ_INTERNAL)):
             return ComponentAccessResult(
                 has_access=True,
                 reason="private_access_granted",

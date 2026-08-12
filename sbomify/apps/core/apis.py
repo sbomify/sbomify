@@ -700,8 +700,9 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         # (e.g. a publish-only CI token) honours its scope: listing products
         # exposes private workspace data, which a non-read token scope must not
         # reach. No behaviour change for sessions or full/unscoped tokens —
-        # product:read is the READ_MEMBER tier every current member already
-        # satisfies; it only adds the token action-scope gate.
+        # product:read is the READ_INTERNAL tier, which every internal member
+        # already satisfies; it only adds the token action-scope gate.
+        # Guests hold no read tier and are denied here, by design.
         team = Team.objects.filter(id=team_id).first()
         if team is not None and not can(request, "product:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -1657,8 +1658,9 @@ def list_components(
         # (e.g. a publish-only CI token) honours its scope: listing components
         # exposes private workspace data, which a non-read token scope must not
         # reach. No behaviour change for sessions or full/unscoped tokens —
-        # component:read_internal is the READ_MEMBER tier every current member
-        # already satisfies; it only adds the token action-scope gate.
+        # component:read_internal is the READ_INTERNAL tier, which every internal
+        # member already satisfies; it only adds the token action-scope gate.
+        # Guests hold no read tier and are denied here, by design.
         team = Team.objects.filter(id=team_id).first()
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -2477,8 +2479,9 @@ def get_dashboard_summary(
         # (e.g. a publish-only CI token) honours its scope: the authenticated
         # dashboard aggregates private workspace data, which a non-read token
         # scope must not reach. No behaviour change for sessions or
-        # full/unscoped tokens — workspace:read is the READ_MEMBER tier every
-        # current member already satisfies; it only adds the token scope gate.
+        # full/unscoped tokens — workspace:read is the READ_INTERNAL tier
+        # every internal member already satisfies; it only adds the token
+        # scope gate. Guests hold no read tier and are denied, by design.
         team_id = _get_user_team_id(request)
         team = Team.objects.filter(id=team_id).first() if team_id else None
         if team is not None and not can(request, "workspace:read", team):
@@ -2689,8 +2692,9 @@ def list_all_releases(
                     # listing releases of a private product exposes private
                     # workspace data, which a non-read token scope must not
                     # reach. No behaviour change for sessions or full/unscoped
-                    # tokens — release:read is the READ_MEMBER tier every current
-                    # member already satisfies; it only adds the token scope gate.
+                    # tokens — release:read is the READ_INTERNAL tier every
+                    # internal member already satisfies; it only adds the
+                    # token scope gate.
                     team = Team.objects.filter(id=team_id).first()
                     if team is not None and not can(request, "release:read", team):
                         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -2718,8 +2722,9 @@ def list_all_releases(
             # (e.g. a publish-only CI token) honours its scope: listing all team
             # releases exposes private workspace data, which a non-read token
             # scope must not reach. No behaviour change for sessions or
-            # full/unscoped tokens — release:read is the READ_MEMBER tier every
-            # current member already satisfies; it only adds the token scope gate.
+            # full/unscoped tokens — release:read is the READ_INTERNAL tier
+            # every internal member already satisfies; it only adds the
+            # token scope gate.
             team = Team.objects.filter(id=team_id).first()
             if team is not None and not can(request, "release:read", team):
                 return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
