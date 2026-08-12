@@ -112,6 +112,43 @@ class TestTheClientTellsTheCasesApart:
         assert "code=%s" in logged.args[0]
         assert "resource_missing" in logged.args
 
+    def test_the_log_withholds_the_object_id(self) -> None:
+        """Stripe puts the id in the message verbatim. CodeQL flagged the
+        sweep's own line for that; dropping it there while this one still wrote
+        it on the first occurrence would have moved the identifier rather than
+        removed it."""
+        from sbomify.apps.billing import stripe_client as stripe_client_module
+
+        err = stripe.error.InvalidRequestError("No such subscription: 'sub_gone'", param="id", code="resource_missing")
+
+        with (
+            patch("stripe.Subscription.retrieve", side_effect=err),
+            patch.object(stripe_client_module.logger, "error") as error_log,
+            pytest.raises(StripeResourceMissingError),
+        ):
+            StripeClient().get_subscription("sub_gone")
+
+        rendered = " ".join(str(a) for call in error_log.call_args_list for a in call.args)
+        assert "sub_gone" not in rendered
+        assert "resource_missing" in rendered
+
+    def test_other_invalid_requests_keep_their_message(self) -> None:
+        """The message is the only diagnosis for a malformed request, and it
+        carries no object id."""
+        from sbomify.apps.billing import stripe_client as stripe_client_module
+
+        err = stripe.error.InvalidRequestError("Bad parameter: expand", param="expand", code="parameter_unknown")
+
+        with (
+            patch("stripe.Subscription.retrieve", side_effect=err),
+            patch.object(stripe_client_module.logger, "error") as error_log,
+            pytest.raises(StripeError),
+        ):
+            StripeClient().get_subscription("sub_x")
+
+        rendered = " ".join(str(a) for call in error_log.call_args_list for a in call.args)
+        assert "Bad parameter" in rendered
+
 
 @pytest.mark.django_db
 class TestTheSweepReconciles:

@@ -88,7 +88,17 @@ def handle_stripe_errors(func: F) -> F:
             # saying which way, and the classification that follows looks
             # arbitrary to whoever is reading back.
             code = getattr(e, "code", None)
-            logger.error("Invalid Stripe request: code=%s, param=%s, message=%s", code, e.param, str(e))
+            # The message is withheld for resource_missing because Stripe puts
+            # the object id in it verbatim — "No such subscription: 'sub_…'".
+            # CodeQL flagged the sweep's own log line for exactly that, and
+            # dropping it there while this one still wrote it on the first
+            # occurrence would have moved the identifier rather than removed
+            # it. ``code`` and ``param`` say which request failed and how,
+            # which is what the line is for.
+            if code == "resource_missing":
+                logger.error("Invalid Stripe request: code=%s, param=%s", code, e.param)
+            else:
+                logger.error("Invalid Stripe request: code=%s, param=%s, message=%s", code, e.param, str(e))
             # Separated from its siblings so a caller can tell "the id I stored
             # refers to nothing" apart from "this request was malformed". Both
             # are terminal, but only the first is a statement about our own
