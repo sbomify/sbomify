@@ -54,6 +54,10 @@ class OSVPlugin(AssessmentPlugin):
     VERSION = "1.0.0"
     DEFAULT_TIMEOUT = 300
     DEFAULT_SCANNER_PATH = "/usr/local/bin/osv-scanner"
+    # osv-scanner exits 0 when it matched nothing and 1 when it found
+    # vulnerabilities. Every other code means the scan itself did not run to
+    # completion, so its (empty) output says nothing about the SBOM.
+    SUCCESS_EXIT_CODES = (0, 1)
 
     def get_metadata(self) -> PluginMetadata:
         """Return plugin metadata."""
@@ -118,6 +122,18 @@ class OSVPlugin(AssessmentPlugin):
         try:
             # Execute osv-scanner
             stdout, stderr, returncode = self._execute_scanner(scanner_path, scan_path, timeout)
+
+            # A scanner that aborted produces no findings for the same reason a
+            # clean SBOM does — an empty result set — so the two are
+            # indistinguishable downstream unless the exit code is checked
+            # first. Falling through here published "0 vulnerabilities found"
+            # for SBOMs osv-scanner never actually scanned.
+            if returncode not in self.SUCCESS_EXIT_CODES:
+                logger.error(f"[OSV] Scan of SBOM {sbom_id} failed with exit code {returncode}; reporting as error")
+                return self._create_error_result(
+                    f"osv-scanner exited with code {returncode} without completing the scan. "
+                    "No vulnerability result can be inferred from this run."
+                )
 
             # Parse results into findings
             findings = self._parse_scan_output(stdout, returncode)
@@ -341,7 +357,7 @@ class OSVPlugin(AssessmentPlugin):
         )
 
         # Exit code 0 = no vulns, 1 = vulns found, other = error
-        if process.returncode not in (0, 1):
+        if process.returncode not in self.SUCCESS_EXIT_CODES:
             logger.warning(f"[OSV] Scanner returned code {process.returncode}: {process.stderr}")
 
         return process.stdout, process.stderr, process.returncode
