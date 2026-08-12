@@ -207,15 +207,15 @@ def _fetch_github_jwks() -> dict[str, Any]:
         # dead. It was — the tests covering it only passed because their mock
         # raised a bare ``ValueError``, which no real response produces.
         logger.warning("GitHub JWKS response was not valid JSON (%s): %s", url, exc)
-        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"))
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"), cause=exc)
     except requests.RequestException as exc:
         logger.warning("GitHub JWKS fetch failed (%s): %s", url, exc)
-        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(str(exc)))
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(str(exc)), cause=exc)
     except ValueError as exc:
         # A non-requests JSON decoder (a patched session, a future client)
         # can still surface a bare ValueError here.
         logger.warning("GitHub JWKS response was not valid JSON (%s): %s", url, exc)
-        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"))
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"), cause=exc)
 
     if not _jwks_passes_validation(jwks):
         # Reached GitHub and did not recognise what it said, which is a
@@ -235,7 +235,7 @@ def _fetch_github_jwks() -> dict[str, Any]:
     return jwks
 
 
-def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable) -> dict[str, Any]:
+def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable, cause: BaseException | None = None) -> dict[str, Any]:
     """Serve the last JWKS GitHub gave us, or re-raise if there isn't one.
 
     The fresh entry lasts an hour. Before this, a network fault that outlived
@@ -250,16 +250,24 @@ def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable) -> dict[str, Any]:
     """
     fallback = cache.get(_JWKS_FALLBACK_CACHE_KEY)
     if fallback is None:
-        raise error
+        # ``from cause`` so the 503 an operator sees keeps the underlying
+        # connection or decode error in its chain. Constructing the wrapper at
+        # the call site and re-raising it here dropped that context, leaving a
+        # bare "JWKS unavailable" with nothing under it in Sentry.
+        raise error from cause
 
     if not _jwks_passes_validation(fallback):
         # Same reasoning as the fresh-entry check: a slot that fails validation
         # is evidence of tampering, not of a stale-but-usable document.
         logger.warning("Discarding invalid last-known-good JWKS entry")
         cache.delete(_JWKS_FALLBACK_CACHE_KEY)
-        raise error
+        raise error from cause
 
-    logger.warning("Serving last-known-good JWKS; GitHub is unreachable (%s)", error)
+        # Describes the condition rather than asserting one: this path is
+        # reached for an unreachable host, an unparseable body and a
+        # document that failed validation, and only the first is an
+        # outage. ``error`` already names which.
+        logger.warning("Serving last-known-good JWKS; no usable fresh document (%s)", error)
     _JWKS_SOURCE.served_from_fallback = True
     return cast(dict[str, Any], fallback)
 

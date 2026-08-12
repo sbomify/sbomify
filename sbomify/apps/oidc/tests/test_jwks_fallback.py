@@ -28,6 +28,7 @@ from django.core.cache import cache
 
 from sbomify.apps.oidc.utils import (
     _JWKS_CACHE_KEY,
+    _JWKS_REFRESH_MARKER_KEY,
     _JWKS_FALLBACK_CACHE_KEY,
     OIDCJWKSUnavailable,
     _fetch_github_jwks,
@@ -46,6 +47,19 @@ def _unreachable(mocker) -> Any:
 def _expire_the_fresh_entry() -> None:
     """The 1h entry lapsing, without waiting an hour for it."""
     cache.delete(_JWKS_CACHE_KEY)
+
+
+def _cold_cache() -> None:
+    """A deployment that has never reached GitHub.
+
+    Deletes the three JWKS slots by name rather than calling ``cache.clear()``:
+    the cache is shared with throttle windows and checkout locks, and wiping it
+    from inside one test is how neighbouring tests start failing for reasons
+    that have nothing to do with them.
+    """
+    cache.delete(_JWKS_CACHE_KEY)
+    cache.delete(_JWKS_FALLBACK_CACHE_KEY)
+    cache.delete(_JWKS_REFRESH_MARKER_KEY)
 
 
 class TestTheFallbackCarriesTheOutage:
@@ -93,7 +107,7 @@ class TestWithoutAFallbackNothingChanges:
     def test_a_cold_cache_still_raises(self, mocker) -> None:
         """A deployment that has never reached GitHub has nothing to serve, and
         must still fail loudly rather than inventing something."""
-        cache.clear()
+        _cold_cache()
         _unreachable(mocker)
 
         with pytest.raises(OIDCJWKSUnavailable):
@@ -101,7 +115,7 @@ class TestWithoutAFallbackNothingChanges:
 
     def test_the_original_error_is_what_surfaces(self, mocker) -> None:
         """The 503 an operator sees should still name the cause."""
-        cache.clear()
+        _cold_cache()
         _unreachable(mocker)
 
         with pytest.raises(OIDCJWKSUnavailable, match="No route to host"):
@@ -116,7 +130,7 @@ class TestTheFallbackIsNotATrustHole:
         because an attacker in the cache could otherwise plant a key whose
         private half they hold. A fallback read without the same check would
         reopen that, with a longer window than the one it closed."""
-        cache.clear()
+        _cold_cache()
         cache.set(_JWKS_FALLBACK_CACHE_KEY, {"keys": [{"kty": "RSA", "kid": "evil", "n": "AQAB", "e": "AQAB"}]})
         _unreachable(mocker)
 
@@ -124,7 +138,7 @@ class TestTheFallbackIsNotATrustHole:
             _fetch_github_jwks()
 
     def test_a_poisoned_fallback_is_evicted_not_left_to_be_retried(self, mocker) -> None:
-        cache.clear()
+        _cold_cache()
         cache.set(_JWKS_FALLBACK_CACHE_KEY, {"not": "a jwks"})
         _unreachable(mocker)
 
@@ -239,7 +253,7 @@ class TestTheMalformedBodyBranchIsReachable:
         assert _fetch_github_jwks() == {"keys": [rsa_keypair["jwk"]]}
 
     def test_it_names_the_parse_failure_when_there_is_no_fallback(self, mocker) -> None:
-        cache.clear()
+        _cold_cache()
         bad = mocker.MagicMock()
         bad.raise_for_status.return_value = None
         bad.json.side_effect = requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0)
