@@ -33,6 +33,22 @@ class StripeError(Exception):
     pass
 
 
+class StripeResourceMissingError(StripeError):
+    """The object we asked Stripe about does not exist there.
+
+    Stripe answers ``resource_missing`` when an id we hold refers to nothing —
+    a subscription deleted out of band, or a record left behind by a different
+    Stripe account. Distinct from its ``InvalidRequestError`` siblings because
+    it is the one that says something about *our* stored state rather than
+    about the request: retrying cannot fix it, and no amount of waiting will
+    make the id resolve.
+
+    Callers that hold the id are expected to reconcile rather than retry.
+    """
+
+    pass
+
+
 class BillingRetryableError(StripeError):
     """A transient/recoverable failure that Stripe should retry.
 
@@ -68,6 +84,13 @@ def handle_stripe_errors(func: F) -> F:
             raise StripeError(f"Card error: {e.user_message}") from e
         except stripe.error.InvalidRequestError as e:
             logger.error("Invalid Stripe request: param=%s, message=%s", e.param, str(e))
+            # Separated from its siblings so a caller can tell "the id I stored
+            # refers to nothing" apart from "this request was malformed". Both
+            # are terminal, but only the first is a statement about our own
+            # data, and only the first is worth reconciling instead of
+            # reporting.
+            if getattr(e, "code", None) == "resource_missing":
+                raise StripeResourceMissingError("Referenced object does not exist at the payment provider.") from e
             raise StripeError("Invalid request to payment provider.") from e
         except stripe.error.AuthenticationError as e:
             logger.error("Stripe authentication error")

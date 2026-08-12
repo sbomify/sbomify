@@ -224,7 +224,7 @@ def check_stale_trials_task() -> None:
     This is a defensive measure - normally trial expiration is handled by
     Stripe webhooks, but this catches cases where webhooks were missed.
     """
-    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+    from sbomify.apps.billing.stripe_client import StripeClient, StripeError, StripeResourceMissingError
     from sbomify.apps.teams.models import Team
 
     record_task_breadcrumb("check_stale_trials_task", "start")
@@ -245,6 +245,11 @@ def check_stale_trials_task() -> None:
         limits: dict[str, Any] = team.billing_plan_limits or {}
         # Check if it looks like a trial that should have ended
         if limits.get("is_trial") or limits.get("subscription_status") == "trialing":
+            # Already known to point at nothing. Re-asking produces the same
+            # answer every sweep, which is what turned one broken reference
+            # into a permanent daily error line per team.
+            if limits.get("stripe_subscription_missing_at"):
+                continue
             trial_end = limits.get("trial_end")
             if trial_end and trial_end < now_timestamp:
                 stale_teams.append(team)
@@ -257,6 +262,7 @@ def check_stale_trials_task() -> None:
 
     synced_count = 0
     error_count = 0
+    missing_count = 0
 
     for team in stale_teams:
         limits = team.billing_plan_limits or {}
@@ -296,6 +302,25 @@ def check_stale_trials_task() -> None:
                 )
                 synced_count += 1
 
+        except StripeResourceMissingError:
+            # The stored id refers to nothing at Stripe, so every future sweep
+            # would ask again and fail again — 12 teams doing that daily is
+            # what this branch exists to stop. Recorded rather than acted on:
+            # what a workspace should be entitled to once its subscription has
+            # vanished is a billing decision, not something a sync task should
+            # infer, so the marker parks the retry and leaves the plan alone.
+            limits["stripe_subscription_missing_at"] = timezone.now().isoformat()
+            team.billing_plan_limits = limits
+            team.save(update_fields=["billing_plan_limits"])
+            # Logged once, on the sweep that discovers it, because the marker
+            # above keeps the team out of every sweep after this one.
+            logger.error(
+                "Workspace %s references subscription %s which does not exist at Stripe; "
+                "parked pending manual reconciliation",
+                team.key,
+                subscription_id,
+            )
+            missing_count += 1
         except StripeError as e:
             logger.error("Failed to sync team %s: %s", team.key, e)
             error_count += 1
@@ -303,4 +328,9 @@ def check_stale_trials_task() -> None:
             logger.exception("Unexpected error syncing team %s: %s", team.key, e)
             error_count += 1
 
-    logger.info("Stale trials check complete: synced=%d, errors=%d", synced_count, error_count)
+    logger.info(
+        "Stale trials check complete: synced=%d, errors=%d, missing_subscriptions=%d",
+        synced_count,
+        error_count,
+        missing_count,
+    )
