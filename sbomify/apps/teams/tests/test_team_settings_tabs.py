@@ -240,7 +240,9 @@ class TestMembersRoleLegend:
         team = sample_team_with_owner_member.team
         setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
 
-        response = client.get(reverse("teams:team_settings", kwargs={"team_key": team.key}))
+        # Each settings section is its own page, so target the members tab
+        # directly rather than relying on which tab happens to be the default.
+        response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "members"}))
 
         assert response.status_code == 200
         content = response.content.decode()
