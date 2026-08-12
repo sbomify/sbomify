@@ -508,7 +508,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         # aggregating ``verification:attestation`` summary is the single
         # ``fail`` signal for "no source verified" — it's what BSI's
         # ``requires_one_of: attestation`` consumes.
-        bundle = self._download_github_bundle(github_org, github_repo, digest)
+        bundle = self._download_github_bundle(github_org, github_repo, digest, repo_provenance)
         if not bundle.get("success"):
             return self._gha_finding(
                 "warning",
@@ -602,7 +602,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             metadata=metadata,
         )
 
-    def _download_github_bundle(self, org: str, repo: str, digest: str) -> dict[str, Any]:
+    def _download_github_bundle(self, org: str, repo: str, digest: str, repo_provenance: str = "") -> dict[str, Any]:
         """Fetch the attestation bundle from GitHub's public Attestations API.
 
         Raises ``AttestationNotYetAvailableError`` on ``404`` so the task
@@ -635,7 +635,8 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             # the SBOM written before augmentation rewrote it — is the failure
             # mode that never resolves no matter how long we retry.
             raise AttestationNotYetAvailableError(
-                f"GitHub returned 404 for subject digest sha256:{digest} in {org}/{repo} — that "
+                f"GitHub returned 404 for subject digest sha256:{digest} in "
+                f"{org}/{repo}{repo_provenance} — that "
                 f"digest is the SHA-256 of this SBOM as sbomify stored it. GitHub answers 404 "
                 f"here for three different reasons: the attestation has not been published yet, "
                 f"the workflow attested a different subject (a container image, or a copy of the "
@@ -724,11 +725,27 @@ class SBOMVerificationPlugin(AssessmentPlugin):
     # ------------------------------------------------------------------
 
     def _extract_vcs_info(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
+        """Resolve the GitHub repository this SBOM points at, and where from.
+
+        The ``source`` key is what stops a caller putting a dependency's
+        repository in front of a user unqualified. ``document`` means the
+        SBOM's own subject declared it; anything else means it was inferred
+        from a package or component entry, which for a Python SBOM is
+        typically an upstream project nobody here controls. Defaulted here
+        rather than at each return so a format handler that forgets to tag its
+        result is treated as the cautious case rather than as the document's
+        own.
+        """
         if is_spdx3(sbom_data):
-            return self._extract_vcs_info_spdx3(sbom_data)
-        if "spdxVersion" in sbom_data or "SPDXID" in sbom_data:
-            return self._extract_vcs_info_spdx(sbom_data)
-        return self._extract_vcs_info_cyclonedx(sbom_data)
+            resolved = self._extract_vcs_info_spdx3(sbom_data)
+        elif "spdxVersion" in sbom_data or "SPDXID" in sbom_data:
+            resolved = self._extract_vcs_info_spdx(sbom_data)
+        else:
+            resolved = self._extract_vcs_info_cyclonedx(sbom_data)
+
+        if resolved is not None and "source" not in resolved:
+            resolved = {**resolved, "source": "package"}
+        return resolved
 
     def _extract_vcs_info_cyclonedx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
         for path in (
@@ -781,8 +798,8 @@ class SBOMVerificationPlugin(AssessmentPlugin):
 
     def _extract_vcs_info_spdx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
         # packages[0] is the document's subject by convention rather than by
-        # guarantee, so this is reported as package-derived for the same reason
-        # as the CycloneDX component fallback above.
+        # guarantee, so every return below is tagged package-derived for the
+        # same reason as the CycloneDX component fallback above.
         packages = sbom_data.get("packages", [])
         if not packages:
             return None

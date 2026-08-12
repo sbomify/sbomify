@@ -237,3 +237,66 @@ class TestItSaysWhereTheRepositoryCameFrom:
         assert f"{ORG}/{REPO}" in finding.description
         assert "from a package reference" not in finding.description
         assert finding.metadata["vcs_source"] == "document"
+
+
+class TestTheRetryMessageIsQualifiedToo:
+    """The 404 path is the one users actually reach.
+
+    It becomes the run's error after the retry budget is spent, so leaving it
+    unqualified meant the dominant message still told a reader to go and fix a
+    workflow in a dependency's repository — the exact harm the qualifier was
+    added for, on the path that matters most.
+    """
+
+    def _raise_404_for(self, sbom_file: Path, sha256: str) -> str:
+        plugin = SBOMVerificationPlugin()
+        session = MagicMock()
+        session.get.return_value = _response(404)
+
+        with (
+            patch("sbomify.apps.plugins.builtins.verification.get_http_session", return_value=session),
+            patch.object(plugin, "_fetch_blob", return_value=None),
+            pytest.raises(AttestationNotYetAvailableError) as excinfo,
+        ):
+            plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
+        return str(excinfo.value)
+
+    def test_a_dependency_repo_is_qualified(self, tmp_path: Path) -> None:
+        message = self._raise_404_for(*_cyclonedx_with_dependency_vcs(tmp_path))
+
+        assert "psf/requests" in message
+        assert "from a package reference" in message
+
+    def test_the_documents_own_repo_is_not(self, sbom) -> None:
+        message = self._raise_404_for(*sbom)
+
+        assert f"{ORG}/{REPO}" in message
+        assert "from a package reference" not in message
+
+
+class TestEveryFormatReportsItsSource:
+    """A handler that forgets to tag its result must not be read as the
+    document's own subject, which is the permissive answer."""
+
+    def test_spdx_is_package_derived(self, tmp_path: Path) -> None:
+        doc = {
+            "spdxVersion": "SPDX-2.3",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "packages": [{"name": "widget", "downloadLocation": "git+https://github.com/example-org/example-repo"}],
+        }
+        path = tmp_path / "s.spdx.json"
+        path.write_text(json.dumps(doc))
+
+        info = SBOMVerificationPlugin()._extract_vcs_info(json.loads(path.read_text()))
+
+        assert info is not None
+        assert info["source"] == "package"
+
+    def test_a_cyclonedx_document_subject_is_not(self, tmp_path: Path) -> None:
+        _, _sha = _cyclonedx_with_vcs(tmp_path)
+        doc = json.loads((tmp_path / "sbom.json").read_text())
+
+        info = SBOMVerificationPlugin()._extract_vcs_info(doc)
+
+        assert info is not None
+        assert info["source"] == "document"
