@@ -417,8 +417,8 @@ class TestGuestCannotLeakAcrossWorkspaces:
         """A gated component is publicly viewable; its private product names are not."""
         from django.test import Client
 
-        from sbomify.apps.sboms.models import Product
-        from sbomify.apps.core.models import Release
+        from sbomify.apps.core.models import Release, ReleaseArtifact
+        from sbomify.apps.sboms.models import SBOM, Product
 
         user, own = guest_of_vendor
         gated = Component.objects.create(
@@ -430,7 +430,19 @@ class TestGuestCannotLeakAcrossWorkspaces:
         private_product = Product.objects.create(
             team=team_with_business_plan, name="Vendor Secret Product", is_public=False
         )
-        Release.objects.create(product=private_product, name="v1.0.0")
+        release = Release.objects.create(product=private_product, name="v1.0.0")
+        # The endpoint finds releases via the component's artifacts, so the
+        # component has to actually be tagged into the release — without this the
+        # response is empty for unrelated reasons and the test proves nothing.
+        sbom = SBOM.objects.create(
+            name="vendor-sbom",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            component=gated,
+            source="api",
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=sbom)
 
         client = Client()
         setup_authenticated_client_session(client, own, user)
@@ -438,3 +450,5 @@ class TestGuestCannotLeakAcrossWorkspaces:
 
         assert response.status_code == 200
         assert "Vendor Secret Product" not in response.content.decode()
+        # And the release itself is withheld, not merely its product name.
+        assert response.json()["items"] == []
