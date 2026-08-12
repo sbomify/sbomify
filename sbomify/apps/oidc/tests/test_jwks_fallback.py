@@ -1,0 +1,179 @@
+"""A one-hour cache in front of a network is a scheduled outage.
+
+The JWKS entry expires after an hour, and there was nothing behind it. Any
+moment GitHub was unreachable after that expiry failed every OIDC exchange
+that arrived, with a 503 apiece. From staging, inside a single minute:
+
+    GitHub JWKS fetch failed (...): [Errno 113] No route to host
+    Service Unavailable: /api/v1/auth/oidc/github/exchange
+
+— eleven consecutive CI token exchanges, none of which had anything wrong
+with them, failed because of a network fault that lasted less time than the
+log line took to write.
+
+Every successful fetch now also writes a longer-lived last-known-good copy,
+served when GitHub cannot be reached. The trade is bounded staleness: while
+GitHub is unreachable we keep trusting keys it may since have retired. Key
+rotation is a planned, pre-announced event and a retired key stays valid
+upstream far longer than a day; a thirty-second network fault is routine.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+import requests
+from django.core.cache import cache
+
+from sbomify.apps.oidc.utils import (
+    _JWKS_CACHE_KEY,
+    _JWKS_FALLBACK_CACHE_KEY,
+    OIDCJWKSUnavailable,
+    _fetch_github_jwks,
+    verify_github_oidc_token,
+)
+
+
+def _unreachable(mocker) -> Any:
+    """GitHub not answering, which is what staging actually saw."""
+    return mocker.patch(
+        "sbomify.apps.oidc.utils.requests.get",
+        side_effect=requests.exceptions.ConnectionError("[Errno 113] No route to host"),
+    )
+
+
+def _expire_the_fresh_entry() -> None:
+    """The 1h entry lapsing, without waiting an hour for it."""
+    cache.delete(_JWKS_CACHE_KEY)
+
+
+class TestTheFallbackCarriesTheOutage:
+    def test_a_successful_fetch_records_a_fallback(self, mock_github_jwks, rsa_keypair) -> None:
+        """Nothing else works if this does not happen on the success path."""
+        _fetch_github_jwks()
+
+        assert cache.get(_JWKS_FALLBACK_CACHE_KEY) == {"keys": [rsa_keypair["jwk"]]}
+
+    def test_an_unreachable_github_is_survived(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        """The defect: this raised, and every exchange behind it became a 503."""
+        _fetch_github_jwks()  # populates both entries
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+
+        assert _fetch_github_jwks() == {"keys": [rsa_keypair["jwk"]]}
+
+    def test_a_real_token_still_verifies_during_the_outage(
+        self, mocker, mock_github_jwks, github_claims_factory
+    ) -> None:
+        """The point of the whole change, at the level the user experiences:
+        a CI job exchanging a perfectly good token mid-blip should not be told
+        the service is unavailable."""
+        token = github_claims_factory()
+        verify_github_oidc_token(token)  # warms the fallback
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+
+        assert verify_github_oidc_token(github_claims_factory())["iss"]
+
+    def test_a_malformed_upstream_body_also_falls_back(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        """GitHub's edge serving an HTML error page with a 200 is the same
+        outage wearing a different hat."""
+        _fetch_github_jwks()
+        _expire_the_fresh_entry()
+        bad = mocker.MagicMock()
+        bad.raise_for_status.return_value = None
+        bad.json.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=bad)
+
+        assert _fetch_github_jwks() == {"keys": [rsa_keypair["jwk"]]}
+
+
+class TestWithoutAFallbackNothingChanges:
+    def test_a_cold_cache_still_raises(self, mocker) -> None:
+        """A deployment that has never reached GitHub has nothing to serve, and
+        must still fail loudly rather than inventing something."""
+        cache.clear()
+        _unreachable(mocker)
+
+        with pytest.raises(OIDCJWKSUnavailable):
+            _fetch_github_jwks()
+
+    def test_the_original_error_is_what_surfaces(self, mocker) -> None:
+        """The 503 an operator sees should still name the cause."""
+        cache.clear()
+        _unreachable(mocker)
+
+        with pytest.raises(OIDCJWKSUnavailable, match="No route to host"):
+            _fetch_github_jwks()
+
+
+class TestTheFallbackIsNotATrustHole:
+    """Serving something stale must not mean serving something unchecked."""
+
+    def test_a_poisoned_fallback_is_discarded(self, mocker, rsa_keypair) -> None:
+        """The fresh entry is structurally revalidated on read precisely
+        because an attacker in the cache could otherwise plant a key whose
+        private half they hold. A fallback read without the same check would
+        reopen that, with a longer window than the one it closed."""
+        cache.clear()
+        cache.set(_JWKS_FALLBACK_CACHE_KEY, {"keys": [{"kty": "RSA", "kid": "evil", "n": "AQAB", "e": "AQAB"}]})
+        _unreachable(mocker)
+
+        with pytest.raises(OIDCJWKSUnavailable):
+            _fetch_github_jwks()
+
+    def test_a_poisoned_fallback_is_evicted_not_left_to_be_retried(self, mocker) -> None:
+        cache.clear()
+        cache.set(_JWKS_FALLBACK_CACHE_KEY, {"not": "a jwks"})
+        _unreachable(mocker)
+
+        with pytest.raises(OIDCJWKSUnavailable):
+            _fetch_github_jwks()
+
+        assert cache.get(_JWKS_FALLBACK_CACHE_KEY) is None
+
+    def test_a_token_signed_by_an_unknown_key_still_fails_during_an_outage(
+        self, mocker, mock_github_jwks, github_claims_factory, rsa_keypair
+    ) -> None:
+        """The fallback relaxes how recently we spoke to GitHub, nothing else.
+        A signature that does not verify against it is still rejected."""
+        from sbomify.apps.oidc.utils import OIDCInvalidSignature
+
+        verify_github_oidc_token(github_claims_factory())  # warms the fallback
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+
+        import jwt
+        from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+
+        attacker_key = _rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        forged = jwt.encode(
+            jwt.decode(github_claims_factory(), options={"verify_signature": False}),
+            attacker_key,
+            algorithm="RS256",
+            headers={"kid": rsa_keypair["jwk"]["kid"]},
+        )
+
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(forged)
+
+
+class TestTheFreshPathIsPreferred:
+    def test_a_reachable_github_is_still_used(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        """The fallback is for outages. A working fetch must not be shadowed by
+        a stale copy, or a rotation would never be picked up."""
+        cache.set(_JWKS_FALLBACK_CACHE_KEY, {"keys": [dict(rsa_keypair["jwk"], kid="stale-kid")]})
+        _expire_the_fresh_entry()
+
+        assert _fetch_github_jwks()["keys"][0]["kid"] == rsa_keypair["jwk"]["kid"]
+
+    def test_the_fallback_is_refreshed_by_each_success(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        """So the copy served during an outage is from the last time GitHub was
+        reachable, not from whenever it was first seen."""
+        cache.set(_JWKS_FALLBACK_CACHE_KEY, {"keys": [dict(rsa_keypair["jwk"], kid="older-kid")]})
+        _expire_the_fresh_entry()
+
+        _fetch_github_jwks()
+
+        assert cache.get(_JWKS_FALLBACK_CACHE_KEY)["keys"][0]["kid"] == rsa_keypair["jwk"]["kid"]

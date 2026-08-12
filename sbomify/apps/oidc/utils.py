@@ -38,7 +38,21 @@ logger = getLogger(__name__)
 # full namespaced key.
 _JWKS_CACHE_KEY = "sbomify:trusted:oidc:github:jwks"
 _JWKS_REFRESH_MARKER_KEY = "sbomify:trusted:oidc:github:jwks:last_refresh"
+_JWKS_FALLBACK_CACHE_KEY = "sbomify:trusted:oidc:github:jwks:last_known_good"
 _JWKS_FETCH_TIMEOUT_SECONDS = 5
+
+# How long the last successful JWKS stays usable as a fallback when GitHub
+# cannot be reached. The fresh entry above expires after an hour; without
+# something behind it, any blip lasting longer than the gap between two
+# exchanges fails every one of them.
+#
+# The cost of the fallback is bounded staleness: while GitHub is unreachable
+# we keep trusting keys it may since have retired. That is the trade being
+# made deliberately — key rotation is a planned, pre-announced event and a
+# retired key stays valid at GitHub for far longer than this, whereas a
+# thirty-second network fault is routine. A day rides out any realistic
+# outage while keeping the window short enough to reason about.
+_JWKS_FALLBACK_MAX_AGE_SECONDS = 86400
 
 # Minimum gap between forced JWKS refreshes triggered by a ``kid`` miss.
 # Without this, an unauthenticated attacker spamming the exchange
@@ -148,6 +162,11 @@ def _fetch_github_jwks() -> dict[str, Any]:
     (``_ALLOWED_JWKS_HOSTS``). Combined with ``allow_redirects=False``
     on the actual request, this prevents a compromised settings file
     or env from pivoting the fetch at an internal address.
+
+    Availability: every successful fetch also writes a longer-lived
+    last-known-good copy, which ``_jwks_fallback_or_raise`` serves when
+    GitHub cannot be reached. Without it the 1h TTL above is a scheduled
+    outage waiting for a network fault to land in the wrong minute.
     """
     cached = cache.get(_JWKS_CACHE_KEY)
     if cached is not None and _jwks_passes_validation(cached):
@@ -168,7 +187,7 @@ def _fetch_github_jwks() -> dict[str, Any]:
         jwks: dict[str, Any] = response.json()
     except requests.RequestException as exc:
         logger.warning("GitHub JWKS fetch failed (%s): %s", url, exc)
-        raise OIDCJWKSUnavailable(str(exc)) from exc
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(str(exc)))
     except ValueError as exc:
         # ``response.json()`` raises ``ValueError`` (the parent of
         # ``json.JSONDecodeError``) on malformed upstream bodies. Without
@@ -176,16 +195,47 @@ def _fetch_github_jwks() -> dict[str, Any]:
         # the exchange endpoint maps cleanly to 503 like every other JWKS
         # unavailability mode.
         logger.warning("GitHub JWKS response was not valid JSON (%s): %s", url, exc)
-        raise OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}") from exc
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"))
 
     if not _jwks_passes_validation(jwks):
         # Upstream returned something we don't recognise; better to fail
         # the request than to cache a degraded document for an hour.
         logger.warning("GitHub JWKS response failed structural validation; not caching")
-        raise OIDCJWKSUnavailable("upstream JWKS failed validation")
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable("upstream JWKS failed validation"))
 
     cache.set(_JWKS_CACHE_KEY, jwks, timeout=settings.OIDC_JWKS_CACHE_SECONDS)
+    # Written on every success, so the fallback below is never older than the
+    # last time GitHub was actually reachable.
+    cache.set(_JWKS_FALLBACK_CACHE_KEY, jwks, timeout=_JWKS_FALLBACK_MAX_AGE_SECONDS)
     return jwks
+
+
+def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable) -> dict[str, Any]:
+    """Serve the last JWKS GitHub gave us, or re-raise if there isn't one.
+
+    The fresh entry lasts an hour. Before this, a network fault that outlived
+    the gap between two exchanges turned every one of them into a 503 — on
+    staging a single unreachable moment failed eleven consecutive CI token
+    exchanges, none of which had anything wrong with them.
+
+    Nothing here weakens what is accepted: the fallback goes through the same
+    structural validation as a fresh document, so a poisoned cache slot is
+    discarded rather than trusted, and signature verification downstream is
+    unchanged. The only thing relaxed is how recently we last spoke to GitHub.
+    """
+    fallback = cache.get(_JWKS_FALLBACK_CACHE_KEY)
+    if fallback is None:
+        raise error
+
+    if not _jwks_passes_validation(fallback):
+        # Same reasoning as the fresh-entry check: a slot that fails validation
+        # is evidence of tampering, not of a stale-but-usable document.
+        logger.warning("Discarding invalid last-known-good JWKS entry")
+        cache.delete(_JWKS_FALLBACK_CACHE_KEY)
+        raise error
+
+    logger.warning("Serving last-known-good JWKS; GitHub is unreachable (%s)", error)
+    return cast(dict[str, Any], fallback)
 
 
 def _jwks_passes_validation(jwks: Any) -> bool:
