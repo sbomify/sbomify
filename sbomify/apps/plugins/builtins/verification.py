@@ -495,6 +495,13 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         precomputed = context.sha256_hash if context else None
         digest = precomputed or hashlib.sha256(sbom_data).hexdigest()
 
+        # Qualified when the repository came from a dependency rather than from
+        # the document's own subject. _extract_vcs_info falls back to the first
+        # component carrying a VCS reference, which for a Python SBOM is
+        # typically an upstream OSS project — naming it unqualified tells the
+        # reader to go and fix a workflow in a repository they do not own.
+        repo_provenance = "" if vcs_info.get("source") == "document" else " (from a package reference in the SBOM)"
+
         # Per-source failures below emit ``warning`` rather than ``fail`` so
         # they don't drive ``fail_count > 0`` on the run when another source
         # (stored signature/provenance) has already verified the SBOM. The
@@ -517,17 +524,18 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 # can see both sides.
                 (
                     f"Could not retrieve an attestation from GitHub for this SBOM. sbomify asked "
-                    f"{github_org}/{github_repo} for subject digest sha256:{digest} — the SHA-256 "
-                    f"of this SBOM as sbomify stored it. GitHub's response: "
-                    f"{bundle.get('error', 'unknown')}. If the attestation exists and the digest "
-                    f"above does not match its subject, the workflow is attesting a different "
-                    f"artifact, or attesting the SBOM before a later step rewrites it. If there is "
-                    f"no attest step at all, add actions/attest-build-provenance for the file this "
-                    f"SBOM is uploaded from."
+                    f"{github_org}/{github_repo}{repo_provenance} for subject digest "
+                    f"sha256:{digest} — the SHA-256 of this SBOM as sbomify stored it. GitHub's "
+                    f"response: {bundle.get('error', 'unknown')}. If the attestation exists and "
+                    f"the digest above does not match its subject, the workflow is attesting a "
+                    f"different artifact, or attesting the SBOM before a later step rewrites it. "
+                    f"If there is no attest step at all, add actions/attest-build-provenance for "
+                    f"the file this SBOM is uploaded from."
                 ),
                 metadata={
                     "github_org": github_org,
                     "github_repo": github_repo,
+                    "vcs_source": vcs_info.get("source", "unknown"),
                     # The digest is the whole diagnosis: an operator comparing it
                     # against `gh attestation list` sees immediately whether the
                     # subject is absent or merely different.
@@ -562,6 +570,7 @@ class SBOMVerificationPlugin(AssessmentPlugin):
                 metadata={
                     "github_org": github_org,
                     "github_repo": github_repo,
+                    "vcs_source": vcs_info.get("source", "unknown"),
                     "certificate_identity": identity_regexp,
                     "oidc_issuer": self.certificate_oidc_issuer,
                 },
@@ -730,14 +739,18 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             if url:
                 parsed = self._parse_github_url(url)
                 if parsed:
-                    return parsed
+                    return {**parsed, "source": "document"}
 
+        # Falling back to a dependency's repository. Recorded, because the
+        # difference matters to anything that puts the name in front of a
+        # reader: this is somebody else's project, and advice to go and change
+        # that workflow is advice about a repository they do not own.
         for comp in sbom_data.get("components", []):
             url = self._find_vcs_url_cyclonedx(comp.get("externalReferences", []))
             if url:
                 parsed = self._parse_github_url(url)
                 if parsed:
-                    return parsed
+                    return {**parsed, "source": "component"}
         return None
 
     def _extract_vcs_info_spdx3(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
@@ -767,6 +780,9 @@ class SBOMVerificationPlugin(AssessmentPlugin):
         return None
 
     def _extract_vcs_info_spdx(self, sbom_data: dict[str, Any]) -> dict[str, str] | None:
+        # packages[0] is the document's subject by convention rather than by
+        # guarantee, so this is reported as package-derived for the same reason
+        # as the CycloneDX component fallback above.
         packages = sbom_data.get("packages", [])
         if not packages:
             return None

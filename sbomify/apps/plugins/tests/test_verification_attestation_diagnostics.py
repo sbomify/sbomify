@@ -178,3 +178,62 @@ class TestTheFindingOnOtherFailures:
         dropped it, leaving those users with advice about a step they do not
         have."""
         assert "attest-build-provenance" in self._finding(sbom).description
+
+
+def _cyclonedx_with_dependency_vcs(tmp_path: Path) -> tuple[Path, str]:
+    """An SBOM whose own subject carries no VCS reference, so the lookup falls
+    through to a dependency's repository."""
+    import hashlib
+
+    doc = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "widget"}},
+        "components": [
+            {
+                "type": "library",
+                "name": "requests",
+                "externalReferences": [{"type": "vcs", "url": "https://github.com/psf/requests"}],
+            }
+        ],
+    }
+    raw = json.dumps(doc).encode()
+    path = tmp_path / "sbom.json"
+    path.write_bytes(raw)
+    return path, hashlib.sha256(raw).hexdigest()
+
+
+class TestItSaysWhereTheRepositoryCameFrom:
+    """``_extract_vcs_info`` falls back to the first component carrying a VCS
+    reference, which for a Python SBOM is typically an upstream OSS project.
+    Naming it unqualified told the reader to go and fix a workflow in a
+    repository they do not own."""
+
+    def _finding_for(self, sbom_file: Path, sha256: str):
+        plugin = SBOMVerificationPlugin()
+        session = MagicMock()
+        session.get.return_value = _response(500)
+
+        with (
+            patch("sbomify.apps.plugins.builtins.verification.get_http_session", return_value=session),
+            patch.object(plugin, "_fetch_blob", return_value=None),
+        ):
+            result = plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
+        return next(f for f in result.findings if f.id == "verification:github-attestation")
+
+    def test_a_dependency_repo_is_qualified(self, tmp_path: Path) -> None:
+        finding = self._finding_for(*_cyclonedx_with_dependency_vcs(tmp_path))
+
+        assert "psf/requests" in finding.description
+        assert "from a package reference" in finding.description
+        assert finding.metadata["vcs_source"] == "component"
+
+    def test_the_documents_own_repo_is_not_qualified(self, sbom) -> None:
+        """The common case must stay direct — hedging it would make every
+        message read as uncertain."""
+        finding = self._finding_for(*sbom)
+
+        assert f"{ORG}/{REPO}" in finding.description
+        assert "from a package reference" not in finding.description
+        assert finding.metadata["vcs_source"] == "document"
