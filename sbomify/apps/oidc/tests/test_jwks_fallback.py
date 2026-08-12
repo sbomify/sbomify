@@ -177,3 +177,73 @@ class TestTheFreshPathIsPreferred:
         _fetch_github_jwks()
 
         assert cache.get(_JWKS_FALLBACK_CACHE_KEY)["keys"][0]["kid"] == rsa_keypair["jwk"]["kid"]
+
+
+class TestAKidMissDuringAnOutageIsNotTheTokensFault:
+    """The fallback answers with the document that was already in hand, so a
+    kid it does not contain proves nothing about the token — GitHub may have
+    rotated the key in and we simply could not ask."""
+
+    def test_it_reports_unavailable_rather_than_invalid(self, mocker, mock_github_jwks, github_claims_factory) -> None:
+        """401 told a CI client its token was rejected, so it stopped retrying
+        a condition that would clear on its own, and sent whoever investigated
+        looking at the customer's workflow instead of at the outage."""
+        import jwt
+
+        verify_github_oidc_token(github_claims_factory())  # warms the fallback
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+
+        rotated = jwt.encode(
+            jwt.decode(github_claims_factory(), options={"verify_signature": False}),
+            "secret",
+            algorithm="HS256",
+            headers={"kid": "a-kid-github-rotated-in-while-we-were-blind"},
+        )
+
+        with pytest.raises(OIDCJWKSUnavailable):
+            verify_github_oidc_token(rotated)
+
+    def test_a_kid_miss_against_fresh_keys_is_still_invalid(self, mock_github_jwks, github_claims_factory) -> None:
+        """The half that must not change: when GitHub answered and the key is
+        genuinely not there, the token really is unverifiable."""
+        import jwt
+
+        from sbomify.apps.oidc.utils import OIDCInvalidSignature
+
+        unknown = jwt.encode(
+            jwt.decode(github_claims_factory(), options={"verify_signature": False}),
+            "secret",
+            algorithm="HS256",
+            headers={"kid": "never-existed"},
+        )
+
+        with pytest.raises(OIDCInvalidSignature):
+            verify_github_oidc_token(unknown)
+
+
+class TestTheMalformedBodyBranchIsReachable:
+    def test_a_real_requests_json_error_takes_the_parse_branch(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        """requests' JSONDecodeError inherits from RequestException, so the
+        broader handler used to swallow every malformed body and the parse
+        branch was dead — its tests passed only because their mock raised a
+        bare ValueError, which no real response produces."""
+        _fetch_github_jwks()
+        _expire_the_fresh_entry()
+
+        bad = mocker.MagicMock()
+        bad.raise_for_status.return_value = None
+        bad.json.side_effect = requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0)
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=bad)
+
+        assert _fetch_github_jwks() == {"keys": [rsa_keypair["jwk"]]}
+
+    def test_it_names_the_parse_failure_when_there_is_no_fallback(self, mocker) -> None:
+        cache.clear()
+        bad = mocker.MagicMock()
+        bad.raise_for_status.return_value = None
+        bad.json.side_effect = requests.exceptions.JSONDecodeError("Expecting value", "<html>", 0)
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=bad)
+
+        with pytest.raises(OIDCJWKSUnavailable, match="not parseable"):
+            _fetch_github_jwks()

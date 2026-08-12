@@ -20,6 +20,7 @@ internal verification detail to the response.
 
 from __future__ import annotations
 
+import threading
 from typing import Any, cast
 
 import jwt
@@ -53,6 +54,19 @@ _JWKS_FETCH_TIMEOUT_SECONDS = 5
 # thirty-second network fault is routine. A day rides out any realistic
 # outage while keeping the window short enough to reason about.
 _JWKS_FALLBACK_MAX_AGE_SECONDS = 86400
+
+# Whether the JWKS the current request is working from came from the fallback
+# rather than from GitHub. Thread-local because the fetch and the kid lookup
+# that consults it are two calls in one request, and workers handle requests
+# concurrently — a module global would let one request's outage mark another
+# request's fresh keys as stale.
+_JWKS_SOURCE = threading.local()
+
+
+def _served_from_fallback() -> bool:
+    """Whether the JWKS in hand is the last-known-good copy, not a fresh fetch."""
+    return bool(getattr(_JWKS_SOURCE, "served_from_fallback", False))
+
 
 # Minimum gap between forced JWKS refreshes triggered by a ``kid`` miss.
 # Without this, an unauthenticated attacker spamming the exchange
@@ -168,6 +182,7 @@ def _fetch_github_jwks() -> dict[str, Any]:
     GitHub cannot be reached. Without it the 1h TTL above is a scheduled
     outage waiting for a network fault to land in the wrong minute.
     """
+    _JWKS_SOURCE.served_from_fallback = False
     cached = cache.get(_JWKS_CACHE_KEY)
     if cached is not None and _jwks_passes_validation(cached):
         return cast(dict[str, Any], cached)
@@ -185,28 +200,38 @@ def _fetch_github_jwks() -> dict[str, Any]:
         response = requests.get(url, timeout=_JWKS_FETCH_TIMEOUT_SECONDS, allow_redirects=False)
         response.raise_for_status()
         jwks: dict[str, Any] = response.json()
+    except requests.exceptions.JSONDecodeError as exc:
+        # Caught ahead of ``RequestException`` deliberately: in requests,
+        # ``JSONDecodeError`` inherits from it, so the broader handler below
+        # would otherwise take every malformed body and this branch would be
+        # dead. It was — the tests covering it only passed because their mock
+        # raised a bare ``ValueError``, which no real response produces.
+        logger.warning("GitHub JWKS response was not valid JSON (%s): %s", url, exc)
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"))
     except requests.RequestException as exc:
         logger.warning("GitHub JWKS fetch failed (%s): %s", url, exc)
         return _jwks_fallback_or_raise(OIDCJWKSUnavailable(str(exc)))
     except ValueError as exc:
-        # ``response.json()`` raises ``ValueError`` (the parent of
-        # ``json.JSONDecodeError``) on malformed upstream bodies. Without
-        # this branch the exception bubbles up as an unhandled 500; with it
-        # the exchange endpoint maps cleanly to 503 like every other JWKS
-        # unavailability mode.
+        # A non-requests JSON decoder (a patched session, a future client)
+        # can still surface a bare ValueError here.
         logger.warning("GitHub JWKS response was not valid JSON (%s): %s", url, exc)
         return _jwks_fallback_or_raise(OIDCJWKSUnavailable(f"upstream JWKS not parseable: {exc}"))
 
     if not _jwks_passes_validation(jwks):
-        # Upstream returned something we don't recognise; better to fail
-        # the request than to cache a degraded document for an hour.
-        logger.warning("GitHub JWKS response failed structural validation; not caching")
+        # Reached GitHub and did not recognise what it said, which is a
+        # different problem from an outage: the document has changed shape, or
+        # carries a key type we reject. Logged at error rather than warning
+        # because the fallback below will hide it for as long as it lasts, and
+        # the deployment then fails all at once when that expires — a day after
+        # the only signal.
+        logger.error("GitHub JWKS response failed structural validation; serving last known good if available")
         return _jwks_fallback_or_raise(OIDCJWKSUnavailable("upstream JWKS failed validation"))
 
     cache.set(_JWKS_CACHE_KEY, jwks, timeout=settings.OIDC_JWKS_CACHE_SECONDS)
     # Written on every success, so the fallback below is never older than the
     # last time GitHub was actually reachable.
     cache.set(_JWKS_FALLBACK_CACHE_KEY, jwks, timeout=_JWKS_FALLBACK_MAX_AGE_SECONDS)
+    _JWKS_SOURCE.served_from_fallback = False
     return jwks
 
 
@@ -235,6 +260,7 @@ def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable) -> dict[str, Any]:
         raise error
 
     logger.warning("Serving last-known-good JWKS; GitHub is unreachable (%s)", error)
+    _JWKS_SOURCE.served_from_fallback = True
     return cast(dict[str, Any], fallback)
 
 
@@ -287,6 +313,16 @@ def _signing_key_for_kid(token: str) -> Any:
             jwks = _fetch_github_jwks()
             matching = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
     if not matching:
+        # A miss against the last-known-good copy says nothing about the token.
+        # GitHub may well have rotated in the key this kid names; we simply
+        # could not ask. Raising OIDCInvalidSignature here mapped that to a 401
+        # "invalid OIDC token", so a CI client treated a transient outage as a
+        # permanent rejection and stopped retrying, and the log pointed the
+        # investigation at the customer's workflow instead of at the outage.
+        if _served_from_fallback():
+            raise OIDCJWKSUnavailable(
+                f"cannot verify kid={kid!r}: GitHub is unreachable and the last known good JWKS predates it"
+            )
         raise OIDCInvalidSignature(f"no JWK matches token kid={kid!r}")
 
     return jwt.PyJWK(matching).key
