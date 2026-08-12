@@ -122,6 +122,19 @@ class OSVPlugin(AssessmentPlugin):
             # Parse results into findings
             findings = self._parse_scan_output(stdout, returncode)
 
+            # No findings can mean two opposite things: nothing was vulnerable,
+            # or nothing was recognised. A Yocto SPDX document carries
+            # ``pkg:yocto/...`` PURLs, which osv-scanner rejects as invalid and
+            # skips, and the scan reports "found 0 packages" while exiting
+            # cleanly. Reported as a pass, that renders a green "no known
+            # vulnerabilities" badge over a build nothing was ever matched
+            # against — the worst answer a security product can give.
+            if not findings and self._scanned_package_count(stderr) == 0:
+                logger.warning(
+                    f"[OSV] Scan of SBOM {sbom_id} recognised no packages; reporting as skipped rather than clean"
+                )
+                return self._create_no_packages_result()
+
             # Build severity summary
             by_severity: dict[str, int] = {
                 "critical": 0,
@@ -519,6 +532,57 @@ class OSVPlugin(AssessmentPlugin):
         elif score >= 4.0:
             return "medium"
         return "low"
+
+    _SCANNED_PACKAGES = re.compile(r"found (\d+) package", re.IGNORECASE)
+
+    def _scanned_package_count(self, stderr: str) -> int | None:
+        """How many packages osv-scanner said it recognised, or None if it did not say.
+
+        The count is only on stderr. The JSON output lists packages that *have*
+        vulnerabilities, so on a clean scan it cannot distinguish "500 scanned,
+        none vulnerable" from "none scanned at all".
+
+        None rather than 0 when the line is absent: a scanner version that
+        phrases it differently must not turn every clean scan into a skip.
+        """
+        match = self._SCANNED_PACKAGES.search(stderr or "")
+        return int(match.group(1)) if match else None
+
+    def _create_no_packages_result(self) -> AssessmentResult:
+        """A scan that recognised nothing, reported as skipped rather than clean.
+
+        Skipped is the shape that already means "the plugin never scanned
+        anything" — ``public_assessment_utils._is_run_skipped`` reads it and
+        withholds the public pass, which is the whole point here.
+        """
+        finding = Finding(
+            id="osv:no-packages",
+            title="No Packages Recognised",
+            description=(
+                "osv-scanner did not recognise any packages in this SBOM, so it was not "
+                "matched against any advisory source. This usually means the package URLs "
+                "use a type osv-scanner does not know, such as pkg:yocto. No vulnerability "
+                "result can be inferred from this scan."
+            ),
+            status="warning",
+            severity="info",
+        )
+        summary = AssessmentSummary(
+            total_findings=1,
+            pass_count=0,
+            fail_count=0,
+            warning_count=1,
+            error_count=0,
+        )
+        return AssessmentResult(
+            plugin_name="osv",
+            plugin_version=self.VERSION,
+            category=AssessmentCategory.SECURITY.value,
+            assessed_at=datetime.now(timezone.utc).isoformat(),
+            summary=summary,
+            findings=[finding],
+            metadata={"scanner": "osv-scanner", "skipped": True, "no_packages": True},
+        )
 
     def _create_error_result(self, error_message: str) -> AssessmentResult:
         """Create an error result when assessment cannot be completed.

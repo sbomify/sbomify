@@ -463,6 +463,7 @@ class TestPassingAssessmentsToDictHelper:
                 "standard_url": None,
                 "pass_count": None,
                 "total_findings": None,
+                "warning_count": None,
                 "completed_at": None,
             }
         ]

@@ -34,6 +34,22 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _is_unsupported_spec_version(error: Exception) -> bool:
+    """Whether Dependency Track refused the upload over its CycloneDX version.
+
+    Matched on the server's message because that is the only place it says so:
+    the rejection is a plain 400 shared with every other invalid-BOM reason, and
+    nothing in the payload distinguishes "malformed" from "a version I do not
+    know yet".
+
+    Deliberately narrow. A 400 that is not about the spec version is still a
+    real failure and keeps its error result — misreading a genuinely corrupt BOM
+    as "not applicable" would hide the thing worth knowing.
+    """
+    message = str(error).lower()
+    return "specversion" in message and ("unrecognized" in message or "unsupported" in message)
+
+
 def _first_float(*candidates: Any) -> float | None:
     """The first candidate that is a real number, else None.
 
@@ -209,6 +225,22 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     current_release_names=current_release_names,
                 )
             except Exception as e:
+                # A spec version this DT does not know is a capability gap, not
+                # a fault: "Unrecognized specVersion 1.7" means CycloneDX moved
+                # ahead of the server, and every scan of that artifact would log
+                # an error and store a high-severity marker until DT catches up.
+                # The same reasoning the format gate already applies — DT simply
+                # cannot process it — so it skips rather than errors.
+                if _is_unsupported_spec_version(e):
+                    logger.info(f"[DT] SBOM {sbom_id} uses a spec version this Dependency Track does not accept: {e}")
+                    return self._create_skipped_result(
+                        finding_id="dependency-track:unsupported-spec-version",
+                        title="Spec Version Not Supported",
+                        description=(
+                            "This Dependency Track server does not accept this CycloneDX spec "
+                            f"version, so vulnerability scanning was skipped. Server response: {e}"
+                        ),
+                    )
                 logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
                 return self._create_error_result(f"DT upload failed: {e}")
 

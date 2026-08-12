@@ -14,7 +14,7 @@ Click the link below to complete these actions:
 
 ${link}
 
-This link will expire in ${linkExpiration} minutes.
+This link will expire in ${linkExpirationFormatter(linkExpiration)}.
 
 If you did not expect this email, please contact your administrator.
 

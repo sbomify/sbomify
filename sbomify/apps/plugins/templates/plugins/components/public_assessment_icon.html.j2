@@ -16,13 +16,13 @@
             </span>
         {% elif assessment.category == 'license' %}
             <span class="compliance-icon compliance-icon--license"
-                  x-tooltip="'{{ tooltip_text|escapejs }}{% if assessment.standard_version %} ({{ assessment.standard_version|escapejs }}){% endif %}: All checks passed{% if assessment.completed_at %} {{ assessment.completed_at|date:"j M Y"|escapejs }}{% endif %}'">
+                  x-tooltip="'{{ tooltip_text|escapejs }}{% if assessment.standard_version %} ({{ assessment.standard_version|escapejs }}){% endif %}: {% if assessment.warning_count %}No failed checks{% else %}All checks passed{% endif %}{% if assessment.completed_at %} {{ assessment.completed_at|date:"j M Y"|escapejs }}{% endif %}'">
                 <i class="fas fa-scale-balanced"></i>
             </span>
         {% else %}
             {# Default: compliance or unknown category #}
             <span class="compliance-icon compliance-icon--compliance"
-                  x-tooltip="'{{ tooltip_text|escapejs }}{% if assessment.standard_version %} ({{ assessment.standard_version|escapejs }}){% endif %}: All checks passed{% if assessment.completed_at %} {{ assessment.completed_at|date:"j M Y"|escapejs }}{% endif %}'">
+                  x-tooltip="'{{ tooltip_text|escapejs }}{% if assessment.standard_version %} ({{ assessment.standard_version|escapejs }}){% endif %}: {% if assessment.warning_count %}No failed checks{% else %}All checks passed{% endif %}{% if assessment.completed_at %} {{ assessment.completed_at|date:"j M Y"|escapejs }}{% endif %}'">
                 <i class="fas fa-check-circle"></i>
             </span>
         {% endif %}
