@@ -21,11 +21,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from asgiref.sync import sync_to_async
+from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from sbomify.apps.access_tokens.throttling import AccessTokenHeavyRateThrottle, AccessTokenRateThrottle
+from sbomify.apps.access_tokens.throttling import (
+    AccessTokenHeavyRateThrottle,
+    AccessTokenRateThrottle,
+    AnonymousIPRateThrottle,
+)
 from sbomify.apps.access_tokens.utils import get_user_and_token_record
 from sbomify.apps.core.utils import get_client_ip
 
@@ -133,12 +138,26 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     token = _bearer_token(starlette_request)
     stub = _stub_request(starlette_request)
 
-    user, record = await sync_to_async(get_user_and_token_record)(
+    # database_sync_to_async, not a bare sync_to_async: this is the first DB
+    # access of every MCP request — and the only one on the tools/list path —
+    # and /mcp never fires the request signals that normally run
+    # close_old_connections (see run_db in tools/_base.py). A bare wrapper here
+    # would leave the per-request executor's connection to die of old age and
+    # make a Postgres restart surface as an error auth can't recover from.
+    user, record = await database_sync_to_async(get_user_and_token_record)(
         token,
         source_ip=get_client_ip(stub),
         attempted_action=f"mcp {attempted_action}",
     )
     if user is None or record is None:
+        # A rejected credential never reaches the per-token throttle, so charge
+        # the per-IP window the REST API keeps for tokenless surfaces instead —
+        # each attempt costs a JWT decode plus an audit-log line, and without a
+        # budget a loop of them amplifies both for free. Only failures are
+        # charged: valid tokens stay on their own (larger) budget.
+        anon_throttle = AnonymousIPRateThrottle()
+        if not await sync_to_async(anon_throttle.allow_request)(stub):
+            raise MCPRateLimitedError("Too many failed authentication attempts from this address. Retry later.")
         raise MCPAuthError("Invalid or expired access token.")
 
     stub.user = user  # type: ignore[assignment]
@@ -157,9 +176,26 @@ async def authenticate(starlette_request: Request, *, attempted_action: str) -> 
     # window lives in the cache, keyed on the token pk.
     throttle = AccessTokenRateThrottle()
     if not await sync_to_async(throttle.allow_request)(stub):
-        raise MCPRateLimitedError("Rate limit exceeded for this access token. Retry shortly.")
+        raise MCPRateLimitedError(f"Rate limit exceeded for this access token.{_retry_hint(stub)}")
 
     return Principal(user=user, token=record, request=stub)
+
+
+def _retry_hint(stub: HttpRequest) -> str:
+    """When to retry, from the budget the throttle stashed on the request.
+
+    The REST API surfaces this as ``Retry-After``/``X-RateLimit-*`` headers via
+    middleware /mcp never passes through; folding it into the error message is
+    the only channel an MCP client has, and without it the natural agent
+    behaviour is an immediate retry loop that keeps the window saturated.
+    """
+    import time
+
+    budget = getattr(stub, "_access_token_ratelimit", None)
+    if budget is None:
+        return " Retry shortly."
+    _, _, reset = budget
+    return f" Retry in {max(1, int(reset - time.time()))} seconds."
 
 
 async def throttle_write(principal: Principal, *, tool: str) -> None:
@@ -173,7 +209,9 @@ async def throttle_write(principal: Principal, *, tool: str) -> None:
     """
     throttle = AccessTokenHeavyRateThrottle()
     if not await sync_to_async(throttle.allow_request)(principal.request):
-        raise MCPRateLimitedError(f"Write rate limit exceeded for this access token ({tool}). Retry shortly.")
+        raise MCPRateLimitedError(
+            f"Write rate limit exceeded for this access token ({tool}).{_retry_hint(principal.request)}"
+        )
 
 
 def require(principal: Principal, action: str, resource: Any) -> None:

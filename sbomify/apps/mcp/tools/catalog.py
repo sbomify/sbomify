@@ -157,7 +157,12 @@ def register_tools(mcp: FastMCP) -> None:
             require(principal, "component:read_internal", team)
             queryset = Component.objects.filter(team=team)
             if product_id is not None:
-                _get_product(principal, product_id)
+                # Workspace-scoped lookup only: the tool's declared action is
+                # component:read_internal, and get_component already exposes a
+                # component's product names under that scope — demanding
+                # product:read for the filter would advertise-then-refuse a
+                # token scoped to exactly the declared action.
+                _lookup_product(principal, product_id)
                 queryset = queryset.filter(products__id=product_id)
             safe_page, safe_size = clamp_page(page, page_size)
             rows, total = serializers.page_queryset(queryset.order_by("name"), safe_page, safe_size)
@@ -207,7 +212,10 @@ def register_tools(mcp: FastMCP) -> None:
             require(principal, "release:read", team)
             queryset = Release.objects.filter(product__team=team)
             if product_id is not None:
-                _get_product(principal, product_id)
+                # Workspace-scoped lookup only, for the same reason as
+                # list_components: release:read is this tool's declared action,
+                # and every release row already names its product.
+                _lookup_product(principal, product_id)
                 queryset = queryset.filter(product_id=product_id)
             safe_page, safe_size = clamp_page(page, page_size)
             rows, total = serializers.page_queryset(queryset.order_by("-created_at"), safe_page, safe_size)

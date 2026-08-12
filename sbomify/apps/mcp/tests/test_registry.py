@@ -76,6 +76,9 @@ def test_publish_preset_grants_upload_and_release_but_not_vex():
     # 'publish' includes release:read for the check-then-create workflow.
     assert "get_release" in allowed
     assert "list_products" not in allowed
+    # ... but release:read alone must not unlock the workspace's security
+    # posture: the risk report also requires workspace:read.
+    assert "get_release_risk_report" not in allowed
 
 
 def test_resource_wildcard_scope():
@@ -90,7 +93,7 @@ def test_resource_wildcard_scope():
         ("workspace:read", "get_workspace_summary"),
         ("product:read", "list_products"),
         ("component:read_internal", "get_component"),
-        ("release:read", "get_release_risk_report"),
+        ("release:read", "get_release"),
         ("document:read", "list_documents"),
         ("artifact:publish", "upload_sbom"),
         ("release:create", "create_release"),

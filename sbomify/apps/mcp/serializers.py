@@ -19,6 +19,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
+from .limits import untrusted
+
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
@@ -118,8 +120,11 @@ def sbom(obj: SBOM, *, detail: bool = False) -> dict[str, Any]:
     """
     data: dict[str, Any] = {
         "id": obj.id,
-        "name": obj.name,
-        "version": obj.version,
+        # name and version are lifted verbatim out of the uploaded document
+        # (metadata.component.* / the SPDX document name), so they are as
+        # supplier-controlled as a package name and bounded the same way.
+        "name": untrusted(obj.name, limit=256),
+        "version": untrusted(obj.version, limit=128),
         "format": obj.format,
         "format_version": obj.format_version,
         "bom_type": obj.bom_type,
@@ -140,16 +145,18 @@ def sbom(obj: SBOM, *, detail: bool = False) -> dict[str, Any]:
 def document(obj: Document, *, detail: bool = False) -> dict[str, Any]:
     data: dict[str, Any] = {
         "id": obj.id,
-        "name": obj.name,
-        "version": obj.version,
+        # Supplied by the uploader alongside the file, not typed into the app —
+        # bounded like every other artifact-adjacent string.
+        "name": untrusted(obj.name, limit=256),
+        "version": untrusted(obj.version, limit=128),
         "type": obj.document_type,
         "component_id": obj.component_id,
         "created_at": _stamp(obj.created_at),
     }
     if detail:
         data |= {
-            "description": obj.description,
-            "filename": obj.document_filename,
+            "description": untrusted(obj.description, limit=2000),
+            "filename": untrusted(obj.document_filename, limit=256),
             "content_type": obj.content_type,
             "file_size": obj.file_size,
             "sha256": obj.sha256_hash,
@@ -158,9 +165,12 @@ def document(obj: Document, *, detail: bool = False) -> dict[str, Any]:
 
 
 def release_artifact(obj: ReleaseArtifact) -> dict[str, Any]:
+    # No "artifact_id": obj.id is the release-artifact junction row's own pk,
+    # which no tool accepts as input — emitting it under that name invites an
+    # agent to feed it to get_sbom_packages and hit a misleading not-found.
+    # sbom_id / document_id are the real artifact identifiers.
     return compact(
         {
-            "artifact_id": obj.id,
             "type": obj.artifact_type,
             "name": obj.artifact_name,
             "sbom_id": obj.sbom_id,

@@ -70,13 +70,13 @@ async def mcp_http():
 def structured(response: httpx.Response) -> dict:
     """The tool's return value.
 
-    FastMCP wraps a plain ``dict`` return under a ``result`` key when building
-    the output schema, so the payload nests one level deeper than the tool's own
-    return value.
+    Every tool returns (and is annotated as returning) a dict, so FastMCP's
+    output schema is the dict itself — ``structuredContent`` carries the tool's
+    return value directly, with no extra nesting.
     """
     payload = parse(response)
     assert payload["result"].get("isError") is not True, payload
-    return payload["result"]["structuredContent"]["result"]
+    return payload["result"]["structuredContent"]
 
 
 async def call(client: httpx.AsyncClient, method: str, token: str | None = None, **params):

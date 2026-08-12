@@ -10,6 +10,19 @@ from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Member, Team
 
 
+@pytest.fixture(autouse=True)
+def _enforce_async_safety(monkeypatch):
+    """Re-arm Django's SynchronousOnlyOperation guard for MCP tests.
+
+    The suite sets ``DJANGO_ALLOW_ASYNC_UNSAFE=1`` globally for the Playwright
+    e2e tests, which disables the very guard the MCP async contract rests on —
+    an ORM call that escapes ``run_db`` onto the event loop must raise, here as
+    in production. Django reads the variable per call, so removing it for this
+    app's tests restores the invariant without touching e2e.
+    """
+    monkeypatch.delenv("DJANGO_ALLOW_ASYNC_UNSAFE", raising=False)
+
+
 def _make_team(name: str) -> Team:
     team = Team.objects.create(name=name)
     team.key = number_to_random_token(team.pk)

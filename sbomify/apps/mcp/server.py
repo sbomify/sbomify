@@ -157,10 +157,14 @@ def _transport_security() -> TransportSecuritySettings:
         origins += [f"https://{hostname}", f"https://{hostname}:*"]
 
     # Escape hatch for deployments fronted by a hostname the app does not know
-    # about (extra CNAME, internal load-balancer probe, staging alias).
-    extra = [h.strip() for h in getattr(settings, "MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+    # about (extra CNAME, internal load-balancer probe, staging alias). Origins
+    # too, like the canonical hostname above — the SDK validates Host and
+    # Origin independently, so a host-only entry would still 421 any client
+    # that sends an Origin header.
+    extra = [h.strip() for h in settings.MCP_ALLOWED_HOSTS.split(",") if h.strip()]
     for host in extra:
         hosts += [host, f"{host}:*"]
+        origins += [f"https://{host}", f"https://{host}:*"]
 
     return TransportSecuritySettings(
         enable_dns_rebinding_protection=True,

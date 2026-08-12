@@ -28,7 +28,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from ..auth import Principal
 from ..limits import enforce_upload_size
-from ._base import mcp_tool, not_found, run_db
+from ._base import mcp_tool, not_found, run_db, unwrap_view
 from .catalog import _lookup_component, _lookup_product, _lookup_release
 
 if TYPE_CHECKING:
@@ -46,19 +46,6 @@ def _with_body(principal: Principal, raw: bytes) -> HttpRequest:
     request._body = raw
     request.method = "POST"
     return request
-
-
-def _unwrap(result: tuple[int, Any], *, action: str) -> dict[str, Any]:
-    """Turn a ``(status, payload)`` view result into a value or a ``ToolError``.
-
-    The view's own message is preserved: it is far more specific than anything
-    this layer could synthesise (which schema failed, which duplicate was hit).
-    """
-    status, payload = result
-    if status >= 400:
-        detail = payload.get("detail") if isinstance(payload, dict) else str(payload)
-        raise ToolError(f"{action} failed ({status}): {detail}")
-    return payload if isinstance(payload, dict) else {"result": payload}
 
 
 def _parse_json(content: str, *, label: str) -> bytes:
@@ -114,7 +101,7 @@ def register_tools(mcp: FastMCP) -> None:
             _lookup_component(principal, component_id)
             request = _with_body(principal, _parse_json(content, label="SBOM"))
             view = apis.sbom_upload_cyclonedx if normalised == "cyclonedx" else apis.sbom_upload_spdx
-            return _unwrap(view(request, component_id), action="SBOM upload")
+            return unwrap_view(view(request, component_id), action="SBOM upload")
 
         return await run_db(call)
 
@@ -137,7 +124,7 @@ def register_tools(mcp: FastMCP) -> None:
 
             _lookup_component(principal, component_id)
             request = _with_body(principal, _parse_json(content, label="VEX document"))
-            return _unwrap(apis.vex_artifact_upload(request, component_id), action="VEX upload")
+            return unwrap_view(apis.vex_artifact_upload(request, component_id), action="VEX upload")
 
         return await run_db(call)
 
@@ -173,7 +160,7 @@ def register_tools(mcp: FastMCP) -> None:
                 is_prerelease=is_prerelease,
                 product_id=product_id,
             )
-            return _unwrap(apis.create_release(principal.request, payload), action="Release creation")
+            return unwrap_view(apis.create_release(principal.request, payload), action="Release creation")
 
         return await run_db(call)
 
@@ -215,7 +202,7 @@ def register_tools(mcp: FastMCP) -> None:
                 raise not_found("document", document_id)
 
             payload = ReleaseArtifactCreateSchema(sbom_id=sbom_id, document_id=document_id)
-            return _unwrap(
+            return unwrap_view(
                 apis.add_artifacts_to_release(principal.request, release_id, payload),
                 action="Artifact tagging",
             )

@@ -34,19 +34,25 @@ from sbomify.logging import getLogger
 if TYPE_CHECKING:
     from .auth import Principal
 
-log = getLogger("sbomify.audit.mcp")
+# sbomify.logging.getLogger prepends "sbomify.", yielding "sbomify.audit.mcp" —
+# under the "sbomify.audit" logger that settings pins to INFO independent of
+# LOG_LEVEL. Passing the full name here would double the prefix and drop
+# success events whenever LOG_LEVEL is raised.
+log = getLogger("audit.mcp")
 
-MAX_UPLOAD_BYTES = getattr(settings, "MCP_MAX_UPLOAD_BYTES", 20 * 1024 * 1024)
-"""Largest artifact an MCP tool will accept. Matches Django's
+# Defined unconditionally in settings.py, so no fallback defaults here — a
+# second copy of each default would drift from the one settings actually uses.
+MAX_UPLOAD_BYTES: int = settings.MCP_MAX_UPLOAD_BYTES
+"""Largest artifact an MCP tool will accept. Defaults to Django's
 ``DATA_UPLOAD_MAX_MEMORY_SIZE`` so MCP is never the laxer of the two doors."""
 
-MAX_ARTIFACT_PARSE_BYTES = getattr(settings, "MCP_MAX_ARTIFACT_PARSE_BYTES", 50 * 1024 * 1024)
+MAX_ARTIFACT_PARSE_BYTES: int = settings.MCP_MAX_ARTIFACT_PARSE_BYTES
 """Largest stored artifact ``get_sbom_packages`` will pull into memory to parse.
 Higher than the upload cap because artifacts predating this limit — or uploaded
 through other paths — can legitimately be larger; the point is to fail with a
 clear message instead of an OOM that takes the worker down."""
 
-MAX_RESPONSE_BYTES = getattr(settings, "MCP_MAX_RESPONSE_BYTES", 1024 * 1024)
+MAX_RESPONSE_BYTES: int = settings.MCP_MAX_RESPONSE_BYTES
 """Ceiling on a single tool's serialized response. Pagination should keep every
 response far below this; tripping it means a tool has an unbounded field."""
 

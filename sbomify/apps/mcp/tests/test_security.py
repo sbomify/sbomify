@@ -393,3 +393,28 @@ async def test_a_tool_works_with_a_token_scoped_to_exactly_its_declared_action(
             body = json.dumps(parse(response))
             assert "token scope does not grant" not in body, (name, action, body)
             assert "Not permitted" not in body, (name, action, body)
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_a_guest_members_token_is_refused(mcp_owner, make_token, product_in_bound_workspace):
+    """REST 403s guest members on every internal read; MCP must not be the laxer door.
+
+    Tokens are minted while owner/admin (creation is role-gated) but survive a
+    demotion to guest — nothing revokes them on role change, so the gate has to
+    hold at call time.
+    """
+    from sbomify.apps.teams.models import Member
+
+    user, bound, _ = mcp_owner
+    token = await sync_to_async(make_token)(None)
+
+    def demote() -> None:
+        Member.objects.filter(user=user, team=bound).update(role="guest")
+
+    await sync_to_async(demote)()
+
+    async with mcp_http() as client:
+        response = await call(client, "tools/call", token=token.encoded_token, name="list_products", arguments={})
+
+    assert "Guest members" in json.dumps(parse(response))

@@ -24,7 +24,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from .. import serializers
 from ..auth import Principal, require
-from ._base import mcp_tool, not_found, resolve_workspace, run_db, workspace_key
+from ._base import mcp_tool, not_found, resolve_workspace, run_db, unwrap_view, workspace_key
 from .catalog import _lookup_component
 
 if TYPE_CHECKING:
@@ -65,14 +65,6 @@ def _profile_summary(payload: Any) -> dict[str, Any]:
             "entities": entities,
         }
     )
-
-
-def _unwrap(result: tuple[int, Any], *, action: str) -> Any:
-    status, payload = result
-    if status >= 400:
-        detail = payload.get("detail") if isinstance(payload, dict) else str(payload)
-        raise ToolError(f"{action} failed ({status}): {detail}")
-    return payload
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -186,8 +178,10 @@ def register_tools(mcp: FastMCP) -> None:
                 ],
             )
             payload = ContactProfileCreateSchema(name=name, entities=[entity], is_default=is_default)
-            created = _unwrap(view(principal.request, workspace_key(team), payload), action="Contact profile creation")
-            return _profile_summary(created if isinstance(created, dict) else created.dict())
+            created = unwrap_view(
+                view(principal.request, workspace_key(team), payload), action="Contact profile creation"
+            )
+            return _profile_summary(created)
 
         return await run_db(call)
 
@@ -223,10 +217,10 @@ def register_tools(mcp: FastMCP) -> None:
                 raise ToolError("Nothing to update: pass name and/or is_default.")
 
             payload = ContactProfileUpdateSchema(**fields)
-            updated = _unwrap(
+            updated = unwrap_view(
                 view(principal.request, workspace_key(team), profile_id, payload), action="Contact profile update"
             )
-            return _profile_summary(updated if isinstance(updated, dict) else updated.dict())
+            return _profile_summary(updated)
 
         return await run_db(call)
 
@@ -253,7 +247,7 @@ def register_tools(mcp: FastMCP) -> None:
                 raise not_found("contact profile", profile_id)
 
             payload = ComponentMetaDataPatch(contact_profile_id=profile_id)
-            _unwrap(
+            unwrap_view(
                 patch_component_metadata(principal.request, component_id, payload),
                 action="Contact profile assignment",
             )

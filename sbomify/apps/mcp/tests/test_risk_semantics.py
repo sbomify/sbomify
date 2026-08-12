@@ -143,3 +143,50 @@ def test_severities_mirror_the_shared_rank():
     from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK
 
     assert risk.SEVERITIES == (*SEVERITY_RANK, "unknown")
+
+
+@pytest.mark.django_db
+def test_only_the_latest_sbom_per_component_counts(mcp_owner):
+    """Historical SBOM versions must not stack their findings.
+
+    The dashboards count only the newest bom_type=sbom per component; a
+    component uploading an SBOM per build would otherwise report the same
+    CVE once per upload, and the tool docstring promises dashboard parity.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    _, bound, _ = mcp_owner
+    component = Component.objects.create(name="versioned-component", team=bound)
+
+    def _versioned(version: str) -> SBOM:
+        return SBOM.objects.create(
+            name="versioned",
+            version=version,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename=f"versioned-{version}.json",
+            component=component,
+        )
+
+    old = _versioned("1.0.0")
+    new = _versioned("2.0.0")
+    SBOM.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=1))
+
+    _run(
+        old,
+        status="completed",
+        result={
+            "findings": [{"id": "CVE-2024-0001", "severity": "high", "component": {"name": "oldlib", "version": "1"}}]
+        },
+    )
+    _run(new, status="completed")
+
+    rows, scanned = risk._rows_for(risk._security_runs(bound))
+    counts = risk._counts(rows)
+
+    assert scanned == {new.id}
+    assert counts["critical"] == 1
+    assert counts["high"] == 0
+    assert counts["total"] == 1

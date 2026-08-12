@@ -39,10 +39,15 @@ MAX_PAGE_SIZE = 100
 """Hard ceiling on any tool's page size. Agents pay for every token of a
 response, and an unbounded list is the fastest way to exhaust a context window."""
 
+MAX_PAGE = 1_000_000
+"""Upper bound on the page number. An unbounded page becomes a raw SQL OFFSET,
+and a large enough value overflows Postgres bigint into a DataError; past this
+bound every page is empty anyway."""
+
 
 def clamp_page(page: int, page_size: int, *, default_size: int = 25) -> tuple[int, int]:
     """Normalise agent-supplied pagination into something safe."""
-    page = max(1, page)
+    page = min(max(1, page), MAX_PAGE)
     if page_size < 1:
         page_size = default_size
     return page, min(page_size, MAX_PAGE_SIZE)
@@ -83,7 +88,13 @@ def mcp_tool(
         if not inspect.iscoroutinefunction(fn):
             raise TypeError(f"MCP tool {name!r} must be an async function (see mcp_tool docstring)")
 
-        signature = inspect.signature(fn)
+        # eval_str resolves the string annotations `from __future__ import
+        # annotations` leaves behind. FastMCP would do this itself, but a set
+        # __signature__ short-circuits its inspect.signature(..., eval_str=True)
+        # call, so an unresolved ForwardRef here would reach pydantic and fail
+        # at registration for any annotation not importable from FastMCP's own
+        # module namespace.
+        signature = inspect.signature(fn, eval_str=True)
         params = list(signature.parameters.values())
         if not params or params[0].name != "principal":
             raise TypeError(f"MCP tool {name!r} must take 'principal' as its first parameter")
@@ -97,24 +108,28 @@ def mcp_tool(
                 raise MCPAuthError("This tool must be called over HTTP with a bearer token.")
             principal = await authenticate(request, attempted_action=name)
 
-            # Defence in depth: refuse anything the token's scopes don't grant,
-            # before the tool body runs. The per-resource can() check inside each
-            # tool remains the authoritative decision — but several tools delegate
-            # to REST views that load the resource *first* and so return 404
-            # before they ever reach their can() call. That ordering is right for
-            # the REST API (it avoids confirming a resource exists to someone who
-            # may not read it), but it means the action declared in the registry
-            # would otherwise be advisory for those tools. This makes it binding:
-            # a read-only token is refused at the door, whatever the wrapped view
-            # would have done.
-            for required in spec.actions:
-                if not scope_permits(principal.scopes, required):
-                    raise MCPAuthError(f"Not permitted ({required}): token scope does not grant {required!r}")
-
-            if writes:
-                await throttle_write(principal, tool=name)
-
             try:
+                # Defence in depth: refuse anything the token's scopes don't grant,
+                # before the tool body runs. The per-resource can() check inside each
+                # tool remains the authoritative decision — but several tools delegate
+                # to REST views that load the resource *first* and so return 404
+                # before they ever reach their can() call. That ordering is right for
+                # the REST API (it avoids confirming a resource exists to someone who
+                # may not read it), but it means the action declared in the registry
+                # would otherwise be advisory for those tools. This makes it binding:
+                # a read-only token is refused at the door, whatever the wrapped view
+                # would have done.
+                #
+                # Inside the try so these refusals are audited too: an
+                # under-scoped token probing the whole tool surface is exactly
+                # the pattern the audit trail exists to make visible.
+                for required in spec.actions:
+                    if not scope_permits(principal.scopes, required):
+                        raise MCPAuthError(f"Not permitted ({required}): token scope does not grant {required!r}")
+
+                if writes:
+                    await throttle_write(principal, tool=name)
+
                 result = await fn(principal, *args, **kwargs)
                 # Inside the try so an over-cap response is audited as a refusal
                 # rather than logged as a success it never was.
@@ -142,7 +157,10 @@ def mcp_tool(
         wrapper.__signature__ = signature.replace(parameters=params[1:])  # type: ignore[attr-defined]
 
         mcp.add_tool(wrapper, name=name, description=inspect.getdoc(fn))
-        return fn
+        # Return the wrapper, not the bare fn: if a tool is ever called by
+        # name from Python, it must not silently skip authentication, the
+        # scope gate, the write throttle, the audit event and the size cap.
+        return wrapper
 
     return decorator
 
@@ -151,7 +169,7 @@ async def run_db(fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     """Run a synchronous ORM/service call from an async tool.
 
     Uses channels' ``database_sync_to_async`` rather than a bare
-    ``sync_to_async``: it calls ``close_old_connections()` around the call,
+    ``sync_to_async``: it calls ``close_old_connections()`` around the call,
     which is what recycles a connection broken by a Postgres restart, failover,
     or server-side idle timeout.
 
@@ -176,28 +194,40 @@ def resolve_workspace(principal: Principal) -> Team:
     A workspace-pinned token wins outright. Legacy tokens predating workspace
     scoping (``team IS NULL``) fall back to the user's default workspace, which
     keeps them working while the operator rotates them.
+
+    Guest members are refused here, whatever the tool: the REST API 403s
+    guests on every internal read before ``can()`` runs (``_is_guest_member``),
+    because the READ_MEMBER role tier includes guest. Every MCP tool is an
+    internal surface, and this is the one choke point they all pass through —
+    without it, a member demoted to guest whose token was never revoked would
+    keep full read of the private workspace over MCP alone.
     """
     from sbomify.apps.core.models import User
     from sbomify.apps.teams.models import Member
     from sbomify.apps.teams.utils import get_user_default_team
 
-    if principal.token.team is not None:
-        return principal.token.team
-
     user = cast("User", principal.user)
-    team_id = get_user_default_team(user)
-    if team_id is not None:
-        membership = Member.objects.filter(user=user, team_id=team_id).select_related("team").first()
-        if membership is not None:
-            return membership.team
+    team: Team | None = principal.token.team
 
-    # Ordered so the fallback is deterministic: this resolves per tool call,
-    # and an unordered .first() could hand consecutive calls in one agent
-    # session different workspaces.
-    membership = Member.objects.filter(user=user).select_related("team").order_by("pk").first()
-    if membership is None:
-        raise ToolError("This token is not associated with any workspace.")
-    return membership.team
+    if team is None:
+        team_id = get_user_default_team(user)
+        if team_id is not None:
+            membership = Member.objects.filter(user=user, team_id=team_id).select_related("team").first()
+            if membership is not None:
+                team = membership.team
+
+    if team is None:
+        # Ordered so the fallback is deterministic: this resolves per tool call,
+        # and an unordered .first() could hand consecutive calls in one agent
+        # session different workspaces.
+        membership = Member.objects.filter(user=user).select_related("team").order_by("pk").first()
+        if membership is None:
+            raise ToolError("This token is not associated with any workspace.")
+        team = membership.team
+
+    if Member.objects.filter(user=user, team=team, role="guest").exists():
+        raise ToolError("Guest members can only access public pages; this token's workspace role is guest.")
+    return team
 
 
 def workspace_key(team: Team) -> str:
@@ -209,6 +239,22 @@ def workspace_key(team: Team) -> str:
     if not team.key:
         raise ToolError(f"Workspace {team.pk} has no key; this workspace is not usable over the API.")
     return team.key
+
+
+def unwrap_view(result: tuple[int, Any], *, action: str) -> dict[str, Any]:
+    """Turn a delegated ninja view's ``(status, payload)`` into a dict or a ``ToolError``.
+
+    The view's own message is preserved: it is far more specific than anything
+    this layer could synthesise (which schema failed, which duplicate was hit).
+    Schema payloads are flattened to dicts so callers never re-check the type.
+    """
+    status, payload = result
+    if hasattr(payload, "dict"):  # a ninja Schema
+        payload = payload.dict()
+    if status >= 400:
+        detail = payload.get("detail") if isinstance(payload, dict) else str(payload)
+        raise ToolError(f"{action} failed ({status}): {detail}")
+    return payload if isinstance(payload, dict) else {"result": payload}
 
 
 def not_found(kind: str, identifier: str) -> ToolError:

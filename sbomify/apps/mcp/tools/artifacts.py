@@ -106,11 +106,37 @@ def _extract_packages(payload: dict[str, Any], sbom_format: str) -> list[dict[st
                     "licenses": [untrusted(lic, limit=256) for lic in licenses if isinstance(lic, str)],
                 }
             )
+    elif isinstance(payload.get("@graph"), list):
+        # SPDX 3.0: packages are software_Package elements in the graph
+        # (mirrors sboms.schemas.SPDX3Package, minus its strict validation —
+        # a stored artifact must degrade per element, not fail whole).
+        for entry in payload["@graph"]:
+            if not isinstance(entry, dict) or entry.get("type") != "software_Package":
+                continue
+            purl = None
+            for ext in entry.get("externalIdentifiers", []) or []:
+                if isinstance(ext, dict) and ext.get("externalIdentifierType") in ("purl", "packageURL"):
+                    purl = ext.get("identifier")
+                    break
+            packages.append(
+                {
+                    "name": _field(entry, "name"),
+                    "version": _field(entry, "software_packageVersion"),
+                    "purl": untrusted(purl, limit=512) if isinstance(purl, str) else None,
+                    # SPDX 3.0 carries licensing via relationships, not package
+                    # fields; omitted rather than guessed.
+                    "licenses": [],
+                }
+            )
     else:
         for entry in payload.get("packages", []) or []:
             if not isinstance(entry, dict):
                 continue
-            declared = entry.get("licenseDeclared") or entry.get("licenseConcluded")
+            # Prefer licenseDeclared, but NOASSERTION carries no information —
+            # fall through to licenseConcluded, matching SPDXPackage.license.
+            declared = entry.get("licenseDeclared")
+            if not isinstance(declared, str) or not declared or declared == "NOASSERTION":
+                declared = entry.get("licenseConcluded")
             purl = None
             for ref in entry.get("externalRefs", []) or []:
                 if isinstance(ref, dict) and ref.get("referenceType") == "purl":
@@ -223,6 +249,12 @@ def register_tools(mcp: FastMCP) -> None:
             except json.JSONDecodeError as exc:
                 raise ToolError(f"SBOM {sbom_id} is not valid JSON: {exc}") from exc
 
+            if not isinstance(payload, dict):
+                # A stored artifact whose top level is a list/string/null —
+                # reachable via the non-validating upload paths. Without this,
+                # payload.get below raises and the agent sees an opaque error.
+                raise ToolError(f"SBOM {sbom_id} is not a JSON object; cannot list its packages.")
+
             packages = _extract_packages(payload, obj.format)
             if name_filter:
                 needle = name_filter.casefold()
@@ -283,22 +315,24 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.plugins.sdk.enums import AssessmentCategory
 
             _get_sbom(principal, sbom_id)
+            # Latest per plugin resolved in the database (DISTINCT ON), like
+            # every dashboard consumer — materializing the full history would
+            # de-TOAST each superseded run's result blob only to discard it.
+            # `result` itself is never read, so it stays deferred.
             runs = (
                 AssessmentRun.objects.filter(sbom_id=sbom_id)
                 .exclude(category=AssessmentCategory.SECURITY.value)
-                .order_by("plugin_name", "-created_at")
+                .order_by("plugin_name", "-created_at", "-id")
+                .distinct("plugin_name")
+                .defer("result")
             )
-
-            latest: dict[str, Any] = {}
-            for run in runs:
-                latest.setdefault(run.plugin_name, run)
 
             return {
                 "sbom_id": sbom_id,
                 "assessments": [
                     serializers.compact(
                         {
-                            "plugin": name,
+                            "plugin": run.plugin_name,
                             "category": run.category,
                             "status": run.status,
                             "skipped": run.result_skipped,
@@ -313,7 +347,7 @@ def register_tools(mcp: FastMCP) -> None:
                             "error": untrusted(run.error_message, limit=2000),
                         }
                     )
-                    for name, run in latest.items()
+                    for run in runs
                 ],
             }
 
