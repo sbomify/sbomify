@@ -16,8 +16,9 @@ never be approved can stop a real workspace from getting its certificate.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
-from django.core.cache import cache
 
 from sbomify.apps.core.utils import number_to_random_token
 from sbomify.apps.teams.models import Team
@@ -103,15 +104,27 @@ class TestTheTwoDirectionsExpireDifferently:
 
         assert ON_DEMAND_TLS_DENY_CACHE_SECONDS < ON_DEMAND_TLS_ALLOW_CACHE_SECONDS
 
-    def test_a_new_workspace_is_seen_once_the_denial_lapses(self, client) -> None:
-        """Backed off, not blocked. Creating the workspace after a probe must
-        not lock it out of certificates indefinitely."""
+    def test_adding_the_domain_clears_the_denial(self, client) -> None:
+        """The case the manual cache.clear() in the first version of this test
+        was hiding. A customer points DNS at us before adding the domain — the
+        normal order, since propagation is slow — so the hostname is probed and
+        denied first. Configuring it has to take effect immediately, not after
+        the deny window lapses with Caddy's own backoff on top."""
         assert client.get(ASK.format("app.example.com")).status_code == 404
 
         _business_team_with_domain("app.example.com")
-        cache.clear()  # stands in for the deny entry expiring
 
         assert client.get(ASK.format("app.example.com")).status_code == 200
+
+    def test_removing_the_domain_clears_the_approval(self, client) -> None:
+        """The mirror case, which runs longer: an approval outlives a denial."""
+        team = _business_team_with_domain("app.example.com")
+        assert client.get(ASK.format("app.example.com")).status_code == 200
+
+        team.custom_domain = None
+        team.save()
+
+        assert client.get(ASK.format("app.example.com")).status_code == 404
 
 
 @pytest.mark.django_db
@@ -129,3 +142,54 @@ class TestHostileInput:
         response = client.get(ASK.format("a" * 500 + ".example.com"))
 
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestTheAskHasItsOwnBudget:
+    """The cache cannot help with this on its own.
+
+    django-ninja charges throttles in ``Operation._run_checks()`` before the
+    view runs, so a cache inside the view cannot stop the budget being spent.
+    Sharing the anonymous bucket meant a client probing hostnames could exhaust
+    it and take the Trust Center pages and the OIDC exchange down with it —
+    while any throttled ask is a certificate Caddy then refuses to issue.
+    """
+
+    def test_the_endpoint_declares_its_own_throttle(self) -> None:
+        from sbomify.apps.access_tokens.throttling import AnonymousIPRateThrottle, OnDemandTLSRateThrottle
+        from sbomify.apps.teams.apis import internal_router
+
+        operation = next(
+            op
+            for _path, view in internal_router.path_operations.items()
+            for op in view.operations
+            if "domains" in _path
+        )
+        throttles = list(operation.throttle_objects)
+
+        assert any(isinstance(t, OnDemandTLSRateThrottle) for t in throttles)
+        # A per-operation throttle replaces the global list, so the shared
+        # anonymous limiter must not be among them or the split does nothing.
+        assert not any(type(t) is AnonymousIPRateThrottle for t in throttles)
+
+    def test_its_window_is_separate_from_the_anonymous_one(self) -> None:
+        """Same key derivation, different prefix — without that they would read
+        and write the same counter and the split would be cosmetic."""
+        from sbomify.apps.access_tokens.throttling import AnonymousIPRateThrottle, OnDemandTLSRateThrottle
+
+        assert OnDemandTLSRateThrottle.cache_key_prefix != AnonymousIPRateThrottle.cache_key_prefix
+
+
+@pytest.mark.django_db
+class TestTheRequestIsStillAttributable:
+    def test_a_cache_hit_is_still_logged_with_its_source(self, client) -> None:
+        """Logging behind the cache left support with no line at all for the
+        handshake that failed, and no address to attribute a prober to."""
+        from sbomify.apps.teams import apis as teams_apis
+
+        client.get(ASK.format("nobody.example.com"))  # warm
+
+        with patch.object(teams_apis.logger, "debug") as debug:
+            client.get(ASK.format("nobody.example.com"))
+
+        assert any("On-demand TLS check" in call.args[0] for call in debug.call_args_list)

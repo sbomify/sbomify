@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import re
 import uuid
 from collections.abc import Sequence
@@ -18,6 +17,7 @@ from ninja.security import django_auth
 from pydantic import BaseModel
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
+from sbomify.apps.access_tokens.throttling import OnDemandTLSRateThrottle
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
@@ -55,6 +55,7 @@ from sbomify.apps.teams.services.suppliers import (
     list_suppliers,
     update_supplier,
 )
+from sbomify.apps.teams.utils import on_demand_tls_cache_key
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -1345,7 +1346,16 @@ ON_DEMAND_TLS_ALLOW_CACHE_SECONDS = 300
 ON_DEMAND_TLS_DENY_CACHE_SECONDS = 60
 
 
-@internal_router.get("/domains", response={200: None, 404: None})
+@internal_router.get(
+    "/domains",
+    response={200: None, 404: None},
+    throttle=[OnDemandTLSRateThrottle()],
+    # A per-operation throttle replaces the global list rather than adding to
+    # it, so naming this one is what takes the ask out of the shared anonymous
+    # budget. Declared here rather than relying on the cache below, because
+    # ninja charges throttles in Operation._run_checks() before the view runs —
+    # a cache inside the view cannot stop the budget being spent.
+)
 def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
     """
     Check if a domain is allowed for on-demand TLS certificate provisioning.
@@ -1393,16 +1403,22 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
         logger.warning(f"On-demand TLS denied: failed to parse domain '{domain}': {e}")
         return 404, None
 
-    # Answered from cache before the query and before the log line: a hostname
-    # being probed in a loop is the case this endpoint sees most, and repeating
-    # the lookup and the warning for every handshake is what made it the
-    # single loudest source of traffic and log volume in production.
-    cache_key = _on_demand_tls_cache_key(domain_normalized)
+    # Logged before the cache is consulted. Moving it behind the lookup removed
+    # the only record of who asked: support tracing "my certificate never
+    # issued" would find the failing handshake answered from cache with no line
+    # for it at all, and an abusive prober could no longer be attributed to an
+    # address. Debug rather than info, so the volume this endpoint sees stays
+    # out of the default stream while remaining recoverable.
+    logger.debug(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
+
+    # Answered from cache before the query: a hostname being probed in a loop is
+    # the case this endpoint sees most, and repeating the lookup and the denial
+    # warning for every handshake is what made it the single loudest source of
+    # traffic and log volume in production.
+    cache_key = on_demand_tls_cache_key(domain_normalized)
     cached = cache.get(cache_key)
     if cached is not None:
         return (200, None) if cached else (404, None)
-
-    logger.info(f"On-demand TLS check: domain={domain} from {request.META.get('REMOTE_ADDR')}")
 
     status = _resolve_on_demand_tls(domain_normalized)
     cache.set(
@@ -1411,16 +1427,6 @@ def check_domain_allowed(request: HttpRequest, domain: str) -> tuple[int, Any]:
         timeout=(ON_DEMAND_TLS_ALLOW_CACHE_SECONDS if status == 200 else ON_DEMAND_TLS_DENY_CACHE_SECONDS),
     )
     return status, None
-
-
-def _on_demand_tls_cache_key(domain_normalized: str) -> str:
-    """Cache key for an on-demand TLS decision.
-
-    The hostname is hashed rather than interpolated: it is attacker-controlled,
-    and memcached rejects keys containing spaces or control characters, so a
-    probe crafted around that would otherwise raise instead of being denied.
-    """
-    return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
 
 
 def _resolve_on_demand_tls(domain_normalized: str) -> int:
