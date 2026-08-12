@@ -229,3 +229,31 @@ async def test_page_size_is_clamped(make_token, product_in_bound_workspace):
         )
 
         assert structured(response)["page_size"] == 100
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_throttled_tools_list_is_an_error_not_an_empty_catalogue(make_token, monkeypatch):
+    """Clients cache the handshake's tool list, so a transient rate limit must
+    surface as a retryable error — an empty list would read as "this server has
+    no tools" and stick for the rest of the session."""
+    from sbomify.apps.access_tokens.throttling import AccessTokenRateThrottle
+
+    token = await sync_to_async(make_token)(None)
+    monkeypatch.setattr(AccessTokenRateThrottle, "allow_request", lambda self, request: False)
+
+    async with mcp_http() as client:
+        response = await call(client, "tools/list", token=token.encoded_token)
+
+    payload = parse(response)
+    assert "error" in payload, payload
+    assert "tools" not in json.dumps(payload.get("result", {}))
+
+
+def test_transport_body_cap_clears_the_upload_limit():
+    """The SDK's default transport cap is 4 MiB — smaller than the artifact
+    limit, which would reject a container SBOM before enforce_upload_size ever
+    saw it and turn MCP_MAX_UPLOAD_BYTES into dead configuration."""
+    from sbomify.apps.mcp.limits import MAX_UPLOAD_BYTES
+
+    assert mcp.settings.max_request_body_size >= 2 * MAX_UPLOAD_BYTES

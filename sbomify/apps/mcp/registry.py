@@ -31,9 +31,19 @@ class ToolSpec:
     action: str
     """The ``can()`` action this tool needs, e.g. ``"sbom:read"``."""
 
+    also_requires: tuple[str, ...] = ()
+    """Extra actions the delegated view checks besides ``action``. A token must
+    hold every one for the tool to be advertised or invoked — otherwise the
+    registry would advertise a tool the view is certain to refuse (the VEX
+    upload view gates on ``artifact:publish`` before ``artifact:publish_vex``)."""
+
     writes: bool = False
     """Whether the tool mutates state. Drives the stricter write throttle, and
     lets tests assert that the read-only preset exposes nothing that writes."""
+
+    @property
+    def actions(self) -> tuple[str, ...]:
+        return (self.action, *self.also_requires)
 
 
 _REGISTRY: dict[str, ToolSpec] = {}
@@ -47,16 +57,17 @@ FORBIDDEN_ACTIONS: frozenset[str] = frozenset(
 )
 
 
-def register(name: str, action: str, *, writes: bool = False) -> ToolSpec:
-    """Record that ``name`` requires ``action``. Returns the stored spec."""
+def register(name: str, action: str, *, also_requires: tuple[str, ...] = (), writes: bool = False) -> ToolSpec:
+    """Record that ``name`` requires ``action`` (and ``also_requires``). Returns the stored spec."""
     if name in _REGISTRY:
         raise ValueError(f"MCP tool {name!r} is already registered")
-    if action in FORBIDDEN_ACTIONS:
-        raise ValueError(
-            f"MCP tool {name!r} requires {action!r}, which is not exposable over MCP. "
-            "Destructive and administrative actions are deliberately absent from the tool surface."
-        )
-    spec = ToolSpec(name=name, action=action, writes=writes)
+    spec = ToolSpec(name=name, action=action, also_requires=also_requires, writes=writes)
+    for required in spec.actions:
+        if required in FORBIDDEN_ACTIONS:
+            raise ValueError(
+                f"MCP tool {name!r} requires {required!r}, which is not exposable over MCP. "
+                "Destructive and administrative actions are deliberately absent from the tool surface."
+            )
     _REGISTRY[name] = spec
     return spec
 
@@ -76,7 +87,11 @@ def validate() -> None:
     action rename in ``authz`` that misses a tool breaks the build rather than
     turning that tool into a permanent 403.
     """
-    unknown = {spec.name: spec.action for spec in _REGISTRY.values() if spec.action not in ALL_ACTIONS}
+    unknown = {
+        spec.name: [action for action in spec.actions if action not in ALL_ACTIONS]
+        for spec in _REGISTRY.values()
+        if any(action not in ALL_ACTIONS for action in spec.actions)
+    }
     if unknown:
         raise ValueError(f"MCP tools declare actions unknown to can(): {unknown}")
 
@@ -87,6 +102,7 @@ def permitted_by(scopes: list[str] | None) -> set[str]:
     ``None`` means an unscoped (legacy, full-capability) token, which permits
     every tool. Delegates to ``authz.scope_permits`` rather than
     re-implementing the ``<resource>:*`` wildcard grammar, so the two can't
-    drift.
+    drift. A tool with several required actions is permitted only when the
+    token grants all of them — matching what its delegated view will enforce.
     """
-    return {spec.name for spec in _REGISTRY.values() if scope_permits(scopes, spec.action)}
+    return {spec.name for spec in _REGISTRY.values() if all(scope_permits(scopes, action) for action in spec.actions)}

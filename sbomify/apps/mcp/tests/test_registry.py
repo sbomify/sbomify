@@ -93,7 +93,6 @@ def test_resource_wildcard_scope():
         ("release:read", "get_release_risk_report"),
         ("document:read", "list_documents"),
         ("artifact:publish", "upload_sbom"),
-        ("artifact:publish_vex", "upload_vex"),
         ("release:create", "create_release"),
         ("release:tag", "tag_artifact_to_release"),
     ],
@@ -103,6 +102,14 @@ def test_single_scope_grants_exactly_its_tools(scope, tool):
 
     assert tool in allowed
     assert all(registry.get(name).action == scope for name in allowed)
+
+
+def test_upload_vex_needs_both_publish_scopes():
+    """The VEX view checks artifact:publish before artifact:publish_vex, so a
+    publish_vex-only token must not be advertised a tool the view will 403."""
+    assert "upload_vex" not in registry.permitted_by(["artifact:publish_vex"])
+    assert "upload_vex" not in registry.permitted_by(["artifact:publish"])
+    assert "upload_vex" in registry.permitted_by(["artifact:publish", "artifact:publish_vex"])
 
 
 def test_duplicate_registration_is_rejected():

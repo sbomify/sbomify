@@ -89,7 +89,15 @@ def register_tools(mcp: FastMCP) -> None:
 
             team = resolve_workspace(principal)
             require(principal, "workspace:read", team)
-            profiles = ContactProfile.objects.filter(team=team).prefetch_related("entities__contacts").order_by("name")
+            # is_component_private=False like the REST list view: private
+            # profiles are per-component bookkeeping rows, and the assignment
+            # view refuses them — listing them here would advertise profiles
+            # that assign_contact_profile is certain to 404 on.
+            profiles = (
+                ContactProfile.objects.filter(team=team, is_component_private=False)
+                .prefetch_related("entities__contacts")
+                .order_by("name")
+            )
 
             from sbomify.apps.teams.apis import serialize_contact_profile
 
@@ -111,7 +119,9 @@ def register_tools(mcp: FastMCP) -> None:
             team = resolve_workspace(principal)
             require(principal, "workspace:read", team)
             profile = (
-                ContactProfile.objects.filter(pk=profile_id, team=team).prefetch_related("entities__contacts").first()
+                ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False)
+                .prefetch_related("entities__contacts")
+                .first()
             )
             if profile is None:
                 raise not_found("contact profile", profile_id)
@@ -201,7 +211,7 @@ def register_tools(mcp: FastMCP) -> None:
             from sbomify.apps.teams.schemas import ContactProfileUpdateSchema
 
             team = resolve_workspace(principal)
-            if not ContactProfile.objects.filter(pk=profile_id, team=team).exists():
+            if not ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False).exists():
                 raise not_found("contact profile", profile_id)
 
             fields: dict[str, Any] = {}
@@ -239,7 +249,7 @@ def register_tools(mcp: FastMCP) -> None:
             # which is what patch_component_metadata checks; requiring
             # component:read_internal on top would refuse a correctly scoped token.
             component = _lookup_component(principal, component_id)
-            if not ContactProfile.objects.filter(pk=profile_id, team=team).exists():
+            if not ContactProfile.objects.filter(pk=profile_id, team=team, is_component_private=False).exists():
                 raise not_found("contact profile", profile_id)
 
             payload = ComponentMetaDataPatch(contact_profile_id=profile_id)

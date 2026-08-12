@@ -252,3 +252,201 @@ async def test_upload_sbom_rejects_an_unknown_format(make_token, component_in_bo
         )
 
     assert "Unsupported sbom_format" in json.dumps(parse(response))
+
+
+MINIMAL_SPDX = {
+    "spdxVersion": "SPDX-2.3",
+    "dataLicense": "CC0-1.0",
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "name": "widget",
+    "documentNamespace": "https://example.com/widget-1.2.3",
+    "creationInfo": {"created": "2026-01-01T00:00:00Z", "creators": ["Tool: test"]},
+    "packages": [
+        {
+            "name": "widget",
+            "SPDXID": "SPDXRef-Package-widget",
+            "versionInfo": "1.2.3",
+            "downloadLocation": "NOASSERTION",
+        }
+    ],
+}
+
+MINIMAL_VEX = {
+    "bomFormat": "CycloneDX",
+    "specVersion": "1.6",
+    "version": 1,
+    "vulnerabilities": [
+        {
+            "id": "CVE-2025-0001",
+            "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+            "affects": [{"ref": "pkg:pypi/widget@1.2.3"}],
+        }
+    ],
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_upload_sbom_spdx_goes_through_the_real_view(make_token, component_in_bound_workspace, monkeypatch):
+    """The SPDX branch delegates to a different view than CycloneDX; call it."""
+    from sbomify.apps.core import object_store
+    from sbomify.apps.sboms.models import SBOM
+
+    monkeypatch.setattr(object_store.S3Client, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+
+    token = await sync_to_async(make_token)(["artifact:publish"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "upload_sbom",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(MINIMAL_SPDX),
+                "sbom_format": "spdx",
+            },
+        )
+
+    assert "id" in structured(response)
+    stored = await sync_to_async(list)(SBOM.objects.filter(component=component_in_bound_workspace))
+    assert len(stored) == 1
+    assert stored[0].format == "spdx"
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_upload_vex_stores_a_vex_artifact(make_token, component_in_bound_workspace, monkeypatch):
+    from sbomify.apps.core import object_store
+    from sbomify.apps.sboms.models import SBOM
+
+    monkeypatch.setattr(object_store.S3Client, "upload_sbom", lambda self, data: "stub-key.json", raising=False)
+
+    token = await sync_to_async(make_token)(["artifact:publish", "artifact:publish_vex"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "upload_vex",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(MINIMAL_VEX),
+            },
+        )
+
+    assert "id" in structured(response)
+    stored = await sync_to_async(list)(SBOM.objects.filter(component=component_in_bound_workspace))
+    assert len(stored) == 1
+    assert stored[0].bom_type == SBOM.BomType.VEX.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_upload_vex_is_refused_before_the_view_for_a_publish_vex_only_token(
+    make_token, component_in_bound_workspace
+):
+    """Regression: the tool was advertised on publish_vex alone, but the view
+    checks artifact:publish first — the call was certain to 403."""
+    token = await sync_to_async(make_token)(["artifact:publish_vex"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "upload_vex",
+            {
+                "component_id": component_in_bound_workspace.id,
+                "content": json.dumps(MINIMAL_VEX),
+            },
+        )
+
+    assert "token scope does not grant" in json.dumps(parse(response))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_tag_artifact_attaches_an_sbom_to_a_release(make_token, product_in_bound_workspace):
+    from sbomify.apps.core.models import Component, Release, ReleaseArtifact
+    from sbomify.apps.sboms.models import SBOM
+
+    def build_rows():
+        component = Component.objects.create(name="tag-target", team=product_in_bound_workspace.team)
+        component.products.add(product_in_bound_workspace)
+        sbom = SBOM.objects.create(
+            name="tag-target",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="tag-target.json",
+            component=component,
+        )
+        release = Release.objects.create(product=product_in_bound_workspace, name="v9")
+        return sbom, release
+
+    sbom, release = await sync_to_async(build_rows)()
+    token = await sync_to_async(make_token)(["release:tag"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "tag_artifact_to_release",
+            {"release_id": release.id, "sbom_id": sbom.id},
+        )
+
+    structured(response)
+    exists = await sync_to_async(ReleaseArtifact.objects.filter(release=release, sbom=sbom).exists)()
+    assert exists
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_tag_artifact_names_an_unknown_sbom_id(make_token, product_in_bound_workspace):
+    """Regression: the view answers an unknown id with a generic 400 that reads
+    like a server fault; the tool must give the uniform not-found instead."""
+    from sbomify.apps.core.models import Release
+
+    release = await sync_to_async(Release.objects.create)(product=product_in_bound_workspace, name="v10")
+    token = await sync_to_async(make_token)(["release:tag"])
+
+    async with mcp_http() as client:
+        response = await call_tool(
+            client,
+            token,
+            "tag_artifact_to_release",
+            {"release_id": release.id, "sbom_id": "doesnotexist"},
+        )
+
+    assert "No SBOM found" in json.dumps(parse(response))
+
+
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_component_private_profiles_are_hidden_and_unassignable(
+    make_token, component_in_bound_workspace, mcp_owner
+):
+    """A private profile is per-component bookkeeping the assignment view
+    refuses; listing it would advertise a guaranteed 404."""
+    from sbomify.apps.teams.models import ContactProfile
+
+    _, bound, _ = mcp_owner
+    private = await sync_to_async(ContactProfile.objects.create)(
+        name="[Private] tag-target", team=bound, is_component_private=True
+    )
+    token = await sync_to_async(make_token)(
+        ["workspace:read", "workspace:manage", "component:manage", "component:read_internal"]
+    )
+
+    async with mcp_http() as client:
+        listed = await call_tool(client, token, "list_contact_profiles", {})
+        assigned = await call_tool(
+            client,
+            token,
+            "assign_contact_profile",
+            {"component_id": component_in_bound_workspace.id, "profile_id": private.id},
+        )
+
+    names = [p["name"] for p in structured(listed).get("profiles", [])]
+    assert "[Private] tag-target" not in names
+    assert "No contact profile found" in json.dumps(parse(assigned))

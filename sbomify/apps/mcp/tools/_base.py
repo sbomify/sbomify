@@ -61,6 +61,7 @@ def mcp_tool(
     name: str,
     action: str,
     *,
+    also_requires: tuple[str, ...] = (),
     writes: bool = False,
 ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
     """Register ``fn`` as an MCP tool requiring ``action``.
@@ -87,7 +88,7 @@ def mcp_tool(
         if not params or params[0].name != "principal":
             raise TypeError(f"MCP tool {name!r} must take 'principal' as its first parameter")
 
-        registry.register(name, action, writes=writes)
+        spec = registry.register(name, action, also_requires=also_requires, writes=writes)
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -106,8 +107,9 @@ def mcp_tool(
             # would otherwise be advisory for those tools. This makes it binding:
             # a read-only token is refused at the door, whatever the wrapped view
             # would have done.
-            if not scope_permits(principal.scopes, action):
-                raise MCPAuthError(f"Not permitted ({action}): token scope does not grant {action!r}")
+            for required in spec.actions:
+                if not scope_permits(principal.scopes, required):
+                    raise MCPAuthError(f"Not permitted ({required}): token scope does not grant {required!r}")
 
             if writes:
                 await throttle_write(principal, tool=name)
@@ -189,7 +191,10 @@ def resolve_workspace(principal: Principal) -> Team:
         if membership is not None:
             return membership.team
 
-    membership = Member.objects.filter(user=user).select_related("team").first()
+    # Ordered so the fallback is deterministic: this resolves per tool call,
+    # and an unordered .first() could hand consecutive calls in one agent
+    # session different workspaces.
+    membership = Member.objects.filter(user=user).select_related("team").order_by("pk").first()
     if membership is None:
         raise ToolError("This token is not associated with any workspace.")
     return membership.team

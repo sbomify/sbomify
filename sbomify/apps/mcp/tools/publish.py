@@ -28,7 +28,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 
 from ..auth import Principal
 from ..limits import enforce_upload_size
-from ._base import mcp_tool, run_db
+from ._base import mcp_tool, not_found, run_db
 from .catalog import _lookup_component, _lookup_product, _lookup_release
 
 if TYPE_CHECKING:
@@ -118,7 +118,11 @@ def register_tools(mcp: FastMCP) -> None:
 
         return await run_db(call)
 
-    @mcp_tool(mcp, "upload_vex", "artifact:publish_vex", writes=True)
+    # also_requires artifact:publish: the view checks it before publish_vex
+    # (and the CycloneDX-JSON branch delegates into the SBOM upload view, which
+    # checks it too), so a publish_vex-only token would be advertised a tool
+    # that is certain to 403.
+    @mcp_tool(mcp, "upload_vex", "artifact:publish_vex", also_requires=("artifact:publish",), writes=True)
     async def upload_vex(principal: Principal, component_id: str, content: str) -> dict[str, Any]:
         """Upload a CycloneDX VEX document to a component.
 
@@ -189,6 +193,8 @@ def register_tools(mcp: FastMCP) -> None:
         def call() -> dict[str, Any]:
             from sbomify.apps.core import apis
             from sbomify.apps.core.schemas import ReleaseArtifactCreateSchema
+            from sbomify.apps.documents.models import Document
+            from sbomify.apps.sboms.models import SBOM
 
             if bool(sbom_id) == bool(document_id):
                 raise ToolError("Pass exactly one of sbom_id or document_id.")
@@ -196,7 +202,18 @@ def register_tools(mcp: FastMCP) -> None:
             # Workspace-scoped lookup only. This tool is declared release:tag,
             # which is what add_artifacts_to_release checks; requiring
             # release:read on top would refuse a token scoped to just release:tag.
-            _lookup_release(principal, release_id)
+            release_obj = _lookup_release(principal, release_id)
+
+            # Resolve the artifact id here too: the view answers an unknown one
+            # with a generic 400 ("Error processing SBOM") that reads like a
+            # server fault and invites retries. Same uniform not-found as every
+            # other tool, whether the id is misspelled or from another workspace.
+            team_id = release_obj.product.team_id
+            if sbom_id and not SBOM.objects.filter(pk=sbom_id, component__team_id=team_id).exists():
+                raise not_found("SBOM", sbom_id)
+            if document_id and not Document.objects.filter(pk=document_id, component__team_id=team_id).exists():
+                raise not_found("document", document_id)
+
             payload = ReleaseArtifactCreateSchema(sbom_id=sbom_id, document_id=document_id)
             return _unwrap(
                 apis.add_artifacts_to_release(principal.request, release_id, payload),

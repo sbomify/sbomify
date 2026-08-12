@@ -26,7 +26,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Tool as MCPTool
 
 from . import registry
-from .auth import authenticate
+from .auth import MCPAuthError, MCPRateLimitedError, authenticate
+from .limits import MAX_UPLOAD_BYTES
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
@@ -89,11 +90,20 @@ class ScopedFastMCP(FastMCP):
 
         try:
             principal = await authenticate(request, attempted_action="tools/list")
-        except Exception:
+        except MCPRateLimitedError:
+            # The credential is fine, the caller is just over budget. This must
+            # NOT read as an empty catalogue: clients cache the handshake's tool
+            # list, so a transient throttle would permanently convince the agent
+            # this server exposes nothing. An error is retryable; [] is final.
+            raise
+        except MCPAuthError:
             # No usable token: advertise nothing. Every tool would refuse the
             # call anyway, and an empty list is an unambiguous signal to a
             # misconfigured client that its credential is the problem — more
             # useful than a full catalogue whose every entry fails.
+            # Only credential failures take this branch — anything unexpected
+            # (the database down, say) propagates as an error for the same
+            # reason the throttle does.
             return []
 
         allowed = registry.permitted_by(principal.scopes)
@@ -166,6 +176,13 @@ mcp: FastMCP = ScopedFastMCP(
     json_response=True,
     streamable_http_path=MCP_PATH_PREFIX,
     transport_security=_transport_security(),
+    # The SDK's transport-level cap defaults to 4 MiB, which would reject an
+    # upload_sbom call long before limits.MAX_UPLOAD_BYTES ever applied —
+    # container SBOMs routinely exceed it. Doubled because the artifact
+    # travels as an escaped string inside the JSON-RPC envelope, which can
+    # inflate it well past its byte size; the precise cap on the decoded
+    # artifact is still enforce_upload_size's.
+    max_request_body_size=2 * MAX_UPLOAD_BYTES,
 )
 
 

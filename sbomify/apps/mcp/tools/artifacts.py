@@ -198,6 +198,8 @@ def register_tools(mcp: FastMCP) -> None:
         """
 
         def query() -> dict[str, Any]:
+            from botocore.exceptions import BotoCoreError, ClientError
+
             from sbomify.apps.sboms.utils import SBOMDataError, get_sbom_data_bytes
 
             obj = _get_sbom(principal, sbom_id)
@@ -210,6 +212,14 @@ def register_tools(mcp: FastMCP) -> None:
                 payload = json.loads(raw)
             except SBOMDataError as exc:
                 raise ToolError(f"Could not read SBOM {sbom_id}: {exc}") from exc
+            except (ClientError, BotoCoreError) as exc:
+                # get_sbom_data_bytes wraps most failure modes in SBOMDataError,
+                # but the S3 fetch itself re-raises botocore errors. Without
+                # this they hit the wrapper's generic handler, which audits with
+                # no detail — the agent would see an opaque internal error for
+                # what is a retryable storage fault. Message kept generic: a
+                # botocore message can carry bucket names and key paths.
+                raise ToolError(f"Could not read SBOM {sbom_id}: artifact storage is unavailable.") from exc
             except json.JSONDecodeError as exc:
                 raise ToolError(f"SBOM {sbom_id} is not valid JSON: {exc}") from exc
 
