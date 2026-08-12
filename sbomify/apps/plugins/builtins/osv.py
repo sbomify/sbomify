@@ -39,6 +39,12 @@ logger = getLogger(__name__)
 # warnings cannot emit a megabyte-wide record.
 _STDERR_LOG_LIMIT = 2000
 
+# How much of that budget the head keeps when the output is longer. A panic
+# message, a usage error and an early TLS failure all announce themselves in
+# the first line or two; the tail gets the rest because a scanner that dies
+# part way through has usually said why just before it stopped.
+_STDERR_HEAD_CHARS = 600
+
 
 def _collapse_for_log(text: str) -> str:
     """Fold multi-line captured output into a single log-safe line.
@@ -52,14 +58,20 @@ def _collapse_for_log(text: str) -> str:
 
     — the exit code preserved and the reason for it discarded.
 
-    Truncation keeps the tail rather than the head: a scanner that dies has
-    usually said why in its last few lines, and it is the head that is
-    boilerplate.
+    Truncation keeps both ends. Keeping only the tail was the first attempt,
+    on the reasoning that a scanner says why it died in its last few lines —
+    true for a lockfile or network error, false for the case that matters most:
+    a Go panic puts its message on line one and then ten kilobytes of goroutine
+    stack after it, so a tail-only cut discarded the cause and kept the frames.
+    Since this helper is the only route stderr takes to the logs, whatever it
+    drops is not written anywhere.
     """
     joined = " | ".join(line.strip() for line in (text or "").splitlines() if line.strip())
     if len(joined) <= _STDERR_LOG_LIMIT:
         return joined
-    return f"...{joined[-_STDERR_LOG_LIMIT:]}"
+    head = joined[:_STDERR_HEAD_CHARS]
+    tail = joined[-(_STDERR_LOG_LIMIT - _STDERR_HEAD_CHARS) :]
+    return f"{head} ...[{len(joined) - _STDERR_LOG_LIMIT} chars omitted]... {tail}"
 
 
 class OSVPlugin(AssessmentPlugin):
@@ -198,8 +210,21 @@ class OSVPlugin(AssessmentPlugin):
                 },
             )
 
-        except subprocess.TimeoutExpired:
-            logger.error(f"[OSV] Scanner timed out after {timeout}s for SBOM {sbom_id}")
+        except subprocess.TimeoutExpired as exc:
+            # The exception carries whatever the scanner managed to write before
+            # it was killed, and that is the only account of where it stalled —
+            # the lockfile it was on, a network retry loop, the ecosystem it was
+            # resolving. Discarding it left the same "exit condition preserved,
+            # reason discarded" gap on this path that the non-zero-exit path was
+            # fixed for. Decoded defensively: stderr is bytes when the call was
+            # made without text mode, and a partial read can be invalid UTF-8.
+            raw = exc.stderr
+            partial = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes | bytearray) else (raw or "")
+            detail = _collapse_for_log(partial)
+            logger.error(
+                f"[OSV] Scanner timed out after {timeout}s for SBOM {sbom_id}"
+                + (f": {detail}" if detail else " with no output")
+            )
             return self._create_error_result(f"OSV scanner timed out after {timeout} seconds")
 
         except FileNotFoundError:
