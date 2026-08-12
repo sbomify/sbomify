@@ -18,11 +18,55 @@ from sbomify.logging import getLogger
 
 from .billing_helpers import parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
-from .stripe_client import StripeError, get_stripe_client
+from .stripe_client import StripeError, StripeResourceMissingError, get_stripe_client
 
 logger = getLogger(__name__)
 
 stripe_client = get_stripe_client()
+
+
+def _is_missing_subscription(error: StripeError) -> bool:
+    """Whether Stripe said the subscription id we hold refers to nothing.
+
+    Prefers the typed signal. The substring match behind it is kept because
+    this branch predates the typed error and other paths still surface the
+    condition as a plain ``StripeError`` — dropping it would silently narrow
+    what gets reconciled.
+    """
+    if isinstance(error, StripeResourceMissingError):
+        return True
+    error_str = str(error).lower()
+    return "no such subscription" in error_str or "resource_missing" in error_str
+
+
+def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> None:
+    """Settle a workspace whose stored subscription no longer exists at Stripe.
+
+    Re-reads the row under ``select_for_update`` rather than writing back a
+    copy loaded earlier: callers reach here after a Stripe round trip, and a
+    checkout completing in that window would otherwise be reverted by a stale
+    blob — leaving a paying customer on a dead subscription id.
+
+    Clearing ``stripe_subscription_id`` is also what makes this self-healing.
+    Both sweeps select on that key being present, so a reconciled workspace
+    drops out of them without needing a marker to remember it, and re-appears
+    on its own the moment a new subscription is stored.
+    """
+    from django.db import transaction as db_transaction
+
+    with db_transaction.atomic():
+        locked = Team.objects.select_for_update().get(pk=team.pk)
+        billing_limits = locked.billing_plan_limits or {}
+        billing_limits["subscription_status"] = "canceled"
+        billing_limits.pop("stripe_subscription_id", None)
+        # Also remove customer_id to satisfy valid_billing_relationship constraint
+        billing_limits.pop("stripe_customer_id", None)
+        billing_limits.pop("scheduled_downgrade_plan", None)
+        billing_limits["cancel_at_period_end"] = False
+        billing_limits["last_updated"] = timezone.now().isoformat()
+        locked.billing_plan_limits = billing_limits
+        locked.save()
+    invalidate_subscription_cache(stripe_sub_id or "", team.key or "")
 
 
 def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:
@@ -285,26 +329,10 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         return True  # No update needed, but sync was successful
 
     except StripeError as e:
-        error_str = str(e).lower()
         # Handle deleted subscriptions
-        if "no such subscription" in error_str or "resource_missing" in error_str:
+        if _is_missing_subscription(e):
             logger.info("Subscription no longer exists in Stripe")
-            # Update database to reflect deleted subscription
-            from django.db import transaction as db_transaction
-
-            with db_transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
-                billing_limits = team.billing_plan_limits or {}
-                billing_limits["subscription_status"] = "canceled"
-                billing_limits.pop("stripe_subscription_id", None)
-                # Also remove customer_id to satisfy valid_billing_relationship constraint
-                billing_limits.pop("stripe_customer_id", None)
-                billing_limits.pop("scheduled_downgrade_plan", None)
-                billing_limits["cancel_at_period_end"] = False
-                billing_limits["last_updated"] = timezone.now().isoformat()
-                team.billing_plan_limits = billing_limits
-                team.save()
-            invalidate_subscription_cache(stripe_sub_id, team.key or "")
+            reconcile_missing_subscription(team, stripe_sub_id)
             return True
         else:
             logger.warning(f"Failed to sync subscription: {e}")

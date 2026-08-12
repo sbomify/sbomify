@@ -13,9 +13,14 @@ From staging, the same twelve subscription ids failing on every run:
 Nothing about that answer was ever going to change, so it was a permanent
 daily error line per workspace with no path to resolution.
 
-What a workspace should be entitled to once its subscription has vanished is
-a billing decision. This does not make it — it parks the retry and says so
-once, loudly, leaving the plan untouched.
+``stripe_sync`` already knew how to settle this — mark the subscription
+canceled, drop the dangling ids, invalidate the cache, all under
+``select_for_update`` — but it recognised the condition by matching on the
+error message, so the typed error introduced here reached it as neither
+substring and left the branch unreachable. Wiring the two together settles
+the workspace instead of only silencing the sweep, and clearing
+``stripe_subscription_id`` is what stops both sweeps selecting it, so nothing
+has to remember why it was skipped.
 """
 
 from __future__ import annotations
@@ -109,47 +114,50 @@ class TestTheClientTellsTheCasesApart:
 
 
 @pytest.mark.django_db
-class TestTheSweepStopsAsking:
-    def test_a_missing_subscription_is_marked(self) -> None:
+class TestTheSweepReconciles:
+    def test_the_dangling_reference_is_cleared(self) -> None:
+        """The defect this replaces: parking the workspace silenced the sweep
+        without settling anything, so the dead id stayed on the row and every
+        other code path kept tripping over it."""
         team = _expired_trial_team()
 
         _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
 
         team.refresh_from_db()
-        assert team.billing_plan_limits.get("stripe_subscription_missing_at")
+        assert "stripe_subscription_id" not in team.billing_plan_limits
 
-    def test_a_marked_workspace_is_not_asked_again(self) -> None:
-        """The defect. Without this the same id is re-queried every sweep,
-        forever, for an answer that cannot change."""
+    def test_the_subscription_is_marked_canceled(self) -> None:
+        team = _expired_trial_team()
+
+        _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["subscription_status"] == "canceled"
+
+    def test_it_stops_asking_without_needing_a_marker(self) -> None:
+        """Self-healing rather than remembered: both sweeps select on
+        stripe_subscription_id being present, so clearing it is what takes the
+        workspace out of them. A marker would have had to be cleared by hand."""
         team = _expired_trial_team()
         _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
-        team.refresh_from_db()
 
         second_sweep = MagicMock(side_effect=StripeResourceMissingError("gone"))
         _run_sweep(second_sweep)
 
         second_sweep.assert_not_called()
 
-    def test_the_marker_records_which_id_went_missing(self) -> None:
-        """A bare timestamp cannot say what it was about, which is what makes
-        the re-entry below possible."""
-        team = _expired_trial_team()
-
-        _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
-
-        team.refresh_from_db()
-        assert team.billing_plan_limits["stripe_subscription_missing_id"] == "sub_gone"
-
     def test_a_new_subscription_re_enters_the_sweep(self) -> None:
-        """The footgun in parking by timestamp alone: a workspace given a new
-        subscription would stay parked forever if nobody thought to clear the
-        marker, and the new subscription would never sync."""
+        """And re-enters on its own, because nothing was left behind to
+        suppress it."""
         team = _expired_trial_team()
         _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
 
         team.refresh_from_db()
         limits = team.billing_plan_limits
         limits["stripe_subscription_id"] = "sub_replacement"
+        limits["stripe_customer_id"] = "cus_present"
+        limits["is_trial"] = True
+        limits["subscription_status"] = "trialing"
         team.billing_plan_limits = limits
         team.save()
 
@@ -160,17 +168,26 @@ class TestTheSweepStopsAsking:
 
         get_subscription.assert_called_once_with("sub_replacement")
 
-    def test_the_plan_is_left_alone(self) -> None:
-        """Deliberately not decided here. Downgrading a workspace because a
-        sync task could not find its subscription is a billing decision with
-        real consequences for a real customer, and it belongs to a human."""
+    def test_the_row_is_re_read_under_a_lock(self) -> None:
+        """A checkout completing during the Stripe round trip must not be
+        reverted by the copy the sweep loaded beforehand."""
+        from sbomify.apps.billing import stripe_sync
+
         team = _expired_trial_team()
 
-        _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
+        def _checkout_lands_mid_flight(_subscription_id: str):
+            fresh = Team.objects.get(pk=team.pk)
+            limits = fresh.billing_plan_limits
+            limits["concurrent_write"] = "preserved"
+            fresh.billing_plan_limits = limits
+            fresh.save()
+            raise StripeResourceMissingError("gone")
+
+        assert stripe_sync.reconcile_missing_subscription  # the path under test
+        _run_sweep(MagicMock(side_effect=_checkout_lands_mid_flight))
 
         team.refresh_from_db()
-        assert team.billing_plan == "business"
-        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_gone"
+        assert team.billing_plan_limits.get("concurrent_write") == "preserved"
 
 
 @pytest.mark.django_db

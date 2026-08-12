@@ -225,6 +225,7 @@ def check_stale_trials_task() -> None:
     Stripe webhooks, but this catches cases where webhooks were missed.
     """
     from sbomify.apps.billing.stripe_client import StripeClient, StripeError, StripeResourceMissingError
+    from sbomify.apps.billing.stripe_sync import reconcile_missing_subscription
     from sbomify.apps.teams.models import Team
 
     record_task_breadcrumb("check_stale_trials_task", "start")
@@ -245,18 +246,6 @@ def check_stale_trials_task() -> None:
         limits: dict[str, Any] = team.billing_plan_limits or {}
         # Check if it looks like a trial that should have ended
         if limits.get("is_trial") or limits.get("subscription_status") == "trialing":
-            # Already known to point at nothing. Re-asking produces the same
-            # answer every sweep, which is what turned one broken reference
-            # into a permanent daily error line per team.
-            #
-            # Only skipped while the id is still the one that went missing: a
-            # workspace given a new subscription has to re-enter the sweep even
-            # if nobody cleared the marker, or parking it would quietly become
-            # permanent.
-            if limits.get("stripe_subscription_missing_at") and limits.get(
-                "stripe_subscription_missing_id"
-            ) == limits.get("stripe_subscription_id"):
-                continue
             trial_end = limits.get("trial_end")
             if trial_end and trial_end < now_timestamp:
                 stale_teams.append(team)
@@ -310,31 +299,26 @@ def check_stale_trials_task() -> None:
                 synced_count += 1
 
         except StripeResourceMissingError:
-            # The stored id refers to nothing at Stripe, so every future sweep
-            # would ask again and fail again — 12 teams doing that daily is
-            # what this branch exists to stop. Recorded rather than acted on:
-            # what a workspace should be entitled to once its subscription has
-            # vanished is a billing decision, not something a sync task should
-            # infer, so the marker parks the retry and leaves the plan alone.
-            limits["stripe_subscription_missing_at"] = timezone.now().isoformat()
-            # Recorded alongside the timestamp so the skip can be tied to the id
-            # it was about. If the workspace is later given a new subscription
-            # and nobody thinks to clear the marker, a bare timestamp would keep
-            # it out of the sweep forever and the new subscription would never
-            # sync.
-            limits["stripe_subscription_missing_id"] = subscription_id
-            team.billing_plan_limits = limits
-            team.save(update_fields=["billing_plan_limits"])
-            # Logged once, on the sweep that discovers it, because the marker
-            # above keeps the team out of every sweep after this one.
+            # The stored id refers to nothing at Stripe, and re-asking gets the
+            # same answer on every sweep — which is what made one broken
+            # reference a permanent daily error line per workspace.
             #
-            # The subscription id is deliberately not in the message. It is
-            # stored on the row for whoever reconciles this, and the workspace
-            # key is enough to find that row — putting a billing identifier
-            # into log aggregation buys nothing and CodeQL flags it.
-            logger.error(
-                "Workspace %s references a subscription that does not exist at Stripe; "
-                "parked pending manual reconciliation",
+            # Settled through the same reconciliation the subscription sync
+            # already uses, rather than a marker that only silences this sweep.
+            # It re-reads the row under select_for_update, so a checkout landing
+            # during the Stripe round trip is not reverted by a stale copy, and
+            # it clears stripe_subscription_id — which both sweeps select on, so
+            # the workspace drops out of them without anything having to
+            # remember why, and re-enters on its own once a new subscription is
+            # stored.
+            #
+            # The id is deliberately not in the message: the workspace key
+            # locates the row, and a billing identifier in log aggregation buys
+            # nothing. CodeQL flags it too.
+            reconcile_missing_subscription(team, subscription_id)
+            logger.warning(
+                "Workspace %s referenced a subscription that no longer exists at Stripe; "
+                "marked canceled and cleared the dangling reference",
                 team.key,
             )
             missing_count += 1
