@@ -1,0 +1,149 @@
+"""A 404 from the attestations API has to say what it was looking for.
+
+Over 48 hours of production the GitHub-attestation check succeeded zero times
+out of 78 lookups, across four separate repositories. Every one ended the same
+way: four retries over ~34 minutes, then a run finalised with
+
+    No attestation found yet for this SBOM (digest: sha256:<hex>)
+
+That message cannot be acted on. GitHub returns a bare 404 whether the
+attestation has not been published yet or the repository attests a different
+subject entirely, and the retry ladder only helps with the first. Attesting the
+container image rather than the SBOM, or attesting a copy of the document
+written before a step rewrote it, produces a digest that will never match no
+matter how long we wait — and nothing in the output let an operator tell that
+apart from a slow publish.
+
+The lookup key is the SHA-256 of the SBOM exactly as sbomify stored it. Saying
+so, and saying which repository was searched, is what turns the failure into
+something a user can compare against ``gh attestation list``.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from sbomify.apps.plugins.builtins.verification import (
+    AttestationNotYetAvailableError,
+    SBOMVerificationPlugin,
+)
+from sbomify.apps.plugins.sdk.base import SBOMContext
+
+ORG = "example-org"
+REPO = "example-repo"
+
+
+def _cyclonedx_with_vcs(tmp_path: Path) -> tuple[Path, str]:
+    import hashlib
+
+    doc = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "name": "widget",
+                "externalReferences": [
+                    {"type": "vcs", "url": f"https://github.com/{ORG}/{REPO}"},
+                ],
+            }
+        },
+    }
+    raw = json.dumps(doc).encode()
+    path = tmp_path / "sbom.json"
+    path.write_bytes(raw)
+    return path, hashlib.sha256(raw).hexdigest()
+
+
+def _response(status: int) -> MagicMock:
+    response = MagicMock()
+    response.status_code = status
+    response.json.return_value = {"message": "Not Found"}
+    response.text = "Not Found"
+    return response
+
+
+@pytest.fixture
+def sbom(tmp_path: Path) -> tuple[Path, str]:
+    return _cyclonedx_with_vcs(tmp_path)
+
+
+class TestTheNotFoundMessage:
+    """This text becomes the run's error once the retry budget is spent, so it
+    is the only thing most users will ever see about the failure."""
+
+    def _raise_404(self, sbom: tuple[Path, str]) -> AttestationNotYetAvailableError:
+        sbom_file, sha256 = sbom
+        plugin = SBOMVerificationPlugin()
+        session = MagicMock()
+        session.get.return_value = _response(404)
+
+        with (
+            patch("sbomify.apps.plugins.builtins.verification.get_http_session", return_value=session),
+            patch.object(plugin, "_fetch_blob", return_value=None),
+            pytest.raises(AttestationNotYetAvailableError) as excinfo,
+        ):
+            plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
+        return excinfo.value
+
+    def test_it_names_the_digest_that_was_searched_for(self, sbom) -> None:
+        _, sha256 = sbom
+
+        assert f"sha256:{sha256}" in str(self._raise_404(sbom))
+
+    def test_it_says_what_the_digest_is_of(self, sbom) -> None:
+        """Without this the digest is an opaque token. With it, an operator can
+        compare it against what their workflow actually attested."""
+        message = str(self._raise_404(sbom))
+
+        assert "as sbomify stored it" in message
+
+    def test_it_names_the_repository_searched(self, sbom) -> None:
+        """Which repo was searched is derived from the SBOM's VCS reference, not
+        chosen by the user, so it is worth stating outright."""
+        assert f"{ORG}/{REPO}" in str(self._raise_404(sbom))
+
+    def test_it_names_the_failure_that_retrying_cannot_fix(self, sbom) -> None:
+        """The retry ladder only helps a slow publish. A mismatched subject is
+        permanent, and the message has to admit that possibility or the user
+        waits for something that will never arrive."""
+        assert "ever match this digest" in str(self._raise_404(sbom))
+
+
+class TestTheFindingOnOtherFailures:
+    """Non-404 download failures take the warning path instead, and need the
+    same diagnosis."""
+
+    def _finding(self, sbom: tuple[Path, str]):
+        sbom_file, sha256 = sbom
+        plugin = SBOMVerificationPlugin()
+        session = MagicMock()
+        session.get.return_value = _response(500)
+
+        with (
+            patch("sbomify.apps.plugins.builtins.verification.get_http_session", return_value=session),
+            patch.object(plugin, "_fetch_blob", return_value=None),
+        ):
+            result = plugin.assess("sbom-1", sbom_file, context=SBOMContext(sha256_hash=sha256))
+        return next(f for f in result.findings if f.id == "verification:github-attestation")
+
+    def test_the_digest_is_in_the_description(self, sbom) -> None:
+        _, sha256 = sbom
+
+        assert f"sha256:{sha256}" in self._finding(sbom).description
+
+    def test_the_digest_is_machine_readable_in_metadata(self, sbom) -> None:
+        """An operator comparing against ``gh attestation list`` should not have
+        to scrape it out of prose."""
+        _, sha256 = sbom
+
+        assert self._finding(sbom).metadata["subject_digest"] == f"sha256:{sha256}"
+
+    def test_the_underlying_error_is_still_reported(self, sbom) -> None:
+        """The added diagnosis must not displace what GitHub actually said."""
+        assert "500" in self._finding(sbom).metadata["error"]
