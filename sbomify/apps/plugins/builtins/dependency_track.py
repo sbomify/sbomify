@@ -933,8 +933,10 @@ class DependencyTrackPlugin(AssessmentPlugin):
                 task backs it off; see ``UNSUPPORTED_INPUT_SKIP_HOURS``.
 
         Returns:
-            AssessmentResult with a single warning finding and
-            metadata={"skipped": True}.
+            AssessmentResult with a single warning finding and metadata
+            containing ``skipped: True``, plus ``unsupported_input: True`` when
+            that argument is set. Consumers should test for the keys they care
+            about rather than compare the dict, since this shape grows.
         """
         metadata: dict[str, Any] = {"skipped": True}
         if unsupported_input:

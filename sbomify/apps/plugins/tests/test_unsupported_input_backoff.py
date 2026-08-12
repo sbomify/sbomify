@@ -245,3 +245,30 @@ class TestItDoesNotReadTheFatBlobForEveryRun:
 
         assert AssessmentRun.objects.get(sbom=scannable_sbom).result_skipped is True
         assert _sweep(monkeypatch) == []
+
+
+@pytest.mark.django_db
+class TestOnlyTheLatestRunsMarkerCounts:
+    """"Latest run" has to mean the latest run, not "the latest run was skipped
+    and something in the window carried the marker".
+
+    Selecting the JSON read by SBOM id rather than by run id left that gap: an
+    SBOM whose most recent run is a different kind of skip stayed backed off on
+    the strength of an older unsupported-input run — the same "any run in the
+    window" defect this whole function replaced, one level down.
+    """
+
+    def test_a_later_skip_of_another_kind_clears_the_backoff(self, scannable_sbom, monkeypatch) -> None:
+        _run_at_age(scannable_sbom, hours_ago=6, metadata={"skipped": True, "unsupported_input": True})
+        # A precondition skip — no product membership, say. Still skipped, so
+        # still result_skipped=True, but it carries no marker.
+        _run_at_age(scannable_sbom, hours_ago=5, metadata={"skipped": True})
+
+        assert len(_sweep(monkeypatch)) == 1
+
+    def test_the_latest_run_carrying_the_marker_still_backs_off(self, scannable_sbom, monkeypatch) -> None:
+        """The half that must not regress."""
+        _run_at_age(scannable_sbom, hours_ago=6, metadata={"skipped": True})
+        _run_at_age(scannable_sbom, hours_ago=5, metadata={"skipped": True, "unsupported_input": True})
+
+        assert _sweep(monkeypatch) == []

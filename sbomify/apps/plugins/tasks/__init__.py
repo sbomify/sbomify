@@ -84,7 +84,7 @@ def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> se
     """
     from ..models import AssessmentRun
 
-    latest_by_sbom: dict[str, tuple[Any, bool]] = {}
+    latest_run_id: dict[str, Any] = {}
     rows = (
         AssessmentRun.objects.filter(
             plugin_name=plugin_name,
@@ -93,26 +93,27 @@ def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> se
             sbom__component__team_id__in=team_ids,
         )
         .order_by("sbom_id", "-created_at", "-id")
-        .values_list("sbom_id", "created_at", "result_skipped")
+        .values_list("sbom_id", "id", "result_skipped")
     )
-    for sbom_id, created_at, skipped in rows:
-        latest_by_sbom.setdefault(str(sbom_id), (created_at, bool(skipped)))
+    for sbom_id, run_id, skipped in rows:
+        # Only a skipped run can carry the marker, so an SBOM whose latest run
+        # is anything else is out regardless of what it looked like earlier.
+        latest_run_id.setdefault(str(sbom_id), run_id if skipped else None)
 
-    # Only the latest run per SBOM survives above, and only a skipped one can
-    # carry the marker — so the JSON read below is at most one row per SBOM
-    # still in play rather than every run in the window.
-    candidates = [sbom_id for sbom_id, (_created, skipped) in latest_by_sbom.items() if skipped]
-    if not candidates:
+    # Selected by run id, not by SBOM id. Restricting the JSON read to a set of
+    # SBOMs still matched any marked run in the window for them, so an SBOM
+    # whose latest run is a *different* skip — no product membership, say —
+    # stayed backed off on the strength of an older unsupported-input run. That
+    # is the same "any run in the window" defect this function was written to
+    # remove, one level down.
+    candidate_ids = [run_id for run_id in latest_run_id.values() if run_id is not None]
+    if not candidate_ids:
         return set()
 
     return {
         str(sbom_id)
         for sbom_id in AssessmentRun.objects.filter(
-            plugin_name=plugin_name,
-            created_at__gte=since,
-            status="completed",
-            result_skipped=True,
-            sbom_id__in=candidates,
+            id__in=candidate_ids,
             result__metadata__unsupported_input=True,
         ).values_list("sbom_id", flat=True)
     }
