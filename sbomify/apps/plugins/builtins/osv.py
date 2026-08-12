@@ -356,9 +356,14 @@ class OSVPlugin(AssessmentPlugin):
             cwd=str(absolute_path.parent),
         )
 
-        # Exit code 0 = no vulns, 1 = vulns found, other = error
+        # Exit code 0 = no vulns, 1 = vulns found, other = error.
+        #
+        # Error rather than warning: this used to be advisory, because the run
+        # carried on and published a result regardless. It is now the point at
+        # which the scan is abandoned, and a line that reads as non-fatal for an
+        # outcome the caller treats as fatal is what makes a log hard to trust.
         if process.returncode not in self.SUCCESS_EXIT_CODES:
-            logger.warning(f"[OSV] Scanner returned code {process.returncode}: {process.stderr}")
+            logger.error(f"[OSV] Scanner returned code {process.returncode}: {process.stderr}")
 
         return process.stdout, process.stderr, process.returncode
 
