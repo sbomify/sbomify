@@ -113,8 +113,15 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
         response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases")
         assert response.status_code == 200
 
-    def test_list_sbom_releases_redacts_private_product_for_non_members(self):
-        """Gated SBOMs are publicly listable, but private product names/IDs must not leak."""
+    def test_list_sbom_releases_withholds_private_product_releases_from_non_members(self):
+        """Gated SBOMs are publicly listable, but releases of a private product are not.
+
+        This used to return the release with product_name/product_id blanked. That
+        was not enough: release names and descriptions routinely carry the product
+        codename, so the identity stayed reconstructible, and a UI building a link
+        from an empty product_id rendered a broken href. All five "which releases
+        contain this artifact" endpoints now withhold the release instead.
+        """
         client = Client()
 
         # Component is publicly viewable (gated), but its release lives in a PRIVATE product.
@@ -125,12 +132,11 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
 
         response = client.get(f"/api/v1/sboms/{self.sbom1_cdx.id}/releases")
         assert response.status_code == 200
-        item = json.loads(response.content)["items"][0]
-        assert item["id"] == str(self.release1.id)
-        assert item["is_public"] is False
-        # Private product name and id are withheld from non-members.
-        assert item["product_name"] == ""
-        assert item["product_id"] == ""
+        body = json.loads(response.content)
+        assert body["items"] == []
+        # ...and the pagination metadata agrees, rather than counting rows the
+        # caller will never receive.
+        assert body["pagination"]["total"] == 0
 
     def test_list_sbom_releases_shows_private_product_to_members(self, authenticated_api_client):
         """Workspace members still see private product names/IDs on gated SBOM releases."""
