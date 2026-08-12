@@ -192,23 +192,36 @@ class TestTheSweepReconciles:
 
 @pytest.mark.django_db
 class TestEverythingElseKeepsRetrying:
-    def test_a_generic_stripe_failure_is_not_parked(self) -> None:
-        """An outage or a malformed request may well succeed next time, so it
-        must not be marked as permanently missing."""
+    """Asserted against the stored subscription id rather than against the
+    absence of a marker.
+
+    An earlier version of this change parked the workspace behind a
+    ``stripe_subscription_missing_at`` flag, and these tests checked that flag
+    was not set. Reconciliation replaced the marker, so nothing can set it any
+    more and those assertions could not fail — they would have passed against
+    a version that wrongly reconciled every error. What actually distinguishes
+    the cases now is whether the dangling reference was cleared.
+    """
+
+    def test_a_generic_stripe_failure_does_not_reconcile(self) -> None:
+        """An outage or a malformed request may well succeed next time, so the
+        subscription must not be marked canceled and its id must survive."""
         team = _expired_trial_team()
 
         _run_sweep(MagicMock(side_effect=StripeError("payment provider unavailable")))
 
         team.refresh_from_db()
-        assert "stripe_subscription_missing_at" not in team.billing_plan_limits
+        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_gone"
+        assert team.billing_plan_limits["subscription_status"] != "canceled"
 
-    def test_an_unexpected_error_is_not_parked(self) -> None:
+    def test_an_unexpected_error_does_not_reconcile(self) -> None:
         team = _expired_trial_team()
 
         _run_sweep(MagicMock(side_effect=RuntimeError("boom")))
 
         team.refresh_from_db()
-        assert "stripe_subscription_missing_at" not in team.billing_plan_limits
+        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_gone"
+        assert team.billing_plan_limits["subscription_status"] != "canceled"
 
     def test_a_healthy_subscription_still_syncs(self) -> None:
         """The regression that would hurt most: the sweep's actual job."""
@@ -221,4 +234,4 @@ class TestEverythingElseKeepsRetrying:
         team.refresh_from_db()
         assert team.billing_plan_limits["subscription_status"] == "active"
         assert team.billing_plan_limits["is_trial"] is False
-        assert "stripe_subscription_missing_at" not in team.billing_plan_limits
+        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_gone"
