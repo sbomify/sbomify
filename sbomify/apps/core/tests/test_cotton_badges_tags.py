@@ -217,3 +217,42 @@ def test_removable_travels_through_a_variant_file(rendered: str) -> None:
     ada = _span_holding(rendered, "Ada Lovelace")
     assert "text-primary bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]" in ada
     assert "<button" in ada
+
+
+def _probe(rendered: str, name: str) -> str:
+    """The element carrying data-probe=name, from its tag open to the next one."""
+    marker = f'data-probe="{name}"'
+    assert marker in rendered, f"probe {name} missing"
+    start = rendered.rindex("<", 0, rendered.index(marker))
+    return rendered[start : rendered.index(">", rendered.index(marker)) + 1]
+
+
+def test_dynamic_badge_keeps_every_recipe_and_binds_only_the_variant(rendered: str) -> None:
+    danger = _probe(rendered, "dyn-danger")
+    assert 'data-variant="danger"' in danger
+    # The recipes stay in the component, keyed by the attribute.
+    assert "data-[variant=danger]:text-danger" in danger
+    assert "data-[variant=success]:text-success" in danger
+    # And the neutral tint is the resting state, so an unknown variant degrades quietly.
+    assert "text-text-muted" in danger
+
+
+def test_dynamic_badge_defaults_to_the_neutral_variant(rendered: str) -> None:
+    assert 'data-variant="secondary"' in _probe(rendered, "dyn-default")
+
+
+def test_dynamic_badge_size_segment_matches_the_named_badges(rendered: str) -> None:
+    assert "px-1.5 py-0.5 text-[0.625rem] leading-[1.5]" in _probe(rendered, "dyn-sm")
+
+
+def test_neutral_chip_recipe(rendered: str) -> None:
+    chip = _probe(rendered, "chip-neutral")
+    assert "px-2 py-1 text-xs font-semibold leading-tight rounded-lg" in chip
+    assert "text-text-muted" in chip
+
+
+def test_tag_renders_an_anchor_with_href_and_no_underline(rendered: str) -> None:
+    tag = _probe(rendered, "tag-link")
+    assert tag.startswith("<a ")
+    assert 'href="/components/x"' in tag
+    assert "no-underline" in tag

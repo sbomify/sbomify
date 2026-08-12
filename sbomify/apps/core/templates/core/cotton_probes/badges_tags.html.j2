@@ -33,3 +33,9 @@ and assert on the output; it is not routed anywhere.
 <c-tags.tag class="font-mono" title="Probe tag" @click="edit()"><i class="fab fa-python" aria-hidden="true"></i> <span>Python</span></c-tags.tag>
 <c-tags.tag removable label="MIT">MIT</c-tags.tag>
 <c-tags.primary removable label="Ada Lovelace" remove_click="removeContact(index)">Ada Lovelace</c-tags.primary>
+{# Runtime-variant badge and the neutral chip, added with the page migrations. #}
+<c-badges.dynamic variant="danger" data-probe="dyn-danger">Critical</c-badges.dynamic>
+<c-badges.dynamic data-probe="dyn-default">Low</c-badges.dynamic>
+<c-badges.dynamic variant="success" size="sm" data-probe="dyn-sm">Resolved</c-badges.dynamic>
+<c-chips.neutral data-probe="chip-neutral">+3 more</c-chips.neutral>
+<c-tags.tag href="/components/x" data-probe="tag-link">Linked tag</c-tags.tag>

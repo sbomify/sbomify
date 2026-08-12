@@ -42,3 +42,9 @@ small context of lists and assert on the output; it is not routed anywhere.
 <p class="m-0">Always open without a state.</p>
 </c-navigation.accordion-item>
 </c-navigation.accordion>
+{# The Alpine pager twin, added with the advisories migration. #}
+<c-navigation.page-button data-probe="page-btn" @click="goToPage(2)">2</c-navigation.page-button>
+<c-navigation.page-button nav label="Previous page" data-probe="page-btn-nav">
+<i class="fas fa-chevron-left" aria-hidden="true"></i>
+</c-navigation.page-button>
+<c-navigation.page-ellipsis data-probe="page-ellipsis" />

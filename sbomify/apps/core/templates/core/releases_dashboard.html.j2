@@ -3,7 +3,7 @@
 {% load static %}
 {% block title %}sbomify Releases{% endblock %}
 {% block dashboard_content %}
-    {% page_header title="Releases" subtitle="Releases across all your products." icon="fas fa-tag" %}{% endpage_header %}
+    <c-layout.page-header title="Releases" subtitle="Releases across all your products." icon="fas fa-tag" />
     <div class="space-y-6">
         {# Releases Table #}
         {% include 'core/releases_table.html.j2' %}

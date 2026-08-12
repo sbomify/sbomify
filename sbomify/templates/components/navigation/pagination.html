@@ -26,7 +26,7 @@ class, above all) can fall through into it.
         {% if page_num == current %}
             <c-navigation.page-link active only>{{ page_num }}</c-navigation.page-link>
         {% elif page_num == '…' or page_num == '...' %}
-            <span class="flex items-center justify-center min-w-8 h-8 text-[0.8125rem] text-text-muted">...</span>
+            <c-navigation.page-ellipsis />
         {% else %}
             <c-navigation.page-link href="{{ base_url }}?page={{ page_num }}" only>{{ page_num }}</c-navigation.page-link>
         {% endif %}

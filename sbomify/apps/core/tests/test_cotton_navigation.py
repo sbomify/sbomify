@@ -210,10 +210,7 @@ def test_current_page_is_a_span_that_says_so(rendered: str) -> None:
 
 
 def test_ellipsis_is_a_bare_cell(rendered: str) -> None:
-    assert (
-        '<span class="flex items-center justify-center min-w-8 h-8 text-[0.8125rem] text-text-muted">...</span>'
-        in rendered
-    )
+    assert '<span class="flex items-center justify-center min-w-8 h-8 text-[0.8125rem] text-text-muted"' in rendered
 
 
 def test_previous_and_next_step_one_page(rendered: str) -> None:
@@ -371,3 +368,30 @@ def test_a_section_without_a_state_stays_open(rendered: str) -> None:
     panel = _chunk(rendered, "div", "Always open without a state.")
     assert "x-show" not in panel
     assert ":aria-expanded" not in _chunk(rendered, "button", "Compact section")
+
+
+def _nav_probe(rendered: str, name: str) -> str:
+    marker = f'data-probe="{name}"'
+    assert marker in rendered, f"probe {name} missing"
+    start = rendered.rindex("<", 0, rendered.index(marker))
+    return rendered[start : rendered.index(">", rendered.index(marker)) + 1]
+
+
+def test_page_button_states_hang_off_data_active_and_disabled(rendered: str) -> None:
+    btn = _nav_probe(rendered, "page-btn")
+    assert btn.startswith("<button ")
+    assert 'data-active="false"' in btn
+    assert "data-[active=true]:text-white" in btn
+    assert "disabled:opacity-40" in btn
+
+
+def test_page_button_nav_segment_and_label(rendered: str) -> None:
+    nav = _nav_probe(rendered, "page-btn-nav")
+    assert "text-xs" in nav
+    assert 'aria-label="Previous page"' in nav
+
+
+def test_page_ellipsis_is_not_a_control(rendered: str) -> None:
+    ell = _nav_probe(rendered, "page-ellipsis")
+    assert ell.startswith("<span ")
+    assert 'aria-hidden="true"' in ell

@@ -593,9 +593,30 @@
     <h2 id="pagination" class="text-xl font-semibold text-text mb-4">Pagination</h2>
     <c-cards.card class="mb-8">
     <c-navigation.pagination :current="3" :total="8" :page_range="demo_page_range" base_url="#pagination" />
+    <p class="text-sm text-text-muted mt-4 mb-6">
+        The server-rendered pager: the view knows the current page and every control is a link.
+    </p>
+    <p class="tw-data-label mb-2">Paged in the browser</p>
+    <nav class="flex items-center gap-1"
+         aria-label="Pagination"
+         x-data="{ currentPage: 2, totalPages: 5 }">
+        <c-navigation.page-button nav label="Previous page" ::disabled="currentPage === 1" @click="currentPage--">
+        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        </c-navigation.page-button>
+        <template x-for="page in [1, 2, 3]" :key="page">
+            <c-navigation.page-button ::data-active="currentPage === page" @click="currentPage = page" x-text="page" />
+        </template>
+        <c-navigation.page-ellipsis />
+        <c-navigation.page-button ::data-active="currentPage === 5" @click="currentPage = 5">5</c-navigation.page-button>
+        <c-navigation.page-button nav label="Next page" ::disabled="currentPage === totalPages" @click="currentPage++">
+        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+        </c-navigation.page-button>
+    </nav>
     <p class="text-sm text-text-muted mt-4 mb-0">
-        The compact Alpine pager for client-side tables lives in
-        <code class="tw-code-inline">components/tw/table_pager.html.j2</code>.
+        For a table whose page is client state. The buttons bind the state, never the classes: active hangs
+        off <code class="tw-code-inline">data-active</code> and unavailable off the real
+        <code class="tw-code-inline">disabled</code>. The compact prev/next pager is
+        <code class="tw-code-inline">c-tables.pager</code>.
     </p>
     </c-cards.card>
     <h2 id="stats" class="text-xl font-semibold text-text mb-4">Stat cards</h2>
@@ -725,10 +746,33 @@
         Solid fill is reserved for confirmed-exploitation alarms and alert counters. Everything else stays a tint.
     </p>
     <p class="tw-data-label mb-2">SBOM format</p>
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap gap-2 mb-6">
         <c-badges.format format="cyclonedx">CycloneDX</c-badges.format>
         <c-badges.format format="spdx">SPDX</c-badges.format>
     </div>
+    <p class="tw-data-label mb-2">Variant from the browser</p>
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+        <c-badges.dynamic variant="danger">Critical</c-badges.dynamic>
+        <c-badges.dynamic variant="warning">High</c-badges.dynamic>
+        <c-badges.dynamic variant="info">Medium</c-badges.dynamic>
+        <c-badges.dynamic>Low</c-badges.dynamic>
+        <c-badges.dynamic variant="success" size="sm">Resolved</c-badges.dynamic>
+    </div>
+    <p class="text-sm text-text-muted mb-6">
+        For rows Alpine builds from JSON, where the server never sees the value. The caller binds
+        <code class="tw-code-inline">::data-variant</code> and the recipes stay in the component. Everywhere
+        else, name the variant: <code class="tw-code-inline">c-badges.danger</code>.
+    </p>
+    <p class="tw-data-label mb-2">Neutral chip</p>
+    <div class="flex flex-wrap items-center gap-2">
+        <c-chips.neutral>+3 more</c-chips.neutral>
+        <c-chips.neutral>CVSS: 9.8</c-chips.neutral>
+        <c-chips.neutral><i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i> Acme Gateway</c-chips.neutral>
+    </div>
+    <p class="text-sm text-text-muted mt-2 mb-0">
+        The quiet count or label beside a value. It carries no status, so it takes the border tint rather
+        than an accent, and it is smaller and squarer than a tag, which is a thing you can act on.
+    </p>
     </c-cards.card>
     <h2 id="tags" class="text-xl font-semibold text-text mb-4">Tags</h2>
     <c-cards.card class="mb-8">
@@ -743,6 +787,7 @@
         <c-tags.warning>Warning</c-tags.warning>
         <c-tags.danger>Danger</c-tags.danger>
         <c-tags.tag><i class="fab fa-python" aria-hidden="true"></i> Python</c-tags.tag>
+        <c-tags.tag href="#tags"><i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i> Linked tag</c-tags.tag>
         <c-tags.tag removable label="Removable">Removable</c-tags.tag>
     </div>
     </c-cards.card>
