@@ -506,12 +506,24 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             return self._gha_finding(
                 "warning",
                 "No GitHub Attestation Found",
+                # States what was asked and what came back, and stops there.
+                # This branch is reached by every failed download — timeouts,
+                # 403 rate limits, 5xx, an unparseable body, even a local
+                # write error — so naming a subject-digest mismatch as the
+                # cause told operators with a perfectly good attestation to go
+                # rewrite a correct workflow. The digest is still here, because
+                # comparing it against `gh attestation list` is what actually
+                # distinguishes the cases; the conclusion is left to whoever
+                # can see both sides.
                 (
-                    f"Could not download an attestation from GitHub for this SBOM. sbomify looked "
-                    f"for one in {github_org}/{github_repo} with subject digest sha256:{digest} — "
-                    f"the SHA-256 of this SBOM exactly as sbomify stored it. Check that the "
-                    f"workflow attests the same file it uploads, and attests it after any step "
-                    f"that rewrites it. Error: {bundle.get('error', 'unknown')}"
+                    f"Could not retrieve an attestation from GitHub for this SBOM. sbomify asked "
+                    f"{github_org}/{github_repo} for subject digest sha256:{digest} — the SHA-256 "
+                    f"of this SBOM as sbomify stored it. GitHub's response: "
+                    f"{bundle.get('error', 'unknown')}. If the attestation exists and the digest "
+                    f"above does not match its subject, the workflow is attesting a different "
+                    f"artifact, or attesting the SBOM before a later step rewrites it. If there is "
+                    f"no attest step at all, add actions/attest-build-provenance for the file this "
+                    f"SBOM is uploaded from."
                 ),
                 metadata={
                     "github_org": github_org,
@@ -614,10 +626,13 @@ class SBOMVerificationPlugin(AssessmentPlugin):
             # the SBOM written before augmentation rewrote it — is the failure
             # mode that never resolves no matter how long we retry.
             raise AttestationNotYetAvailableError(
-                f"No GitHub attestation for {org}/{repo} has subject digest sha256:{digest}. "
-                "That is the SHA-256 of this SBOM exactly as sbomify stored it. If the "
-                "workflow attests a different artifact, or attests the SBOM before a step "
-                "that rewrites it, no attestation will ever match this digest."
+                f"GitHub returned 404 for subject digest sha256:{digest} in {org}/{repo} — that "
+                f"digest is the SHA-256 of this SBOM as sbomify stored it. GitHub answers 404 "
+                f"here for three different reasons: the attestation has not been published yet, "
+                f"the workflow attested a different subject (a container image, or a copy of the "
+                f"SBOM written before a later step rewrote it), or the repository is private or "
+                f"does not exist, since this lookup is unauthenticated. Comparing the digest "
+                f"above against `gh attestation list` tells them apart."
             )
         if response.status_code != 200:
             return {

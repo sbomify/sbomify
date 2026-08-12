@@ -112,7 +112,21 @@ class TestTheNotFoundMessage:
         """The retry ladder only helps a slow publish. A mismatched subject is
         permanent, and the message has to admit that possibility or the user
         waits for something that will never arrive."""
-        assert "ever match this digest" in str(self._raise_404(sbom))
+        assert "different subject" in str(self._raise_404(sbom))
+
+    def test_it_does_not_assert_the_attestation_is_absent(self, sbom) -> None:
+        """GitHub answers 404 for a private or nonexistent repo too, because
+        this lookup is unauthenticated. Asserting the digest was searched for
+        and not found sent operators to rewrite a correct attest step when the
+        real cause was that sbomify cannot see the repository at all."""
+        message = str(self._raise_404(sbom))
+
+        assert "private" in message
+        assert "unauthenticated" in message
+
+    def test_it_still_admits_the_attestation_may_simply_be_late(self, sbom) -> None:
+        """The reason this is a retryable error in the first place."""
+        assert "not been published yet" in str(self._raise_404(sbom))
 
 
 class TestTheFindingOnOtherFailures:
@@ -147,3 +161,20 @@ class TestTheFindingOnOtherFailures:
     def test_the_underlying_error_is_still_reported(self, sbom) -> None:
         """The added diagnosis must not displace what GitHub actually said."""
         assert "500" in self._finding(sbom).metadata["error"]
+
+    def test_it_does_not_blame_the_workflow_for_a_server_error(self, sbom) -> None:
+        """This branch fires for every failed download — timeouts, 403 rate
+        limits, 5xx, an unparseable body, even a local write error. Naming a
+        subject-digest mismatch as the cause told operators whose attestation
+        was fine to go and rewrite a correct workflow."""
+        description = self._finding(sbom).description
+
+        assert "500" in description
+        assert description.index("GitHub's response") < description.index("If the attestation exists")
+
+    def test_it_keeps_the_advice_for_repos_with_no_attest_step(self, sbom) -> None:
+        """The one instruction that clears this finding for a repo that never
+        set attestation up. Rewriting the text around a digest mismatch had
+        dropped it, leaving those users with advice about a step they do not
+        have."""
+        assert "attest-build-provenance" in self._finding(sbom).description
