@@ -35,18 +35,27 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from mcp.server.fastmcp import FastMCP
 
-SEVERITIES = ("critical", "high", "medium", "low", "unknown")
+# Mirrors utils.SEVERITY_RANK plus the no-severity bucket. Hand-written rather
+# than derived so this module keeps its imports lazy; test_risk_semantics
+# asserts the two stay in sync.
+SEVERITIES = ("critical", "high", "medium", "low", "info", "unknown")
 
 
 def _security_runs(team: Any) -> QuerySet[Any]:
-    """Every security assessment run for ``team``, newest first."""
+    """Every completed security assessment run for ``team``, newest first.
+
+    Completed only, like every dashboard consumer of these runs: a pending or
+    failed run has no ``result``, so letting it win the newest-per-provider
+    pick would make a mid-rescan SBOM read as scanned-and-clean.
+    """
     from sbomify.apps.plugins.models import AssessmentRun
-    from sbomify.apps.plugins.sdk.enums import AssessmentCategory
+    from sbomify.apps.plugins.sdk.enums import AssessmentCategory, RunStatus
 
     return (
         AssessmentRun.objects.filter(
             sbom__component__team=team,
             category=AssessmentCategory.SECURITY.value,
+            status=RunStatus.COMPLETED.value,
         )
         .select_related("sbom", "sbom__component")
         .order_by("sbom_id", "plugin_name", "-created_at")
@@ -77,9 +86,13 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
         is_vulnerability,
         merge_findings_by_alias,
     )
+    from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
     rows: list[dict[str, Any]] = []
     scanned: set[str] = set()
+    # One S3 fetch per component per call, like the dashboards' request-scoped
+    # cache — several SBOMs usually share a component.
+    vex_cache: dict[Any, list[dict[str, Any]]] = {}
 
     for sbom_id, sbom_runs in _latest_per_provider(runs).items():
         merged = merge_findings_by_alias([run.result for run in sbom_runs])
@@ -92,7 +105,10 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
 
         sbom = sbom_runs[0].sbom
         providers = sorted({run.plugin_name for run in sbom_runs})
-        for row in extract_finding_rows(merged):
+        # The component's live VEX suppressions, like every dashboard caller: a
+        # VEX uploaded after the scan must read as suppressed without a re-scan.
+        statements = load_vex_suppressions(sbom.component_id, cache=vex_cache)
+        for row in extract_finding_rows(merged, statements):
             row["sbom_id"] = sbom_id
             row["component_id"] = sbom.component_id
             row["component_name"] = sbom.component.name
@@ -102,15 +118,24 @@ def _rows_for(runs: QuerySet[Any]) -> tuple[list[dict[str, Any]], set[str]]:
     return rows, scanned
 
 
+def _severity_bucket(row: dict[str, Any]) -> str:
+    """The severity bucket a row lands in; anything unrecognised is ``unknown``.
+
+    Shared by the summary tally and the list filter so that a count read from
+    `get_vulnerability_summary` is always reachable through
+    `list_vulnerabilities(severity=...)` with the same name.
+    """
+    severity = row.get("severity")
+    return severity if severity in SEVERITIES else "unknown"
+
+
 def _counts(rows: list[dict[str, Any]]) -> dict[str, int]:
     """Severity tally over live (non-VEX-suppressed) findings."""
     counts = dict.fromkeys(("total", *SEVERITIES), 0)
     for row in rows:
         if row.get("vex_suppressed"):
             continue
-        raw_severity = row.get("severity")
-        severity = raw_severity if raw_severity in SEVERITIES else "unknown"
-        counts[str(severity)] += 1
+        counts[_severity_bucket(row)] += 1
         counts["total"] += 1
     return counts
 
@@ -218,7 +243,7 @@ def register_tools(mcp: FastMCP) -> None:
     ) -> dict[str, Any]:
         """Individual vulnerability findings, worst first.
 
-        `severity` filters to one of critical, high, medium, low, unknown.
+        `severity` filters to one of critical, high, medium, low, info, unknown.
         Findings the customer has dispositioned via VEX are excluded unless
         `include_suppressed` is set; when included they carry `suppressed: true`
         and the state that suppressed them.
@@ -237,7 +262,7 @@ def register_tools(mcp: FastMCP) -> None:
                 rows = [row for row in rows if not row.get("vex_suppressed")]
             if severity:
                 wanted = severity.strip().lower()
-                rows = [row for row in rows if row.get("severity") == wanted]
+                rows = [row for row in rows if _severity_bucket(row) == wanted]
 
             safe_page, safe_size = clamp_page(page, page_size)
             start = (safe_page - 1) * safe_size
