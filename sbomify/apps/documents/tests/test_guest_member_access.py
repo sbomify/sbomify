@@ -360,3 +360,81 @@ class TestGuestIsExternalOnly:
         request.user = guest_with_access
 
         assert check_component_access(request, private).has_access is False
+
+
+@pytest.mark.django_db
+class TestGuestCannotLeakAcrossWorkspaces:
+    """A guest of workspace X must not read X's internals via their OWN workspace.
+
+    These paths gated on helpers scoped to the caller's *session* workspace
+    (``_is_internal_member``) or on plain team membership, so being an owner
+    somewhere satisfied them even when the resource lived elsewhere. Removing
+    guest from the read tier does not close that on its own — the check has to be
+    about the resource's workspace, not the caller's.
+    """
+
+    @pytest.fixture
+    def guest_of_vendor(self, team_with_business_plan, guest_user, company_nda_document):
+        """A user who owns their own workspace and is an approved guest of another."""
+        from sbomify.apps.teams.models import Team
+
+        Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
+        access_request = AccessRequest.objects.create(
+            team=team_with_business_plan,
+            user=guest_user,
+            status=AccessRequest.Status.APPROVED,
+        )
+        NDASignature.objects.create(
+            access_request=access_request,
+            nda_document=company_nda_document,
+            nda_content_hash=company_nda_document.content_hash,
+            signed_name="Test User",
+        )
+        own = Team.objects.create(name="Guest's Own Workspace")
+        Member.objects.create(team=own, user=guest_user, role="owner", is_default_team=True)
+        return guest_user, own
+
+    def test_dashboard_summary_excludes_guest_workspaces(self, team_with_business_plan, guest_of_vendor):
+        """Totals and latest uploads must not include a workspace they only guest in."""
+        from django.test import Client
+
+        from sbomify.apps.sboms.models import Product
+
+        user, own = guest_of_vendor
+        Product.objects.create(team=team_with_business_plan, name="Vendor Private Product")
+
+        client = Client()
+        setup_authenticated_client_session(client, own, user)
+        response = client.get("/api/v1/dashboard/summary")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert "Vendor Private Product" not in response.content.decode()
+        # Their own (empty) workspace is all they should be counted for.
+        assert body["total_products"] == 0
+
+    def test_component_releases_hides_other_workspace_private_products(self, team_with_business_plan, guest_of_vendor):
+        """A gated component is publicly viewable; its private product names are not."""
+        from django.test import Client
+
+        from sbomify.apps.sboms.models import Product
+        from sbomify.apps.core.models import Release
+
+        user, own = guest_of_vendor
+        gated = Component.objects.create(
+            name="Vendor Gated Component",
+            team=team_with_business_plan,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.GATED,
+        )
+        private_product = Product.objects.create(
+            team=team_with_business_plan, name="Vendor Secret Product", is_public=False
+        )
+        Release.objects.create(product=private_product, name="v1.0.0")
+
+        client = Client()
+        setup_authenticated_client_session(client, own, user)
+        response = client.get(f"/api/v1/components/{gated.id}/releases")
+
+        assert response.status_code == 200
+        assert "Vendor Secret Product" not in response.content.decode()

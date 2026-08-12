@@ -127,9 +127,10 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         ROLE_GUEST,
         "Guest",
         "External access, granted through the Trust Center rather than invited "
-        "directly. Sees your public pages, plus any gated documents they have "
-        "been approved for and signed the NDA for. Cannot see anything else in "
-        "the workspace.",
+        "directly. Sees your public pages, plus everything on the gated "
+        "components they have been approved for and signed the NDA for — "
+        "documents, SBOMs and vulnerability information alike. Cannot see "
+        "anything else in the workspace.",
     ),
 )
 

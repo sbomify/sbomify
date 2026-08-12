@@ -79,28 +79,36 @@ def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
     from sbomify.apps.documents.access_models import AccessRequest
     from sbomify.apps.teams.models import Member
 
-    # First check if user has a revoked access request - if so, deny access regardless of membership
-    # This ensures revoked users lose access even if member deletion hasn't completed yet
+    # Membership is resolved BEFORE the revocation check. Revocation is an
+    # *external* access control — it withdraws a trust-center grant — so it must
+    # not out-rank an internal role. Checking it first meant a stale REVOKED row
+    # permanently locked an internal member out of their own workspace's gated
+    # content: revoke an external user, then later hire them and invite them as
+    # an admin, and because their guest Member row was deleted a *new* row is
+    # created, so neither the guest-upgrade cleanup (which returns early when the
+    # row is `created`) nor the invitation-accept cleanup (which only fires when
+    # an existing membership changes role) removes the REVOKED request. With no
+    # UI to clear it, every gated check denied them, telling them to request
+    # access from themselves.
+    member = Member.objects.filter(team=team, user=user).select_related("team", "user").first()
+    if member and member.role in READ_INTERNAL:
+        # Internal members have full access without signing an NDA — the NDA
+        # gates *external* access, and they can already read the workspace.
+        return True, False
+
+    # Revoked access request — deny regardless of any *guest* membership, so a
+    # revoked user loses access even if member deletion hasn't completed yet.
     revoked_request = (
         AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.REVOKED)
         .select_related("team", "user")
         .first()
     )
     if revoked_request:
-        # User's access has been revoked, deny access
         # Also ensure guest membership is removed (in case deletion failed)
         Member.objects.filter(team=team, user=user, role=ROLE_GUEST).delete()
         return False, False
 
-    # Optimize: Check member first (most common case for owners/admins)
-    # This avoids querying AccessRequest if user is already a member
-    member = Member.objects.filter(team=team, user=user).select_related("team", "user").first()
     if member:
-        if member.role in READ_INTERNAL:
-            # Internal members have full access without signing an NDA — the NDA
-            # gates *external* access, and they can already read the workspace.
-            # (Revoked requests don't apply to them; those are guest access.)
-            return True, False
         if member.role == ROLE_GUEST:
             # Guest members must have signed the current NDA
             if not _user_has_signed_current_nda(user, team):
