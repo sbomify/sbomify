@@ -258,21 +258,34 @@ class OnboardingEmailService:
         skipped_errors = 0
         for member in primary_owners:
             try:
-                # The row is created by a signal on user creation, so a primary
-                # owner without one predates that signal or was made by a path
-                # that bypassed it. Every other call site in this app reaches
-                # for it with get_or_create; this one used a bare get and
-                # counted the miss, which meant those owners were stepped over
-                # on every run and the count was reported without saying who or
-                # ever converging.
+                # Synthetic OIDC bot identities have no row because the creation
+                # signal refuses to make one — that absence is the intended
+                # state, not a gap, and is a plausible source of the skipped
+                # count in the first place. Backfilling them would resurrect a
+                # row an operator deleted, on every run, and list a bot among
+                # onboarding users. Checked with the same helper signals.py and
+                # _is_mailable use, so the three cannot drift.
+                if not _is_mailable(member.user):
+                    continue
+
+                # The row is created by a signal on user creation, so a human
+                # primary owner without one predates that signal or was made by
+                # a path that bypassed it. Every other call site in this app
+                # reaches for it with get_or_create; this one used a bare get
+                # and counted the miss, so those owners were stepped over on
+                # every run and the count never converged or said who.
                 #
-                # Creating it changes no mail. A fresh row has
-                # welcome_email_sent=False, and all four should_receive_*
-                # predicates gate on that, so a long-standing user does not
-                # suddenly enter a drip sequence — it makes the data consistent
-                # and stops a daily warning nobody could act on.
+                # Backdated to the account rather than to now. created_at is
+                # what days_since_signup and the drip anchor are computed from,
+                # so a fresh row would show "0 days since signup" on the admin
+                # screen for someone who joined years ago, and would restart the
+                # drip at day 0 if welcome_email_sent were ever set.
                 status, created = OnboardingStatus.objects.get_or_create(user=member.user)
                 if created:
+                    joined = getattr(member.user, "date_joined", None)
+                    if joined:
+                        OnboardingStatus.objects.filter(pk=status.pk).update(created_at=joined)
+                        status.refresh_from_db(fields=["created_at"])
                     backfilled_status += 1
 
                 user_id = member.user.id
