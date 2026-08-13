@@ -112,9 +112,14 @@ class TestInventoryCsv:
 
     def test_formula_injection_is_neutralised(self, inventory, stub_sbom_bytes):
         team, _, _ = inventory
+        import csv as stdlib_csv
+        import io
+
         result = csv_exports.export_inventory_csv(team)
         assert "'=cmd" in result.value
-        assert not any(cell.startswith("=") for line in result.value.splitlines() for cell in line.split(","))
+        for record in stdlib_csv.reader(io.StringIO(result.value)):
+            for cell in record:
+                assert not cell.startswith(("=", "+", "@", "\t"))
 
     def test_unreadable_sbom_gets_an_explicit_row(self, inventory, monkeypatch):
         team, _, docs = inventory

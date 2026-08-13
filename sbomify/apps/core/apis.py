@@ -4830,7 +4830,7 @@ def _csv_response(csv_text: str, filename: str) -> HttpResponse:
 
 @router.get(
     "/exports/inventory.csv",
-    response={403: ErrorResponse, 404: ErrorResponse},
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export the package inventory as CSV",
     tags=["Exports"],
 )
@@ -4851,7 +4851,7 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
 
     result = csv_exports.export_inventory_csv(team, product=product)
     if not result.ok:
-        return 403, ErrorResponse(detail=result.error or "Export failed")
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     scope = product.name if product else team.name
     safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-")
     return _csv_response(result.value or "", f"{safe}-inventory.csv")
@@ -4859,7 +4859,7 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
 
 @router.get(
     "/exports/licenses.csv",
-    response={403: ErrorResponse, 404: ErrorResponse},
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export the license list as CSV",
     tags=["Exports"],
 )
@@ -4887,13 +4887,13 @@ def export_licenses(
 
     result = csv_exports.export_licenses_csv(team, product=product, release=release)
     if not result.ok:
-        return 403, ErrorResponse(detail=result.error or "Export failed")
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     return _csv_response(result.value or "", "licenses.csv")
 
 
 @router.get(
     "/exports/findings.csv",
-    response={403: ErrorResponse, 404: ErrorResponse},
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export assessment findings as CSV",
     tags=["Exports"],
 )
@@ -4912,13 +4912,13 @@ def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[
 
     result = csv_exports.export_findings_csv(sbom)
     if not result.ok:
-        return 403, ErrorResponse(detail=result.error or "Export failed")
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     return _csv_response(result.value or "", f"{sbom_id}-findings.csv")
 
 
 @router.get(
     "/exports/vulnerabilities.csv",
-    response={403: ErrorResponse, 404: ErrorResponse},
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export vulnerability findings as CSV",
     tags=["Exports"],
 )
@@ -4946,7 +4946,7 @@ def export_vulnerabilities(
 
     result = csv_exports.export_vulnerabilities_csv(team, component=component, release=release)
     if not result.ok:
-        return 403, ErrorResponse(detail=result.error or "Export failed")
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     return _csv_response(result.value or "", "vulnerabilities.csv")
 
 
