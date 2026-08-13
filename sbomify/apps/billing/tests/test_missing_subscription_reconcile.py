@@ -367,6 +367,66 @@ class TestTheSweepReportsWhatHappened:
 
 
 @pytest.mark.django_db
+class TestASettledWorkspaceIsNotStillTrialing:
+    """``canceled`` and ``is_trial`` disagreeing is a state nothing else here
+    produces.
+
+    The trial-expiry path in ``billing_processing`` sets the two together, and
+    the Stripe sync zeroes the remaining days whenever the subscription is not
+    trialing. Reconciliation reached ``canceled`` by its own route and left the
+    trial flags behind — and since the sweep that calls it selects expired
+    trials, that was the ordinary result rather than an unusual one.
+    """
+
+    def test_the_trial_flags_are_cleared(self) -> None:
+        from sbomify.apps.billing import stripe_sync
+
+        team = _expired_trial_team()
+
+        stripe_sync.reconcile_missing_subscription(team, "sub_gone")
+
+        team.refresh_from_db()
+        limits = team.billing_plan_limits
+        assert limits["subscription_status"] == "canceled"
+        assert limits["is_trial"] is False
+        assert limits["trial_days_remaining"] == 0
+        # Kept: it says when the trial ended rather than granting anything, and
+        # the sweep reads it to decide what to look at.
+        assert "trial_end" in limits
+
+    def test_a_no_op_leaves_the_trial_alone(self) -> None:
+        """The workspace moved on, so its trial is not this call's business."""
+        from sbomify.apps.billing import stripe_sync
+
+        team = _expired_trial_team()
+        limits = team.billing_plan_limits
+        limits["stripe_subscription_id"] = "sub_new_from_checkout"
+        team.billing_plan_limits = limits
+        team.save()
+
+        stripe_sync.reconcile_missing_subscription(team, "sub_gone")
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["is_trial"] is True
+
+
+@pytest.mark.django_db
+class TestAnUnnamedSubscriptionSettlesNothing:
+    def test_a_falsy_id_does_not_cancel_the_workspace(self) -> None:
+        """With no id to compare against, a workspace that also holds none
+        compares equal to it and would be canceled on the strength of a
+        subscription nobody named."""
+        from sbomify.apps.billing import stripe_sync
+
+        team = Team.objects.create(name="No Subscription", billing_plan="community", billing_plan_limits={})
+
+        assert stripe_sync.reconcile_missing_subscription(team, None) is False
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits.get("subscription_status") != "canceled"
+
+
+@pytest.mark.django_db
 class TestTheSyncPathNamesTheWorkspace:
     """The other entry point into reconciliation, reached from views as well as
     from the sweep.

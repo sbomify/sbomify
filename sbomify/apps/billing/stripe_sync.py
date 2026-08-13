@@ -64,6 +64,13 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
     """
     from django.db import transaction as db_transaction
 
+    # Nothing was confirmed missing, so there is nothing to settle. Without
+    # this, a workspace that also holds no id compares equal to the absent one
+    # and falls into the reconcile branch — marked canceled on the strength of
+    # a subscription that was never named.
+    if not stripe_sub_id:
+        return False
+
     reconciled = False
     with db_transaction.atomic():
         locked = Team.objects.select_for_update().get(pk=team.pk)
@@ -85,6 +92,21 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> boo
             billing_limits.pop("stripe_customer_id", None)
             billing_limits.pop("scheduled_downgrade_plan", None)
             billing_limits["cancel_at_period_end"] = False
+            # Canceled and still trialing is a state nothing else in billing
+            # produces: the trial-expiry path pairs the two (billing_processing),
+            # and the Stripe sync zeroes the remaining days whenever the
+            # subscription is not trialing. The sweep that reaches this reconciles
+            # expired trials specifically, so leaving the flags set would be the
+            # usual outcome rather than a corner of it, and every downstream
+            # ``is_trial`` check would read entitlement from a canceled workspace.
+            #
+            # ``trial_end`` stays: it records when the trial ended rather than
+            # granting anything, the two paths above both leave it in place,
+            # and the sweep reads it to decide what to look at — so dropping it
+            # would take a workspace out of the sweep for a reason unrelated to
+            # why it is being settled.
+            billing_limits["is_trial"] = False
+            billing_limits["trial_days_remaining"] = 0
             billing_limits["last_updated"] = timezone.now().isoformat()
             locked.billing_plan_limits = billing_limits
             locked.save()
