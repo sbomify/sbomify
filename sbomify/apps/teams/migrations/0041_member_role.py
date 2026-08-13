@@ -68,20 +68,33 @@ def normalise_unrecognised_roles(apps, schema_editor):
         )
 
     stale_members = Member.objects.exclude(role__in=SUPPORTED_ROLES)
-    for row in stale_members.values("id", "team__key", "role"):
-        logger.warning("Migration 0041: Member %s (workspace %s) role %r -> 'guest'", row["id"], row["team__key"], row["role"])
+    stale_sample = list(stale_members.values_list("id", flat=True)[:20])
+    stale_roles = sorted(set(stale_members.values_list("role", flat=True)[:100]))
     updated = stale_members.update(role="guest")
     if updated:
-        logger.warning("Migration 0041: normalised %s Member row(s) to 'guest'", updated)
+        # Count, the distinct values seen and a bounded id sample — not a line
+        # per row. One log line per member would be unbounded on a large install
+        # and adds nothing the ids do not.
+        logger.warning(
+            "Migration 0041: normalised %s Member row(s) with unrecognised roles %s to 'guest'. First %s ids: %s",
+            updated,
+            stale_roles,
+            len(stale_sample),
+            stale_sample,
+        )
 
     stale_invites = Invitation.objects.exclude(role__in=INVITABLE_ROLES)
-    for row in stale_invites.values("id", "team__key", "role"):
-        logger.warning(
-            "Migration 0041: Invitation %s (workspace %s) role %r -> 'guest'", row["id"], row["team__key"], row["role"]
-        )
+    invite_sample = list(stale_invites.values_list("id", flat=True)[:20])
+    invite_roles = sorted(set(stale_invites.values_list("role", flat=True)[:100]))
     updated = stale_invites.update(role="guest")
     if updated:
-        logger.warning("Migration 0041: normalised %s Invitation row(s) to 'guest'", updated)
+        logger.warning(
+            "Migration 0041: normalised %s Invitation row(s) with unrecognised roles %s to 'guest'. First %s ids: %s",
+            updated,
+            invite_roles,
+            len(invite_sample),
+            invite_sample,
+        )
 
 
 def noop_reverse(apps, schema_editor):
@@ -128,6 +141,22 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=models.Q(("role__in", ["owner", "admin", "member", "guest", "bot"])),
                 name="member_role_is_supported",
+            ),
+        ),
+        # Invitation was only constrained against "bot", so every other
+        # unrecognised value stayed insertable — and an invitation is a deferred
+        # Member row, so it sat there until accept time and then failed against
+        # the constraint above. Replaced with the invitable set, which subsumes
+        # the bot rule.
+        migrations.RemoveConstraint(
+            model_name="invitation",
+            name="invitation_role_not_bot",
+        ),
+        migrations.AddConstraint(
+            model_name="invitation",
+            constraint=models.CheckConstraint(
+                condition=models.Q(("role__in", ["owner", "admin", "member", "guest"])),
+                name="invitation_role_is_invitable",
             ),
         ),
     ]

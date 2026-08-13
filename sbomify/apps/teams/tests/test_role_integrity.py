@@ -19,7 +19,7 @@ from django.db import IntegrityError, transaction
 
 from sbomify.apps.core.authz import ROLE_MEMBER
 from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Team
 
 
 @pytest.mark.django_db
@@ -49,6 +49,27 @@ class TestRoleIntegrity:
 
         assert membership.role == ROLE_MEMBER
         assert ROLE_MEMBER in [role for role, _label in settings.TEAMS_SUPPORTED_ROLES]
+
+    def test_database_rejects_an_unrecognised_invitation_role(self):
+        """Invitation was the remaining way in for a role the code doesn't know.
+
+        It was constrained against ``bot`` only, so any other unrecognised value
+        was insertable — and an invitation is a deferred Member row, so the bad
+        value sat there until accept time and then failed against
+        member_role_is_supported, turning a write nobody validated into an
+        IntegrityError for whoever clicked the link.
+        """
+        team = Team.objects.create(name="Invitation Constraint Workspace")
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Invitation.objects.create(team=team, email="someone@example.com", role="viewer")
+
+    def test_invitations_still_cannot_carry_the_bot_role(self):
+        """The invitable set subsumes the old not-bot rule; prove it still holds."""
+        team = Team.objects.create(name="Bot Invitation Workspace")
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            Invitation.objects.create(team=team, email="ci@example.com", role="bot")
 
     def test_every_supported_role_is_writable(self, django_user_model):
         """The constraint must admit exactly the canonical set — no more, no less.

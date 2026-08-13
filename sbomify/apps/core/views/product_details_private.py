@@ -40,6 +40,11 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         current_team = request.session.get("current_team", {})
         team_billing_plan = current_team.get("billing_plan")
 
+        # Live Member row, not the session cache: these gate rendering, and the
+        # cache has a 300s TTL, so a demoted user would keep seeing controls the
+        # handlers behind them now refuse. Resolved once and reused.
+        is_admin_or_owner = get_member_role_by_key(request.user, current_team.get("key")) in ADMINISTER
+
         # Build TEI URN if TEA is enabled with a validated custom domain
         product_tei = get_product_tei_urn(product["id"], product["team_id"])
 
@@ -50,11 +55,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             from sbomify.apps.compliance.models import CRAAssessment
             from sbomify.apps.compliance.permissions import check_cra_access
 
-            # Live Member row, not the session cache: this gates a card whose
-            # data is fetched below, so a demoted user would otherwise keep
-            # seeing CRA assessment content until the cache refreshed.
-            team_role = get_member_role_by_key(request.user, current_team.get("key"))
-            has_cra_access = team_role in ADMINISTER and check_cra_access(billing_plan_key=team_billing_plan)
+            has_cra_access = is_admin_or_owner and check_cra_access(billing_plan_key=team_billing_plan)
 
             if has_cra_access:
                 cra = CRAAssessment.objects.filter(
@@ -101,8 +102,6 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             import logging
 
             logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
-
-        is_admin_or_owner = get_member_role_by_key(request.user, current_team.get("key")) in ADMINISTER
 
         # Components-and-security table + severity rollup, and the releases strip.
         from sbomify.apps.core.services.product_page import (
