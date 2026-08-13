@@ -427,13 +427,22 @@ class OSVPlugin(AssessmentPlugin):
             cwd=str(absolute_path.parent),
         )
 
-        # Exit code 0 = no vulns, 1 = vulns found, other = error.
+        # Exit code 0 = no vulns, 1 = vulns found, 128 = nothing to scan,
+        # anything else = the scan did not run to completion.
         #
-        # Error rather than warning: this used to be advisory, because the run
-        # carried on and published a result regardless. It is now the point at
-        # which the scan is abandoned, and a line that reads as non-fatal for an
-        # outcome the caller treats as fatal is what makes a log hard to trust.
-        if process.returncode not in self.SUCCESS_EXIT_CODES:
+        # Error rather than warning for the last group: it used to be advisory,
+        # because the run carried on and published a result regardless, and it
+        # is now the point at which the scan is abandoned. A line that reads as
+        # non-fatal for an outcome the caller treats as fatal is what makes a
+        # log hard to trust.
+        #
+        # 128 is excluded because assess() turns it into a skipped result, and
+        # settings wires Sentry to capture on logger.error — so leaving it in
+        # the error branch raised an incident for a Yocto SBOM the scanner
+        # simply had no packages to match, every hour.
+        if process.returncode == self.NO_PACKAGE_SOURCES_EXIT_CODE:
+            logger.warning(f"[OSV] Scanner found no package sources: {_collapse_for_log(process.stderr)}")
+        elif process.returncode not in self.SUCCESS_EXIT_CODES:
             logger.error(f"[OSV] Scanner returned code {process.returncode}: {_collapse_for_log(process.stderr)}")
 
         return process.stdout, process.stderr, process.returncode
