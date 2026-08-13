@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sbomify.apps.core.authz import ADMINISTER, MANAGE, READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.authz import ADMINISTER, MANAGE, READ_INTERNAL
 
 # Roles that may see a tab, taken from the capability tiers rather than spelled
 # out here: a tab and the actions behind it should never disagree about who may
@@ -25,11 +25,11 @@ from sbomify.apps.core.authz import ADMINISTER, MANAGE, READ_INTERNAL, ROLE_GUES
 # the only capability they lack is deleting the workspace — so there is no tab an
 # owner can open and an admin cannot. (Workspace deletion lives inside the
 # General tab and is gated separately, on ``is_owner``.)
-# Every human role. Derived from READ_INTERNAL rather than ADMINISTER: it was
-# written as ADMINISTER + guest when those two covered every role, which silently
-# stopped meaning "anyone" the moment `member` was added — and cost members the
-# Account tab, which is about the person rather than the workspace.
-ANY_MEMBER: tuple[str, ...] = READ_INTERNAL + (ROLE_GUEST,)
+# There is deliberately no "any role" alias here. One existed, written as
+# ADMINISTER + guest back when those two covered every role; it silently stopped
+# meaning "anyone" the moment `member` arrived, and cost members the Account tab.
+# Tabs name the tier they mean, so widening a tier widens the tab with it and an
+# alias cannot fall out of step with the roles again.
 
 
 @dataclass(frozen=True)
@@ -118,8 +118,11 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="Account",
         icon="fa-user-gear",
         template="account",
-        # Your own account is yours whatever your role in this workspace.
-        roles=ANY_MEMBER,
+        # Your own account is yours whatever your *internal* role. Guests are
+        # external and never reach this view — allowed_roles stops them well
+        # before the tab list — so listing them here only invited someone to
+        # widen the view later and hand guests a settings page by accident.
+        roles=READ_INTERNAL,
         description="Your own sign-in and personal settings.",
     ),
 )
