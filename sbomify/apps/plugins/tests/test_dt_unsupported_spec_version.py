@@ -188,9 +188,14 @@ class TestTheWiringInAssess:
 
         assert result["metadata"].get("unsupported_input") is True
 
-    def test_an_ordinary_skip_does_not_carry_it(self, scannable_sbom) -> None:
-        """The marker means "cannot read this input", not "skipped". A
-        precondition skip must keep the hourly cadence."""
+    def test_an_upload_failure_does_not_carry_it(self, scannable_sbom) -> None:
+        """The marker means "cannot read this input", and nothing else.
+
+        Named for what this actually drives: a 401 from the upload, which
+        returns an error result rather than a skip. The point is that a failure
+        the scanner might recover from keeps the hourly cadence instead of
+        being parked for a day.
+        """
         sbom, path, server = scannable_sbom
 
         result = self._assess_with_upload_raising(
