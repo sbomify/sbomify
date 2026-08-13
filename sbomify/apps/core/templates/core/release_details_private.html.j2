@@ -27,6 +27,22 @@
                             {% include 'core/components/copyable_value.html.j2' with value=release.id title="Release ID: "|add:release.id|add:" (click to copy)" %}
                         </div>
                     </div>
+                    {% if sibling_releases %}
+                        <div class="flex items-center gap-2 mt-2"
+                             x-data
+                             title="Compare this release with another">
+                            <i class="fas fa-code-compare text-text-muted text-sm"
+                               aria-hidden="true"></i>
+                            <select class="tw-form-select text-sm"
+                                    aria-label="Compare this release with another release"
+                                    onchange="if (this.value) window.location.href = this.value">
+                                <option value="">Compare with…</option>
+                                {% for sibling in sibling_releases %}
+                                    <option value="{% url 'core:release_diff' release.product.id release.id sibling.id %}">{{ sibling.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endif %}
                     {# Breadcrumb #}
                     <nav aria-label="breadcrumb" class="mt-1">
                         <ol class="flex items-center gap-2 text-sm text-text-muted">

@@ -4993,3 +4993,37 @@ def export_notice(
     response = HttpResponse(result.value, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
+
+
+@router.get(
+    "/release-diff",
+    response={200: dict[str, Any], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Diff two releases of a product",
+    tags=["Releases"],
+)
+def get_release_diff(
+    request: HttpRequest, from_release_id: str, to_release_id: str
+) -> dict[str, Any] | tuple[int, ErrorResponse]:
+    """Components added, removed and version-changed plus vulnerabilities
+    introduced and resolved between two releases of one product."""
+    from sbomify.apps.core.services import release_diff
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    releases = {
+        release.id: release
+        for release in Release.objects.filter(
+            id__in=[from_release_id, to_release_id], product__team=team
+        ).select_related("product")
+    }
+    from_release = releases.get(from_release_id)
+    to_release = releases.get(to_release_id)
+    if from_release is None or to_release is None:
+        return 404, ErrorResponse(detail="Release not found")
+
+    result = release_diff.diff_releases(team, from_release, to_release)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Diff failed")
+    return result.value or {}
