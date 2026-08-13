@@ -5,7 +5,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -392,6 +392,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # missing the admin self-removal rule).
         denial = check_member_removal(actor=user, target=membership)
         if denial:
+            # Honour ``forbidden`` exactly as the bare-PK path does. Both are
+            # plain form posts, so there is no rendering reason for the two to
+            # answer an authorization refusal differently — and downgrading a
+            # 403 to a redirect here is precisely the drift the shared helper
+            # exists to prevent.
+            if denial.forbidden:
+                return error_response(request, HttpResponseForbidden(denial.message))
             messages.add_message(request, denial.level, denial.message)
             return self._redirect_with_tab(request, team_key)
 
