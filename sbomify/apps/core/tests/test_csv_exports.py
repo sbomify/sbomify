@@ -333,3 +333,33 @@ class TestNoticeReport:
         html = client.get("/api/v1/exports/notice?format=html", **get_api_headers(token))
         assert html.status_code == 200
         assert html["Content-Type"].startswith("text/html")
+
+
+@pytest.mark.django_db
+class TestUnreadableSurfacing:
+    def test_licenses_csv_counts_unreadable_artifacts(self, inventory, monkeypatch):
+        team, _, _ = inventory
+
+        def broken(sbom_id):
+            raise csv_exports.SBOMDataError("gone")
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", broken)
+        result = csv_exports.export_licenses_csv(team)
+        assert "(unreadable artifact)" in result.value
+
+    def test_notice_lists_unreadable_artifacts(self, inventory, monkeypatch):
+        team, _, _ = inventory
+
+        def broken(sbom_id):
+            raise csv_exports.SBOMDataError("gone")
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", broken)
+        result = csv_exports.export_notice_text(team)
+        assert "Artifacts that could not be read" in result.value
+
+    def test_unknown_notice_format_is_rejected(self, authenticated_api_client, inventory, stub_sbom_bytes):
+        client, token = authenticated_api_client
+        from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+        response = client.get("/api/v1/exports/notice?format=pdf", **get_api_headers(token))
+        assert response.status_code == 400

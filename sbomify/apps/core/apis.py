@@ -4952,7 +4952,7 @@ def export_vulnerabilities(
 
 @router.get(
     "/exports/notice",
-    response={403: ErrorResponse, 404: ErrorResponse},
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
     summary="Export a third-party NOTICE document",
     tags=["Exports"],
 )
@@ -4985,9 +4985,13 @@ def export_notice(
     if format == "html":
         result = csv_exports.export_notice_html(team, product=product, release=release)
         content_type, filename = "text/html; charset=utf-8", "NOTICE.html"
-    else:
+    elif format == "text":
         result = csv_exports.export_notice_text(team, product=product, release=release)
         content_type, filename = "text/plain; charset=utf-8", "NOTICE.txt"
+    else:
+        # A typo must not silently produce the default format — automation
+        # would never notice it asked for something else.
+        return 400, ErrorResponse(detail='Unknown format; expected "text" or "html".')
     if not result.ok:
         return 403, ErrorResponse(detail=result.error or "Export failed")
     response = HttpResponse(result.value, content_type=content_type)

@@ -193,19 +193,25 @@ def export_licenses_csv(
 
     packages_by_license: dict[str, set[tuple[str, str]]] = defaultdict(set)
     components_by_license: dict[str, set[str]] = defaultdict(set)
+    unreadable_components: set[str] = set()
     for sbom in sboms:
         payload = _load_payload(sbom)
         if payload is None:
+            unreadable_components.add(sbom.component_id)
             continue
         for package in _packages(payload, sbom.format):
             for label in package["licenses"]:
                 packages_by_license[label].add((package["name"], package["version"]))
                 components_by_license[label].add(sbom.component_id)
 
-    rows = [
+    rows: list[list[Any]] = [
         [label, len(packages_by_license[label]), len(components_by_license[label])]
         for label in sorted(packages_by_license)
     ]
+    if unreadable_components:
+        # The same rule as the inventory export: an aggregation that silently
+        # dropped what it could not read looks complete while it is not.
+        rows.append([UNREADABLE, "", len(unreadable_components)])
     return ServiceResult.success(_csv(["License", "Packages", "Components"], rows))
 
 
@@ -331,9 +337,10 @@ def _notice_entries(
     team: Team,
     product: Product | None = None,
     release: Release | None = None,
-) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
-    """``(scope_name, attributed, unknown)`` — the one structure both notice
-    renderers consume, so text and HTML can never list different components."""
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """``(scope_name, attributed, unknown, unreadable)`` — the one structure
+    both notice renderers consume, so text and HTML can never list different
+    components; ``unreadable`` names the artifacts the notice could not cover."""
     if release is not None:
         sboms = [
             artifact.sbom
@@ -346,9 +353,11 @@ def _notice_entries(
         scope_name = product.name if product is not None else team.name
 
     seen: dict[tuple[str, str], dict[str, Any]] = {}
+    unreadable: list[str] = []
     for sbom in sboms:
         payload = _load_payload(sbom)
         if payload is None:
+            unreadable.append(f"{sbom.component.name} ({sbom.name} {sbom.version or ''})".strip())
             continue
         for package in _packages(payload, sbom.format):
             if not package["name"]:
@@ -367,7 +376,7 @@ def _notice_entries(
     entries = sorted(seen.values(), key=lambda e: (e["name"].lower(), e["version"]))
     attributed = [e for e in entries if e["licenses"]]
     unknown = [e for e in entries if not e["licenses"]]
-    return scope_name, attributed, unknown
+    return scope_name, attributed, unknown, sorted(unreadable)
 
 
 def export_notice_text(
@@ -381,7 +390,7 @@ def export_notice_text(
     section rather than dropped — an attribution file that silently omits them
     reads as complete when it is not.
     """
-    scope_name, attributed, unknown = _notice_entries(team, product=product, release=release)
+    scope_name, attributed, unknown, unreadable = _notice_entries(team, product=product, release=release)
     lines = [f"Third-Party Notices for {scope_name}", "=" * 40, ""]
     for entry in attributed:
         lines.append(f"{entry['name']} {entry['version']}".rstrip())
@@ -393,6 +402,10 @@ def export_notice_text(
         lines += ["Components without license data", "-" * 40, ""]
         for entry in unknown:
             lines.append(f"{entry['name']} {entry['version']}".rstrip())
+        lines.append("")
+    if unreadable:
+        lines += ["Artifacts that could not be read", "-" * 40, ""]
+        lines += unreadable
         lines.append("")
     return ServiceResult.success("\n".join(lines))
 
@@ -409,7 +422,7 @@ def export_notice_html(
     """
     from django.utils.html import escape
 
-    scope_name, attributed, unknown = _notice_entries(team, product=product, release=release)
+    scope_name, attributed, unknown, unreadable = _notice_entries(team, product=product, release=release)
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'>",
         f"<title>Third-Party Notices for {escape(scope_name)}</title>",
@@ -431,6 +444,11 @@ def export_notice_html(
         parts.append("<h2>Components without license data</h2><ul>")
         for entry in unknown:
             parts.append(f"<li>{escape(entry['name'])} {escape(entry['version'])}</li>")
+        parts.append("</ul>")
+    if unreadable:
+        parts.append("<h2>Artifacts that could not be read</h2><ul>")
+        for label in unreadable:
+            parts.append(f"<li>{escape(label)}</li>")
         parts.append("</ul>")
     parts.append("</body></html>")
     return ServiceResult.success("".join(parts))
