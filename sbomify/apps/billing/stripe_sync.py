@@ -67,8 +67,13 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> Non
         billing_limits = locked.billing_plan_limits or {}
         current = billing_limits.get("stripe_subscription_id")
         if current != stripe_sub_id:
+            # Names the workspace: without it the line records that something
+            # was left alone without saying what, which is not traceable in
+            # production. The key is safe to log — it is the subscription ids
+            # that are kept out.
             logger.info(
-                "Subscription reference changed while Stripe was queried; leaving the workspace alone",
+                "Workspace %s changed subscription reference while Stripe was queried; leaving it alone",
+                team.key,
             )
         else:
             billing_limits["subscription_status"] = "canceled"
