@@ -4853,7 +4853,7 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
     if not result.ok:
         return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     scope = product.name if product else team.name
-    safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-")
+    safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-") or "workspace"
     return _csv_response(result.value or "", f"{safe}-inventory.csv")
 
 

@@ -31,13 +31,9 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         current_team = request.session.get("current_team", {})
 
-        from sbomify.apps.core.models import Release
+        from sbomify.apps.core.services.release_diff import sibling_releases_for
 
-        sibling_releases = list(
-            Release.objects.filter(product_id=product_id, product__team_id=current_team.get("id"))
-            .exclude(id=release_id)
-            .order_by("-created_at")
-        )
+        sibling_releases = sibling_releases_for(current_team.get("id"), product_id, exclude_release_id=release_id)
 
         return render(
             request,
@@ -55,6 +51,7 @@ class ReleaseDiffView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     """What changed between two releases of a product."""
 
     def get(self, request: HttpRequest, product_id: str, release_id: str, other_release_id: str) -> HttpResponse:
+        from sbomify.apps.core.authz import can
         from sbomify.apps.core.services.release_diff import build_diff_page_context
         from sbomify.apps.teams.models import Team
 
@@ -62,6 +59,10 @@ class ReleaseDiffView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         team = Team.objects.filter(id=team_id).first() if team_id else None
         if team is None:
             return error_response(request, HttpResponse(status=403, content="No workspace context"))
+        # The session names the workspace; can() decides whether this user may
+        # still read it — a stale session must not keep exposing diff data.
+        if not can(request, "workspace:read", team):
+            return error_response(request, HttpResponse(status=403, content="Forbidden"))
 
         result = build_diff_page_context(team, product_id, release_id, other_release_id)
         if not result.ok:

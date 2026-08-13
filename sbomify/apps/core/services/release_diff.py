@@ -29,18 +29,36 @@ def _release_sboms(release: Release) -> list[SBOM]:
     ]
 
 
-def _package_versions(release: Release) -> dict[str, set[str]]:
-    """Package name → the versions the release ships (a name can appear in
-    several pinned SBOMs, or at several versions in one)."""
+def sibling_releases_for(team_id: Any, product_id: str, *, exclude_release_id: str) -> list[Release]:
+    """The product's other releases, newest first — the baseline selector's
+    option list, kept here so views hold no release queries of their own."""
+    from sbomify.apps.core.models import Release
+
+    return list(
+        Release.objects.filter(product_id=product_id, product__team_id=team_id)
+        .exclude(id=exclude_release_id)
+        .order_by("-created_at")
+    )
+
+
+def _package_versions(release: Release) -> tuple[dict[str, set[str]], list[str]]:
+    """(package name → versions the release ships, unreadable artifact names).
+
+    An unreadable pinned SBOM must be reported, not skipped: its absence
+    silently deletes every one of its packages from the delta, and a diff
+    presenting "no changes" over a hole is worse than an error.
+    """
     versions: dict[str, set[str]] = defaultdict(set)
+    unreadable: list[str] = []
     for sbom in _release_sboms(release):
         payload = csv_exports._load_payload(sbom)
         if payload is None:
+            unreadable.append(f"{sbom.component.name} ({sbom.name} {sbom.version or ''})".strip())
             continue
         for package in csv_exports._packages(payload, sbom.format):
             if package["name"]:
                 versions[package["name"]].add(package["version"] or "")
-    return versions
+    return versions, sorted(unreadable)
 
 
 def _live_findings(team: Team, release: Release) -> dict[str, dict[str, Any]]:
@@ -119,8 +137,8 @@ def diff_releases(team: Team, from_release: Release, to_release: Release) -> Ser
             status_code=400,
         )
 
-    old_packages = _package_versions(from_release)
-    new_packages = _package_versions(to_release)
+    old_packages, old_unreadable = _package_versions(from_release)
+    new_packages, new_unreadable = _package_versions(to_release)
 
     added = [
         {"name": name, "version": "; ".join(sorted(new_packages[name]))}
@@ -151,6 +169,7 @@ def diff_releases(team: Team, from_release: Release, to_release: Release) -> Ser
             "to_release": _release_summary(to_release),
             "components": {"added": added, "removed": removed, "changed": changed},
             "vulnerabilities": {"introduced": introduced, "resolved": resolved},
+            "unreadable_artifacts": sorted(set(old_unreadable) | set(new_unreadable)),
             "counts": {
                 "added": len(added),
                 "removed": len(removed),

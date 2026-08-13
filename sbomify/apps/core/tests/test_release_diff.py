@@ -158,3 +158,16 @@ class TestDiffPage:
         response = authenticated_web_client.get(f"/product/{product.id}/release/{new.id}/")
         assert response.status_code == 200
         assert f"/diff/{old.id}/" in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestUnreadableArtifacts:
+    def test_unreadable_pinned_sbom_is_reported_not_skipped(self, two_releases, monkeypatch):
+        team, _, old, new = two_releases
+
+        def broken(sbom_id):
+            raise csv_exports.SBOMDataError("gone")
+
+        monkeypatch.setattr(csv_exports, "get_sbom_data_bytes", broken)
+        diff = release_diff.diff_releases(team, old, new).value
+        assert len(diff["unreadable_artifacts"]) == 2

@@ -41,11 +41,23 @@
                 </select>
                 <a href="{% url 'core:release_diff' product.id from_release.id to_release.id %}"
                    class="tw-btn-secondary tw-btn-sm"
-                   title="Swap direction">
+                   title="Swap direction"
+                   aria-label="Swap comparison direction">
                     <i class="fas fa-right-left" aria-hidden="true"></i>
                 </a>
             </div>
         </div>
+        {% if diff.unreadable_artifacts %}
+            <div class="tw-alert tw-alert-warning">
+                <i class="fas fa-triangle-exclamation tw-alert-icon" aria-hidden="true"></i>
+                <div class="tw-alert-content">
+                    <p class="text-sm m-0">
+                        {{ diff.unreadable_artifacts|length }} pinned artifact{{ diff.unreadable_artifacts|length|pluralize }} could not be read
+                        ({{ diff.unreadable_artifacts|join:", " }}) — the delta below may be incomplete.
+                    </p>
+                </div>
+            </div>
+        {% endif %}
         {# Count strip #}
         <div class="flex flex-wrap gap-3">
             <span class="tw-badge-success">{{ diff.counts.added }} added</span>
