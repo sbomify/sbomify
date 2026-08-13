@@ -103,6 +103,7 @@ def _packages(payload: dict[str, Any], sbom_format: str) -> list[dict[str, Any]]
                     "supplier": (supplier or {}).get("name", "") if isinstance(supplier, dict) else "",
                     "licenses": _cyclonedx_licenses(entry),
                     "purl": entry.get("purl") or "",
+                    "copyright": entry.get("copyright") if isinstance(entry.get("copyright"), str) else "",
                 }
             )
     else:
@@ -126,6 +127,11 @@ def _packages(payload: dict[str, Any], sbom_format: str) -> list[dict[str, Any]]
                         [declared] if isinstance(declared, str) and declared and declared != "NOASSERTION" else []
                     ),
                     "purl": purl,
+                    "copyright": (
+                        entry.get("copyrightText")
+                        if isinstance(entry.get("copyrightText"), str) and entry.get("copyrightText") != "NOASSERTION"
+                        else ""
+                    ),
                 }
             )
     return rows
@@ -313,3 +319,112 @@ def export_vulnerabilities_csv(
             rows,
         )
     )
+
+
+def _notice_entries(
+    team: Team,
+    product: Product | None = None,
+    release: Release | None = None,
+) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+    """``(scope_name, attributed, unknown)`` — the one structure both notice
+    renderers consume, so text and HTML can never list different components."""
+    if release is not None:
+        sboms = [
+            artifact.sbom
+            for artifact in release.artifacts.select_related("sbom__component").all()
+            if artifact.sbom is not None and artifact.sbom.bom_type == SBOM.BomType.SBOM.value
+        ]
+        scope_name = f"{release.product.name} {release.name}"
+    else:
+        sboms = _latest_sboms(team, product)
+        scope_name = product.name if product is not None else team.name
+
+    seen: dict[tuple[str, str], dict[str, Any]] = {}
+    for sbom in sboms:
+        payload = _load_payload(sbom)
+        if payload is None:
+            continue
+        for package in _packages(payload, sbom.format):
+            if not package["name"]:
+                continue
+            key = (package["name"], package["version"])
+            entry = seen.setdefault(
+                key,
+                {"name": package["name"], "version": package["version"], "licenses": [], "copyright": ""},
+            )
+            for label in package["licenses"]:
+                if label not in entry["licenses"]:
+                    entry["licenses"].append(label)
+            if package["copyright"] and not entry["copyright"]:
+                entry["copyright"] = package["copyright"]
+
+    entries = sorted(seen.values(), key=lambda e: (e["name"].lower(), e["version"]))
+    attributed = [e for e in entries if e["licenses"]]
+    unknown = [e for e in entries if not e["licenses"]]
+    return scope_name, attributed, unknown
+
+
+def export_notice_text(
+    team: Team,
+    product: Product | None = None,
+    release: Release | None = None,
+) -> ServiceResult[str]:
+    """A NOTICE document as plain text.
+
+    Components the artifacts carry no licence for are listed in their own
+    section rather than dropped — an attribution file that silently omits them
+    reads as complete when it is not.
+    """
+    scope_name, attributed, unknown = _notice_entries(team, product=product, release=release)
+    lines = [f"Third-Party Notices for {scope_name}", "=" * 40, ""]
+    for entry in attributed:
+        lines.append(f"{entry['name']} {entry['version']}".rstrip())
+        lines.append(f"  License: {'; '.join(entry['licenses'])}")
+        if entry["copyright"]:
+            lines.append(f"  {entry['copyright']}")
+        lines.append("")
+    if unknown:
+        lines += ["Components without license data", "-" * 40, ""]
+        for entry in unknown:
+            lines.append(f"{entry['name']} {entry['version']}".rstrip())
+        lines.append("")
+    return ServiceResult.success("\n".join(lines))
+
+
+def export_notice_html(
+    team: Team,
+    product: Product | None = None,
+    release: Release | None = None,
+) -> ServiceResult[str]:
+    """The same NOTICE document as a standalone HTML page.
+
+    Every value is artifact-derived, so everything renders through
+    ``django.utils.html.escape``.
+    """
+    from django.utils.html import escape
+
+    scope_name, attributed, unknown = _notice_entries(team, product=product, release=release)
+    parts = [
+        "<!doctype html><html><head><meta charset='utf-8'>",
+        f"<title>Third-Party Notices for {escape(scope_name)}</title>",
+        "<style>body{font-family:sans-serif;max-width:48rem;margin:2rem auto;padding:0 1rem;color:#1a1a2e}"
+        "h1{font-size:1.4rem}h2{font-size:1.1rem;margin-top:2rem}"
+        "li{margin-bottom:.6rem}.c{color:#555;font-size:.9rem}</style></head><body>",
+        f"<h1>Third-Party Notices for {escape(scope_name)}</h1><ul>",
+    ]
+    for entry in attributed:
+        parts.append(
+            f"<li><strong>{escape(entry['name'])} {escape(entry['version'])}</strong>"
+            f" — {escape('; '.join(entry['licenses']))}"
+        )
+        if entry["copyright"]:
+            parts.append(f"<div class='c'>{escape(entry['copyright'])}</div>")
+        parts.append("</li>")
+    parts.append("</ul>")
+    if unknown:
+        parts.append("<h2>Components without license data</h2><ul>")
+        for entry in unknown:
+            parts.append(f"<li>{escape(entry['name'])} {escape(entry['version'])}</li>")
+        parts.append("</ul>")
+    parts.append("</body></html>")
+    return ServiceResult.success("".join(parts))
