@@ -367,6 +367,58 @@ class TestTheSweepReportsWhatHappened:
 
 
 @pytest.mark.django_db
+class TestTheSyncPathNamesTheWorkspace:
+    """The other entry point into reconciliation, reached from views as well as
+    from the sweep.
+
+    It logged a bare "no longer exists", which said neither which workspace it
+    concerned nor whether the reference was actually cleared — and the no-op
+    branch declines to write, so the two are different outcomes.
+    """
+
+    def _sync_against_a_missing_subscription(self, team, monkeypatch, on_fetch=None):
+        from sbomify.apps.billing import stripe_sync
+
+        monkeypatch.setattr(
+            stripe_sync.stripe_client,
+            "get_subscription",
+            MagicMock(side_effect=on_fetch or StripeResourceMissingError("gone")),
+        )
+        return stripe_sync.sync_subscription_from_stripe(team, force_refresh=True)
+
+    def test_a_cleared_reference_names_the_workspace(self, monkeypatch) -> None:
+        from sbomify.apps.billing import stripe_sync
+
+        team = _expired_trial_team()
+
+        with patch.object(stripe_sync.logger, "info") as info:
+            self._sync_against_a_missing_subscription(team, monkeypatch)
+
+        cleared = [c for c in info.call_args_list if "cleared it from workspace" in c.args[0]]
+        assert cleared, "the sync path did not report clearing the reference"
+        assert team.key in cleared[0].args
+
+    def test_a_no_op_is_not_reported_as_a_clear(self, monkeypatch) -> None:
+        from sbomify.apps.billing import stripe_sync
+
+        team = _expired_trial_team()
+
+        def _checkout_lands_mid_flight(_subscription_id: str):
+            fresh = Team.objects.get(pk=team.pk)
+            limits = fresh.billing_plan_limits
+            limits["stripe_subscription_id"] = "sub_new_from_checkout"
+            fresh.billing_plan_limits = limits
+            fresh.save()
+            raise StripeResourceMissingError("gone")
+
+        with patch.object(stripe_sync.logger, "info") as info:
+            self._sync_against_a_missing_subscription(team, monkeypatch, on_fetch=_checkout_lands_mid_flight)
+
+        assert not [c for c in info.call_args_list if "cleared it from workspace" in c.args[0]]
+        assert [c for c in info.call_args_list if "already moved on" in c.args[0]]
+
+
+@pytest.mark.django_db
 class TestCacheInvalidationNeedsBothHalvesOfTheKey:
     def test_a_missing_id_does_not_build_a_partial_key(self, monkeypatch) -> None:
         """Substituting "" for a missing id builds a key belonging to nothing —

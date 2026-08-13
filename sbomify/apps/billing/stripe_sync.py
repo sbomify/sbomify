@@ -362,8 +362,16 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
     except StripeError as e:
         # Handle deleted subscriptions
         if _is_missing_subscription(e):
-            logger.info("Subscription no longer exists in Stripe")
-            reconcile_missing_subscription(team, stripe_sub_id)
+            # Named, and reported by what actually happened. This path is
+            # reachable from the daily sweep and from views, so a bare
+            # "no longer exists" left no way to tell which workspace it was
+            # about — or whether the dangling reference was cleared, since
+            # reconciliation declines to write when the stored id moved while
+            # Stripe was being queried.
+            if reconcile_missing_subscription(team, stripe_sub_id):
+                logger.info("Subscription no longer exists in Stripe; cleared it from workspace %s", team.key)
+            else:
+                logger.info("Subscription no longer exists in Stripe; workspace %s already moved on", team.key)
             return True
         else:
             logger.warning(f"Failed to sync subscription: {e}")
