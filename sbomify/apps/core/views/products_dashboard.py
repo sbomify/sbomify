@@ -13,6 +13,7 @@ from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.teams.queries import get_member_role_by_key
 
 
 def _get_products_context(request: HttpRequest) -> dict[str, Any] | None:
@@ -22,7 +23,7 @@ def _get_products_context(request: HttpRequest) -> dict[str, Any] | None:
         return None
 
     current_team = request.session.get("current_team") or {}
-    has_crud_permissions = current_team.get("role") in MANAGE
+    has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
 
     # Sort products alphabetically by name
     sorted_products = sorted(products.items, key=lambda p: p.name.lower())

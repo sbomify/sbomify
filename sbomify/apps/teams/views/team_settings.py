@@ -23,7 +23,7 @@ from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
-from sbomify.apps.teams.queries import get_pending_invitations_for_user
+from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
@@ -258,7 +258,13 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # open is neither linked nor rendered.
         from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
 
-        role = request.session.get("current_team", {}).get("role")
+        # Live Member row, not the session cache. This decides which settings
+        # sections are linked AND rendered, so a demoted user reading a stale
+        # cached role would be shown sections they can no longer act on — and
+        # this view was just widened to MANAGE so members can reach their own
+        # tabs, which makes an accurate role here load-bearing rather than
+        # cosmetic.
+        role = get_member_role_by_key(request.user, team_key)
         billing_enabled_flag = is_billing_enabled()
         active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
         if active_tab is None:

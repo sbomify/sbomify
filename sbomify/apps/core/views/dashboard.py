@@ -11,6 +11,7 @@ from django.views import View
 from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.teams.models import Member
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.teams.queries import get_member_role_by_key
 
 
 class ValidateWorkspaceMixin:
@@ -51,7 +52,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if needs_plan_selection(team, request.user):
             return redirect(f"{reverse('teams:onboarding_wizard')}?step=plan")
 
-        has_crud_permissions = current_team.get("role") in MANAGE
+        has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
 
         from django.utils import timezone
 

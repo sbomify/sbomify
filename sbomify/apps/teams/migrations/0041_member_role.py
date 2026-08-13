@@ -48,25 +48,37 @@ def normalise_unrecognised_roles(apps, schema_editor):
     # nobody re-authorized, so it must leave a trace rather than being inferred
     # later from behaviour. Review this list and demote anyone who should not
     # have it; there is no way for the migration to tell.
-    promoted = list(Member.objects.filter(role="member").values("id", "team__key", "user__email"))
-    if promoted:
+    promoted = Member.objects.filter(role="member")
+    promoted_count = promoted.count()
+    if promoted_count:
+        # Membership IDs, not emails, and a bounded sample. Deploy logs are
+        # widely readable and long-lived, so putting every affected user's email
+        # in one there trades a privacy problem for an operational convenience —
+        # and on a large install the entry would be unusable anyway. The IDs are
+        # enough to pull the rows back out.
+        sample = list(promoted.values_list("id", flat=True)[:20])
         logger.warning(
             "Migration 0041: %s pre-existing role='member' row(s) become real members "
-            "(internal read + create/edit + artifact upload). Review: %s",
-            len(promoted),
-            promoted,
+            "(internal read + create/edit + artifact upload). Review these Member ids "
+            "and demote any that should not have it — the migration cannot tell. "
+            "First %s: %s",
+            promoted_count,
+            len(sample),
+            sample,
         )
 
     stale_members = Member.objects.exclude(role__in=SUPPORTED_ROLES)
-    for row in stale_members.values("id", "team__key", "user__email", "role"):
-        logger.warning("Migration 0041: Member role %r -> 'guest' (%s)", row["role"], row)
+    for row in stale_members.values("id", "team__key", "role"):
+        logger.warning("Migration 0041: Member %s (workspace %s) role %r -> 'guest'", row["id"], row["team__key"], row["role"])
     updated = stale_members.update(role="guest")
     if updated:
         logger.warning("Migration 0041: normalised %s Member row(s) to 'guest'", updated)
 
     stale_invites = Invitation.objects.exclude(role__in=INVITABLE_ROLES)
-    for row in stale_invites.values("id", "team__key", "email", "role"):
-        logger.warning("Migration 0041: Invitation role %r -> 'guest' (%s)", row["role"], row)
+    for row in stale_invites.values("id", "team__key", "role"):
+        logger.warning(
+            "Migration 0041: Invitation %s (workspace %s) role %r -> 'guest'", row["id"], row["team__key"], row["role"]
+        )
     updated = stale_invites.update(role="guest")
     if updated:
         logger.warning("Migration 0041: normalised %s Invitation row(s) to 'guest'", updated)

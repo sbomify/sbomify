@@ -16,6 +16,7 @@ from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ProductPatchSchema
 from sbomify.apps.tea.mappers import get_product_tei_urn
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.teams.queries import get_member_role_by_key
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,10 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             from sbomify.apps.compliance.models import CRAAssessment
             from sbomify.apps.compliance.permissions import check_cra_access
 
-            team_role = current_team.get("role")
+            # Live Member row, not the session cache: this gates a card whose
+            # data is fetched below, so a demoted user would otherwise keep
+            # seeing CRA assessment content until the cache refreshed.
+            team_role = get_member_role_by_key(request.user, current_team.get("key"))
             has_cra_access = team_role in ADMINISTER and check_cra_access(billing_plan_key=team_billing_plan)
 
             if has_cra_access:
