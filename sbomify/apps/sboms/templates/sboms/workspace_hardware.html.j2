@@ -1,0 +1,103 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}Hardware{% endblock %}
+{% block dashboard_content %}
+    <div class="mb-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <i class="fas fa-microchip text-primary text-lg"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-text">Hardware</h1>
+                <p class="text-text-muted text-sm">
+                    {{ team.name }} · parts across every hardware-bearing artifact, and where they concentrate
+                </p>
+            </div>
+        </div>
+    </div>
+    {% if rollup.rows %}
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-text">{{ rollup.components_with_hardware }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Components with hardware</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-text">{{ rollup.distinct_parts }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Distinct parts</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold {% if rollup.shared_parts %}text-warning{% else %}text-text{% endif %}">
+                    {{ rollup.shared_parts }}
+                </div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Shared across products</div>
+            </div>
+            <div class="tw-card px-4 py-3 text-center">
+                <div class="text-2xl font-bold text-text">{{ rollup.parts_total }}</div>
+                <div class="text-xs text-text-muted uppercase tracking-wide mt-1">Part lines</div>
+            </div>
+        </div>
+        {% if rollup.top_manufacturers %}
+            <div class="tw-card mb-6">
+                <div class="px-6 py-4 border-b border-border">
+                    <h4 class="text-lg font-semibold text-text m-0">Manufacturers</h4>
+                </div>
+                <div class="p-6">
+                    <div class="flex flex-wrap gap-2">
+                        {% for entry in rollup.top_manufacturers %}
+                            <span class="px-3 py-1.5 text-sm rounded-lg border border-border bg-background text-text">
+                                {{ entry.name }}
+                                <span class="text-xs text-text-muted">· {{ entry.parts }} part{{ entry.parts|pluralize }}</span>
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        <div class="tw-card">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text m-0">Parts</h4>
+                <p class="text-text-muted text-sm m-0 mt-1">
+                    Parts more than one product depends on lead — that concentration is the single-source risk to review.
+                </p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="tw-data-table w-full">
+                    <thead>
+                        <tr>
+                            <th>Manufacturer</th>
+                            <th>Part</th>
+                            <th>Type</th>
+                            <th>Products</th>
+                            <th>Components</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rollup.rows %}
+                            <tr>
+                                <td class="text-text-muted">{{ row.manufacturer|default:"—" }}</td>
+                                <td>
+                                    <span class="font-medium text-text">{{ row.name }}</span>
+                                    {% if row.shared %}<span class="tw-badge-warning ml-2">shared</span>{% endif %}
+                                </td>
+                                <td class="text-text-muted">{{ row.type|default:"—" }}</td>
+                                <td class="text-text-muted">{{ row.products|join:", " }}</td>
+                                <td class="text-text-muted">{{ row.components|join:", " }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="tw-card">
+            <div class="tw-empty-state py-12">
+                <div class="tw-empty-state-icon">
+                    <i class="fas fa-microchip text-2xl"></i>
+                </div>
+                <h4 class="tw-empty-state-title">No hardware artifacts yet</h4>
+                <p class="tw-empty-state-description">
+                    Upload an HBOM, or an SBOM carrying hardware components, and its parts appear here.
+                </p>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
