@@ -50,6 +50,17 @@ def _expire_the_fresh_entry() -> None:
     cache.delete(_JWKS_CACHE_KEY)
 
 
+def _backoff_expiry() -> float:
+    """When the backoff marker lapses.
+
+    Reaches into LocMemCache's expiry table because Django's cache API has no
+    public way to read a key's remaining life, and the distinction being tested
+    — set the window once, versus restart it on every request — is invisible in
+    the value itself.
+    """
+    return cache._expire_info[cache.make_key(_JWKS_FETCH_BACKOFF_KEY)]
+
+
 def _cold_cache() -> None:
     """A deployment that has never reached GitHub.
 
@@ -334,6 +345,28 @@ class TestAnOutageDoesNotCostAFetchPerRequest:
         mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=response)
 
         assert _fetch_github_jwks() == rotated
+
+    def test_traffic_during_the_outage_does_not_extend_the_window(
+        self, mocker, mock_github_jwks, rsa_keypair
+    ) -> None:
+        """The window is measured from the first failure, not from the last request.
+
+        Every exchange served from the fallback comes back through the arming
+        site, so re-stamping the marker there would push its expiry out again
+        each time. Under steady traffic — which is the load this exists for —
+        the window would then never close and the recovery above would never
+        be reached.
+        """
+        _fetch_github_jwks()
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+        _fetch_github_jwks()
+        first_expiry = _backoff_expiry()
+
+        for _ in range(3):
+            _fetch_github_jwks()
+
+        assert _backoff_expiry() == first_expiry, "continued traffic pushed the retry further away"
 
     def test_a_cold_cache_still_tries(self, mocker) -> None:
         """With nothing to fall back to, failing fast would fail every request

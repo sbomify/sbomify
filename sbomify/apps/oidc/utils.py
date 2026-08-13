@@ -273,7 +273,13 @@ def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable, cause: BaseException | N
     """
     # Armed here rather than at each call site so every failure mode that
     # reaches the fallback also suppresses the next fetch.
-    cache.set(_JWKS_FETCH_BACKOFF_KEY, True, timeout=_JWKS_FETCH_BACKOFF_SECONDS)
+    #
+    # ``add``, not ``set``: every request served from the fallback comes back
+    # through here, and a ``set`` would push the expiry out again each time.
+    # Under steady traffic the window would then never close, so the fetch
+    # would never be retried and GitHub coming back would go unnoticed until
+    # the traffic did. ``add`` measures the window from the first failure.
+    cache.add(_JWKS_FETCH_BACKOFF_KEY, True, timeout=_JWKS_FETCH_BACKOFF_SECONDS)
 
     fallback = cache.get(_JWKS_FALLBACK_CACHE_KEY)
     if fallback is None:
