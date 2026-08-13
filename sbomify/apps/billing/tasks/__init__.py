@@ -315,13 +315,18 @@ def check_stale_trials_task() -> None:
             # The id is deliberately not in the message: the workspace key
             # locates the row, and a billing identifier in log aggregation buys
             # nothing. CodeQL flags it too.
-            reconcile_missing_subscription(team, subscription_id)
-            logger.warning(
-                "Workspace %s referenced a subscription that no longer exists at Stripe; "
-                "marked canceled and cleared the dangling reference",
-                team.key,
-            )
-            missing_count += 1
+            # Reported from what actually happened. Reconciliation no-ops when
+            # the workspace's subscription changed during the Stripe round
+            # trip, and announcing "marked canceled and cleared" for that would
+            # describe a write that did not occur — and count it, so the sweep
+            # summary would overstate how many workspaces it settled.
+            if reconcile_missing_subscription(team, subscription_id):
+                logger.warning(
+                    "Workspace %s referenced a subscription that no longer exists at Stripe; "
+                    "marked canceled and cleared the dangling reference",
+                    team.key,
+                )
+                missing_count += 1
         except StripeError as e:
             logger.error("Failed to sync team %s: %s", team.key, e)
             error_count += 1

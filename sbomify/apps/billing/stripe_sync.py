@@ -39,7 +39,7 @@ def _is_missing_subscription(error: StripeError) -> bool:
     return "no such subscription" in error_str or "resource_missing" in error_str
 
 
-def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> None:
+def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> bool:
     """Settle a workspace whose stored subscription no longer exists at Stripe.
 
     Re-reads the row under ``select_for_update`` rather than writing back a
@@ -58,6 +58,9 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> Non
     round trip and a checkout can complete during it. Clearing unconditionally
     would then delete the subscription the customer had just paid for — the
     same harm the lock was added to prevent, arrived at from the other side.
+
+    Returns whether anything was settled, so a caller does not report a
+    reconciliation that did not happen.
     """
     from django.db import transaction as db_transaction
 
@@ -87,10 +90,14 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> Non
             locked.save()
             reconciled = True
 
-    # Only for the id actually settled. Invalidating on a no-op would drop the
-    # cache entry belonging to whichever subscription replaced it.
-    if reconciled:
-        invalidate_subscription_cache(stripe_sub_id or "", team.key or "")
+    # Only for the id actually settled, and only when both halves of the key
+    # are known. Invalidating on a no-op would drop the entry belonging to
+    # whichever subscription replaced this one, and substituting "" for a
+    # missing id builds a key that belongs to nothing — or worse, to something
+    # else.
+    if reconciled and stripe_sub_id and team.key:
+        invalidate_subscription_cache(stripe_sub_id, team.key)
+    return reconciled
 
 
 def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:

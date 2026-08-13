@@ -331,3 +331,52 @@ class TestAReplacementSubscriptionSurvives:
         stripe_sync.reconcile_missing_subscription(team, "sub_gone")
 
         assert calls == []
+
+
+@pytest.mark.django_db
+class TestTheSweepReportsWhatHappened:
+    """A no-op must not be announced or counted as a reconciliation."""
+
+    def test_a_no_op_is_not_counted(self, caplog) -> None:
+        from sbomify.apps.billing import tasks as billing_tasks
+
+        team = _expired_trial_team()
+
+        def _checkout_lands_mid_flight(_subscription_id: str):
+            fresh = Team.objects.get(pk=team.pk)
+            limits = fresh.billing_plan_limits
+            limits["stripe_subscription_id"] = "sub_new_from_checkout"
+            fresh.billing_plan_limits = limits
+            fresh.save()
+            raise StripeResourceMissingError("gone")
+
+        with patch.object(billing_tasks.logger, "warning") as warning:
+            _run_sweep(MagicMock(side_effect=_checkout_lands_mid_flight))
+
+        assert not [c for c in warning.call_args_list if "cleared the dangling reference" in c.args[0]]
+
+    def test_a_real_reconciliation_is_announced(self) -> None:
+        from sbomify.apps.billing import tasks as billing_tasks
+
+        _expired_trial_team()
+
+        with patch.object(billing_tasks.logger, "warning") as warning:
+            _run_sweep(MagicMock(side_effect=StripeResourceMissingError("gone")))
+
+        assert [c for c in warning.call_args_list if "cleared the dangling reference" in c.args[0]]
+
+
+@pytest.mark.django_db
+class TestCacheInvalidationNeedsBothHalvesOfTheKey:
+    def test_a_missing_id_does_not_build_a_partial_key(self, monkeypatch) -> None:
+        """Substituting "" for a missing id builds a key belonging to nothing —
+        or to something else."""
+        from sbomify.apps.billing import stripe_sync
+
+        team = _expired_trial_team()
+        calls: list = []
+        monkeypatch.setattr(stripe_sync, "invalidate_subscription_cache", lambda *a: calls.append(a))
+
+        stripe_sync.reconcile_missing_subscription(team, None)
+
+        assert calls == []
