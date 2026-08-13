@@ -90,7 +90,7 @@ def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
 
     if requires_nda:
         # Only show requests that have NDA signature (request is complete)
-        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         return base_queryset.filter(id__in=signed_request_ids)
 
     return base_queryset
@@ -1071,7 +1071,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 requires_nda = company_nda is not None
 
                 if requires_nda:
-                    signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True)
+                    signed_request_ids = (
+                        NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
+                    )
                     pending_requests = list(
                         AccessRequest.objects.filter(
                             team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids

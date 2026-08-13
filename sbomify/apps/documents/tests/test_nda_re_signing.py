@@ -232,13 +232,9 @@ class TestNDAReSigning:
         guest_with_old_nda_signature.nda_signatures.update(superseded_at=timezone.now())
         assert _user_has_signed_current_nda(guest_user, team_with_business_plan) is False
 
-    def test_owner_admin_no_nda_required_after_update(
-        self, sample_user, team_with_business_plan, updated_nda_document
-    ):
+    def test_owner_admin_no_nda_required_after_update(self, sample_user, team_with_business_plan, updated_nda_document):
         """Test that owners/admins don't need to sign NDA even after update."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         gated_component = Component.objects.create(
             name="Gated Component",
@@ -258,9 +254,7 @@ class TestNDAReSigning:
         assert result.has_access is True
         assert result.reason == "gated_access_granted"
 
-    def test_guest_without_old_signature_needs_to_sign(
-        self, team_with_business_plan, guest_user, updated_nda_document
-    ):
+    def test_guest_without_old_signature_needs_to_sign(self, team_with_business_plan, guest_user, updated_nda_document):
         """Test that guest without any signature needs to sign current NDA."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         AccessRequest.objects.create(
@@ -340,3 +334,31 @@ class TestNDAReSigning:
 
         # Should need to sign v3.0
         assert _user_has_signed_current_nda(guest_user, team_with_business_plan) is False
+
+
+@pytest.mark.django_db
+def test_two_live_signatures_for_one_document_are_impossible(
+    guest_with_old_nda_signature, original_nda_document, team_with_business_plan, guest_user
+):
+    """The database refuses a second live signature per (request, document);
+    a superseded row for the same document remains legal history."""
+    from django.db import IntegrityError, transaction
+    from django.utils import timezone
+
+    access_request = guest_with_old_nda_signature
+    with pytest.raises(IntegrityError), transaction.atomic():
+        NDASignature.objects.create(
+            access_request=access_request,
+            nda_document=original_nda_document,
+            nda_content_hash=original_nda_document.content_hash,
+            signed_name="Duplicate",
+        )
+
+    access_request.nda_signatures.live().update(superseded_at=timezone.now())
+    NDASignature.objects.create(
+        access_request=access_request,
+        nda_document=original_nda_document,
+        nda_content_hash=original_nda_document.content_hash,
+        signed_name="Re-signed after revocation",
+    )
+    assert NDASignature.objects.filter(access_request=access_request).count() == 2

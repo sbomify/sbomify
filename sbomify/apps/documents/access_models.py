@@ -119,6 +119,17 @@ class NDASignature(models.Model):
             models.Index(fields=["signed_at"]),
         ]
         ordering = ["-signed_at"]
+        constraints = [
+            # At most one live signature per (request, document): two
+            # concurrent signing POSTs must not both insert. Superseded rows
+            # are history and may repeat — a user who re-signs the same
+            # version after a revocation legitimately creates a second row.
+            models.UniqueConstraint(
+                fields=["access_request", "nda_document"],
+                condition=models.Q(superseded_at__isnull=True),
+                name="one_live_signature_per_request_document",
+            ),
+        ]
 
     objects = NDASignatureQuerySet.as_manager()
 

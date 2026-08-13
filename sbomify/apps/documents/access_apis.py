@@ -56,7 +56,7 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
     requires_nda = company_nda is not None
 
     if requires_nda:
-        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         pending_count = AccessRequest.objects.filter(
             team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
         ).count()
@@ -547,7 +547,7 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     if teams_requiring_nda:
         # Requests from teams requiring NDA must have NDA signature
         # Requests from teams not requiring NDA don't need signature
-        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         nda_required_filter = Q(team_id__in=teams_requiring_nda, id__in=signed_request_ids)
         teams_not_requiring_nda = set(member_teams) - set(teams_requiring_nda)
         nda_not_required_filter = Q(team_id__in=teams_not_requiring_nda)
