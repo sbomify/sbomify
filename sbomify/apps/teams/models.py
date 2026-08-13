@@ -515,7 +515,7 @@ class Member(models.Model):
             # three files. This constraint is what stops another one appearing:
             # it covers bulk_create(), raw SQL, fixtures and admin actions alike.
             models.CheckConstraint(
-                check=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_SUPPORTED_ROLES]),
                 name="member_role_is_supported",
             ),
         ]
@@ -552,7 +552,7 @@ class Invitation(models.Model):
             # fixtures, admin — that bypasses full_clean(). The clean() below
             # gives the normal form flow a friendlier ValidationError first.
             models.CheckConstraint(
-                check=models.Q(role__in=[role for role, _label in settings.TEAMS_INVITABLE_ROLES]),
+                condition=models.Q(role__in=[role for role, _label in settings.TEAMS_INVITABLE_ROLES]),
                 name="invitation_role_is_invitable",
             ),
         ]
