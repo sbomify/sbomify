@@ -129,9 +129,9 @@
             </div>
         {% endif %}
     </div>
-    {# Role legend — the members page is the only place a user learns what a role
+    {% comment %}Role legend — the members page is the only place a user learns what a role
        grants, so the descriptions come from authz.ROLE_DESCRIPTIONS and move with
-       the capability table rather than drifting out of date here. #}
+    the capability table rather than drifting out of date here.{% endcomment %}
     <div class="border-t border-border/40" x-data="{ open: false }">
         <button type="button"
                 class="w-full flex items-center justify-between gap-3 px-6 py-3 text-sm text-text-muted hover:text-text transition-colors"
