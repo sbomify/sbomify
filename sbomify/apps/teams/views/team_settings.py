@@ -345,9 +345,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
                     ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
                 ],
-                "is_admin_or_owner": Member.objects.filter(
-                    user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER
-                ).exists(),
+                # ``role`` above is the same live lookup against the same row;
+                # re-querying only asked the database a question it had already
+                # answered.
+                "is_admin_or_owner": role in ADMINISTER,
             },
         )
 
