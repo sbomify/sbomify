@@ -28,6 +28,7 @@ from django.core.cache import cache
 
 from sbomify.apps.oidc.utils import (
     _JWKS_CACHE_KEY,
+    _JWKS_FETCH_BACKOFF_KEY,
     _JWKS_REFRESH_MARKER_KEY,
     _JWKS_FALLBACK_CACHE_KEY,
     OIDCJWKSUnavailable,
@@ -60,6 +61,7 @@ def _cold_cache() -> None:
     cache.delete(_JWKS_CACHE_KEY)
     cache.delete(_JWKS_FALLBACK_CACHE_KEY)
     cache.delete(_JWKS_REFRESH_MARKER_KEY)
+    cache.delete(_JWKS_FETCH_BACKOFF_KEY)
 
 
 class TestTheFallbackCarriesTheOutage:
@@ -293,3 +295,58 @@ class TestServingTheFallbackIsAnnounced:
         _fetch_github_jwks()
 
         assert not [c for c in warning.call_args_list if "last-known-good" in c.args[0]]
+
+
+class TestAnOutageDoesNotCostAFetchPerRequest:
+    """The fallback was correct but slow in exactly the case it exists for.
+
+    With the fresh entry gone, every exchange re-ran the fetch and blocked for
+    the full timeout before being handed the copy we already had. A CI fleet
+    doing concurrent exchanges holds a worker each for that long, so an outage
+    at GitHub became saturation here — the fast 503 the fallback replaced at
+    least freed the worker.
+    """
+
+    def test_a_second_exchange_does_not_refetch(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        _fetch_github_jwks()  # warms the fallback
+        _expire_the_fresh_entry()
+        get = _unreachable(mocker)
+
+        assert _fetch_github_jwks() == {"keys": [rsa_keypair["jwk"]]}
+        first = get.call_count
+        assert _fetch_github_jwks() == {"keys": [rsa_keypair["jwk"]]}
+
+        assert get.call_count == first, "second exchange paid for another doomed fetch"
+
+    def test_recovery_is_picked_up_once_the_backoff_lapses(self, mocker, mock_github_jwks, rsa_keypair) -> None:
+        """Suppressed, not abandoned — GitHub coming back has to be noticed."""
+        _fetch_github_jwks()
+        _expire_the_fresh_entry()
+        _unreachable(mocker)
+        _fetch_github_jwks()
+
+        cache.delete(_JWKS_FETCH_BACKOFF_KEY)  # stands in for the marker expiring
+        mocker.stopall()
+        rotated = {"keys": [dict(rsa_keypair["jwk"], kid="rotated-in-during-the-outage")]}
+        response = mocker.MagicMock()
+        response.json.return_value = rotated
+        response.raise_for_status.return_value = None
+        mocker.patch("sbomify.apps.oidc.utils.requests.get", return_value=response)
+
+        assert _fetch_github_jwks() == rotated
+
+    def test_a_cold_cache_still_tries(self, mocker) -> None:
+        """With nothing to fall back to, failing fast would fail every request
+        without ever attempting the fetch."""
+        _cold_cache()
+        get = _unreachable(mocker)
+
+        with pytest.raises(OIDCJWKSUnavailable):
+            _fetch_github_jwks()
+
+        assert get.call_count > 0
+
+    def test_a_successful_fetch_clears_the_backoff(self, mocker, mock_github_jwks) -> None:
+        _fetch_github_jwks()
+
+        assert cache.get(_JWKS_FETCH_BACKOFF_KEY) is None

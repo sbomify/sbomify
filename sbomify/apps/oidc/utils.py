@@ -40,6 +40,7 @@ logger = getLogger(__name__)
 _JWKS_CACHE_KEY = "sbomify:trusted:oidc:github:jwks"
 _JWKS_REFRESH_MARKER_KEY = "sbomify:trusted:oidc:github:jwks:last_refresh"
 _JWKS_FALLBACK_CACHE_KEY = "sbomify:trusted:oidc:github:jwks:last_known_good"
+_JWKS_FETCH_BACKOFF_KEY = "sbomify:trusted:oidc:github:jwks:fetch_backoff"
 _JWKS_FETCH_TIMEOUT_SECONDS = 5
 
 # How long the last successful JWKS stays usable as a fallback when GitHub
@@ -54,6 +55,19 @@ _JWKS_FETCH_TIMEOUT_SECONDS = 5
 # thirty-second network fault is routine. A day rides out any realistic
 # outage while keeping the window short enough to reason about.
 _JWKS_FALLBACK_MAX_AGE_SECONDS = 86400
+
+# How long a failed fetch suppresses the next one.
+#
+# Without this the fallback is correct but slow in exactly the situation it
+# exists for: the fresh entry is gone, so every exchange re-runs the fetch and
+# blocks for the full timeout before being served the copy we already had. A
+# CI fleet doing many concurrent exchanges then holds a worker each for that
+# long, and an outage at GitHub turns into saturation here — the fast 503 the
+# fallback replaced at least freed the worker.
+#
+# Short, because it also decides how long a recovery goes unnoticed: GitHub
+# coming back is picked up within this window rather than on the next request.
+_JWKS_FETCH_BACKOFF_SECONDS = 30
 
 # Whether the JWKS the current request is working from came from the fallback
 # rather than from GitHub. Thread-local because the fetch and the kid lookup
@@ -191,6 +205,14 @@ def _fetch_github_jwks() -> dict[str, Any]:
         logger.warning("Discarding invalid cached JWKS entry; refetching")
         cache.delete(_JWKS_CACHE_KEY)
 
+    # A recent fetch already failed, so skip straight to the last known good
+    # copy rather than paying the timeout again. Only when there is one to
+    # serve: with a cold cache the fetch has to run, since failing fast on a
+    # deployment that has never reached GitHub would just fail every request
+    # without ever trying.
+    if cache.get(_JWKS_FETCH_BACKOFF_KEY) is not None and cache.get(_JWKS_FALLBACK_CACHE_KEY) is not None:
+        return _jwks_fallback_or_raise(OIDCJWKSUnavailable("recent JWKS fetch failed; not retrying yet"))
+
     url = settings.OIDC_GITHUB_JWKS_URL
     if not _is_safe_jwks_url(url):
         logger.error("Refusing to fetch JWKS from unsafe URL: %s", url)
@@ -227,6 +249,7 @@ def _fetch_github_jwks() -> dict[str, Any]:
         logger.error("GitHub JWKS response failed structural validation; serving last known good if available")
         return _jwks_fallback_or_raise(OIDCJWKSUnavailable("upstream JWKS failed validation"))
 
+    cache.delete(_JWKS_FETCH_BACKOFF_KEY)
     cache.set(_JWKS_CACHE_KEY, jwks, timeout=settings.OIDC_JWKS_CACHE_SECONDS)
     # Written on every success, so the fallback below is never older than the
     # last time GitHub was actually reachable.
@@ -248,6 +271,10 @@ def _jwks_fallback_or_raise(error: OIDCJWKSUnavailable, cause: BaseException | N
     discarded rather than trusted, and signature verification downstream is
     unchanged. The only thing relaxed is how recently we last spoke to GitHub.
     """
+    # Armed here rather than at each call site so every failure mode that
+    # reaches the fallback also suppresses the next fetch.
+    cache.set(_JWKS_FETCH_BACKOFF_KEY, True, timeout=_JWKS_FETCH_BACKOFF_SECONDS)
+
     fallback = cache.get(_JWKS_FALLBACK_CACHE_KEY)
     if fallback is None:
         # ``from cause`` so the 503 an operator sees keeps the underlying
