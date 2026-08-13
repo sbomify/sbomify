@@ -322,14 +322,19 @@ def _signing_key_for_kid(token: str) -> Any:
             matching = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
     if not matching:
         # A miss against the last-known-good copy says nothing about the token.
-        # GitHub may well have rotated in the key this kid names; we simply
-        # could not ask. Raising OIDCInvalidSignature here mapped that to a 401
+        # GitHub may well have rotated in the key this kid names, and we did not
+        # get a usable answer — whether because it was unreachable, or answered
+        # with something unparseable, or answered with a document that failed
+        # validation. All three land here, so neither the message nor this
+        # comment should single out an outage. Raising OIDCInvalidSignature
+        # here mapped it to a 401
         # "invalid OIDC token", so a CI client treated a transient outage as a
         # permanent rejection and stopped retrying, and the log pointed the
         # investigation at the customer's workflow instead of at the outage.
         if _served_from_fallback():
             raise OIDCJWKSUnavailable(
-                f"cannot verify kid={kid!r}: GitHub is unreachable and the last known good JWKS predates it"
+                f"cannot verify kid={kid!r}: no usable fresh JWKS was available and the last known "
+                f"good copy does not contain that key"
             )
         raise OIDCInvalidSignature(f"no JWK matches token kid={kid!r}")
 

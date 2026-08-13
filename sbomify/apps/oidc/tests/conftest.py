@@ -110,12 +110,21 @@ def mock_github_jwks(mocker, rsa_keypair: dict[str, Any]) -> Any:
     """
     from django.core.cache import cache
 
-    cache.delete("sbomify:trusted:oidc:github:jwks")
-    cache.delete("sbomify:trusted:oidc:github:jwks:last_refresh")
+    # Imported rather than spelled out: a key renamed in the module would
+    # otherwise leave this fixture silently clearing nothing, and the tests it
+    # isolates would start passing or failing on execution order.
+    from sbomify.apps.oidc.utils import (
+        _JWKS_CACHE_KEY,
+        _JWKS_FALLBACK_CACHE_KEY,
+        _JWKS_REFRESH_MARKER_KEY,
+    )
+
+    cache.delete(_JWKS_CACHE_KEY)
+    cache.delete(_JWKS_REFRESH_MARKER_KEY)
     # The last-known-good slot too. It lives for 24h, so a test that warms it
     # would otherwise leak into every later test in the session and make the
     # cold-cache and outage cases pass or fail on execution order.
-    cache.delete("sbomify:trusted:oidc:github:jwks:last_known_good")
+    cache.delete(_JWKS_FALLBACK_CACHE_KEY)
     mock_response = MagicMock()
     mock_response.json.return_value = {"keys": [rsa_keypair["jwk"]]}
     mock_response.raise_for_status.return_value = None
