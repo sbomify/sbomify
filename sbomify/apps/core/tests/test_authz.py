@@ -413,3 +413,37 @@ def test_read_only_preset_includes_abac_access():
     just the role-based read actions, or read-only tokens couldn't read gated
     components (can() checks scope before ABAC)."""
     assert "component:access" in authz.SCOPE_PRESETS["read_only"]
+
+
+def test_no_view_gates_on_the_cached_session_role():
+    """Authorization and UI gating must read the Member row, not the session cache.
+
+    ``session["current_team"]["role"]`` has a 300s TTL, so a demoted user keeps
+    being offered controls they can no longer use and a promoted one keeps
+    missing controls they can. Every gate built on it in this codebase has been a
+    bug, and the class kept reappearing one file at a time across four review
+    rounds — hence a test rather than another comment.
+
+    ``teams.utils`` is exempt: it *writes* that cache, so reading the old value
+    to carry it forward is the one legitimate use.
+    """
+    import pathlib
+    import re
+
+    apps_root = pathlib.Path(__file__).resolve().parents[2]
+    pattern = re.compile(r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\])""")
+    exempt = {"teams/utils.py"}
+
+    offenders = []
+    for path in apps_root.rglob("*.py"):
+        rel = path.relative_to(apps_root).as_posix()
+        if "tests" in path.parts or rel in exempt:
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            if pattern.search(line):
+                offenders.append(f"{rel}:{number}")
+
+    assert not offenders, (
+        "These read the cached session role; use teams.queries.get_member_role_by_key "
+        f"so the UI agrees with what the handler enforces: {offenders}"
+    )

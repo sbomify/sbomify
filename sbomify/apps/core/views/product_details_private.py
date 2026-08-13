@@ -102,7 +102,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
             logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
 
-        is_admin_or_owner = current_team.get("role") in ADMINISTER
+        is_admin_or_owner = get_member_role_by_key(request.user, current_team.get("key")) in ADMINISTER
 
         # Components-and-security table + severity rollup, and the releases strip.
         from sbomify.apps.core.services.product_page import (
