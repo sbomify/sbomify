@@ -116,11 +116,17 @@ def mock_github_jwks(mocker, rsa_keypair: dict[str, Any]) -> Any:
     from sbomify.apps.oidc.utils import (
         _JWKS_CACHE_KEY,
         _JWKS_FALLBACK_CACHE_KEY,
+        _JWKS_FETCH_BACKOFF_KEY,
         _JWKS_REFRESH_MARKER_KEY,
     )
 
     cache.delete(_JWKS_CACHE_KEY)
     cache.delete(_JWKS_REFRESH_MARKER_KEY)
+    # And the backoff marker, which is the one that decides whether a fetch is
+    # attempted at all. A test that armed it would otherwise hand the next test
+    # the fallback in place of the fresh document it asked for — quietly, and
+    # only in the orders where the two happen to land in that sequence.
+    cache.delete(_JWKS_FETCH_BACKOFF_KEY)
     # The last-known-good slot too. It lives for 24h, so a test that warms it
     # would otherwise leak into every later test in the session and make the
     # cold-cache and outage cases pass or fail on execution order.
