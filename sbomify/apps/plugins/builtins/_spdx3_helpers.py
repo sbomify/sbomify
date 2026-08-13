@@ -313,3 +313,145 @@ def get_spdx3_package_fields(
         "external_refs": external_refs,
         "external_identifiers": external_identifiers,
     }
+
+
+# Licensing element types from the SimpleLicensing and ExpandedLicensing
+# profiles, matched on the unprefixed tail like every other type here. The
+# NoAssertion/None singletons are collected too so a reference to them
+# resolves deliberately to "no licence" rather than falling through as an
+# unknown target.
+# Spec spelling first (lowercase profile prefixes, per the 3.0.1 schema:
+# simplelicensing_, expandedlicensing_), with the camelCase variants this
+# module's reading rules extend to every other profile-prefixed name.
+_LICENSE_TYPE_TAILS = frozenset(
+    {
+        "simplelicensing_LicenseExpression",
+        "simplelicensing_SimpleLicensingText",
+        "expandedlicensing_ListedLicense",
+        "expandedlicensing_CustomLicense",
+        "expandedlicensing_NoAssertionLicense",
+        "expandedlicensing_NoneLicense",
+        "simpleLicensing_LicenseExpression",
+        "simpleLicensing_SimpleLicensingText",
+        "expandedLicensing_ListedLicense",
+        "expandedLicensing_CustomLicense",
+        "expandedLicensing_NoAssertionLicense",
+        "expandedLicensing_NoneLicense",
+        "LicenseExpression",
+        "SimpleLicensingText",
+        "ListedLicense",
+        "CustomLicense",
+        "NoAssertionLicense",
+        "NoneLicense",
+    }
+)
+
+_NO_LICENSE_TAILS = frozenset(
+    {
+        "expandedlicensing_NoAssertionLicense",
+        "expandedlicensing_NoneLicense",
+        "expandedLicensing_NoAssertionLicense",
+        "expandedLicensing_NoneLicense",
+        "NoAssertionLicense",
+        "NoneLicense",
+    }
+)
+
+
+def extract_spdx3_licenses(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Licensing elements from @graph, keyed by spdxId.
+
+    Kept separate from ``extract_spdx3_elements`` so its five-tuple contract
+    (and every existing unpack site) stays untouched; the licence checks are
+    the only consumers of this map.
+    """
+    elements = data.get("@graph", data.get("elements", []))
+    if not isinstance(elements, list):
+        return {}
+    licenses: dict[str, dict[str, Any]] = {}
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        elem_type = element.get("type", element.get("@type", "")) or ""
+        if not isinstance(elem_type, str):
+            continue
+        if elem_type.rsplit("/", 1)[-1] not in _LICENSE_TYPE_TAILS:
+            continue
+        spdx_id = element.get("spdxId", element.get("@id", ""))
+        if isinstance(spdx_id, str) and spdx_id:
+            licenses[spdx_id] = element
+    return licenses
+
+
+def resolve_spdx3_license_expression(target: Any, licenses: dict[str, dict[str, Any]]) -> str | None:
+    """The licence string a relationship target denotes, or ``None``.
+
+    Resolution order: a LicenseExpression's expression string, then a
+    Listed/Custom licence's name, then the SPDX licence-list id tail for a
+    ``spdx.org/licenses/…`` reference that carries no element (the
+    conventional way documents cite listed licences). NoAssertion/None
+    singletons and anything unresolvable are ``None`` — a reference to
+    nothing must not score as a licence.
+    """
+    element: dict[str, Any] | None
+    if isinstance(target, dict):
+        element = target
+    elif isinstance(target, str):
+        element = licenses.get(target)
+    else:
+        return None
+
+    if element is None:
+        if isinstance(target, str) and "spdx.org/licenses/" in target:
+            tail = target.rstrip("/").rsplit("/", 1)[-1]
+            return tail or None
+        return None
+
+    elem_type = element.get("type", element.get("@type", "")) or ""
+    if isinstance(elem_type, str) and elem_type.rsplit("/", 1)[-1] in _NO_LICENSE_TAILS:
+        return None
+
+    expression = element.get("simplelicensing_licenseExpression", element.get("simpleLicensing_licenseExpression"))
+    if isinstance(expression, str) and expression.strip():
+        return expression.strip()
+    name = element.get("name")
+    if isinstance(name, str) and name.strip():
+        return name.strip()
+    spdx_id = element.get("spdxId", element.get("@id", ""))
+    if isinstance(spdx_id, str) and "spdx.org/licenses/" in spdx_id:
+        tail = spdx_id.rstrip("/").rsplit("/", 1)[-1]
+        return tail or None
+    return None
+
+
+def get_spdx3_package_license(
+    package: dict[str, Any],
+    relationships: list[dict[str, Any]],
+    licenses: dict[str, dict[str, Any]],
+    relationship_type: str,
+) -> str | None:
+    """The resolved licence for ``package`` via ``relationship_type``.
+
+    ``hasConcludedLicense`` and ``hasDeclaredLicense`` relationships point
+    from the package at licensing elements; the first resolvable target wins.
+    ``None`` when no relationship exists or every target is unresolvable —
+    the callers treat both as the same failure, deliberately.
+    """
+    pkg_id = package.get("spdxId", package.get("@id", ""))
+    if not pkg_id:
+        return None
+    for rel in relationships:
+        if not isinstance(rel, dict):
+            continue
+        if rel.get("from") != pkg_id or rel.get("relationshipType") != relationship_type:
+            continue
+        targets = rel.get("to", [])
+        if isinstance(targets, (str, dict)):
+            targets = [targets]
+        if not isinstance(targets, list):
+            continue
+        for target in targets:
+            resolved = resolve_spdx3_license_expression(target, licenses)
+            if resolved:
+                return resolved
+    return None
