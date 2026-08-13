@@ -22,6 +22,7 @@ import json
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from botocore.exceptions import BotoCoreError, ClientError
 from defusedcsv import csv
 
 from sbomify.apps.core.services.results import ServiceResult
@@ -45,14 +46,19 @@ def _latest_sboms(team: Team, product: Product | None = None) -> list[SBOM]:
     queryset = SBOM.objects.filter(component__team=team, bom_type=SBOM.BomType.SBOM)
     if product is not None:
         queryset = queryset.filter(component__products=product)
-    return list(queryset.select_related("component").order_by("component_id", "-created_at").distinct("component_id"))
+    return list(
+        queryset.select_related("component").order_by("component_id", "-created_at", "-id").distinct("component_id")
+    )
 
 
 def _load_payload(sbom: SBOM) -> dict[str, Any] | None:
     """The parsed document, or ``None`` for anything unreadable."""
     try:
         _, raw = get_sbom_data_bytes(sbom.id)
-    except (SBOMDataError, Exception):
+    except (SBOMDataError, ClientError, BotoCoreError):
+        # get_sbom_data_bytes normalises most failures into SBOMDataError, but
+        # the S3 fetch itself re-raises botocore errors; anything else is a
+        # programming error that must surface, not an unreadable artifact.
         return None
     if raw is None or len(raw) > MAX_PARSE_BYTES:
         return None
