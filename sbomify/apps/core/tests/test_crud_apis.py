@@ -1743,8 +1743,9 @@ def test_product_identifier_permissions(
 
     assert response.status_code == 403
     error_detail = response.json()["detail"]
-    # Guest members get a different error message, but it's still a 403
-    assert "Guest members" in error_detail or "Only owners and admins" in error_detail
+    # The wording differs by path (guest deny-check vs capability gate); the 403
+    # is the contract, so accept either rather than couple the test to a sentence.
+    assert "Guest members" in error_detail or "don't have permission" in error_detail
 
     # Clean up
     guest_access_token.delete()
@@ -2605,8 +2606,9 @@ def test_product_link_permissions(
 
     assert response.status_code == 403
     error_detail = response.json()["detail"]
-    # Guest members get a different error message, but it's still a 403
-    assert "Guest members" in error_detail or "Only owners and admins" in error_detail
+    # The wording differs by path (guest deny-check vs capability gate); the 403
+    # is the contract, so accept either rather than couple the test to a sentence.
+    assert "Guest members" in error_detail or "don't have permission" in error_detail
 
     # Clean up
     guest_access_token.delete()

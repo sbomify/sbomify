@@ -24,7 +24,7 @@ class ComponentScopeView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return HttpResponseBadRequest("Only documents can be workspace-wide")
 
         if not can(request, "component:manage", component):
-            return HttpResponseForbidden("Only owners and admins can change scope")
+            return HttpResponseForbidden("You don't have permission to change this component's scope")
 
         target_scope = request.POST.get("target_scope")
         if target_scope not in ("workspace", "product"):
