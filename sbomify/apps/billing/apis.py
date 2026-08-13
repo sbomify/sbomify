@@ -105,7 +105,11 @@ def change_plan(request: HttpRequest, data: ChangePlanRequest) -> tuple[int, Any
         # narrowly-scoped token (e.g. publish-only) change the plan — and a
         # downgrade flips private products and components public.
         if not can(request, "billing:manage", team):
-            return 403, {"detail": "Only workspace owners and admins can change billing plans"}
+            # Deliberately not a role-specific message. can() also denies on
+            # token action scope, so naming roles would tell the holder of a
+            # publish-only token that their *role* is the problem and send them
+            # to an admin who cannot fix it.
+            return 403, {"detail": "You don't have permission to change this workspace's billing plan"}
 
         plan = BillingPlan.objects.get(key=data.plan)
         stripe_client = get_stripe_client()
