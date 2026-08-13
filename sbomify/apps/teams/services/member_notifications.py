@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
+from sbomify.apps.billing.billing_helpers import mask_email
 from sbomify.apps.core.authz import OWNER_ONLY
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import get_base_url
@@ -47,14 +48,30 @@ def notify_owners_of_owner_invitation(team: Team, actor: User, invited_email: st
     }
 
     try:
-        email = EmailMultiAlternatives(
-            subject=f"An owner-level invitation was created for {team.name}",
-            body=render_to_string("teams/emails/owner_invitation_notice.txt", context),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipients,
-            reply_to=["hello@sbomify.com"],
-        )
-        email.attach_alternative(render_to_string("teams/emails/owner_invitation_notice.html.j2", context), "text/html")
-        email.send()
+        body = render_to_string("teams/emails/owner_invitation_notice.txt", context)
+        html = render_to_string("teams/emails/owner_invitation_notice.html.j2", context)
     except Exception:
-        logger.exception("Failed to notify owners of owner-level invitation for team %s", team.key)
+        logger.exception("Failed to render owner-invitation notice for team %s", team.key)
+        return
+
+    # One message per recipient, as everywhere else we mail members. A single
+    # message addressed to every owner would put the full owner roster in the
+    # To: header of each copy — and this is a security notice, so its recipient
+    # list is exactly the thing not to broadcast. A failed send is logged and
+    # the remaining owners are still notified; a failure here must never roll
+    # back a successful invite.
+    for recipient in recipients:
+        try:
+            email = EmailMultiAlternatives(
+                subject=f"An owner-level invitation was created for {team.name}",
+                body=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient],
+                reply_to=["hello@sbomify.com"],
+            )
+            email.attach_alternative(html, "text/html")
+            email.send()
+        except Exception:
+            logger.exception(
+                "Failed to notify %s of owner-level invitation for team %s", mask_email(recipient), team.key
+            )
