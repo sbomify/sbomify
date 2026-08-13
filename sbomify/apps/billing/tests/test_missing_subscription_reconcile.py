@@ -272,3 +272,62 @@ class TestEverythingElseKeepsRetrying:
         assert team.billing_plan_limits["subscription_status"] == "active"
         assert team.billing_plan_limits["is_trial"] is False
         assert team.billing_plan_limits["stripe_subscription_id"] == "sub_gone"
+
+
+@pytest.mark.django_db
+class TestAReplacementSubscriptionSurvives:
+    """The lock stops a lost update; it does not stop acting on a stale premise.
+
+    The decision to reconcile is made before the Stripe round trip, and a
+    checkout can complete during it. Clearing unconditionally under the lock
+    would then delete the subscription the customer had just paid for — the
+    same harm the lock was added to prevent, reached from the other side.
+    """
+
+    def test_a_checkout_landing_mid_flight_is_not_undone(self) -> None:
+        from sbomify.apps.billing.stripe_sync import reconcile_missing_subscription
+
+        team = _expired_trial_team()
+
+        # Stripe answered about sub_gone; by the time we settle, the row holds
+        # a new subscription from a checkout that completed in the meantime.
+        limits = team.billing_plan_limits
+        limits["stripe_subscription_id"] = "sub_new_from_checkout"
+        team.billing_plan_limits = limits
+        team.save()
+
+        reconcile_missing_subscription(team, "sub_gone")
+
+        team.refresh_from_db()
+        assert team.billing_plan_limits["stripe_subscription_id"] == "sub_new_from_checkout"
+        assert team.billing_plan_limits["subscription_status"] != "canceled"
+
+    def test_the_id_it_was_told_about_is_still_settled(self) -> None:
+        """The ordinary case has to keep working."""
+        from sbomify.apps.billing.stripe_sync import reconcile_missing_subscription
+
+        team = _expired_trial_team()
+
+        reconcile_missing_subscription(team, "sub_gone")
+
+        team.refresh_from_db()
+        assert "stripe_subscription_id" not in team.billing_plan_limits
+        assert team.billing_plan_limits["subscription_status"] == "canceled"
+
+    def test_a_no_op_does_not_invalidate_the_replacement_cache(self, monkeypatch) -> None:
+        """Invalidating on a no-op would drop the entry belonging to whichever
+        subscription replaced the missing one."""
+        from sbomify.apps.billing import stripe_sync
+
+        team = _expired_trial_team()
+        limits = team.billing_plan_limits
+        limits["stripe_subscription_id"] = "sub_new_from_checkout"
+        team.billing_plan_limits = limits
+        team.save()
+
+        calls: list = []
+        monkeypatch.setattr(stripe_sync, "invalidate_subscription_cache", lambda *a: calls.append(a))
+
+        stripe_sync.reconcile_missing_subscription(team, "sub_gone")
+
+        assert calls == []

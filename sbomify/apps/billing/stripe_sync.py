@@ -51,22 +51,41 @@ def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> Non
     Both sweeps select on that key being present, so a reconciled workspace
     drops out of them without needing a marker to remember it, and re-appears
     on its own the moment a new subscription is stored.
+
+    No-ops when the stored id is no longer the one Stripe reported missing.
+    The lock alone is not enough: it stops a lost update, but the *premise*
+    can still be stale, since the caller decided to reconcile before the Stripe
+    round trip and a checkout can complete during it. Clearing unconditionally
+    would then delete the subscription the customer had just paid for — the
+    same harm the lock was added to prevent, arrived at from the other side.
     """
     from django.db import transaction as db_transaction
 
+    reconciled = False
     with db_transaction.atomic():
         locked = Team.objects.select_for_update().get(pk=team.pk)
         billing_limits = locked.billing_plan_limits or {}
-        billing_limits["subscription_status"] = "canceled"
-        billing_limits.pop("stripe_subscription_id", None)
-        # Also remove customer_id to satisfy valid_billing_relationship constraint
-        billing_limits.pop("stripe_customer_id", None)
-        billing_limits.pop("scheduled_downgrade_plan", None)
-        billing_limits["cancel_at_period_end"] = False
-        billing_limits["last_updated"] = timezone.now().isoformat()
-        locked.billing_plan_limits = billing_limits
-        locked.save()
-    invalidate_subscription_cache(stripe_sub_id or "", team.key or "")
+        current = billing_limits.get("stripe_subscription_id")
+        if current != stripe_sub_id:
+            logger.info(
+                "Subscription reference changed while Stripe was queried; leaving the workspace alone",
+            )
+        else:
+            billing_limits["subscription_status"] = "canceled"
+            billing_limits.pop("stripe_subscription_id", None)
+            # Also remove customer_id to satisfy valid_billing_relationship constraint
+            billing_limits.pop("stripe_customer_id", None)
+            billing_limits.pop("scheduled_downgrade_plan", None)
+            billing_limits["cancel_at_period_end"] = False
+            billing_limits["last_updated"] = timezone.now().isoformat()
+            locked.billing_plan_limits = billing_limits
+            locked.save()
+            reconciled = True
+
+    # Only for the id actually settled. Invalidating on a no-op would drop the
+    # cache entry belonging to whichever subscription replaced it.
+    if reconciled:
+        invalidate_subscription_cache(stripe_sub_id or "", team.key or "")
 
 
 def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:
