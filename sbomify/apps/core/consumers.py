@@ -56,6 +56,21 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
     URL pattern: ws/workspace/<workspace_key>/
     """
 
+    async def _reject(self, code: int) -> None:
+        """Close a socket that never joined the workspace group.
+
+        Drops ``group_name`` first so ``disconnect()`` skips its
+        ``group_discard``. Accepting the handshake before applying the verdict
+        means Channels now runs ``disconnect()`` for rejected sockets too, and
+        that discard is a broker round trip for a group this connection was
+        never in. It lands hardest in the case that needs it least: when
+        ``group_add`` has just failed because the broker is down, every
+        rejected socket would add another call to it.
+        """
+        if hasattr(self, "group_name"):
+            del self.group_name
+        await self.close(code=code)
+
     async def connect(self) -> None:
         """Handle WebSocket connection."""
         # Get workspace key from URL route
@@ -84,7 +99,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             # channel. Best-effort, since whatever broke the accept will often
             # break this too — but an unanswered handshake is the worse end.
             try:
-                await self.close(code=WS_CLOSE_SERVICE_RESTART)
+                await self._reject(WS_CLOSE_SERVICE_RESTART)
             except Exception:
                 logger.debug("close after failed accept also failed", exc_info=True)
             return
@@ -93,7 +108,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
             logger.warning(f"WebSocket connection rejected: unauthenticated user for workspace {self.workspace_key}")
-            await self.close(code=WS_CLOSE_POLICY_VIOLATION)
+            await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
         # Verify user is a member of this workspace
@@ -103,7 +118,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             logger.warning(
                 f"WebSocket connection rejected: user {user_id} is not a member of workspace {self.workspace_key}"
             )
-            await self.close(code=WS_CLOSE_POLICY_VIOLATION)
+            await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
         # Join workspace group. A broker mid-restart raises here; closing
@@ -119,7 +134,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         except Exception as exc:
             logger.warning(f"WebSocket group join failed for workspace {self.workspace_key}: {exc!r}")
             logger.debug("group_add traceback", exc_info=True)
-            await self.close(code=WS_CLOSE_SERVICE_RESTART)
+            await self._reject(WS_CLOSE_SERVICE_RESTART)
             return
 
         connected_user_id = user.id  # type: ignore[attr-defined]
