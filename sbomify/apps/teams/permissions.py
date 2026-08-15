@@ -53,9 +53,13 @@ def check_member_removal(actor: Any, target: Member) -> MemberRemovalDenial | No
         # Admins can't quietly remove themselves — unless they're leaving for a
         # workspace they've been invited to.
         if target.user_id == getattr(actor, "id", None):
-            from sbomify.apps.teams.models import Invitation
+            from sbomify.apps.teams.queries import has_pending_invitation
 
-            if not Invitation.objects.filter(email=actor.email).exists():
+            # Pending means unexpired. The original check was ``exists()`` over
+            # every Invitation ever addressed to them — under a variable named
+            # has_pending_invites — so an invitation that lapsed months ago
+            # still bought a way out of this rule.
+            if not has_pending_invitation(actor.email):
                 return MemberRemovalDenial(
                     "Admins cannot remove their own membership. Only workspace owners can remove members.",
                     forbidden=True,
