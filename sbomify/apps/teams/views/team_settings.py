@@ -268,9 +268,14 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         billing_enabled_flag = is_billing_enabled()
         active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
         if active_tab is None:
-            # The typed domain error rather than a hand-built HttpResponse:
-            # error_response understands it, it carries its own 403, and it keeps
-            # this on the same path as every other permission failure.
+            # Defence in depth: get_team() above already refuses non-members and
+            # guests, so nobody who reaches here should have an empty tab list.
+            # Kept because the two gates answer different questions — that one is
+            # about the workspace, this one about what the role opens — and a
+            # future tier that opens no section should be denied, not shown a
+            # blank page. The typed domain error rather than a hand-built
+            # HttpResponse: error_response understands it, it carries its own 403,
+            # and it keeps this on the same path as every other permission failure.
             return error_response(request, PermissionDeniedError("No settings available for this role"))
         # A stale or renamed slug resolves to the first section instead of 404ing;
         # send the browser to the URL that actually rendered so the address bar,

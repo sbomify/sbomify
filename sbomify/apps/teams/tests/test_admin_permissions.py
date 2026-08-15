@@ -79,6 +79,30 @@ def test_admin_cannot_remove_owner(client, admin_user, owner, team):
     assert "Admins cannot remove workspace owners" in str(messages[0])
 
 
+def test_settings_for_a_workspace_you_do_not_belong_to_is_refused(client, owner, django_user_model):
+    """The mixin authorizes the *session* workspace; the view renders the URL one.
+
+    So an owner of A can reach B's settings URL past the mixin. The view
+    re-resolves the role against B and refuses — this pins that, and that the
+    refusal says the right thing rather than blaming the user's role.
+    """
+    # No explicit key: Team.save() derives a real token from the pk, and the
+    # settings path decodes it. A hand-written key decodes to nothing and 404s
+    # before any of the logic under test runs.
+    other = Team.objects.create(name="Someone Else's Workspace")
+    stranger = django_user_model.objects.create_user(
+        username="stranger", email="stranger@test.com", password="password"
+    )
+    Member.objects.create(user=stranger, team=other, role="owner", is_default_team=True)
+
+    client.force_login(owner)
+    _setup_session(client, Team.objects.get(key="testteamkey"), "owner")
+
+    response = client.get(reverse("teams:team_settings", kwargs={"team_key": other.key}))
+
+    assert response.status_code == 403
+
+
 def test_an_expired_invitation_does_not_unlock_admin_self_removal(client, admin_user, team, django_user_model):
     """The self-removal exception is for admins actually leaving for somewhere.
 
