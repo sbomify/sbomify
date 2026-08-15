@@ -74,25 +74,29 @@ DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
 twice already, and a named tier makes moving it again a one-line change."""
 
-PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT, ROLE_GUEST)
-"""Upload artifacts — granted to OIDC/CI ``bot`` identities and, per #468, to
-guests (so a low-trust member can contribute artifacts without management
-rights)."""
+PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+"""Upload artifacts and cut/tag releases — the CI publish workflow, granted to
+OIDC/CI ``bot`` identities alongside owners and admins.
 
-RELEASE_PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""Cut and tag a release — the release half of the CI publish workflow. Granted
-to OIDC/CI ``bot`` identities (the action creates a release and tags its uploaded
-artifacts to it) alongside owners and admins. Guests are excluded: they may
-contribute artifacts (``PUBLISH``) but not cut releases. Renaming or deleting a
-release stays the stricter ``MANAGE`` / ``DELETE`` tiers."""
+Guests were briefly in this tier (#468) so a low-trust member could contribute
+artifacts. That grant is withdrawn: ``guest`` is an *external* trust-center role
+and holds no capability at all. The former ``RELEASE_PUBLISH`` tier existed only
+to keep guests out of release-cutting while leaving them artifact upload; with
+guests holding nothing, it was identical to this tier and has been removed."""
 
-# Order mirrors the predominant call-site literal ``["guest", "owner", "admin"]``
-# (membership is order-independent, but the parity keeps the claim above honest).
-READ_MEMBER: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN)
-"""Any workspace member may read internal (non-public) workspace data."""
+# ``READ_INTERNAL``/``READ_INTERNAL_OR_BOT`` were ``READ_MEMBER``/``READ_MEMBER_OR_BOT``.
+# Renamed because the tier means "internal roles only, guests excluded", which
+# "READ_MEMBER" no longer conveys once guests are external — and would be
+# actively misleading next to a role literally named ``member`` (#468).
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+"""Read internal (non-public) workspace data. Internal roles only — a guest is
+an external trust-center visitor and must not be able to enumerate a workspace's
+private inventory. Guests reach restricted content solely through the
+attribute-based ``component:access`` path (visibility + NDA + approved request),
+which this tier does not govern."""
 
-READ_MEMBER_OR_BOT: tuple[str, ...] = (ROLE_GUEST, ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
-"""``READ_MEMBER`` plus the CI/OIDC ``bot``: reading releases is part of the
+READ_INTERNAL_OR_BOT: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+"""``READ_INTERNAL`` plus the CI/OIDC ``bot``: reading releases is part of the
 publish workflow (the action checks whether a release already exists before
 creating it), so a bot must reach release reads that other internal reads still
 deny it."""
@@ -122,18 +126,13 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
     (
         ROLE_GUEST,
         "Guest",
-        "Limited access, granted through the Trust Center rather than invited "
-        "directly. Can view workspace data and upload artifacts, but cannot "
-        "create or manage products, components, releases or any settings. Also "
-        "reaches gated documents they have been approved for and signed the NDA "
-        "for.",
+        "External access, granted through the Trust Center rather than invited "
+        "directly. Sees your public pages, plus everything on the gated "
+        "components they have been approved for and signed the NDA for — "
+        "documents, SBOMs and vulnerability information alike. Cannot see "
+        "anything else in the workspace.",
     ),
 )
-# NOTE: keep the guest text above in step with the tiers — guests currently hold
-# READ_MEMBER (internal reads) and PUBLISH (artifact upload), which is why it
-# does NOT say "external, public content only". #468 narrows guest to a purely
-# external trust-center role; this description must be rewritten in the same
-# change, or the members page will understate what a guest can reach.
 
 
 @dataclass(frozen=True)
@@ -167,28 +166,27 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "sbom:manage": MANAGE,
     "document:manage": MANAGE,
     # release publishing — the CI/OIDC bot's job (create a release, tag artifacts
-    # to it). Owners and admins keep it; bots gain it; guests stay out.
-    "release:create": RELEASE_PUBLISH,
-    "release:tag": RELEASE_PUBLISH,
+    # to it), alongside owners and admins.
+    "release:create": PUBLISH,
+    "release:tag": PUBLISH,
     # deletion of domain resources — owner + admin
     "product:delete": DELETE,
     "component:delete": DELETE,
     "release:delete": DELETE,
     "sbom:delete": DELETE,
     "document:delete": DELETE,
-    # artifact upload — allows OIDC/CI bot identities and guests (#468)
+    # artifact upload — owners, admins and OIDC/CI bot identities
     "artifact:publish": PUBLISH,
     # VEX publishing rewrites the workspace's stored vulnerability posture (the
-    # re-annotated scan summaries feed every dashboard), so guests are excluded;
-    # owners, admins and the CI/OIDC bot keep it.
-    "artifact:publish_vex": RELEASE_PUBLISH,
-    # any-member read of internal (non-public) workspace data
-    "workspace:read": READ_MEMBER,
-    "component:read_internal": READ_MEMBER,
-    "product:read": READ_MEMBER,
-    "release:read": READ_MEMBER_OR_BOT,
-    "document:read": READ_MEMBER,
-    "sbom:read": READ_MEMBER,
+    # re-annotated scan summaries feed every dashboard).
+    "artifact:publish_vex": PUBLISH,
+    # internal reads — guests are external and hold none of these
+    "workspace:read": READ_INTERNAL,
+    "component:read_internal": READ_INTERNAL,
+    "product:read": READ_INTERNAL,
+    "release:read": READ_INTERNAL_OR_BOT,
+    "document:read": READ_INTERNAL,
+    "sbom:read": READ_INTERNAL,
 }
 
 # Actions authorized by resource attributes (visibility / NDA / access request)

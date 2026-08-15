@@ -1417,11 +1417,12 @@ def test_get_team_branding_enforces_token_read_scope(sample_team_with_owner_memb
 
 @pytest.mark.django_db
 def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  # noqa: F811
-    """Branding writes are ADMINISTER; a guest can read but not write.
+    """A guest can neither read nor write branding.
 
-    The endpoints used to carry a redundant inline ``role == "owner"`` check on
-    top of ``can("workspace:administer")``; that has been removed, so the denial
-    now comes from ``can()`` alone and reports the generic FORBIDDEN payload.
+    Branding reads are ``workspace:read`` and writes are
+    ``workspace:administer``; a guest holds neither, because a guest is an
+    external trust-center visitor with no role capability. (Public branding is
+    served by the public trust-center views, not this internal endpoint.)
     """
     client = Client()
 
@@ -1430,11 +1431,11 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
     team_key = sample_team_with_guest_member.team.key
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
-    # A guest may read branding info
+    # A guest may not read branding info through the internal API
     response = client.get(base_uri)
-    assert response.status_code == 200
+    assert response.status_code == 403
 
-    # ...but not update it
+    # ...nor update it
     response = client.patch(f"{base_uri}/brand_color", {"value": "#ff0000"}, content_type="application/json")
     assert response.status_code == 403
 
