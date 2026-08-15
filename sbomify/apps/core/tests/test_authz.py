@@ -431,19 +431,34 @@ def test_no_view_gates_on_the_cached_session_role():
     import re
 
     apps_root = pathlib.Path(__file__).resolve().parents[2]
-    pattern = re.compile(r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\])""")
+    # Python subscript/.get() access, and the dotted access templates use. The
+    # first version of this test scanned only *.py with only the Python pattern,
+    # and a template gate — ``current_team.role == 'owner'`` in
+    # teams/team_settings.html.j2 — sat behind both holes until an audit found
+    # it. A guardrail that covers one of the two dialects is not a guardrail.
+    pattern = re.compile(
+        r"""current_team(?:\.get\(["']role["']\)|\[["']role["']\]|\.role\b)"""
+    )
     exempt = {"teams/utils.py"}
 
+    # Prose *about* the rule is not a violation of it. Docstrings here quote the
+    # forbidden expression in backticks to explain why it is forbidden, so strip
+    # inline-code spans before matching rather than exempting whole files.
+    code_span = re.compile(r"``[^`]*``|`[^`]*`")
+
     offenders = []
-    for path in apps_root.rglob("*.py"):
-        rel = path.relative_to(apps_root).as_posix()
-        if "tests" in path.parts or rel in exempt:
-            continue
-        for number, line in enumerate(path.read_text().splitlines(), 1):
-            if pattern.search(line):
-                offenders.append(f"{rel}:{number}")
+    for suffix in ("*.py", "*.j2"):
+        for path in apps_root.rglob(suffix):
+            rel = path.relative_to(apps_root).as_posix()
+            if "tests" in path.parts or rel in exempt:
+                continue
+            for number, line in enumerate(path.read_text().splitlines(), 1):
+                if pattern.search(code_span.sub("", line)):
+                    offenders.append(f"{rel}:{number}")
 
     assert not offenders, (
-        "These read the cached session role; use teams.queries.get_member_role_by_key "
-        f"so the UI agrees with what the handler enforces: {offenders}"
+        "These read the cached session role. In Python use "
+        "teams.queries.get_member_role_by_key; in templates use the capability flags from "
+        "core.context_processors.team_context (is_owner / can_administer / can_manage / "
+        f"can_delete) so the UI agrees with what the handler enforces: {offenders}"
     )
