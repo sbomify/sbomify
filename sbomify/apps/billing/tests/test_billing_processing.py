@@ -398,7 +398,7 @@ class TestBillingProcessing:
     def test_payment_succeeded_postcommit_notify_failure_is_best_effort(self, mock_email):
         """A post-commit notification outage must NOT fail the webhook (best-effort, like cache)."""
         with patch(
-            "sbomify.apps.billing.billing_processing.notify_team_owners",
+            "sbomify.apps.billing.billing_processing.notify_billing_managers",
             side_effect=Exception("smtp blip"),
         ):
             billing_processing.handle_payment_succeeded(self.invoice)  # does not raise

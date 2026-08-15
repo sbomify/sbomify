@@ -30,7 +30,6 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             )
 
         current_team = request.session.get("current_team", {})
-        is_owner = current_team.get("role") == "owner"
         billing_plan = current_team.get("billing_plan")
 
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
@@ -169,7 +168,6 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
             "current_team": current_team,
-            "is_owner": is_owner,
             "team_billing_plan": billing_plan,
             "company_nda_id": company_nda_id,
             "gated_visibility_allowed": gated_visibility_allowed,

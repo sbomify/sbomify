@@ -21,6 +21,7 @@ from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
@@ -48,7 +49,7 @@ CI_SCOPE_PRESET = "publish"
 class CITokenView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """POST-only: mints one token and returns it once."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def post(self, request: HttpRequest, team_key: str) -> JsonResponse:
         status_code, team = get_team(request, team_key)

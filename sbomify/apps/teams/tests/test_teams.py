@@ -645,6 +645,62 @@ def test_accept_invitation_removes_access_requests_when_guest_upgraded(django_us
 
 
 @pytest.mark.django_db
+def test_accept_invitation_never_demotes_an_owner(django_user_model, community_plan):
+    """An invitation must not strip ownership — the admin/owner boundary depends on it.
+
+    Now that admins can invite, an admin could otherwise re-invite an existing
+    owner at a lower role and demote them on accept, routing around "an admin
+    may not remove an owner" without touching the removal guards. Demoting the
+    last owner would also leave the workspace with nobody able to delete it.
+    """
+    owner_user = django_user_model.objects.create_user(
+        username="demote-target-owner",
+        email="demote-target@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Demotion Test Workspace", billing_plan=community_plan.key)
+    membership = Member.objects.create(team=team, user=owner_user, role="owner", is_default_team=True)
+
+    # An admin re-invites the existing owner at a lower role.
+    invitation = Invitation.objects.create(team=team, email=owner_user.email, role="admin")
+
+    client = Client()
+    assert client.login(username="demote-target-owner", password="secret")
+    setup_authenticated_client_session(client, team, owner_user)
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+
+    membership.refresh_from_db()
+    assert membership.role == "owner", "accepting an invitation must never demote an owner"
+    # The invitation is consumed either way so it can't be replayed.
+    assert not Invitation.objects.filter(id=invitation.id).exists()
+
+
+@pytest.mark.django_db
+def test_accept_invitation_still_upgrades_to_owner(django_user_model, community_plan):
+    """The demotion guard must not block legitimate promotion to owner."""
+    user = django_user_model.objects.create_user(
+        username="promote-to-owner",
+        email="promote-owner@example.com",
+        password="secret",
+    )
+    team = Team.objects.create(name="Promotion Test Workspace", billing_plan=community_plan.key)
+    membership = Member.objects.create(team=team, user=user, role="admin", is_default_team=True)
+    invitation = Invitation.objects.create(team=team, email=user.email, role="owner")
+
+    client = Client()
+    assert client.login(username="promote-to-owner", password="secret")
+    setup_authenticated_client_session(client, team, user)
+
+    response: HttpResponse = client.get(reverse("teams:accept_invite", kwargs={"invite_token": str(invitation.token)}))
+    assert response.status_code == 302
+
+    membership.refresh_from_db()
+    assert membership.role == "owner"
+
+
+@pytest.mark.django_db
 def test_accept_invitation_no_role_change_when_same_role(django_user_model, community_plan):
     """Test that accepting an invitation with same role doesn't show update message."""
     user = django_user_model.objects.create_user(
@@ -781,7 +837,7 @@ def test_deleting_last_owner_of_team_is_not_allowed(
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
     assert messages[0].level == django_messages.WARNING
-    assert messages[0].message == "Cannot delete the only owner of the team. Please assign another owner first."
+    assert messages[0].message == "Cannot delete the only owner of the workspace. Please assign another owner first."
 
 
 @pytest.mark.django_db
@@ -982,9 +1038,10 @@ def test_visibility_toggle__community_cannot_be_private(
 
 
 @pytest.mark.django_db
-def test_visibility_toggle__non_owner_blocked(
+def test_visibility_toggle__admin_allowed(
     sample_team_with_admin_member: Member,  # noqa: F811
 ):
+    """Workspace visibility is ADMINISTER — admins may change it."""
     client = Client()
     team = sample_team_with_admin_member.team
     team.billing_plan = Team.Plan.BUSINESS
@@ -1001,10 +1058,33 @@ def test_visibility_toggle__non_owner_blocked(
 
     assert response.status_code == 302
     team.refresh_from_db()
-    assert team.is_public is False
+    assert team.is_public is True
 
-    messages = list(get_messages(response.wsgi_request))
-    assert any("Only workspace owners can change visibility" in msg.message for msg in messages)
+
+@pytest.mark.django_db
+def test_visibility_toggle__guest_blocked(
+    sample_team_with_guest_member: Member,  # noqa: F811
+):
+    """Guests hold no governance capability and cannot change visibility."""
+    client = Client()
+    team = sample_team_with_guest_member.team
+    team.billing_plan = Team.Plan.BUSINESS
+    team.is_public = False
+    team.save(update_fields=["billing_plan", "is_public"])
+
+    setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
+
+    uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    response = client.post(
+        uri,
+        {"visibility_action": "update", "is_public": ["false", "true"]},
+    )
+
+    # Guests are stopped by TeamRoleRequiredMixin before the handler runs, so
+    # this is a bare 403 with no Django message attached.
+    assert response.status_code == 403
+    team.refresh_from_db()
+    assert team.is_public is False
 
 
 @pytest.mark.django_db
@@ -1337,6 +1417,12 @@ def test_get_team_branding_enforces_token_read_scope(sample_team_with_owner_memb
 
 @pytest.mark.django_db
 def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  # noqa: F811
+    """Branding writes are ADMINISTER; a guest can read but not write.
+
+    The endpoints used to carry a redundant inline ``role == "owner"`` check on
+    top of ``can("workspace:administer")``; that has been removed, so the denial
+    now comes from ``can()`` alone and reports the generic FORBIDDEN payload.
+    """
     client = Client()
 
     assert client.login(username=os.environ["DJANGO_TEST_USER"], password=os.environ["DJANGO_TEST_PASSWORD"])
@@ -1344,26 +1430,39 @@ def test_team_branding_api_permissions(sample_team_with_guest_member: Member):  
     team_key = sample_team_with_guest_member.team.key
     base_uri = f"/api/v1/workspaces/{team_key}/branding"
 
-    # Test GET branding info as non-owner
+    # A guest may read branding info
     response = client.get(base_uri)
     assert response.status_code == 200
 
-    # Test updating brand color as non-owner
+    # ...but not update it
     response = client.patch(f"{base_uri}/brand_color", {"value": "#ff0000"}, content_type="application/json")
     assert response.status_code == 403
-    assert "Only allowed for owners" in response.json()["detail"]
 
-    # Test file upload as non-owner
+    # ...nor upload branding assets
     with open("test_icon.png", "wb") as f:
         f.write(b"fake png content")
 
     with open("test_icon.png", "rb") as f:
         response = client.post(f"{base_uri}/upload/icon", {"file": f}, format="multipart")
         assert response.status_code == 403
-        assert "Only allowed for owners" in response.json()["detail"]
 
     # Clean up test file
     os.remove("test_icon.png")
+
+
+@pytest.mark.django_db
+def test_team_branding_api__admin_can_write(sample_team_with_admin_member: Member):  # noqa: F811
+    """Admins can write branding — it is workspace configuration (ADMINISTER)."""
+    client = Client()
+    team = sample_team_with_admin_member.team
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    response = client.patch(
+        f"/api/v1/workspaces/{team.key}/branding/brand_color",
+        {"value": "#ff0000"},
+        content_type="application/json",
+    )
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db
@@ -2016,10 +2115,14 @@ def test_team_general_get__when_user_is_owner__should_succeed(
 
 
 @pytest.mark.django_db
-def test_team_general_get__when_user_is_admin__should_fail(
+def test_team_general_get__when_user_is_admin__should_succeed(
     sample_team_with_admin_member: Member,  # noqa: F811
 ):
-    """Test that admins cannot access the general settings view (owner-only)."""
+    """Admins reach general settings: workspace configuration is the ADMINISTER tier.
+
+    Admins are near-owners; the only capability they lack is deleting the
+    workspace (see test_team_general_post__admin_cannot_delete_workspace).
+    """
     client = Client()
     team = sample_team_with_admin_member.team
     uri = reverse("teams:team_general", kwargs={"team_key": team.key})
@@ -2028,7 +2131,7 @@ def test_team_general_get__when_user_is_admin__should_fail(
 
     response: HttpResponse = client.get(uri)
 
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db
@@ -2099,25 +2202,49 @@ def test_team_general_post__empty_name_should_fail(
 
 
 @pytest.mark.django_db
-def test_team_general_post__admin_cannot_update_name(
+def test_team_general_post__admin_can_update_name(
     sample_team_with_admin_member: Member,  # noqa: F811
 ):
-    """Test that admins cannot update the workspace name."""
+    """Admins can rename the workspace — workspace settings are ADMINISTER."""
     client = Client()
     team = sample_team_with_admin_member.team
-    original_name = team.name
     uri = reverse("teams:team_general", kwargs={"team_key": team.key})
 
     setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
 
     response: HttpResponse = client.post(uri, {"name": "New Name"})
 
-    # Should be forbidden
-    assert response.status_code == 403
+    assert response.status_code == 200
 
-    # Verify the name was not updated
     team.refresh_from_db()
-    assert team.name == original_name
+    assert team.name == "New Name"
+
+
+@pytest.mark.django_db
+def test_team_general_post__admin_cannot_delete_workspace(
+    sample_team_with_admin_member: Member,  # noqa: F811
+):
+    """Deleting the workspace is OWNER_ONLY — one of exactly two things an admin cannot do.
+
+    This is the boundary the whole admin widening rests on: admins gained
+    settings, billing, member management and resource deletion, but not this.
+    """
+    client = Client()
+    team = sample_team_with_admin_member.team
+    uri = reverse("teams:team_general", kwargs={"team_key": team.key})
+
+    setup_authenticated_client_session(client, team, sample_team_with_admin_member.user)
+
+    response: HttpResponse = client.post(uri, {"action": "delete_workspace"})
+
+    assert response.status_code == 403
+    assert Team.objects.filter(pk=team.pk).exists()
+
+    # ...and the control isn't rendered either — an admin must not be shown a
+    # Delete Workspace button that always 403s.
+    page: HttpResponse = client.get(uri)
+    assert page.status_code == 200
+    assert "Delete Workspace" not in page.content.decode()
 
 
 @pytest.mark.django_db

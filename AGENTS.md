@@ -281,14 +281,27 @@ Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requi
 
 ### Team Roles and Permissions
 
-Supported roles: `"owner"`, `"admin"`, `"guest"` (defined in `TEAMS_SUPPORTED_ROLES`). Legacy code may reference `"member"` but it is not in the current choices. CBV mixins in `sbomify.apps.teams.permissions`:
+Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. Legacy rows may still carry `"member"`, which is not in the current choices.
+
+**`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
+
+1. **The ladder stays linear** — `guest ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
+
+Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `MANAGE` = `DELETE` (owner + admin) ⊂ `RELEASE_PUBLISH` (+ bot) and `READ_MEMBER` (+ guest) ⊂ `PUBLISH` (+ bot + guest). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+
+Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
 ```python
+from sbomify.apps.core.authz import ADMINISTER
+
 class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)  # not a hardcoded ["owner", "admin"]
 ```
 
 `GuestAccessBlockedMixin` redirects guest members to the public workspace page.
+
+**Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
 
 ## Key Conventions
 

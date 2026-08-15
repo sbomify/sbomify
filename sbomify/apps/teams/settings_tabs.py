@@ -15,11 +15,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Roles that may see a tab. Mirrors the keys of ``settings.TEAMS_SUPPORTED_ROLES``.
-OWNER = "owner"
-ADMIN = "admin"
-OWNER_ONLY = (OWNER,)
-OWNER_OR_ADMIN = (OWNER, ADMIN)
+from sbomify.apps.core.authz import ADMINISTER, ROLE_GUEST
+
+# Roles that may see a tab, taken from the capability tiers rather than spelled
+# out here: a tab and the actions behind it should never disagree about who may
+# use them, and deriving both from ``authz`` makes that true by construction.
+#
+# Every workspace-configuration tab is ``ADMINISTER``. Admins are near-owners —
+# the only capability they lack is deleting the workspace — so there is no tab an
+# owner can open and an admin cannot. (Workspace deletion lives inside the
+# General tab and is gated separately, on ``is_owner``.)
+ANY_MEMBER: tuple[str, ...] = ADMINISTER + (ROLE_GUEST,)
 
 
 @dataclass(frozen=True)
@@ -31,7 +37,7 @@ class SettingsTab:
     icon: str
     # The template under ``teams/team_settings_tabs/`` that renders the body.
     template: str
-    roles: tuple[str, ...] = OWNER_OR_ADMIN
+    roles: tuple[str, ...] = ADMINISTER
     # Billing sections are pointless when the deployment has billing switched off.
     requires_billing: bool = False
     description: str = ""
@@ -50,7 +56,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="General",
         icon="fa-sliders",
         template="general",
-        roles=OWNER_ONLY,
         description="Workspace name, visibility and identifiers.",
     ),
     SettingsTab(
@@ -79,7 +84,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="Trust Center",
         icon="fa-globe",
         template="trust_center",
-        roles=OWNER_ONLY,
         description="What the public sees, and who may be let past the gate.",
     ),
     SettingsTab(
@@ -98,7 +102,6 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         label="Billing",
         icon="fa-credit-card",
         template="billing",
-        roles=OWNER_ONLY,
         requires_billing=True,
         description="Your plan, usage and payment details.",
     ),
@@ -108,7 +111,7 @@ SETTINGS_TABS: tuple[SettingsTab, ...] = (
         icon="fa-user-gear",
         template="account",
         # Your own account is yours whatever your role in this workspace.
-        roles=(OWNER, ADMIN, "guest"),
+        roles=ANY_MEMBER,
         description="Your own sign-in and personal settings.",
     ),
 )
