@@ -421,6 +421,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
 
     def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        # Managing invitations is ADMINISTER, but the class gate is MANAGE so
+        # members can reach their own tabs — so this has to re-check for itself,
+        # as its siblings do. Without it a member could cancel any invitation in
+        # the workspace, including an owner-level one. A 403 rather than a
+        # message: this is an authorization failure, matching _delete_member.
+        membership = Member.objects.filter(user=cast(User, request.user), team__key=team_key).first()
+        if not membership or membership.role not in ADMINISTER:
+            return error_response(
+                request, HttpResponseForbidden("You don't have permission to manage this workspace's invitations")
+            )
+
         form = DeleteInvitationForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())

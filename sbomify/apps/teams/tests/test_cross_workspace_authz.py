@@ -109,3 +109,42 @@ def test_flags_still_come_from_the_session_when_the_url_names_no_workspace(clien
 
     assert context["team"].key == home.key
     assert context["is_owner"] is True
+
+
+@pytest.mark.django_db
+def test_a_member_cannot_delete_a_workspace_invitation(client, django_user_model, home):
+    """Managing invitations is ADMINISTER, and the settings view is only MANAGE.
+
+    TeamSettingsView was widened to MANAGE so members could reach their own
+    tabs, on the stated basis that every POST sub-action re-checks ADMINISTER
+    for itself. _delete_invitation did not, so a member could cancel any
+    invitation in the workspace — including an owner-level one — with a crafted
+    _method=DELETE post.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from sbomify.apps.teams.models import Invitation
+
+    member_user = django_user_model.objects.create_user(
+        username="plainmember", email="plainmember@test.com", password="password"
+    )
+    Member.objects.create(user=member_user, team=home, role="member", is_default_team=True)
+
+    invitation = Invitation.objects.create(
+        team=home, email="incoming-owner@example.com", role="owner",
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+
+    client.force_login(member_user)
+    _session_for(client, home, "member")
+
+    client.post(
+        reverse("teams:team_settings", kwargs={"team_key": home.key}),
+        {"_method": "DELETE", "invitation_id": invitation.id},
+    )
+
+    assert Invitation.objects.filter(pk=invitation.pk).exists(), (
+        "a member deleted a workspace invitation; managing invitations is ADMINISTER"
+    )
