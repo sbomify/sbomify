@@ -67,3 +67,45 @@ def test_owner_elsewhere_cannot_change_another_workspaces_freshness_policy(clien
 
     other.refresh_from_db()
     assert other.sbom_freshness_days is None
+
+
+@pytest.mark.django_db
+def test_capability_flags_describe_the_workspace_the_page_is_about(client, two_hatted_user, home, other):
+    """The template flags must match the page, not the session.
+
+    Otherwise the settings page for a workspace you are merely a member of
+    renders the admin controls of the workspace you happen to have selected,
+    and every one of them 403s when used — the UI/enforcement split this whole
+    change set exists to close.
+    """
+    from sbomify.apps.core.context_processors import team_context
+
+    client.force_login(two_hatted_user)
+    _session_for(client, home, "owner")
+
+    response = client.get(reverse("teams:team_settings", kwargs={"team_key": other.key}))
+    request = response.wsgi_request
+
+    context = team_context(request)
+
+    assert context["team"].key == other.key
+    assert context["workspace_role"] == "member"
+    assert context["can_administer"] is False
+    assert context["can_delete"] is False
+    assert context["is_owner"] is False
+    assert context["can_manage"] is True
+
+
+@pytest.mark.django_db
+def test_flags_still_come_from_the_session_when_the_url_names_no_workspace(client, two_hatted_user, home):
+    """Pages that aren't workspace-scoped keep working off the session."""
+    from sbomify.apps.core.context_processors import team_context
+
+    client.force_login(two_hatted_user)
+    _session_for(client, home, "owner")
+
+    response = client.get(reverse("core:dashboard"))
+    context = team_context(response.wsgi_request)
+
+    assert context["team"].key == home.key
+    assert context["is_owner"] is True

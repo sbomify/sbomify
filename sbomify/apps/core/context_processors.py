@@ -184,8 +184,19 @@ def team_context(request: Any) -> Any:
         return {}
 
     current_team_data = request.session.get("current_team", {})
-    team_key = current_team_data.get("key")
+    session_team_key = current_team_data.get("key")
 
+    # The workspace this page is *about*, which is not always the one in the
+    # session. TeamRoleRequiredMixin authorizes the URL's workspace, so flags
+    # derived from the session would describe a different workspace than the
+    # page renders — an admin in A viewing B would be shown B's admin controls
+    # and refused when they used them.
+    url_team_key = None
+    resolver_match = getattr(request, "resolver_match", None)
+    if resolver_match is not None:
+        url_team_key = resolver_match.kwargs.get("team_key")
+
+    team_key = url_team_key or session_team_key
     if not team_key:
         return {}
 
@@ -193,7 +204,15 @@ def team_context(request: Any) -> Any:
         from sbomify.apps.teams.models import Member, Team
 
         # We could use select_related hooks or simple caching here if performance is an issue
-        team = Team.objects.get(key=team_key)
+        try:
+            team = Team.objects.get(key=team_key)
+        except Team.DoesNotExist:
+            # A ``team_key`` kwarg that names no workspace isn't necessarily a
+            # workspace key at all. Fall back rather than dropping the whole
+            # context and stripping the chrome off the page.
+            if not url_team_key or not session_team_key:
+                raise
+            team = Team.objects.get(key=session_team_key)
 
         # Determine if owner. Billing status (banners/notifications) is read
         # straight from team.billing_plan_limits below; it is NOT synced from
