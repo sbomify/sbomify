@@ -63,7 +63,9 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         return []
 
     from sbomify.apps.access_tokens.models import AccessToken
+    from sbomify.apps.core.authz import ADMINISTER
     from sbomify.apps.teams.models import Member
+    from sbomify.apps.teams.queries import get_member_role_by_key
 
     now = timezone.now()
     cutoff = now + timedelta(days=WARNING_WINDOW_DAYS)
@@ -72,8 +74,11 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         AccessToken.objects.filter(user=request.user, expires_at__gt=now, expires_at__lte=cutoff).select_related("team")
     )
 
+    # Live Member row and the tier, not the session cache and a role literal:
+    # this decides whether someone is shown the workspace's bot tokens, so a
+    # demoted admin would keep seeing them until the 300s cache turned over.
     team_key = (request.session.get("current_team") or {}).get("key")
-    if team_key and (request.session.get("current_team") or {}).get("role") in ("owner", "admin"):
+    if team_key and get_member_role_by_key(request.user, team_key) in ADMINISTER:
         bot_user_ids = Member.objects.filter(team__key=team_key, role="bot").values_list("user_id", flat=True)
         tokens.extend(
             AccessToken.objects.filter(

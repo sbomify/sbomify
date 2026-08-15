@@ -105,7 +105,30 @@ class TestBellProvider:
         _bot_member(guest_user, member.team)
         _token(guest_user, member.team, days=3)
 
+        # Demote the Member row, not just the session copy of it. The provider
+        # reads the live row, so a session claiming "guest" over an owner row
+        # would prove only that the cache can lie.
+        member.role = "guest"
+        member.save(update_fields=["role"])
+
         assert get_notifications(self._request(rf, member.user, member.team, role="guest")) == []
+
+    def test_a_stale_session_role_does_not_unlock_bot_tokens(
+        self, rf: Any, sample_team_with_owner_member: Any, guest_user: Any
+    ) -> None:
+        """The session role is a 300s cache and must not be the deciding source.
+
+        A demoted admin keeps a session saying "owner" until it turns over; that
+        window must not keep handing them the workspace's bot tokens.
+        """
+        member = sample_team_with_owner_member
+        _bot_member(guest_user, member.team)
+        _token(guest_user, member.team, days=3)
+
+        member.role = "member"
+        member.save(update_fields=["role"])
+
+        assert get_notifications(self._request(rf, member.user, member.team, role="owner")) == []
 
 
 class TestShortLivedTokensAreNotNagged:

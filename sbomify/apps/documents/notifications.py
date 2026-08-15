@@ -41,11 +41,12 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         return []
 
     # Only show notifications to owners and admins
+    from sbomify.apps.core.authz import ADMINISTER
     from sbomify.apps.teams.models import Member
 
     try:
         member = Member.objects.get(team=team, user=request.user)
-        if member.role not in ("owner", "admin"):
+        if member.role not in ADMINISTER:
             return []
     except Member.DoesNotExist:
         return []

@@ -110,6 +110,7 @@ def pending_access_requests_context(request: Any) -> Any:
         from django.conf import settings
         from django.core.cache import cache
 
+        from sbomify.apps.core.authz import ADMINISTER
         from sbomify.apps.documents.access_models import AccessRequest
         from sbomify.apps.teams.models import Member, Team
 
@@ -117,7 +118,7 @@ def pending_access_requests_context(request: Any) -> Any:
         team = Team.objects.get(key=team_key)
         member = Member.objects.filter(team=team, user=request.user).first()
 
-        if not member or member.role not in ("owner", "admin"):
+        if not member or member.role not in ADMINISTER:
             return {
                 "pending_access_requests_count": 0,
                 "has_pending_access_requests": False,

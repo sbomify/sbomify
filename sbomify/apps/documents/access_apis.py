@@ -17,7 +17,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
+from sbomify.apps.core.authz import ADMINISTER, READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
@@ -362,7 +362,7 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
                 # Check if user is admin/owner
                 try:
                     member = Member.objects.get(team=team, user=request.user)
-                    if member.role not in ("owner", "admin"):
+                    if member.role not in ADMINISTER:
                         return 403, {"detail": "Forbidden"}
                 except Member.DoesNotExist:
                     return 403, {"detail": "Forbidden"}
@@ -610,7 +610,7 @@ def approve_access_request(request: HttpRequest, request_id: str) -> Any:
         # Verify user is owner or admin of the team
         try:
             member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return 403, {"detail": "Access denied"}
         except Member.DoesNotExist:
             return 403, {"detail": "Access denied"}
@@ -729,7 +729,7 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         # Verify user is owner or admin of the team
         try:
             member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return 403, {"detail": "Access denied"}
         except Member.DoesNotExist:
             return 403, {"detail": "Access denied"}
@@ -820,7 +820,7 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         # Verify user is owner or admin of the team
         try:
             member = Member.objects.get(team=access_request.team, user=request.user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return 403, {"detail": "Access denied"}
         except Member.DoesNotExist:
             return 403, {"detail": "Access denied"}
