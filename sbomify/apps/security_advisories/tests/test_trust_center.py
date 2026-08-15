@@ -296,6 +296,37 @@ def test_owner_scope_includes_unlisted_products(team, unlisted_product, sample_u
     assert str(unlisted_product.id) in scope.product_ids
 
 
+def test_member_scope_matches_owner_scope(team, unlisted_product, django_user_model):
+    """Insider status follows ``product:read``, which every internal role holds.
+
+    A member can already read every advisory internally — the views in
+    core/views/security_advisories.py carry no role tier at all — so gating this
+    page above that only meant the same person saw different inventory depending
+    on which page they opened.
+    """
+    contributor = django_user_model.objects.create_user(
+        username="scope-member", email="scope-member@test.com", password="password"
+    )
+    Member.objects.create(team=team, user=contributor, role="member")
+
+    scope = resolve_viewer_scope(make_request(contributor), team)
+
+    assert scope.is_insider
+    assert str(unlisted_product.id) in scope.product_ids
+
+
+def test_a_non_member_is_not_an_insider(team, unlisted_product, django_user_model):
+    """Authenticated is not the same as internal — the widening stops at the workspace."""
+    outsider = django_user_model.objects.create_user(
+        username="scope-outsider", email="scope-outsider@test.com", password="password"
+    )
+
+    scope = resolve_viewer_scope(make_request(outsider), team)
+
+    assert not scope.is_insider
+    assert str(unlisted_product.id) not in scope.product_ids
+
+
 def test_anonymous_scope_excludes_gated_products(team, public_product, gated_product):
     scope = resolve_viewer_scope(make_request(), team)
     assert str(public_product.id) in scope.product_ids
