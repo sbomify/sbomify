@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
-from sbomify.apps.teams.models import Member, Team
+from sbomify.apps.teams.models import Invitation, Member, Team
 
 
 @pytest.fixture
@@ -74,6 +77,51 @@ def test_admin_cannot_remove_owner(client, admin_user, owner, team):
     messages = list(response.wsgi_request._messages)
     assert len(messages) > 0
     assert "Admins cannot remove workspace owners" in str(messages[0])
+
+
+def test_an_expired_invitation_does_not_unlock_admin_self_removal(client, admin_user, team, django_user_model):
+    """The self-removal exception is for admins actually leaving for somewhere.
+
+    The check was exists() over every Invitation ever addressed to them — under
+    a variable named has_pending_invites — so an invitation that lapsed months
+    ago still bought a way past the rule.
+    """
+    Invitation.objects.create(
+        team=Team.objects.create(name="Somewhere Else"),
+        email=admin_user.email,
+        role="member",
+        expires_at=timezone.now() - timedelta(days=30),
+    )
+
+    client.force_login(admin_user)
+    _setup_session(client, team, "admin")
+    membership = Member.objects.get(user=admin_user, team=team)
+
+    url = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    response = client.post(url, {"_method": "DELETE", "member_id": membership.id})
+
+    assert response.status_code == 403
+    assert Member.objects.filter(pk=membership.pk).exists()
+
+
+def test_a_live_invitation_still_unlocks_admin_self_removal(client, admin_user, team):
+    """The exception itself must keep working — an admin leaving can still go."""
+    Invitation.objects.create(
+        team=Team.objects.create(name="Somewhere Else"),
+        email=admin_user.email,
+        role="member",
+        expires_at=timezone.now() + timedelta(days=7),
+    )
+
+    client.force_login(admin_user)
+    _setup_session(client, team, "admin")
+    membership = Member.objects.get(user=admin_user, team=team)
+
+    url = reverse("teams:team_settings", kwargs={"team_key": team.key})
+    response = client.post(url, {"_method": "DELETE", "member_id": membership.id})
+
+    assert response.status_code == 302
+    assert not Member.objects.filter(pk=membership.pk).exists()
 
 
 def test_settings_tab_answers_403_for_an_authorization_refusal(client, admin_user, team):
