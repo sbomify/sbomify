@@ -953,6 +953,14 @@ API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/m
 # Trust Center never notices, low enough to blunt scripted enumeration.
 API_ANONYMOUS_RATE_LIMIT = os.environ.get("API_ANONYMOUS_RATE_LIMIT", "120/min")
 
+# Caddy's on-demand TLS ask, kept out of the bucket above. It fires once per
+# TLS handshake against an unprovisioned hostname, so a client probing
+# hostnames could otherwise spend the whole anonymous budget and take the Trust
+# Center and OIDC exchange with it — while any throttled ask is a certificate
+# Caddy then refuses to issue. Set above the handshake rate real traffic
+# produces; the decision cache in front of the endpoint absorbs the repeats.
+ON_DEMAND_TLS_RATE_LIMIT = os.environ.get("ON_DEMAND_TLS_RATE_LIMIT", "600/min")
+
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend
 # enforces the ``aud`` claim against it during verification.
