@@ -21,10 +21,27 @@ role set itself remained wrong in three ways:
    trust-center approvals and member removal.
 
 2. **`guest` was three things at once** — an external trust-center visitor, an
-   internal reader (the API granted guests every `*:read` action over private
-   data), and an artifact publisher. `GuestAccessBlockedMixin` blocked guests
-   from the internal *web* pages, so the two halves of the product disagreed
-   about what a guest was: blocked in the UI, admitted by the API.
+   internal reader, and an artifact publisher. `READ_MEMBER` held
+   `(guest, owner, admin)` and *every* read action resolved to it
+   (`workspace:read`, `component:read_internal`, `product:read`, `release:read`,
+   `document:read`, `sbom:read`); only `component:access` took the
+   attribute-based path, so those reads were role checks with no visibility gate
+   at all. `PUBLISH` held `guest` outright.
+
+   The dangerous part was not that the model said this, but that **nothing
+   agreed with it**. `GuestAccessBlockedMixin` kept guests out of the internal
+   web pages; inside the API, 26 inline `_is_guest_member` checks in
+   `core/apis.py` and a hardcoded refusal in `teams/apis.py` turned guests away
+   on *some* endpoints. So a guest's actual access depended on whether the
+   endpoint they hit happened to carry an ad-hoc guard, none of which the
+   capability model knew about. The endpoints that lacked one fell through to
+   the permissive tier — which is exactly where review later found three read
+   paths reaching internal data, one of them unauthenticated.
+
+   The lesson is not "the UI and the API disagreed". It is that a permissive
+   tier patched over by scattered inline guards has no reviewable answer to
+   "what can a guest do?", and the gaps are invisible until something enumerates
+   them.
 
 3. **`admin` was a half-owner** defined by an arbitrary list of things it could
    not reach, including deleting a product it had just created.
