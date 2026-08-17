@@ -1,4 +1,4 @@
-{% load static %}
+{% load static brand_tags %}
 {% load django_vite %}
 {% load django_htmx %}
 {% load cache %}
@@ -156,6 +156,16 @@
                 --brand-color-dark: {{ brand.brand_color|default:'#3b7ddd'|darken:0.1 }};
                 --accent-color-light: {{ brand.accent_color|default:'#3b7ddd'|lighten:0.1 }};
                 --accent-color-dark: {{ brand.accent_color|default:'#3b7ddd'|darken:0.1 }};
+
+                /* What the c-branded.* library reads. It is normally published
+                   by c-branded.theme, but a whole page is one brand scope, so
+                   it is set once here rather than wrapping every template in a
+                   div. Nothing in the app stylesheet defines --brand, so unlike
+                   --color-primary below, this is not overridden by load order.
+                   brand_ink measures the accent and returns the text colour
+                   that is actually readable on it. */
+                --brand: {{ brand.accent_color|brand_fill }};
+                --brand-ink: {{ brand.accent_color|brand_ink }};
 
                 /* Override Tailwind primary color with accent color for buttons/links.
                    Whole rgb() values: the tokens are whole colors, and a bare

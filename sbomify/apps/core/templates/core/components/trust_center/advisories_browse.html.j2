@@ -106,13 +106,20 @@ submit button applies the same filters, and the URL is the same either way.
                     A date range is a plain control, not something the
                     workspace's colour has any say over, so it uses the app's
                     own field rather than a branded one. See the note in
-                    AGENTS.md on which library a trust centre control belongs
-                    to: the brand goes on what the page is, not on the
-                    machinery for filtering it.
+                    AGENTS.md on which library a trust centre control belongs to.
 
-                    The names and ids are the form's contract. hx-trigger
-                    listens for change on the form, so these stay real inputs
-                    carrying from and to, and the request is unchanged.
+                    These are native date inputs rather than the app's
+                    components/date_picker.html.j2, because that picker does not
+                    open. Its calendar teleports to the body and stays
+                    display:none even when its own open flag is forced true, and
+                    it fails the same way in the design system gallery, so it is
+                    broken everywhere rather than here. A native input gives a
+                    working calendar, a keyboard, and a mobile picker for free.
+                    Swap them when the picker is fixed.
+
+                    The names and ids are the form's contract. hx-trigger listens
+                    for change on the form, so these stay real inputs carrying
+                    from and to, and the request is unchanged.
                 {% endcomment %}
                 <div class="flex flex-col gap-3">
                     <c-forms.field label="From" for="publishedFrom">
