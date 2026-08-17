@@ -464,33 +464,78 @@ if REDIS_CA_CERTS and not _redis_is_tls:
         "Either use rediss:// or remove REDIS_CA_CERTS."
     )
 
+
 # Cache Configuration
-CACHES: dict[str, dict[str, Any]]
-if DEBUG:
-    # Disable caching in development mode
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-        }
+def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str, Any]]:
+    """The two Redis cache aliases, which differ in one option only.
+
+    A function rather than an inline literal so a test can read the real pair
+    back and check that the difference between them is the only difference
+    there is.
+
+    Both point at the same Redis. ``default`` swallows connection failures;
+    ``throttle`` does not, and nothing else about them may drift apart.
+    """
+    pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    if ca_certs:
+        pool_kwargs["ssl_ca_certs"] = ca_certs
+    options: dict[str, Any] = {
+        "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        "SOCKET_CONNECT_TIMEOUT": 5,
+        "SOCKET_TIMEOUT": 5,
+        "RETRY_ON_TIMEOUT": True,
+        "CONNECTION_POOL_KWARGS": pool_kwargs,
     }
-else:
-    # Use Redis cache in production
-    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 10}
-    if REDIS_CA_CERTS:
-        _cache_pool_kwargs["ssl_ca_certs"] = REDIS_CA_CERTS
-    CACHES = {
+    return {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_CACHE_URL,
+            "LOCATION": location,
             "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "SOCKET_CONNECT_TIMEOUT": 5,
-                "SOCKET_TIMEOUT": 5,
-                "RETRY_ON_TIMEOUT": True,
-                "CONNECTION_POOL_KWARGS": _cache_pool_kwargs,
+                **options,
+                # Without this, django-redis re-raises every Redis failure out
+                # of cache.get()/cache.set(). Each authenticated page renders
+                # its sidebar and header through {% cache %}, so a socket
+                # timeout (five seconds is easy to blow when the box is
+                # mid-checkpoint) became a 500 on a page that had already done
+                # all its work. A cache that is unreachable should cost
+                # latency, not the page.
+                #
+                # Every read on this alias falls through to the database or to
+                # S3 on a miss, including the custom-domain host checks in
+                # core.middleware, so an outage returns the same answers more
+                # slowly rather than a wrong or more permissive one.
+                "IGNORE_EXCEPTIONS": True,
             },
-        }
+        },
+        # A rate limiter is the exception, because it decides from the counter
+        # it reads back: a swallowed failure reads as an empty window and hands
+        # out a fresh budget, so the limit disappears for as long as Redis is
+        # unwell — which is when a caller hammering the API is a plausible
+        # reason for it being unwell. Raising refuses the call instead.
+        "throttle": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": location,
+            "OPTIONS": dict(options),
+        },
     }
+
+
+CACHES: dict[str, dict[str, Any]]
+if DEBUG:
+    # Disable caching in development mode. The throttle alias is declared here
+    # too so it always resolves; against DummyCache it accumulates no window,
+    # which is the same absence of rate limiting development already had.
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"},
+        "throttle": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"},
+    }
+else:
+    CACHES = build_redis_caches(REDIS_CACHE_URL, REDIS_CA_CERTS)
+
+# django-redis only logs the failures it swallows when this is on; without it an
+# outage is invisible except as latency.
+DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+DJANGO_REDIS_LOGGER = "sbomify.cache"
 
 # Channel Layers for WebSocket support
 # Keepalive plus proactive health checks: a broker restart is then noticed
@@ -906,6 +951,14 @@ API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/m
 # apply to them. Keyed per client IP. Generous enough that a human browsing the
 # Trust Center never notices, low enough to blunt scripted enumeration.
 API_ANONYMOUS_RATE_LIMIT = os.environ.get("API_ANONYMOUS_RATE_LIMIT", "120/min")
+
+# Caddy's on-demand TLS ask, kept out of the bucket above. It fires once per
+# TLS handshake against an unprovisioned hostname, so a client probing
+# hostnames could otherwise spend the whole anonymous budget and take the Trust
+# Center and OIDC exchange with it — while any throttled ask is a certificate
+# Caddy then refuses to issue. Set above the handshake rate real traffic
+# produces; the decision cache in front of the endpoint absorbs the repeats.
+ON_DEMAND_TLS_RATE_LIMIT = os.environ.get("ON_DEMAND_TLS_RATE_LIMIT", "600/min")
 
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend

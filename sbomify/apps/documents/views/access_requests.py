@@ -20,6 +20,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.cache import never_cache
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.object_store import S3Client
@@ -62,7 +63,7 @@ def user_has_signed_current_nda(user: User, team: Team) -> bool:
 
 def _invalidate_access_requests_cache(team: Team) -> None:
     """Invalidate cache for pending access requests count for all owners/admins of the team."""
-    admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).values_list("user_id", flat=True)
+    admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).values_list("user_id", flat=True)
 
     for user_id in admin_members:
         cache_key = f"pending_access_requests:{team.key}:{user_id}"
@@ -174,7 +175,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
     """Send email notification to all owners and admins about a new access request."""
     try:
         # Get all owners and admins of the team
-        admin_members = Member.objects.filter(team=team, role__in=("owner", "admin")).select_related("user")
+        admin_members = Member.objects.filter(team=team, role__in=ADMINISTER).select_related("user")
 
         if not admin_members.exists():
             logger.warning(f"No admins found for team {team.key} to notify about access request {access_request.id}")
@@ -770,7 +771,7 @@ class NDASigningView(View):
 class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """Admin view to approve/reject/revoke access requests."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         """List pending access requests."""
@@ -783,7 +784,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Verify user is owner or admin
         try:
             member = Member.objects.get(team=team, user=user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return error_response(request, HttpResponse(status=403, content="Access denied"))
         except Member.DoesNotExist:
             return error_response(request, HttpResponse(status=403, content="Access denied"))
@@ -866,7 +867,7 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # Verify user is owner or admin
         try:
             member = Member.objects.get(team=team, user=user)
-            if member.role not in ("owner", "admin"):
+            if member.role not in ADMINISTER:
                 return error_response(request, HttpResponse(status=403, content="Access denied"))
         except Member.DoesNotExist:
             return error_response(request, HttpResponse(status=403, content="Access denied"))

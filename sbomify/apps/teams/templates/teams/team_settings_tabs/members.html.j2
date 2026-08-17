@@ -104,7 +104,7 @@
                             <p class="text-sm text-text-muted m-0 truncate">{{ member.user.email }}</p>
                         </div>
                         {# Actions #}
-                        {% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+                        {% if can_administer %}
                             {% if member.role != 'owner' %}
                                 <div class="flex-shrink-0">
                                     <button class="tw-icon-btn tw-icon-btn-sm text-text-muted hover:text-danger hover:bg-danger/10"
@@ -129,12 +129,45 @@
             </div>
         {% endif %}
     </div>
+    {# Role legend — the members page is the only place a user learns what a role
+       grants, so the descriptions come from authz.ROLE_DESCRIPTIONS and move with
+       the capability table rather than drifting out of date here. #}
+    <div class="border-t border-border/40" x-data="{ open: false }">
+        <button type="button"
+                class="w-full flex items-center justify-between gap-3 px-6 py-3 text-sm text-text-muted hover:text-text transition-colors"
+                @click="open = !open"
+                :aria-expanded="open.toString()"
+                aria-controls="role-legend">
+            <span class="flex items-center gap-2">
+                <i class="fas fa-circle-info"></i>
+                What can each role do?
+            </span>
+            <i class="fas fa-chevron-down transition-transform"
+               :class="open && 'rotate-180'"></i>
+        </button>
+        <div id="role-legend" x-show="open" x-cloak class="px-6 pb-5">
+            <dl class="space-y-3 m-0">
+                {% for role_key, role_label, role_description in role_descriptions %}
+                    <div class="flex flex-col sm:flex-row sm:gap-4">
+                        <dt class="sm:w-28 flex-shrink-0 mb-1 sm:mb-0">
+                            <span class="{% if role_key == 'owner' %}tw-badge-primary{% elif role_key == 'admin' %}tw-badge-warning{% else %}tw-badge-secondary{% endif %}">
+                                {{ role_label }}
+                            </span>
+                        </dt>
+                        <dd class="text-sm text-text-muted m-0">
+                            {{ role_description }}
+                        </dd>
+                    </div>
+                {% endfor %}
+            </dl>
+        </div>
+    </div>
 </div>
-{% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+{% if can_administer %}
     {% include "components/modals/delete_modal.html.j2" with modal_id="delete-member-modal" modal_title="Remove Member" message_text="Are you sure you want to remove" warning_text="This action will immediately remove the member from the workspace and revoke their access." form_action=request.path form=delete_member_form submit_text="Remove Member" additional_fields='<input type="hidden" name="active_tab" value="members">' %}
 {% endif %}
 {# Pending Invitations Card #}
-{% if request.session.current_team.role == 'owner' or request.session.current_team.role == 'admin' %}
+{% if can_administer %}
     <div class="tw-settings-card mt-6">
         <div class="px-6 py-4 border-b border-border/40">
             <div class="flex items-center justify-between">

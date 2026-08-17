@@ -13,6 +13,7 @@ from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.services.results import ServiceResult
@@ -39,7 +40,7 @@ class SupplierListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     mixin stays as a cheap first gate and ``_team`` is the authority.
     """
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
     template_name = "teams/suppliers.html.j2"
     rows_template_name = "teams/components/supplier_rows.html.j2"
 

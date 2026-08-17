@@ -159,7 +159,10 @@ def test_change_plan_unauthorized_user(
 
     assert response.status_code == 403
     data = json.loads(response.content)
-    assert "Only workspace owners can change billing plans" in data["detail"]
+    # No role names: can() also denies on token action scope, so the API's
+    # message has to hold for a permitted role with an insufficient token.
+    assert "don't have permission" in data["detail"]
+    assert "owner" not in data["detail"].lower()
 
 
 @pytest.mark.django_db

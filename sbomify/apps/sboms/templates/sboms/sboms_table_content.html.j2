@@ -146,7 +146,19 @@
                                     <template x-if="bomType !== 'sbom'">
                                         <span class="text-text-muted text-sm">—</span>
                                     </template>
-                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0">
+                                    {% comment %}
+                                    Nothing scanned is not nothing found. A skipped
+                                    run stores zero findings exactly as a clean scan
+                                    does, so without this branch an artifact no
+                                    scanner could read renders as "Clean".
+                                    {% endcomment %}
+                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
+                                        <span class="tw-badge-warning text-xs"
+                                              title="A scan ran but matched no packages, so nothing was checked against any advisory source.">
+                                            Nothing scanned
+                                        </span>
+                                    </template>
+                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && !item.vuln.scanned_nothing">
                                         <span class="tw-badge-success text-xs">Clean</span>
                                     </template>
                                     <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total > 0">

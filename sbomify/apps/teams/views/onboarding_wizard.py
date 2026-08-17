@@ -14,8 +14,8 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.billing.config import is_billing_enabled
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
-from sbomify.apps.sboms.models import Component, Product
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
     ContactEntity,
@@ -50,7 +50,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         team = self._get_current_team(request)
         if team and team.has_completed_wizard:
             pending_plan = is_billing_enabled() and not team.has_selected_billing_plan
-            showing_completion = request.GET.get("step") == "complete" and request.session.get("wizard_component_id")
+            showing_completion = request.GET.get("step") == "complete" and request.session.get("wizard_company_name")
             if not pending_plan and not showing_completion:
                 messages.info(request, "Onboarding is already complete.")
                 return redirect("core:dashboard")
@@ -101,23 +101,25 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return render(request, "core/components/onboarding_wizard.html.j2", context)
 
     def _render_complete(self, request: HttpRequest) -> HttpResponse:
-        component_id = request.session.get("wizard_component_id")
-        if not component_id:
+        # Keyed on the company name rather than a component id: the wizard no
+        # longer creates a component, and gating on one meant this step could
+        # only be reached by having an entity the user never asked for.
+        company_name = request.session.get("wizard_company_name")
+        if not company_name:
             return redirect(reverse("teams:onboarding_wizard"))
 
         billing_enabled = is_billing_enabled()
         if billing_enabled:
             next_url = f"{reverse('teams:onboarding_wizard')}?step=plan"
         else:
-            # Pop session data — no plan step follows
-            request.session.pop("wizard_component_id", None)
-            next_url = reverse("core:component_details", kwargs={"component_id": component_id})
-
-        company_name = request.session.get("wizard_company_name", "")
+            # The dashboard, where the onboarding checklist asks for a product
+            # and a component. Those steps used to be pre-ticked by the wizard
+            # creating both, so the checklist was complete before the person
+            # had done either.
+            next_url = reverse("core:dashboard")
 
         context = {
             "current_step": "complete",
-            "component_id": component_id,
             "company_name": company_name,
             "next_url": next_url,
             "billing_enabled": billing_enabled,
@@ -129,7 +131,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect("core:dashboard")
 
         team = self._get_current_team(request)
-        if not team or not self._is_team_owner(request.user, team):
+        if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
 
         if team.has_selected_billing_plan:
@@ -163,7 +165,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect(plan_url)
 
         team = self._get_current_team(request)
-        if not team or not self._is_team_owner(request.user, team):
+        if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
 
         if team.has_selected_billing_plan:
@@ -262,12 +264,12 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return member.team if member else None
 
     @staticmethod
-    def _is_team_owner(user: Any, team: Team) -> bool:
-        return Member.objects.filter(user=user, team=team, role="owner").exists()
+    def _can_administer_team(user: Any, team: Team) -> bool:
+        """The wizard configures the workspace, so it's the ADMINISTER tier."""
+        return Member.objects.filter(user=user, team=team, role__in=ADMINISTER).exists()
 
     @staticmethod
     def _pop_wizard_session(request: HttpRequest) -> None:
-        request.session.pop("wizard_component_id", None)
         request.session.pop("wizard_company_name", None)
         request.session.pop("onboarding_plan_hint", None)
 
@@ -315,13 +317,9 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         }
 
     def _process_setup(self, request: HttpRequest) -> HttpResponse:
-        from sbomify.apps.sboms.utils import (
-            create_default_component_metadata,
-            populate_component_metadata_native_fields,
-        )
 
         team = self._get_current_team(request)
-        if not team or not self._is_team_owner(request.user, team):
+        if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
 
         if team.is_payment_restricted:
@@ -393,58 +391,18 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                         contact.is_author = True
                         contact.save(update_fields=["is_author"])
 
-                    is_public = not team.can_be_private()
-
-                    # Re-running onboarding with a different company name
-                    # should update the existing product, not create a second one.
-                    # Only rename if the team has exactly one product (wizard-created);
-                    # if multiple exist (user created more via UI/API), fall back to get_or_create.
-                    products = Product.objects.filter(team=team)
-                    if products.count() == 1:
-                        product = products.first()  # guaranteed non-None since count==1
-                        assert product is not None
-                        # Only rename if no other product with the target name exists,
-                        # to avoid violating the unique (team, name) constraint.
-                        name_conflict = (
-                            Product.objects.filter(team=team, name=company_name).exclude(pk=product.pk).exists()
-                        )
-                        if not name_conflict:
-                            product.name = company_name
-                            product.save(update_fields=["name"])
-                        else:
-                            messages.warning(
-                                request,
-                                f'A product named "{company_name}" already exists — kept the previous name.',
-                            )
-                    else:
-                        product, _ = Product.objects.get_or_create(
-                            name=company_name, team=team, defaults={"is_public": is_public}
-                        )
-
-                    component_metadata = create_default_component_metadata(
-                        user=request.user, team_id=team.id, custom_metadata=None
-                    )
-
-                    component, component_created = Component.objects.get_or_create(
-                        name="Main Component",
-                        team=team,
-                        defaults={
-                            "component_type": Component.ComponentType.BOM,
-                            "metadata": component_metadata,
-                            "visibility": Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE,
-                        },
-                    )
-
-                    if component_created:
-                        populate_component_metadata_native_fields(
-                            component,
-                            request.user,
-                            custom_metadata=None,
-                        )
-                        component.save()
-
-                    product.components.add(component)
-
+                    # The wizard used to create a product named after the company and a
+                    # component called "Main Component" here. It no longer does.
+                    #
+                    # Bootstrapping an account left two entities nobody asked for, which
+                    # had to be found and deleted before the account looked like the one
+                    # being set up. It also pre-ticked the dashboard's own "create your
+                    # first product" and "create your first component" steps, so the
+                    # checklist meant to guide someone through those was complete before
+                    # they had done either.
+                    #
+                    # What the wizard is for — the workspace name, the manufacturer and
+                    # contact identity above, the onboarding goal — is unchanged.
                     team.name = format_workspace_name(company_name)
                     team.has_completed_wizard = True
                     team.onboarding_goal = form.cleaned_data.get("goal", "")
@@ -453,7 +411,6 @@ class OnboardingWizardView(LoginRequiredMixin, View):
                     update_user_teams_session(request, cast(User, request.user))
                     refresh_current_team_session(request, team)
 
-                    request.session["wizard_component_id"] = component.id
                     request.session["wizard_company_name"] = company_name
                     request.session.modified = True
                     request.session.save()

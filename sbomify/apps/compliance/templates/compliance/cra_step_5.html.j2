@@ -202,7 +202,28 @@
                                     {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
                                 Exporting...</span>
                             </button>
-                            <template x-if="!overallReady">
+                            {% comment %}
+                            A named reason where there is one. An assessment can
+                            show every step complete and 21/21 controls satisfied
+                            and still be refused, because the EU-establishment
+                            determination is recorded rather than demanded. Saying
+                            "complete all steps" there sends the reader to look at
+                            steps that are already done.
+                            {% endcomment %}
+                            <template x-if="!overallReady && blockers.length">
+                                <div class="tw-alert tw-alert-warning" data-testid="export-blockers">
+                                    <i class="fas fa-triangle-exclamation tw-alert-icon" aria-hidden="true"></i>
+                                    <div class="tw-alert-content">
+                                        <p class="tw-alert-title">Not ready to export</p>
+                                        <ul class="text-xs list-disc list-inside m-0">
+                                            <template x-for="reason in blockers" :key="reason">
+                                                <li x-text="reason"></li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="!overallReady && !blockers.length">
                                 <p class="text-xs text-text-muted text-center">Complete all steps and answer all controls to enable export.</p>
                             </template>
                         </div>
