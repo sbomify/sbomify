@@ -1,3 +1,4 @@
+import json
 import re
 import sys
 import time
@@ -12,6 +13,7 @@ from django.test import Client
 from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
 
+from narrator import Narrator
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
@@ -83,6 +85,24 @@ _screenshot_state: dict[str, Any] = {
 
 # Hero-shot names become filenames, so keep them to a slug we can trust.
 _HERO_NAME_RE = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Generator[None, Any, None]:
+    """Stash each phase's outcome so fixtures can tell a pass from a failure.
+
+    Without this the narration teardown would raise "beats never spoken" on top
+    of whatever actually broke the recording, burying the real error.
+    """
+    outcome = yield
+    item.stash.setdefault(_REPORT_KEY, {})[call.when] = outcome.get_result().passed
+
+
+_REPORT_KEY = pytest.StashKey[dict]()
+
+
+def _test_passed(request: pytest.FixtureRequest) -> bool:
+    return bool(request.node.stash.get(_REPORT_KEY, {}).get("call", False))
 
 
 def _recording_name(request: pytest.FixtureRequest) -> str:
@@ -197,6 +217,81 @@ def pace(page: Page, ms: int = 600) -> None:
         elapsed_ms = int((time.monotonic() - started) * 1000)
         remaining_ms = max(0, ms - elapsed_ms)
     page.wait_for_timeout(remaining_ms)
+
+
+# ---------------------------------------------------------------------------
+# Narration — spoken voiceover
+#
+# The voice is synthesized ahead of the recording (see narrator.py) and muxed
+# in afterwards (see mux_narration.py), which also writes a WebVTT subtitle
+# file from these same offsets.  Because the audio carries the explanation,
+# ``caption()`` suppresses its lower-third in a narrated recording and the
+# subtitles serve viewers watching muted.
+# ---------------------------------------------------------------------------
+
+# Breath between lines.  Short, because a narrator runs one sentence into the
+# next rather than pausing between them.
+_INTER_BEAT_GAP_MS = 180
+
+_narration_state: dict[str, Any] = {
+    "narrator": None,
+    "t0": 0.0,
+    "beats": [],
+    "busy_until": 0.0,
+}
+
+
+def narrate(page: Page, key: str) -> None:
+    """Start speaking a narration beat, and return immediately.
+
+    Narration is a voiceover: the line plays *while* the clicking, typing and
+    page loads underneath it continue, the way a person talks over a demo.  So
+    this does not hold the shot — it notes when the line starts and hands
+    control straight back to the script, which keeps working under the voice.
+
+    It does wait for the previous line to finish first, so lines never overlap
+    each other.  Use ``settle()`` where the picture must not move on until the
+    current sentence has landed.
+
+    Recordings without a narration script are unaffected: ``narrate`` becomes a
+    no-op and their existing ``pace()`` and ``caption()`` calls still drive the
+    timing.
+    """
+    narrator: Narrator | None = _narration_state["narrator"]
+    if narrator is None:
+        return
+
+    settle(page)
+
+    clip = narrator.get(key)
+    offset_ms = (time.monotonic() - _narration_state["t0"]) * 1000
+
+    # Start the next line synthesizing while this one plays.  The API returns
+    # audio faster than real time, so the request finishes before it is needed.
+    narrator.prefetch(narrator.next_key(key))
+
+    _narration_state["beats"].append(
+        {
+            "key": key,
+            "offset_ms": round(offset_ms, 1),
+            "duration": clip.duration,
+            "sha": clip.sha,
+            "caption": clip.caption,
+        }
+    )
+    _narration_state["busy_until"] = time.monotonic() + clip.duration + _INTER_BEAT_GAP_MS / 1000
+
+
+def settle(page: Page) -> None:
+    """Hold until the line currently being spoken has finished.
+
+    Only needed when the next thing on screen would otherwise arrive before the
+    sentence describing it does — the script is free to keep acting under the
+    voice the rest of the time.
+    """
+    remaining_ms = int((_narration_state["busy_until"] - time.monotonic()) * 1000)
+    if remaining_ms > 0:
+        pace(page, remaining_ms)
 
 
 def smooth_scroll(page: Page, locator: Locator, pause_ms: int = 1200) -> None:
@@ -408,7 +503,14 @@ def caption(page: Page, text: str) -> None:
     a click the recording is about to make. Call :func:`clear_caption` before
     a navigation — the caption lives in the current document and would
     otherwise vanish on its own mid-sentence.
+
+    A recording that has a narration script says this out loud instead, so the
+    lower-third is suppressed there rather than duplicating the voiceover on
+    screen.  Nothing at the call sites has to change.
     """
+    if _narration_state["narrator"] is not None:
+        return
+
     page.evaluate(
         """(payload) => {
             let bar = document.getElementById(payload.id);
@@ -901,11 +1003,24 @@ def recording_page(
 ) -> Generator[Page, Any, None]:
     page = recording_context.new_page()
 
+    # Video capture starts with the page, so this is the zero point every
+    # narration offset — and every subtitle cue — is measured against.
+    _narration_state["t0"] = time.monotonic()
+
     # Replace the white about:blank with a branded splash screen.  This is
     # visible while the first real navigation loads.
     page.set_content(SPLASH_HTML, wait_until="commit")
 
     recording_name = _recording_name(request)
+
+    narrator = Narrator.for_recording(recording_name)
+    _narration_state["narrator"] = narrator
+    _narration_state["beats"] = []
+    _narration_state["busy_until"] = 0.0
+    if narrator is not None:
+        # Synthesize the opening line while the splash screen and the first
+        # navigation are still on screen, so its latency never reaches the video.
+        narrator.prefetch(narrator.beat_keys[0])
 
     screenshot_dir = OUTPUT_DIR / "screenshots" / recording_name
     screenshot_dir.mkdir(parents=True, exist_ok=True)
@@ -922,6 +1037,12 @@ def recording_page(
         _screenshot_state["dir"] = None
         _screenshot_state["hero_dir"] = None
 
+    # Let the closing line finish before capture stops, or it gets clipped.
+    if narrator is not None:
+        settle(page)
+
+    wall_duration_ms = (time.monotonic() - _narration_state["t0"]) * 1000
+
     # Grab the video handle, close the page (finalizes recording),
     # then save to a meaningful filename.
     video = page.video
@@ -930,3 +1051,45 @@ def recording_page(
     if video:
         final_path = OUTPUT_DIR / f"{recording_name}.webm"
         video.save_as(str(final_path))
+
+    if narrator is not None:
+        _write_narration_manifest(recording_name, narrator, wall_duration_ms, _test_passed(request))
+
+
+def _write_narration_manifest(
+    recording_name: str,
+    narrator: Narrator,
+    wall_duration_ms: float,
+    passed: bool,
+) -> None:
+    """Record where each spoken line landed.
+
+    ``mux_narration`` reads this to lay the audio back down at the same offsets
+    and to cut the WebVTT subtitle file from the same timings.
+    """
+    spoken = [beat["key"] for beat in _narration_state["beats"]]
+
+    # Only meaningful for a recording that ran to completion — after a failure
+    # the unspoken beats are a symptom, not the cause.
+    if passed and (unused := [key for key in narrator.beat_keys if key not in spoken]):
+        raise AssertionError(f"{recording_name}: narration beats never spoken: {', '.join(unused)}")
+
+    if narrator.blocked_beats:
+        print(
+            f"[narration] {recording_name}: synthesis blocked the recording at "
+            f"{', '.join(narrator.blocked_beats)} — prefetch is not keeping up",
+            file=sys.stderr,
+        )
+
+    manifest = OUTPUT_DIR / f"{recording_name}.narration.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "recording": recording_name,
+                "wall_duration_ms": round(wall_duration_ms, 1),
+                "beats": _narration_state["beats"],
+            },
+            indent=2,
+        )
+        + "\n"
+    )

@@ -16,10 +16,12 @@ from conftest import (
     MINIMAL_PDF,
     dismiss_toasts,
     hover_and_click,
+    narrate,
     navigate_to_components,
     navigate_to_trust_center_tab,
     pace,
     rewrite_localhost_urls,
+    settle,
     start_on_dashboard,
     type_text,
 )
@@ -36,12 +38,15 @@ COMPONENT_NAME = "Compression Core Library"
 def trust_center_setup(recording_page: Page) -> None:
     page = recording_page
 
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Navigate to Settings → Trust Center tab ────────────────────────
+    narrate(page, "what_it_is")
     navigate_to_trust_center_tab(page)
 
     # ── 2. Enable Trust Center ────────────────────────────────────────────
+    narrate(page, "enable")
     toggle = page.locator("#workspace-visibility-toggle")
     toggle.wait_for(state="visible", timeout=10_000)
     pace(page, 600)
@@ -53,6 +58,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 2000)
 
     # ── 3. Enable security.txt (RFC 9116) ─────────────────────────────────
+    narrate(page, "security_txt")
     security_toggle = page.locator("#security-txt-toggle")
     security_toggle.wait_for(state="visible", timeout=10_000)
     security_toggle.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
@@ -71,6 +77,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 1500)
 
     # ── 4. Upload Company NDA ─────────────────────────────────────────────
+    narrate(page, "nda")
     nda_label = page.locator("label[for='company_nda_file']")
     nda_label.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
@@ -95,6 +102,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pdf_path.unlink(missing_ok=True)
 
     # ── 5. Configure custom domain ────────────────────────────────────────
+    narrate(page, "domain")
     # The custom domain section loads via HTMX after the page reload
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
@@ -107,6 +115,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 800)
 
     # ── 6. Save domain ────────────────────────────────────────────────────
+    narrate(page, "domain_save")
     save_btn = page.locator("button:has-text('Save Domain')")
     save_btn.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, save_btn)
@@ -117,6 +126,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 2000)
 
     # ── 7. Create a component to demonstrate visibility ───────────────────
+    narrate(page, "component")
     navigate_to_components(page)
 
     page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
@@ -156,6 +166,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 1000)
 
     # Set to Public
+    narrate(page, "visibility_public")
     hover_and_click(page, visibility_select)
     pace(page, 400)
     visibility_select.select_option("public")
@@ -165,6 +176,7 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 800)
 
     # Set to Gated
+    narrate(page, "visibility_gated")
     hover_and_click(page, visibility_select)
     pace(page, 400)
     visibility_select.select_option("gated")
@@ -174,10 +186,12 @@ def trust_center_setup(recording_page: Page) -> None:
     pace(page, 800)
 
     # Set back to Private
+    narrate(page, "visibility_private")
     hover_and_click(page, visibility_select)
     pace(page, 400)
     visibility_select.select_option("private")
     page.wait_for_load_state("networkidle")
     pace(page, 1000)
     dismiss_toasts(page)
-    pace(page, 2000)
+    narrate(page, "outro")
+    settle(page)

@@ -1,0 +1,76 @@
+# Narration for screencasts/profile_editing.py
+#
+# Thesis: "who made this and who do I call" is required metadata in both SBOM
+# formats and in the NTIA minimum elements. A contact profile fills it in once
+# instead of per SBOM.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Every SBOM has to say who produced it. Supplier, author, and someone a
+      person can actually contact.
+
+  why_profile:
+    text: >-
+      Rather than retyping that on every upload, you describe it once as a
+      contact profile, and sbomify stamps it onto the SBOMs as they arrive.
+
+  contacts_tab:
+    text: >-
+      Profiles live under Contacts in workspace settings.
+
+  name_profile:
+    text: >-
+      Give the profile a name you'll recognise later. Most teams need only one,
+      so marking it the default means it applies without anyone choosing it.
+
+  add_entity:
+    text: >-
+      Inside a profile is the entity. That's the organisation itself.
+
+  entity_roles:
+    text: >-
+      The roles matter more than they look. [pause] Manufacturer, supplier and
+      author are distinct ideas in the SBOM formats, and here the same company
+      is all three.
+
+  entity_details:
+    text: >-
+      Then the details a downstream consumer would need. A name, an address
+      that identifies a real legal entity, and a way to reach you.
+
+  entity_web:
+    text: >-
+      The website is what somebody checks when they want to know the company is
+      who it claims to be.
+
+  add_contact:
+    text: >-
+      Underneath the entity go the people.
+
+  contact_one:
+    text: >-
+      This one is the security contact, which is the address a researcher uses
+      when they have found something and want a human, not a support form.
+
+  contact_roles:
+    text: >-
+      A contact can hold more than one role, and here the same person is the
+      author and the technical contact as well.
+
+  contact_two:
+    text: >-
+      A second contact covers the technical questions, so a scanner integration
+      question does not land in the security inbox.
+
+  done:
+    text: >-
+      Finish the entity,
+
+  outro:
+    text: >-
+      and create the profile. [pause] From here every SBOM you upload carries
+      this provenance automatically, which is one of the NTIA minimum elements
+      you no longer have to think about.

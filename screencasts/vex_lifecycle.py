@@ -39,8 +39,10 @@ from playwright.sync_api import Page
 from conftest import (
     click_into_row,
     hover_and_click,
+    narrate,
     navigate_to_components,
     pace,
+    settle,
     smooth_scroll,
     start_on_dashboard,
 )
@@ -326,8 +328,20 @@ def _show_component_posture(page: Page, component_url: str, struck_cves: list[st
     """
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
+
+    # Suppressed rows are hidden by default now, so the open counts match the
+    # working list — the "Show suppressed" toggle is what brings them back,
+    # struck through and annotated with their VEX state. Without this the
+    # cleared CVE simply is not in the table.
+    show_suppressed = page.locator("label:has-text('Show suppressed') input[type='checkbox']").first
+    show_suppressed.wait_for(state="visible", timeout=30_000)
+    show_suppressed.scroll_into_view_if_needed()
+    pace(page, 600)
+    hover_and_click(page, show_suppressed)
+    pace(page, 800)
+
     anchor = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
-    anchor.wait_for(state="visible", timeout=15_000)
+    anchor.wait_for(state="visible", timeout=30_000)
     pace(page, 1500)
     smooth_scroll(page, anchor, 1500)
     for cve in struck_cves:
@@ -341,7 +355,9 @@ def _show_trust_center(page: Page, public_url: str, show_download: bool) -> None
     page.goto(public_url)
     page.wait_for_load_state("networkidle")
 
-    posture_heading = page.locator("h4:has-text('Vulnerability Posture')")
+    # Matched by role rather than tag: this panel's heading has already moved
+    # from h4 to h2 once.
+    posture_heading = page.get_by_role("heading", name="Vulnerability posture")
     posture_heading.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, posture_heading, 2000)
 
@@ -371,36 +387,54 @@ def vex_lifecycle(recording_page: Page, vex_release: dict, s3_short_circuit: Non
         kwargs={"product_id": product.id, "release_id": release.id},
     )
 
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. The vulnerability — the component's scan flagged a critical ───
+    narrate(page, "the_findings")
     navigate_to_components(page)
     click_into_row(page, COMPONENT_NAME)
     critical_row = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
     critical_row.wait_for(state="visible", timeout=15_000)
     pace(page, 1500)
+    narrate(page, "triage")
     smooth_scroll(page, critical_row, 4000)
+    settle(page)
 
     # ── 2. VEX v1 — show the file, upload it, watch the critical clear ───
+    narrate(page, "vex_v1_file")
     _show_vex_file(page, VEX_V1, "CycloneDX VEX · version 1 — clears the critical", 5500)
+    narrate(page, "vex_v1_detail")
+    settle(page)
 
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
     pace(page, 800)
+    narrate(page, "upload_v1")
     _upload_vex(page, VEX_V1)
 
     _apply_vex(component, release, run, VEX_V1)
+    narrate(page, "posture_v1")
     _show_component_posture(page, component_url, [CRITICAL_CVE])  # critical struck through
+    narrate(page, "trust_center_v1")
     _show_trust_center(page, public_url, show_download=False)  # 1 finding suppressed
 
     # ── 3. VEX v2 — re-issue a newer version that also clears the high ───
+    narrate(page, "vex_v2_file")
     _show_vex_file(page, VEX_V2, "CycloneDX VEX · version 2 — re-issued, also clears the high", 5500)
+    narrate(page, "vex_v2_detail")
+    settle(page)
 
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
     pace(page, 800)
+    narrate(page, "upload_v2")
     _upload_vex(page, VEX_V2)
+    narrate(page, "supersede")
 
     _apply_vex(component, release, run, VEX_V2)
+    narrate(page, "posture_v2")
     _show_component_posture(page, component_url, [CRITICAL_CVE, HIGH_CVE])  # both struck through
+    narrate(page, "outro")
     _show_trust_center(page, public_url, show_download=True)  # 2 findings suppressed
+    settle(page)

@@ -1,0 +1,31 @@
+# Narration for chapter 1 of the marketplace walkthrough — "Know what you ship".
+#
+# These beats are also pulled into marketplace_walkthrough.yaml, which plays the
+# same chapter functions back to back. Edit the copy here; the long cut follows.
+#
+# This tour plays cold beside a marketplace listing, so the register is a
+# little more like a pitch than the FAQ recordings — still explaining, never
+# selling at the viewer.
+voice: ara
+speed: 1.0
+
+beats:
+  sc_workspace:
+    text: >-
+      Everything starts in one workspace. Every product you ship, in one place,
+      rather than scattered across build systems and spreadsheets.
+
+  sc_products:
+    text: >-
+      A product is the thing you actually sell. It gathers up the components
+      that make it real, which is how sbomify keeps track of where any given
+      piece of software actually lives.
+
+  sc_product_detail:
+    text: >-
+      This is Pied Piper's compression engine. Four components under one
+      product. [pause] When somebody asks whether you're affected by something,
+      this structure is what makes the answer take seconds rather than a week.
+      You aren't searching build logs or asking around the team — you're
+      reading a list you already maintain, that already knows which repository
+      each piece came from.

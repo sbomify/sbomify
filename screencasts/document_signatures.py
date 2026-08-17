@@ -40,8 +40,10 @@ from conftest import (
     auto_dismiss_toasts,
     click_into_row,
     hover_and_click,
+    narrate,
     navigate_to_components,
     pace,
+    settle,
     start_on_dashboard,
 )
 from sbomify.apps.plugins.builtins.verification import SBOMVerificationPlugin
@@ -197,19 +199,20 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     # only fire on real DOM mutations, so there is no polling
     # overhead and no interval to clean up.
     auto_dismiss_toasts(page)
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Components page ──────────────────────────────────────────────
     # The Components sidebar entry leads to the table that lists every
     # component in the workspace. We open it first so a viewer sees the
     # path the FAQ prose describes ("Components → click into the
     # component → SBOM list with badges").
+    narrate(page, "components")
     navigate_to_components(page)
-    pace(page, 1500)
 
     # ── 2. Click into the signed component ──────────────────────────────
     click_into_row(page, SIGNED_COMPONENT_NAME)
-    pace(page, 1500)
+    narrate(page, "open_sbom")
 
     # ── 3. Open the SBOM detail page ────────────────────────────────────
     # The Signed / Provenance badges live on the *SBOM* detail page,
@@ -232,11 +235,15 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     # render inline next to the SBOM metadata block. They show the
     # moment the page loads — no interaction needed — so we just
     # scroll the badge row into view and pause for the FAQ tie-in.
+    narrate(page, "signed_badge")
     sbom_signed_badge = page.locator("span.text-success:has-text('Signed')").first
     sbom_signed_badge.wait_for(state="visible", timeout=15_000)
     sbom_signed_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
 
+    settle(page)
+
+    narrate(page, "provenance_badge")
     provenance_badge = page.locator("span.text-info:has-text('Provenance')").first
     provenance_badge.wait_for(state="visible", timeout=10_000)
     provenance_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
@@ -249,14 +256,19 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     # reports zero failures across every finding — the same outcome
     # a real signed-and-attested SBOM produces once the worker
     # finishes.
+    settle(page)
+
+    narrate(page, "verification")
     all_passed = page.locator("span:has-text('All Passed')").first
     all_passed.wait_for(state="visible", timeout=20_000)
     all_passed.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
+    narrate(page, "all_passed")
 
     # Hover the All Passed pill so the closing frame anchors on the
     # operator-visible outcome the FAQ promises.
     box = all_passed.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    pace(page, 2500)
+
+    narrate(page, "outro")
+    settle(page)
