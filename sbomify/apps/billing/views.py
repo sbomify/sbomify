@@ -38,7 +38,7 @@ from .billing_helpers import (
     acquire_checkout_lock,
     check_rate_limit,
     release_checkout_lock,
-    require_team_owner,
+    require_billing_manager,
 )
 from .forms import PublicEnterpriseContactForm
 from .models import BillingPlan
@@ -190,8 +190,8 @@ class CreatePortalSessionView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         team = get_object_or_404(Team, key=team_key)
 
-        is_owner, error_msg = require_team_owner(team, request.user)
-        if not is_owner:
+        can_bill, error_msg = require_billing_manager(team, request.user)
+        if not can_bill:
             messages.error(request, error_msg)
             return redirect("core:dashboard")
 
@@ -294,8 +294,8 @@ class SelectPlanView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         team = get_object_or_404(Team, key=team_key)
 
-        is_owner, error_msg = require_team_owner(team, request.user)
-        if not is_owner:
+        can_bill, error_msg = require_billing_manager(team, request.user)
+        if not can_bill:
             messages.error(request, error_msg)
             return redirect("core:dashboard")
 
@@ -315,8 +315,8 @@ class SelectPlanView(LoginRequiredMixin, View):
 
         team = get_object_or_404(Team, key=team_key)
 
-        is_owner, error_msg = require_team_owner(team, request.user)
-        if not is_owner:
+        can_bill, error_msg = require_billing_manager(team, request.user)
+        if not can_bill:
             messages.error(request, error_msg)
             return redirect("core:dashboard")
 
@@ -569,10 +569,10 @@ class BillingReturnView(LoginRequiredMixin, View):
 
             try:
                 team_check = Team.objects.get(key=team_key)
-                is_owner, _ = require_team_owner(team_check, request.user)
-                if not is_owner:
+                can_bill, _ = require_billing_manager(team_check, request.user)
+                if not can_bill:
                     logger.warning(
-                        "User %s attempted billing_return for team %s without owner access",
+                        "User %s attempted billing_return for team %s without billing access",
                         request.user.pk,
                         team_key,
                     )
@@ -599,8 +599,8 @@ class BillingReturnView(LoginRequiredMixin, View):
                     team = Team.objects.select_for_update().get(key=team_key)
 
                     # Re-verify ownership under lock to prevent TOCTOU race
-                    is_owner, _ = require_team_owner(team, request.user)
-                    if not is_owner:
+                    can_bill, _ = require_billing_manager(team, request.user)
+                    if not can_bill:
                         messages.error(request, "You do not have permission to manage billing for this workspace.")
                         return redirect("core:dashboard")
 

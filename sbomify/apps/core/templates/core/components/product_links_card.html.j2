@@ -9,7 +9,13 @@
     <i class="fas fa-link text-primary" aria-hidden="true"></i>Product links
 </h4>
 <c-slot name="right">
-{% if can_manage_links %}
+{% comment %}
+    Only when the table below gives it something to sit above. In the product
+    page's collapsible section the panel title is suppressed, so an always-on
+    button floated alone over the empty state; the empty state carries its own
+    action instead.
+{% endcomment %}
+{% if can_manage_links and links %}
     <c-buttons.primary size="sm" @click="showAddModal = true">
     <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add link
     </c-buttons.primary>
@@ -64,10 +70,19 @@
     </tbody>
     </c-tables.table>
 {% else %}
-    {% if not has_crud_permissions %}
-        <c-feedback.empty-state icon="fas fa-link" icon_variant="neutral" title="No product links available" message="This product does not have any links defined" />
+    {% comment %}
+        Two branches, not three: build_links_context sets can_manage_links to
+        has_crud_permissions verbatim, so there is no reader who can crud but
+        not manage.
+    {% endcomment %}
+    {% if can_manage_links %}
+        <c-feedback.empty-state icon="fas fa-link" icon_variant="neutral" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product">
+        <c-buttons.primary size="sm" @click="showAddModal = true">
+        <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add link
+        </c-buttons.primary>
+        </c-feedback.empty-state>
     {% else %}
-        <c-feedback.empty-state icon="fas fa-link" icon_variant="neutral" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product" />
+        <c-feedback.empty-state icon="fas fa-link" icon_variant="neutral" title="No product links available" message="This product does not have any links defined" />
     {% endif %}
 {% endif %}
 {% if can_manage_links %}

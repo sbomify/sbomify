@@ -156,7 +156,7 @@
                     Custom domains allow you to serve your Trust Center from your own branded URL (e.g., trust.yourcompany.com).
                     This feature is available on Business and Enterprise plans.
                 </p>
-                {% if request.session.current_team.role == 'owner' %}
+                {% if can_administer %}
                     <c-buttons.primary href="{% url 'billing:select_plan' team.key %}">
                     <i class="fas fa-arrow-up mr-2"></i>Upgrade Plan
                     </c-buttons.primary>

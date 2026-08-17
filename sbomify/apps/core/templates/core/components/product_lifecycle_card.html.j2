@@ -7,12 +7,19 @@
     <i class="far fa-question-circle text-text-muted text-sm cursor-help"
        x-tooltip="'Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)'"></i>
 </h4>
+{% comment %}
+    Only when there are dates to edit. In the product page's collapsible
+    section the panel title is suppressed, so an always-on Edit floated alone
+    over the empty state, which offers Set dates itself.
+{% endcomment %}
 {% if can_edit %}
-    <template x-if="!editing">
-        <c-buttons.secondary @click="editing = true">
-        <i class="fas fa-edit mr-1"></i>Edit
-        </c-buttons.secondary>
-    </template>
+    {% if product.release_date or product.end_of_support or product.end_of_life %}
+        <template x-if="!editing">
+            <c-buttons.secondary @click="editing = true">
+            <i class="fas fa-edit mr-1"></i>Edit
+            </c-buttons.secondary>
+        </template>
+    {% endif %}
 {% endif %}
 </c-cards.header>
 </c-slot>
@@ -47,7 +54,9 @@
                 </div>
             </div>
         {% elif can_edit %}
-            <c-feedback.empty-state icon="fas fa-clock" icon_size="sm" icon_variant="neutral" compact title="No lifecycle dates set" message="Add release date, end of support, and end of life dates to track product lifecycle" />
+            <c-feedback.empty-state icon="fas fa-clock" icon_size="sm" icon_variant="neutral" compact title="No lifecycle dates set" message="Add release date, end of support, and end of life dates to track product lifecycle">
+            <c-buttons.secondary size="sm" @click="editing = true">Set dates</c-buttons.secondary>
+            </c-feedback.empty-state>
         {% else %}
             <c-feedback.empty-state icon="fas fa-clock" icon_size="sm" icon_variant="neutral" compact title="No lifecycle dates available" message="This product does not have lifecycle dates defined" />
         {% endif %}

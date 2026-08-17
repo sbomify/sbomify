@@ -123,7 +123,7 @@
         {# Danger Zone #}
         {% if component.has_crud_permissions %}
             <div>
-                {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name is_owner=is_owner %}
+                {% include 'components/component_danger_zone.html.j2' with component_id=component.id component_name=component.name can_delete=can_delete %}
             </div>
         {% endif %}
     </div>

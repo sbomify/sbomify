@@ -218,14 +218,16 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
             logger.debug("User is not a member of team")
             return notifications
 
-        # Check if user is workspace owner
-        is_owner = user_member.role == "owner"
-        logger.debug("User is %s owner of team", "not" if not is_owner else "")
+        # Billing notifications go to whoever can act on them — owners and admins.
+        from sbomify.apps.core.authz import ADMINISTER
+
+        can_bill = user_member.role in ADMINISTER
+        logger.debug("User %s manage billing for team", "cannot" if not can_bill else "can")
 
         # Only run billing-specific checks if billing is enabled
         if is_billing_enabled():
-            # Run billing checks - upgrade notification shown to all users, others only to owners
-            if is_owner:
+            # Run billing checks - upgrade notification shown to all users, others only to billing managers
+            if can_bill:
                 for check in [
                     check_billing_plan_exists,
                     check_billing_info_missing,

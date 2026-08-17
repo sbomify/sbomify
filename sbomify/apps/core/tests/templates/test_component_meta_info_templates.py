@@ -113,7 +113,7 @@ class TestComponentMetaInfoTemplates:
         rendered = render_to_string("sboms/components/ci_cd_info.html.j2", context)
         
         # Assertions
-        assert "CI/CD Integration" in rendered
+        assert "Get started" in rendered
         assert component.id in rendered
         # The dialog is the wizard command now. Asserting on the command rather
         # than on an Alpine component name keeps this checking what the reader

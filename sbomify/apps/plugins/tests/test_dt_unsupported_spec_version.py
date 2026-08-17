@@ -175,6 +175,35 @@ class TestTheWiringInAssess:
         assert result["findings"][0]["id"] == "dependency-track:unsupported-spec-version"
         assert result["summary"]["error_count"] == 0
 
+    def test_the_rejection_carries_the_backoff_marker(self, scannable_sbom) -> None:
+        """Asserted here, on the real assess() path, rather than only against
+        the helper that builds the result. The scheduled sweep reads this flag
+        from the stored run and the two live in different modules — dropping
+        ``unsupported_input=True`` from this call site left the whole suite
+        green while every stored rejection lost the marker, the backoff matched
+        nothing, and the hourly re-upload loop came back."""
+        sbom, path, server = scannable_sbom
+
+        result = self._assess_with_upload_raising(DependencyTrackPlugin(), sbom, path, server, REAL_REJECTION)
+
+        assert result["metadata"].get("unsupported_input") is True
+
+    def test_an_upload_failure_does_not_carry_it(self, scannable_sbom) -> None:
+        """The marker means "cannot read this input", and nothing else.
+
+        Named for what this actually drives: a 401 from the upload, which
+        returns an error result rather than a skip. The point is that a failure
+        the scanner might recover from keeps the hourly cadence instead of
+        being parked for a day.
+        """
+        sbom, path, server = scannable_sbom
+
+        result = self._assess_with_upload_raising(
+            DependencyTrackPlugin(), sbom, path, server, Exception("Dependency Track error (401): Unauthorized")
+        )
+
+        assert result["metadata"].get("unsupported_input") is not True
+
     def test_any_other_upload_failure_is_still_an_error(self, scannable_sbom) -> None:
         """The half that keeps the change honest: a real failure must not be
         quietly reclassified as "not applicable"."""

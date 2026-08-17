@@ -30,17 +30,20 @@ The ``as`` form swallows NoReverseMatch, so a session without a workspace
 leaves it empty and the button is not offered rather than 500ing the page.
 {% endcomment %}
 {% url 'teams:ci_token' team_key=request.session.current_team.key as ci_token_url %}
+{# Reachable from onboarding, where there is no component, so the copy
+   target needs an id that still resolves. #}
+{% firstof component.id 'onboarding' as cicd_copy_suffix %}
 <div x-data="{ cicdOpen: false }"
      @open-cicd.window="cicdOpen = true"
      @keydown.escape.window="if (cicdOpen) cicdOpen = false">
-    <c-modal show="cicdOpen" title="CI/CD Integration" icon="fas fa-gears" x-data="ciCdToken('{{ ci_token_url|escapejs }}')">
+    <c-modal show="cicdOpen" title="Get started" icon="fas fa-rocket" x-data="ciCdToken('{{ ci_token_url|escapejs }}')">
     <p class="text-sm text-text-muted mt-0 mb-4">
         Run this in your repository. The wizard detects your CI platform and package
         manager, then writes the pipeline configuration for you.
     </p>
     <div class="tw-code-block">
         <div class="tw-code-block-content">
-            <pre><code id="ci-cd-command-{{ component.id }}">docker run --rm -it \
+            <pre><code id="ci-cd-command-{{ cicd_copy_suffix }}">docker run --rm -it \
   -v "$(pwd):/github/workspace" \
   -w /github/workspace \
   -e SBOMIFY_TOKEN=<span x-text="token || '$SBOMIFY_TOKEN'">$SBOMIFY_TOKEN</span> \
@@ -48,7 +51,7 @@ leaves it empty and the button is not offered rather than 500ing the page.
   sbomify-action wizard</code></pre>
         </div>
         <div class="absolute top-2 right-2">
-            {% include "core/components/copyable_value.html.j2" with copy_from="ci-cd-command-"|add:component.id title="Copy command" hide_value=True %}
+            {% include "core/components/copyable_value.html.j2" with copy_from="ci-cd-command-"|add:cicd_copy_suffix title="Copy command" hide_value=True %}
         </div>
     </div>
     {# Before minting: the command reads an env var the reader may already have. #}

@@ -1,6 +1,6 @@
 <!-- Site-wide notifications/alerts that require urgent user action -->
 {% with team=request.session.current_team %}
-    {% if team and team.billing_plan_limits and team.billing_plan_limits.subscription_status == 'past_due' and is_owner %}
+    {% if team and team.billing_plan_limits and team.billing_plan_limits.subscription_status == 'past_due' and can_administer %}
         {% comment %}
             The action sits in the alert's message, which is the only region the
             alert component gives a caller: the notice and the way out of it read

@@ -9,11 +9,17 @@
     <i class="fas fa-barcode text-primary" aria-hidden="true"></i>Product Identifiers
 </h4>
 <c-slot name="right">
-{% if can_manage_identifiers %}
+{% comment %}
+    Only when the table below gives them something to sit above. In the product
+    page's collapsible section the panel title is suppressed, so an always-on
+    control floated alone over the empty state, which carries its own action or
+    explanation instead.
+{% endcomment %}
+{% if identifiers and can_manage_identifiers %}
     <c-buttons.primary size="sm" @click="showAddModal = true">
     <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Identifier
     </c-buttons.primary>
-{% elif has_crud_permissions and not is_feature_allowed %}
+{% elif identifiers and has_crud_permissions and not is_feature_allowed %}
     <span class="text-text-muted text-sm">
         <i class="fas fa-lock mr-1" aria-hidden="true"></i>Business feature
     </span>
@@ -80,9 +86,13 @@
     {% if not has_crud_permissions %}
         <c-feedback.empty-state icon="fas fa-barcode" icon_variant="neutral" title="No product identifiers available" message="This product does not have any identifiers defined" />
     {% elif not is_feature_allowed %}
-        <c-feedback.empty-state icon="fas fa-barcode" icon_variant="neutral" title="Product identifiers are a business feature" message="Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc." />
+        <c-feedback.empty-state icon="fas fa-lock" icon_variant="neutral" title="Product identifiers are a business feature" message="Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc." />
     {% else %}
-        <c-feedback.empty-state icon="fas fa-barcode" icon_variant="neutral" title="No product identifiers added" message="Add identifiers like GTIN, SKU, MPN, etc. to help identify this product" />
+        <c-feedback.empty-state icon="fas fa-barcode" icon_variant="neutral" title="No product identifiers added" message="Add identifiers like GTIN, SKU, MPN, etc. to help identify this product">
+        <c-buttons.primary size="sm" @click="showAddModal = true">
+        <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Identifier
+        </c-buttons.primary>
+        </c-feedback.empty-state>
     {% endif %}
 {% endif %}
 {% if can_manage_identifiers %}

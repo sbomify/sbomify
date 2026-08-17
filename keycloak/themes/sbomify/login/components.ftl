@@ -244,7 +244,7 @@
                             </svg>
                             <span>
                                 <strong>Didn't receive the email?</strong> 
-                                The verification link will expire in a few minutes. You can request a new one if needed.
+                                The verification link expires after a while. You can request a new one if needed.
                             </span>
                         </div>
                     </div>
