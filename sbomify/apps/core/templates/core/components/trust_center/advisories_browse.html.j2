@@ -126,8 +126,7 @@ submit button applies the same filters, and the URL is the same either way.
                 {% endcomment %}
                 <div class="flex flex-col gap-3"
                      x-data="{ from: '{{ query.published_from|date:'Y-m-d' }}', to: '{{ query.published_to|date:'Y-m-d' }}' }"
-                     x-init="$watch('from', () => $refs.fromField.dispatchEvent(new Event('change', { bubbles: true })));
-                             $watch('to', () => $refs.toField.dispatchEvent(new Event('change', { bubbles: true })))">
+                     x-init="$watch('from', () => $refs.fromField.dispatchEvent(new Event('change', { bubbles: true }))); $watch('to', () => $refs.toField.dispatchEvent(new Event('change', { bubbles: true })))">
                     {% include 'components/date_picker.html.j2' with value_binding='from' label='From' placeholder='Any date' compact='true' %}
                     <input type="hidden" name="from" x-ref="fromField" :value="from">
                     {% include 'components/date_picker.html.j2' with value_binding='to' label='To' placeholder='Any date' compact='true' %}
