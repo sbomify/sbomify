@@ -122,8 +122,8 @@ def _member_with_role(team: Team, role: str, username: str) -> Member:
 
 
 @pytest.mark.django_db
-def test_admin_cannot_rename_slug(sample_team_with_owner_member: Member):  # noqa: F811
-    """Admins reach the handler (allowed_roles) but the rename is owner-only."""
+def test_admin_can_rename_slug(sample_team_with_owner_member: Member):  # noqa: F811
+    """The slug is workspace configuration, so it is ADMINISTER, not owner-only."""
     team = sample_team_with_owner_member.team
     team.slug = "acme"
     team.save()
@@ -133,12 +133,11 @@ def test_admin_cannot_rename_slug(sample_team_with_owner_member: Member):  # noq
     client = Client()
     setup_authenticated_client_session(client, team, admin.user)
 
-    response = _post_slug(client, team, "hijacked")
+    response = _post_slug(client, team, "renamed-by-admin")
 
     assert response.status_code == 302
     team.refresh_from_db()
-    assert team.slug == "acme"
-    assert any("owner" in m.lower() for m in _messages(response))
+    assert team.slug == "renamed-by-admin"
 
 
 @pytest.mark.django_db

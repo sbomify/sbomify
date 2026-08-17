@@ -4,6 +4,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.teams.apis import (
@@ -17,7 +18,7 @@ from sbomify.apps.teams.schemas import UpdateTeamBrandingSchema
 
 
 class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         status_code, team = get_team(request, team_key)

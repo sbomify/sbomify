@@ -1,7 +1,6 @@
 """Tests for the onboarding wizard single-step flow."""
 
 import pytest
-from allauth.socialaccount.models import SocialAccount
 from django.conf import settings
 from django.contrib.messages import get_messages
 from django.test import Client
@@ -270,153 +269,73 @@ class TestOnboardingWizard:
         assert entity is not None
         assert entity.email == sample_user.email
 
-    def test_product_and_component_auto_created(
+    def test_no_product_or_component_is_created(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
-        """Test that Product and Component are auto-created and the component is attached
-        directly to the product via the ProductComponent M2M (Project layer is gone)."""
+        """The wizard sets up an identity, not an inventory.
+
+        It used to create a product named after the company and a component
+        called "Main Component". Bootstrapping an account left two entities
+        nobody asked for, and pre-ticked the dashboard's own "create your first
+        product" and "create your first component" steps — so the checklist
+        meant to guide someone through those was complete before they had done
+        either.
+        """
+        from sbomify.apps.core.models import Component, Product
+
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
-
         session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
+        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": False}
         session.save()
 
         response = client.post(
             reverse("teams:onboarding_wizard"),
             {
-                "company_name": "Hierarchy Test Corp",
-                "contact_name": "Test Contact",
+                "company_name": "No Auto Entities Ltd",
+                "contact_name": "Jane Doe",
+                "email": "jane@example.com",
+                "goal": "compliance",
             },
         )
 
         assert response.status_code == 302
+        assert not Product.objects.filter(team=team).exists()
+        assert not Component.objects.filter(team=team).exists()
 
-        # Verify Product
-        product = Product.objects.filter(team=team, name="Hierarchy Test Corp").first()
-        assert product is not None
-
-        # Verify Component with BOM type
-        component = Component.objects.filter(team=team, name="Main Component").first()
-        assert component is not None
-        assert component.component_type == Component.ComponentType.BOM
-
-        # Verify hierarchy: product -> component (direct M2M)
-        assert component in product.components.all()
-
-    def test_component_has_contact_profile_persisted(
+    def test_the_identity_it_does_set_up_survives(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
-        """Test that component created during onboarding has contact_profile correctly assigned and persisted."""
-        client.force_login(sample_user)
-        team = sample_team_with_owner_member.team
-
-        session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
-        session.save()
-
-        response = client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "Profile Persistence Test",
-                "contact_name": "Test Contact",
-            },
-        )
-
-        assert response.status_code == 302
-
-        # Verify default profile was created
-        default_profile = ContactProfile.objects.filter(team=team, is_default=True).first()
-        assert default_profile is not None
-
-        # Verify component was created and has contact_profile assigned
-        component = Component.objects.filter(team=team, name="Main Component").first()
-        assert component is not None
-        # Refresh from database to ensure we have the latest state
-        component.refresh_from_db()
-        assert component.contact_profile is not None
-        assert component.contact_profile.id == default_profile.id
-        assert component.contact_profile.is_default is True
-
-    def test_component_has_bom_type(
-        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
-    ) -> None:
-        """Test that auto-created component has component_type=BOM."""
-        client.force_login(sample_user)
-        team = sample_team_with_owner_member.team
-
-        session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
-        session.save()
-
-        response = client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "BOM Type Test",
-                "contact_name": "BOM Tester",
-            },
-        )
-
-        assert response.status_code == 302
-
-        component = Component.objects.filter(team=team).first()
-        assert component is not None
-        assert component.component_type == Component.ComponentType.BOM
-
-    def test_keycloak_metadata_in_component(
-        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
-    ) -> None:
-        """Test that Keycloak user metadata is properly used when creating a component."""
-        # Create Keycloak social auth record with metadata (created for side effects only)
-        SocialAccount.objects.create(
-            user=sample_user,
-            provider="keycloak",
-            extra_data={
-                "user_metadata": {
-                    "company": "Keycloak Corp",
-                    "supplier_url": "https://keycloak.example.com",
-                }
-            },
-        )
+        """What the wizard is actually for is unchanged: the workspace name and
+        the manufacturer/contact identity. Removing the entities must not take
+        those with it."""
+        from sbomify.apps.teams.models import ContactEntity, Team
 
         client.force_login(sample_user)
         team = sample_team_with_owner_member.team
-
         session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
+        session["current_team"] = {"key": team.key, "role": "owner", "has_completed_wizard": False}
         session.save()
 
-        response = client.post(
+        client.post(
             reverse("teams:onboarding_wizard"),
             {
-                "company_name": "Keycloak Test",
-                "contact_name": "Keycloak Tester",
+                "company_name": "Identity Survives Ltd",
+                "contact_name": "Jane Doe",
+                "email": "jane@example.com",
+                "goal": "compliance",
             },
         )
 
-        assert response.status_code == 302
+        team = Team.objects.get(pk=team.pk)
+        assert team.has_completed_wizard is True
+        assert "Identity Survives Ltd" in team.name
+        entity = ContactEntity.objects.get(profile__team=team, is_manufacturer=True)
+        # The posted address, not the user's. Before the field name was fixed the
+        # form ignored it and this fell back to sample_user.email, so the test
+        # passed while exercising nothing.
+        assert entity.email == "jane@example.com"
 
-        # Verify component has Keycloak metadata
-        component = Component.objects.filter(team=team).first()
-        assert component is not None
-        assert component.metadata.get("supplier", {}).get("name") == "Keycloak Corp"
-        assert component.metadata.get("supplier", {}).get("url") == ["https://keycloak.example.com"]
 
     def test_complete_step_shows_summary(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -448,7 +367,14 @@ class TestOnboardingWizard:
         assert response.status_code == 200
         assert response.context["current_step"] == "complete"
         assert response.context["company_name"] == "Summary Test Inc"
-        assert response.context["component_id"] is not None
+        # No component id: the completion step is keyed on the company name now,
+        # since the wizard no longer creates a component to point at.
+        #
+        # The positive control matters: ContextList.__contains__ does look up
+        # keys, but a bare "not in" assertion is indistinguishable from one that
+        # can never fail, so a key known to be present is asserted beside it.
+        assert "company_name" in response.context
+        assert "component_id" not in response.context
 
     def test_session_updated_after_completion(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -596,91 +522,6 @@ class TestOnboardingWizard:
         assert response.status_code == 200
         assert response.context["form"].errors.get("website") is not None
 
-    def test_community_plan_creates_public_entities(
-        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
-    ) -> None:
-        """Test that community plan wizard creates public entities."""
-        client.force_login(sample_user)
-        team = sample_team_with_owner_member.team
-
-        # Ensure team is on community plan (cannot be private)
-        team.billing_plan = "community"
-        team.save()
-
-        session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
-        session.save()
-
-        response = client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "Community Corp",
-                "contact_name": "Community Tester",
-            },
-        )
-
-        assert response.status_code == 302
-
-        # Verify all entities are public for community plan
-        product = Product.objects.filter(team=team, name="Community Corp").first()
-        assert product is not None
-        assert product.is_public is True
-
-        component = Component.objects.filter(team=team, name="Main Component").first()
-        assert component is not None
-        assert component.visibility == Component.Visibility.PUBLIC
-
-    def test_business_plan_creates_private_entities(
-        self, client: Client, sample_user, sample_team_with_owner_member
-    ) -> None:
-        """Test that business plan wizard creates private entities."""
-        client.force_login(sample_user)
-        team = sample_team_with_owner_member.team
-
-        # Create and set up business plan for the team
-        BillingPlan.objects.get_or_create(
-            key="business",
-            defaults={
-                "name": "Business",
-                "description": "Business Plan",
-                "max_products": 10,
-                "max_components": 10,
-            },
-        )
-        team.billing_plan = "business"
-        team.save()
-
-        session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
-        session.save()
-
-        response = client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "Business Corp",
-                "contact_name": "Business Tester",
-            },
-        )
-
-        assert response.status_code == 302
-
-        # Verify all entities are private for business plan
-        product = Product.objects.filter(team=team, name="Business Corp").first()
-        assert product is not None
-        assert product.is_public is False
-
-        component = Component.objects.filter(team=team, name="Main Component").first()
-        assert component is not None
-        assert component.visibility == Component.Visibility.PRIVATE
-
     def test_goal_field_saved_to_team(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
     ) -> None:
@@ -786,8 +627,11 @@ class TestOnboardingWizard:
 
         # Single product is renamed in place; component uses get_or_create with a
         # fixed "Main Component" name, creating at most one new component.
-        assert Product.objects.filter(team=team).count() == 1  # renamed to "At Limit Corp"
-        assert Component.objects.filter(team=team).count() == 6  # 5 existing + "Main Component"
+        # The point of this test is that a team at its plan limit can still
+        # finish onboarding. It used to prove that by counting the entities the
+        # wizard created; with none created, the limit cannot be the thing that
+        # blocks it, and completion is the whole assertion.
+        assert Component.objects.filter(team=team).count() == 5  # unchanged by the wizard
 
     def test_rerun_onboarding_updates_manufacturer_entity(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan
@@ -897,119 +741,6 @@ class TestOnboardingWizard:
         assert response.status_code == 302
         entity.refresh_from_db()
         assert entity.website_urls == ["https://website-corp.com"]
-
-    def test_rerun_onboarding_renames_single_product(
-        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
-    ) -> None:
-        """Test that re-running onboarding renames the product when team has exactly one.
-
-        When the team has only one product (wizard-created), the product name
-        should be updated to the new company name, not creating a duplicate.
-        """
-        client.force_login(sample_user)
-        team = sample_team_with_owner_member.team
-
-        session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
-        session.save()
-
-        # First onboarding
-        client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "First Name",
-                "contact_name": "Tester",
-            },
-        )
-
-        assert Product.objects.filter(team=team).count() == 1
-        product = Product.objects.get(team=team)
-        assert product.name == "First Name"
-        original_pk = product.pk
-
-        # Reset wizard state for second run
-        team.has_completed_wizard = False
-        team.save(update_fields=["has_completed_wizard"])
-        session = client.session
-        session["current_team"]["has_completed_wizard"] = False
-        session.save()
-
-        # Second onboarding with different company name
-        response = client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "Second Name",
-                "contact_name": "Tester",
-            },
-        )
-
-        assert response.status_code == 302
-
-        # Still exactly one product, renamed in place (same PK)
-        assert Product.objects.filter(team=team).count() == 1
-        product.refresh_from_db()
-        assert product.pk == original_pk
-        assert product.name == "Second Name"
-
-    def test_rerun_onboarding_with_multiple_products_uses_get_or_create(
-        self, client: Client, sample_user, sample_team_with_owner_member, community_plan
-    ) -> None:
-        """Test that re-running onboarding uses get_or_create when team has multiple products.
-
-        When the team has more than one product (user created extras via UI/API),
-        the wizard should fall back to get_or_create to avoid renaming the wrong product.
-        """
-        client.force_login(sample_user)
-        team = sample_team_with_owner_member.team
-
-        session = client.session
-        session["current_team"] = {
-            "key": team.key,
-            "role": "owner",
-            "has_completed_wizard": False,
-        }
-        session.save()
-
-        # First onboarding
-        client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "Wizard Product",
-                "contact_name": "Tester",
-            },
-        )
-
-        # User creates a second product via UI/API
-        Product.objects.create(name="User Created Product", team=team, is_public=True)
-        assert Product.objects.filter(team=team).count() == 2
-
-        # Reset wizard state for second run
-        team.has_completed_wizard = False
-        team.save(update_fields=["has_completed_wizard"])
-        session = client.session
-        session["current_team"]["has_completed_wizard"] = False
-        session.save()
-
-        # Re-run onboarding with a new company name
-        response = client.post(
-            reverse("teams:onboarding_wizard"),
-            {
-                "company_name": "New Company",
-                "contact_name": "Tester",
-            },
-        )
-
-        assert response.status_code == 302
-
-        # Should have 3 products: the original is NOT renamed, a new one is created
-        assert Product.objects.filter(team=team).count() == 3
-        assert Product.objects.filter(team=team, name="Wizard Product").exists()
-        assert Product.objects.filter(team=team, name="User Created Product").exists()
-        assert Product.objects.filter(team=team, name="New Company").exists()
 
     def test_completed_onboarding_redirects_to_dashboard(
         self, client: Client, sample_user, sample_team_with_owner_member, community_plan

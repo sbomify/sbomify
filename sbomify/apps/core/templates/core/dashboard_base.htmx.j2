@@ -41,7 +41,7 @@
 {# Create Modals #}
 {% with current_team=request.session.current_team %}
     {% if current_team %}
-        {% if current_team.role == "owner" or current_team.role == "admin" %}
+        {% if can_manage %}
             {% include "core/components/create_modals.html.j2" %}
         {% endif %}
     {% endif %}

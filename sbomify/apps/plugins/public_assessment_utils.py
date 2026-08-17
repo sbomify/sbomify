@@ -39,6 +39,11 @@ class PassingAssessment:
     standard_url: str | None = None
     pass_count: int | None = None
     total_findings: int | None = None
+    # Checks that warned. Often an optional thing that was absent — no signature,
+    # no provenance — rather than a problem, which is why a run carrying them is
+    # still shown. The badge needs the count because "All checks passed" beside
+    # "1/7" is a contradiction.
+    warning_count: int | None = None
     completed_at: Any = None
 
 
@@ -159,7 +164,15 @@ def _is_run_passing(run: AssessmentRun) -> bool:
         findings_total = sum(v for v in by_severity.values() if isinstance(v, int))
         return findings_total == 0 and not summary.get("malicious_count")
 
-    return bool(summary.get("pass_count", 0))
+    # ``pass_count`` was added to summary payloads later, so a run predating it
+    # carries no key at all. ``orchestrator._is_passing`` distinguishes that from
+    # a present-and-zero count and lets the legacy run pass; reading a default of
+    # 0 here did not, so the same run satisfied a dependency gate and showed no
+    # public badge. The two encode one judgement and now answer alike.
+    pass_count = summary.get("pass_count")
+    if pass_count is None:
+        return True
+    return bool(pass_count)
 
 
 def _passing_assessment_from_run(run: AssessmentRun, plugin_info: dict[str, tuple[str, str]]) -> PassingAssessment:
@@ -181,6 +194,7 @@ def _passing_assessment_from_run(run: AssessmentRun, plugin_info: dict[str, tupl
     is_security = category == AssessmentCategory.SECURITY.value
     pass_count = summary.get("pass_count") if not is_security else None
     total_findings = summary.get("total_findings") if not is_security else None
+    warning_count = summary.get("warning_count") if not is_security else None
     return PassingAssessment(
         plugin_name=run.plugin_name,
         plugin_display_name=display_name,
@@ -190,6 +204,7 @@ def _passing_assessment_from_run(run: AssessmentRun, plugin_info: dict[str, tupl
         standard_url=metadata.get("standard_url") or None,
         pass_count=pass_count if isinstance(pass_count, int) else None,
         total_findings=total_findings if isinstance(total_findings, int) else None,
+        warning_count=warning_count if isinstance(warning_count, int) else None,
         completed_at=run.completed_at,
     )
 
@@ -210,7 +225,7 @@ def _aggregate_passing(
     for plugin_name in sorted(common_passing):
         detail = details_by_plugin.get(plugin_name)
         if detail is not None:
-            aggregated.append(dataclass_replace(detail, pass_count=None, total_findings=None))
+            aggregated.append(dataclass_replace(detail, pass_count=None, total_findings=None, warning_count=None))
         else:
             display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
             aggregated.append(
@@ -695,6 +710,7 @@ def passing_assessments_to_dict(assessments: list[PassingAssessment]) -> list[di
             "standard_url": a.standard_url,
             "pass_count": a.pass_count,
             "total_findings": a.total_findings,
+            "warning_count": a.warning_count,
             "completed_at": a.completed_at,
         }
         for a in assessments

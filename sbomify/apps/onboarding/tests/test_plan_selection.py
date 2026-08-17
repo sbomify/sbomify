@@ -336,7 +336,7 @@ class TestTrialExpirationDowngrade:
 
         with (
             patch("sbomify.apps.billing.billing_processing.handle_community_downgrade_visibility"),
-            patch("sbomify.apps.billing.billing_processing.notify_team_owners"),
+            patch("sbomify.apps.billing.billing_processing.notify_billing_managers"),
         ):
             handle_trial_period(mock_sub, team)
 
@@ -372,7 +372,7 @@ class TestTrialExpirationDowngrade:
         mock_sub.trial_end = future_ts
         mock_sub.metadata = {"plan_key": "business"}
 
-        with patch("sbomify.apps.billing.billing_processing.notify_team_owners"):
+        with patch("sbomify.apps.billing.billing_processing.notify_billing_managers"):
             handle_trial_period(mock_sub, team)
 
         team.refresh_from_db()

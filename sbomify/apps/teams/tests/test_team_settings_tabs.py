@@ -5,7 +5,10 @@ from django.test import Client
 from django.urls import reverse
 
 from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
-from sbomify.apps.teams.fixtures import sample_team_with_owner_member  # noqa: F401
+from sbomify.apps.teams.fixtures import (  # noqa: F401
+    sample_team_with_guest_member,
+    sample_team_with_owner_member,
+)
 from sbomify.apps.teams.models import Invitation, Member
 from sbomify.apps.teams.utils import ALLOWED_TABS, redirect_to_team_settings
 
@@ -222,6 +225,43 @@ class TestRedirectToTeamSettingsHelper:
 
 
 @pytest.mark.django_db
+class TestMembersRoleLegend:
+    """The members tab explains what each role can do.
+
+    Roles are otherwise invisible: a user sees a badge saying "Admin" with no way
+    to find out what that grants. The legend renders authz.ROLE_DESCRIPTIONS, so
+    this also pins that the two stay wired together.
+    """
+
+    def test_members_tab_renders_role_descriptions(self, sample_team_with_owner_member: Member):  # noqa: F811
+        from sbomify.apps.core.authz import ROLE_DESCRIPTIONS
+
+        client = Client()
+        team = sample_team_with_owner_member.team
+        setup_authenticated_client_session(client, team, sample_team_with_owner_member.user)
+
+        # Each settings section is its own page, so target the members tab
+        # directly rather than relying on which tab happens to be the default.
+        response = client.get(reverse("teams:team_settings_tab", kwargs={"team_key": team.key, "tab": "members"}))
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "What can each role do?" in content
+        for _role, label, description in ROLE_DESCRIPTIONS:
+            assert label in content
+            # The first clause is enough to prove the description body rendered
+            # without depending on exact punctuation/wrapping.
+            assert description.split(".")[0] in content
+
+    def test_legend_reflects_the_owner_admin_boundary(self):
+        """The two owner-exclusive rules must be stated to users, not just enforced."""
+        from sbomify.apps.core.authz import ROLE_ADMIN, ROLE_DESCRIPTIONS
+
+        admin_description = next(d for role, _label, d in ROLE_DESCRIPTIONS if role == ROLE_ADMIN)
+        assert "Cannot remove an owner or delete the workspace." in admin_description
+
+
+@pytest.mark.django_db
 class TestTrustCenterDescription:
     """Tests for trust center description settings."""
 
@@ -302,16 +342,37 @@ class TestTrustCenterDescription:
         team.refresh_from_db()
         assert team.branding_info.get("trust_center_description", "") != "x" * 501
 
-    def test_non_owner_cannot_update_description(self, sample_team_with_owner_member: Member):  # noqa: F811
-        """Non-owner should not be able to update trust center description."""
+    def test_admin_can_update_description(self, sample_team_with_owner_member: Member):  # noqa: F811
+        """Trust-center config is ADMINISTER, so admins may update the description."""
         client = Client()
         team = sample_team_with_owner_member.team
 
-        # Create a non-owner member
         admin_user = User.objects.create_user(username="adminuser", email="admin@example.com", password="testpass")
         Member.objects.create(team=team, user=admin_user, role="admin")
 
         setup_authenticated_client_session(client, team, admin_user)
+
+        uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
+        response = client.post(
+            uri,
+            {
+                "trust_center_description_action": "update",
+                "trust_center_description": "Saved by an admin",
+                "active_tab": "trust-center",
+            },
+        )
+
+        assert response.status_code == 302
+
+        team.refresh_from_db()
+        assert team.branding_info.get("trust_center_description", "") == "Saved by an admin"
+
+    def test_guest_cannot_update_description(self, sample_team_with_guest_member: Member):  # noqa: F811
+        """Guests hold no governance capability."""
+        client = Client()
+        team = sample_team_with_guest_member.team
+
+        setup_authenticated_client_session(client, team, sample_team_with_guest_member.user)
 
         uri = reverse("teams:team_settings", kwargs={"team_key": team.key})
         response = client.post(
@@ -323,9 +384,8 @@ class TestTrustCenterDescription:
             },
         )
 
-        assert response.status_code == 302
+        assert response.status_code == 403
 
-        # Verify description was NOT saved
         team.refresh_from_db()
         assert team.branding_info.get("trust_center_description", "") != "Should not be saved"
 
