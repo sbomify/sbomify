@@ -1,5 +1,5 @@
 {% extends "./dashboard_base.html.j2" %}
-{% load design_system %}
+{% load design_system brand_tags %}
 {% block title %}Design System - sbomify{% endblock %}
 {% comment %}
     The living inventory of the shared component library. Every demo below calls the
@@ -1533,6 +1533,57 @@
     <div class="flex flex-wrap gap-3">
         <c-buttons.secondary x-tooltip="'Scanned 3 hours ago'">Hover me</c-buttons.secondary>
         <c-buttons.icon label="More information" x-tooltip="'Immutable, sbomify never rewrites an artifact'"><i class="fas fa-circle-info" aria-hidden="true"></i></c-buttons.icon>
+    </div>
+    </c-cards.card>
+    <h2 id="branded" class="text-xl font-semibold text-text mb-4">Branded components</h2>
+    <c-cards.card class="mb-8">
+    <p class="text-sm text-text-muted mb-4">
+        <code class="tw-code-inline">c-branded.*</code> is a second, smaller library for pages we render on
+        behalf of a workspace, for their customers to read: the trust centre first, and anything else
+        shared outwards later. It is the same cotton conventions as everything above, with one rule added.
+        A workspace picks one colour. It reaches the page only through
+        <code class="tw-code-inline">c-branded.theme</code>, which publishes
+        <code class="tw-code-inline">--brand</code> and <code class="tw-code-inline">--brand-ink</code>,
+        and nothing else is brandable. Colour goes on what a reader acts on, never on the ground they read
+        against, so no brand colour can produce a page that is hard to read.
+    </p>
+    <p class="text-sm text-text-muted mb-4">
+        The ink is measured, not chosen: <code class="tw-code-inline">is_dark_color</code> compares the
+        brand's WCAG relative luminance against the point where white and black text contrast equally, so
+        each row below picks its own label colour. The pale amber gets dark text and the navy gets white
+        without either being told to.
+    </p>
+    <div class="flex flex-col gap-4">
+        {% for demo in branded_demos %}
+            <c-branded.theme brand="{{ demo.brand }}">
+            <c-branded.surface>
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="inline-block h-8 w-8 shrink-0 rounded-full border border-solid border-border"
+                      style="background: {{ demo.brand|brand_fill }}"></span>
+                <div class="min-w-0 mr-auto">
+                    <p class="text-sm font-semibold text-text m-0">{{ demo.label }}</p>
+                    <p class="text-xs text-text-muted m-0 font-mono">{{ demo.brand|default:"not set" }}</p>
+                </div>
+                <c-branded.badge brand>Verified</c-branded.badge>
+                <c-branded.badge tone="critical">Critical</c-branded.badge>
+                <c-branded.badge>Draft</c-branded.badge>
+                <c-branded.buttons.secondary size="sm">Download</c-branded.buttons.secondary>
+                <c-branded.buttons.primary size="sm">Request access</c-branded.buttons.primary>
+            </div>
+            <c-branded.nav class="mt-4">
+            <c-branded.nav-item href="#branded" icon="fas fa-house" current>Overview</c-branded.nav-item>
+            <c-branded.nav-item href="#branded" icon="fas fa-shield-halved">Advisories</c-branded.nav-item>
+            <c-branded.nav-item href="#branded" icon="fas fa-file-lines">Documents</c-branded.nav-item>
+            </c-branded.nav>
+            <c-branded.notice title="Sign in to view this document" class="mt-4">
+            This artifact is shared with named recipients.
+            <c-slot name="action">
+            <c-branded.buttons.secondary size="sm" href="#branded">Sign in</c-branded.buttons.secondary>
+            </c-slot>
+            </c-branded.notice>
+            </c-branded.surface>
+            </c-branded.theme>
+        {% endfor %}
     </div>
     </c-cards.card>
 {% endblock %}

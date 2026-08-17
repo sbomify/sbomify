@@ -1,0 +1,40 @@
+{% load brand_tags %}
+{% comment %}
+The brand scope. Every other c-branded component reads its colour from here, so
+this is the only place a workspace's brand enters the page.
+
+It publishes exactly two custom properties:
+
+  --brand      the workspace's colour, for solid fills and nothing else
+  --brand-ink  the text colour that belongs on top of --brand
+
+Two, rather than a palette, is the point. These components are shown to our
+users' users, so the workspace picks an accent and the platform keeps
+everything else: surfaces, body text, borders, radius and type all stay on the
+shared tokens. A workspace cannot set a background, so it cannot produce a page
+that is hard to read.
+
+--brand-ink is computed, not chosen. ink_on_color measures the brand's WCAG
+relative luminance and returns white or the platform ink, whichever actually
+contrasts, so a pale yellow brand gets dark text and a navy one gets white
+without the caller thinking about it.
+
+Custom properties inherit, so the scope is set once on a wrapper and everything
+below it is branded, at any depth, with no prop passed down. That is what keeps
+the library flexible: the trust centre wraps a page, but an email preview or an
+embedded widget can wrap a single card.
+
+brand is optional. Without it the platform accent is used, so a branded
+component is never unstyled and a workspace with branding turned off renders as
+plain sbomify.
+
+The colour is user input landing in a style attribute, so both filters resolve
+it through brand_fill's sanitizer: anything that is not #RGB or #RRGGBB is
+replaced, not escaped. They resolve it the same way, so the fill and its ink
+can never end up measuring different colours.
+{% endcomment %}
+<c-vars brand class />
+<div class="{{ class }}"
+     style="--brand: {{ brand|brand_fill }}; --brand-ink: {{ brand|brand_ink }}"
+     {{ attrs }}>{{ slot }}
+</div>

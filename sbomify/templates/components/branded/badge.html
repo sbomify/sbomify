@@ -1,0 +1,16 @@
+{% comment %}
+A small status word. Neutral by default; brand tints it with the workspace
+colour when the badge marks something the workspace owns rather than something
+with a fixed meaning.
+
+Severity and status keep the platform's own colours and are not brandable: red
+has to mean critical on every trust centre, or the badge stops carrying
+information. Pass tone for those, brand for the ones a workspace may colour.
+
+Tone renders as one conditional segment so two colour recipes never land on the
+same element.
+{% endcomment %}
+<c-vars tone brand class />
+<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap {% if brand %}bg-[var(--brand)] text-[var(--brand-ink)] border border-solid border-[var(--brand)]{% elif tone == 'critical' %}bg-[color-mix(in_oklab,var(--color-danger)_14%,transparent)] text-[var(--color-danger)] border border-solid border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)]{% elif tone == 'high' %}bg-[color-mix(in_oklab,var(--color-warning)_14%,transparent)] text-[var(--color-warning)] border border-solid border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)]{% elif tone == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_14%,transparent)] text-[var(--color-success)] border border-solid border-[color-mix(in_oklab,var(--color-success)_30%,transparent)]{% else %}bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)] text-text-secondary border border-solid border-border{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}
+</span>

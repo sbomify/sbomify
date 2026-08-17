@@ -1,0 +1,195 @@
+"""Render contract for the branded component set.
+
+These components are shown to our users' users, so two things are pinned here
+that the main library does not have to worry about.
+
+First, the brand only ever reaches the page through c-branded.theme, as two
+custom properties, and the ink is measured rather than chosen. A workspace can
+colour what a reader acts on and nothing they read against.
+
+Second, branded components render on the public pages, which still load seven
+legacy stylesheets carrying 140 !important declarations. A class name that
+collides with one of those loses, silently, only on the pages this library
+exists for. test_no_component_uses_a_class_the_legacy_sheets_override is the
+guard.
+"""
+
+import re
+from pathlib import Path
+
+import pytest
+from django.conf import settings
+from django.template.loader import render_to_string
+
+from sbomify.apps.teams.branding import DEFAULT_ACCENT_COLOR, DEFAULT_BRAND_COLOR
+
+APP_ROOT = Path(settings.BASE_DIR) / "sbomify"
+BRANDED_DIR = APP_ROOT / "templates" / "components" / "branded"
+LEGACY_CSS = APP_ROOT / "static" / "css" / "utilities.css"
+
+
+@pytest.fixture(scope="module")
+def rendered() -> str:
+    return render_to_string("core/cotton_probes/branded.html.j2", {})
+
+
+def _open_tag(rendered: str, tag: str, marker: str) -> str:
+    chunks = [part for part in rendered.split(f"<{tag}") if marker in part]
+    assert chunks, f"no <{tag}> holds {marker!r}"
+    return chunks[0][: chunks[0].index(">") + 1]
+
+
+def _classes(rendered: str, tag: str, marker: str) -> set[str]:
+    open_tag = _open_tag(rendered, tag, marker)
+    start = open_tag.index('class="') + len('class="')
+    return set(open_tag[start : open_tag.index('"', start)].split())
+
+
+# ── The brand scope ─────────────────────────────────────────────────────────
+
+
+def test_theme_publishes_the_brand_and_its_ink(rendered: str) -> None:
+    """Two properties, not a palette: a fill and the text that goes on it."""
+    scope = _open_tag(rendered, "div", 'data-probe="theme-dark"')
+    assert "--brand: #25293F" in scope
+    assert "--brand-ink: #ffffff" in scope
+
+
+def test_theme_measures_the_ink_rather_than_assuming_white(rendered: str) -> None:
+    """A pale brand gets dark text, which is the point of the helper."""
+    scope = _open_tag(rendered, "div", 'data-probe="theme-light"')
+    assert "--brand: #FDE68A" in scope
+    assert f"--brand-ink: {DEFAULT_BRAND_COLOR}" in scope
+
+
+def test_theme_without_a_brand_falls_back_to_the_platform_accent(rendered: str) -> None:
+    """An unbranded workspace still renders as sbomify, not as gray."""
+    scope = _open_tag(rendered, "div", 'data-probe="theme-none"')
+    assert f"--brand: {DEFAULT_ACCENT_COLOR}" in scope
+    assert "--brand-ink: #ffffff" in scope
+
+
+def test_theme_replaces_a_css_injection_rather_than_escaping_it(rendered: str) -> None:
+    """The brand lands in a style attribute, so a payload must not survive."""
+    scope = _open_tag(rendered, "div", 'data-probe="theme-evil"')
+    assert "</style>" not in scope
+    assert "script" not in scope.lower()
+    assert f"--brand: {DEFAULT_ACCENT_COLOR}" in scope
+
+
+# ── What may and may not wear the brand ─────────────────────────────────────
+
+
+def test_primary_button_fills_with_the_brand_and_inks_from_it(rendered: str) -> None:
+    button = _classes(rendered, "button", "Primary action")
+    assert "bg-[var(--brand)]" in button
+    assert "text-[var(--brand-ink)]" in button
+    # Restated, because the legacy anchor rule also paints :hover.
+    assert "hover:text-[var(--brand-ink)]" in button
+
+
+def test_secondary_button_stays_neutral_so_one_action_leads(rendered: str) -> None:
+    """A workspace cannot make the quiet button loud."""
+    button = _classes(rendered, "button", "Secondary action")
+    assert "bg-surface" in button
+    assert "text-text" in button
+    assert "bg-[var(--brand)]" not in button
+
+
+def test_surface_is_not_brandable(rendered: str) -> None:
+    """Colour goes on what a reader acts on, never the ground they read against."""
+    surface = _classes(rendered, "div", 'data-probe="surface"')
+    assert "bg-surface" in surface
+    assert "border-border" in surface
+    assert not any("var(--brand)" in utility for utility in surface)
+
+
+def test_severity_keeps_the_platform_colours(rendered: str) -> None:
+    """Red must mean critical on every trust centre, so it is not brandable."""
+    badge = _classes(rendered, "span", 'data-probe="badge-critical"')
+    assert "text-[var(--color-danger)]" in badge
+    assert not any("var(--brand)" in utility for utility in badge)
+
+
+def test_a_badge_the_workspace_owns_may_take_the_brand(rendered: str) -> None:
+    """As a fill under the measured ink, never as brand-coloured text."""
+    badge = _classes(rendered, "span", 'data-probe="badge-brand"')
+    assert "bg-[var(--brand)]" in badge
+    assert "text-[var(--brand-ink)]" in badge
+    assert "text-[var(--brand)]" not in badge
+
+
+def test_the_brand_is_never_used_as_text_or_an_icon_colour() -> None:
+    """The rule a pale brand breaks: brand-on-brand-tint is invisible.
+
+    A fill is safe because --brand-ink was measured against it. Colouring text
+    or an icon with --brand is not, because what sits behind it is whatever the
+    surface happens to be. Only the nav underline may take the raw brand, and
+    that is a 2px rule against the page, not something being read.
+    """
+    offenders: dict[str, list[str]] = {}
+    for template in sorted(BRANDED_DIR.rglob("*.html")):
+        if template.name == "nav_item.html":
+            continue
+        bad = [used for used in re.findall(r"text-\[var\(--brand\)\]", template.read_text())]
+        if bad:
+            offenders[template.relative_to(BRANDED_DIR).as_posix()] = bad
+    assert not offenders, f"brand used as a text colour: {offenders}"
+
+
+def test_current_nav_item_is_marked_for_a_reader_and_a_screen_reader(rendered: str) -> None:
+    current = _open_tag(rendered, "a", 'data-probe="nav-current"')
+    assert 'aria-current="page"' in current
+    assert "border-[var(--brand)]" in current
+    other = _open_tag(rendered, "a", 'data-probe="nav-other"')
+    assert "aria-current" not in other
+    assert "border-transparent" in other
+
+
+def test_branded_anchors_carry_the_public_page_escape(rendered: str) -> None:
+    """Without data-button the legacy sheet repaints the link on public pages."""
+    assert "data-button" in _open_tag(rendered, "a", "Link action")
+
+
+# ── The legacy-collision guard ──────────────────────────────────────────────
+
+
+def _legacy_important_classes() -> set[str]:
+    """Class names in utilities.css whose declarations carry !important."""
+    css = LEGACY_CSS.read_text()
+    important: set[str] = set()
+    for block in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        selector, body = block.group(1), block.group(2)
+        if "!important" not in body:
+            continue
+        important.update(re.findall(r"\.([a-zA-Z0-9_-]+)", selector))
+    return important
+
+
+def test_the_legacy_sheet_still_looks_the_way_this_guard_assumes() -> None:
+    """If utilities.css is deleted, the guard below must fail loudly, not pass."""
+    assert LEGACY_CSS.exists(), "utilities.css moved; update or retire the collision guard"
+    assert len(_legacy_important_classes()) > 50
+
+
+def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
+    """A colliding utility loses only on public pages, which is where these run.
+
+    Tailwind's p-4 is 1rem; the legacy .p-4 is a spacing variable and carries
+    !important, so it wins wherever both are loaded. The same trap holds for
+    rounded-lg, shadow-sm, w-50 and text-muted. Components stay off those
+    names; px-*, py-*, gap-*, rounded-xl and the token utilities are clear.
+    """
+    legacy = _legacy_important_classes()
+    offenders: dict[str, set[str]] = {}
+
+    for template in sorted(BRANDED_DIR.rglob("*.html")):
+        used: set[str] = set()
+        for attr in re.findall(r'class="([^"]*)"', template.read_text()):
+            # Drop template tags, then keep the literal utilities around them.
+            for token in re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split():
+                used.add(token.split(":")[-1] if ":" in token and "[" not in token else token)
+        if collisions := used & legacy:
+            offenders[template.relative_to(BRANDED_DIR).as_posix()] = collisions
+
+    assert not offenders, f"classes the legacy !important sheets would override: {offenders}"

@@ -1,0 +1,21 @@
+{% comment %}
+One destination in a branded nav. The current page is marked with the brand: a
+2px underline in the workspace colour plus the page's own text colour, while
+the others stay muted.
+
+current is the caller's to decide, because only the page knows which it is, and
+it sets aria-current="page" as well as the look. A screen reader gets the same
+answer the underline gives.
+
+The brand is used as a rule and as text here rather than as a fill. That is safe
+where a fill would not be: the underline is 2px of colour against the page, not
+something being read through, and the label beside it keeps its own colour.
+{% endcomment %}
+<c-vars href icon current class />
+<a href="{{ href }}"
+   class="inline-flex items-center gap-2 px-3.5 py-2.5 text-sm font-medium no-underline whitespace-nowrap border-b-2 border-solid -mb-px transition-colors duration-150 {% if current %}border-[var(--brand)] text-text{% else %}border-transparent text-text-muted hover:text-text hover:border-[color-mix(in_oklab,var(--brand)_35%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+   {% if current %}aria-current="page"{% endif %}
+   {{ attrs }}>
+    {% if icon %}<i class="{{ icon }} text-xs" aria-hidden="true"></i>{% endif %}
+    {{ slot }}
+</a>

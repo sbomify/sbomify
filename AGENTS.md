@@ -288,6 +288,40 @@ in a diff is a review blocker.
 - **`tw-*` classes are the old layer.** Do not add callers and do not delete them;
   unmigrated pages still consume them.
 
+#### Branded components (`components/branded/`, `<c-branded.*>`)
+
+A second, smaller library for pages we render **on behalf of a workspace, for
+their customers**: the trust centre first, anything shared outwards later. Same
+cotton conventions as above, plus one rule.
+
+A workspace picks **one colour**. It enters only through `<c-branded.theme>`,
+which publishes two properties and nothing else:
+
+```html
+<c-branded.theme brand="{{ brand.accent_color }}">…</c-branded.theme>
+{# --brand: the fill   --brand-ink: the text that goes on it #}
+```
+
+- **`--brand-ink` is measured, not chosen.** `is_dark_color()` in
+  `teams/branding.py` compares WCAG relative luminance against the point where
+  white and black contrast equally. Never branch on the brand yourself; use
+  `ink_on_color()`, or the `brand_fill` / `brand_ink` filters in `brand_tags.py`.
+- **The brand is a solid fill under `--brand-ink`, or a low-alpha tint behind
+  neutral text. Never a text or icon colour.** A pale brand on its own tint is
+  invisible. The nav underline is the one exception: 2px of rule, not something
+  read through.
+- **Surfaces, body text, borders, radius, type and the severity colours are not
+  brandable.** Red means critical on every trust centre.
+- **Custom properties inherit**, so one wrapper brands everything below it. No
+  prop drilling, and any future surface can reuse the library by wrapping.
+
+Class names need more care here than in the main library: these render on public
+pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
+`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
+`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
+needs `data-button` or the legacy sheet repaints it.
+
 ### API Layer
 
 Central router in `sbomify/apis.py` registers per-app routers. Most apps expose a `Router()` in `apis.py` (some use `api.py`, e.g. `licensing`):

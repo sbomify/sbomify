@@ -1,0 +1,12 @@
+{% comment %}
+The one place a workspace's colour is used as a solid fill. The text is
+--brand-ink, which c-branded.theme measured, so the label stays readable on a
+navy brand and on a pale yellow one alike.
+
+hover darkens the brand rather than swapping to a second colour: mixing toward
+black keeps any hue recognisable, where a fixed hover colour drifts away from
+brands it was not picked for. The ink is restated on hover because the legacy
+anchor rule on public pages sets a colour on :hover too.
+{% endcomment %}
+<c-vars size type="button" href disabled class />
+<c-branded.buttons.button variant_class="bg-[var(--brand)] text-[var(--brand-ink)] hover:text-[var(--brand-ink)] hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)] active:bg-[color-mix(in_oklab,var(--brand)_78%,black)]" size="{{ size }}" type="{{ type }}" href="{{ href }}" :disabled="disabled" class="{{ class }}" :attrs="attrs">{{ slot }}</c-branded.buttons.button>

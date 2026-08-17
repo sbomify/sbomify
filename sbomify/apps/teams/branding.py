@@ -90,6 +90,94 @@ def hex_to_rgb_tuple(hex_color: str) -> tuple[int, int, int]:
         return (220, 220, 220)
 
 
+def relative_luminance(hex_color: str) -> float:
+    """
+    WCAG relative luminance of a colour, 0.0 (black) to 1.0 (white).
+
+    This is not the same as HSL lightness: the channels are gamma-expanded and
+    then weighted for how bright the eye finds them, so a saturated blue and a
+    saturated yellow of equal HSL lightness land far apart. Text legibility
+    follows this number, not lightness, which is why it backs is_dark_color.
+
+    Args:
+        hex_color: Valid hex color (already sanitized)
+
+    Returns:
+        Relative luminance in the range 0.0 to 1.0
+    """
+    channels = []
+    for value in hex_to_rgb_tuple(hex_color):
+        srgb = value / 255.0
+        channels.append(srgb / 12.92 if srgb <= 0.03928 else ((srgb + 0.055) / 1.055) ** 2.4)
+
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+# Luminance at which white and black text contrast equally against a colour.
+# Solving 1.05 / (L + 0.05) == (L + 0.05) / 0.05 gives L = sqrt(0.0525) - 0.05.
+_CONTRAST_PIVOT = 0.0525**0.5 - 0.05
+
+
+def is_dark_color(color: str | None) -> bool:
+    """
+    Is this colour dark enough that light text belongs on top of it?
+
+    True means put white text on it, False means put dark text on it. The
+    threshold is the luminance where white and black text contrast equally
+    against the colour, so the answer is always the more readable of the two
+    rather than a guess.
+
+    A user's brand colour reaches this unvalidated, so the input is sanitized
+    first: anything that is not a hex colour is treated as the fallback gray,
+    which is light, so the safe dark-text answer comes back.
+
+    Args:
+        color: Brand colour as hex, or None
+
+    Returns:
+        True if light text should sit on this colour
+    """
+    return relative_luminance(sanitize_hex_color(color)) < _CONTRAST_PIVOT
+
+
+def resolve_brand_color(color: str | None) -> str:
+    """
+    The colour a branded surface should paint with.
+
+    A workspace's brand when it has set one, the platform accent when it has
+    not. The neutral gray that sanitize_hex_color falls back to is right for an
+    unknown swatch but wrong for an accent, so the fallback is named here and
+    every branded caller resolves through this one function. That is what stops
+    a fill and its text from measuring different colours.
+
+    Args:
+        color: Brand colour as hex, or None
+
+    Returns:
+        A valid hex colour, safe to place in CSS
+    """
+    return sanitize_hex_color(color, fallback=DEFAULT_ACCENT_COLOR)
+
+
+def ink_on_color(color: str | None) -> str:
+    """
+    The text colour to print on top of a brand colour.
+
+    White on a dark brand, the platform ink on a light one. Callers should not
+    branch on is_dark_color themselves to pick a colour: doing it here keeps
+    every branded surface using the same two inks, so a workspace cannot end up
+    with text that is technically readable but visibly off from the rest.
+
+    Args:
+        color: Brand colour as hex, or None
+
+    Returns:
+        Hex colour for text drawn on `color`
+    """
+    return "#ffffff" if is_dark_color(color) else DEFAULT_BRAND_COLOR
+
+
 def _apply_lightness_transform(hex_color: str, transform: Callable[[float], float]) -> str:
     """Shared RGB<->HLS helper used by lighten_hex/darken_hex."""
     try:

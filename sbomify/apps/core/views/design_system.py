@@ -47,6 +47,7 @@ GALLERY_SECTIONS: list[dict[str, str]] = [
     {"id": "avatars", "label": "Avatars", "group": "Misc"},
     {"id": "copy", "label": "Code & tokens", "group": "Misc"},
     {"id": "tooltip", "label": "Tooltip", "group": "Misc"},
+    {"id": "branded", "label": "Branded components", "group": "Branded"},
 ]
 
 
@@ -63,6 +64,16 @@ class DesignSystemView(LoginRequiredMixin, View):
         context = {
             "team": request.session.get("current_team", {}),
             "sections": GALLERY_SECTIONS,
+            # One row per brand, chosen to show the ink switching rather than to
+            # look pretty: navy and violet take white text, amber and mint take
+            # dark, and the last row has no brand at all.
+            "branded_demos": [
+                {"label": "Dark brand", "brand": "#25293F"},
+                {"label": "Vivid brand", "brand": "#7C3AED"},
+                {"label": "Pale brand", "brand": "#FDE68A"},
+                {"label": "Mint brand", "brand": "#6EE7B7"},
+                {"label": "No brand set", "brand": ""},
+            ],
             "demo_tokens": [
                 "primary",
                 "primary-dark",

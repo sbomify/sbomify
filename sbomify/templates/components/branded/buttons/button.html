@@ -1,0 +1,30 @@
+{% comment %}
+The shell every branded button shares. Pages use a variant
+(c-branded.buttons.primary and friends); those nest this and pass their recipe
+through variant_class. With an href it renders an anchor, so any variant works
+as a link, and the two branches differ only in element and must stay in
+lockstep.
+
+data-button is not decoration. These render on public pages, where the legacy
+stylesheet repaints every anchor from the workspace accent unless the anchor is
+excluded, and [data-button] is the exclusion. A branded anchor without it comes
+out the wrong colour on the only pages this library is used.
+
+Sizes and radii avoid the legacy utility names: .rounded-lg, .shadow-sm, .p-4
+and friends are !important on those pages and would win. See the class-name
+rule in AGENTS.md; a render test enforces it.
+{% endcomment %}
+<c-vars variant_class size type="button" href disabled class />
+{% if href %}
+    <a href="{{ href }}"
+       class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer no-underline transition-colors duration-150 rounded-[0.5rem] {% if size == 'sm' %}px-3.5 py-2 text-xs{% elif size == 'lg' %}px-7 py-3.5 text-base{% else %}px-5 py-2.5 text-sm{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--brand)_40%,transparent)] aria-disabled:opacity-50 aria-disabled:pointer-events-none {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+       data-button
+       {% if disabled %}aria-disabled="true" tabindex="-1"{% endif %}
+       {{ attrs }}>{{ slot }}</a>
+{% else %}
+    <button type="{{ type }}"
+            class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer no-underline transition-colors duration-150 rounded-[0.5rem] {% if size == 'sm' %}px-3.5 py-2 text-xs{% elif size == 'lg' %}px-7 py-3.5 text-base{% else %}px-5 py-2.5 text-sm{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--brand)_40%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+            data-button
+            {% if disabled %}disabled{% endif %}
+            {{ attrs }}>{{ slot }}</button>
+{% endif %}

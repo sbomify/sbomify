@@ -1,0 +1,17 @@
+{% comment %}
+The panel branded content sits on. It is deliberately not brandable: surface,
+border and radius come from the platform tokens, so however a workspace colours
+its accents, the ground the reader reads against stays legible and every trust
+centre keeps the same shape.
+
+That is the whole rule of this library in one component. Colour goes on the
+things a reader acts on, never on the ground they read against.
+
+flush drops the inset padding, for a panel whose rows own their own, and is
+written as the inverted flag rather than padded="True" because an omitted
+cotton prop is undefined, not False, so a positive default cannot be tested.
+{% endcomment %}
+<c-vars flush class />
+<div class="rounded-xl border border-solid border-border bg-surface{% if not flush %} px-5 py-4{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>
