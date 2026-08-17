@@ -95,6 +95,17 @@ def test_menu_panel_carries_the_keyboard_handling(rendered: str) -> None:
         assert f"@keydown.{key}.prevent" in panel
 
 
+def test_menu_keys_reach_a_choice_row_as_well_as_a_command(rendered: str) -> None:
+    """A row that is a setting, not a command, is still stepped through.
+
+    The keys match on the menuitem prefix, so menuitemradio and
+    menuitemcheckbox rows are walked with the rest rather than skipped.
+    """
+    panel = _opening(rendered, PANEL, "Component actions")
+    assert "[role^=menuitem]" in panel
+    assert "[role=menuitem]" not in panel
+
+
 def test_panel_without_a_role_drops_the_menu_semantics(rendered: str) -> None:
     panel = _opening(rendered, PANEL, "SBOM uploaded")
     assert "role=" not in panel

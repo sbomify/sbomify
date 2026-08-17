@@ -75,7 +75,9 @@ def test_label_without_for_or_required_renders_neither(rendered: str) -> None:
 
 def test_hint_and_error_recipes(rendered: str) -> None:
     assert "block text-xs leading-[1.5] text-text-muted mt-1.5" in _chunk(rendered, "p", "Standalone hint")
-    assert "flex items-center gap-1 text-xs leading-[1.5] text-danger mt-1.5" in _chunk(rendered, "p", "Standalone error")
+    assert "flex items-center gap-1 text-xs leading-[1.5] text-danger mt-1.5" in _chunk(
+        rendered, "p", "Standalone error"
+    )
 
 
 def test_error_slot_carries_nested_markup(rendered: str) -> None:
@@ -471,9 +473,11 @@ def test_file_preview_action_slot_holds_a_real_button(rendered: str) -> None:
 def test_input_carries_the_runtime_state_recipes(rendered: str) -> None:
     """An editor whose validity is client state binds data-state, never a class."""
     field = _open_tag(rendered, "input", 'name="probe-bound-state"')
-    assert ':data-state="formErrors.name ? \'error\' : \'\'"' in field
+    assert ":data-state=\"formErrors.name ? 'error' : ''\"" in field
     assert "data-[state=error]:border-danger" in field
-    assert "data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]" in field
+    assert (
+        "data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]" in field
+    )
     assert "data-[state=success]:border-success" in field
     # The resting recipe is still the fallback, so an empty state renders plain.
     assert "border-border" in field
@@ -483,3 +487,54 @@ def test_textarea_carries_the_runtime_state_recipes(rendered: str) -> None:
     field = _open_tag(rendered, "textarea", 'name="probe-bound-textarea"')
     assert "data-[state=error]:border-danger" in field
     assert "data-[state=success]:border-success" in field
+
+
+# ── Colour field ────────────────────────────────────────────────────────────
+
+
+def _colour(rendered: str) -> str:
+    """The whole colour field, from its label through to the hidden input."""
+    start = rendered.index('for="probe-colour"')
+    return rendered[start : rendered.index("probe-colour-bare", start)]
+
+
+def test_colour_field_wears_the_field_label_and_hint(rendered: str) -> None:
+    """A colour reads as one of the form's fields, not a block beside them."""
+    field = _colour(rendered)
+    assert "Primary brand color" in field
+    assert "Headers, navigation, primary elements" in field
+
+
+def test_colour_field_draws_one_border_around_both_halves(rendered: str) -> None:
+    """The swatch and the hex are one control, so the wrapper owns the ring."""
+    wrapper = _open_tag(rendered, "div", "focus-within:border-primary")
+    assert "border-[1.5px] border-solid border-border" in wrapper
+    assert (
+        "focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]"
+        in wrapper
+    )
+    # Neither input paints a border of its own.
+    assert "border" not in _classes(rendered, "input", 'id="probe-colour"')
+
+
+def test_colour_field_binds_both_halves_to_one_value(rendered: str) -> None:
+    """Typing a hex drives the swatch and picking drives the hex."""
+    swatch = _open_tag(rendered, "input", 'id="probe-colour-swatch"')
+    hexed = _open_tag(rendered, "input", 'id="probe-colour"')
+    for half in (swatch, hexed):
+        assert ':value="branding.primary"' in half
+        assert '@input="branding.primary = $event.target.value"' in half
+    assert 'type="color"' in swatch
+    assert 'type="text"' in hexed
+
+
+def test_colour_field_names_the_picker_for_a_screen_reader(rendered: str) -> None:
+    swatch = _open_tag(rendered, "input", 'id="probe-colour-swatch"')
+    assert 'aria-label="Primary brand color, colour picker"' in swatch
+
+
+def test_colour_field_posts_through_a_hidden_input_only_when_named(rendered: str) -> None:
+    """The visible halves are display; a form gets one value, once."""
+    field = _colour(rendered)
+    assert '<input type="hidden" name="probe-colour" :value="branding.primary">' in field
+    assert 'type="hidden"' not in rendered[rendered.index("probe-colour-bare") :]

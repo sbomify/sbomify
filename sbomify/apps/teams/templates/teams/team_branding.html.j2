@@ -34,43 +34,11 @@
     </c-layout.section-header>
     <c-layout.section-body>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {# Primary Brand Color #}
         <c-cards.inset>
-        <div class="flex items-start gap-4">
-            <div class="relative group">
-                <div class="w-20 h-20 rounded-xl border-2 border-border overflow-hidden shadow-sm group-hover:shadow-md transition-shadow cursor-pointer"
-                     :style="'background-color: ' + uiColors.brand_color">
-                    <c-forms.input type="color" id="brand-color" class="absolute inset-0" x-model="uiColors.brand_color" ::value="uiColors.brand_color" @input="updateColor('brand_color', $event.target.value)" />
-                </div>
-                <input type="hidden"
-                       name="brand_color"
-                       :value="localBrandingInfo.brand_color || ''">
-            </div>
-            <div class="flex-1 pt-1">
-                <label for="brand-color" class="text-sm font-semibold text-text block mb-2">Primary brand color</label>
-                <c-code-inline class="inline-block mb-2" x-text="displayColor('brand_color')" />
-                <p class="text-text-muted text-xs m-0">Headers, navigation, primary elements</p>
-            </div>
-        </div>
+        <c-forms.color-field id="brand-color" name="brand_color" label="Primary brand color" hint="Headers, navigation, primary elements" colour="uiColors.brand_color" on_input="updateColor('brand_color', $event.target.value)" submit_value="localBrandingInfo.brand_color || ''" />
         </c-cards.inset>
-        {# Accent Color #}
         <c-cards.inset>
-        <div class="flex items-start gap-4">
-            <div class="relative group">
-                <div class="w-20 h-20 rounded-xl border-2 border-border overflow-hidden shadow-sm group-hover:shadow-md transition-shadow cursor-pointer"
-                     :style="'background-color: ' + uiColors.accent_color">
-                    <c-forms.input type="color" id="accent-color" class="absolute inset-0" x-model="uiColors.accent_color" ::value="uiColors.accent_color" @input="updateColor('accent_color', $event.target.value)" />
-                </div>
-                <input type="hidden"
-                       name="accent_color"
-                       :value="localBrandingInfo.accent_color || ''">
-            </div>
-            <div class="flex-1 pt-1">
-                <label for="accent-color" class="text-sm font-semibold text-text block mb-2">Accent color</label>
-                <c-code-inline class="inline-block mb-2" x-text="displayColor('accent_color')" />
-                <p class="text-text-muted text-xs m-0">Buttons, links, highlights</p>
-            </div>
-        </div>
+        <c-forms.color-field id="accent-color" name="accent_color" label="Accent color" hint="Buttons, links, highlights" colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" submit_value="localBrandingInfo.accent_color || ''" />
         </c-cards.inset>
     </div>
     </c-layout.section-body>
@@ -80,7 +48,7 @@
     <c-layout.section-header title="Visual assets" subtitle="Upload your brand assets for public content" icon="fas fa-images" accent="neutral" />
     <c-layout.section-body class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div>
-        <c-forms.label>Brand Icon</c-forms.label>
+        <c-forms.label>Brand icon</c-forms.label>
         {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
         <input type="hidden"
                name="icon_pending_deletion"
@@ -88,7 +56,7 @@
         <c-forms.hint class="mt-2">Recommended: 512x512px PNG or SVG</c-forms.hint>
     </div>
     <div>
-        <c-forms.label>Brand Logo</c-forms.label>
+        <c-forms.label>Brand logo</c-forms.label>
         {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
         <input type="hidden"
                name="logo_pending_deletion"
@@ -97,9 +65,9 @@
     </div>
     </c-layout.section-body>
     </c-cards.inset>
-    {# Display Preferences Section #}
+    {# Display preferences section #}
     <c-cards.inset>
-    <c-layout.section-header title="Display Preferences" subtitle="Toggle workspace branding on or off" icon="fas fa-eye" accent="neutral" />
+    <c-layout.section-header title="Display preferences" subtitle="Toggle workspace branding on or off" icon="fas fa-eye" accent="neutral" />
     <c-layout.section-body>
     <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">
     Enable custom workspace branding
@@ -118,7 +86,7 @@
         <i class="fas fa-undo mr-2"></i>Cancel
         </c-buttons.secondary>
         <c-buttons.primary type="submit" size="sm" id="team-branding-save-btn" ::disabled="!hasUnsavedChanges()">
-        <i class="fas fa-save mr-2"></i>Save Changes
+        <i class="fas fa-save mr-2"></i>Save changes
         </c-buttons.primary>
     </div>
 </form>

@@ -1581,17 +1581,6 @@ input[type="color"]::-moz-color-swatch {
   color: var(--color-text);
 }
 
-/* Theme button hover state - gradient for inactive theme buttons */
-.theme-button-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-.theme-button-hover:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-}
-
 /* Header button hover state - gradient for topnav icon buttons */
 .header-btn-hover:hover {
   background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;

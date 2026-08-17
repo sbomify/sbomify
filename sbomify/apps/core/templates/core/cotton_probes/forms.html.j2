@@ -64,3 +64,5 @@ on the output; it is not routed anywhere.
 </c-forms.file-preview>
 <c-forms.input name="probe-bound-state" ::data-state="formErrors.name ? 'error' : ''" x-model="name" />
 <c-forms.textarea name="probe-bound-textarea" ::data-state="formErrors.text ? 'error' : ''" />
+<c-forms.color-field name="probe-colour" id="probe-colour" label="Primary brand color" hint="Headers, navigation, primary elements" colour="branding.primary" on_input="branding.primary = $event.target.value" submit_value="branding.primary" />
+<c-forms.color-field id="probe-colour-bare" label="Accent color" colour="branding.accent" on_input="branding.accent = $event.target.value" />

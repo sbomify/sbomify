@@ -342,6 +342,7 @@
             a handle bar over an inset swatch, which reads as a broken image
             beside the controls above, so the stylesheet strips it back to the
             bare fill and it takes the radius of whatever tile holds it.
+            c-forms.color-field below is the whole field built on it.
         {% endcomment %}
         <c-forms.field label="Colour" for="ds-color" hint="Sized by its container, not by the browser.">
         <c-forms.input name="ds-color" type="color" value="#7C8CFF" class="h-11 rounded-lg overflow-hidden" />
@@ -349,6 +350,15 @@
         <c-forms.field label="Select" for="ds-select" hint="Pick an artifact type.">
         <c-forms.select name="ds-select" :options="demo_select_options" selected="document" />
         </c-forms.field>
+    </div>
+    <div class="mt-5" x-data="{ swatch: '#7C8CFF' }">
+        <p class="text-sm text-text-muted mb-3">
+            <code class="tw-code-inline">c-forms.color-field</code> is a colour as a field, shaped like
+            every other one: label above, hint below. The swatch and the hex are two halves of one control
+            bound to the same value, so a brand colour can be typed or pasted as well as picked, and the
+            ring is drawn on the pair rather than on whichever half has focus.
+        </p>
+        <c-forms.color-field id="ds-color-field" label="Primary brand color" hint="Headers, navigation, primary elements" colour="swatch" on_input="swatch = $event.target.value" />
     </div>
     <div class="mt-5">
         <c-forms.field label="Textarea" for="ds-textarea">
