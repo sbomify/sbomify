@@ -228,7 +228,7 @@ locator and check the template. A template existing does not mean it is used;
 several orphaned templates sit in the tree, so confirm something includes or
 serves it.
 
-Two real examples of this rot, both found by recording:
+Four real examples of this rot, all found by recording:
 
 - **Settings tabs are real links now** (`a.settings-tab[href$='/account']`), not
   the old in-page `data-tab` switcher. `conftest.navigate_to_trust_center_tab`
