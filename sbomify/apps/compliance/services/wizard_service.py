@@ -14,6 +14,9 @@ import calendar
 import datetime
 from typing import TYPE_CHECKING, Any
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
+
 from sbomify.apps.compliance.models import (
     CRAAssessment,
     CRAGeneratedDocument,
@@ -311,6 +314,17 @@ def _build_step_1_context(assessment: CRAAssessment) -> ServiceResult[dict[str, 
             "is_radio_equipment": assessment.is_radio_equipment,
             "processes_personal_data": assessment.processes_personal_data,
             "handles_financial_value": assessment.handles_financial_value,
+            # EU establishment and the Authorised Representative (CRA Art. 22,
+            # checklist 7.4). Tri-state: null is "not yet determined", which the
+            # step records without refusing and the export path refuses.
+            "is_eu_established": assessment.is_eu_established,
+            "authorized_rep_name": assessment.authorized_rep_name,
+            "authorized_rep_address": assessment.authorized_rep_address,
+            "authorized_rep_email": assessment.authorized_rep_email,
+            "authorized_rep_mandate_date": (
+                assessment.authorized_rep_mandate_date.isoformat() if assessment.authorized_rep_mandate_date else None
+            ),
+            "authorized_rep_mandate_reference": assessment.authorized_rep_mandate_reference,
         }
     )
 
@@ -563,8 +577,18 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
             ],
         }
 
+    # The EU-establishment determination is evidence the declaration needs
+    # (checklist 7.4.1), and an unanswered one is not an error the step refuses
+    # to save — it is a gap that has to be visible before anything is published.
+    # Without this it was neither: the assessment exported cleanly and the DoC
+    # simply omitted section 2a.
+    eu_representation_problems = assessment.eu_representation_problems
+
     steps = {
-        1: {"complete": 1 in assessment.completed_steps},
+        1: {
+            "complete": 1 in assessment.completed_steps,
+            "eu_representation_problems": eu_representation_problems,
+        },
         2: {"complete": 2 in assessment.completed_steps},
         3: {
             "complete": 3 in assessment.completed_steps,
@@ -581,9 +605,12 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
         5: {"complete": 5 in assessment.completed_steps},
     }
 
-    # Overall ready: steps 1-4 complete, no unanswered controls
+    # Overall ready: steps 1-4 complete, no unanswered controls, and the
+    # EU-representation block settled. Annex V item 2a is part of the
+    # declaration, so an assessment that cannot say whether an Authorised
+    # Representative is required is not ready to produce one.
     required_steps_done = all(s in assessment.completed_steps for s in [1, 2, 3, 4])
-    overall_ready = required_steps_done and status_counts["unanswered"] == 0
+    overall_ready = required_steps_done and status_counts["unanswered"] == 0 and not eu_representation_problems
 
     return {
         "product": {
@@ -602,15 +629,40 @@ def _compute_compliance_summary(assessment: CRAAssessment) -> dict[str, Any]:
 
 
 # ---- Step 1 fields that can be saved ----
-_STEP_1_TEXT_FIELDS = ("intended_use",)
-_STEP_1_CHAR_FIELDS = ("product_category",)
+_STEP_1_TEXT_FIELDS = ("intended_use", "authorized_rep_address")
+_STEP_1_CHAR_FIELDS = (
+    "product_category",
+    "authorized_rep_name",
+    "authorized_rep_email",
+    "authorized_rep_mandate_reference",
+)
 _STEP_1_BOOL_FIELDS = (
     "is_open_source_steward",
     "is_radio_equipment",
     "processes_personal_data",
     "handles_financial_value",
 )
-_STEP_1_DATE_FIELDS = ("support_period_end",)
+# Tri-state on purpose: NULL means the EU-establishment determination has not
+# been made, which checklist 7.4.1 treats differently from answering "no".
+_STEP_1_NULLABLE_BOOL_FIELDS = ("is_eu_established",)
+_STEP_1_DATE_FIELDS = ("support_period_end", "authorized_rep_mandate_date")
+
+# Validated on save rather than left to full_clean(), which this path skips.
+_STEP_1_EMAIL_FIELDS = frozenset({"authorized_rep_email"})
+
+# The Art. 22 gate fires only when the save touches one of these. Editing an
+# unrelated Step 1 field must not be refused for the state of a block the
+# payload did not mention.
+_AR_GATED_FIELDS = frozenset(
+    {
+        "is_eu_established",
+        "authorized_rep_name",
+        "authorized_rep_address",
+        "authorized_rep_email",
+        "authorized_rep_mandate_date",
+        "authorized_rep_mandate_reference",
+    }
+)
 _STEP_1_JSON_FIELDS = ("target_eu_markets",)
 
 # ---- Step 3b/3c fields ----
@@ -647,6 +699,14 @@ _AUDITED_STEP_FIELDS: dict[int, tuple[str, ...]] = {
         "is_radio_equipment",
         "is_open_source_steward",
         "intended_use",
+        # The establishment determination and the AR block exist to be legal
+        # evidence, so who changed them and when is the part that matters most.
+        "is_eu_established",
+        "authorized_rep_name",
+        "authorized_rep_address",
+        "authorized_rep_email",
+        "authorized_rep_mandate_date",
+        "authorized_rep_mandate_reference",
     ),
     2: ("bsi_waivers",),
     3: ("vdp_url", "security_contact_url", "csirt_contact_email"),
@@ -728,11 +788,27 @@ def _save_step_1(
                 continue
             if not isinstance(raw, str):
                 return ServiceResult.failure(f"{field} must be a string", status_code=400)
-            if len(raw) > _MAX_STEP_1_TEXT_CHARS:
+            # The column's own limit where it has one, the generic cap for the
+            # unbounded text fields. Checking only the generic cap let a value
+            # longer than a CharField's max_length through to save(), where the
+            # database rejected it and the caller got a 500 for what is plainly
+            # bad input. Reading max_length off the field keeps this honest if
+            # a column is later widened.
+            cap = getattr(assessment._meta.get_field(field), "max_length", None) or _MAX_STEP_1_TEXT_CHARS
+            if len(raw) > cap:
                 return ServiceResult.failure(
-                    f"{field} exceeds the {_MAX_STEP_1_TEXT_CHARS}-character cap",
+                    f"{field} exceeds the {cap}-character cap",
                     status_code=400,
                 )
+            # EmailField only validates under full_clean(), which this save path
+            # does not call, so a malformed address reached the database and the
+            # signed declaration — where the AR's contact is the point of the
+            # block. Validated here, where the value arrives.
+            if field in _STEP_1_EMAIL_FIELDS and raw.strip():
+                try:
+                    validate_email(raw.strip())
+                except DjangoValidationError:
+                    return ServiceResult.failure(f"{field} must be a valid email address", status_code=400)
             setattr(assessment, field, raw)
 
     for field in _STEP_1_BOOL_FIELDS:
@@ -758,19 +834,21 @@ def _save_step_1(
                 )
         assessment.target_eu_markets = markets or []
 
-    if "support_period_end" in data:
-        val = data["support_period_end"]
+    for field in _STEP_1_DATE_FIELDS:
+        if field not in data:
+            continue
+        val = data[field]
         if val is None:
-            assessment.support_period_end = None
+            setattr(assessment, field, None)
+        elif isinstance(val, datetime.date):
+            setattr(assessment, field, val)
         elif isinstance(val, str):
             try:
-                assessment.support_period_end = datetime.date.fromisoformat(val)
+                setattr(assessment, field, datetime.date.fromisoformat(val))
             except ValueError:
-                return ServiceResult.failure("Invalid date format for support_period_end", status_code=400)
-        elif isinstance(val, datetime.date):
-            assessment.support_period_end = val
+                return ServiceResult.failure(f"Invalid date format for {field}", status_code=400)
         else:
-            return ServiceResult.failure("Invalid type for support_period_end", status_code=400)
+            return ServiceResult.failure(f"Invalid type for {field}", status_code=400)
 
     # Harmonised-standard flag (CRA Art 32(2)). Treat an absent key as
     # "unchanged" — the normal PATCH semantic — so a partial save that
@@ -895,10 +973,40 @@ def _save_step_1(
             status_code=400,
         )
 
+    for field in _STEP_1_NULLABLE_BOOL_FIELDS:
+        if field in data:
+            raw = data[field]
+            if raw is not None and not isinstance(raw, bool):
+                return ServiceResult.failure(f"{field} must be a boolean or null", status_code=400)
+            setattr(assessment, field, raw)
+
+    # CRA Art. 22 makes an AR mandatory before market placement for a
+    # manufacturer with no EU establishment, so answering "not established"
+    # and leaving the block empty is a breach the step refuses to record.
+    # An *unanswered* determination is only incomplete evidence, and blocking
+    # on it would strand every assessment created before the question
+    # existed. That one surfaces on the publish and export path instead.
+    #
+    # Only when the payload touches this block, though. The gate reads the
+    # whole assessment, so re-running it on every Step 1 save meant that once
+    # "not established" was recorded without an AR, every later partial save —
+    # adjusting the intended use, picking a market — was refused with an Art. 22
+    # error about fields it never sent, and the step could not be edited back
+    # into a valid state.
+    if _AR_GATED_FIELDS & data.keys():
+        if assessment.requires_authorized_representative and (problems := assessment.eu_representation_problems):
+            return ServiceResult.failure(problems[0], status_code=400)
+
     _mark_step_complete(assessment, 1)
     assessment.save(
         update_fields=[
             "product_category",
+            "is_eu_established",
+            "authorized_rep_name",
+            "authorized_rep_address",
+            "authorized_rep_email",
+            "authorized_rep_mandate_date",
+            "authorized_rep_mandate_reference",
             "is_open_source_steward",
             "harmonised_standard_applied",
             "conformity_assessment_procedure",

@@ -76,7 +76,7 @@
                             </div>
                         {% endif %}
                     </div>
-                    {% if is_owner %}
+                    {% if can_administer %}
                         <a href="{% url 'billing:select_plan' team.key %}"
                            class="tw-btn-primary flex-shrink-0">
                             <i class="fas fa-{% if team.billing_plan == 'community' or not team.billing_plan %}arrow-up{% else %}sync-alt{% endif %} mr-2"></i>
@@ -159,7 +159,7 @@
                     <p class="text-text-muted text-sm mb-4">
                         Get access to higher limits, advanced compliance plugins, vulnerability scanning with Dependency Track, and priority support.
                     </p>
-                    {% if is_owner %}
+                    {% if can_administer %}
                         <a href="{% url 'billing:select_plan' team.key %}"
                            class="tw-btn-gradient">
                             <i class="fas fa-arrow-up mr-2"></i>View Plans & Pricing

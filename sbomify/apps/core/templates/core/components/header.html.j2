@@ -50,7 +50,7 @@
         {# New Button Dropdown #}
         {% with current_team=request.session.current_team %}
             {% if current_team %}
-                {% if current_team.role == "owner" or current_team.role == "admin" %}
+                {% if can_manage %}
                     <div x-data="{ open: false }"
                          class="relative"
                          @keydown.escape.window="if(open) open = false">

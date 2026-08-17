@@ -110,9 +110,13 @@ class TestComponentMetaInfoTemplates:
         rendered = render_to_string("sboms/components/ci_cd_info.html.j2", context)
         
         # Assertions
-        assert "ciCdInfo" in rendered
+        assert "Get started" in rendered
         assert component.id in rendered
-        assert "CI/CD Integration" in rendered
+        # The dialog is the wizard command now. Asserting on the command rather
+        # than on an Alpine component name keeps this checking what the reader
+        # is given, which is the part that has to stay right.
+        assert "sbomify-action wizard" in rendered
+        assert "ghcr.io/sbomify/sbomify-action" in rendered
 
     def test_licenses_editor_rendering(self):
         # Setup

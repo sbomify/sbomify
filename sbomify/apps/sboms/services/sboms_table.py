@@ -30,6 +30,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         extract_severity_counts,
         merge_findings_by_alias,
         reconstruct_result_summary,
+        result_scanned_nothing,
     )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
@@ -44,9 +45,15 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
             .distinct("sbom_id")
             .values("sbom_id", *RESULT_SUMMARY_COLUMNS)
         )
-        counts_by_sbom = {
-            str(row["sbom_id"]): extract_severity_counts(reconstruct_result_summary(row)) for row in latest_summaries
-        }
+        counts_by_sbom = {}
+        for row in latest_summaries:
+            reconstructed = reconstruct_result_summary(row)
+            counts = extract_severity_counts(reconstructed)
+            # A skipped run stores zero findings, which is what a clean scan
+            # stores. Without this the row reads "Clean" for an artifact nothing
+            # could be matched against.
+            counts["scanned_nothing"] = result_scanned_nothing(reconstructed)
+            counts_by_sbom[str(row["sbom_id"])] = counts
         for item in sbom_items:
             item["vuln"] = counts_by_sbom.get(str(item.get("sbom", {}).get("id", "")))
         return
@@ -69,6 +76,10 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
         if not provider_results:
             item["vuln"] = None
             continue
+        # Only when EVERY provider skipped. One scanner failing while another
+        # scanned the same artifact still leaves a real verdict, and marking
+        # that "Nothing scanned" would hide the scan that worked.
+        scanned_nothing = all(result_scanned_nothing(result) for result in provider_results)
         rows = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
         if rows:
             item["vuln"] = {
@@ -87,6 +98,7 @@ def _attach_vulnerability_counts(sbom_items: list[dict[str, Any]], component_id:
                 (extract_severity_counts(result) for result in provider_results),
                 key=lambda c: c["total"],
             )
+        item["vuln"]["scanned_nothing"] = scanned_nothing
 
 
 def _summary_artifacts(sbom_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
