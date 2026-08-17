@@ -34,13 +34,12 @@ from sbomify.apps.security_advisories.models import (
     validate_publishable,
 )
 
-# Severity to the badge variant the templates use.
-SEVERITY_VARIANTS = {
-    "critical": "danger",
-    "high": "warning",
-    "medium": "info",
-    "low": "secondary",
-}
+# Severity is not projected to a badge variant. c-badges.severity owns the five
+# CVSS bands, and mapping them onto the generic semantic variants here shifted
+# every band by one: high rendered in the amber the rest of the app uses for
+# medium, medium in the blue it uses for low. Templates pass the raw band to
+# c-badges.severity (or bind data-level for the Alpine twin) and the component
+# picks the colour.
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 
 # Remediation status to badge variant and icon. One dict so the list, the detail
@@ -155,7 +154,6 @@ def _vulnerability_projection(vulnerability: AdvisoryVulnerability) -> dict[str,
         "title": vulnerability.title,
         "description": vulnerability.description,
         "severity": vulnerability.severity,
-        "severity_variant": SEVERITY_VARIANTS.get(vulnerability.severity, "secondary"),
         "cwe_ids": vulnerability.cwe_ids or [],
         "cvss_scores": vulnerability.cvss_scores or [],
         "exploitation_status": vulnerability.exploitation_status,
@@ -271,7 +269,6 @@ def _advisory_projection(advisory: SecurityAdvisory, *, detail: bool = False) ->
         "description": advisory.description,
         "advisory_type": advisory.advisory_type,
         "severity": severity,
-        "severity_variant": SEVERITY_VARIANTS.get(severity, "secondary"),
         "severity_rank": SEVERITY_RANK.get(severity, 0),
         # Two axes, deliberately. status_* is where the fix is, which is what the
         # list's Status column means and what the timeline drives. publication_*

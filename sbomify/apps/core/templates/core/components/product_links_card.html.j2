@@ -6,12 +6,12 @@
 <c-tables.shell id="product-links-card" x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editTitle: '', editUrl: '', editDescription: '', deleteId: '', deleteName: '' }">
 <c-tables.toolbar>
 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-    <i class="fas fa-link text-primary" aria-hidden="true"></i>Product Links
+    <i class="fas fa-link text-primary" aria-hidden="true"></i>Product links
 </h4>
 <c-slot name="right">
 {% if can_manage_links %}
     <c-buttons.primary size="sm" @click="showAddModal = true">
-    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Link
+    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add link
     </c-buttons.primary>
 {% endif %}
 </c-slot>
@@ -72,7 +72,7 @@
 {% endif %}
 {% if can_manage_links %}
     {# Add Link Modal #}
-    <c-modal id="addLinkModal" show="showAddModal" title="Add Link">
+    <c-modal id="addLinkModal" show="showAddModal" title="Add link">
     <form id="add-link-form"
           @submit.prevent=" fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showAddModal = false; }); ">
         {% csrf_token %}

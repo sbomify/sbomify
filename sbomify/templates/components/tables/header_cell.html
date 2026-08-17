@@ -18,8 +18,14 @@ inherited its line-height, which is 1.5 in the app and 1.6 on a public page.
     {% if sort %}:aria-sort="sortColumn === '{{ sort }}' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"{% endif %}
     {{ attrs }}>
     {% if sort %}
+        {% comment %}
+            uppercase is restated here, not inherited: the th sets it, but a
+            button is a form control and the UA stylesheet gives it
+            text-transform: none, so a sortable label silently dropped out of
+            the header's case and tables read "Name / STATUS / Last Modified".
+        {% endcomment %}
         <button type="button"
-                class="inline-flex items-center gap-2 cursor-pointer select-none hover:text-primary focus-visible:outline-none focus-visible:rounded-sm focus-visible:text-primary focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                class="inline-flex items-center gap-2 uppercase cursor-pointer select-none hover:text-primary focus-visible:outline-none focus-visible:rounded-sm focus-visible:text-primary focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
                 data-sort="none"
                 :data-sort="sortColumn === '{{ sort }}' ? sortDirection : 'none'"
                 @click="sort('{{ sort }}')">

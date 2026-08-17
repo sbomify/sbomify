@@ -80,12 +80,12 @@
             <c-chips.metric-chip>
             <i class="fas fa-puzzle-piece text-primary text-xs" aria-hidden="true"></i>
             <c-chips.metric.value>{{ component_rows|length }}</c-chips.metric.value>
-            <c-chips.metric.label>Components</c-chips.metric.label>
+            <c-chips.metric.label>Component{{ component_rows|length|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
             <c-chips.metric-chip>
             <i class="fas fa-tag text-primary text-xs" aria-hidden="true"></i>
             <c-chips.metric.value>{{ releases_summary.total }}</c-chips.metric.value>
-            <c-chips.metric.label>Releases</c-chips.metric.label>
+            <c-chips.metric.label>Release{{ releases_summary.total|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
             {% if vuln_rollup.critical or vuln_rollup.high or vuln_rollup.medium or vuln_rollup.low %}
                 {% comment %}The accent is settled first: a prop written as an inline {% if %} is one djlint reformat away from arriving with newlines in it, and a padded value matches no branch in the component.{% endcomment %}
@@ -298,7 +298,7 @@
                     {% if release.is_latest %}<c-badges.success size="sm">Latest</c-badges.success>{% endif %}
                     {% if release.is_prerelease %}<c-badges.warning size="sm">Pre-release</c-badges.warning>{% endif %}
                     <span class="ml-auto">{{ release.artifact_count }} artifact{{ release.artifact_count|pluralize }}</span>
-                    <span>{{ release.date|date:"M d, Y" }}</span>
+                    <span>{{ release.date|date:"j M Y" }}</span>
                 </div>
             {% endfor %}
         {% else %}

@@ -10,7 +10,7 @@
         {# New product dialog #}
         {% if has_crud_permissions %}
             <div x-data="{ open: false }" @open-add-product-modal.window="open = true">
-                <c-modal id="addProductModal" title="New Product" icon="fas fa-cube">
+                <c-modal id="addProductModal" title="New product" icon="fas fa-cube">
                 <form id="addProductForm"
                       method="post"
                       action="{% url 'core:products_dashboard' %}">
@@ -33,7 +33,7 @@
                 <c-slot name="footer">
                 <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
                 <c-buttons.primary type="submit" form="addProductForm">
-                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Product
+                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create product
                 </c-buttons.primary>
                 </c-slot>
                 </c-modal>

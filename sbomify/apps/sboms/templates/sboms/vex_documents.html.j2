@@ -52,7 +52,7 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
                     <span class="text-text-muted text-xs">No suppressions</span>
                 {% endif %}
                 </c-tables.cell>
-                <c-tables.cell date class="hidden lg:table-cell">{{ doc.created_at|date:"M j, Y" }}</c-tables.cell>
+                <c-tables.cell date class="hidden lg:table-cell">{{ doc.created_at|date:"j M Y" }}</c-tables.cell>
                 <c-tables.actions-cell>
                 <c-actions-menu label="VEX document actions">
                 <c-dropdowns.item icon="fas fa-download" href="{% url 'sboms:sbom_download' doc.id %}">

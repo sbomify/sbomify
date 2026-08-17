@@ -10,7 +10,7 @@
         <i class="fas fa-key" aria-hidden="true"></i>
         </c-chips.icon-chip>
         <div>
-            <h5 class="text-lg font-semibold text-text m-0">API Tokens</h5>
+            <h5 class="text-lg font-semibold text-text m-0">API tokens</h5>
             <p class="text-text-muted text-sm m-0">Manage personal access tokens for API authentication</p>
         </div>
     </div>
@@ -35,7 +35,7 @@
 {% endif %}
 {# Generate New Token Section #}
 <div class="mb-6">
-    <c-layout.section-header title="Generate New Token" subtitle="Create a new personal access token scoped to this workspace" icon="fas fa-plus-circle" accent="neutral" />
+    <c-layout.section-header title="Generate new token" subtitle="Create a new personal access token scoped to this workspace" icon="fas fa-plus-circle" accent="neutral" />
     <c-layout.section-body>
     {# expiryChoice drives the custom TTL row; seeded from the bound value so a validation re-render keeps it open. #}
     <form method="post"
@@ -128,7 +128,7 @@
 </div>
 {# Existing Tokens Section #}
 <div class="pt-6 border-t border-border">
-    <c-layout.section-header title="Your Tokens" subtitle="Manage your existing personal access tokens" icon="fas fa-list" accent="neutral" />
+    <c-layout.section-header title="Your tokens" subtitle="Manage your existing personal access tokens" icon="fas fa-list" accent="neutral" />
     {% if access_tokens or unscoped_tokens %}
         <c-layout.section-body>
         <div x-data="window.getBulkRevokeData({ url: '{% url 'teams:team_tokens' team.key %}', csrfToken: '{{ csrf_token }}', refreshEvent: 'refreshTeamTokens' })">

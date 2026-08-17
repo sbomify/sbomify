@@ -28,7 +28,7 @@ by create_modals.html.j2 which should be included in the base template.
     <c-layout.action-tile href="{{ upload_sbom_url|default:components_url }}" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a new software bill of materials" />
     {# Create Product and Add Component open a dialog, so they are buttons. #}
     {% if has_crud_permissions %}
-        <c-layout.action-tile icon="fas fa-cube" title="Create Product" description="Add a new product to your workspace" @click="$dispatch('open-product-modal')" />
+        <c-layout.action-tile icon="fas fa-cube" title="Create product" description="Add a new product to your workspace" @click="$dispatch('open-product-modal')" />
         <c-layout.action-tile accent="info" icon="fas fa-puzzle-piece" title="Add Component" description="Create a new SBOM or document component" @click="$dispatch('open-component-modal')" />
     {% endif %}
     {% url 'vulnerability_scanning:vulnerability_scans' current_team.key as scans_url %}

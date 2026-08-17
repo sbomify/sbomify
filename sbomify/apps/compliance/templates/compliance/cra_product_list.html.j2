@@ -49,13 +49,13 @@
                     {% if a.status_value == "complete" %}
                         <c-badges.success>Complete</c-badges.success>
                     {% elif a.status_value == "in_progress" %}
-                        <c-badges.warning>In Progress</c-badges.warning>
+                        <c-badges.warning>In progress</c-badges.warning>
                     {% else %}
                         <c-badges.secondary>Draft</c-badges.secondary>
                     {% endif %}
                     </c-tables.cell>
                     <c-tables.cell>{{ a.completed_steps|length }}/5 steps</c-tables.cell>
-                    <c-tables.cell date>{{ a.updated_at|date:"M d, Y" }}</c-tables.cell>
+                    <c-tables.cell date>{{ a.updated_at|date:"j M Y" }}</c-tables.cell>
                     <c-tables.cell end>
                     <c-buttons.ghost size="sm" href="{% url 'compliance:cra_wizard_shell' assessment_id=a.id %}">
                     Continue <i class="fas fa-arrow-right ml-1"></i>
@@ -67,12 +67,12 @@
             </c-tables.table>
             </c-cards.card>
         {% else %}
+            {% comment %}
+                The library panel, so the mark sits in the tinted medallion
+                every other empty state uses rather than a bare muted glyph.
+            {% endcomment %}
             <c-cards.card flush>
-            <div class="p-8 text-center">
-                <i class="fas fa-shield-halved text-4xl text-text-muted mb-4"></i>
-                <h3 class="text-lg font-semibold text-text mb-2">No CRA Assessments</h3>
-                <p class="text-text-muted mb-4">Start a CRA compliance assessment from any product's detail page.</p>
-            </div>
+            <c-feedback.empty-state icon="fas fa-shield-halved" title="No CRA assessments" message="Start a CRA compliance assessment from any product's detail page." />
             </c-cards.card>
         {% endif %}
     </div>

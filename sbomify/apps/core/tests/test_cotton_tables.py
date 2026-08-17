@@ -154,8 +154,20 @@ def test_sortable_header_keeps_the_table_state_names(rendered: str) -> None:
     assert ":data-sort=\"sortColumn === 'name' ? sortDirection : 'none'\"" in sortable
     assert "@click=\"sort('name')\"" in sortable
     assert 'data-sort="none"' in sortable
-    assert "inline-flex items-center gap-2 cursor-pointer select-none hover:text-primary" in sortable
+    assert "inline-flex items-center gap-2 uppercase cursor-pointer select-none hover:text-primary" in sortable
     assert "focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]" in sortable
+
+
+def test_sortable_header_label_is_uppercase_like_an_unsorted_one(rendered: str) -> None:
+    """The th sets uppercase, but a button is a form control and the UA
+    stylesheet gives it text-transform: none, so the label has to restate it.
+    Without this a table renders "Name / STATUS / Last Modified", uppercase on
+    exactly the columns that happen not to sort.
+    """
+    sortable = _element_holding(rendered, "th", "Name column")
+    unsorted = _element_holding(rendered, "th", "Unsorted head")
+    assert "uppercase" in unsorted
+    assert "uppercase" in sortable.split("<button", 1)[1]
 
 
 def test_sort_icon_states_are_mutually_exclusive(rendered: str) -> None:

@@ -4,7 +4,7 @@
      @open-product-modal.window="productModal = true"
      @open-component-modal.window="componentModal = true">
     {# New Product Modal #}
-    <c-modal id="newProductModal" show="productModal" title="New Product" icon="fas fa-cube">
+    <c-modal id="newProductModal" show="productModal" title="New product" icon="fas fa-cube">
     <form id="newProductForm"
           method="post"
           action="{% url 'core:products_dashboard' %}">
@@ -27,12 +27,12 @@
     <c-slot name="footer">
     <c-buttons.ghost @click="productModal = false">Cancel</c-buttons.ghost>
     <c-buttons.primary type="submit" form="newProductForm">
-    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Product
+    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create product
     </c-buttons.primary>
     </c-slot>
     </c-modal>
     {# New Component Modal #}
-    <c-modal id="newComponentModal" show="componentModal" title="New Component" icon="fas fa-puzzle-piece">
+    <c-modal id="newComponentModal" show="componentModal" title="New component" icon="fas fa-puzzle-piece">
     <form id="newComponentForm"
           method="post"
           action="{% url 'core:components_dashboard' %}">
@@ -66,7 +66,7 @@
     <c-slot name="footer">
     <c-buttons.ghost @click="componentModal = false">Cancel</c-buttons.ghost>
     <c-buttons.primary type="submit" form="newComponentForm">
-    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Component
+    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create component
     </c-buttons.primary>
     </c-slot>
     </c-modal>

@@ -316,6 +316,14 @@
    Smooth Theme Transitions
    Prevents CSS flash when switching themes
    ============================================ */
+/* Hold the scrollbar's space whether or not the page is long enough to need
+   one. Without it a short page (an empty component, the Account tab) is 15px
+   wider than a long one, and the sidebar, content column and top bar all jump
+   sideways on every navigation. */
+html {
+  scrollbar-gutter: stable;
+}
+
 html,
 body,
 .tw-card,
@@ -421,21 +429,69 @@ html.no-transitions * {
   background-color: var(--color-accent-orange);
 }
 
-/* Flatten a tw-card rendered inside an About-group collapsible row: the row is
-   the chrome, so the embedded card sheds its border and duplicate heading while
-   keeping its own action buttons. */
-.tw-embed .tw-card {
+/* Flatten the panel rendered inside an About-group collapsible row: the row is
+   already the chrome, so the panel sheds its frame and its duplicate heading
+   while keeping its own action controls.
+
+   Matched structurally rather than by class. This block used to target
+   `.tw-card` and an `h4`; the panels now render through c-cards.card and
+   c-tables.shell, which emit neither, so every selector missed and each row
+   drew a bordered card headed with the row's own title a second time. The two
+   panels do not share a wrapper class, but they do share a shape: one root
+   element, whose first child is the title band. */
+.tw-embed > * {
   border: 0;
   background: transparent;
   box-shadow: none;
 }
-.tw-embed .tw-card > div:first-child {
+
+.tw-embed > * > :first-child {
   border-bottom: 0;
   padding-top: 0;
   justify-content: flex-end;
 }
-.tw-embed .tw-card > div:first-child h4 {
+
+.tw-embed > * > :first-child :is(h2, h3, h4) {
   display: none;
+}
+
+/* A title band holding nothing but the duplicate title leaves an empty padded
+   strip once the heading goes, so it drops out whole. One that also carries a
+   control keeps its place, minus the heading. */
+.tw-embed > * > :first-child:not(:has(button, a, input, select)) {
+  display: none;
+}
+
+/* Native colour input. Left alone, the browser paints its own control chrome
+   over the fill (a grey handle bar above an inset swatch), which next to the
+   app's own controls reads as a broken image placeholder rather than a colour.
+   Stripped back so the control is nothing but the colour it holds, and it can
+   sit flush inside whatever tile the page gives it.
+
+   Keyed on the type attribute rather than a class so a colour field is right
+   wherever it appears; the selector outranks the form component's own
+   background and border utilities on specificity. */
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: inherit;
+}
+
+input[type="color"]::-moz-color-swatch {
+  border: 0;
+  border-radius: inherit;
 }
 
 /* High-severity orange — distinct from amber warnings (CVSS convention). */
@@ -1164,7 +1220,7 @@ html.no-transitions * {
 }
 
 /* Small-caps label sitting over a value — the documented "labels over data"
-   pattern (docs/design-system.md). */
+   pattern. */
 .tw-data-label {
   font-size: 0.75rem;
   font-weight: 600;

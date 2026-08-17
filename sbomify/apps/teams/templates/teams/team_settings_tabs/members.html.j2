@@ -35,7 +35,7 @@
                         </div>
                         <span class="text-xs text-text-muted flex items-center gap-1 mt-1">
                             <i class="fas fa-clock"></i>
-                            Expires {{ inv.expires_at|date:"M j, Y" }}
+                            Expires {{ inv.expires_at|date:"j M Y" }}
                         </span>
                     </div>
                     <div class="flex-shrink-0 flex items-center gap-2">
@@ -74,7 +74,7 @@
         <i class="fas fa-users" aria-hidden="true"></i>
         </c-chips.icon-chip>
         <div>
-            <h5 class="text-lg font-semibold text-text m-0">Workspace Members</h5>
+            <h5 class="text-lg font-semibold text-text m-0">Workspace members</h5>
             <p class="text-text-muted text-sm m-0">People with access to this workspace</p>
         </div>
     </div>
@@ -148,7 +148,7 @@
             <i class="fas fa-paper-plane" aria-hidden="true"></i>
             </c-chips.icon-chip>
             <div>
-                <h5 class="text-lg font-semibold text-text m-0">Pending Invitations</h5>
+                <h5 class="text-lg font-semibold text-text m-0">Pending invitations</h5>
                 <p class="text-text-muted text-sm m-0">Invitations awaiting acceptance</p>
             </div>
         </div>
@@ -158,7 +158,7 @@
             {% endif %}
             <c-buttons.primary size="sm" href="{% url 'teams:invite_user' team.key %}">
             <i class="fas fa-user-plus mr-2"></i>
-            Invite Member
+            Invite member
             </c-buttons.primary>
         </div>
     </div>
@@ -198,7 +198,7 @@
                                 </span>
                                 <span class="text-xs text-text-muted flex items-center gap-1">
                                     <i class="fas fa-hourglass-half"></i>
-                                    Expires {{ invitation.expires_at|date:"M j, Y" }}
+                                    Expires {{ invitation.expires_at|date:"j M Y" }}
                                 </span>
                             </div>
                         </div>

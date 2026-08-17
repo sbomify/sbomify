@@ -42,12 +42,13 @@
             <template x-for="advisory in paginatedData" :key="advisory.id">
                 <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)">
                 {% comment %}
-                    The severity, status and publication badges take their variant
-                    from the row Alpine builds, so they bind data-variant rather
-                    than pick a variant component.
+                    Status and publication take their variant from the row Alpine
+                    builds, so they bind data-variant rather than pick a variant
+                    component. Severity is not a variant: it binds data-level and
+                    c-badges.severity-dynamic owns the five CVSS recipes.
                 {% endcomment %}
                 <c-tables.cell>
-                <c-badges.dynamic ::data-variant="advisory.severity_variant" x-text="titleCase(advisory.severity)" />
+                <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
                 </c-tables.cell>
                 <c-tables.cell>
                 <div class="min-w-0">
@@ -82,6 +83,14 @@
                             <span x-text="product.name"></span>
                         </template>
                         </c-chips.neutral>
+                    </template>
+                    {% comment %}
+                        An advisory naming no product leaves the cell blank,
+                        which against ruled rows reads as a rendering failure
+                        rather than "none".
+                    {% endcomment %}
+                    <template x-if="!(advisory.products || []).length">
+                        <span class="text-text-muted text-sm">None</span>
                     </template>
                 </div>
                 </c-tables.cell>

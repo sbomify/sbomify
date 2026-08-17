@@ -14,30 +14,41 @@
     </div>
     </c-cards.header>
     </c-slot>
-    {# Danger Zone - Collapsible #}
-    <c-cards.collapsible level="danger" ::class="{ 'opacity-75': !isExpanded }">
-    <c-cards.collapsible-trigger state="isExpanded" @click="toggle()">
-    <i class="fas fa-exclamation-triangle text-danger"></i>
-    Danger Zone
-    </c-cards.collapsible-trigger>
-    <c-cards.collapsible-body state="isExpanded">
+    {% comment %}
+        The same dangerzone card the product, component, release and SBOM pages
+        use. It was a collapsible at level="danger", which paints the border red
+        but leaves the title and chevron in the neutral ink, so this Danger Zone
+        read as a milder thing than the identical control everywhere else.
+    {% endcomment %}
+    <c-cards.dangerzone flush>
+    <c-slot name="header">
+    <c-cards.dangerzone-header class="cursor-pointer select-none justify-between" role="button" tabindex="0" ::aria-expanded="isExpanded" @click="toggle()" @keydown.enter.prevent="toggle()" @keydown.space.prevent="toggle()">
+    <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
+        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>Danger Zone
+    </h4>
+    <i class="fas fa-chevron-down text-danger transition-transform duration-200"
+       :class="isExpanded ? 'rotate-180' : ''"
+       aria-hidden="true"></i>
+    </c-cards.dangerzone-header>
+    </c-slot>
+    <c-cards.dangerzone-body x-show="isExpanded" x-collapse>
     <div class="flex items-center gap-4">
         <div class="flex-1">
-            <h6 class="text-sm font-semibold text-text m-0">Delete Account</h6>
+            <h6 class="text-sm font-semibold text-text m-0">Delete account</h6>
             <p class="text-text-muted text-sm mt-1 m-0">
                 Your account will be deactivated immediately and permanently removed after 14 days.
             </p>
         </div>
         <c-buttons.danger class="flex-shrink-0" @click.prevent="openDeleteModal()" aria-label="Delete your account">
         <i class="fas fa-user-slash" aria-hidden="true"></i>
-        Delete Account
+        Delete account
         </c-buttons.danger>
     </div>
-    </c-cards.collapsible-body>
-    </c-cards.collapsible>
+    </c-cards.dangerzone-body>
+    </c-cards.dangerzone>
     </c-cards.dashboard>
     {# Delete Account Modal #}
-    <c-modal id="deleteAccountModal" show="showDeleteModal" title="Delete Your Account" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteAccountModalDesc">
+    <c-modal id="deleteAccountModal" show="showDeleteModal" title="Delete your account" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteAccountModalDesc">
     <p id="deleteAccountModalDesc" class="text-text-muted mb-4">
         Your account will be deactivated immediately and permanently deleted after <strong class="text-text">14 days</strong>.
     </p>
@@ -74,7 +85,7 @@
     <c-buttons.danger @click="deleteAccount()" ::disabled="!canConfirm || isDeleting">
     <span x-show="isDeleting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
     <i x-show="!isDeleting" class="fas fa-trash"></i>
-    <span x-text="isDeleting ? 'Deleting...' : 'Delete My Account'"></span>
+    <span x-text="isDeleting ? 'Deleting…' : 'Delete my account'"></span>
     </c-buttons.danger>
     </c-slot>
     </c-modal>

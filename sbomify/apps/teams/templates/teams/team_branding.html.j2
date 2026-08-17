@@ -25,7 +25,7 @@
     {% csrf_token %}
     {# Brand Colors Section #}
     <c-cards.inset class="mb-4">
-    <c-layout.section-header title="Brand Colors" subtitle="Define your primary brand colors for consistent visual identity" icon="fas fa-swatchbook" accent="neutral">
+    <c-layout.section-header title="Brand colors" subtitle="Define your primary brand colors for consistent visual identity" icon="fas fa-swatchbook" accent="neutral">
     <c-slot name="actions">
     <c-buttons.ghost size="sm" @click="setDefaultColors">
     <i class="fas fa-undo mr-1"></i>Reset
@@ -47,7 +47,7 @@
                        :value="localBrandingInfo.brand_color || ''">
             </div>
             <div class="flex-1 pt-1">
-                <label for="brand-color" class="text-sm font-semibold text-text block mb-2">Primary Brand Color</label>
+                <label for="brand-color" class="text-sm font-semibold text-text block mb-2">Primary brand color</label>
                 <c-code-inline class="inline-block mb-2" x-text="displayColor('brand_color')" />
                 <p class="text-text-muted text-xs m-0">Headers, navigation, primary elements</p>
             </div>
@@ -66,7 +66,7 @@
                        :value="localBrandingInfo.accent_color || ''">
             </div>
             <div class="flex-1 pt-1">
-                <label for="accent-color" class="text-sm font-semibold text-text block mb-2">Accent Color</label>
+                <label for="accent-color" class="text-sm font-semibold text-text block mb-2">Accent color</label>
                 <c-code-inline class="inline-block mb-2" x-text="displayColor('accent_color')" />
                 <p class="text-text-muted text-xs m-0">Buttons, links, highlights</p>
             </div>
@@ -77,7 +77,7 @@
     </c-cards.inset>
     {# Visual Assets Section #}
     <c-cards.inset class="mb-4" @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)" @file-removed.window="removeFile($event.detail.field)" @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
-    <c-layout.section-header title="Visual Assets" subtitle="Upload your brand assets for public content" icon="fas fa-images" accent="neutral" />
+    <c-layout.section-header title="Visual assets" subtitle="Upload your brand assets for public content" icon="fas fa-images" accent="neutral" />
     <c-layout.section-body class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div>
         <c-forms.label>Brand Icon</c-forms.label>

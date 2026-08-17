@@ -5,7 +5,10 @@ c-badges.danger over c-badges.success.
 
 The caller binds one data attribute and nothing else:
 
-    <c-badges.dynamic ::data-variant="advisory.severity_variant" x-text="titleCase(advisory.severity)" />
+    <c-badges.dynamic ::data-variant="advisory.status_variant" x-text="advisory.status_label" />
+
+Not for severity. A CVSS band is not a semantic variant, and projecting it to
+one shifts every band: reach for c-badges.severity-dynamic and bind data-level.
 
 Every recipe still lives here, keyed by data-variant, the same technique the
 sortable table header uses for its carets. An unknown or missing variant falls

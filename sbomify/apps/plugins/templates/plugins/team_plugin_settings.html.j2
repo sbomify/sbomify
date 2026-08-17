@@ -9,7 +9,7 @@
             <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
             </c-chips.icon-chip>
             <div>
-                <h5 class="text-lg font-semibold text-text m-0">Assessment Plugins</h5>
+                <h5 class="text-lg font-semibold text-text m-0">Assessment plugins</h5>
                 <p class="text-text-muted text-sm m-0">Configure which assessment plugins run on your SBOMs</p>
             </div>
         </div>
@@ -104,8 +104,13 @@
                                     </div>
                                 {% endif %}
                             </div>
+                            {% comment %}
+                                On or off for the whole plugin, applied on the
+                                spot, so it reads as a switch rather than a
+                                checkbox stranded at the far edge of the row.
+                            {% endcomment %}
                             <div class="flex-shrink-0">
-                                <c-forms.checkbox-input name="enabled_plugins" value="{{ plugin.name }}" id="plugin-{{ plugin.name }}" x-ref="toggle" x-model="enabled" :disabled="plugin.requires_upgrade" />
+                                <c-forms.toggle name="enabled_plugins" value="{{ plugin.name }}" id="plugin-{{ plugin.name }}" aria-label="Enable {{ plugin.display_name|default:plugin.name }}" x-ref="toggle" x-model="enabled" :disabled="plugin.requires_upgrade" />
                             </div>
                             </c-layout.select-row>
                         {% endfor %}
@@ -137,7 +142,7 @@
             <i class="fas fa-info-circle text-info"></i>
         </div>
         <div>
-            <h5 class="text-lg font-semibold text-text m-0">About Assessment Plugins</h5>
+            <h5 class="text-lg font-semibold text-text m-0">About assessment plugins</h5>
             <p class="text-text-muted text-sm m-0">Learn how plugins work with your SBOMs</p>
         </div>
     </div>

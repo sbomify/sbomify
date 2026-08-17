@@ -10,8 +10,10 @@ puts it into the panel's flex column, so the body still scrolls and the footer
 stays pinned under the 90vh cap.
 
 Size is one conditional segment on the panel, so two max-widths never land on
-it. The backdrop is a click catcher with no tint of its own, as it has always
-been.
+it. The backdrop is the click catcher, and it carries a light wash of the page
+background: enough to sit the dialog above the page rather than in it, not
+enough to black the content out. It is mixed from --color-background so it
+reads the same way in both themes.
 
 role is a prop rather than a passthrough attribute because the element already
 carries one: a second role in attrs would be a duplicate attribute the browser
@@ -52,7 +54,7 @@ cannot drift apart.
          x-transition:leave="transition ease-in duration-150"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-[101]"
+         class="fixed inset-0 z-[101] bg-[color-mix(in_oklab,var(--color-background)_45%,transparent)]"
          @click="{{ dismiss }}"></div>
     <div class="fixed inset-0 z-[101] flex items-center justify-center p-4"
          x-show="{{ show }}"

@@ -13,8 +13,9 @@
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-text mb-2">sbomify Design System</h1>
         <p class="text-text-muted">
-            Every shared component, rendered through its own tag — dev-only. The written contract
-            (rules, tokens, inventory, recipes) lives in <code class="tw-code-inline">docs/design-system.md</code>.
+            Every shared component, rendered through its own tag. Dev-only. Each component's own file in
+            <code class="tw-code-inline">sbomify/templates/components/</code> is its parameter contract; the
+            rules live in <code class="tw-code-inline">AGENTS.md</code>.
         </p>
     </div>
     {# ── Index ─────────────────────────────────────────────────────────────── #}
@@ -40,7 +41,7 @@
     <c-cards.card class="mb-8">
     <p class="text-sm text-text-muted mb-4">
         Every colour in the app resolves to one of these. Swatches read the custom property directly,
-        so this grid is the tokens — not a copy of them.
+        so this grid is the tokens, not a copy of them.
     </p>
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {% for token in demo_tokens %}
@@ -55,19 +56,19 @@
     <h2 id="typography" class="text-xl font-semibold text-text mb-4">Typography</h2>
     <c-cards.card class="mb-8">
     <div class="space-y-3">
-        <h1 class="text-3xl font-bold text-text m-0">Heading 1 — Figtree Bold</h1>
-        <h2 class="text-2xl font-semibold text-text m-0">Heading 2 — Figtree Semibold</h2>
-        <h3 class="text-lg font-semibold text-text m-0">Heading 3 — Figtree Semibold</h3>
-        <p class="text-text m-0">Body — the default paragraph size, used for everything that is read rather than scanned.</p>
-        <p class="text-sm text-text-muted m-0">Muted small — secondary detail, hints and timestamps.</p>
-        <p class="tw-data-label m-0">Data label — small caps over a value</p>
-        <p class="font-mono text-sm text-text m-0">Mono — identifiers, tokens and code (tabular where numeric).</p>
+        <h1 class="text-3xl font-bold text-text m-0">Heading 1, Figtree Bold</h1>
+        <h2 class="text-2xl font-semibold text-text m-0">Heading 2, Figtree Semibold</h2>
+        <h3 class="text-lg font-semibold text-text m-0">Heading 3, Figtree Semibold</h3>
+        <p class="text-text m-0">Body: the default paragraph size, used for everything that is read rather than scanned.</p>
+        <p class="text-sm text-text-muted m-0">Muted small: secondary detail, hints and timestamps.</p>
+        <p class="tw-data-label m-0">Data label, small caps over a value</p>
+        <p class="font-mono text-sm text-text m-0">Mono: identifiers, tokens and code (tabular where numeric).</p>
     </div>
     </c-cards.card>
     <h2 id="icon-chips" class="text-xl font-semibold text-text mb-4">Icon chips</h2>
     <c-cards.card class="mb-8">
     <p class="text-sm text-text-muted mb-4">
-        The accent carrier of the design language — a flat 12% tint with the accent as foreground.
+        The accent carrier of the design language: a flat 12% tint with the accent as foreground.
         Every "icon beside a heading" is one of these. Never a gradient chip, never a coloured side-border.
     </p>
     <p class="tw-data-label mb-2">Sizes</p>
@@ -99,7 +100,7 @@
     <h2 id="metric-chips" class="text-xl font-semibold text-text mb-4">Metric chips</h2>
     <c-cards.card class="mb-8">
     <p class="text-sm text-text-muted mb-4">
-        The stats strip that sits under a page header — a bordered surface pill holding an icon,
+        The stats strip that sits under a page header: a bordered surface pill holding an icon,
         a muted label and a value.
     </p>
     <div class="flex flex-wrap gap-2">
@@ -311,7 +312,7 @@
     message and the border it goes with are written where each is read.
     {% endcomment %}
     <p class="text-sm text-text-muted mb-4">
-        Every input in the app comes from here — including email, password and number, which are the
+        Every input in the app comes from here, including email, password and number, which are the
         text input with a <code class="tw-code-inline">type</code>.
     </p>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -335,6 +336,15 @@
         </c-forms.field>
         <c-forms.field label="Disabled" for="ds-disabled">
         <c-forms.input name="ds-disabled" value="Read only" disabled />
+        </c-forms.field>
+        {% comment %}
+            Colour is the one type the browser draws itself. Left alone it paints
+            a handle bar over an inset swatch, which reads as a broken image
+            beside the controls above, so the stylesheet strips it back to the
+            bare fill and it takes the radius of whatever tile holds it.
+        {% endcomment %}
+        <c-forms.field label="Colour" for="ds-color" hint="Sized by its container, not by the browser.">
+        <c-forms.input name="ds-color" type="color" value="#7C8CFF" class="h-11 rounded-lg overflow-hidden" />
         </c-forms.field>
         <c-forms.field label="Select" for="ds-select" hint="Pick an artifact type.">
         <c-forms.select name="ds-select" :options="demo_select_options" selected="document" />
@@ -454,7 +464,7 @@
     <h2 id="date-picker" class="text-xl font-semibold text-text mb-4">Date picker</h2>
     <c-cards.card class="mb-8">
     {% comment %}
-    value_binding is required — it names the Alpine property the picker reads and
+    value_binding is required: it names the Alpine property the picker reads and
     writes, so it must resolve in an enclosing scope.
     {% endcomment %}
     <div class="max-w-xs" x-data="{ dsReleaseDate: '' }">
@@ -464,7 +474,7 @@
     {# ── Containers ────────────────────────────────────────────────────────── #}
     <h2 id="cards" class="text-xl font-semibold text-text mb-4">Cards</h2>
     <p class="text-sm text-text-muted mb-4">
-        Containers sit still — no hover lift, no shadow swap. Cards compose: a card holds library components,
+        Containers sit still: no hover lift, no shadow swap. Cards compose: a card holds library components,
         it does not hold bespoke markup.
     </p>
     {% comment %}
@@ -722,7 +732,7 @@
         A dialog whose open state is the row it acts on passes
         <code class="tw-code-inline">close</code>, because
         <code class="tw-code-inline">removeTarget !== null = false</code> is not a statement; escape, the
-        backdrop and the close button all run it. The app-wide confirm dialog is already in the base template —
+        backdrop and the close button all run it. The app-wide confirm dialog is already in the base template,
         dispatch <code class="tw-code-inline">confirm:show</code> rather than building another modal.
     </p>
     </c-cards.card>
@@ -1365,7 +1375,7 @@
     <c-cards.card class="mb-8">
     <p class="text-sm text-text-muted mb-4">
         Row and header actions. Unlike <code class="tw-code-inline">dropdown</code>, the items are block content
-        rather than a list, so a menu can mix links with HTMX and Alpine actions — and the menu is teleported out
+        rather than a list, so a menu can mix links with HTMX and Alpine actions, and the menu is teleported out
         to the body, so one opened from the last row of a scrolling table is neither clipped nor off screen.
     </p>
     {% comment %}
@@ -1490,7 +1500,7 @@
         <p class="tw-data-label mt-6 mb-2">Inline copy</p>
         <p class="text-sm text-text-muted mb-3">
             An identifier you click to copy. It confirms in place with its own
-            <code class="tw-code-inline">copied</code> state — no toast, because these sit in page headers
+            <code class="tw-code-inline">copied</code> state, with no toast, because these sit in page headers
             and identifier tables where one toast per click is far too loud.
         </p>
         <div class="flex flex-wrap items-center gap-2">
@@ -1508,7 +1518,7 @@
     <c-cards.card class="mb-8">
     <p class="text-sm text-text-muted mb-4">
         Tooltips come from the <code class="tw-code-inline">x-tooltip</code> Alpine directive, which
-        positions a single shared element — CSS-hover tooltips cannot follow the trigger.
+        positions a single shared element. CSS-hover tooltips cannot follow the trigger.
     </p>
     <div class="flex flex-wrap gap-3">
         <c-buttons.secondary x-tooltip="'Scanned 3 hours ago'">Hover me</c-buttons.secondary>

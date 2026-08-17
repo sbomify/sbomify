@@ -2,7 +2,7 @@
 
 Each tag renders the matching template under ``components/tw/``, so a macro file
 stays the only place a component's markup lives; these tags just make it callable
-and composable. ``docs/design-system.md`` is the contract; ``/design-system/`` is
+and composable. The Frontend (UI) section of AGENTS.md is the contract; ``/design-system/`` is
 the live gallery.
 
 Containers are block tags, so a card genuinely contains library components::

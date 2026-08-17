@@ -83,7 +83,7 @@
             {# The label keeps its own bottom margin, so the row only adds the rest. #}
             <div class="flex items-center justify-between gap-4 mb-1">
                 <c-forms.label for="support-contact">
-                <i class="fas fa-address-book text-primary mr-1.5"></i>Select from Contact Profiles
+                <i class="fas fa-address-book text-primary mr-1.5"></i>Select from contact profiles
                 </c-forms.label>
                 <a href="{% if current_team and current_team.key %}{% url 'teams:team_settings' team_key=current_team.key %}#contact-profiles{% else %}#{% endif %}"
                    class="text-xs text-primary hover:underline flex-shrink-0">

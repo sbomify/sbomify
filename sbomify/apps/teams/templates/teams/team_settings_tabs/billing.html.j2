@@ -62,9 +62,9 @@
             <div class="flex items-center gap-2 mt-3 text-sm text-text-muted">
                 <i class="fas fa-calendar-alt"></i>
                 {% if team.billing_plan_limits.cancel_at_period_end %}
-                    <span>Plan ends on <strong class="text-warning">{{ plan_pricing.next_billing_date|date:"M d, Y" }}</strong></span>
+                    <span>Plan ends on <strong class="text-warning">{{ plan_pricing.next_billing_date|date:"j M Y" }}</strong></span>
                 {% else %}
-                    <span>Next billing: <strong>{{ plan_pricing.next_billing_date|date:"M d, Y" }}</strong></span>
+                    <span>Next billing: <strong>{{ plan_pricing.next_billing_date|date:"j M Y" }}</strong></span>
                 {% endif %}
             </div>
         {% endif %}

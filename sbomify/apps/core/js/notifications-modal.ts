@@ -121,7 +121,10 @@ function renderNotification(notification: Notification): string {
   }
 
   return `
-    <div class="px-4 py-4 ${colors.bg} border-l-4 ${colors.accent} transition-all duration-200" data-notification-id="${escapeHtml(notification.id)}">
+    <!-- No coloured side border: the design language keeps accent in the icon
+         chip, which this row already has, so the rail was a second, louder copy
+         of the same signal. -->
+    <div class="px-4 py-4 ${colors.bg} transition-all duration-200" data-notification-id="${escapeHtml(notification.id)}">
       <div class="flex items-start gap-3">
         <div class="w-10 h-10 rounded-xl ${colors.iconBg} flex items-center justify-center flex-shrink-0 shadow-sm">
           <i class="${icon} ${colors.icon} text-base"></i>

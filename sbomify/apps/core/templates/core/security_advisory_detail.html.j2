@@ -190,7 +190,7 @@
                         <div class="flex items-center justify-between gap-3">
                             <dt class="text-text-muted">Severity</dt>
                             <dd>
-                                <c-badges.dynamic variant="{{ advisory.severity_variant }}">{{ advisory.severity|title }}</c-badges.dynamic>
+                                <c-badges.severity level="{{ advisory.severity }}">{{ advisory.severity|default:"none" }}</c-badges.severity>
                             </dd>
                         </div>
                         <div class="flex items-center justify-between gap-3">

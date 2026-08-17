@@ -81,7 +81,7 @@
             {% if release.has_crud_permissions and not release.is_latest %}
                 {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.released_at|default_if_none:release.created_at|date:'Y-m-d\\TH:i' field_name='released_at' field_type='datetime' display_value=release.released_at|default_if_none:release.created_at|date:'M d, Y' %}
             {% else %}
-                {{ release.released_at|default_if_none:release.created_at|date:"M d, Y" }}
+                {{ release.released_at|default_if_none:release.created_at|date:"j M Y" }}
             {% endif %}
             </c-chips.metric.value>
             </c-chips.metric-chip>
@@ -92,7 +92,7 @@
             {% if release.has_crud_permissions and not release.is_latest %}
                 {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.created_at|date:'Y-m-d\\TH:i' field_name='created_at' field_type='datetime' display_value=release.created_at|date:'M d, Y' %}
             {% else %}
-                {{ release.created_at|date:"M d, Y" }}
+                {{ release.created_at|date:"j M Y" }}
             {% endif %}
             </c-chips.metric.value>
             </c-chips.metric-chip>

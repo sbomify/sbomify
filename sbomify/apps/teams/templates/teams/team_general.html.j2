@@ -9,7 +9,7 @@
     <i class="fas fa-sliders-h" aria-hidden="true"></i>
     </c-chips.icon-chip>
     <div>
-        <h5 class="text-lg font-semibold text-text m-0">General Settings</h5>
+        <h5 class="text-lg font-semibold text-text m-0">General settings</h5>
         <p class="text-text-muted text-sm m-0">Manage your workspace's basic information</p>
     </div>
 </div>
@@ -23,7 +23,7 @@
     {% csrf_token %}
     {# Workspace Name Section #}
     <div class="mb-6">
-        <c-layout.section-header title="Workspace Name" subtitle="The name displayed across the platform for this workspace" icon="fas fa-building" accent="neutral" />
+        <c-layout.section-header title="Workspace name" subtitle="The name displayed across the platform for this workspace" icon="fas fa-building" accent="neutral" />
         <c-layout.section-body class="max-w-md">
         <c-forms.label for="workspace-name">Name</c-forms.label>
         <c-forms.input id="workspace-name" name="name" placeholder="Enter workspace name" maxlength="255" required x-model="localName" />
@@ -32,7 +32,7 @@
     </div>
     {# SBOM Freshness Section #}
     <div class="mb-6 pt-6 border-t border-border">
-        <c-layout.section-header title="SBOM Freshness" subtitle="How long an SBOM stays current before its component is flagged stale" icon="fas fa-hourglass-half" accent="neutral" />
+        <c-layout.section-header title="SBOM freshness" subtitle="How long an SBOM stays current before its component is flagged stale" icon="fas fa-hourglass-half" accent="neutral" />
         <c-layout.section-body class="max-w-md">
         <c-forms.label for="sbom-freshness-days">Freshness window</c-forms.label>
         <div class="flex items-center gap-2">
