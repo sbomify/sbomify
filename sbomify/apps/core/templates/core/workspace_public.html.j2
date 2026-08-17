@@ -43,69 +43,69 @@
 {% block content %}
     {# Sections take their rhythm from the column, not from a margin each. #}
     <div class="flex flex-col gap-14">
-    {# ---- Security advisories -------------------------------------------- #}
-    <section class="scroll-mt-[4.5rem]" id="advisories">
-        <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is." class="mb-4">
-        {% if advisories.total %}
-            <c-slot name="action">
-            <c-branded.buttons.secondary size="sm" href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">All advisories</c-branded.buttons.secondary>
-            </c-slot>
-        {% endif %}
-        </c-branded.section-header>
-        {% if advisories.recent %}
-            <c-branded.surface flush>
+        {# ---- Security advisories -------------------------------------------- #}
+        <section class="scroll-mt-[4.5rem]" id="advisories">
+            <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is." class="mb-4">
+            {% if advisories.total %}
+                <c-slot name="action">
+                <c-branded.buttons.secondary size="sm" href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">All advisories</c-branded.buttons.secondary>
+                </c-slot>
+            {% endif %}
+            </c-branded.section-header>
+            {% if advisories.recent %}
+                <c-branded.surface flush>
                 {% for advisory in advisories.recent %}
                     {% include "core/components/trust_center/advisory_row.html.j2" with advisory=advisory %}
                 {% endfor %}
-            </c-branded.surface>
-        {% else %}
-<c-feedback.empty-state icon="fas fa-shield-halved" icon_variant="neutral" title="No published advisories">
-            {% if advisories.hidden_count %}
-                No security advisories are visible to you. New disclosures appear here as they are released.
+                </c-branded.surface>
             {% else %}
-                We have not published any security advisories. New disclosures appear here as they are released.
+                <c-feedback.empty-state icon="fas fa-shield-halved" icon_variant="neutral" title="No published advisories">
+                {% if advisories.hidden_count %}
+                    No security advisories are visible to you. New disclosures appear here as they are released.
+                {% else %}
+                    We have not published any security advisories. New disclosures appear here as they are released.
+                {% endif %}
+                </c-feedback.empty-state>
             {% endif %}
-            </c-feedback.empty-state>
-        {% endif %}
-        {% include "core/components/trust_center/restricted_notice.html.j2" with hidden_count=advisories.hidden_count viewer_is_authenticated=advisories.viewer_is_authenticated viewer_has_gated_grant=advisories.viewer_has_gated_grant %}
-    </section>
-    {# ---- Products -------------------------------------------------------- #}
-    {% comment %}
+            {% include "core/components/trust_center/restricted_notice.html.j2" with hidden_count=advisories.hidden_count viewer_is_authenticated=advisories.viewer_is_authenticated viewer_has_gated_grant=advisories.viewer_has_gated_grant %}
+        </section>
+        {# ---- Products -------------------------------------------------------- #}
+        {% comment %}
     A searchable table rather than a card grid: a visitor with dozens of
     products is looking one up by name, not browsing. Filtering is client-side
     Alpine over the server-rendered rows — every product is already on the
     page, so hiding rows keeps the assessment badges server-rendered and the
     table intact without JavaScript.
-    {% endcomment %}
-    <section class="scroll-mt-[4.5rem]"
-             id="products"
-             x-data="{ q: '', currentPage: 1, perPage: 10, rows: [], init() { this.rows = Array.from(this.$root.querySelectorAll('tr[data-search]')).map(r => r.dataset.search); this.$watch('q', () => this.currentPage = 1) }, get needle() { return this.q.trim().toLowerCase() }, get matched() { const n = this.needle; return this.rows.reduce((acc, s, i) => { if (!n || s.includes(n)) acc.push(i); return acc; }, []) }, get totalPages() { return Math.max(1, Math.ceil(this.matched.length / this.perPage)) }, get pageIdx() { const start = (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage; return this.matched.slice(start, start + this.perPage) }, show(i) { return this.pageIdx.includes(i) }, get startIndex() { return this.matched.length ? (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage + 1 : 0 }, get endIndex() { return Math.min(Math.min(this.currentPage, this.totalPages) * this.perPage, this.matched.length) } }">
-        <c-branded.section-header title="Products" subtitle="Our products and their software bills of materials." class="mb-4">
-        {% if products %}
-            <c-slot name="action">
-            {# The search landmark stays on the wrapper; the component is the box inside it. #}
-            <div role="search">
-                <c-tables.search id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
-            </div>
-            </c-slot>
-        {% endif %}
-        </c-branded.section-header>
-        {% if is_workspace_admin and not has_vulnerability_plugin %}
-            <c-feedback.alert icon="fas fa-shield-halved" class="mb-4">
-            Enable vulnerability scanning to show security status on your products.
-            {% comment %}
+        {% endcomment %}
+        <section class="scroll-mt-[4.5rem]"
+                 id="products"
+                 x-data="{ q: '', currentPage: 1, perPage: 10, rows: [], init() { this.rows = Array.from(this.$root.querySelectorAll('tr[data-search]')).map(r => r.dataset.search); this.$watch('q', () => this.currentPage = 1) }, get needle() { return this.q.trim().toLowerCase() }, get matched() { const n = this.needle; return this.rows.reduce((acc, s, i) => { if (!n || s.includes(n)) acc.push(i); return acc; }, []) }, get totalPages() { return Math.max(1, Math.ceil(this.matched.length / this.perPage)) }, get pageIdx() { const start = (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage; return this.matched.slice(start, start + this.perPage) }, show(i) { return this.pageIdx.includes(i) }, get startIndex() { return this.matched.length ? (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage + 1 : 0 }, get endIndex() { return Math.min(Math.min(this.currentPage, this.totalPages) * this.perPage, this.matched.length) } }">
+            <c-branded.section-header title="Products" subtitle="Our products and their software bills of materials." class="mb-4">
+            {% if products %}
+                <c-slot name="action">
+                {# The search landmark stays on the wrapper; the component is the box inside it. #}
+                <div role="search">
+                    <c-tables.search id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
+                </div>
+                </c-slot>
+            {% endif %}
+            </c-branded.section-header>
+            {% if is_workspace_admin and not has_vulnerability_plugin %}
+                <c-feedback.alert icon="fas fa-shield-halved" class="mb-4">
+                Enable vulnerability scanning to show security status on your products.
+                {% comment %}
                 Through switch_team: this page is reachable for any workspace the
                 viewer administers, while the Plugins page is scoped to the session's
                 current workspace. Linking straight to it could offer to enable
                 scanning on whichever workspace happened to be selected.
-            {% endcomment %}
-            <a href="{% url 'teams:switch_team' workspace.key %}?next={% url 'plugins:plugins_page' %}"
-               class="font-medium">Plugins</a>
-            </c-feedback.alert>
-        {% endif %}
-        {% if products %}
-            {# The panel already draws the frame, so the table brings only its own parts. #}
-            <c-branded.surface flush>
+                {% endcomment %}
+                <a href="{% url 'teams:switch_team' workspace.key %}?next={% url 'plugins:plugins_page' %}"
+                   class="font-medium">Plugins</a>
+                </c-feedback.alert>
+            {% endif %}
+            {% if products %}
+                {# The panel already draws the frame, so the table brings only its own parts. #}
+                <c-branded.surface flush>
                 <c-tables.table>
                 <c-tables.head>
                 <c-tables.header-cell scope="col">Product</c-tables.header-cell>
@@ -173,41 +173,41 @@
                     </c-tables.info>
                     <c-tables.pager />
                 </div>
-            </c-branded.surface>
-        {% else %}
-<c-feedback.empty-state icon="fas fa-cube" icon_variant="neutral" title="No public products">
-            Products appear here once they are published with at least one public component.
-            </c-feedback.empty-state>
-        {% endif %}
-    </section>
-    {# ---- Compliance artifacts -------------------------------------------- #}
-    <section class="scroll-mt-[4.5rem]" id="compliance">
-        <c-branded.section-header title="Compliance artifacts" subtitle="Organization-wide certifications, attestations and policy documents." class="mb-4" />
-        {% if global_components %}
-            {% comment %}
+                </c-branded.surface>
+            {% else %}
+                <c-feedback.empty-state icon="fas fa-cube" icon_variant="neutral" title="No public products">
+                Products appear here once they are published with at least one public component.
+                </c-feedback.empty-state>
+            {% endif %}
+        </section>
+        {# ---- Compliance artifacts -------------------------------------------- #}
+        <section class="scroll-mt-[4.5rem]" id="compliance">
+            <c-branded.section-header title="Compliance artifacts" subtitle="Organization-wide certifications, attestations and policy documents." class="mb-4" />
+            {% if global_components %}
+                {% comment %}
                 A card here is a panel holding one record, so it is a surface
                 and a row rather than a third shape with its own rules. The row
                 already stretches its link across the whole card.
-            {% endcomment %}
-            <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))]">
-                {% for component in global_components %}
-                    <c-branded.surface flush>
-                    <c-branded.list-row href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
-                    <c-slot name="heading">{{ component.name }}</c-slot>
-                    <c-slot name="summary">Organization-level artifact, applicable across everything we ship.</c-slot>
-                    <c-slot name="side">
-                    <c-branded.badge>{{ component.component_type_display }}</c-branded.badge>
-                    </c-slot>
-                    </c-branded.list-row>
-                    </c-branded.surface>
-                {% endfor %}
-            </div>
-        {% else %}
-<c-feedback.empty-state icon="fas fa-award" icon_variant="neutral" title="No compliance artifacts">
-            Organization-wide certifications and attestations appear here once published.
-            </c-feedback.empty-state>
-        {% endif %}
-    </section>
+                {% endcomment %}
+                <div class="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(18rem,1fr))]">
+                    {% for component in global_components %}
+                        <c-branded.surface flush>
+                        <c-branded.list-row href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
+                        <c-slot name="heading">{{ component.name }}</c-slot>
+                        <c-slot name="summary">Organization-level artifact, applicable across everything we ship.</c-slot>
+                        <c-slot name="side">
+                        <c-branded.badge>{{ component.component_type_display }}</c-branded.badge>
+                        </c-slot>
+                        </c-branded.list-row>
+                        </c-branded.surface>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <c-feedback.empty-state icon="fas fa-award" icon_variant="neutral" title="No compliance artifacts">
+                Organization-wide certifications and attestations appear here once published.
+                </c-feedback.empty-state>
+            {% endif %}
+        </section>
     </div>
 {% endblock %}
 {% block scripts %}
