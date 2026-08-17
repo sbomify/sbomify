@@ -1,33 +1,37 @@
 ---
 name: design-system
-description: MUST be used for any user-facing UI work in this repo — creating or editing pages, Jinja templates (.html.j2), styles in tailwind.src.css, tw-* classes, component macros, buttons, cards, forms, modals, toasts, tables, colors, dark mode. Loads the sbomify design-system contract so UI is built from the shared component library instead of hand-rolled markup or hardcoded styles.
+description: MUST be used for any user-facing UI work in this repo - creating or editing pages, Jinja templates (.html.j2), components in sbomify/templates/components/, tokens in tailwind.src.css, buttons, cards, forms, modals, tables, badges, colors, dark mode. Points at the live component library so UI is composed from it rather than hand-rolled.
 ---
 
-# sbomify design system
+# sbomify UI
 
-This repo has a shared component library and design language. UI work consumes it — it is not optional.
+The rules live in one place: the **Frontend (UI)** section of `AGENTS.md`,
+which is already in context. Read it, then use the two live references below.
+There is no separate design-system document.
 
 ## Before writing any UI
 
-1. Read `docs/design-system.md` (the contract: rules, tokens, component inventory, recipes).
-2. Find the component you need in the inventory or the living gallery at `/design-system/` (DEBUG-only). The macro files in `sbomify/apps/core/templates/components/tw/` are the parameter contracts.
+1. **Browse `/design-system/`** (DEBUG-only, URL name `core:design_system`).
+   Every component, rendered, with its variants. Find the one you need.
+2. **Read that component's file** in `sbomify/templates/components/`. Its
+   opening comment is the parameter contract and explains why it is built the
+   way it is. `buttons/` is the precedent to copy when building a new set.
 
-## The decision tree for any UI need
+## The decision
 
-1. **Exists** → use it as-is.
-2. **Variant of an existing family** → add a modifier class setting the family's custom properties (`--btn-accent` etc.). Never fork base rules.
-3. **Genuinely new** → create it IN THE LIBRARY (CSS in `tailwind.src.css` under a `Component Classes -` banner with `tw-<component>-*` naming, macro in `components/tw/` with the standard param names), then consume it from your feature. Never define a component inside an app template or app CSS — even for a single caller. Follow "Creating a new component" in `docs/design-system.md`.
-4. **Found a shareable one-off in an app** → promote it into the library and replace the original.
+- **It exists** → use it.
+- **It is a variant** (new colour, emphasis) → new file nesting the base,
+  passing `variant_class`. Never restate the base markup.
+- **It is a modifier** (size, state, density) → a prop, not a file.
+- **It is genuinely new** → build it in `sbomify/templates/components/`, then
+  consume it. Never define component-like markup in an app template, even for
+  one caller.
 
-## Non-negotiables
-
-- Use existing components (Jinja includes or `tw-*` class families). Never hand-roll a button, card, form control, badge, toast, or table.
-- State styling goes on real interactive elements (`:checked`, `:disabled`, `:focus-visible` on the input itself), never on decorative siblings.
-- Colors, shadows, and radii come from the CSS custom-property tokens in `sbomify/assets/css/tailwind.src.css` (`:root` = dark, `:root.light` = light). Never hardcode hex/rgb values.
-- New variants parameterize (`--btn-accent`, `--toast-accent`, `--alert-accent`, `--stat-accent`, `--progress-accent`) — they never duplicate base rules.
-- Containers sit still: no hover lift or ambient animation. Text on tinted backgrounds mixes toward `--color-text` (see the contrast recipe in the doc).
-- Anything added to the library ships with a gallery demo in `core/design_system.html.j2` and an inventory row in `docs/design-system.md`, in the same change.
+Anything added ships with a demo in `core/design_system.html.j2` in the same
+change.
 
 ## After changing UI
 
-Run `bun run build`, `uv run djlint <templates> --lint`, and check the gallery in both themes when the library itself changed.
+`bun run build`, then `uv run djlint <templates> --extension=j2 --lint`, and
+look at the page in the browser in both themes. If it has an e2e snapshot,
+expect the baseline to move only when you meant it to.

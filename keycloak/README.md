@@ -82,7 +82,7 @@ life before it was noticed.
 The class vocabulary is this theme's own (`form-card`, `btn-submit`,
 `form-control`) rather than the app's `tw-*` names, because most of it has to
 match class names Keycloak itself emits. The design language is shared, though,
-and comes from `docs/design-system.md`:
+and comes from the Frontend (UI) section of `AGENTS.md`:
 
 - Containers sit still. No hover lift, no ambient animation. Entrances are
   one-shot and motion respects `prefers-reduced-motion`.
@@ -103,7 +103,7 @@ silently disabled the error border everywhere.
 
 ## Copy
 
-Follows `docs/design-system.md`: sentence case, short sentences, plain words,
+Follows the copy rules in `AGENTS.md`: sentence case, short sentences, plain words,
 no em or en dashes, and a button says the action it performs ("Send reset link",
 not "Submit"). Overrides live in `login/messages/messages_en.properties`.
 

@@ -207,26 +207,22 @@ htmx_error_response(message, triggers=None, content=None)    # error toast + HX-
 htmx_error_from_exception(error: DomainError)                # converts DomainError via content=error.to_dict()
 ```
 
-### Frontend Architecture (ADR-005)
+### Frontend (UI)
 
-| Layer     | Technology                           | Responsibility                                   |
-| --------- | ------------------------------------ | ------------------------------------------------ |
-| Structure | Components (`sbomify/templates/components/`) | The HTML every page composes         |
-| Styling   | Tailwind utilities, inside components | Visual presentation                             |
-| State     | Alpine.js                            | Component state, client-side interactivity       |
-| Updates   | HTMX                                 | Partial page updates, form submissions           |
+| Layer     | Technology                                   | Responsibility                             |
+| --------- | -------------------------------------------- | ------------------------------------------ |
+| Structure | Components (`sbomify/templates/components/`) | The HTML every page composes               |
+| Styling   | Tailwind utilities, inside components        | Visual presentation                        |
+| State     | Alpine.js                                    | Component state, client-side interactivity |
+| Updates   | HTMX                                         | Partial page updates, form submissions     |
 
-**UI is composed from the component library. This is not optional.**
-`docs/component-library.md` is the contract: read it before writing or
-changing any page, and read the components you are about to use, since the
-file is the parameter contract. `docs/design-system.md` remains the design
-language behind them (tokens, motion, copy rules). The living gallery at
-`/design-system/` (DEBUG-only, URL name `core:design_system`) renders every
-component; it is built from the components themselves, so a broken component
-breaks the gallery first.
+**Pages compose components. They do not style.** A page may use layout
+utilities (grid, flex, spacing) and nothing else. The moment you write a
+styled control, a repeated visual pattern, or anything wanting its own class,
+it belongs in `sbomify/templates/components/`.
 
 ```html
-{# No load tag: <c-dir.name> works in any template #}
+{# No load tag needed: <c-dir.name> works in any template #}
 <c-tables.shell>
   <c-tables.toolbar>
     <c-tables.search id="things-search" label="Search things" x-model="search" />
@@ -237,24 +233,60 @@ breaks the gallery first.
 <c-buttons.primary size="sm" hx-get="{% url 'core:new_thing' %}">New thing</c-buttons.primary>
 ```
 
-Key patterns:
+**Two references, both live, neither prose.** Browse `/design-system/`
+(DEBUG-only, URL name `core:design_system`) to see every component rendered
+with its variants. Read the component's own file for its parameters: each one
+opens with a comment explaining what it is for and why it is built that way.
+The gallery is built from the components, so a broken component breaks the
+gallery first.
 
-- **Never hand-roll a control, container or status chip.** If the library
-  lacks it, add it there (with a gallery demo and a render test), never on the
-  page. Layout, page copy and genuinely unique widgets stay page-local.
-- **Never write a `tw-*` class in new work.** Those classes still exist and
-  still work for the pages not yet migrated, but they are the old layer; do
-  not delete them and do not add callers.
-- **Migrating an existing page**: follow "Building a page from the library" in
-  `docs/component-library.md`. Protect the page with an e2e snapshot test
-  first if it has none, then change structure only, so the baselines can prove
-  the render did not move.
-- **Server data to Alpine.js**: Use `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')` — never client-side fetch
-- **HTMX partials**: Views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
-- **Dark mode**: `.dark` class on `<html>` element (not `[data-bs-theme]`)
+Adding to the library: a variant is a new file nesting the base and passing
+`variant_class`; a modifier (size, state, density) is a prop. Ship it with a
+gallery demo in `core/design_system.html.j2` in the same change.
+
+Colour, radius, shadow and type come from the tokens in
+`sbomify/assets/css/tailwind.src.css` (`:root` is dark, `:root.light`
+overrides). Use token utilities (`bg-surface`, `text-text-muted`,
+`border-border`) or arbitrary values referencing tokens
+(`bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]`). A raw hex
+in a diff is a review blocker.
+
+#### The things that actually break
+
+- **Two utilities for one CSS property.** Tailwind resolves them by stylesheet
+  order, not the order you wrote them. Prop-dependent utilities must render as
+  ONE `{% if %}` segment covering every case.
+- **A `{# … #}` comment spanning more than one line is not a comment.** Django's
+  tag pattern is single-line, so the text renders on the page or becomes junk
+  attributes. Use `{% comment %}…{% endcomment %}`.
+- **`:class` on a `<c-*>` tag.** Cotton reads a leading `:` as its own dynamic-prop
+  prefix, so Alpine's bindings there are written `::class` / `::style`. On plain
+  HTML inside a component they pass through untouched.
+- **An omitted `<c-vars>` prop is undefined, not empty.** `{% if class %}` is safe;
+  `"x-"|add:class` raises `VariableDoesNotExist`.
+- **A form control does not inherit `text-transform`.** The UA stylesheet resets it,
+  so a label wrapped in a `<button>` drops out of its parent's casing.
+- **State belongs on the real element.** `disabled` on the button, `:checked` on the
+  input, `[aria-disabled]` on a link. Never a styled sibling.
+- **State only the browser knows goes on a data attribute.** The component carries
+  every recipe keyed by `data-*`, the caller binds the value
+  (`<c-badges.dynamic ::data-variant="row.status_variant" />`). Never hand a page a
+  class expression: Tailwind never compiles a computed class name.
+- **Referencing a class that does not exist fails silently.** Grep before shipping.
+- **Copy is part of the component.** See Copy under Key Conventions; in UI it is a
+  review blocker, same as a raw hex.
+
+#### Other
+
+- **Server data to Alpine**: `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')`, never client-side fetch
+- **HTMX partials**: views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
+- **Theme**: `.dark` / `.light` class on `<html>`; dark is the default
 - **Vite entry points** in `vite.config.ts`: core, sboms, teams, billing, documents, vulnerability_scanning, plugins (plus alerts, djangoMessages, htmxBundle, tailwind). Dev server runs on port **5170**
-
-> **Migration note**: Bootstrap and Tailwind coexist during transition. New components use Tailwind exclusively. Bootstrap is removed once all pages are converted.
+- **Changing an existing page**: it probably has an e2e snapshot. Change structure
+  only, and if the baselines move, confirm every move was intended before
+  regenerating them.
+- **`tw-*` classes are the old layer.** Do not add callers and do not delete them;
+  unmigrated pages still consume them.
 
 ### API Layer
 
@@ -340,8 +372,7 @@ messages and docs pages.
   models, statuses and fields are not copy.
 - Write a button as the action it performs: "Create advisory", not "Submit".
 
-`docs/design-system.md` carries the same rule with examples, where it is a
-review blocker.
+In UI this is a review blocker, same as a raw hex value.
 
 ### Python
 
