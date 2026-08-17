@@ -1,0 +1,16 @@
+{% comment %}
+A row of headline figures: how many advisories, how many products, when the
+last one landed.
+
+It owns the rhythm and the dividers; each figure is a c-branded.stat. The
+alternative was one component taking a list of dicts, which pushes display
+strings into the view and makes a figure impossible to compose with anything
+else. Here a page writes what it has.
+
+The strip wraps rather than scrolls, because these are four short facts and a
+reader on a phone should get them stacked, not hidden off the edge.
+{% endcomment %}
+<c-vars class />
+<dl class="flex [flex-wrap:wrap] items-stretch gap-x-8 gap-y-4 my-0{% if class %} {{ class }}{% endif %}"
+    {{ attrs }}>{{ slot }}
+</dl>

@@ -1,0 +1,19 @@
+{% comment %}
+One headline figure and what it counts.
+
+The figure comes first and large, the label under it small and quiet, because
+the number is what a reader scans for. The label is not uppercased in the
+markup: it is set in small caps through tracking and weight instead, so the
+text a screen reader announces is the text the page wrote.
+
+value is a slot rather than a prop so a figure can be a date, a count, or a
+count with a unit beside it, without this component learning about any of them.
+
+Not branded. A number in a pale brand colour against the page is the exact
+unreadable case the library exists to avoid, and a figure is read, not acted on.
+{% endcomment %}
+<c-vars label class />
+<div class="flex flex-col gap-1{% if class %} {{ class }}{% endif %}" {{ attrs }}>
+    <dd class="text-2xl font-semibold text-text my-0 leading-none tabular-nums">{{ slot }}</dd>
+    <dt class="text-xs font-medium text-text-muted my-0">{{ label }}</dt>
+</div>

@@ -107,7 +107,7 @@ def test_surface_is_not_brandable(rendered: str) -> None:
 def test_severity_keeps_the_platform_colours(rendered: str) -> None:
     """Red must mean critical on every trust centre, so it is not brandable."""
     badge = _classes(rendered, "span", 'data-probe="badge-critical"')
-    assert "text-[var(--color-danger)]" in badge
+    assert "var(--tone)" in " ".join(badge)
     assert not any("var(--brand)" in utility for utility in badge)
 
 
@@ -193,3 +193,77 @@ def test_no_component_uses_a_class_the_legacy_sheets_override() -> None:
             offenders[template.relative_to(BRANDED_DIR).as_posix()] = collisions
 
     assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
+
+
+# ── The rebuilt set ─────────────────────────────────────────────────────────
+
+
+def test_badge_drives_every_tone_from_one_recipe(rendered: str) -> None:
+    """One set of utilities, only the colour varies, so a ramp cannot drift."""
+    critical = _open_tag(rendered, "span", 'data-probe="badge-critical"')
+    assert "--tone: var(--color-severity-critical)" in critical
+    assert "bg-[color-mix(in_oklab,var(--tone)_14%,transparent)]" in critical
+
+
+def test_badge_covers_the_whole_severity_ramp(rendered: str) -> None:
+    """medium and low exist in the tokens, so they must exist here."""
+    for level in ("critical", "high", "medium", "low"):
+        assert f"--tone: var(--color-severity-{level})" in rendered, level
+
+
+def test_a_flush_surface_clips_so_a_square_child_cannot_spill(rendered: str) -> None:
+    """The panel owns the radius, so the panel owns the clipping.
+
+    A severity spine is square and the corner is not. Without the clip the
+    colour draws past the corner, which is the bug this replaced.
+    """
+    flush = _classes(rendered, "div", 'data-probe="list"')
+    assert "overflow-clip" in flush
+    assert "rounded-xl" in flush
+    # A padded panel is not clipped, so a focus ring may still overhang.
+    padded = _classes(rendered, "div", 'data-probe="surface"')
+    assert "overflow-clip" not in padded
+
+
+def test_the_spine_spans_the_row_and_takes_the_platform_ramp(rendered: str) -> None:
+    spine = _open_tag(rendered, "span", 'data-probe="row-critical"')
+    row = rendered[rendered.index('data-probe="row-critical"') :]
+    assert "absolute inset-y-0 left-0 w-[3px]" in row
+    assert "--tone: var(--color-severity-critical)" in row
+    assert "var(--brand)" not in row[: row.index("</span>")]
+    assert spine is not None
+
+
+def test_a_linked_row_wraps_only_its_heading(rendered: str) -> None:
+    """The legacy sheet repaints anchors, so it gets one element, not the row.
+
+    The stretched pseudo element is what keeps the whole row clickable.
+    """
+    row = rendered[rendered.index('data-probe="row-critical"') :]
+    anchor = row[row.index("<a ") : row.index("</a>")]
+    assert "before:absolute before:inset-0" in anchor
+    assert "text-text" in anchor
+    assert "Heap overflow in libfoo" in anchor
+
+
+def test_the_eyebrow_does_not_restyle_what_it_holds(rendered: str) -> None:
+    """It usually holds a badge, and text-transform inherits."""
+    header = rendered[rendered.index('data-probe="page-header"') :]
+    eyebrow = header[: header.index("</h1>")]
+    assert "uppercase" not in eyebrow
+
+
+def test_a_page_header_and_a_section_header_are_different_components() -> None:
+    """Not one component with a size prop, which would let either sit in the
+    other's place. Neither file may take a prop that turns it into the other."""
+    for name in ("page_header", "section_header"):
+        vars_line = (BRANDED_DIR / f"{name}.html").read_text()
+        vars_line = vars_line[vars_line.index("<c-vars") : vars_line.index("/>")]
+        assert "size" not in vars_line, name
+        assert "variant" not in vars_line, name
+
+
+def test_figures_are_never_branded(rendered: str) -> None:
+    """A number is read, not acted on, so a pale brand would make it vanish."""
+    stat = _classes(rendered, "div", 'data-probe="stat"')
+    assert not any("var(--brand)" in utility for utility in stat)

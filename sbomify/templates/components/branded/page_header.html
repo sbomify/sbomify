@@ -1,0 +1,40 @@
+{% comment %}
+The top of a branded page: what this page is, in one line, with room for a
+short explanation and whatever the page needs beside it.
+
+It is a separate component from c-branded.section-header rather than one
+component with a size prop. A page header and a section heading are different
+things, not two sizes of the same thing: they sit in different places, carry
+different weight, and only one of them ever holds actions or figures. A prop
+that switches between them would let a page put a page header halfway down
+itself, which is exactly the drift this library exists to prevent.
+
+The title is a real h1 because it is the page's name. Nothing here is branded:
+a workspace's colour on a heading has to survive being read at 30px against the
+page, and pale brands do not. The eyebrow slot is where a brand mark belongs if
+one is wanted, since a small solid chip is safe at any brand.
+
+lede is optional, and the slot beneath takes anything the page leads with, such
+as a figures strip.
+{% endcomment %}
+<c-vars title lede class />
+<header class="flex flex-col gap-4{% if class %} {{ class }}{% endif %}" {{ attrs }}>
+    <div class="flex items-start gap-4 [flex-wrap:wrap]">
+        <div class="min-w-0 flex-1 flex flex-col gap-2">
+            {% if eyebrow %}
+                {% comment %}
+                    No text-transform here. The eyebrow usually holds a badge,
+                    and text-transform inherits, so uppercasing the row would
+                    quietly restyle a component that looks one way everywhere
+                    else. A container that restyles its children is how a
+                    library drifts, so the eyebrow only positions them.
+                {% endcomment %}
+                <div class="flex items-center gap-2 text-xs font-semibold text-text-muted">{{ eyebrow }}</div>
+            {% endif %}
+            <h1 class="text-3xl font-semibold text-text my-0 text-balance">{{ title }}</h1>
+            {% if lede %}<p class="text-base text-text-secondary my-0 max-w-[60ch]">{{ lede }}</p>{% endif %}
+        </div>
+        {% if actions %}<div class="shrink-0 flex items-center gap-2">{{ actions }}</div>{% endif %}
+    </div>
+    {{ slot }}
+</header>

@@ -1570,6 +1570,44 @@
                 <c-branded.buttons.secondary size="sm">Download</c-branded.buttons.secondary>
                 <c-branded.buttons.primary size="sm">Request access</c-branded.buttons.primary>
             </div>
+            <c-branded.page-header title="ACME Widget" lede="ACME publishes every advisory, SBOM and attestation the moment it is signed off." class="mt-5">
+            <c-slot name="eyebrow">
+            <c-branded.badge brand>Trust center</c-branded.badge>
+            </c-slot>
+            <c-slot name="actions">
+            <c-branded.buttons.primary size="sm">Request access</c-branded.buttons.primary>
+            </c-slot>
+            <c-branded.stats>
+            <c-branded.stat label="Advisories">5</c-branded.stat>
+            <c-branded.stat label="Products">6</c-branded.stat>
+            <c-branded.stat label="Compliance artifacts">0</c-branded.stat>
+            <c-branded.stat label="Latest advisory">3 Aug 2026</c-branded.stat>
+            </c-branded.stats>
+            </c-branded.page-header>
+            <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is." class="mt-6">
+            <c-slot name="action">
+            <c-branded.buttons.secondary size="sm" href="#branded">All advisories</c-branded.buttons.secondary>
+            </c-slot>
+            </c-branded.section-header>
+            <c-branded.surface flush class="mt-4">
+            <c-branded.list-row href="#branded" level="critical">
+            <c-slot name="eyebrow">ACMEWIDGETSW-SA-2026-0001</c-slot>
+            <c-slot name="heading">Heap overflow in libfoo</c-slot>
+            <c-slot name="summary">A crafted packet can crash the parser before authentication.</c-slot>
+            <c-slot name="meta"><span>CVE-2026-21004</span><span>Acme Vault</span></c-slot>
+            <c-slot name="side"><c-branded.badge tone="critical">Critical</c-branded.badge>3 Aug 2026</c-slot>
+            </c-branded.list-row>
+            <c-branded.list-row href="#branded" level="medium">
+            <c-slot name="eyebrow">ACMEWIDGETSW-SA-2026-0002</c-slot>
+            <c-slot name="heading">Privilege escalation in the edge agent</c-slot>
+            <c-slot name="side"><c-branded.badge tone="medium">Medium</c-branded.badge>1 Aug 2026</c-slot>
+            </c-branded.list-row>
+            <c-branded.list-row level="none">
+            <c-slot name="heading">Log4Shell impact assessment</c-slot>
+            <c-slot name="summary">Nothing we ship is affected.</c-slot>
+            <c-slot name="side"><c-branded.badge>None</c-branded.badge>28 Jul 2026</c-slot>
+            </c-branded.list-row>
+            </c-branded.surface>
             <c-branded.nav class="mt-4">
             <c-branded.nav-item href="#branded" icon="fas fa-house" current>Overview</c-branded.nav-item>
             <c-branded.nav-item href="#branded" icon="fas fa-shield-halved">Advisories</c-branded.nav-item>
