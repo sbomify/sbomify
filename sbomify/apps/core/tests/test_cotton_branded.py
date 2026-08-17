@@ -267,3 +267,51 @@ def test_figures_are_never_branded(rendered: str) -> None:
     """A number is read, not acted on, so a pale brand would make it vanish."""
     stat = _classes(rendered, "div", 'data-probe="stat"')
     assert not any("var(--brand)" in utility for utility in stat)
+
+
+def test_no_public_template_uses_a_class_the_legacy_sheets_override() -> None:
+    """The same guard, applied to the pages rather than the components.
+
+    A component is not the only thing that can name a colliding utility: a page
+    composing them writes layout classes too, and these pages are exactly the
+    ones that load the legacy sheets. mb-4 slipped through this way, resolving
+    to the legacy spacing variable rather than Tailwind's 1rem.
+
+    Pre-existing offenders are listed rather than fixed, so the guard can be
+    strict about new ones without turning red on markup this branch did not
+    write. Shrink the list, never grow it.
+    """
+    known = {
+        "components/trust_center/advisories_browse.html.j2": {"flex-wrap", "mb-2", "mb-3", "mt-1", "p-2"},
+        "workspace_public.html.j2": {"flex-wrap", "mt-1"},
+        # Not migrated yet; these go when that page is.
+        "trust_center_advisory_detail.html.j2": {
+            "flex-wrap",
+            "m-0",
+            "mb-3",
+            "mb-5",
+            "ml-1",
+            "mt-1",
+            "mt-4",
+        },
+    }
+    legacy = _legacy_important_classes()
+    trust_center = [
+        APP_ROOT / "apps/core/templates/core/workspace_public.html.j2",
+        APP_ROOT / "apps/core/templates/core/trust_center_advisories.html.j2",
+        APP_ROOT / "apps/core/templates/core/trust_center_advisory_detail.html.j2",
+        *sorted((APP_ROOT / "apps/core/templates/core/components/trust_center").glob("*.j2")),
+    ]
+    offenders: dict[str, set[str]] = {}
+    for template in trust_center:
+        if not template.exists():
+            continue
+        used: set[str] = set()
+        for attr in re.findall(r'class="([^"]*)"', template.read_text()):
+            for token in re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", attr, flags=re.S).split():
+                used.add(token.split(":")[-1] if ":" in token and "[" not in token else token)
+        key = template.as_posix().split("core/templates/core/")[-1]
+        if fresh := (used & legacy) - known.get(key, set()):
+            offenders[key] = fresh
+
+    assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
