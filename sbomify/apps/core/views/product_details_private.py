@@ -36,7 +36,6 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
             )
 
         current_team = request.session.get("current_team", {})
-        is_owner = current_team.get("role") == "owner"
         team_billing_plan = current_team.get("billing_plan")
 
         # Build TEI URN if TEA is enabled with a validated custom domain
@@ -118,7 +117,6 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "cra_assessment": cra_assessment,
                 "has_cra_access": has_cra_access,
                 "current_team": current_team,
-                "is_owner": is_owner,
                 "is_admin_or_owner": is_admin_or_owner,
                 "product": product,
                 "product_tei": product_tei,

@@ -38,7 +38,6 @@ import { advisoryProductPicker } from './components/advisory-product-picker';
 // ============================================
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerSbomsTable } from '../../sboms/js/sboms-table';
-import { registerCiCdInfo } from '../../sboms/js/ci-cd-info';
 import { registerLicensesEditor } from '../../sboms/js/licenses-editor';
 import { registerContactsEditor } from '../../sboms/js/contacts-editor';
 import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
@@ -60,6 +59,7 @@ import { registerCraStep2 } from '../../compliance/js/cra-step-2';
 import { registerCraStep3 } from '../../compliance/js/cra-step-3';
 import { registerCraStep4 } from '../../compliance/js/cra-step-4';
 import { registerCraStep5 } from '../../compliance/js/cra-step-5';
+import { registerCiCdToken } from '../../sboms/js/ci-cd-token';
 
 // Track registered components to prevent double-registration
 const registeredComponents = new Set<string>();
@@ -207,6 +207,7 @@ export function registerCommonComponents(): void {
  */
 export function registerAllComponents(): void {
     // Common inline components
+    registerCiCdToken();
     registerCommonComponents();
 
     // Core components
@@ -237,7 +238,6 @@ export function registerAllComponents(): void {
     // SBOM module components
     registerSbomUpload();
     registerSbomsTable();
-    registerCiCdInfo();
     registerLicensesEditor();
     registerContactsEditor();
     registerSupplierEditor();
@@ -290,7 +290,6 @@ export function registerHtmxBundleComponents(): void {
     // SBOM module components
     registerSbomUpload();
     registerSbomsTable();
-    registerCiCdInfo();
     registerLicensesEditor();
     registerContactsEditor();
     registerSupplierEditor();

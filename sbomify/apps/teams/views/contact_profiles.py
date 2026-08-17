@@ -8,6 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.teams.apis import (
     _get_team_and_membership_role,
@@ -71,7 +72,7 @@ def _format_formset_errors(formset: Any) -> str:
 
 
 class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         status_code, team = get_team(request, team_key)
@@ -148,7 +149,7 @@ class ContactProfileView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 
 class ContactProfileFormView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str, profile_id: str | None = None) -> HttpResponse:
         status_code, team = get_team(request, team_key)
