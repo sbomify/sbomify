@@ -148,7 +148,9 @@
             <i class="fas fa-circle-info" aria-hidden="true"></i>
             What can each role do?
         </span>
-        <i class="fas fa-chevron-down transition-transform" :class="open && 'rotate-180'" aria-hidden="true"></i>
+        <i class="fas fa-chevron-down transition-transform"
+           :class="open && 'rotate-180'"
+           aria-hidden="true"></i>
     </button>
     <div id="role-legend" x-show="open" x-cloak class="px-6 pb-5">
         <dl class="space-y-3 m-0">
@@ -163,7 +165,9 @@
                             <c-badges.secondary>{{ role_label }}</c-badges.secondary>
                         {% endif %}
                     </dt>
-                    <dd class="text-sm text-text-muted m-0">{{ role_description }}</dd>
+                    <dd class="text-sm text-text-muted m-0">
+                        {{ role_description }}
+                    </dd>
                 </div>
             {% endfor %}
         </dl>

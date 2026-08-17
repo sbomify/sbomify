@@ -25,13 +25,7 @@
                 <input type="hidden" name="visibility_action" value="update">
                 <input type="hidden" name="is_public" value="false">
                 <input type="hidden" name="active_tab" value="trust-center">
-                <c-forms.toggle id="workspace-visibility-toggle"
-                                name="is_public"
-                                value="true"
-                                aria-label="Make workspace publicly visible"
-                                checked="{{ team.is_public|yesno:'1,' }}"
-                                disabled="{{ can_administer|yesno:',1' }}"
-                                onchange="this.form.submit()" />
+                <c-forms.toggle id="workspace-visibility-toggle" name="is_public" value="true" aria-label="Make workspace publicly visible" checked="{{ team.is_public|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
                 <button type="submit" class="sr-only">Save visibility</button>
             </form>
         </div>
@@ -175,13 +169,7 @@
                     <input type="hidden" name="tea_action" value="update">
                     <input type="hidden" name="tea_enabled" value="false">
                     <input type="hidden" name="active_tab" value="trust-center">
-                    <c-forms.toggle id="tea-toggle"
-                                    name="tea_enabled"
-                                    value="true"
-                                    aria-label="Enable Transparency Exchange API"
-                                    checked="{{ team_obj.tea_enabled|yesno:'1,' }}"
-                                    disabled="{{ can_administer|yesno:',1' }}"
-                                    onchange="this.form.submit()" />
+                    <c-forms.toggle id="tea-toggle" name="tea_enabled" value="true" aria-label="Enable Transparency Exchange API" checked="{{ team_obj.tea_enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
                     <button type="submit" class="sr-only">Save TEA setting</button>
                 </form>
             </div>
@@ -290,13 +278,7 @@
                             Served at <code class="text-xs">/.well-known/security.txt</code> on your Trust Center domain and any validated custom domains
                         </p>
                     </div>
-                    <c-forms.toggle id="security-txt-toggle"
-                                    name="security_txt_enabled"
-                                    value="true"
-                                    aria-label="Enable security.txt"
-                                    checked="{{ security_txt_config.enabled|yesno:'1,' }}"
-                                    disabled="{{ can_administer|yesno:',1' }}"
-                                    x-model="securityTxtEnabled" />
+                    <c-forms.toggle id="security-txt-toggle" name="security_txt_enabled" value="true" aria-label="Enable security.txt" checked="{{ security_txt_config.enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" x-model="securityTxtEnabled" />
                 </div>
                 {# Configuration fields — shown when enabled #}
                 <div x-show="securityTxtEnabled" x-cloak>
