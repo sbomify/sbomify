@@ -75,8 +75,11 @@ else
   fi
 fi
 
-# Always enable user registration after all other steps
-/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true
+# Always enable user registration after all other steps.
+# resetPasswordAllowed matches what create_realm sets in core/keycloak_utils.py;
+# without it the "Forgot password?" link never renders and the reset flow is
+# unreachable.
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true -s resetPasswordAllowed=true
 
 # Create test users for development (only in dev mode)
 if [ "$KEYCLOAK_DEV_MODE" = "true" ]; then
