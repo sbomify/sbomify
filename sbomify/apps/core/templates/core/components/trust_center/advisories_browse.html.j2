@@ -102,19 +102,25 @@ submit button applies the same filters, and the URL is the same either way.
             {% endif %}
             <div class="tc-filter-group">
                 <h3 class="tc-filter-heading">Published</h3>
-                <div class="tc-filter-date">
-                    <label for="publishedFrom">From</label>
-                    <input id="publishedFrom"
-                           type="date"
-                           name="from"
-                           value="{{ query.published_from|date:'Y-m-d' }}">
-                </div>
-                <div class="tc-filter-date">
-                    <label for="publishedTo">To</label>
-                    <input id="publishedTo"
-                           type="date"
-                           name="to"
-                           value="{{ query.published_to|date:'Y-m-d' }}">
+                {% comment %}
+                    A date range is a plain control, not something the
+                    workspace's colour has any say over, so it uses the app's
+                    own field rather than a branded one. See the note in
+                    AGENTS.md on which library a trust centre control belongs
+                    to: the brand goes on what the page is, not on the
+                    machinery for filtering it.
+
+                    The names and ids are the form's contract. hx-trigger
+                    listens for change on the form, so these stay real inputs
+                    carrying from and to, and the request is unchanged.
+                {% endcomment %}
+                <div class="flex flex-col gap-3">
+                    <c-forms.field label="From" for="publishedFrom">
+                    <c-forms.input id="publishedFrom" name="from" type="date" value="{{ query.published_from|date:'Y-m-d' }}" />
+                    </c-forms.field>
+                    <c-forms.field label="To" for="publishedTo">
+                    <c-forms.input id="publishedTo" name="to" type="date" value="{{ query.published_to|date:'Y-m-d' }}" />
+                    </c-forms.field>
                 </div>
             </div>
         </div>

@@ -322,6 +322,34 @@ pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
 `test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
 needs `data-button` or the legacy sheet repaints it.
 
+**Which library a trust-centre control belongs to.** Not everything on a branded
+page is branded. The brand goes on what the page *is*, not on the machinery for
+reading it:
+
+| Use `<c-branded.*>` | Use the main library |
+| --- | --- |
+| Anything with a **solid fill** a reader must read text on | Date, search, select, checkbox, text fields |
+| The page and section headings, record rows, figures | Tables, pagination, the filter panel |
+| The primary action, status the workspace owns | Alerts, empty states, spinners |
+
+The test is readability, not taste. A filled control needs `--brand-ink`, which
+only the branded library measures, so a filled main-library button on a public
+page renders `text-white` on whatever the accent is: fine on navy, unreadable on
+pale amber. Neutral controls have no fill to be unreadable on, so they can and
+should stay global and look like the rest of sbomify.
+
+`public_base.htmx.j2` tries to remap `--color-primary` to the workspace accent at
+`:root`, but the app stylesheet loads after that inline block and wins, so the
+remap does nothing at page level: a main-library control on a trust centre
+renders in platform colours. Verified, not assumed — on a workspace with accent
+`#C2410C` the computed `--color-primary` is still the platform navy.
+
+What *does* apply is the scoped `.public-page [data-button]` rule, which remaps
+the token on library buttons only. So a filled main-library button there is
+`text-white` over the workspace accent with no ink measurement: fine on navy,
+unreadable on pale amber. There are currently 8 such buttons across 5 public
+pages, all of which should become `c-branded.buttons.primary`.
+
 ### API Layer
 
 Central router in `sbomify/apis.py` registers per-app routers. Most apps expose a `Router()` in `apis.py` (some use `api.py`, e.g. `licensing`):
