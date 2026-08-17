@@ -132,7 +132,11 @@
                 <i class="fas fa-save mr-2"></i>Save Changes
             </button>
         </div>
-        {# Danger Zone #}
-        {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
+        {# Danger Zone — owner only. This tab is ADMINISTER (admins can rename the
+           workspace, set defaults, etc.), but deleting the workspace is OWNER_ONLY,
+           so an admin must not be shown a control that always 403s. #}
+        {% if is_owner %}
+            {% include 'teams/components/team_danger_zone.html.j2' with team_key=team.key team_name=team.name is_default_team=is_default_team %}
+        {% endif %}
     </div>
 </div>

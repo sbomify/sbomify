@@ -18,11 +18,108 @@ from sbomify.logging import getLogger
 
 from .billing_helpers import parse_cancel_at
 from .stripe_cache import get_cached_subscription, invalidate_subscription_cache, set_cached_subscription
-from .stripe_client import StripeError, get_stripe_client
+from .stripe_client import StripeError, StripeResourceMissingError, get_stripe_client
 
 logger = getLogger(__name__)
 
 stripe_client = get_stripe_client()
+
+
+def _is_missing_subscription(error: StripeError) -> bool:
+    """Whether Stripe said the subscription id we hold refers to nothing.
+
+    Prefers the typed signal. The substring match behind it is kept because
+    this branch predates the typed error and other paths still surface the
+    condition as a plain ``StripeError`` — dropping it would silently narrow
+    what gets reconciled.
+    """
+    if isinstance(error, StripeResourceMissingError):
+        return True
+    error_str = str(error).lower()
+    return "no such subscription" in error_str or "resource_missing" in error_str
+
+
+def reconcile_missing_subscription(team: Team, stripe_sub_id: str | None) -> bool:
+    """Settle a workspace whose stored subscription no longer exists at Stripe.
+
+    Re-reads the row under ``select_for_update`` rather than writing back a
+    copy loaded earlier: callers reach here after a Stripe round trip, and a
+    checkout completing in that window would otherwise be reverted by a stale
+    blob — leaving a paying customer on a dead subscription id.
+
+    Clearing ``stripe_subscription_id`` is also what makes this self-healing.
+    Both sweeps select on that key being present, so a reconciled workspace
+    drops out of them without needing a marker to remember it, and re-appears
+    on its own the moment a new subscription is stored.
+
+    No-ops when the stored id is no longer the one Stripe reported missing.
+    The lock alone is not enough: it stops a lost update, but the *premise*
+    can still be stale, since the caller decided to reconcile before the Stripe
+    round trip and a checkout can complete during it. Clearing unconditionally
+    would then delete the subscription the customer had just paid for — the
+    same harm the lock was added to prevent, arrived at from the other side.
+
+    Returns whether anything was settled, so a caller does not report a
+    reconciliation that did not happen.
+    """
+    from django.db import transaction as db_transaction
+
+    # Nothing was confirmed missing, so there is nothing to settle. Without
+    # this, a workspace that also holds no id compares equal to the absent one
+    # and falls into the reconcile branch — marked canceled on the strength of
+    # a subscription that was never named.
+    if not stripe_sub_id:
+        return False
+
+    reconciled = False
+    with db_transaction.atomic():
+        locked = Team.objects.select_for_update().get(pk=team.pk)
+        billing_limits = locked.billing_plan_limits or {}
+        current = billing_limits.get("stripe_subscription_id")
+        if current != stripe_sub_id:
+            # Names the workspace: without it the line records that something
+            # was left alone without saying what, which is not traceable in
+            # production. The key is safe to log — it is the subscription ids
+            # that are kept out.
+            logger.info(
+                "Workspace %s changed subscription reference while Stripe was queried; leaving it alone",
+                team.key,
+            )
+        else:
+            billing_limits["subscription_status"] = "canceled"
+            billing_limits.pop("stripe_subscription_id", None)
+            # Also remove customer_id to satisfy valid_billing_relationship constraint
+            billing_limits.pop("stripe_customer_id", None)
+            billing_limits.pop("scheduled_downgrade_plan", None)
+            billing_limits["cancel_at_period_end"] = False
+            # Canceled and still trialing is a state nothing else in billing
+            # produces: the trial-expiry path pairs the two (billing_processing),
+            # and the Stripe sync zeroes the remaining days whenever the
+            # subscription is not trialing. The sweep that reaches this reconciles
+            # expired trials specifically, so leaving the flags set would be the
+            # usual outcome rather than a corner of it, and every downstream
+            # ``is_trial`` check would read entitlement from a canceled workspace.
+            #
+            # ``trial_end`` stays: it records when the trial ended rather than
+            # granting anything, the two paths above both leave it in place,
+            # and the sweep reads it to decide what to look at — so dropping it
+            # would take a workspace out of the sweep for a reason unrelated to
+            # why it is being settled.
+            billing_limits["is_trial"] = False
+            billing_limits["trial_days_remaining"] = 0
+            billing_limits["last_updated"] = timezone.now().isoformat()
+            locked.billing_plan_limits = billing_limits
+            locked.save()
+            reconciled = True
+
+    # Only for the id actually settled, and only when both halves of the key
+    # are known. Invalidating on a no-op would drop the entry belonging to
+    # whichever subscription replaced this one, and substituting "" for a
+    # missing id builds a key that belongs to nothing — or worse, to something
+    # else.
+    if reconciled and stripe_sub_id and team.key:
+        invalidate_subscription_cache(stripe_sub_id, team.key)
+    return reconciled
 
 
 def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bool:
@@ -285,26 +382,18 @@ def sync_subscription_from_stripe(team: Team, force_refresh: bool = False) -> bo
         return True  # No update needed, but sync was successful
 
     except StripeError as e:
-        error_str = str(e).lower()
         # Handle deleted subscriptions
-        if "no such subscription" in error_str or "resource_missing" in error_str:
-            logger.info("Subscription no longer exists in Stripe")
-            # Update database to reflect deleted subscription
-            from django.db import transaction as db_transaction
-
-            with db_transaction.atomic():
-                team = Team.objects.select_for_update().get(pk=team.pk)
-                billing_limits = team.billing_plan_limits or {}
-                billing_limits["subscription_status"] = "canceled"
-                billing_limits.pop("stripe_subscription_id", None)
-                # Also remove customer_id to satisfy valid_billing_relationship constraint
-                billing_limits.pop("stripe_customer_id", None)
-                billing_limits.pop("scheduled_downgrade_plan", None)
-                billing_limits["cancel_at_period_end"] = False
-                billing_limits["last_updated"] = timezone.now().isoformat()
-                team.billing_plan_limits = billing_limits
-                team.save()
-            invalidate_subscription_cache(stripe_sub_id, team.key or "")
+        if _is_missing_subscription(e):
+            # Named, and reported by what actually happened. This path is
+            # reachable from the daily sweep and from views, so a bare
+            # "no longer exists" left no way to tell which workspace it was
+            # about — or whether the dangling reference was cleared, since
+            # reconciliation declines to write when the stored id moved while
+            # Stripe was being queried.
+            if reconcile_missing_subscription(team, stripe_sub_id):
+                logger.info("Subscription no longer exists in Stripe; cleared it from workspace %s", team.key)
+            else:
+                logger.info("Subscription no longer exists in Stripe; workspace %s already moved on", team.key)
             return True
         else:
             logger.warning(f"Failed to sync subscription: {e}")

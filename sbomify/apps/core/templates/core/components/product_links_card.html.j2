@@ -2,11 +2,17 @@
 <div class="tw-card shadow"
      id="product-links-card"
      x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editTitle: '', editUrl: '', editDescription: '', deleteId: '', deleteName: '' }">
+    {% comment %}
+    The header button renders only when the table below gives it something to
+    sit above. Inside the collapsible product page section (.tw-embed hides
+    this header's title), an always-on button floated alone over the empty
+    state — the empty state carries its own Add Link action instead.
+    {% endcomment %}
     <div class="px-6 py-4 border-b border-border flex justify-between items-center">
         <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
             <i class="fas fa-link text-primary" aria-hidden="true"></i>Product Links
         </h4>
-        {% if can_manage_links %}
+        {% if can_manage_links and links %}
             <button type="button"
                     class="tw-btn-primary text-sm"
                     @click="showAddModal = true">
@@ -77,20 +83,16 @@
                 </table>
             </div>
         {% else %}
-            <div class="flex flex-col items-center justify-center py-12 px-6">
-                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                    <i class="fas fa-link text-2xl text-text-muted" aria-hidden="true"></i>
-                </div>
-                {% if not has_crud_permissions %}
-                    <p class="text-text-muted m-0">No product links available</p>
-                    <p class="text-text-muted text-sm mt-1">This product does not have any links defined</p>
-                {% else %}
-                    <p class="text-text-muted m-0">No product links added</p>
-                    <p class="text-text-muted text-sm mt-1">
-                        Add links like website, support, documentation, etc. to provide additional information about this product
-                    </p>
-                {% endif %}
-            </div>
+            {% comment %}
+            Two branches, not three: build_links_context sets can_manage_links
+            to has_crud_permissions verbatim, so there is no reader who can
+            crud but not manage.
+            {% endcomment %}
+            {% if can_manage_links %}
+                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product" action_text="Add Link" action_click="showAddModal = true" %}
+            {% else %}
+                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links available" message="This product does not have any links defined" %}
+            {% endif %}
         {% endif %}
     </div>
     {% if can_manage_links %}

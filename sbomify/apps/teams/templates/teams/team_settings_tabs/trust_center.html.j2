@@ -31,7 +31,7 @@
                        aria-label="Make workspace publicly visible"
                        class="tw-checkbox"
                        {% if team.is_public %}checked{% endif %}
-                       {% if not is_owner %}disabled{% endif %}
+                       {% if not can_administer %}disabled{% endif %}
                        onchange="this.form.submit()">
                 <button type="submit" class="sr-only">Save visibility</button>
             </form>
@@ -71,11 +71,11 @@
                 </div>
             </div>
         {% endif %}
-        {% if not is_owner %}
+        {% if not can_administer %}
             <div class="tw-alert tw-alert-info mt-4">
                 <i class="fas fa-info-circle tw-alert-icon"></i>
                 <div class="tw-alert-content">
-                    <p class="text-sm m-0">Only workspace owners can change Trust Center visibility.</p>
+                    <p class="text-sm m-0">Only workspace owners and admins can change Trust Center visibility.</p>
                 </div>
             </div>
         {% elif not can_set_private %}
@@ -123,7 +123,7 @@
                                minlength="3"
                                pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
                                placeholder="my-company"
-                               {% if not is_owner %}disabled{% endif %}>
+                               {% if not can_administer %}disabled{% endif %}>
                     </div>
                     <p class="tw-form-helper mt-2">
                         Your Trust Center will be available at:
@@ -137,7 +137,7 @@
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not is_owner %}disabled{% endif %}>
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-save mr-2"></i>Save Slug
                     </button>
                 </div>
@@ -183,7 +183,7 @@
                            aria-label="Enable Transparency Exchange API"
                            class="tw-checkbox"
                            {% if team_obj.tea_enabled %}checked{% endif %}
-                           {% if not is_owner %}disabled{% endif %}
+                           {% if not can_administer %}disabled{% endif %}
                            onchange="this.form.submit()">
                     <button type="submit" class="sr-only">Save TEA setting</button>
                 </form>
@@ -242,11 +242,11 @@
                     </div>
                 </div>
             {% endif %}
-            {% if not is_owner %}
+            {% if not can_administer %}
                 <div class="tw-alert tw-alert-info mt-4">
                     <i class="fas fa-info-circle tw-alert-icon"></i>
                     <div class="tw-alert-content">
-                        <p class="text-sm m-0">Only workspace owners can change TEA settings.</p>
+                        <p class="text-sm m-0">Only workspace owners and admins can change TEA settings.</p>
                     </div>
                 </div>
             {% endif %}
@@ -301,7 +301,7 @@
                            aria-label="Enable security.txt"
                            class="tw-checkbox"
                            {% if security_txt_config.enabled %}checked{% endif %}
-                           {% if not is_owner %}disabled{% endif %}
+                           {% if not can_administer %}disabled{% endif %}
                            x-model="securityTxtEnabled">
                 </div>
                 {# Configuration fields — shown when enabled #}
@@ -316,7 +316,7 @@
                             <select id="security_txt_contact_id"
                                     name="security_txt_contact_id"
                                     class="tw-form-input"
-                                    {% if not is_owner %}disabled{% endif %}>
+                                    {% if not can_administer %}disabled{% endif %}>
                                 <option value="">Auto-detect (security contact from default profile)</option>
                                 {% for contact in security_txt_contacts %}
                                     <option value="{{ contact.id }}"
@@ -348,7 +348,7 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.policy_url|default:'' }}"
                                        placeholder="https://example.com/security-policy"
-                                       {% if not is_owner %}disabled{% endif %}>
+                                       {% if not can_administer %}disabled{% endif %}>
                                 <p class="tw-form-helper mt-1">Vulnerability disclosure policy</p>
                             </div>
                             {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
@@ -361,11 +361,11 @@
                                                class="tw-form-input flex-1"
                                                x-model="urls[index]"
                                                placeholder="https://example.com/pgp-key.txt"
-                                               {% if not is_owner %}disabled{% endif %}>
+                                               {% if not can_administer %}disabled{% endif %}>
                                         <button type="button"
                                                 @click="urls.splice(index, 1)"
                                                 class="tw-btn-outline-primary tw-btn-sm text-danger"
-                                                {% if not is_owner %}disabled{% endif %}>
+                                                {% if not can_administer %}disabled{% endif %}>
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -373,7 +373,7 @@
                                 <button type="button"
                                         @click="urls.push('')"
                                         class="text-xs text-primary hover:underline"
-                                        {% if not is_owner %}disabled{% endif %}>
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <i class="fas fa-plus mr-1"></i>Add encryption key URL
                                 </button>
                                 <input type="hidden"
@@ -389,7 +389,7 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.acknowledgments_url|default:'' }}"
                                        placeholder="https://example.com/hall-of-fame"
-                                       {% if not is_owner %}disabled{% endif %}>
+                                       {% if not can_administer %}disabled{% endif %}>
                                 <p class="tw-form-helper mt-1">Security researcher acknowledgments</p>
                             </div>
                             <div>
@@ -400,7 +400,7 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.hiring_url|default:'' }}"
                                        placeholder="https://example.com/security-jobs"
-                                       {% if not is_owner %}disabled{% endif %}>
+                                       {% if not can_administer %}disabled{% endif %}>
                                 <p class="tw-form-helper mt-1">Security-related job openings</p>
                             </div>
                         </div>
@@ -417,7 +417,7 @@
                                 <button type="button"
                                         @click="open = !open"
                                         class="tw-form-input w-full text-left flex items-center justify-between"
-                                        {% if not is_owner %}disabled{% endif %}>
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <span x-text="selected.length ? selected.join(', ') : 'Select languages'"
                                           class="truncate"
                                           :class="{ 'text-text-muted': !selected.length }"></span>
@@ -473,14 +473,14 @@
                 </div>
                 {# Save button + owner gate #}
                 <div class="flex items-center justify-end mt-4 gap-4">
-                    {% if not is_owner %}
+                    {% if not can_administer %}
                         <p class="text-text-muted text-sm m-0 mr-auto">
-                            <i class="fas fa-lock mr-1"></i>Only workspace owners can change these settings.
+                            <i class="fas fa-lock mr-1"></i>Only workspace owners and admins can change these settings.
                         </p>
                     {% endif %}
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not is_owner %}disabled{% endif %}>
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-save mr-2"></i>Save
                     </button>
                 </div>
@@ -517,13 +517,13 @@
                               rows="4"
                               maxlength="500"
                               placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
-                              {% if not is_owner %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
+                              {% if not can_administer %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
                     <span class="tw-form-helper">Max 500 characters. Leave empty to use the default description.</span>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not is_owner %}disabled{% endif %}>
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-save mr-2"></i>Save Description
                     </button>
                 </div>
@@ -592,13 +592,13 @@
                 <input type="hidden" name="company_nda_action" value="upload">
                 <input type="hidden" name="active_tab" value="trust-center">
                 <label for="company_nda_file"
-                       class="tw-file-upload relative block mb-4 {% if not is_owner %}opacity-50 pointer-events-none{% endif %}">
+                       class="tw-file-upload relative block mb-4 {% if not can_administer %}opacity-50 pointer-events-none{% endif %}">
                     <input type="file"
                            id="company_nda_file"
                            name="company_nda_file"
                            class="sr-only"
                            accept=".pdf"
-                           {% if not is_owner %}disabled{% endif %}
+                           {% if not can_administer %}disabled{% endif %}
                            required
                            @change="fileName = $event.target.files[0] ? $event.target.files[0].name : ''">
                     <div class="tw-file-upload-icon">
@@ -617,7 +617,7 @@
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not is_owner %}disabled{% endif %}>
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-upload mr-2"></i>
                         {% if company_nda_document %}
                             Upload New Version

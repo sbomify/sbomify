@@ -283,6 +283,53 @@ class TestCRAExportPackage:
 
 
 @pytest.mark.django_db
+class TestEuAuthorizedRepresentative:
+    """CRA Art. 22/25 (checklist 7.4): a manufacturer without an EU
+    establishment must appoint an AR before market placement."""
+
+    def test_an_unanswered_determination_is_incomplete_but_not_a_breach(self, cra_assessment):
+        assert cra_assessment.is_eu_established is None
+        assert cra_assessment.requires_authorized_representative is False
+        assert "Record whether" in cra_assessment.eu_representation_problems[0]
+
+    def test_an_eu_established_manufacturer_needs_no_representative(self, cra_assessment):
+        cra_assessment.is_eu_established = True
+
+        assert cra_assessment.requires_authorized_representative is False
+        assert cra_assessment.eu_representation_problems == []
+
+    def test_a_non_eu_manufacturer_without_a_representative_is_a_breach(self, cra_assessment):
+        cra_assessment.is_eu_established = False
+
+        assert cra_assessment.requires_authorized_representative is True
+        problem = cra_assessment.eu_representation_problems[0]
+        assert "Art. 22" in problem
+        assert "name" in problem and "mandate date" in problem
+
+    def test_a_complete_representative_block_clears_the_obligation(self, cra_assessment):
+        from datetime import date
+
+        cra_assessment.is_eu_established = False
+        cra_assessment.authorized_rep_name = "Acme EU Compliance BV"
+        cra_assessment.authorized_rep_address = "Keizersgracht 1, 1015 Amsterdam, NL"
+        cra_assessment.authorized_rep_email = "ar@acme-eu.example"
+        cra_assessment.authorized_rep_mandate_date = date(2026, 1, 15)
+
+        assert cra_assessment.authorized_rep_is_complete is True
+        assert cra_assessment.eu_representation_problems == []
+
+    def test_a_partial_block_names_only_what_is_missing(self, cra_assessment):
+        cra_assessment.is_eu_established = False
+        cra_assessment.authorized_rep_name = "Acme EU Compliance BV"
+        cra_assessment.authorized_rep_email = "ar@acme-eu.example"
+
+        problem = cra_assessment.eu_representation_problems[0]
+        assert "address" in problem
+        assert "mandate date" in problem
+        assert "contact email" not in problem
+
+
+@pytest.mark.django_db
 class TestExportPackageRetention:
     """CRA Art. 13(15): the exported bundle is the durable evidence, so its
     retention floor is pinned at creation and cleanup must respect it."""

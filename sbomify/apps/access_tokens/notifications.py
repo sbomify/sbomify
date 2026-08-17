@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from django.http import HttpRequest
 from django.urls import reverse
@@ -17,6 +18,9 @@ from django.utils import timezone
 
 from sbomify.apps.notifications.schemas import NotificationSchema
 from sbomify.logging import getLogger
+
+if TYPE_CHECKING:
+    from sbomify.apps.access_tokens.models import AccessToken
 
 logger = getLogger(__name__)
 
@@ -30,6 +34,25 @@ def days_until(expires_at: datetime, now: datetime) -> int:
     "in 5 days", and anything inside the final 24 hours reads "tomorrow".
     """
     return max(0, math.ceil((expires_at - now).total_seconds() / 86400))
+
+
+def lifetime_days(token: "AccessToken") -> int | None:
+    """How long the token was issued for, or None when that is unknowable."""
+    if token.expires_at is None or token.created_at is None:
+        return None
+    return max(0, math.ceil((token.expires_at - token.created_at).total_seconds() / 86400))
+
+
+def is_short_lived(token: "AccessToken") -> bool:
+    """True when the token's whole life fits inside the warning window.
+
+    Such a token is inside the window from the moment it exists, so a warning
+    reports back a lifetime the reader just chose rather than telling them
+    anything. The CI/CD dialog issues 7-day tokens, which is well inside the
+    14-day window.
+    """
+    lifetime = lifetime_days(token)
+    return lifetime is not None and lifetime <= WARNING_WINDOW_DAYS
 
 
 def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
@@ -63,6 +86,10 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
         if token.expires_at is None:
             continue
         days = days_until(token.expires_at, now)
+        # Keep the final day for short-lived tokens: silence for the whole life
+        # would let a pipeline start failing with no notice at all.
+        if days > 1 and is_short_lived(token):
+            continue
         when = "today" if days == 0 else ("tomorrow" if days == 1 else f"in {days} days")
         action_url = None
         if token.team is not None:

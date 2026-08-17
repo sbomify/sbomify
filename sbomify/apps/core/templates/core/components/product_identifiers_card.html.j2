@@ -2,20 +2,29 @@
 <div class="tw-card shadow"
      id="product-identifiers-card"
      x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editValue: '', deleteId: '', deleteName: '', addType: '' }">
+    {% comment %}
+    Header actions render only when the table below gives them something to
+    sit above — same reasoning as the links card: inside the product page's
+    collapsible section (.tw-embed hides this header's title), an always-on
+    control floated alone over the empty state, which carries its own action
+    or explanation instead.
+    {% endcomment %}
     <div class="px-6 py-4 border-b border-border flex justify-between items-center">
         <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
             <i class="fas fa-barcode text-primary" aria-hidden="true"></i>Product Identifiers
         </h4>
-        {% if can_manage_identifiers %}
-            <button type="button"
-                    class="tw-btn-primary text-sm"
-                    @click="showAddModal = true">
-                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Identifier
-            </button>
-        {% elif has_crud_permissions and not is_feature_allowed %}
-            <span class="text-text-muted text-sm">
-                <i class="fas fa-lock mr-1" aria-hidden="true"></i>Business feature
-            </span>
+        {% if identifiers %}
+            {% if can_manage_identifiers %}
+                <button type="button"
+                        class="tw-btn-primary text-sm"
+                        @click="showAddModal = true">
+                    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Identifier
+                </button>
+            {% elif has_crud_permissions and not is_feature_allowed %}
+                <span class="text-text-muted text-sm">
+                    <i class="fas fa-lock mr-1" aria-hidden="true"></i>Business feature
+                </span>
+            {% endif %}
         {% endif %}
     </div>
     <div>
@@ -90,23 +99,13 @@
                 </table>
             </div>
         {% else %}
-            <div class="flex flex-col items-center justify-center py-12 px-6">
-                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                    <i class="fas fa-barcode text-2xl text-text-muted" aria-hidden="true"></i>
-                </div>
-                {% if not has_crud_permissions %}
-                    <p class="text-text-muted m-0">No product identifiers available</p>
-                    <p class="text-text-muted text-sm mt-1">This product does not have any identifiers defined</p>
-                {% elif not is_feature_allowed %}
-                    <p class="text-text-muted m-0">Product identifiers are a business feature</p>
-                    <p class="text-text-muted text-sm mt-1">
-                        Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc.
-                    </p>
-                {% else %}
-                    <p class="text-text-muted m-0">No product identifiers added</p>
-                    <p class="text-text-muted text-sm mt-1">Add identifiers like GTIN, SKU, MPN, etc. to help identify this product</p>
-                {% endif %}
-            </div>
+            {% if not has_crud_permissions %}
+                {% include "components/tw/empty_state.html.j2" with icon="fas fa-barcode" title="No product identifiers available" message="This product does not have any identifiers defined" %}
+            {% elif not is_feature_allowed %}
+                {% include "components/tw/empty_state.html.j2" with icon="fas fa-lock" title="Product identifiers are a business feature" message="Upgrade to a business or enterprise plan to add identifiers like GTIN, SKU, MPN, etc." %}
+            {% else %}
+                {% include "components/tw/empty_state.html.j2" with icon="fas fa-barcode" title="No product identifiers added" message="Add identifiers like GTIN, SKU, MPN, etc. to help identify this product" action_text="Add Identifier" action_click="showAddModal = true" %}
+            {% endif %}
         {% endif %}
     </div>
     {% if can_manage_identifiers %}

@@ -50,6 +50,14 @@ def run_scanned(run: Any) -> bool:
     A skipped run reports one stand-down notice and no findings; treating that
     as "nothing found" is what would mark a component remediated because its
     format changed.
+
+    A run that errored says just as little, and said it while looking like a
+    completed scan: plugins record a failure by returning a result with
+    ``error_count`` set and the status still COMPLETED, so only the summary
+    distinguishes "scanned and found nothing" from "could not scan". Without
+    this an aborted osv-scanner run resolved every open advisory for the
+    component — a remediation that never happened, dropping real CVEs out of
+    the workspace's open counts and into its MTTR.
     """
     if getattr(run, "status", None) != RunStatus.COMPLETED.value:
         return False
@@ -59,16 +67,19 @@ def run_scanned(run: Any) -> bool:
     metadata = result.get("metadata")
     if isinstance(metadata, dict) and metadata.get("skipped"):
         return False
+    summary = result.get("summary")
+    if isinstance(summary, dict) and summary.get("error_count"):
+        return False
     return True
 
 
 def _advisories(result: dict[str, Any]) -> dict[str, str]:
     """Advisory id to severity for the real vulnerabilities in a result."""
-    from sbomify.apps.vulnerability_scanning.posture import _is_vulnerability
+    from sbomify.apps.vulnerability_scanning.utils import is_vulnerability
 
     seen: dict[str, str] = {}
     for finding in result.get("findings") or []:
-        if not isinstance(finding, dict) or not _is_vulnerability(finding):
+        if not isinstance(finding, dict) or not is_vulnerability(finding):
             continue
         advisory_id = (finding.get("id") or "").strip()
         if advisory_id:

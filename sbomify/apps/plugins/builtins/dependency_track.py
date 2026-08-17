@@ -34,6 +34,22 @@ from sbomify.logging import getLogger
 logger = getLogger(__name__)
 
 
+def _is_unsupported_spec_version(error: Exception) -> bool:
+    """Whether Dependency Track refused the upload over its CycloneDX version.
+
+    Matched on the server's message because that is the only place it says so:
+    the rejection is a plain 400 shared with every other invalid-BOM reason, and
+    nothing in the payload distinguishes "malformed" from "a version I do not
+    know yet".
+
+    Deliberately narrow. A 400 that is not about the spec version is still a
+    real failure and keeps its error result — misreading a genuinely corrupt BOM
+    as "not applicable" would hide the thing worth knowing.
+    """
+    message = str(error).lower()
+    return "specversion" in message and ("unrecognized" in message or "unsupported" in message)
+
+
 def _first_float(*candidates: Any) -> float | None:
     """The first candidate that is a real number, else None.
 
@@ -209,6 +225,23 @@ class DependencyTrackPlugin(AssessmentPlugin):
                     current_release_names=current_release_names,
                 )
             except Exception as e:
+                # A spec version this DT does not know is a capability gap, not
+                # a fault: "Unrecognized specVersion 1.7" means CycloneDX moved
+                # ahead of the server, and every scan of that artifact would log
+                # an error and store a high-severity marker until DT catches up.
+                # The same reasoning the format gate already applies — DT simply
+                # cannot process it — so it skips rather than errors.
+                if _is_unsupported_spec_version(e):
+                    logger.info(f"[DT] SBOM {sbom_id} uses a spec version this Dependency Track does not accept: {e}")
+                    return self._create_skipped_result(
+                        finding_id="dependency-track:unsupported-spec-version",
+                        title="Spec Version Not Supported",
+                        description=(
+                            "This Dependency Track server does not accept this CycloneDX spec "
+                            f"version, so vulnerability scanning was skipped. Server response: {e}"
+                        ),
+                        unsupported_input=True,
+                    )
                 logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
                 return self._create_error_result(f"DT upload failed: {e}")
 
@@ -873,6 +906,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         finding_id: str,
         title: str,
         description: str,
+        unsupported_input: bool = False,
     ) -> AssessmentResult:
         """Create a non-failing result indicating the assessment was skipped.
 
@@ -892,17 +926,27 @@ class DependencyTrackPlugin(AssessmentPlugin):
             finding_id: Stable identifier for the finding.
             title: Human-readable title.
             description: Detailed reason the assessment was skipped.
+            unsupported_input: True when the skip is because the server could
+                not read the artifact at all, rather than because a
+                per-run precondition was unmet. Re-running such an SBOM on the
+                next sweep repeats the rejection verbatim, so the scheduled
+                task backs it off; see ``UNSUPPORTED_INPUT_SKIP_HOURS``.
 
         Returns:
-            AssessmentResult with a single warning finding and
-            metadata={"skipped": True}.
+            AssessmentResult with a single warning finding and metadata
+            containing ``skipped: True``, plus ``unsupported_input: True`` when
+            that argument is set. Consumers should test for the keys they care
+            about rather than compare the dict, since this shape grows.
         """
+        metadata: dict[str, Any] = {"skipped": True}
+        if unsupported_input:
+            metadata["unsupported_input"] = True
         return self._build_single_finding_result(
             finding_id=finding_id,
             title=title,
             description=description,
             status="warning",
             severity="info",
-            metadata={"skipped": True},
+            metadata=metadata,
             warning_count=1,
         )
