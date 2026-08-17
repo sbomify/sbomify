@@ -1,0 +1,37 @@
+# Narration for the long cut of the marketplace walkthrough.
+#
+# The chapter copy is NOT restated here — it is included from the four chapter
+# scripts, for the same reason marketplace_walkthrough.py imports the chapter
+# step functions rather than copying them: the long cut and the short cuts must
+# not drift apart. Edit chapter copy in its own file.
+#
+# Only the framing beats that belong to the long cut live here: the opening
+# title card and the closing call to action.
+voice: ara
+speed: 1.0
+
+include:
+  - walkthrough_chapters_supply_chain
+  - walkthrough_chapters_inventory
+  - walkthrough_chapters_vulnerabilities
+  - walkthrough_chapters_trust_center
+
+beats:
+  tour_intro:
+    text: >-
+      Software supply chain transparency usually arrives as a spreadsheet, a
+      deadline, and somebody's weekend. [pause] It doesn't have to.
+
+  # Write the domain out as words. A replace key may not contain punctuation
+  # (the API rejects it), and "sbomify.com" left bare is read as a URL —
+  # "s-bomba.fi slash dot-com" — rather than spoken.
+  tour_outro:
+    text: >-
+      That's sbomify. Know what you ship, keep every artifact exactly as it was
+      produced, tell the truth about what's actually exploitable, and hand your
+      customers a link instead of an apology. [pause] Start free, at sbomify dot
+      com.
+    caption: >-
+      That's sbomify. Know what you ship, keep every artifact exactly as it was
+      produced, tell the truth about what's actually exploitable, and hand your
+      customers a link instead of an apology. Start free at sbomify.com.

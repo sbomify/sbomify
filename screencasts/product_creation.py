@@ -14,9 +14,11 @@ from conftest import (
     click_into_row,
     create_global_document_component,
     hover_and_click,
+    narrate,
     navigate_to_components,
     navigate_to_products,
     pace,
+    settle,
     start_on_dashboard,
     type_text,
 )
@@ -148,9 +150,10 @@ def _add_identifier(page: Page, identifier_type: str, value: str) -> None:
 
     value_input = page.locator("#add-identifier-value")
     hover_and_click(page, value_input)
-    pace(page, 200)
-    type_text(value_input, value)
-    pace(page, 400)
+    # A CPE string is machine data, not prose — typing it at reading speed
+    # just stalls the video under the narration.
+    type_text(value_input, value, delay=25)
+    pace(page, 300)
 
     submit_btn = modal.locator("button[type='submit']")
     hover_and_click(page, submit_btn)
@@ -178,15 +181,12 @@ def _add_link(page: Page, link_type: str, title: str, url: str) -> None:
 
     title_input = page.locator("#add-link-title")
     hover_and_click(page, title_input)
-    pace(page, 200)
-    type_text(title_input, title)
-    pace(page, 400)
+    type_text(title_input, title, delay=55)
 
     url_input = page.locator("#add-link-url")
     hover_and_click(page, url_input)
-    pace(page, 200)
-    type_text(url_input, url)
-    pace(page, 400)
+    type_text(url_input, url, delay=25)
+    pace(page, 300)
 
     submit_btn = modal.locator("button[type='submit']")
     hover_and_click(page, submit_btn)
@@ -201,7 +201,13 @@ def _edit_lifecycle(page: Page) -> None:
     lifecycle_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 400)
 
-    edit_btn = lifecycle_card.locator("button:has-text('Edit')")
+    # The header's "Edit" button only renders once the product already has
+    # lifecycle dates; a product created moments ago shows the empty state,
+    # whose "Set Dates" button opens the same editor. Match either, and wait
+    # for it — the row's panel is HTMX-loaded, so the card element can be
+    # visible a beat before its contents arrive.
+    edit_btn = lifecycle_card.locator("button:has-text('Set Dates'), button:has-text('Edit')").first
+    edit_btn.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, edit_btn)
     pace(page, 600)
 
@@ -249,18 +255,34 @@ def _edit_lifecycle(page: Page) -> None:
 def product_creation(recording_page: Page) -> None:
     page = recording_page
 
-    start_on_dashboard(page)
+    # Each narrate() starts a line and returns immediately, so the work below
+    # it happens under the voice.  Lines sit before the action they describe.
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Create Components ──────────────────────────────────────────────
+    narrate(page, "components_intro")
     navigate_to_components(page)
 
-    for component_name in COMPONENTS:
+    # Repetitive loops get a line every couple of iterations rather than one
+    # per iteration, so the voice keeps moving without narrating each click.
+    component_beats = {
+        0: "components_first",
+        1: "components_rest",
+        2: "components_rest_two",
+        3: "components_last",
+    }
+    for index, component_name in enumerate(COMPONENTS):
+        if beat := component_beats.get(index):
+            narrate(page, beat)
         _create_component(page, component_name)
 
     # ── 2. Create a global Document component ────────────────────────────
+    narrate(page, "document_component")
     create_global_document_component(page, DOCUMENT_COMPONENT_NAME)
 
     # ── 3. Create Product ─────────────────────────────────────────────────
+    narrate(page, "product_intro")
     navigate_to_products(page)
 
     page.evaluate("window.dispatchEvent(new CustomEvent('open-add-product-modal'))")
@@ -268,47 +290,56 @@ def product_creation(recording_page: Page) -> None:
 
     modal_form = page.locator("#addProductForm")
     modal_form.wait_for(state="visible", timeout=5_000)
-    pace(page, 400)
 
+    narrate(page, "product_name")
     name_input = page.locator("#productName")
     hover_and_click(page, name_input)
-    pace(page, 200)
     type_text(name_input, PRODUCT_NAME)
-    pace(page, 500)
 
+    narrate(page, "product_description")
     desc_input = page.locator("#productDescription")
     hover_and_click(page, desc_input)
-    pace(page, 200)
-    type_text(desc_input, PRODUCT_DESCRIPTION)
-    pace(page, 500)
+    type_text(desc_input, PRODUCT_DESCRIPTION, delay=45)
 
     submit_btn = modal_form.locator("button[type='submit']")
     hover_and_click(page, submit_btn)
 
     page.wait_for_load_state("networkidle")
-    pace(page, 1000)
 
     # ── 4. Click into the product and assign components ──────────────────
+    narrate(page, "assign_intro")
     click_into_row(page, PRODUCT_NAME)
 
-    _assign_items(page, COMPONENTS)
+    _assign_items(page, COMPONENTS[:2])
+    narrate(page, "assign_linkage")
+    _assign_items(page, COMPONENTS[2:])
 
     # ── 5. Add Identifiers (inside the About accordion) ───────────────────
+    narrate(page, "identifiers_intro")
     _expand_about_row(page, "Product identifiers", "product-identifiers-card")
 
-    for id_type, id_value in IDENTIFIERS:
+    identifier_beats = ["identifier_cpe", "identifier_purl"]
+    for beat, (id_type, id_value) in zip(identifier_beats, IDENTIFIERS):
+        narrate(page, beat)
         _add_identifier(page, id_type, id_value)
 
     # ── 6. Add Links ──────────────────────────────────────────────────────
+    narrate(page, "links_intro")
     _expand_about_row(page, "Product links", "product-links-card")
 
-    for link_type, link_title, link_url in LINKS:
+    link_beats = {1: "links_rest", 2: "links_third"}
+    for index, (link_type, link_title, link_url) in enumerate(LINKS):
+        if beat := link_beats.get(index):
+            narrate(page, beat)
         _add_link(page, link_type, link_title, link_url)
 
     # ── 7. Edit Lifecycle ─────────────────────────────────────────────────
+    narrate(page, "lifecycle_intro")
     _expand_about_row(page, "Lifecycle", "product-lifecycle-card")
 
+    narrate(page, "lifecycle_why")
     _edit_lifecycle(page)
 
-    # Final pause to let the viewer see the completed product
-    pace(page, 2000)
+    # Closing line plays over the finished product page.
+    narrate(page, "outro")
+    settle(page)

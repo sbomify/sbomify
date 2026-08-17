@@ -1,0 +1,57 @@
+# Narration for chapter 3 of the marketplace walkthrough — "Know what's
+# exploitable". Also included by marketplace_walkthrough.yaml.
+#
+# This chapter performs a real VEX upload through the UI, so the copy has room
+# to breathe around the dry-run preview.
+voice: ara
+speed: 1.0
+
+beats:
+  vuln_dashboard:
+    text: >-
+      The dashboard leads with what actually needs attention, rather than a
+      count of everything that has ever been found.
+
+  vuln_trends:
+    text: >-
+      Severity trends across every product, over time. This is the view that
+      tells you whether you're getting better or just busier — and it's the one
+      slide that answers the question a board actually asks.
+
+  vuln_drill:
+    text: >-
+      Drill into a component and you get the specifics. The advisory, the
+      package that introduced it, the version that fixes it, and where it
+      stands right now.
+
+  vuln_not_exploitable:
+    text: >-
+      But not every finding is exploitable. Most aren't. [pause] The vulnerable
+      code often isn't reachable in the way you actually use the dependency,
+      and VEX is how you say that in a form a machine can read.
+
+  vuln_upload:
+    text: >-
+      So drop in a CycloneDX VEX document. It's a standard format, which means
+      the statement you're about to make travels to anyone downstream without
+      them having to trust a bespoke report.
+
+  vuln_dry_run:
+    text: >-
+      And before anything is stored, sbomify shows you what it would change.
+      [pause] One finding would be suppressed. Nothing has been written yet.
+      That matters, because a VEX applied by mistake quietly hides something
+      real, and you want to see the effect before you commit to it rather than
+      discover it in an audit.
+
+  vuln_applied:
+    text: >-
+      Apply it, and that finding drops straight out of your working list. The
+      count moves with it, so the number your team looks at every morning is
+      the number of things that actually need doing.
+
+  vuln_nothing_deleted:
+    text: >-
+      But nothing was deleted. [pause] The finding is still there, with your
+      reasoning attached to it, which is exactly what an auditor wants to see —
+      not a shorter list, but a justified one.

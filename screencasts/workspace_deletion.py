@@ -9,8 +9,10 @@ from playwright.sync_api import Page
 
 from conftest import (
     hover_and_click,
+    narrate,
     navigate_to_settings,
     pace,
+    settle,
     start_on_dashboard,
     type_text,
 )
@@ -28,18 +30,20 @@ def workspace_deletion(recording_page: Page) -> None:
     )
 
     # Start on the dashboard so the viewer sees familiar surroundings
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # Click "Settings" in the sidebar
+    narrate(page, "settings")
     navigate_to_settings(page)
 
     # Wait for the HTMX-loaded General tab content (danger zone lives here).
     # Target the workspace danger zone specifically (not the account one).
     danger_card = page.locator(".tw-dangerzone-card", has_text="Delete Workspace")
     danger_card.wait_for(state="visible", timeout=15_000)
-    pace(page, 600)
 
     # Scroll to the danger zone and expand it
+    narrate(page, "expand")
     danger_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
     danger_header = danger_card.locator(".tw-card-header")
@@ -49,23 +53,24 @@ def workspace_deletion(recording_page: Page) -> None:
     # Click "Delete Workspace" to open the modal
     delete_btn = page.locator("button:has-text('Delete Workspace')").first
     hover_and_click(page, delete_btn)
-    pace(page, 800)
+    pace(page, 600)
 
     # Type "delete" character-by-character for a human-like feel.
     # Use the workspace-specific confirm input (id starts with "delete-confirm-")
     # to avoid matching the account deletion modal's input.
+    narrate(page, "confirm")
     confirm_input = page.locator("input[id^='delete-confirm-']")
     confirm_input.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, confirm_input)
-    pace(page, 400)
     type_text(confirm_input, "delete", delay=120)
     pace(page, 600)
 
     # Click "Delete Workspace" in the modal footer
+    narrate(page, "outro")
     confirm_delete_btn = page.get_by_role("button", name="Delete Workspace", exact=True)
     hover_and_click(page, confirm_delete_btn)
 
     # Wait for redirect back to the dashboard
     page.wait_for_url("**/dashboard**", timeout=10_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 2000)
+    settle(page)

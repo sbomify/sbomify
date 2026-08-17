@@ -206,11 +206,16 @@ keycloak-postgres-data/
 # E2E test diff images
 **/tests/e2e/__diffs__/*.jpg
 
-# Screencast recordings
+# Screencast recordings.  Note screencasts/narration/audio/ is deliberately
+# NOT ignored — the synthesized narration is committed so recordings are
+# reproducible without an API key.
 screencasts/output/*.webm
 screencasts/output/*.txt
 screencasts/output/*.md
+screencasts/output/*.vtt
+screencasts/output/*.narration.json
 screencasts/output/screenshots/
+screencasts/narration/audition/
 
 # VSCode settings
 .vscode/

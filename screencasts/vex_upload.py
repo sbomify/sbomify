@@ -22,8 +22,10 @@ from playwright.sync_api import Page
 from conftest import (
     click_into_row,
     hover_and_click,
+    narrate,
     navigate_to_components,
     pace,
+    settle,
     start_on_dashboard,
 )
 from sbomify.apps.core.object_store import S3Client
@@ -110,18 +112,22 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
 def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit: None) -> None:
     page = recording_page
 
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Navigate to Components ────────────────────────────────────────
+    narrate(page, "why_vex")
     navigate_to_components(page)
 
     # ── 2. Click into the seeded component ───────────────────────────────
+    narrate(page, "component")
     click_into_row(page, COMPONENT_NAME)
 
     # ── 3. Open the upload modal from the header's ⋮ menu ────────────────
     # Uploading moved off the page body into a modal behind the component
     # header's meatball menu, so the dropzone does not exist on screen
     # until "Upload artifact…" is picked.
+    narrate(page, "upload_menu")
     more_actions = page.get_by_role("button", name="More actions")
     more_actions.wait_for(state="visible", timeout=15_000)
     pace(page, 800)
@@ -131,6 +137,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     pace(page, 1000)
 
     # ── 4. Pick the VEX artifact type ────────────────────────────────────
+    narrate(page, "pick_type")
     type_select = page.locator("#upload-bom-type")
     type_select.wait_for(state="visible", timeout=10_000)
     pace(page, 1000)
@@ -142,6 +149,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     # Setting files on the input directly mirrors what a real drop does.
     # A VEX file gets a dry-run preview before anything is stored — the
     # counts card is the feature the FAQ wants on screen.
+    narrate(page, "preview")
     file_input = page.locator("#upload-sbom input[type='file']")
     with page.expect_response(lambda r: "/vex-preview" in r.url and r.status == 200, timeout=15_000):
         file_input.set_input_files(
@@ -154,9 +162,11 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
             ]
         )
     page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
-    pace(page, 3000)
+    narrate(page, "preview_detail")
+    settle(page)
 
     # ── 5b. Apply it for real ────────────────────────────────────────────
+    narrate(page, "apply")
     apply_btn = page.locator("button:has-text('Apply this VEX')")
     with page.expect_response(
         lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
@@ -186,7 +196,8 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     pace(page, 2000)
 
     # ── 8. Click through to the VEX artifact page ────────────────────────
+    narrate(page, "outro")
     vex_row_link = page.locator("tr:has(span.tw-badge-violet) a").first
     hover_and_click(page, vex_row_link)
     page.wait_for_load_state("networkidle")
-    pace(page, 3000)
+    settle(page)

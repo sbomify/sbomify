@@ -13,7 +13,13 @@ import pytest
 from django.utils import timezone
 from playwright.sync_api import Page
 
-from conftest import auto_dismiss_toasts, hover_and_click, pace, start_on_dashboard
+from conftest import (
+    auto_dismiss_toasts,
+    hover_and_click,
+    narrate,
+    settle,
+    start_on_dashboard,
+)
 from sbomify.apps.security_advisories.models import (
     AdvisoryEvent,
     AdvisoryProduct,
@@ -78,27 +84,40 @@ def seeded_advisories(pied_piper_product: dict) -> dict:
 def security_advisories(recording_page: Page, seeded_advisories: dict) -> None:
     page = recording_page
     auto_dismiss_toasts(page)
-    start_on_dashboard(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
 
     # ── 1. Navigate to Security Advisories ───────────────────────────────
+    narrate(page, "navigate")
     advisories_link = page.get_by_role("link", name="Security Advisories")
     hover_and_click(page, advisories_link)
     page.wait_for_load_state("networkidle")
-    pace(page, 1500)
 
     # ── 2. Let the list breathe: tallies on top, both lifecycle states ───
+    narrate(page, "the_list")
     page.locator(f"text={OPEN_ADVISORY_TITLE}").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 2500)
+    settle(page)
 
     # ── 3. Open the advisory that is still being worked ──────────────────
-    open_row = page.locator(f"tr:has-text('{OPEN_ADVISORY_TITLE}')").first
+    narrate(page, "open_advisory")
+    # The whole <tr> carries the Alpine @click that navigates, but its centre
+    # sits over the products cell, whose product links are @click.stop — a
+    # click there is swallowed. Aim at the title instead, and confirm the URL
+    # actually changed rather than assuming it did.
+    open_row = page.locator(f"span:text-is('{OPEN_ADVISORY_TITLE}')").first
+    open_row.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, open_row)
+    page.wait_for_url("**/security-advisories/**", timeout=15_000)
     page.wait_for_load_state("networkidle")
-    pace(page, 2000)
 
     # ── 4. Detail: header badges, affected product, CVE, timeline ────────
+    narrate(page, "detail")
     page.locator(f"h1:has-text('{OPEN_ADVISORY_TITLE}')").first.wait_for(state="visible", timeout=15_000)
-    pace(page, 1500)
+    settle(page)
+
+    narrate(page, "timeline")
     timeline_entry = page.locator("text=Reproduced against 5.1.x").first
     timeline_entry.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 2500)
+
+    narrate(page, "outro")
+    settle(page)

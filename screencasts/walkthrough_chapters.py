@@ -44,6 +44,7 @@ from conftest import (
     dismiss_toasts,
     enable_and_configure_trust_center,
     hover_and_click,
+    narrate,
     navigate_to_components,
     navigate_to_products,
     navigate_to_trust_center_tab,
@@ -476,12 +477,14 @@ def chapter_supply_chain(page: Page) -> None:
     identifiers, links, and lifecycle dates a downstream consumer asks for.
     """
     start_on_dashboard(page)
+    narrate(page, "sc_workspace")
     caption(page, "One workspace holds every product you ship.")
     shot(page, "01-dashboard")
     pace(page, 2200)
 
     clear_caption(page)
     navigate_to_products(page)
+    narrate(page, "sc_products")
     caption(page, "Products group the components that make up a shippable thing.")
     shot(page, "02-products-list")
     pace(page, 2400)
@@ -494,6 +497,7 @@ def chapter_supply_chain(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1600)
 
+    narrate(page, "sc_product_detail")
     caption(page, "Pied Piper's compression engine — four components under one product.")
     shot(page, "03-product-overview")
     pace(page, 2600)
@@ -536,6 +540,7 @@ def chapter_inventory(page: Page) -> None:
     years later.
     """
     navigate_to_components(page)
+    narrate(page, "inv_component")
     caption(page, "Every component tracks its own SBOMs, VEX, and documents.")
     shot(page, "06-component-inventory")
     pace(page, 2600)
@@ -543,6 +548,7 @@ def chapter_inventory(page: Page) -> None:
     clear_caption(page)
     click_into_row(page, CORE_COMPONENT)
 
+    narrate(page, "inv_immutable")
     caption(page, "Artifacts are stored exactly as received — never rewritten.")
     shot(page, "07-component-artifacts")
     pace(page, 2800)
@@ -564,6 +570,7 @@ def chapter_inventory(page: Page) -> None:
     releases_card.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, releases_card, 1200)
 
+    narrate(page, "inv_releases")
     caption(page, "Releases pin an exact set of artifacts to a version you shipped.")
     shot(page, "08-releases")
     pace(page, 2800)
@@ -581,6 +588,7 @@ def chapter_inventory(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1800)
 
+    narrate(page, "inv_frozen")
     caption(page, "Every artifact in that build, frozen — years later it still resolves.")
     shot(page, "09-release-artifacts")
     pace(page, 3000)
@@ -600,6 +608,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     drops out of the counts that page your on-call.
     """
     start_on_dashboard(page)
+    narrate(page, "vuln_dashboard")
     caption(page, "The dashboard leads with what actually needs attention.")
     pace(page, 2600)
     shot(page, "10-vulnerability-posture")
@@ -609,6 +618,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     clear_caption(page)
     page.mouse.wheel(0, 700)
     pace(page, 2000)
+    narrate(page, "vuln_trends")
     caption(page, "Severity trends across every product, over time.")
     pace(page, 2400)
     shot(page, "11-vulnerability-trends")
@@ -623,6 +633,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     vulns_card.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, vulns_card, 1400)
 
+    narrate(page, "vuln_drill")
     caption(page, "Drill into a component: advisory, package, fix version, status.")
     shot(page, "12-vulnerability-drilldown")
     pace(page, 3000)
@@ -634,6 +645,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     # dropzone, the dry-run preview, and Apply. Nothing is stubbed above the
     # object store (see the fake_s3 fixture), so the "would suppress: 1" the
     # preview reports is the matcher's own answer.
+    narrate(page, "vuln_not_exploitable")
     caption(page, "Not every finding is exploitable. VEX says so, in a standard format.")
     pace(page, 2600)
     clear_caption(page)
@@ -664,6 +676,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     bom_type.select_option("vex")
     pace(page, 1200)
 
+    narrate(page, "vuln_upload")
     caption(page, "Drop in a CycloneDX VEX — sbomify shows what it would change first.")
     pace(page, 1800)
     clear_caption(page)
@@ -690,6 +703,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     apply_btn.wait_for(state="visible", timeout=20_000)
     smooth_scroll(page, apply_btn, 1400)
 
+    narrate(page, "vuln_dry_run")
     caption(page, "A dry run: one finding would be suppressed, nothing stored yet.")
     pace(page, 3000)
     shot(page, "13-vex-preview")
@@ -717,6 +731,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     hidden_note.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, hidden_note, 800)
 
+    narrate(page, "vuln_applied")
     caption(page, "It drops straight out of your working list — and the count says so.")
     pace(page, 3000)
     shot(page, "14-vex-suppressed-hidden")
@@ -734,6 +749,7 @@ def chapter_vulnerabilities(page: Page) -> None:
     smooth_scroll(page, suppressed, 800)
     suppressed.hover()
 
+    narrate(page, "vuln_nothing_deleted")
     caption(page, "Nothing is deleted — the finding is still there, with the reason attached.")
     pace(page, 3200)
     shot(page, "15-vex-suppression")
@@ -755,6 +771,7 @@ def chapter_trust_center(page: Page) -> None:
     navigate_to_trust_center_tab(page)
     pace(page, 600)
 
+    narrate(page, "tc_enable")
     caption(page, "Turn on a public trust center — no separate site to build.")
     pace(page, 2400)
     clear_caption(page)
@@ -762,6 +779,7 @@ def chapter_trust_center(page: Page) -> None:
     enable_and_configure_trust_center(page)
     rewrite_localhost_urls(page)
 
+    narrate(page, "tc_domain")
     caption(page, "Serve it from your own domain: trust.piedpiper.com.")
     shot(page, "16-trust-center-config")
     pace(page, 2800)
@@ -778,6 +796,7 @@ def chapter_trust_center(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1400)
 
+    narrate(page, "tc_visibility")
     caption(page, "You decide what goes public — per product, per component.")
     pace(page, 2200)
     clear_caption(page)
@@ -799,6 +818,7 @@ def chapter_trust_center(page: Page) -> None:
     rewrite_localhost_urls(page)
     pace(page, 2000)
 
+    narrate(page, "tc_customer_view")
     caption(page, "This is what your customers see — always current, no email thread.")
     shot(page, "17-trust-center-public")
     pace(page, 3200)

@@ -1,0 +1,136 @@
+# Narration for screencasts/product_creation.py — the onboarding flow.
+#
+# Thesis (from /faq/how-do-products-work-in-sbomify/): components hold the
+# SBOMs and usually map to a repository, a product is the thing you actually
+# sell, and attaching one to the other is linkage rather than copying.
+#
+# Written as continuous voiceover — read the `text` values top to bottom and
+# they should sound like one person talking without stopping.  Lines play over
+# the clicking and typing they describe.  This recording is long and its
+# actions are slow (every component assignment reloads the page), so the lines
+# are deliberately generous.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Before sbomify can tell you anything useful, it has to know how your
+      software is actually put together. So let's build that up from nothing,
+      the way you would on your first day.
+
+  components_intro:
+    text: >-
+      Components come first. A component is usually one repository, and it's
+      where the SBOMs themselves end up living. If you have a monorepo, it's
+      whatever you build and version independently.
+
+  components_first:
+    text: >-
+      Naming it is most of the work. This one is the compression library at the
+      heart of the product, and it's the piece everything else depends on.
+
+  components_rest:
+    text: >-
+      Then the rest of the stack. A web dashboard, which is where most of the
+      third party JavaScript will turn up.
+
+  components_rest_two:
+    text: >-
+      The API service that sits behind it, carrying a completely different
+      dependency tree.
+
+  components_last:
+    text: >-
+      And the worker that moves data through the pipeline. [pause] Four
+      repositories, four components. The mapping stays that boring on purpose,
+      because the moment it stops matching your repositories, nobody can tell
+      where a vulnerable package actually lives.
+
+  document_component:
+    text: >-
+      Not every component is code. A SOC 2 report is something your customers
+      will ask for just as often, so it gets a component of its own. [pause]
+      Marking it global means every product in the workspace can point at this
+      same document, instead of each one carrying its own copy that quietly
+      goes out of date.
+
+  product_intro:
+    text: >-
+      A product is the thing you actually sell. It holds no files itself. It
+      gathers up the components that make it real, which is why you can ship
+      the same library in three products without maintaining three copies of
+      anything.
+
+  product_name:
+    text: >-
+      This one is the Pied Piper compression engine.
+
+  product_description:
+    text: >-
+      The description is often the first thing a customer reads on the trust
+      center, so it's worth more than a placeholder.
+
+  assign_intro:
+    text: >-
+      Now attach the components. Each one you add here is a link, not a copy.
+
+  assign_linkage:
+    text: >-
+      That distinction matters more than it sounds. The same component can
+      belong to several products at once without duplicating a single SBOM, so
+      when you upload a new version of that library, every product that ships
+      it is current immediately.
+
+  identifiers_intro:
+    text: >-
+      Identifiers are how the rest of the world names this product. Without
+      them, a vulnerability feed has no way to tell that an advisory is about
+      you, and you find out from a customer instead.
+
+  identifier_cpe:
+    text: >-
+      A CPE is what most vulnerability databases still key on. It's an awkward
+      format, but it's the one the ecosystem agreed on.
+
+  identifier_purl:
+    text: >-
+      And a package URL points at where the thing actually comes from. Between
+      the two, an automated scanner has a fighting chance of matching an
+      advisory to this exact product rather than something with a similar name.
+
+  links_intro:
+    text: >-
+      Links are simpler. They're where somebody goes when they want the real
+      thing rather than a description of it.
+
+  links_rest:
+    text: >-
+      The homepage first, then the source code, so anyone reading an SBOM can
+      get back to where it came from without guessing at a repository name.
+
+  links_third:
+    text: >-
+      And the API documentation. These are all the places a customer or an
+      auditor ends up asking for, usually by email, and usually twice. Putting
+      them here means the answer travels with the product instead of living in
+      somebody's sent folder.
+
+  lifecycle_intro:
+    text: >-
+      Last is the lifecycle, and it's the section people skip.
+
+  lifecycle_why:
+    text: >-
+      A release date, the day support stops, and the day it's end of life.
+      [pause] These are the dates everyone forgets to publish, and they're
+      exactly what a customer needs in order to plan around you. Under the
+      Cyber Resilience Act, stating a support period stops being a courtesy and
+      starts being an expectation.
+
+  outro:
+    text: >-
+      And that's the structure. Components underneath, a product on top, and
+      the metadata that lets the outside world make sense of both. [pause]
+      Everything after this — uploading SBOMs, cutting releases, publishing a
+      trust center — hangs off the shape you just built.

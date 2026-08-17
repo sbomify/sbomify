@@ -1,0 +1,27 @@
+# Narration for chapter 2 of the marketplace walkthrough — "Every artifact,
+# versioned". Also included by marketplace_walkthrough.yaml.
+voice: ara
+speed: 1.0
+
+beats:
+  inv_component:
+    text: >-
+      Each component carries its own artifacts. SBOMs, VEX documents, and the
+      compliance paperwork that goes with them.
+
+  inv_immutable:
+    text: >-
+      And they're stored exactly as received. sbomify never rewrites what you
+      uploaded. [pause] Analysis lands beside the artifact, never inside it, so
+      the file you can hand to an auditor is the file your build produced.
+
+  inv_releases:
+    text: >-
+      A release pins an exact set of those artifacts to a version you actually
+      shipped.
+
+  inv_frozen:
+    text: >-
+      Which means years later it still resolves. [pause] Not the latest of
+      everything, but precisely what went out of the door in that build, which
+      is the question you'll be asked.
