@@ -17,7 +17,11 @@ from sbomify.apps.sboms.models import SBOM
 def _release_with_hbom(team, *, is_public: bool) -> Release:
     product = Product.objects.create(name=f"P {is_public}", team=team, is_public=is_public)
     release = Release.objects.create(product=product, name="v1.0.0")
-    component = Component.objects.create(name="board", team=team)
+    # The public-page scenario needs a listable component: capability flags
+    # come from the visibility-filtered artifact set, so a private component's
+    # HBOM is deliberately not offered to an anonymous viewer.
+    visibility = Component.Visibility.PUBLIC if is_public else Component.Visibility.PRIVATE
+    component = Component.objects.create(name="board", team=team, visibility=visibility)
     hbom = SBOM.objects.create(
         name="board",
         format="cyclonedx",
