@@ -34,6 +34,9 @@ class ObjectStoreClient(ABC):
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]: ...
 
     @abstractmethod
+    def object_exists(self, bucket_name: str, key: str) -> bool: ...
+
+    @abstractmethod
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None: ...
 
     @abstractmethod
@@ -103,6 +106,18 @@ class S3ObjectStoreClient(ObjectStoreClient):
 
     def list_objects(self, bucket_name: str, prefix: str) -> list[str]:
         return [obj.key for obj in self._resource.Bucket(bucket_name).objects.filter(Prefix=prefix)]
+
+    def object_exists(self, bucket_name: str, key: str) -> bool:
+        # HEAD rather than a prefix listing: listing needs the separate
+        # ListBucket permission, which least-privilege policies often withhold
+        # while still granting GetObject, and it costs more for one key.
+        try:
+            self._resource.Object(bucket_name, key).load()
+            return True
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+                return False
+            raise
 
     def upload_file(self, bucket_name: str, file_path: str, key: str) -> None:
         self._resource.Bucket(bucket_name).upload_file(file_path, key)
@@ -269,13 +284,8 @@ class StorageClient:
         self._store.delete_object(bucket_name, object_name)
 
     def object_exists(self, bucket_name: str, object_name: str) -> bool:
-        """Return whether an object is present, without fetching its body.
-
-        Listing under the full key as prefix and matching exactly, rather than
-        a HEAD, keeps this on the backend interface instead of requiring every
-        backend to expose a boto3-shaped ``Object().load()``.
-        """
-        return object_name in self._store.list_objects(bucket_name, object_name)
+        """Return whether an object is present, without fetching its body."""
+        return self._store.object_exists(bucket_name, object_name)
 
     def generate_presigned_url(
         self,

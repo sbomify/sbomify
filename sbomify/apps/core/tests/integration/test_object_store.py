@@ -46,6 +46,46 @@ class TestS3ObjectStoreClient:
         # boto3.client is lazy — not called at construction time
         mock_client.assert_not_called()
 
+    def test_object_exists_uses_head_not_listing(self, mocker: MockerFixture):
+        """Existence is a HEAD, so it does not require ListBucket.
+
+        Least-privilege policies commonly grant GetObject/PutObject/DeleteObject
+        without ListBucket. A prefix-listing implementation would report a
+        readable object as absent (or fail outright) under such a policy.
+        """
+        mock_resource = mocker.patch("boto3.resource")
+        mocker.patch("boto3.client")
+
+        store = S3ObjectStoreClient(region="us-east-1", access_key="k", secret_key="s")
+        assert store.object_exists("my-bucket", "some/key.json") is True
+
+        mock_resource.return_value.Object.assert_called_once_with("my-bucket", "some/key.json")
+        mock_resource.return_value.Object.return_value.load.assert_called_once()
+        # No bucket listing anywhere in that path.
+        mock_resource.return_value.Bucket.assert_not_called()
+
+    def test_object_exists_false_when_head_404s(self, mocker: MockerFixture):
+        mock_resource = mocker.patch("boto3.resource")
+        mocker.patch("boto3.client")
+        mock_resource.return_value.Object.return_value.load.side_effect = ClientError(
+            {"Error": {"Code": "404"}}, "HeadObject"
+        )
+
+        store = S3ObjectStoreClient(region="us-east-1", access_key="k", secret_key="s")
+        assert store.object_exists("my-bucket", "absent.json") is False
+
+    def test_object_exists_propagates_other_errors(self, mocker: MockerFixture):
+        """AccessDenied must not read as absent."""
+        mock_resource = mocker.patch("boto3.resource")
+        mocker.patch("boto3.client")
+        mock_resource.return_value.Object.return_value.load.side_effect = ClientError(
+            {"Error": {"Code": "AccessDenied"}}, "HeadObject"
+        )
+
+        store = S3ObjectStoreClient(region="us-east-1", access_key="k", secret_key="s")
+        with pytest.raises(ClientError):
+            store.object_exists("my-bucket", "forbidden.json")
+
     def test_signature_version_is_pinned_to_s3v4(self, mocker: MockerFixture):
         """SigV4 is set explicitly, not left to botocore to resolve.
 
@@ -372,6 +412,11 @@ class TestStorageClient:
         client = StorageClient("MEDIA")
         client.download_file("my-bucket", "key", "/tmp/file.txt")
         self.mock_store.download_file.assert_called_once_with("my-bucket", "key", "/tmp/file.txt")
+
+    def test_object_exists_delegates(self):
+        self.mock_store.object_exists.return_value = True
+        assert StorageClient("SBOMS").object_exists("my-bucket", "k.json") is True
+        self.mock_store.object_exists.assert_called_once_with("my-bucket", "k.json")
 
     def test_generate_presigned_url_delegates(self):
         self.mock_store.generate_presigned_url.return_value = "https://s3.example.com/presigned"
