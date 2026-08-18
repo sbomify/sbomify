@@ -822,6 +822,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-cotton"
+version = "2.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/cd/5c467a1495b756f56246a6d8d36425517cd01bd3aa4bc6209a821f83ec74/django_cotton-2.7.2.tar.gz", hash = "sha256:7e050042873f724beaa5824e86d5034ced2f7de1c5478c3a9d8c053e05caa8ac", size = 33171, upload-time = "2026-06-01T22:52:00.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/9b/d75158f6280906befada54f9cb17c10d5e0eac078d8d2e189e2f90da0fc1/django_cotton-2.7.2-py3-none-any.whl", hash = "sha256:1b293037ead54ab228362654da00ededc5ca52b2ff407b6087a81cfd9390850e", size = 32084, upload-time = "2026-06-01T22:52:01.238Z" },
+]
+
+[[package]]
 name = "django-debug-toolbar"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2855,6 +2867,7 @@ dependencies = [
     { name = "django" },
     { name = "django-allauth" },
     { name = "django-anymail", extra = ["sendgrid"] },
+    { name = "django-cotton" },
     { name = "django-dramatiq" },
     { name = "django-extensions" },
     { name = "django-health-check" },
@@ -2936,6 +2949,7 @@ requires-dist = [
     { name = "django", specifier = ">=5.2.14,<7" },
     { name = "django-allauth", specifier = ">=65.11.2,<66" },
     { name = "django-anymail", extras = ["sendgrid"], specifier = "~=15.0" },
+    { name = "django-cotton", specifier = ">=2.7.2" },
     { name = "django-dramatiq", specifier = ">=0.15.0" },
     { name = "django-extensions", specifier = "~=4.1" },
     { name = "django-health-check", specifier = ">=3.20.0,<5" },

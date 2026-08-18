@@ -35,7 +35,7 @@
                         </h2>
 
                         <div class="info-message-body">
-                            <p class="instruction">${kcSanitize(message.summary)}</p>
+                            <p class="instruction">${kcSanitize(message.summary)?no_esc}</p>
                         </div>
 
                         <div class="info-footer">

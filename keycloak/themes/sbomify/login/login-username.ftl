@@ -25,15 +25,7 @@
                     </div>
                     <h2 class="form-title">Forgot Your Username?</h2>
 
-                    <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
-                        <div class="alert alert-${message.type}" role="alert" aria-live="polite">
-                            <#if message.type = 'success'><span class="alert-icon" aria-hidden="true">✓</span></#if>
-                            <#if message.type = 'warning'><span class="alert-icon" aria-hidden="true">⚠</span></#if>
-                            <#if message.type = 'error'><span class="alert-icon" aria-hidden="true">✕</span></#if>
-                            <#if message.type = 'info'><span class="alert-icon" aria-hidden="true">ℹ</span></#if>
-                            <span class="alert-text">${kcSanitize(message.summary)}</span>
-                        </div>
-                    </#if>
+                    <@components.alertBanner />
 
                     <form id="kc-recover-username-form" action="${url.loginAction}" method="post">
                         <@components.formScripts formId="kc-recover-username-form" submittingText="Finding Username..." />

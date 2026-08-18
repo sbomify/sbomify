@@ -1,0 +1,15 @@
+{% comment %}
+The accent carrier of the design language: a flat 12% tint of the accent with
+the accent as foreground. Every "icon beside a heading" is one of these, from
+stat cards to modal headers to empty states. The slot is the icon.
+
+Size and radius are two conditional segments, so circle replaces the radius
+rather than stacking a second one on top of the size's.
+
+accent names a token (neutral, info, success, warning, danger). With no accent
+the chip reads --chip-accent from itself or an ancestor and falls back to
+primary, so a one-off tint is still style="--chip-accent: var(--color-accent-pink)".
+{% endcomment %}
+<c-vars size accent circle class />
+<span class="shrink-0 flex items-center justify-center {% if size == 'sm' %}w-8 h-8 text-sm{% elif size == 'lg' %}w-12 h-12 text-lg{% elif size == 'xl' %}w-14 h-14 text-xl{% else %}w-10 h-10{% endif %} {% if circle %}rounded-full{% elif size == 'sm' %}rounded-md{% elif size == 'lg' %}rounded-[0.625rem]{% elif size == 'xl' %}rounded-xl{% else %}rounded-lg{% endif %} {% if accent == 'neutral' %}bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)] text-text-muted{% elif accent == 'info' %}bg-[color-mix(in_oklab,var(--color-info)_12%,transparent)] text-info{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] text-success{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)] text-warning{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)] text-danger{% else %}bg-[color-mix(in_oklab,var(--chip-accent,var(--color-primary))_12%,transparent)] text-[color:var(--chip-accent,var(--color-primary))]{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

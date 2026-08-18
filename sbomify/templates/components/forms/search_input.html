@@ -1,0 +1,40 @@
+{% comment %}
+A search field with the magnifier inside it and a clear button on the right.
+
+The input comes first in the DOM and carries peer, so the icon and the clear
+button react to it in CSS alone: the icon takes the brand colour while the field
+has focus, and the clear button fades in once there is something to clear. Both
+sit on top of the field, so the order they are written in does not move them.
+
+model names the Alpine property the field reads and writes, the way the date
+picker takes value_binding. Given one, the field is bound to it and the clear
+button empties it; without one the field is a plain input driven by whatever
+attributes the caller passes (an hx-get, a form submit). Attributes land on the
+input, which is the thing a caller configures; class lands on the wrapper,
+which is the thing a caller sizes.
+
+hint reserves room on the right for a trailing shortcut hint, the navbar's ⌘K,
+which goes in the slot along with anything else that sits over the field.
+{% endcomment %}
+<c-vars name id model icon="fas fa-search" placeholder hint class />
+<div class="relative{% if class %} {{ class }}{% endif %}">
+    <input type="search"
+           {% if id or name %}id="{% firstof id name %}"{% endif %}
+           {% if name %}name="{{ name }}"{% endif %}
+           {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+           class="peer w-full py-3 pl-11 {% if hint %}pr-14{% else %}pr-4{% endif %} bg-surface border-[1.5px] border-solid border-border rounded-lg text-text text-sm leading-[1.5] transition-all duration-200 placeholder:text-text-muted hover:not-focus:border-border-light focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]"
+           {% if model %}x-model="{{ model }}"{% endif %}
+           {{ attrs }}>
+    <i class="{{ icon }} absolute left-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none transition-[color] duration-200 peer-focus:text-primary"
+       aria-hidden="true"></i>
+    {% if model %}
+        <button type="button"
+                class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 rounded-full text-text-muted opacity-0 transition-all duration-150 peer-[:not(:placeholder-shown)]:opacity-100 hover:bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-text"
+                x-show="{{ model }}"
+                @click="{{ model }} = ''"
+                aria-label="Clear search">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+    {% endif %}
+    {{ slot }}
+</div>

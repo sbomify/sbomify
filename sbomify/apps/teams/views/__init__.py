@@ -25,6 +25,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from sbomify.apps.billing.models import BillingPlan
+from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY, ROLE_OWNER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.posthog_service import capture_for_request
@@ -36,7 +37,9 @@ from sbomify.apps.teams.models import (
     Member,
     Team,
 )
-from sbomify.apps.teams.queries import count_team_members, count_team_owners
+from sbomify.apps.teams.permissions import check_member_removal
+from sbomify.apps.teams.queries import count_team_members
+from sbomify.apps.teams.services.member_notifications import notify_owners_of_owner_invitation
 from sbomify.apps.teams.utils import (
     redirect_to_team_settings,
     switch_active_workspace,
@@ -183,7 +186,7 @@ def switch_team(request: HttpRequest, team_key: str) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_url_team(["owner", "admin"])
+@validate_role_in_url_team(list(ADMINISTER))
 def team_details(request: HttpRequest, team_key: str) -> HttpResponse:
     """Redirect to team settings for unified interface."""
     return redirect("teams:team_settings", team_key=team_key)
@@ -204,55 +207,20 @@ def delete_member(request: HttpRequest, membership_id: int) -> HttpResponse:
         return redirect("core:dashboard")
 
     # Authorize against the TARGET membership's workspace: this view takes a bare PK, so
-    # the session workspace is not a valid basis. Only owners/admins of that workspace.
-    actor_membership = Member.objects.filter(user=user, team=membership.team).first()
-    if actor_membership is None or actor_membership.role not in ("owner", "admin"):
-        return error_response(
-            request,
-            HttpResponseForbidden("You don't have permission to manage this workspace's members"),
-        )
-
-    if actor_membership.role == "admin":
-        # Admins cannot remove owners
-        if membership.role == "owner":
-            messages.add_message(
-                request,
-                messages.ERROR,
-                "Admins cannot remove workspace owners.",
-            )
-            return redirect("teams:team_settings", team_key=membership.team.key)
-
-        # Admins cannot remove their own membership UNLESS they have pending invites
-        if membership.user_id == request.user.id:
-            # Check if user has pending invites - if so, allow self-removal
-            from sbomify.apps.teams.models import Invitation
-
-            has_pending_invites = Invitation.objects.filter(email=request.user.email).exists()
-
-            if not has_pending_invites:
-                return error_response(
-                    request,
-                    HttpResponseForbidden(
-                        "Admins cannot remove their own membership. Only workspace owners can remove members."
-                    ),
-                )
-
-    # Prevent removing the last owner
-    if membership.role == "owner":
-        owners_count = count_team_owners(membership.team.id)
-        if owners_count <= 1:
-            messages.add_message(
-                request,
-                messages.WARNING,
-                "Cannot delete the only owner of the team. Please assign another owner first.",
-            )
-            return redirect_to_team_settings(membership.team.key or "", "members")
+    # the session workspace is not a valid basis. Rules (including the owner
+    # protections) are shared with the settings members tab via check_member_removal.
+    denial = check_member_removal(actor=user, target=membership)
+    if denial:
+        if denial.forbidden:
+            return error_response(request, HttpResponseForbidden(denial.message))
+        messages.add_message(request, denial.level, denial.message)
+        return redirect_to_team_settings(membership.team.key or "", "members")
 
     return remove_member_safely(request, membership)
 
 
 @login_required
-@validate_role_in_url_team(["owner"])
+@validate_role_in_url_team(list(ADMINISTER))
 def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpResponse:
     team_id = token_to_number(team_key)
     context: dict[str, Any] = {"team_key": team_key}
@@ -335,6 +303,19 @@ def invite(request: HttpRequest, team_key: str) -> HttpResponseForbidden | HttpR
             email_domain = invited_email.rsplit("@", 1)[-1].lower() if "@" in invited_email else ""
             captured_role = invite_user_form.cleaned_data["role"]
             captured_team_key = team.key
+
+            # Admins may invite at any level, including owner. That makes the
+            # "admins cannot remove an owner" rule bypassable in principle — an
+            # admin could mint an owner they control. The boundary is about
+            # preventing accidents, not defending against a malicious admin, so
+            # rather than forbidding it we make it visible: tell the existing
+            # owners whenever an owner-level invitation is created.
+            actor_role = (
+                Member.objects.filter(user=cast(User, request.user), team=team).values_list("role", flat=True).first()
+                or ""
+            )
+            if captured_role in OWNER_ONLY and actor_role not in OWNER_ONLY:
+                notify_owners_of_owner_invitation(team, cast(User, request.user), invited_email)
             transaction.on_commit(
                 lambda: capture_for_request(
                     request,
@@ -450,6 +431,25 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         if existing_membership:
             # Update role if invitation role is different
             old_role = existing_membership.role
+
+            # An invitation must never DEMOTE an existing owner. Accepting one
+            # re-writes the membership's role, which would otherwise route
+            # around "an admin may not remove an owner": an admin could invite
+            # an existing owner back at a lower role and strip their ownership
+            # on accept, with none of the removal guards consulted. Demoting the
+            # last owner would also leave the workspace ownerless — nobody could
+            # then delete it (OWNER_ONLY) and the primary-owner lookup in
+            # teams.apis would return None.
+            if old_role == ROLE_OWNER and invitation.role != ROLE_OWNER:
+                invitation.delete()
+                messages.add_message(
+                    request,
+                    messages.WARNING,
+                    f"You are already an owner of {invitation.team.name}, so this invitation was not applied. "
+                    "Owner roles can only be changed by another owner.",
+                )
+                return redirect("core:dashboard")
+
             role_changed = old_role != invitation.role
             if role_changed:
                 existing_membership.role = invitation.role
@@ -652,7 +652,7 @@ def delete_invite(request: HttpRequest, invitation_id: int) -> HttpResponse:
 
     # Authorize against the invitation's OWN workspace (bare PK -> session is not a valid basis).
     actor_membership = Member.objects.filter(user=cast(User, request.user), team=invitation.team).first()
-    if actor_membership is None or actor_membership.role != "owner":
+    if actor_membership is None or actor_membership.role not in ADMINISTER:
         return error_response(
             request,
             HttpResponseForbidden("You don't have permission to manage this workspace's invitations"),
@@ -684,7 +684,7 @@ def settings_redirect(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@validate_role_in_url_team(["owner", "admin"])
+@validate_role_in_url_team(list(ADMINISTER))
 def team_settings_redirect(request: HttpRequest, team_key: str) -> HttpResponse:
     """
     Redirect /workspace/{team_key}/settings/ to the unified settings interface.

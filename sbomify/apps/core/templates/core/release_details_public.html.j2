@@ -29,8 +29,8 @@
                     <span class="tc-eyebrow-dot" aria-hidden="true"></span>
                     Release
                 </p>
-                {% if release.is_latest %}<span class="tw-badge tw-badge-success">Latest</span>{% endif %}
-                {% if release.is_prerelease %}<span class="tw-badge tw-badge-warning">Pre-release</span>{% endif %}
+                {% if release.is_latest %}<c-badges.success>Latest</c-badges.success>{% endif %}
+                {% if release.is_prerelease %}<c-badges.warning>Pre-release</c-badges.warning>{% endif %}
             </div>
             <h1 class="tc-detail-title">{{ release.name }}</h1>
             {% if release.description %}<p class="tc-detail-summary">{{ release.description }}</p>{% endif %}
@@ -55,46 +55,43 @@
         <div class="tc-panel">
             <h2 class="tc-panel-title">Download this release</h2>
             <p class="tc-prose mb-4">Combined artifacts covering everything in this release.</p>
+            {% comment %}
+            outline-primary, not outline: the workspace accent overrides in
+            public_base drove the legacy outline button to the accent, and
+            public_base hands the accent to a library button as its primary.
+            {% endcomment %}
             <div class="flex gap-3 flex-wrap">
                 {% if release.has_sboms %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                       href="{% url 'api-1:download_release' release.id %}"
-                       title="Download release as CycloneDX">
-                        <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                             alt="CycloneDX"
-                             class="h-5 w-auto dark:brightness-0 dark:invert"
-                             width="20"
-                             height="20">
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                    </a>
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                       href="{% url 'api-1:download_release' release.id %}?format=spdx"
-                       title="Download release as SPDX">
-                        <img src="{% static 'img/spdx-logo.svg' %}"
-                             alt="SPDX"
-                             class="h-5 w-auto dark:brightness-0 dark:invert"
-                             width="20"
-                             height="20">
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                    </a>
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release' release.id %}" title="Download release as CycloneDX" class="no-underline">
+                    <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                         alt="CycloneDX"
+                         class="h-5 w-auto dark:brightness-0 dark:invert"
+                         width="20"
+                         height="20">
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release' release.id %}?format=spdx" title="Download release as SPDX" class="no-underline">
+                    <img src="{% static 'img/spdx-logo.svg' %}"
+                         alt="SPDX"
+                         class="h-5 w-auto dark:brightness-0 dark:invert"
+                         width="20"
+                         height="20">
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
                 {% endif %}
                 {% if release.has_vex %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                       href="{% url 'api-1:download_release_vex' release.id %}"
-                       title="Download latest VEX (CycloneDX)">
-                        <i class="fas fa-file-contract text-info" aria-hidden="true"></i>
-                        <span class="text-sm font-semibold tracking-wide">VEX</span>
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                    </a>
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release_vex' release.id %}" title="Download latest VEX (CycloneDX)" class="no-underline">
+                    <i class="fas fa-file-contract" aria-hidden="true"></i>
+                    <span>VEX</span>
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
                 {% endif %}
                 {% if release.has_cbom %}
-                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                       href="{% url 'api-1:download_release_cbom' release.id %}"
-                       title="Download CBOM (Cryptography BOM, CycloneDX)">
-                        <i class="fas fa-key text-success" aria-hidden="true"></i>
-                        <span class="text-sm font-semibold tracking-wide">CBOM</span>
-                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                    </a>
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release_cbom' release.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)" class="no-underline">
+                    <i class="fas fa-key" aria-hidden="true"></i>
+                    <span>CBOM</span>
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
                 {% endif %}
             </div>
         </div>
@@ -103,49 +100,41 @@
     {% if vuln_posture.has_data %}
         {{ vuln_posture|json_script:"vuln-posture-data" }}
         <div class="tc-panel"
-             x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); }, sevPill(sev) { return { critical: 'bg-red-500/10 text-red-600', high: 'bg-orange-500/10 text-orange-600', medium: 'bg-yellow-500/10 text-yellow-700', low: 'bg-cyan-500/10 text-cyan-600' }[sev] || 'bg-border/40 text-text-muted'; } }"
+             x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); } }"
              x-init="init()">
             <h2 class="tc-panel-title">Vulnerability posture</h2>
             <div class="space-y-5">
                 {# Severity breakdown (VEX applied) #}
                 <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-background border border-border">
-                        <div>
-                            <span class="text-xl font-bold text-text" x-text="data.counts.total"></span>
-                            <span class="block text-xs text-text-muted">Total</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-red-600" x-text="data.counts.critical"></span>
-                            <span class="block text-xs text-text-muted">Critical</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-orange-500/5 border border-orange-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-orange-600" x-text="data.counts.high"></span>
-                            <span class="block text-xs text-text-muted">High</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-yellow-700" x-text="data.counts.medium"></span>
-                            <span class="block text-xs text-text-muted">Medium</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10">
-                        <div>
-                            <span class="text-xl font-bold text-cyan-600" x-text="data.counts.low"></span>
-                            <span class="block text-xs text-text-muted">Low</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 p-3 rounded-lg bg-background border border-border">
-                        <div>
-                            <span class="text-xl font-bold text-text-muted"
-                                  x-text="data.counts.unknown"></span>
-                            <span class="block text-xs text-text-muted">Unknown</span>
-                        </div>
-                    </div>
+                    <c-layout.stat-card compact>
+                    <c-layout.stat.value x-text="data.counts.total" />
+                    <c-layout.stat.label>Total</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    {% comment %}
+                    The severity bands are not the card's four named accents, so each
+                    one points --stat-accent at its own severity token, exactly as the
+                    stylesheet expected.
+                    {% endcomment %}
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-critical)">
+                    <c-layout.stat.value x-text="data.counts.critical" />
+                    <c-layout.stat.label>Critical</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-high)">
+                    <c-layout.stat.value x-text="data.counts.high" />
+                    <c-layout.stat.label>High</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-medium)">
+                    <c-layout.stat.value x-text="data.counts.medium" />
+                    <c-layout.stat.label>Medium</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-low)">
+                    <c-layout.stat.value x-text="data.counts.low" />
+                    <c-layout.stat.label>Low</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact accent="muted">
+                    <c-layout.stat.value x-text="data.counts.unknown" />
+                    <c-layout.stat.label>Unknown</c-layout.stat.label>
+                    </c-layout.stat-card>
                 </div>
                 {# Suppression note #}
                 <p class="text-sm text-text-muted m-0 flex items-center gap-2 flex-wrap"
@@ -163,19 +152,15 @@
                     <template x-for="f in data.findings" :key="f.idx">
                         <div class="py-2.5 flex items-start gap-3"
                              :class="f.suppressed ? 'opacity-50' : ''">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase flex-shrink-0"
-                                  :class="sevPill(f.severity)"
-                                  x-text="f.severity"></span>
+                            {# The band comes from the row Alpine builds, so it binds data-level. #}
+                            <c-badges.severity-dynamic class="flex-shrink-0" ::data-level="f.severity" x-text="f.severity" />
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="font-mono text-sm text-text px-1.5 py-0.5 rounded bg-border/30"
-                                          x-text="f.id"></span>
+                                    <c-code-inline x-text="f.id" />
                                     <span class="text-text-muted text-xs"
                                           x-show="f.component"
                                           x-text="f.component + (f.component_version ? ' ' + f.component_version : '')"></span>
-                                    <span class="tw-badge tw-badge-secondary text-xs"
-                                          x-show="f.suppressed"
-                                          x-text="f.state.replace(/_/g, ' ')"></span>
+                                    <c-badges.secondary x-show="f.suppressed" x-text="f.state.replace(/_/g, ' ')" />
                                 </div>
                                 <p class="text-xs text-text-muted m-0 mt-0.5"
                                    x-show="f.suppressed &amp;&amp; f.justification"

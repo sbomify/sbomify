@@ -1,0 +1,8 @@
+{% comment %}
+The lower half of a callout, where the controls live. Layout for the controls
+themselves comes from the caller's class, as the compliance steps do.
+{% endcomment %}
+<c-vars class />
+<div class="px-4 pt-3 pb-4{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

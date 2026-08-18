@@ -207,26 +207,86 @@ htmx_error_response(message, triggers=None, content=None)    # error toast + HX-
 htmx_error_from_exception(error: DomainError)                # converts DomainError via content=error.to_dict()
 ```
 
-### Frontend Architecture (ADR-005)
+### Frontend (UI)
 
-| Layer     | Technology                           | Responsibility                                   |
-| --------- | ------------------------------------ | ------------------------------------------------ |
-| Structure | Django/Jinja2 templates (`.html.j2`) | HTML generation, server-side logic               |
-| Styling   | Tailwind CSS                         | Visual presentation via `tw-*` component classes |
-| State     | Alpine.js                            | Component state, client-side interactivity       |
-| Updates   | HTMX                                 | Partial page updates, form submissions           |
+| Layer     | Technology                                   | Responsibility                             |
+| --------- | -------------------------------------------- | ------------------------------------------ |
+| Structure | Components (`sbomify/templates/components/`) | The HTML every page composes               |
+| Styling   | Tailwind utilities, inside components        | Visual presentation                        |
+| State     | Alpine.js                                    | Component state, client-side interactivity |
+| Updates   | HTMX                                         | Partial page updates, form submissions     |
 
-Key patterns:
+**Pages compose components. They do not style.** A page may use layout
+utilities (grid, flex, spacing) and nothing else. The moment you write a
+styled control, a repeated visual pattern, or anything wanting its own class,
+it belongs in `sbomify/templates/components/`.
 
-- **Tailwind component classes**: `tw-btn-primary`, `tw-badge-success`, `tw-form-input`, `tw-card-*`, `tw-data-table` — defined in `sbomify/assets/css/tailwind.src.css`
-- **Jinja2 component macros**: Reusable UI in `sbomify/apps/core/templates/components/tw/` (button, card, modal, input, badge, etc.)
-- **Server data to Alpine.js**: Use `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')` — never client-side fetch
-- **HTMX partials**: Views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
-- **Dark mode**: `.dark` class on `<html>` element (not `[data-bs-theme]`)
-- **Component reference**: The tw-tests page at `/tailwind-test/` is the source of truth for all component patterns
+```html
+{# No load tag needed: <c-dir.name> works in any template #}
+<c-tables.shell>
+  <c-tables.toolbar>
+    <c-tables.search id="things-search" label="Search things" x-model="search" />
+  </c-tables.toolbar>
+  <c-tables.table fixed>…</c-tables.table>
+</c-tables.shell>
+
+<c-buttons.primary size="sm" hx-get="{% url 'core:new_thing' %}">New thing</c-buttons.primary>
+```
+
+**Two references, both live, neither prose.** Browse `/design-system/`
+(DEBUG-only, URL name `core:design_system`) to see every component rendered
+with its variants. Read the component's own file for its parameters: each one
+opens with a comment explaining what it is for and why it is built that way.
+The gallery is built from the components, so a broken component breaks the
+gallery first.
+
+Adding to the library: a variant is a new file nesting the base and passing
+`variant_class`; a modifier (size, state, density) is a prop. Ship it with a
+gallery demo in `core/design_system.html.j2` in the same change.
+
+Colour, radius, shadow and type come from the tokens in
+`sbomify/assets/css/tailwind.src.css` (`:root` is dark, `:root.light`
+overrides). Use token utilities (`bg-surface`, `text-text-muted`,
+`border-border`) or arbitrary values referencing tokens
+(`bg-[color-mix(in_oklab,var(--color-primary)_12%,transparent)]`). A raw hex
+in a diff is a review blocker.
+
+#### The things that actually break
+
+- **Two utilities for one CSS property.** Tailwind resolves them by stylesheet
+  order, not the order you wrote them. Prop-dependent utilities must render as
+  ONE `{% if %}` segment covering every case.
+- **A `{# … #}` comment spanning more than one line is not a comment.** Django's
+  tag pattern is single-line, so the text renders on the page or becomes junk
+  attributes. Use `{% comment %}…{% endcomment %}`.
+- **`:class` on a `<c-*>` tag.** Cotton reads a leading `:` as its own dynamic-prop
+  prefix, so Alpine's bindings there are written `::class` / `::style`. On plain
+  HTML inside a component they pass through untouched.
+- **An omitted `<c-vars>` prop is undefined, not empty.** `{% if class %}` is safe;
+  `"x-"|add:class` raises `VariableDoesNotExist`.
+- **A form control does not inherit `text-transform`.** The UA stylesheet resets it,
+  so a label wrapped in a `<button>` drops out of its parent's casing.
+- **State belongs on the real element.** `disabled` on the button, `:checked` on the
+  input, `[aria-disabled]` on a link. Never a styled sibling.
+- **State only the browser knows goes on a data attribute.** The component carries
+  every recipe keyed by `data-*`, the caller binds the value
+  (`<c-badges.dynamic ::data-variant="row.status_variant" />`). Never hand a page a
+  class expression: Tailwind never compiles a computed class name.
+- **Referencing a class that does not exist fails silently.** Grep before shipping.
+- **Copy is part of the component.** See Copy under Key Conventions; in UI it is a
+  review blocker, same as a raw hex.
+
+#### Other
+
+- **Server data to Alpine**: `{{ data|json_script:"id" }}` + `window.parseJsonScript('id')`, never client-side fetch
+- **HTMX partials**: views return partial HTML for HTMX requests; triggers like `hx-trigger="refresh-items from:body"`
+- **Theme**: `.dark` / `.light` class on `<html>`; dark is the default
 - **Vite entry points** in `vite.config.ts`: core, sboms, teams, billing, documents, vulnerability_scanning, plugins (plus alerts, djangoMessages, htmxBundle, tailwind). Dev server runs on port **5170**
-
-> **Migration note**: Bootstrap and Tailwind coexist during transition. New components use Tailwind exclusively. Bootstrap is removed once all pages are converted.
+- **Changing an existing page**: it probably has an e2e snapshot. Change structure
+  only, and if the baselines move, confirm every move was intended before
+  regenerating them.
+- **`tw-*` classes are the old layer.** Do not add callers and do not delete them;
+  unmigrated pages still consume them.
 
 ### API Layer
 
@@ -281,14 +341,27 @@ Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requi
 
 ### Team Roles and Permissions
 
-Supported roles: `"owner"`, `"admin"`, `"guest"` (defined in `TEAMS_SUPPORTED_ROLES`). Legacy code may reference `"member"` but it is not in the current choices. CBV mixins in `sbomify.apps.teams.permissions`:
+Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. Legacy rows may still carry `"member"`, which is not in the current choices.
+
+**`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
+
+1. **The ladder stays linear** — `guest ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
+
+Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `MANAGE` = `DELETE` = `READ_INTERNAL` (owner + admin) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+
+Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 
 ```python
+from sbomify.apps.core.authz import ADMINISTER
+
 class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)  # not a hardcoded ["owner", "admin"]
 ```
 
-`GuestAccessBlockedMixin` redirects guest members to the public workspace page.
+**`guest` is an external role and holds no capability tier at all.** A guest `Member` row is an ACL anchor for the trust-center access-request/NDA machinery, not a grant: guests reach restricted content solely through the attribute-based `component:access` path (`core/services/access_control.py`), never through a role check. `GuestAccessBlockedMixin` redirects guest members to the public workspace page. Do not add `guest` to a tier — if an external user needs to contribute, that is what the internal roles are for.
+
+**Templates must not branch on `request.session.current_team.role`** — that is a cache with a 300s TTL. Use the capability flags from `core.context_processors.team_context`, which read the live `Member` row: `can_administer`, `can_manage`, `can_delete`, `is_owner`. User-facing role explanations live in `authz.ROLE_DESCRIPTIONS` and render on the workspace members tab.
 
 ## Key Conventions
 
@@ -296,6 +369,23 @@ class MyView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 
 - "sbomify" is always lowercase
 - "Workspace" in UI maps to "Team" in models (legacy naming)
+
+### Copy (anything a user reads)
+
+Covers UI strings, labels, hints, placeholders, empty states, toasts, error
+messages and docs pages.
+
+- **Never use an em dash (—) or an en dash (–) as punctuation.** Use a comma, a
+  colon, a full stop, or split it into two sentences.
+- Keep it short. One idea per sentence. Cut any word that does not change the
+  meaning.
+- Use plain words. "Fix" not "remediation", "version" not "release artifact
+  revision", "delete" not "permanently remove".
+- Say what the user does or gets, not how it works inside. Names of internal
+  models, statuses and fields are not copy.
+- Write a button as the action it performs: "Create advisory", not "Submit".
+
+In UI this is a review blocker, same as a raw hex value.
 
 ### Python
 
