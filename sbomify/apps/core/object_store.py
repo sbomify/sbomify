@@ -141,13 +141,17 @@ class S3ObjectStoreClient(ObjectStoreClient):
     ) -> str:
         if expires_in <= 0:
             raise ValueError(f"expires_in must be positive, got {expires_in}")
-        params: dict[str, str] = {"Bucket": bucket_name, "Key": key}
         # Response-header overrides (ResponseContentDisposition,
         # ResponseContentType) are signed into the URL, so callers that need a
         # download to arrive as an attachment rather than render inline can say
         # so without reaching past this class for a raw boto3 client.
-        if response_headers:
-            params.update(response_headers)
+        #
+        # Applied first so Bucket and Key always come from this call's own
+        # arguments: the other order would let a stray "Bucket" in the mapping
+        # sign a URL for a different object than the caller named.
+        params: dict[str, str] = dict(response_headers or {})
+        params["Bucket"] = bucket_name
+        params["Key"] = key
         url: str = self._client.generate_presigned_url(
             "get_object",
             Params=params,

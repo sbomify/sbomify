@@ -86,6 +86,33 @@ class TestS3ObjectStoreClient:
         with pytest.raises(ClientError):
             store.object_exists("my-bucket", "forbidden.json")
 
+    def test_response_headers_cannot_override_bucket_or_key(self, mocker: MockerFixture):
+        """The call's own arguments win over the response-header mapping.
+
+        Applying the mapping last would let a stray "Bucket" or "Key" sign a URL
+        for a different object than the caller named, which on a presigned URL
+        means handing out access to something else entirely.
+        """
+        mocker.patch("boto3.resource")
+        mock_client_fn = mocker.patch("boto3.client")
+
+        store = S3ObjectStoreClient(region="us-east-1", access_key="k", secret_key="s")
+        store.generate_presigned_url(
+            "right-bucket",
+            "right/key.zip",
+            expires_in=900,
+            response_headers={
+                "Bucket": "attacker-bucket",
+                "Key": "someone/elses.zip",
+                "ResponseContentType": "application/zip",
+            },
+        )
+
+        params = mock_client_fn.return_value.generate_presigned_url.call_args.kwargs["Params"]
+        assert params["Bucket"] == "right-bucket"
+        assert params["Key"] == "right/key.zip"
+        assert params["ResponseContentType"] == "application/zip"
+
     def test_signature_version_is_pinned_to_s3v4(self, mocker: MockerFixture):
         """SigV4 is set explicitly, not left to botocore to resolve.
 
