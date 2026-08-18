@@ -78,7 +78,7 @@
         <tbody>
             <template x-for="artifact in paginatedArtifacts" :key="artifact.id">
                 <c-tables.row>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center"
                      :class="getArtifactIconClass(artifact)">
                     <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
@@ -226,7 +226,7 @@
                 <tbody>
                     <template x-for="artifact in filteredAvailableArtifacts" :key="artifact.id">
                         <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" ::class="isSelected(artifact.id) ? 'bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'" tabindex="0" @click="toggleArtifactSelection(artifact.id)" @keydown.enter.prevent="toggleArtifactSelection(artifact.id)" @keydown.space.prevent="toggleArtifactSelection(artifact.id)">
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <c-forms.checkbox ::checked="isSelected(artifact.id)" @click.stop="toggleArtifactSelection(artifact.id)" ::aria-label="'Select ' + artifact.name" />
                         </c-tables.cell>
                         <c-tables.cell>

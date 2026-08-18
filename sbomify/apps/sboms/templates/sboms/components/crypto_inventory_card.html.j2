@@ -101,7 +101,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
         {% for asset in crypto_inventory.assets %}
             <tbody x-data="{ open: false }" x-show="pageSet.has({{ forloop.counter0 }})">
                 <c-tables.row class="cursor-pointer" @click="open = !open">
-                <c-tables.cell class="w-6">
+                <c-tables.cell class="w-6" nowrap>
                 <i class="fas fa-chevron-right text-xs transition-transform"
                    :class="open ? 'rotate-90' : ''"></i>
                 </c-tables.cell>
@@ -155,7 +155,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                 </c-tables.cell>
                 </c-tables.row>
                 <c-tables.row x-show="open" x-cloak>
-                <c-tables.cell></c-tables.cell>
+                <c-tables.cell nowrap></c-tables.cell>
                 <c-tables.cell colspan="5">
                 <div class="rounded-lg bg-border/20 px-4 py-3 space-y-2 text-sm">
                     <p class="m-0 text-text">{{ asset.pqc_reason }}</p>

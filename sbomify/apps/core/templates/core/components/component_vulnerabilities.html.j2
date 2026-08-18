@@ -53,7 +53,7 @@
         <tbody>
             {% for vuln in latest_vulns %}
                 <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% if vuln.severity == 'critical' or vuln.severity == 'high' or vuln.severity == 'medium' or vuln.severity == 'low' %}
                     <c-badges.severity level="{{ vuln.severity|lower }}" class="
                     {% if vuln.vex_suppressed %}line-through{% endif %}

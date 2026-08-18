@@ -148,7 +148,7 @@
                         </c-tables.row>
                     {% endfor %}
                     <c-tables.row x-show="matched.length === 0" x-cloak>
-                    <c-tables.cell colspan="4">
+                    <c-tables.cell colspan="4" nowrap>
                     <c-feedback.empty-state icon="fas fa-magnifying-glass" icon_variant="neutral" title="No products match">
                     No product name or description contains "<span x-text="q"></span>".
                     </c-feedback.empty-state>

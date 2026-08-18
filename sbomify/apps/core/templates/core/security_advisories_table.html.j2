@@ -47,7 +47,7 @@
                     component. Severity is not a variant: it binds data-level and
                     c-badges.severity-dynamic owns the five CVSS recipes.
                 {% endcomment %}
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
                 </c-tables.cell>
                 <c-tables.cell nowrap>

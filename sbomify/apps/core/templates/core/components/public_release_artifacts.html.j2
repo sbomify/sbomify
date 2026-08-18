@@ -30,7 +30,7 @@
             <tbody>
                 <template x-for="artifact in filteredArtifacts" :key="artifact.id">
                     <c-tables.row>
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <span class="w-8 h-8 rounded flex items-center justify-center"
                           :class="effType(artifact) === 'sbom' ? 'bg-primary/10 text-primary' : effType(artifact) === 'vex' ? 'bg-info/10 text-info' : effType(artifact) === 'cbom' ? 'bg-success/10 text-success' : effType(artifact) === 'document' ? 'bg-warning/10 text-warning' : 'bg-border/30 text-text-muted'">
                         <i :class="effType(artifact) === 'sbom' ? 'fas fa-file-code' : effType(artifact) === 'vex' ? 'fas fa-file-contract' : effType(artifact) === 'cbom' ? 'fas fa-key' : effType(artifact) === 'document' ? 'fas fa-file-alt' : 'fas fa-file'"></i>
