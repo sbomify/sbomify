@@ -116,7 +116,7 @@
                                minlength="3"
                                pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
                                placeholder="my-company"
-                               disabled="{{ can_administer|yesno:',1' }}">
+                               {% if not can_administer %}disabled{% endif %}>
                     </div>
                     <p class="tw-form-hint mt-2">
                         Your Trust Center will be available at:
@@ -130,7 +130,7 @@
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-save mr-2"></i>Save Slug
                     </button>
                 </div>
@@ -292,7 +292,7 @@
                             <select id="security_txt_contact_id"
                                     name="security_txt_contact_id"
                                     class="tw-form-select"
-                                    disabled="{{ can_administer|yesno:',1' }}">
+                                    {% if not can_administer %}disabled{% endif %}>
                                 <option value="">Auto-detect (security contact from default profile)</option>
                                 {% for contact in security_txt_contacts %}
                                     <option value="{{ contact.id }}"
@@ -324,7 +324,7 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.policy_url|default:'' }}"
                                        placeholder="https://example.com/security-policy"
-                                       disabled="{{ can_administer|yesno:',1' }}">
+                                       {% if not can_administer %}disabled{% endif %}>
                                 <p class="tw-form-hint mt-1">Vulnerability disclosure policy</p>
                             </div>
                             {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
@@ -337,11 +337,11 @@
                                                class="tw-form-input flex-1"
                                                x-model="urls[index]"
                                                placeholder="https://example.com/pgp-key.txt"
-                                               disabled="{{ can_administer|yesno:',1' }}">
+                                               {% if not can_administer %}disabled{% endif %}>
                                         <button type="button"
                                                 @click="urls.splice(index, 1)"
                                                 class="tw-btn-outline-primary tw-btn-sm text-danger"
-                                                disabled="{{ can_administer|yesno:',1' }}">
+                                                {% if not can_administer %}disabled{% endif %}>
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -349,7 +349,7 @@
                                 <button type="button"
                                         @click="urls.push('')"
                                         class="text-xs text-primary hover:underline"
-                                        disabled="{{ can_administer|yesno:',1' }}">
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <i class="fas fa-plus mr-1"></i>Add encryption key URL
                                 </button>
                                 <input type="hidden"
@@ -365,7 +365,7 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.acknowledgments_url|default:'' }}"
                                        placeholder="https://example.com/hall-of-fame"
-                                       disabled="{{ can_administer|yesno:',1' }}">
+                                       {% if not can_administer %}disabled{% endif %}>
                                 <p class="tw-form-hint mt-1">Security researcher acknowledgments</p>
                             </div>
                             <div>
@@ -376,7 +376,7 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.hiring_url|default:'' }}"
                                        placeholder="https://example.com/security-jobs"
-                                       disabled="{{ can_administer|yesno:',1' }}">
+                                       {% if not can_administer %}disabled{% endif %}>
                                 <p class="tw-form-hint mt-1">Security-related job openings</p>
                             </div>
                         </div>
@@ -393,7 +393,7 @@
                                 <button type="button"
                                         @click="open = !open"
                                         class="tw-form-input w-full text-left flex items-center justify-between"
-                                        disabled="{{ can_administer|yesno:',1' }}">
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <span x-text="selected.length ? selected.join(', ') : 'Select languages'"
                                           class="truncate"
                                           :class="{ 'text-text-muted': !selected.length }"></span>
@@ -456,7 +456,7 @@
                     {% endif %}
                     <button type="submit"
                             class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-save mr-2"></i>Save
                     </button>
                 </div>
@@ -493,13 +493,13 @@
                               rows="4"
                               maxlength="500"
                               placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
-                              disabled="{{ can_administer|yesno:',1' }}">{{ branding_info.trust_center_description|default:'' }}</textarea>
+                              {% if not can_administer %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
                     <span class="tw-form-hint">Max 500 characters. Leave empty to use the default description.</span>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-save mr-2"></i>Save Description
                     </button>
                 </div>
@@ -628,7 +628,7 @@
                            name="company_nda_file"
                            class="sr-only"
                            accept=".pdf"
-                           disabled="{{ can_administer|yesno:',1' }}"
+                           {% if not can_administer %}disabled{% endif %}
                            required
                            @change="fileName = $event.target.files[0] ? $event.target.files[0].name : ''">
                     <div class="tw-file-upload-icon">
@@ -647,7 +647,7 @@
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
+                            {% if not can_administer %}disabled{% endif %}>
                         <i class="fas fa-upload mr-2"></i>
                         {% if company_nda_document %}
                             Upload New Version
