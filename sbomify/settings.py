@@ -182,6 +182,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "django_vite",
     "django_htmx",
+    "django_cotton",
     "ninja",
     "widget_tweaks",
     "allauth",
@@ -297,6 +298,17 @@ TEMPLATES = [
         },
     },
 ]
+
+# django-cotton: the component library engine. Components are .html files
+# under sbomify/templates/components/; <c-dir.name> renders them anywhere
+# with no load tag. Isolation keeps components props-only, like a React
+# component: page context does not leak in.
+# The isolation setting is named COTTON_ENABLE_CONTEXT_ISOLATION in 2.7.2.
+# The docs site documents COTTON_ISOLATE_BY_DEFAULT, which this version does
+# not read, so that name silently leaves isolation off. Check the installed
+# package before renaming it.
+COTTON_DIR = "components"
+COTTON_ENABLE_CONTEXT_ISOLATION = True
 
 WSGI_APPLICATION = "sbomify.wsgi.application"
 ASGI_APPLICATION = "sbomify.asgi.application"
@@ -966,6 +978,14 @@ API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/m
 # apply to them. Keyed per client IP. Generous enough that a human browsing the
 # Trust Center never notices, low enough to blunt scripted enumeration.
 API_ANONYMOUS_RATE_LIMIT = os.environ.get("API_ANONYMOUS_RATE_LIMIT", "120/min")
+
+# Caddy's on-demand TLS ask, kept out of the bucket above. It fires once per
+# TLS handshake against an unprovisioned hostname, so a client probing
+# hostnames could otherwise spend the whole anonymous budget and take the Trust
+# Center and OIDC exchange with it — while any throttled ask is a certificate
+# Caddy then refuses to issue. Set above the handshake rate real traffic
+# produces; the decision cache in front of the endpoint absorbs the repeats.
+ON_DEMAND_TLS_RATE_LIMIT = os.environ.get("ON_DEMAND_TLS_RATE_LIMIT", "600/min")
 
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend

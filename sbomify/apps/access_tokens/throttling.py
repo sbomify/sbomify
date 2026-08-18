@@ -131,6 +131,34 @@ class AnonymousIPRateThrottle(AccessTokenRateThrottle):
         return f"{self.cache_key_prefix}_{client_ip}"
 
 
+class OnDemandTLSRateThrottle(AnonymousIPRateThrottle):
+    """Budget for Caddy's on-demand TLS ask, separate from the public surfaces.
+
+    The ask is issued once per TLS handshake against an unprovisioned hostname,
+    so its natural rate is set by whoever is connecting rather than by anything
+    sbomify does. Sharing ``AnonymousIPRateThrottle``'s bucket meant a client
+    probing hostnames could spend the whole anonymous budget and take the Trust
+    Center pages and the OIDC exchange down with it — and, in the other
+    direction, ordinary anonymous traffic could throttle certificate issuance.
+    Caddy reads any non-200 as "do not issue", so a throttled ask is a refused
+    certificate.
+
+    The distinct ``cache_key_prefix`` is what separates the two windows; without
+    it this would read and write the same counter it was split off from.
+
+    Still a per-IP limit rather than none: the route is blocked externally at
+    the proxy, but a control that depends on one layer being configured
+    correctly is not a control. Set well above the handshake rate a real
+    workspace produces, since the decision cache in front of it already absorbs
+    the repeats.
+    """
+
+    cache_key_prefix = "throttle_ondemand_tls"
+
+    def __init__(self, rate: str | None = None) -> None:
+        super().__init__(rate or settings.ON_DEMAND_TLS_RATE_LIMIT)
+
+
 class RateLimitHeadersMiddleware:
     """Surface the per-token throttle budget as X-RateLimit-* response headers (#1076).
 

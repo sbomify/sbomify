@@ -215,8 +215,11 @@ ENTITY_SEARCHES: tuple[tuple[str, str, Any, Any], ...] = (
         "advisories",
         "fa-shield-halved",
         _advisory_rows,
+        # Title first. The identifier is long enough to eat the row on its own,
+        # and leading with it meant the half that got truncated away was the
+        # readable one, which is the half someone scans for.
         lambda row: (
-            f"{row.tracking_id or row.id} · {row.title}",
+            f"{row.title} · {row.tracking_id or row.id}",
             reverse("core:security_advisory_detail", kwargs={"advisory_id": row.id}),
         ),
     ),

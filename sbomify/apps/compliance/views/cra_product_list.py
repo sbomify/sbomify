@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.compliance.permissions import check_cra_access
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.utils import get_team_id_from_session
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 
@@ -19,7 +20,7 @@ class CRAProductListView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     user has owner/admin role before get() is reached.
     """
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest) -> HttpResponse:
         current_team = request.session.get("current_team", {})

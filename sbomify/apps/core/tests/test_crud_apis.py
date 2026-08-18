@@ -3120,8 +3120,8 @@ def test_create_component_no_default_profile(
 
 
 @pytest.mark.django_db
-def test_delete_product_admin_forbidden(sample_team_with_owner_member: Member):  # noqa: F811
-    """Deleting a product is owner-only (#468); an admin gets 403 and the product survives."""
+def test_delete_product_admin_allowed(sample_team_with_owner_member: Member):  # noqa: F811
+    """Deleting a product is the DELETE tier (owner + admin)."""
     team = sample_team_with_owner_member.team
     product = Product.objects.create(name="admin-del-product", team=team)
     admin = User.objects.create_user(username="admin-del-product-user", password="x")
@@ -3131,13 +3131,13 @@ def test_delete_product_admin_forbidden(sample_team_with_owner_member: Member): 
     client.force_login(admin)
     response = client.delete(reverse("api-1:delete_product", kwargs={"product_id": product.id}))
 
-    assert response.status_code == 403
-    assert Product.objects.filter(id=product.id).exists()
+    assert response.status_code == 204
+    assert not Product.objects.filter(id=product.id).exists()
 
 
 @pytest.mark.django_db
-def test_delete_component_admin_forbidden(sample_team_with_owner_member: Member):  # noqa: F811
-    """Deleting a component is owner-only (#468); an admin gets 403 and the component survives."""
+def test_delete_component_admin_allowed(sample_team_with_owner_member: Member):  # noqa: F811
+    """Deleting a component is the DELETE tier (owner + admin)."""
     team = sample_team_with_owner_member.team
     component = Component.objects.create(name="admin-del-comp", team=team)
     admin = User.objects.create_user(username="admin-del-comp-user", password="x")
@@ -3147,8 +3147,8 @@ def test_delete_component_admin_forbidden(sample_team_with_owner_member: Member)
     client.force_login(admin)
     response = client.delete(reverse("api-1:delete_component", kwargs={"component_id": component.id}))
 
-    assert response.status_code == 403
-    assert Component.objects.filter(id=component.id).exists()
+    assert response.status_code == 204
+    assert not Component.objects.filter(id=component.id).exists()
 
 
 @pytest.mark.django_db

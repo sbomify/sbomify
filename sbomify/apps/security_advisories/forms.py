@@ -1,4 +1,4 @@
-"""Validation for the New Advisory modal.
+"""Validation for the New Advisory form.
 
 A plain ``Form`` rather than a ``ModelForm``: one submission writes an advisory,
 its products, a vulnerability, per-product statuses and release ranges, so there
@@ -12,12 +12,12 @@ from typing import Any
 from django import forms
 
 from sbomify.apps.core.models import Product, Release
-from sbomify.apps.security_advisories.models import CVE_ID_RE, Severity
+from sbomify.apps.security_advisories.models import CVE_ID_RE, SecurityAdvisory, Severity
 from sbomify.apps.teams.models import Team
 
 
 class AdvisoryCreateForm(forms.Form):
-    """The New Advisory modal's fields, scoped to one workspace.
+    """The New Advisory form's fields, scoped to one workspace.
 
     ``products`` and ``affected_releases`` querysets are restricted to the team
     at construction, so another workspace's ids fail validation rather than
@@ -26,7 +26,11 @@ class AdvisoryCreateForm(forms.Form):
 
     title = forms.CharField(max_length=255)
     severity = forms.ChoiceField(choices=Severity.choices, required=False)
-    # The modal's single identifier field: a CVE, another database's id
+    # Where the team already is on fixing it. Most advisories open at
+    # "identified", but one being written up after the work started should not
+    # have to be created wrong and then corrected on its own timeline.
+    remediation_status = forms.ChoiceField(choices=SecurityAdvisory.RemediationStatus.choices, required=False)
+    # The form's single identifier field: a CVE, another database's id
     # (GHSA-…), or a URL. clean_vulnerability_id sorts out which.
     vulnerability_id = forms.CharField(max_length=100, required=False)
     description = forms.CharField(required=False, widget=forms.Textarea)

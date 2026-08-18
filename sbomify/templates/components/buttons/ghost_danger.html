@@ -1,0 +1,11 @@
+{% comment %}
+The ghost button in danger ink: a destructive action that is not the primary
+one on the row (revoke every token, discard a draft). It carries no fill until
+the pointer arrives, so it sits beside a filled danger button without competing
+with it; for the action that commits, use c-buttons.danger.
+
+The hairline and the pressed state are the ghost's, so only the ink and the
+hover wash change; the recipe is complete, so no two colours land together.
+{% endcomment %}
+<c-vars size type="button" href loading disabled class />
+<c-buttons.button variant_class="bg-transparent text-danger border border-solid border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] hover:text-danger hover:border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] active:bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] active:scale-[0.98]" size="{{ size }}" type="{{ type }}" href="{{ href }}" :loading="loading" :disabled="disabled" class="{{ class }}" :attrs="attrs">{{ slot }}</c-buttons.button>

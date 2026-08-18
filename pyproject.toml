@@ -72,6 +72,7 @@ dependencies = [
     # Pinned below 2.0: the v2 line renames the server class (FastMCP ->
     # MCPServer) and is still a release candidate as of 2026-07.
     "mcp>=1.28.1,<2",
+    "django-cotton>=2.7.2",
 ]
 
 [project.urls]

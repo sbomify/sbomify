@@ -15,6 +15,7 @@ from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.models import User
@@ -35,7 +36,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     # accepted into this view. Removing it is a deliberate
     # tightening: those rows were never meant to have token-management
     # privileges, and the canonical role list is the source of truth.
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None

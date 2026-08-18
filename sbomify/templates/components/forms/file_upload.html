@@ -1,0 +1,53 @@
+{% comment %}
+The drop zone, in plain Tailwind utilities: a dashed panel that is also the
+label for a file input, so clicking anywhere on it opens the picker and the
+keyboard reaches it through the input.
+
+The drag state is the caller's, because only the caller knows what a drop does.
+Pass active, the Alpine expression that is true while a file is over the zone,
+and the drop handlers themselves (@dragover.prevent, @dragleave.prevent,
+@drop.prevent) as attributes; they land on the panel. active swaps the whole
+border-and-background recipe rather than adding to it: border style, border
+colour and background would otherwise each have two utilities on the element at
+once, and Tailwind settles that by stylesheet order, not by which one Alpine
+added last.
+
+The main line is the slot; hint is the second, quieter line. on_change is the
+Alpine handler for the picked file, which belongs on the input rather than on
+the panel.
+
+The medallion is a span around the mark, not the mark itself, as it is on the
+empty state: Font Awesome's own `display: inline-block` is unlayered, so it
+outranks a `flex` utility on the same element and the circle rendered as a pill
+sized to the glyph. The size of the mark lives inside it.
+
+static renders the same panel with no picker in it, for the state that replaces
+the zone rather than offering it: an upload in flight, showing a spinner and a
+line of text. The slot is the whole content there, since a status panel has no
+main line, no hint and no input. The panel recipe is written once above and both
+branches read it, so the two shapes cannot drift apart.
+{% endcomment %}
+<c-vars name id accept active on_change icon="fas fa-cloud-arrow-up" hint static class />
+{% with zone="group flex flex-col items-center justify-center px-8 py-10 border-2 rounded-xl transition-all duration-200" resting="border-dashed border-border bg-background" %}
+    {% if static %}
+        <div class="{{ zone }} {{ resting }}{% if class %} {{ class }}{% endif %}"
+             {{ attrs }}>{{ slot }}
+        </div>
+    {% else %}
+        <label class="{{ zone }} cursor-pointer hover:border-primary hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)]{% if not active %} {{ resting }}{% endif %}{% if class %} {{ class }}{% endif %}"
+               {% if active %}:class="{{ active }} ? 'border-solid border-primary bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)]' : '{{ resting }}'"{% endif %}
+               {{ attrs }}>
+            <span class="w-16 h-16 flex items-center justify-center rounded-full bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary mb-4 transition-transform duration-300 group-hover:scale-110">
+                <i class="{{ icon }} text-2xl" aria-hidden="true"></i>
+            </span>
+            <span class="text-[0.9375rem] font-medium text-text text-center">{{ slot }}</span>
+            {% if hint %}<span class="text-[0.8125rem] text-text-muted mt-2">{{ hint }}</span>{% endif %}
+            <input type="file"
+                   {% if id or name %}id="{% firstof id name %}"{% endif %}
+                   {% if name %}name="{{ name }}"{% endif %}
+                   {% if accept %}accept="{{ accept }}"{% endif %}
+                   class="sr-only"
+                   {% if on_change %}@change="{{ on_change }}"{% endif %}>
+        </label>
+    {% endif %}
+{% endwith %}

@@ -33,6 +33,22 @@ class StripeError(Exception):
     pass
 
 
+class StripeResourceMissingError(StripeError):
+    """The object we asked Stripe about does not exist there.
+
+    Stripe answers ``resource_missing`` when an id we hold refers to nothing —
+    a subscription deleted out of band, or a record left behind by a different
+    Stripe account. Distinct from its ``InvalidRequestError`` siblings because
+    it is the one that says something about *our* stored state rather than
+    about the request: retrying cannot fix it, and no amount of waiting will
+    make the id resolve.
+
+    Callers that hold the id are expected to reconcile rather than retry.
+    """
+
+    pass
+
+
 class BillingRetryableError(StripeError):
     """A transient/recoverable failure that Stripe should retry.
 
@@ -67,7 +83,29 @@ def handle_stripe_errors(func: F) -> F:
             logger.error("Card error: code=%s, param=%s", e.code, e.param)
             raise StripeError(f"Card error: {e.user_message}") from e
         except stripe.error.InvalidRequestError as e:
-            logger.error("Invalid Stripe request: param=%s, message=%s", e.param, str(e))
+            # ``code`` is what the branch below keys on, so it belongs in the
+            # line too — otherwise the log says a request was invalid without
+            # saying which way, and the classification that follows looks
+            # arbitrary to whoever is reading back.
+            code = getattr(e, "code", None)
+            # The message is withheld for resource_missing because Stripe puts
+            # the object id in it verbatim — "No such subscription: 'sub_…'".
+            # CodeQL flagged the sweep's own log line for exactly that, and
+            # dropping it there while this one still wrote it on the first
+            # occurrence would have moved the identifier rather than removed
+            # it. ``code`` and ``param`` say which request failed and how,
+            # which is what the line is for.
+            if code == "resource_missing":
+                logger.error("Invalid Stripe request: code=%s, param=%s", code, e.param)
+            else:
+                logger.error("Invalid Stripe request: code=%s, param=%s, message=%s", code, e.param, str(e))
+            # Separated from its siblings so a caller can tell "the id I stored
+            # refers to nothing" apart from "this request was malformed". Both
+            # are terminal, but only the first is a statement about our own
+            # data, and only the first is worth reconciling instead of
+            # reporting.
+            if code == "resource_missing":
+                raise StripeResourceMissingError("Referenced object does not exist at the payment provider.") from e
             raise StripeError("Invalid request to payment provider.") from e
         except stripe.error.AuthenticationError as e:
             logger.error("Stripe authentication error")

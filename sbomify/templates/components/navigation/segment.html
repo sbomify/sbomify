@@ -1,0 +1,27 @@
+{% comment %}
+One button of a segmented control, inside c-navigation.segmented.
+
+Which segment is chosen is client state, so the caller binds the state and
+never a class:
+
+    <c-navigation.segment ::data-active="activeChart === 'timeline'" @click="setChart('timeline')">Timeline</c-navigation.segment>
+
+The chosen recipe hangs off data-active, so an unknown or missing value simply
+renders the resting look. Recipes match c-navigation.tab inside
+c-navigation.tabs-pills, which is the server-rendered twin.
+
+The resting ink is an arbitrary value rather than text-text-muted: that utility
+is declared !important in tailwind.src.css, and an important declaration
+outranks every data-[active=true]:text-… rule however specific. Hover keeps
+text-text, whose flag is what put the hovered pill's ink over the chosen one
+in the stylesheet too.
+
+The line-height is stated because .tw-tab set a font-size and inherited 1.5;
+text-sm alone carries 1.4286 and renders the strip a pixel short.
+{% endcomment %}
+<c-vars type="button" class />
+<button type="{{ type }}"
+        data-active="false"
+        class="relative px-5 py-3.5 text-sm leading-[1.5] font-medium rounded-md transition-all duration-200 text-[color:var(--color-text-muted)] hover:text-text hover:bg-[color-mix(in_oklab,var(--color-surface)_50%,transparent)] focus-visible:outline-none focus-visible:text-text focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] data-[active=true]:text-primary data-[active=true]:bg-surface data-[active=true]:hover:bg-surface data-[active=true]:shadow-[var(--shadow-xs)]{% if class %} {{ class }}{% endif %}"
+        {{ attrs }}>{{ slot }}
+</button>

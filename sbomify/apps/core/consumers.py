@@ -19,6 +19,14 @@ logger = getLogger(__name__)
 # here because it is the case this is actually about.
 _SOCKET_GONE = (ConnectionError, OSError)
 
+# RFC 6455 close codes, named because the distinction between them is the whole
+# contract with the client: the store retries everything except the codes that
+# are a verdict about this client, so a rejection has to be told apart from an
+# outage or the client either retries something permanent or gives up on
+# something temporary.
+WS_CLOSE_POLICY_VIOLATION = 1008  # this client may not connect — do not retry
+WS_CLOSE_SERVICE_RESTART = 1012  # the server is unavailable — please retry
+
 
 def _is_socket_closed(exc: RuntimeError) -> bool:
     """Whether a ``RuntimeError`` is Channels saying the socket is already shut.
@@ -48,17 +56,59 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
     URL pattern: ws/workspace/<workspace_key>/
     """
 
+    async def _reject(self, code: int) -> None:
+        """Close a socket that never joined the workspace group.
+
+        Drops ``group_name`` first so ``disconnect()`` skips its
+        ``group_discard``. Accepting the handshake before applying the verdict
+        means Channels now runs ``disconnect()`` for rejected sockets too, and
+        that discard is a broker round trip for a group this connection was
+        never in. It lands hardest in the case that needs it least: when
+        ``group_add`` has just failed because the broker is down, every
+        rejected socket would add another call to it.
+        """
+        if hasattr(self, "group_name"):
+            del self.group_name
+        await self.close(code=code)
+
     async def connect(self) -> None:
         """Handle WebSocket connection."""
         # Get workspace key from URL route
         self.workspace_key = self.scope["url_route"]["kwargs"]["workspace_key"]
         self.group_name = f"workspace_{self.workspace_key}"
 
+        # Accepted before the verdicts below, so that a verdict can be
+        # delivered at all. Per the ASGI spec a ``websocket.close`` sent before
+        # ``websocket.accept`` makes the server refuse the handshake with HTTP
+        # 403, and a refused handshake carries no close code — the browser
+        # reports 1006 for all of them, which is also what it reports for a
+        # dropped network. Closing after the handshake is the only way the code
+        # reaches ``onclose``.
+        #
+        # Nothing is sent and no group is joined until the checks below pass,
+        # so an unauthorised client learns nothing from the accept.
+        try:
+            await self.accept()
+        except Exception as exc:
+            logger.warning(f"WebSocket accept failed for workspace {self.workspace_key}: {exc!r}")
+            logger.debug("accept traceback", exc_info=True)
+            # Returning without answering at all leaves the handshake pending:
+            # no 101 and no close frame, so the browser waits out its own
+            # timeout and onclose never delivers a code the client can act on,
+            # while this consumer sits in await_many_dispatch holding its
+            # channel. Best-effort, since whatever broke the accept will often
+            # break this too — but an unanswered handshake is the worse end.
+            try:
+                await self._reject(WS_CLOSE_SERVICE_RESTART)
+            except Exception:
+                logger.debug("close after failed accept also failed", exc_info=True)
+            return
+
         # Check if user is authenticated
         user = self.scope.get("user")
         if not user or not user.is_authenticated:
             logger.warning(f"WebSocket connection rejected: unauthenticated user for workspace {self.workspace_key}")
-            await self.close()
+            await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
         # Verify user is a member of this workspace
@@ -68,7 +118,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             logger.warning(
                 f"WebSocket connection rejected: user {user_id} is not a member of workspace {self.workspace_key}"
             )
-            await self.close()
+            await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
         # Join workspace group. A broker mid-restart raises here; closing
@@ -84,23 +134,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
         except Exception as exc:
             logger.warning(f"WebSocket group join failed for workspace {self.workspace_key}: {exc!r}")
             logger.debug("group_add traceback", exc_info=True)
-            await self.close(code=1012)
-            return
-
-        try:
-            await self.accept()
-        except Exception as exc:
-            logger.warning(f"WebSocket accept failed for workspace {self.workspace_key}: {exc!r}")
-            logger.debug("accept traceback", exc_info=True)
-            # The group membership was taken and disconnect() never runs for a
-            # socket that was never accepted, so it would sit in the group
-            # until the channel layer expired it, and every broadcast would
-            # keep addressing a channel with nobody on the other end.
-            try:
-                await self.channel_layer.group_discard(self.group_name, self.channel_name)
-            except Exception:
-                logger.debug("group_discard after failed accept also failed", exc_info=True)
-            await self.close(code=1012)
+            await self._reject(WS_CLOSE_SERVICE_RESTART)
             return
 
         connected_user_id = user.id  # type: ignore[attr-defined]
