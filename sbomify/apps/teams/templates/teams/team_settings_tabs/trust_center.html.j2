@@ -181,7 +181,9 @@
                       :class="securityTxtEnabled ? 'text-success' : 'text-text-muted'"
                       x-text="securityTxtEnabled ? 'Enabled' : 'Disabled'"></span>
             </div>
-            <p class="text-sm text-text-muted mt-1 m-0">Help security researchers report vulnerabilities via a standard contact file.</p>
+            <p class="text-sm text-text-muted mt-1 m-0">
+                Help security researchers report vulnerabilities via a standard contact file.
+            </p>
             <form method="post"
                   action="{% url 'teams:team_settings' team.key %}"
                   class="mt-4">
