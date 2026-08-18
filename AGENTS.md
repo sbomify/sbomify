@@ -328,15 +328,23 @@ reading it:
 
 | Use `<c-branded.*>` | Use the main library |
 | --- | --- |
-| Anything with a **solid fill** a reader must read text on | Date, search, select, checkbox, text fields |
-| The page and section headings, record rows, figures | Tables, pagination, the filter panel |
-| The primary action, status the workspace owns | Alerts, empty states, spinners |
+| The page and section headings, record rows, figures | **Buttons** |
+| Status the workspace owns, the restricted callout | Date, search, select, checkbox, text fields |
+| The nav and its current marker | Tables, pagination, the filter panel |
+| Any surface holding the above | Alerts, empty states, spinners |
 
-The test is readability, not taste. A filled control needs `--brand-ink`, which
-only the branded library measures, so a filled main-library button on a public
-page renders `text-white` on whatever the accent is: fine on navy, unreadable on
-pale amber. Neutral controls have no fill to be unreadable on, so they can and
-should stay global and look like the rest of sbomify.
+Buttons are the app's, not the library's. A trust centre button should look like
+an sbomify button, and every one there today is `c-buttons.secondary`, which is
+neutral and carries no fill to be unreadable on.
+
+That leaves one constraint to respect rather than discover. `c-buttons.primary`
+hardcodes `text-white`, and `.public-page [data-button]` remaps `--color-primary`
+to the workspace accent, so a filled button on a public page is white text on
+whatever colour the workspace picked: fine on navy, unreadable on pale amber. No
+token can fix it, because the ink is not a token. **So do not put a filled
+main-library button on a public page.** There are 8 today, on pages this branch
+has not touched; they need either a neutral variant or an ink measured from
+`ink_on_color`.
 
 `public_base.htmx.j2` tries to remap `--color-primary` to the workspace accent at
 `:root`, but the app stylesheet loads after that inline block and wins, so the

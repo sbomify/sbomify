@@ -1,7 +1,0 @@
-{% comment %}
-The quiet button. It stays on the platform's neutral tokens and only borrows
-the brand for its hover tint, so a page of branded controls still has one
-obvious primary action. A workspace cannot make this one loud.
-{% endcomment %}
-<c-vars size type="button" href disabled class />
-<c-branded.buttons.button variant_class="bg-surface text-text hover:text-text border border-solid border-border hover:border-[color-mix(in_oklab,var(--brand)_45%,transparent)] hover:bg-[color-mix(in_oklab,var(--brand)_8%,transparent)]" size="{{ size }}" type="{{ type }}" href="{{ href }}" :disabled="disabled" class="{{ class }}" :attrs="attrs">{{ slot }}</c-branded.buttons.button>

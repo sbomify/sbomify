@@ -4,7 +4,9 @@ These components are shown to our users' users, so two things are pinned here
 that the main library does not have to worry about.
 
 First, the brand only ever reaches the page through c-branded.theme, as two
-custom properties, and the ink is measured rather than chosen. A workspace can
+custom properties, and the ink is measured rather than chosen. Buttons are not
+in this library: the trust centre uses the app's own, so there is no branded
+button to test here. A workspace can
 colour what a reader acts on and nothing they read against.
 
 Second, branded components render on the public pages, which still load seven
@@ -80,22 +82,6 @@ def test_theme_replaces_a_css_injection_rather_than_escaping_it(rendered: str) -
 # ── What may and may not wear the brand ─────────────────────────────────────
 
 
-def test_primary_button_fills_with_the_brand_and_inks_from_it(rendered: str) -> None:
-    button = _classes(rendered, "button", "Primary action")
-    assert "bg-[var(--brand)]" in button
-    assert "text-[var(--brand-ink)]" in button
-    # Restated, because the legacy anchor rule also paints :hover.
-    assert "hover:text-[var(--brand-ink)]" in button
-
-
-def test_secondary_button_stays_neutral_so_one_action_leads(rendered: str) -> None:
-    """A workspace cannot make the quiet button loud."""
-    button = _classes(rendered, "button", "Secondary action")
-    assert "bg-surface" in button
-    assert "text-text" in button
-    assert "bg-[var(--brand)]" not in button
-
-
 def test_surface_is_not_brandable(rendered: str) -> None:
     """Colour goes on what a reader acts on, never the ground they read against."""
     surface = _classes(rendered, "div", 'data-probe="surface"')
@@ -144,11 +130,6 @@ def test_current_nav_item_is_marked_for_a_reader_and_a_screen_reader(rendered: s
     other = _open_tag(rendered, "a", 'data-probe="nav-other"')
     assert "aria-current" not in other
     assert "border-transparent" in other
-
-
-def test_branded_anchors_carry_the_public_page_escape(rendered: str) -> None:
-    """Without data-button the legacy sheet repaints the link on public pages."""
-    assert "data-button" in _open_tag(rendered, "a", "Link action")
 
 
 # ── The legacy-collision guard ──────────────────────────────────────────────
