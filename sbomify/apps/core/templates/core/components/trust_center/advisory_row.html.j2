@@ -40,7 +40,7 @@ two cannot drift. Expects `advisory` (a trust_center projection) and
         </div>
     </div>
     <div class="tc-advisory-side">
-        <span class="tw-badge tw-badge-{{ advisory.severity_variant }}">{{ advisory.severity_label }}</span>
+        <c-badges.severity level="{{ advisory.severity }}">{{ advisory.severity_label }}</c-badges.severity>
         {% if advisory.status_label %}
             <span class="tc-status-line">
                 <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}

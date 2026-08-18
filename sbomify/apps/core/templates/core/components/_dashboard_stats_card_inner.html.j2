@@ -1,11 +1,17 @@
 {% load humanize %}
 {# Inner template for dashboard stats card - receives color classes via with #}
-<a href="{{ href }}"
-   class="block tw-card p-5 border {{ border_class }} {{ hover_class }} transition-all duration-200 hover:shadow-md group"
-   aria-label="View {{ title }}">
+{# The tile is a link, so the anchor carries the hover group and the card the surface. #}
+<a href="{{ href }}" class="block group" aria-label="View {{ title }}">
+    <c-cards.card flush class="p-5 border {{ border_class }} {{ hover_class }} transition-all duration-200 hover:shadow-md">
     <div class="flex items-start justify-between">
         <div class="flex-1">
             <div class="flex items-center gap-3 mb-3">
+                {% comment %}
+                    The mark stays hand-rolled: its tint arrives as a pair of
+                    palette classes from the caller, and c-chips.icon-chip takes
+                    its colour from --chip-accent, which a class cannot carry
+                    without fighting the chip's own background.
+                {% endcomment %}
                 <div class="w-10 h-10 rounded-lg {{ bg_class }} flex items-center justify-center">
                     <i class="fas {{ icon }} {{ text_class }} text-lg"></i>
                 </div>
@@ -29,4 +35,5 @@
             <i class="fas fa-arrow-right text-text-muted"></i>
         </div>
     </div>
+    </c-cards.card>
 </a>

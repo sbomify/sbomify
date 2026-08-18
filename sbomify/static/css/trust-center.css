@@ -849,8 +849,8 @@
    variables the public theme defines as RGB triplets (see the tw-table note
    above) — redeclare them in the form these pages use. */
 .tc-panel .tw-data-table-toolbar {
-    background: rgb(var(--color-background) / 0.5);
-    border-bottom: 1px solid rgb(var(--color-border) / 0.7);
+    background: color-mix(in oklab, var(--color-background) 50%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
 }
 
 /* Same triplet fix for the search input and select the toolbar carries —
@@ -858,9 +858,9 @@
    colour variables and silently vanish on the public theme. */
 .public-page .tw-data-table-search-input,
 .public-page .tw-data-table-page-size-select {
-    background-color: rgb(var(--color-surface));
-    border: 1px solid rgb(var(--color-border));
-    color: rgb(var(--color-text));
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
 }
 
 .public-page .tw-data-table-search-input:focus,
@@ -1426,12 +1426,12 @@
    a half-strength hairline. The last row's divider would double up against
    the panel's own bottom border, so it is dropped. */
 .tc-panel .tw-table th {
-    background-color: rgb(var(--color-background));
-    border-bottom: 1px solid rgb(var(--color-border));
+    background-color: var(--color-background);
+    border-bottom: 1px solid var(--color-border);
 }
 
 .tc-panel .tw-table td {
-    border-bottom: 1px solid rgb(var(--color-border) / 0.5);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
 }
 
 .tc-panel .tw-table tbody tr:last-child td {
@@ -1442,7 +1442,7 @@
    resolves --color-border to the public theme's RGB triplet and falls back
    to currentColor (near-black); declare the hairline in the triplet form. */
 .tc-pager-foot {
-    border-top: 1px solid rgb(var(--color-border) / 0.7);
+    border-top: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
 }
 
 .tc-panel-flush .tc-panel-title {

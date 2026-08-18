@@ -1,9 +1,13 @@
-<span class="tw-tag tw-tag-{{ variant|default:'secondary' }}{% if class %} {{ class }}{% endif %}"
+{% comment %}
+    The base `tw-tag` is already the neutral tag, so a variant modifier is only
+    emitted when one is asked for. Spacing comes from the base rule's `gap`.
+{% endcomment %}
+<span class="tw-tag{% if variant %} tw-tag-{{ variant }}{% endif %}{% if class %} {{ class }}{% endif %}"
       {{ attrs|safe }}>
-    {% if icon %}<i class="{{ icon }} mr-1" aria-hidden="true"></i>{% endif %}
+    {% if icon %}<i class="{{ icon }}" aria-hidden="true"></i>{% endif %}
     {{ text }}
     {% if removable %}
-        <button type="button" class="tw-tag-remove" aria-label="Remove {{ text }}">
+        <button type="button" class="tw-tag-close" aria-label="Remove {{ text }}">
             <i class="fas fa-times" aria-hidden="true"></i>
         </button>
     {% endif %}

@@ -1,0 +1,8 @@
+{% comment %}
+The top row of a callout: an icon chip, a title and a legal-basis pill go in the
+slot. A part, not a variant, so it carries no accent of its own.
+{% endcomment %}
+<c-vars class />
+<div class="flex items-start gap-3 px-4 pt-4 pb-0{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

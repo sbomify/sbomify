@@ -1,0 +1,38 @@
+{% comment %}
+A row in a dropdown panel. With an href it renders an anchor, otherwise a
+button, and the two branches differ only in element and disabled affordance;
+they must stay in lockstep. Rows are menu items, so they carry role="menuitem"
+for the panel's keyboard handling to find.
+
+icon is a Font Awesome class rather than slot content: the icon sits in a fixed
+gutter and takes the row's own colour on hover, which the slot cannot express.
+
+Colour is one conditional segment through variant_class, so c-dropdowns.item-danger
+replaces it whole and two colours never land on the same row.
+{% endcomment %}
+<c-vars variant_class icon type="button" href disabled class />
+{% if href %}
+    <a href="{{ href }}"
+       role="menuitem"
+       class="group flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-left no-underline cursor-pointer transition-all duration-150 focus-visible:outline-none aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:pointer-events-none {% if variant_class %}{{ variant_class }}{% else %}text-text hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] hover:text-primary focus-visible:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] focus-visible:text-primary{% endif %}{% if class %} {{ class }}{% endif %}"
+       {% if disabled %}tabindex="-1" aria-disabled="true"{% endif %}
+       {{ attrs }}>
+        {% if icon %}
+            <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted group-hover:text-inherit group-focus-visible:text-inherit"
+               aria-hidden="true"></i>
+        {% endif %}
+        {{ slot }}
+    </a>
+{% else %}
+    <button type="{{ type }}"
+            role="menuitem"
+            class="group flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-left no-underline cursor-pointer transition-all duration-150 focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none {% if variant_class %}{{ variant_class }}{% else %}text-text hover:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] hover:text-primary focus-visible:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] focus-visible:text-primary{% endif %}{% if class %} {{ class }}{% endif %}"
+            {% if disabled %}disabled{% endif %}
+            {{ attrs }}>
+        {% if icon %}
+            <i class="{{ icon }} shrink-0 w-4 text-center text-text-muted group-hover:text-inherit group-focus-visible:text-inherit"
+               aria-hidden="true"></i>
+        {% endif %}
+        {{ slot }}
+    </button>
+{% endif %}

@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.authz import can
@@ -218,11 +219,29 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             error_message = f"An unexpected error occurred while fetching vulnerability data: {str(e)}"
             logger.error(f"Unexpected error in sbom_vulnerabilities view for SBOM {sbom_id}: {e}", exc_info=True)
 
+        # Page-header breadcrumb trail, built here per the design system
+        # contract: list-shaped header params come from the view.
+        breadcrumb_items = [
+            {
+                "label": sbom.component.name,
+                "url": reverse("core:component_details", args=[sbom.component.id]),
+            },
+            {
+                "label": sbom.name,
+                "url": reverse(
+                    "core:component_item",
+                    kwargs={"component_id": sbom.component.id, "item_type": "sboms", "item_id": sbom.id},
+                ),
+            },
+            {"label": "Vulnerabilities"},
+        ]
+
         return render(
             request,
             "sboms/sbom_vulnerabilities.html.j2",
             {
                 "sbom": sbom,
+                "breadcrumb_items": breadcrumb_items,
                 "vulnerabilities": vulnerabilities_data,
                 "scan_timestamp": scan_timestamp_str,
                 "sbom_version_info": sbom_version_info,

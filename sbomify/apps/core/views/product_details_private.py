@@ -113,6 +113,12 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
         component_rows = components_data["rows"]
         releases_summary = build_product_releases_summary(product_id)
 
+        header_copy_values = [
+            {"value": product["id"], "title": f"Product ID: {product['id']} (click to copy)"},
+        ]
+        if product_tei:
+            header_copy_values.append({"value": product_tei, "title": f"TEI: {product_tei} (click to copy)"})
+
         return render(
             request,
             "core/product_details_private.html.j2",
@@ -124,6 +130,7 @@ class ProductDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "is_admin_or_owner": is_admin_or_owner,
                 "product": product,
                 "product_tei": product_tei,
+                "header_copy_values": header_copy_values,
                 "team_billing_plan": team_billing_plan,
                 "product_controls": product_controls_list[0] if product_controls_list else None,
                 "product_controls_list": product_controls_list,

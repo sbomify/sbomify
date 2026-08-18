@@ -1,0 +1,14 @@
+{% comment %}
+The panel a collapsible trigger reveals. x-collapse animates the height, so the
+clipped wrapper is the outer element and the padding sits inside it, where the
+animation cannot squeeze it. state is the same Alpine expression the trigger
+reads; without one the panel simply stays open. class and any attributes land
+on the padded body, which is the element a caller means.
+{% endcomment %}
+<c-vars state class />
+<div class="overflow-hidden"
+     {% if state %}x-show="{{ state }}" x-collapse{% endif %}>
+    <div class="px-6 pt-5 pb-6 border-t border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+         {{ attrs }}>{{ slot }}
+    </div>
+</div>

@@ -6,595 +6,419 @@
 {% load public_url_tags %}
 {% block title %}sbomify Product: {{ product.name }}{% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        {# Page Header - matches component page pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-cube"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <h1 class="text-2xl font-bold text-text">
-                            {% if product.has_crud_permissions %}
-                                {% include 'core/components/editable_single_field.html.j2' with item_type='product' item_id=product.id item_value=product.name %}
-                            {% else %}
-                                {{ product.name }}
-                            {% endif %}
-                        </h1>
-                        <div class="flex items-center gap-2 text-sm text-text-muted">
-                            {% include 'core/components/copyable_value.html.j2' with value=product.id title="Product ID: "|add:product.id|add:" (click to copy)" %}
-                            {% if product_tei %}
-                                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
-                            {% endif %}
-                        </div>
-                    </div>
-                    {# Description Section #}
-                    {% if product.has_crud_permissions %}
-                        <div x-data="{ editing: false }" class="mt-1">
-                            <template x-if="!editing">
-                                <div class="flex items-center gap-2 cursor-pointer group"
-                                     role="button"
-                                     tabindex="0"
-                                     @click="editing = true"
-                                     @keydown.enter.prevent="editing = true">
-                                    {% if product.description %}
-                                        <p class="text-text-muted text-sm m-0">{{ product.description }}</p>
-                                    {% else %}
-                                        <p class="text-text-muted text-sm italic m-0">Add a description...</p>
-                                    {% endif %}
-                                    <i class="fas fa-pencil-alt text-text-muted text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                       aria-hidden="true"></i>
-                                </div>
-                            </template>
-                            <template x-if="editing">
-                                <form method="post"
-                                      action="{% url 'core:product_details' product.id %}"
-                                      class="max-w-xl mt-2">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="update_description">
-                                    <textarea name="description"
-                                              class="tw-form-input mb-3"
-                                              rows="3"
-                                              maxlength="1000"
-                                              placeholder="Enter a product description..."
-                                              x-init="$el.focus()">{{ product.description|default:'' }}</textarea>
-                                    <div class="flex gap-2">
-                                        <button type="submit" class="tw-btn-primary text-sm">
-                                            <i class="fas fa-check mr-1"></i>Save
-                                        </button>
-                                        <button type="button"
-                                                class="tw-btn-secondary text-sm"
-                                                @click="editing = false">Cancel</button>
-                                    </div>
-                                </form>
-                            </template>
-                        </div>
-                    {% elif product.description %}
-                        <p class="text-text-muted text-sm m-0 mt-1">{{ product.description }}</p>
-                    {% endif %}
-                </div>
-            </div>
-            {# Visibility toggle + meatball menu #}
-            {% if product.has_crud_permissions %}
-                <div class="flex-shrink-0 flex items-stretch gap-2"
-                     x-data="{ pmenu: false, isPublic: {{ product.is_public|yesno:'true,false' }} }"
-                     @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic"
-                     @keydown.escape.window="pmenu = false">
-                    {% url 'core:product_details_public' product.id as product_public_url %}
-                    {# ADMINISTER, not MANAGE — see component_details_private_base. #}
-                    {% if can_administer %}
-                        {% include 'core/components/product_visibility_selector.html.j2' with item_id=product.id is_public=product.is_public %}
-                    {% endif %}
-                    <div class="relative flex">
-                        <button type="button"
-                                class="w-12 min-h-10 h-full rounded-lg border border-border bg-background text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center"
-                                @click="pmenu = !pmenu"
-                                :aria-expanded="pmenu"
-                                aria-haspopup="true"
-                                aria-label="More actions">
-                            <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
-                        </button>
-                        <div x-show="pmenu"
-                             x-cloak
-                             x-transition
-                             @click.outside="pmenu = false"
-                             class="absolute right-0 top-full mt-2 w-64 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40"
-                             role="menu">
-                            <div class="px-2.5 pt-1.5 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Product</div>
-                            <a href="{% url 'core:sbom_download_product' product.id %}"
-                               role="menuitem"
-                               class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left no-underline">
-                                <i class="fas fa-download w-4 text-text-muted" aria-hidden="true"></i>Download SBOM · CycloneDX
-                            </a>
-                            <a href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
-                               role="menuitem"
-                               class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left no-underline">
-                                <i class="fas fa-download w-4 text-text-muted" aria-hidden="true"></i>Download SBOM · SPDX
-                            </a>
-                            {# Sharing actions appear the moment the product goes public, no reload. #}
-                            <template x-if="isPublic">
-                                <div>
-                                    <hr class="my-1.5 border-border">
-                                    <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Sharing</div>
-                                    <button type="button"
-                                            role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                            @click="pmenu = false; navigator.clipboard.writeText('{{ APP_BASE_URL }}{{ product_public_url }}').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Public URL copied to clipboard' }] }))">
-                                        <i class="fas fa-link w-4 text-text-muted" aria-hidden="true"></i>Copy public URL
-                                    </button>
-                                    <button type="button"
-                                            role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                            @click="pmenu = false; navigator.clipboard.writeText('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({{ APP_BASE_URL }}{{ product_public_url }})').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Badge markdown copied to clipboard' }] }))">
-                                        <i class="fas fa-certificate w-4 text-text-muted" aria-hidden="true"></i>Copy badge
-                                    </button>
-                                </div>
-                            </template>
-                            <hr class="my-1.5 border-border">
-                            <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Releases</div>
-                            <button type="button"
-                                    role="menuitem"
-                                    class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                    @click="pmenu = false; $dispatch('open-create-release')">
-                                <i class="fas fa-plus w-4 text-text-muted" aria-hidden="true"></i>Create release…
-                            </button>
-                        </div>
-                    </div>
-                </div>
+    <c-layout.page-header title="{{ product.name }}" icon="fas fa-cube" mark="avatar" editable_item_type="{{ product.has_crud_permissions|yesno:'product,' }}" editable_item_id="{{ product.id }}" :copy_values="header_copy_values">
+    {% if product.has_crud_permissions %}
+        <div class="flex items-stretch gap-2"
+             x-data="{ isPublic: {{ product.is_public|yesno:'true,false' }} }"
+             @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') isPublic = $event.detail.isPublic">
+            {% url 'core:product_details_public' product.id as product_public_url %}
+            {# ADMINISTER, not MANAGE — see component_details_private_base. #}
+            {% if can_administer %}
+                {% include 'core/components/product_visibility_selector.html.j2' with item_id=product.id is_public=product.is_public %}
             {% endif %}
+            <c-actions-menu label="Product actions" stretch width="w-64">
+            <c-dropdowns.header>Product</c-dropdowns.header>
+            <c-dropdowns.item icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}">Download SBOM · CycloneDX</c-dropdowns.item>
+            <c-dropdowns.item icon="fas fa-download" href="{% url 'core:sbom_download_product' product.id %}?format=spdx">Download SBOM · SPDX</c-dropdowns.item>
+            {# Sharing actions appear the moment the product goes public, no reload. #}
+            <template x-if="isPublic">
+                <div>
+                    <c-dropdowns.divider />
+                    <c-dropdowns.header>Sharing</c-dropdowns.header>
+                    <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard.writeText('{{ APP_BASE_URL }}{{ product_public_url }}').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Public URL copied to clipboard' }] }))">
+                    Copy public URL
+                    </c-dropdowns.item>
+                    <c-dropdowns.item icon="fas fa-certificate" @click="navigator.clipboard.writeText('[![sbomified](https://sbomify.com/assets/images/logo/badge.svg)]({{ APP_BASE_URL }}{{ product_public_url }})').then(() => $dispatch('messages', { value: [{ type: 'success', message: 'Badge markdown copied to clipboard' }] }))">
+                    Copy badge
+                    </c-dropdowns.item>
+                </div>
+            </template>
+            <c-dropdowns.divider />
+            <c-dropdowns.header>Releases</c-dropdowns.header>
+            <c-dropdowns.item icon="fas fa-plus" @click="$dispatch('open-create-release')">Create release…</c-dropdowns.item>
+            </c-actions-menu>
         </div>
+    {% endif %}
+    </c-layout.page-header>
+    <div class="space-y-6">
+        {# Description Section #}
+        {% if product.has_crud_permissions %}
+            <div x-data="{ editing: false }">
+                <template x-if="!editing">
+                    <div class="flex items-center gap-2 cursor-pointer group"
+                         role="button"
+                         tabindex="0"
+                         @click="editing = true"
+                         @keydown.enter.prevent="editing = true">
+                        {% if product.description %}
+                            <p class="text-text-muted text-sm m-0">{{ product.description }}</p>
+                        {% else %}
+                            <p class="text-text-muted text-sm italic m-0">Add a description...</p>
+                        {% endif %}
+                        <i class="fas fa-pencil-alt text-text-muted text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                           aria-hidden="true"></i>
+                    </div>
+                </template>
+                <template x-if="editing">
+                    <form method="post"
+                          action="{% url 'core:product_details' product.id %}"
+                          class="max-w-xl mt-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="update_description">
+                        <c-forms.textarea name="description" rows="3" value="{{ product.description|default:'' }}" placeholder="Enter a product description..." class="mb-3" maxlength="1000" x-init="$el.focus()" />
+                        <div class="flex gap-2">
+                            <c-buttons.primary type="submit" size="sm">
+                            <i class="fas fa-check mr-1"></i>Save
+                            </c-buttons.primary>
+                            <c-buttons.secondary size="sm" @click="editing = false">Cancel</c-buttons.secondary>
+                        </div>
+                    </form>
+                </template>
+            </div>
+        {% elif product.description %}
+            <p class="text-text-muted text-sm m-0">{{ product.description }}</p>
+        {% endif %}
         {# Stats chips + severity rollup #}
         <div class="flex flex-wrap gap-2 items-center">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-puzzle-piece text-primary text-xs"></i>
-                <span class="font-semibold text-text">{{ component_rows|length }}</span>
-                <span class="text-text-muted">Components</span>
-            </div>
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-tag text-primary text-xs"></i>
-                <span class="font-semibold text-text">{{ releases_summary.total }}</span>
-                <span class="text-text-muted">Releases</span>
-            </div>
+            <c-chips.metric-chip>
+            <i class="fas fa-puzzle-piece text-primary text-xs" aria-hidden="true"></i>
+            <c-chips.metric.value>{{ component_rows|length }}</c-chips.metric.value>
+            <c-chips.metric.label>Component{{ component_rows|length|pluralize }}</c-chips.metric.label>
+            </c-chips.metric-chip>
+            <c-chips.metric-chip>
+            <i class="fas fa-tag text-primary text-xs" aria-hidden="true"></i>
+            <c-chips.metric.value>{{ releases_summary.total }}</c-chips.metric.value>
+            <c-chips.metric.label>Release{{ releases_summary.total|pluralize }}</c-chips.metric.label>
+            </c-chips.metric-chip>
             {% if vuln_rollup.critical or vuln_rollup.high or vuln_rollup.medium or vuln_rollup.low %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_rollup.critical or vuln_rollup.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
-                    <i class="fas fa-triangle-exclamation text-xs {% if vuln_rollup.critical or vuln_rollup.high %}text-danger{% else %}text-warning{% endif %}"></i>
-                    {% if vuln_rollup.critical %}
-                        <span class="font-semibold text-danger">{{ vuln_rollup.critical }} Critical</span>
+                {% comment %}The accent is settled first: a prop written as an inline {% if %} is one djlint reformat away from arriving with newlines in it, and a padded value matches no branch in the component.{% endcomment %}
+                {% if vuln_rollup.critical or vuln_rollup.high %}
+                    {% firstof "danger" as rollup_accent %}
+                {% else %}
+                    {% firstof "warning" as rollup_accent %}
+                {% endif %}
+                <c-chips.metric-chip accent="{{ rollup_accent }}">
+                <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
+                {% if vuln_rollup.critical %}
+                    <c-chips.metric.value>{{ vuln_rollup.critical }} Critical</c-chips.metric.value>
+                {% endif %}
+                {% if vuln_rollup.high %}
+                    {% if vuln_rollup.critical %}<span class="text-text-muted">·</span>{% endif %}
+                    <c-chips.metric.value>{{ vuln_rollup.high }} High</c-chips.metric.value>
+                {% endif %}
+                {% if vuln_rollup.medium %}
+                    {% if vuln_rollup.critical or vuln_rollup.high %}<span class="text-text-muted">·</span>{% endif %}
+                    <c-chips.metric.value>{{ vuln_rollup.medium }} Medium</c-chips.metric.value>
+                {% endif %}
+                {% if vuln_rollup.low %}
+                    {% if vuln_rollup.critical or vuln_rollup.high or vuln_rollup.medium %}
+                        <span class="text-text-muted">·</span>
                     {% endif %}
-                    {% if vuln_rollup.high %}
-                        {% if vuln_rollup.critical %}<span class="text-text-muted">·</span>{% endif %}
-                        <span class="font-semibold text-severity-high">{{ vuln_rollup.high }} High</span>
-                    {% endif %}
-                    {% if vuln_rollup.medium %}
-                        {% if vuln_rollup.critical or vuln_rollup.high %}<span class="text-text-muted">·</span>{% endif %}
-                        <span class="font-semibold text-info">{{ vuln_rollup.medium }} Medium</span>
-                    {% endif %}
-                    {% if vuln_rollup.low %}
-                        {% if vuln_rollup.critical or vuln_rollup.high or vuln_rollup.medium %}
-                            <span class="text-text-muted">·</span>
-                        {% endif %}
-                        <span class="font-semibold text-text-muted">{{ vuln_rollup.low }} Low</span>
-                    {% endif %}
-                    <span class="text-text-muted">· across {{ component_rows|length }} component{{ component_rows|length|pluralize }}</span>
-                </div>
+                    <c-chips.metric.value>{{ vuln_rollup.low }} Low</c-chips.metric.value>
+                {% endif %}
+                <c-chips.metric.label>· across {{ component_rows|length }} component{{ component_rows|length|pluralize }}</c-chips.metric.label>
+                </c-chips.metric-chip>
             {% endif %}
         </div>
         {# Components & security #}
         {{ component_terms|json_script:"pc-terms" }}
         {{ component_statuses|json_script:"pc-statuses" }}
         {{ assigned_component_ids|json_script:"pc-assigned" }}
-        <section class="tw-card"
-                 x-data="{ search: '', status: 'all', currentPage: 1, perPage: 5, terms: (window.parseJsonScript('pc-terms') || []), statuses: (window.parseJsonScript('pc-statuses') || []), get statusOptions() { const order = ['critical', 'high', 'medium', 'low', 'clean', 'scanned_nothing', 'not_scanned']; const present = new Set(this.statuses); return order.filter(v => present.has(v)); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.status === 'all' || this.statuses[i] === this.status)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); }, assignOpen: false, availLoading: false, avail: [], selectedId: '', busy: false, err: '', assignedIds: (window.parseJsonScript('pc-assigned') || []), prodPublic: {{ product.is_public|yesno:'true,false' }}, openAssign() { this.assignOpen = true; this.err = ''; this.selectedId = ''; this.availLoading = true; fetch('/api/v1/components?is_global=false').then(r => r.json()).then(d => { const items = d.items || d; this.avail = items.filter(c => !this.assignedIds.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name)); }).catch(() => { this.err = 'Failed to load components'; }).finally(() => { this.availLoading = false; }); }, patchIds(ids) { this.busy = true; return fetch('/api/v1/products/{{ product.id }}', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' }, body: JSON.stringify({ component_ids: ids }) }).then(r => { if (!r.ok) throw new Error(); location.reload(); }).catch(() => { this.busy = false; this.err = 'Update failed'; }); }, confirmAssign() { if (this.selectedId && !this.busy) this.patchIds([...this.assignedIds, this.selectedId]); }, removeTarget: null, confirmRemove() { if (this.removeTarget && !this.busy) this.patchIds(this.assignedIds.filter(x => x !== this.removeTarget.id)); } }"
-                 x-init="$watch('search', () => currentPage = 1); $watch('status', () => currentPage = 1)"
-                 @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') prodPublic = $event.detail.isPublic">
-            <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
-                <h4 class="text-lg font-semibold text-text m-0">Components</h4>
-                {% if product.has_crud_permissions and component_rows %}
-                    <button type="button" class="tw-btn-primary text-sm" @click="openAssign()">
-                        <i class="fas fa-plus mr-1"></i>Assign component
-                    </button>
-                {% endif %}
-            </div>
-            {% if component_rows %}
-                <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3">
-                    <div class="tw-data-table-search max-w-xs">
-                        <i class="fas fa-search tw-data-table-search-icon"></i>
-                        <label for="pc-search" class="sr-only">Search components</label>
-                        <input type="search"
-                               id="pc-search"
-                               x-model="search"
-                               placeholder="Search components..."
-                               class="tw-data-table-search-input" />
-                    </div>
-                    <label for="pc-status" class="sr-only">Filter by status</label>
-                    <select id="pc-status"
-                            x-model="status"
-                            class="tw-data-table-page-size-select">
-                        <option value="all">All Statuses</option>
-                        <template x-for="v in statusOptions" :key="v">
-                            <option :value="v"
-                                    x-text="({not_scanned: 'Not scanned', scanned_nothing: 'Nothing scanned'})[v] || v.charAt(0).toUpperCase() + v.slice(1)">
-                            </option>
-                        </template>
-                    </select>
-                </div>
-                <div class="overflow-x-auto" x-cloak>
-                    <table class="tw-table w-full">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Latest version</th>
-                                <th>Vulnerabilities</th>
-                                <th>Last scan</th>
-                                {% if product.has_crud_permissions %}<th class="text-center">Actions</th>{% endif %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in component_rows %}
-                                <tr x-show="pageSet.has({{ forloop.counter0 }})">
-                                    <td>
-                                        <a href="{% url 'core:component_details' row.id %}"
-                                           class="text-primary font-medium hover:underline">{{ row.name }}</a>
-                                    </td>
-                                    <td>
-                                        {% if row.version %}
-                                            <span class="font-mono text-sm text-text" title="{{ row.version }}">{{ row.version|truncatechars:24 }}</span>
-                                        {% else %}
-                                            <span class="text-text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if row.vuln is None %}
-                                            <span class="text-text-muted text-sm">Not scanned</span>
-                                        {% elif row.vuln.total == 0 and row.vuln.scanned_nothing %}
-                                            {# A scan ran and matched nothing, which is not the same as finding nothing. #}
-                                            <span class="tw-badge-warning text-xs"
-                                                  title="A scan ran but matched no packages, so nothing was checked against any advisory source.">Nothing scanned</span>
-                                        {% elif row.vuln.total == 0 %}
-                                            <span class="tw-badge-success text-xs">Clean</span>
-                                        {% else %}
-                                            <div class="flex items-center gap-1.5 flex-wrap">
-                                                {% if row.vuln.critical %}
-                                                    <span class="px-2 py-0.5 rounded text-xs font-bold bg-danger/10 text-danger">{{ row.vuln.critical }} Critical</span>
-                                                {% endif %}
-                                                {% if row.vuln.high %}
-                                                    <span class="px-2 py-0.5 rounded text-xs font-bold bg-severity-high-soft text-severity-high">{{ row.vuln.high }} High</span>
-                                                {% endif %}
-                                                {% if row.vuln.medium %}
-                                                    <span class="px-2 py-0.5 rounded text-xs font-bold bg-info/10 text-info">{{ row.vuln.medium }} Medium</span>
-                                                {% endif %}
-                                                {% if row.vuln.low %}
-                                                    <span class="px-2 py-0.5 rounded text-xs font-bold bg-surface text-text-muted border border-border">{{ row.vuln.low }} Low</span>
-                                                {% endif %}
-                                            </div>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-sm text-text-muted whitespace-nowrap">
-                                        {% if row.last_scan %}
-                                            {{ row.last_scan|naturaltime }}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                    </td>
-                                    {% if product.has_crud_permissions %}
-                                        <td class="text-center">
-                                            <button type="button"
-                                                    class="p-2 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-                                                    title="Remove from product"
-                                                    aria-label="Remove {{ row.name }} from product"
-                                                    :disabled="busy"
-                                                    @click="removeTarget = { id: '{{ row.id }}', name: '{{ row.name|escapejs }}' }">
-                                                <i class="fas fa-unlink" aria-hidden="true"></i>
-                                            </button>
-                                        </td>
-                                    {% endif %}
-                                </tr>
-                            {% endfor %}
-                            <tr x-show="total === 0">
-                                <td colspan="{% if product.has_crud_permissions %}5{% else %}4{% endif %}"
-                                    class="text-center py-8 text-text-muted">No components match your search.</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                    <span class="text-sm text-text-muted">
-                        Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
-                    </span>
-                    {% include "components/tw/table_pager.html.j2" %}
-                </div>
-            {% else %}
-                {% include "components/tw/empty_state.html.j2" with icon="fas fa-puzzle-piece" title="No components assigned yet" message="Components are shared building blocks. Assign an existing one, or create a component and connect CI/CD so your first push reports here." action_text="Assign a component" action_click="openAssign()" secondary_text="or create a new one" secondary_url="/components/" %}
+        <c-cards.card flush x-data="{ search: '', status: 'all', currentPage: 1, perPage: 5, terms: (window.parseJsonScript('pc-terms') || []), statuses: (window.parseJsonScript('pc-statuses') || []), get statusOptions() { const order = ['critical', 'high', 'medium', 'low', 'clean', 'scanned_nothing', 'not_scanned']; const present = new Set(this.statuses); return order.filter(v => present.has(v)); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.status === 'all' || this.statuses[i] === this.status)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); }, assignOpen: false, availLoading: false, avail: [], selectedId: '', busy: false, err: '', assignedIds: (window.parseJsonScript('pc-assigned') || []), prodPublic: {{ product.is_public|yesno:'true,false' }}, openAssign() { this.assignOpen = true; this.err = ''; this.selectedId = ''; this.availLoading = true; fetch('/api/v1/components?is_global=false').then(r => r.json()).then(d => { const items = d.items || d; this.avail = items.filter(c => !this.assignedIds.includes(c.id)).sort((a, b) => a.name.localeCompare(b.name)); }).catch(() => { this.err = 'Failed to load components'; }).finally(() => { this.availLoading = false; }); }, patchIds(ids) { this.busy = true; return fetch('/api/v1/products/{{ product.id }}', { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' }, body: JSON.stringify({ component_ids: ids }) }).then(r => { if (!r.ok) throw new Error(); location.reload(); }).catch(() => { this.busy = false; this.err = 'Update failed'; }); }, confirmAssign() { if (this.selectedId && !this.busy) this.patchIds([...this.assignedIds, this.selectedId]); }, removeTarget: null, confirmRemove() { if (this.removeTarget && !this.busy) this.patchIds(this.assignedIds.filter(x => x !== this.removeTarget.id)); } }" x-init="$watch('search', () => currentPage = 1); $watch('status', () => currentPage = 1)" @public-status-changed.window="if ($event.detail.itemType === 'product' && $event.detail.itemId === '{{ product.id }}') prodPublic = $event.detail.isPublic">
+        <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+            <h4 class="text-lg font-semibold text-text m-0">Components</h4>
+            {% if product.has_crud_permissions and component_rows %}
+                <c-buttons.primary @click="openAssign()">
+                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Assign component
+                </c-buttons.primary>
             {% endif %}
-            {# Assign modal #}
-            {% if product.has_crud_permissions %}
-                <div x-show="assignOpen"
-                     x-cloak
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     class="tw-modal-overlay"
-                     @click="assignOpen = false"></div>
-                <div x-show="assignOpen"
-                     x-cloak
-                     x-trap.noscroll="assignOpen"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     class="tw-modal"
-                     @keydown.escape.window="assignOpen = false"
-                     @click.stop>
-                    <div class="tw-modal-content"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-label="Assign component">
-                        <div class="tw-modal-header">
-                            <h4 class="tw-modal-title flex items-center gap-2">
-                                <i class="fas fa-puzzle-piece text-primary"></i>Assign Component
-                            </h4>
-                            <button type="button"
-                                    class="tw-modal-close"
-                                    @click="assignOpen = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                        <div class="tw-modal-body">
-                            <p class="text-sm text-text-muted mt-0 mb-4">
-                                <span x-show="prodPublic">This product is public, so assign public components. Private components stay hidden on the public page.</span>
-                                <span x-show="!prodPublic">This product is private, so you can assign any component, public or private.</span>
-                            </p>
-                            <div x-show="availLoading" class="py-6 text-center text-text-muted">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
-                                Loading components…
-                            </div>
-                            <template x-if="!availLoading && avail.length === 0 && !err">
-                                <p class="text-sm text-text-muted">Every component in this workspace is already assigned.</p>
-                            </template>
-                            <template x-if="!availLoading && avail.length > 0">
-                                <div>
-                                    <label for="pc-assign-select"
-                                           class="text-text text-sm font-medium block mb-1.5">Component</label>
-                                    <select id="pc-assign-select"
-                                            x-model="selectedId"
-                                            class="tw-form-select w-full">
-                                        <option value="">Choose a component…</option>
-                                        <template x-for="c in avail" :key="c.id">
-                                            <option :value="c.id" x-text="c.name"></option>
-                                        </template>
-                                    </select>
-                                </div>
-                            </template>
-                            <p x-show="err" class="text-sm text-danger mt-3" x-text="err"></p>
-                        </div>
-                        <div class="tw-modal-footer">
-                            <button type="button"
-                                    class="tw-btn-secondary text-sm"
-                                    @click="assignOpen = false">Cancel</button>
-                            <button type="button"
-                                    class="tw-btn-primary text-sm"
-                                    :disabled="!selectedId || busy"
-                                    @click="confirmAssign()">
-                                <span x-show="!busy">Assign</span>
-                                <span x-show="busy">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                                Assigning…</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                {# Remove confirmation #}
-                <div x-show="removeTarget !== null"
-                     x-cloak
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     class="tw-modal-overlay"
-                     @click="removeTarget = null"></div>
-                <div x-show="removeTarget !== null"
-                     x-cloak
-                     x-trap.noscroll="removeTarget !== null"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     class="tw-modal"
-                     @keydown.escape.window="removeTarget = null"
-                     @click.stop>
-                    <div class="tw-modal-content"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-label="Remove component from product">
-                        <div class="tw-modal-header">
-                            <h4 class="tw-modal-title flex items-center gap-2">
-                                <i class="fas fa-unlink text-danger"></i>Remove Component
-                            </h4>
-                            <button type="button"
-                                    class="tw-modal-close"
-                                    @click="removeTarget = null"
-                                    aria-label="Close">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                        <div class="tw-modal-body">
-                            <p class="text-text text-sm mt-0 mb-2">
-                                Are you sure you want to remove <strong x-text="removeTarget?.name"></strong> from this product?
-                            </p>
-                            <p class="text-sm text-text-muted m-0">
-                                The component is only unassigned. It stays in your workspace and in any other products that use it.
-                            </p>
-                            <p x-show="err" class="text-sm text-danger mt-3 mb-0" x-text="err"></p>
-                        </div>
-                        <div class="tw-modal-footer">
-                            <button type="button"
-                                    class="tw-btn-secondary text-sm"
-                                    @click="removeTarget = null">Cancel</button>
-                            <button type="button"
-                                    class="tw-btn-danger text-sm"
-                                    :disabled="busy"
-                                    @click="confirmRemove()">
-                                <span x-show="!busy">Remove</span>
-                                <span x-show="busy">
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                                Removing…</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-        </section>
-        {# Latest releases #}
-        <section class="tw-card">
-            <div class="px-6 py-4 {% if releases_summary.releases %}border-b border-border{% endif %} flex items-center justify-between gap-3">
-                <h4 class="text-lg font-semibold text-text m-0">Latest releases</h4>
-                {% if releases_summary.releases %}
-                    <a href="{% url 'core:product_releases' product.id %}"
-                       class="tw-btn-secondary text-sm no-underline">View all {{ releases_summary.total }}
-                        <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
-                    </a>
-                {% endif %}
+        </div>
+        {% if component_rows %}
+            <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3">
+                <c-tables.search id="pc-search" label="Search components" placeholder="Search components..." class="max-w-xs" x-model="search" />
+                <c-tables.select id="pc-status" label="Filter by status" x-model="status">
+                <option value="all">All Statuses</option>
+                <template x-for="v in statusOptions" :key="v">
+                    <option :value="v"
+                            x-text="({not_scanned: 'Not scanned', scanned_nothing: 'Nothing scanned'})[v] || v.charAt(0).toUpperCase() + v.slice(1)">
+                    </option>
+                </template>
+                </c-tables.select>
             </div>
-            {% if releases_summary.releases %}
-                {% for release in releases_summary.releases %}
-                    <div class="px-6 py-3.5 flex items-center gap-3 flex-wrap text-sm text-text-muted {% if not forloop.last %}border-b border-border/50{% endif %}">
-                        <a href="{% url 'core:release_details' product.id release.id %}"
-                           class="font-semibold text-text hover:text-primary no-underline">{{ release.name }}</a>
-                        {% if release.is_latest %}
-                            <span class="text-[10px] font-extrabold tracking-wider uppercase text-success bg-success/10 rounded px-2 py-0.5">Latest</span>
-                        {% endif %}
-                        {% if release.is_prerelease %}
-                            <span class="text-[10px] font-extrabold tracking-wider uppercase text-warning bg-warning/10 rounded px-2 py-0.5">Pre-release</span>
-                        {% endif %}
-                        <span class="ml-auto">{{ release.artifact_count }} artifact{{ release.artifact_count|pluralize }}</span>
-                        <span>{{ release.date|date:"M d, Y" }}</span>
-                    </div>
-                {% endfor %}
-            {% else %}
-                {% url 'core:product_releases' product.id as releases_url %}
-                {% include "components/tw/empty_state.html.j2" with compact=True icon="fas fa-tag" title="No releases yet" message="A release freezes this product's artifacts at a point in time. Tag one when you ship." action_text="Create a release" action_url=releases_url action_variant="secondary" %}
-            {% endif %}
-        </section>
-        {# About this product — compliance & metadata, uniform collapsed rows #}
-        <section class="tw-card">
-            <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-                <h4 class="text-lg font-semibold text-text m-0">About this product</h4>
-                <span class="text-xs text-text-muted">Compliance &amp; metadata</span>
-            </div>
-            {% if has_cra_access %}
-                <div x-data="{ open: false }" class="border-b border-border">
-                    <button type="button"
-                            class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
-                            :aria-expanded="open"
-                            @click="open = !open">
-                        <span class="w-8 h-8 rounded-lg bg-text-muted/10 flex items-center justify-center text-text-muted"><i class="fas fa-shield-halved text-sm"></i></span>
-                        <span>
-                            <span class="block text-sm font-semibold text-text">CRA Compliance</span>
-                            <span class="block text-xs text-text-muted">
-                                {% if cra_assessment %}
-                                    In progress · step {{ cra_assessment.current_step }}
-                                {% else %}
-                                    Not started
-                                {% endif %}
-                            </span>
-                        </span>
-                        <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
-                           :class="open ? 'rotate-180' : ''"
-                           aria-hidden="true"></i>
-                    </button>
-                    <div x-show="open" x-collapse>
-                        <div class="tw-embed">{% include "compliance/components/cra_product_card.html.j2" %}</div>
-                    </div>
-                </div>
-            {% endif %}
-            <div x-data="{ open: false }" class="border-b border-border">
-                <button type="button"
-                        class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
-                        :aria-expanded="open"
-                        @click="open = !open">
-                    <span class="w-8 h-8 rounded-lg bg-text-muted/10 flex items-center justify-center text-text-muted"><i class="fas fa-link text-sm"></i></span>
-                    <span>
-                        <span class="block text-sm font-semibold text-text">Product links</span>
-                        <span class="block text-xs text-text-muted">Website, docs, support…</span>
-                    </span>
-                    <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
-                       :class="open ? 'rotate-180' : ''"
-                       aria-hidden="true"></i>
-                </button>
-                <div x-show="open" x-collapse>
-                    <div class="tw-embed"
-                         hx-get="{% url 'core:product_links' product.id %}"
-                         hx-trigger="click once from:previous button"
-                         hx-swap="innerHTML">
-                        <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
-                    </div>
-                </div>
-            </div>
-            <div x-data="{ open: false }" class="border-b border-border">
-                <button type="button"
-                        class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
-                        :aria-expanded="open"
-                        @click="open = !open">
-                    <span class="w-8 h-8 rounded-lg bg-text-muted/10 flex items-center justify-center text-text-muted"><i class="fas fa-barcode text-sm"></i></span>
-                    <span>
-                        <span class="block text-sm font-semibold text-text">Product identifiers</span>
-                        <span class="block text-xs text-text-muted">GTIN, SKU, MPN…</span>
-                    </span>
-                    {% if identifiers_locked %}
-                        <span class="ml-auto mr-3 text-[10px] font-bold tracking-wider uppercase text-warning bg-warning/10 rounded px-2 py-0.5"><i class="fas fa-lock mr-1"></i>Business</span>
-                        <i class="fas fa-chevron-down text-text-muted transition-transform"
-                           :class="open ? 'rotate-180' : ''"
-                           aria-hidden="true"></i>
+            <c-tables.table x-cloak>
+            <c-tables.head>
+            <c-tables.header-cell>Name</c-tables.header-cell>
+            <c-tables.header-cell>Latest version</c-tables.header-cell>
+            <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
+            <c-tables.header-cell date>Last scan</c-tables.header-cell>
+            {% if product.has_crud_permissions %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
+            </c-tables.head>
+            <tbody>
+                {% for row in component_rows %}
+                    <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
+                    <c-tables.cell>
+                    <a href="{% url 'core:component_details' row.id %}"
+                       class="text-primary font-medium hover:underline">{{ row.name }}</a>
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    {% if row.version %}
+                        <span class="font-mono text-sm text-text" title="{{ row.version }}">{{ row.version|truncatechars:24 }}</span>
                     {% else %}
-                        <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
-                           :class="open ? 'rotate-180' : ''"
-                           aria-hidden="true"></i>
+                        <span class="text-text-muted">—</span>
                     {% endif %}
-                </button>
-                <div x-show="open" x-collapse>
-                    <div class="tw-embed"
-                         hx-get="{% url 'core:product_identifiers' product.id %}"
-                         hx-trigger="click once from:previous button"
-                         hx-swap="innerHTML">
-                        <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
-                    </div>
-                </div>
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    {% if row.vuln is None %}
+                        <span class="text-text-muted text-sm">Not scanned</span>
+                    {% elif row.vuln.total == 0 and row.vuln.scanned_nothing %}
+                        {# A scan ran and matched nothing, which is not the same as finding nothing. #}
+                        <c-badges.warning title="A scan ran but matched no packages, so nothing was checked against any advisory source.">Nothing scanned</c-badges.warning>
+                    {% elif row.vuln.total == 0 %}
+                        <c-badges.success>Clean</c-badges.success>
+                    {% else %}
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            {% if row.vuln.critical %}
+                                <c-badges.severity level="critical">{{ row.vuln.critical }} Critical</c-badges.severity>
+                            {% endif %}
+                            {% if row.vuln.high %}<c-badges.severity level="high">{{ row.vuln.high }} High</c-badges.severity>{% endif %}
+                            {% if row.vuln.medium %}<c-badges.severity level="medium">{{ row.vuln.medium }} Medium</c-badges.severity>{% endif %}
+                            {% if row.vuln.low %}<c-badges.severity level="low">{{ row.vuln.low }} Low</c-badges.severity>{% endif %}
+                        </div>
+                    {% endif %}
+                    </c-tables.cell>
+                    {% comment %}The muted ink sits on the value rather than the cell: the cell already states the table's own text colour, and two colour utilities on one element resolve by stylesheet order, not by the order they are written.{% endcomment %}
+                    <c-tables.cell date>
+                    <span class="text-text-muted">
+                        {% if row.last_scan %}
+                            {{ row.last_scan|naturaltime }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </span>
+                    </c-tables.cell>
+                    {% if product.has_crud_permissions %}
+                        <c-tables.actions-cell>
+                        <c-actions-menu label="Component actions" width="w-56">
+                        <c-dropdowns.item-danger icon="fas fa-unlink" ::disabled="busy" @click="removeTarget = { id: '{{ row.id }}', name: '{{ row.name|escapejs }}' }">
+                        Remove from product
+                        </c-dropdowns.item-danger>
+                        </c-actions-menu>
+                        </c-tables.actions-cell>
+                    {% endif %}
+                    </c-tables.row>
+                {% endfor %}
+                <tr x-show="total === 0">
+                    <td colspan="{% if product.has_crud_permissions %}5{% else %}4{% endif %}"
+                        class="text-center py-8 text-text-muted">No components match your search.</td>
+                </tr>
+            </tbody>
+            </c-tables.table>
+            <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+                <span class="text-sm text-text-muted">
+                    Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+                </span>
+                <c-tables.pager />
             </div>
-            <div x-data="{ open: false }">
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No components assigned yet" message="Components are shared building blocks. Assign an existing one, or create a component and connect CI/CD so your first push reports here." secondary_text="or create a new one" secondary_url="/components/">
+            <c-buttons.primary @click="openAssign()">Assign a component</c-buttons.primary>
+            </c-feedback.empty-state>
+        {% endif %}
+        {# Assign modal #}
+        {% if product.has_crud_permissions %}
+            <c-modal show="assignOpen" title="Assign Component" icon="fas fa-puzzle-piece" aria-label="Assign component">
+            <p class="text-sm text-text-muted mt-0 mb-4">
+                <span x-show="prodPublic">This product is public, so assign public components. Private components stay hidden on the public page.</span>
+                <span x-show="!prodPublic">This product is private, so you can assign any component, public or private.</span>
+            </p>
+            <div x-show="availLoading" class="py-6 text-center text-text-muted">
+                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-2" %}
+                Loading components…
+            </div>
+            <template x-if="!availLoading && avail.length === 0 && !err">
+                <p class="text-sm text-text-muted">Every component in this workspace is already assigned.</p>
+            </template>
+            <template x-if="!availLoading && avail.length > 0">
+                <div>
+                    <label for="pc-assign-select"
+                           class="text-text text-sm font-medium block mb-1.5">Component</label>
+                    <c-forms.select id="pc-assign-select" x-model="selectedId">
+                    <option value="">Choose a component…</option>
+                    <template x-for="c in avail" :key="c.id">
+                        <option :value="c.id" x-text="c.name"></option>
+                    </template>
+                    </c-forms.select>
+                </div>
+            </template>
+            <p x-show="err" class="text-sm text-danger mt-3" x-text="err"></p>
+            <c-slot name="footer">
+            <c-buttons.secondary @click="assignOpen = false">Cancel</c-buttons.secondary>
+            <c-buttons.primary ::disabled="!selectedId || busy" @click="confirmAssign()">
+            <span x-show="!busy">Assign</span>
+            <span x-show="busy">
+                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+            Assigning…</span>
+            </c-buttons.primary>
+            </c-slot>
+            </c-modal>
+            {% comment %}Remove confirmation. Its open state is the row it acts on, so the dialog is handed the expression that clears it rather than one that assigns false to a comparison.{% endcomment %}
+            <c-modal show="removeTarget" close="removeTarget = null" title="Remove Component" icon="fas fa-unlink" aria-label="Remove component from product" style="--chip-accent: var(--color-danger)">
+            <p class="text-text text-sm mt-0 mb-2">
+                Are you sure you want to remove <strong x-text="removeTarget?.name"></strong> from this product?
+            </p>
+            <p class="text-sm text-text-muted m-0">
+                The component is only unassigned. It stays in your workspace and in any other products that use it.
+            </p>
+            <p x-show="err" class="text-sm text-danger mt-3 mb-0" x-text="err"></p>
+            <c-slot name="footer">
+            <c-buttons.secondary @click="removeTarget = null">Cancel</c-buttons.secondary>
+            <c-buttons.danger ::disabled="busy" @click="confirmRemove()">
+            <span x-show="!busy">Remove</span>
+            <span x-show="busy">
+                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+            Removing…</span>
+            </c-buttons.danger>
+            </c-slot>
+            </c-modal>
+        {% endif %}
+        </c-cards.card>
+        {# Latest releases #}
+        <c-cards.card flush>
+        <div class="px-6 py-4 {% if releases_summary.releases %}border-b border-border{% endif %} flex items-center justify-between gap-3">
+            <h4 class="text-lg font-semibold text-text m-0">Latest releases</h4>
+            {% if releases_summary.releases %}
+                <c-buttons.secondary href="{% url 'core:product_releases' product.id %}">
+                View all {{ releases_summary.total }}
+                <i class="fas fa-arrow-right ml-1 text-xs" aria-hidden="true"></i>
+                </c-buttons.secondary>
+            {% endif %}
+        </div>
+        {% if releases_summary.releases %}
+            {% for release in releases_summary.releases %}
+                <div class="px-6 py-3.5 flex items-center gap-3 flex-wrap text-sm text-text-muted {% if not forloop.last %}border-b border-border/50{% endif %}">
+                    <a href="{% url 'core:release_details' product.id release.id %}"
+                       class="font-semibold text-text hover:text-primary no-underline">{{ release.name }}</a>
+                    {% if release.is_latest %}<c-badges.success size="sm">Latest</c-badges.success>{% endif %}
+                    {% if release.is_prerelease %}<c-badges.warning size="sm">Pre-release</c-badges.warning>{% endif %}
+                    <span class="ml-auto">{{ release.artifact_count }} artifact{{ release.artifact_count|pluralize }}</span>
+                    <span>{{ release.date|date:"j M Y" }}</span>
+                </div>
+            {% endfor %}
+        {% else %}
+            <c-feedback.empty-state compact icon="fas fa-tag" title="No releases yet" message="A release freezes this product's artifacts at a point in time. Tag one when you ship.">
+            <c-buttons.secondary href="{% url 'core:product_releases' product.id %}">Create a release</c-buttons.secondary>
+            </c-feedback.empty-state>
+        {% endif %}
+        </c-cards.card>
+        {# About this product — compliance & metadata, uniform collapsed rows #}
+        <c-cards.card flush>
+        <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+            <h4 class="text-lg font-semibold text-text m-0">About this product</h4>
+            <span class="text-xs text-text-muted">Compliance &amp; metadata</span>
+        </div>
+        {% if has_cra_access %}
+            <div x-data="{ open: false }" class="border-b border-border">
                 <button type="button"
                         class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
                         :aria-expanded="open"
                         @click="open = !open">
-                    <span class="w-8 h-8 rounded-lg bg-text-muted/10 flex items-center justify-center text-text-muted"><i class="fas fa-clock text-sm"></i></span>
+                    <c-chips.icon-chip size="sm" accent="neutral"><i class="fas fa-shield-halved" aria-hidden="true"></i></c-chips.icon-chip>
                     <span>
-                        <span class="block text-sm font-semibold text-text">Lifecycle</span>
-                        <span class="block text-xs text-text-muted">Release, end of support, end of life</span>
+                        <span class="block text-sm font-semibold text-text">CRA Compliance</span>
+                        <span class="block text-xs text-text-muted">
+                            {% if cra_assessment %}
+                                In progress · step {{ cra_assessment.current_step }}
+                            {% else %}
+                                Not started
+                            {% endif %}
+                        </span>
                     </span>
                     <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
                        :class="open ? 'rotate-180' : ''"
                        aria-hidden="true"></i>
                 </button>
                 <div x-show="open" x-collapse>
-                    <div class="tw-embed"
-                         hx-get="{% url 'core:product_lifecycle' product.id %}"
-                         hx-trigger="click once from:previous button"
-                         hx-swap="innerHTML">
-                        <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
-                    </div>
+                    <div class="tw-embed">{% include "compliance/components/cra_product_card.html.j2" %}</div>
                 </div>
             </div>
-        </section>
+        {% endif %}
+        <div x-data="{ open: false }" class="border-b border-border">
+            <button type="button"
+                    class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
+                    :aria-expanded="open"
+                    @click="open = !open">
+                <c-chips.icon-chip size="sm" accent="neutral"><i class="fas fa-link" aria-hidden="true"></i></c-chips.icon-chip>
+                <span>
+                    <span class="block text-sm font-semibold text-text">Product links</span>
+                    <span class="block text-xs text-text-muted">Website, docs, support…</span>
+                </span>
+                <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
+                   :class="open ? 'rotate-180' : ''"
+                   aria-hidden="true"></i>
+            </button>
+            <div x-show="open" x-collapse>
+                <div class="tw-embed"
+                     hx-get="{% url 'core:product_links' product.id %}"
+                     hx-trigger="click once from:previous button"
+                     hx-swap="innerHTML">
+                    <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
+                </div>
+            </div>
+        </div>
+        <div x-data="{ open: false }" class="border-b border-border">
+            <button type="button"
+                    class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
+                    :aria-expanded="open"
+                    @click="open = !open">
+                <c-chips.icon-chip size="sm" accent="neutral"><i class="fas fa-barcode" aria-hidden="true"></i></c-chips.icon-chip>
+                <span>
+                    <span class="block text-sm font-semibold text-text">Product identifiers</span>
+                    <span class="block text-xs text-text-muted">GTIN, SKU, MPN…</span>
+                </span>
+                {% if identifiers_locked %}
+                    <c-badges.warning size="sm" class="ml-auto mr-3"><i class="fas fa-lock mr-1"></i>Business</c-badges.warning>
+                    <i class="fas fa-chevron-down text-text-muted transition-transform"
+                       :class="open ? 'rotate-180' : ''"
+                       aria-hidden="true"></i>
+                {% else %}
+                    <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
+                       :class="open ? 'rotate-180' : ''"
+                       aria-hidden="true"></i>
+                {% endif %}
+            </button>
+            <div x-show="open" x-collapse>
+                <div class="tw-embed"
+                     hx-get="{% url 'core:product_identifiers' product.id %}"
+                     hx-trigger="click once from:previous button"
+                     hx-swap="innerHTML">
+                    <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
+                </div>
+            </div>
+        </div>
+        <div x-data="{ open: false }">
+            <button type="button"
+                    class="w-full flex items-center gap-3 px-6 py-3.5 text-left hover:bg-background/50 transition-colors"
+                    :aria-expanded="open"
+                    @click="open = !open">
+                <c-chips.icon-chip size="sm" accent="neutral"><i class="fas fa-clock" aria-hidden="true"></i></c-chips.icon-chip>
+                <span>
+                    <span class="block text-sm font-semibold text-text">Lifecycle</span>
+                    <span class="block text-xs text-text-muted">Release, end of support, end of life</span>
+                </span>
+                <i class="fas fa-chevron-down ml-auto text-text-muted transition-transform"
+                   :class="open ? 'rotate-180' : ''"
+                   aria-hidden="true"></i>
+            </button>
+            <div x-show="open" x-collapse>
+                <div class="tw-embed"
+                     hx-get="{% url 'core:product_lifecycle' product.id %}"
+                     hx-trigger="click once from:previous button"
+                     hx-swap="innerHTML">
+                    <div class="px-6 pb-4 text-sm text-text-muted">Loading…</div>
+                </div>
+            </div>
+        </div>
+        </c-cards.card>
         {# Shared create-release modal opened from the meatball; slim productReleases scope, ws release_created refreshes. #}
         {% if product.has_crud_permissions %}
             <div x-data="productReleases({ productId: '{{ product.id }}', initialReleases: [], totalCount: 0, isPublicView: false, canCreate: true, canEdit: false, canDelete: false })"
