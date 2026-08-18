@@ -77,7 +77,7 @@
     page, so hiding rows keeps the assessment badges server-rendered and the
     table intact without JavaScript.
         {% endcomment %}
-        <section class="scroll-mt-[4.5rem]"
+        <section class="flex flex-col gap-4 scroll-mt-[4.5rem]"
                  id="products"
                  x-data="{ q: '', currentPage: 1, perPage: 10, rows: [], init() { this.rows = Array.from(this.$root.querySelectorAll('tr[data-search]')).map(r => r.dataset.search); this.$watch('q', () => this.currentPage = 1) }, get needle() { return this.q.trim().toLowerCase() }, get matched() { const n = this.needle; return this.rows.reduce((acc, s, i) => { if (!n || s.includes(n)) acc.push(i); return acc; }, []) }, get totalPages() { return Math.max(1, Math.ceil(this.matched.length / this.perPage)) }, get pageIdx() { const start = (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage; return this.matched.slice(start, start + this.perPage) }, show(i) { return this.pageIdx.includes(i) }, get startIndex() { return this.matched.length ? (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage + 1 : 0 }, get endIndex() { return Math.min(Math.min(this.currentPage, this.totalPages) * this.perPage, this.matched.length) } }">
             <c-branded.section-header title="Products" subtitle="Our products and their software bills of materials.">
