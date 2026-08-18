@@ -28,6 +28,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.security_advisories.forms import AdvisoryCreateForm
 from sbomify.apps.security_advisories.services.advisories import (
@@ -94,7 +95,24 @@ SEVERITY_OPTIONS: list[dict[str, str]] = [
 
 # Roles that may change an advisory, mirroring the has_crud_permissions the
 # templates use to decide whether to render the controls at all.
-_ADVISORY_WRITE_ROLES = ("owner", "admin")
+# Publishing an advisory is an outward-facing act — it appears on the public
+# trust center — so it is ADMINISTER, not the MANAGE tier that covers day-to-day
+# artifact work. Bound to the tier rather than repeated as a literal so it cannot
+# quietly widen when a role is added.
+_ADVISORY_WRITE_ROLES = ADMINISTER
+
+
+def _can_write_advisories(request: HttpRequest) -> bool:
+    """Whether this user may change advisories, from the live Member row.
+
+    Not from ``session["current_team"]["role"]``: that is a cache with a 300s
+    TTL, so a demoted user kept seeing the compose and edit controls (and a
+    promoted one kept missing them) while the handler enforced the real answer.
+    """
+    key = (request.session.get("current_team") or {}).get("key")
+    if not key:
+        return False
+    return Member.objects.filter(user=cast(User, request.user), team__key=key, role__in=_ADVISORY_WRITE_ROLES).exists()
 
 
 def _writable_team(request: HttpRequest) -> Team | None:
@@ -127,7 +145,7 @@ def _advisories_context(request: HttpRequest) -> dict[str, Any]:
     counts = advisory_counts(advisories)
     return {
         "current_team": current_team,
-        "has_crud_permissions": current_team.get("role") in ["owner", "admin"],
+        "has_crud_permissions": _can_write_advisories(request),
         "advisories": advisories,
         "advisories_count": counts["total"],
         "open_count": counts["open"],
@@ -163,9 +181,13 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         if team is None:
             raise Http404("Workspace not found")
 
-        current_team = request.session.get("current_team") or {}
-        if current_team.get("role") not in ["owner", "admin"]:
+        # The live Member row, not the session's cached role: same reason the
+        # rest of this module reads it that way, and it keeps the tier in one
+        # place instead of a literal list that widens when a role is added.
+        if not _can_write_advisories(request):
             raise Http404("Workspace not found")
+
+        current_team = request.session.get("current_team") or {}
 
         products = creation_options(team).value or []
         # ``?product=`` lets a product's row menu open this form with that
@@ -262,7 +284,7 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             "core/security_advisory_detail.html.j2",
             {
                 "current_team": current_team,
-                "has_crud_permissions": current_team.get("role") in ["owner", "admin"],
+                "has_crud_permissions": _can_write_advisories(request),
                 "advisory": advisory,
                 "timeline": advisory["timeline"],
                 "update_kinds": UPDATE_KINDS,
