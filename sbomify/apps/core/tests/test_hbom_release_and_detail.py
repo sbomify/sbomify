@@ -99,7 +99,7 @@ class TestHbomDetailPageRouting:
         assert response.context["is_hbom"] is True
         assert response.context["is_cbom"] is False
         assert response.context["is_vex"] is False
-        assert b"HBOM Details" in response.content
+        assert b"Download CycloneDX HBOM" in response.content
 
     def test_sboms_path_redirects_to_hbom(self, sample_component: Component, sample_user) -> None:
         hbom = _artifact(sample_component, SBOM.BomType.HBOM, "board")
