@@ -23,7 +23,7 @@ Static credentials are a security and operational concern:
 Cloud providers have converged on workload identity as the standard for service-to-service authentication:
 
 | Cloud | Mechanism | How it works |
-|---|---|---|
+| --- | --- | --- |
 | **GCP** | Workload Identity Federation | Kubernetes service account is mapped to a GCP service account; pods receive short-lived tokens via Application Default Credentials (ADC) |
 | **AWS** | IRSA / EKS Pod Identity | IAM role is associated with a Kubernetes service account; projected service account tokens are exchanged for temporary AWS credentials |
 
@@ -69,7 +69,7 @@ A configuration flag (`STORAGE_BACKEND=s3|gcs`, defaulting to `s3`) selects whic
 The GCS backend uses the `google-cloud-storage` Python library, which picks up Application Default Credentials automatically on GKE:
 
 | Current S3 call | GCS equivalent |
-|---|---|
+| --- | --- |
 | `bucket.put_object(Key=key, Body=data)` | `bucket.blob(key).upload_from_string(data)` |
 | `.Object(key).get()["Body"].read()` | `bucket.blob(key).download_as_bytes()` |
 | `.Object(key).delete()` | `bucket.blob(key).delete()` |
@@ -167,7 +167,7 @@ fake-gcs:
 ### Comparison Table
 
 | Library | S3/R2 | GCS | Workload Identity | Presigned URLs | Fit for sbomify |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | **boto3 + google-cloud-storage** | Yes | Yes | Yes | Yes | Best fit — matches current stack |
 | **obstore** | Yes | Yes | Yes | No | Missing presigned URLs |
 | **django-storages** | Yes | Yes | Yes | Yes | Doesn't fit sbomify's storage pattern |
