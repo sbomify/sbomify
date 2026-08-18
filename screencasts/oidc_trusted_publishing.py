@@ -247,10 +247,18 @@ def oidc_trusted_publishing(
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
-    # ── 3. Scroll the Trusted Publishers section into view ───────────────
+    # ── 3. Open Trusted Publishers from the header's ⋮ menu ──────────────
+    # The component page keeps its secondary surfaces behind the meatball
+    # menu now, so the section lives in a modal rather than on the page.
+    more_actions = page.get_by_role("button", name="More actions")
+    more_actions.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, more_actions)
+    pace(page, 600)
+    hover_and_click(page, page.get_by_role("menuitem", name="Trusted publishers"))
+    pace(page, 600)
+
     section = page.locator("#trusted-publishers-section")
     section.wait_for(state="visible", timeout=15_000)
-    section.scroll_into_view_if_needed()
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 
@@ -276,7 +284,7 @@ def oidc_trusted_publishing(
 
     # ── 7. Expand the workflow YAML so the viewer sees the contract ──────
     disclosure = page.locator("#trusted-publishers-section summary:has-text('Configure your GitHub Actions workflow')")
-    disclosure.scroll_into_view_if_needed()
+    disclosure.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
     hover_and_click(page, disclosure)
     pace(page, 2500)
@@ -366,16 +374,18 @@ def oidc_trusted_publishing(
     )
     pace(page, 1800)
 
-    # ── 9. Reload + scroll to the SBOMs table to reveal the new SBOM ─────
+    # ── 9. Reload + scroll to the artifacts table to reveal the new SBOM ─
     hide_overlay(page)
     page.reload()
     page.wait_for_load_state("networkidle")
     auto_dismiss_toasts(page)
     pace(page, 1500)
 
-    sboms_heading = page.locator("h4:has-text('SBOMs')").first
+    # The table header reads "Artifacts & security" ("Latest artifacts &
+    # security" in the compact view); match the shared word.
+    sboms_heading = page.locator("h4:has-text('artifacts')").first
     sboms_heading.wait_for(state="visible", timeout=10_000)
-    sboms_heading.scroll_into_view_if_needed()
+    sboms_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1000)
 
     # The newly-uploaded SBOM carries the metadata-supplied component name.

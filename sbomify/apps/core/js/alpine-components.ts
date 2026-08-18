@@ -31,13 +31,14 @@ import { registerComponentMetaInfoEditor } from './component-meta-info-editor';
 import { registerComponentMetaInfo } from './component-meta-info';
 import { registerAccountDangerZone } from './components/account-danger-zone';
 import { registerDatePicker } from './components/date-picker';
+import { advisoryProductPicker } from './components/advisory-product-picker';
+import { actionsMenu } from './components/actions-menu';
 
 // ============================================
 // COMPONENT IMPORTS - SBOM Module
 // ============================================
 import { registerSbomUpload } from '../../sboms/js/sbom-upload';
 import { registerSbomsTable } from '../../sboms/js/sboms-table';
-import { registerCiCdInfo } from '../../sboms/js/ci-cd-info';
 import { registerLicensesEditor } from '../../sboms/js/licenses-editor';
 import { registerContactsEditor } from '../../sboms/js/contacts-editor';
 import { registerSupplierEditor } from '../../sboms/js/supplier-editor';
@@ -59,6 +60,7 @@ import { registerCraStep2 } from '../../compliance/js/cra-step-2';
 import { registerCraStep3 } from '../../compliance/js/cra-step-3';
 import { registerCraStep4 } from '../../compliance/js/cra-step-4';
 import { registerCraStep5 } from '../../compliance/js/cra-step-5';
+import { registerCiCdToken } from '../../sboms/js/ci-cd-token';
 
 // Track registered components to prevent double-registration
 const registeredComponents = new Set<string>();
@@ -197,6 +199,8 @@ export function registerCommonComponents(): void {
     registerAlpineComponent('collapsible', collapsible);
     registerAlpineComponent('formState', formState);
     registerAlpineComponent('chartSelector', chartSelector);
+    registerAlpineComponent('advisoryProductPicker', advisoryProductPicker);
+    registerAlpineComponent('actionsMenu', actionsMenu);
 }
 
 /**
@@ -205,6 +209,7 @@ export function registerCommonComponents(): void {
  */
 export function registerAllComponents(): void {
     // Common inline components
+    registerCiCdToken();
     registerCommonComponents();
 
     // Core components
@@ -235,7 +240,6 @@ export function registerAllComponents(): void {
     // SBOM module components
     registerSbomUpload();
     registerSbomsTable();
-    registerCiCdInfo();
     registerLicensesEditor();
     registerContactsEditor();
     registerSupplierEditor();
@@ -288,7 +292,6 @@ export function registerHtmxBundleComponents(): void {
     // SBOM module components
     registerSbomUpload();
     registerSbomsTable();
-    registerCiCdInfo();
     registerLicensesEditor();
     registerContactsEditor();
     registerSupplierEditor();

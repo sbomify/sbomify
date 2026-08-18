@@ -19,6 +19,22 @@ from ..utils import get_email_context, render_email_templates
 logger = getLogger(__name__)
 
 
+def _is_mailable(user: Any) -> bool:
+    """Return False for recipients that must never be handed to the mailer.
+
+    Currently that means synthetic OIDC bot identities. This is the last gate
+    before ``EmailMultiAlternatives``, deliberately duplicating the check in
+    ``onboarding.signals`` so a bot reaching any send path — a backfill, an
+    admin action, a future sender — still can't produce a message.
+    """
+    from sbomify.apps.oidc.services import is_synthetic_bot_user
+
+    if is_synthetic_bot_user(user):
+        logger.debug("Suppressing onboarding email for synthetic bot user %s", user.id)
+        return False
+    return True
+
+
 class OnboardingEmailService:
     """Service for sending onboarding emails."""
 
@@ -33,6 +49,9 @@ class OnboardingEmailService:
         Returns:
             True if email was sent successfully, False otherwise
         """
+        if not _is_mailable(user):
+            return False
+
         # Check if welcome email already sent
         onboarding_status, _ = OnboardingStatus.objects.get_or_create(user=user)
         if onboarding_status.welcome_email_sent:
@@ -91,6 +110,9 @@ class OnboardingEmailService:
 
         Checks deduplication, eligibility, and handles record creation/failure tracking.
         """
+        if not _is_mailable(user):
+            return False
+
         # Dedup check — only skip if successfully sent
         existing = OnboardingEmail.objects.filter(user=user, email_type=email_type).first()
         if existing and existing.status == OnboardingEmail.EmailStatus.SENT:
@@ -232,15 +254,39 @@ class OnboardingEmailService:
             ).values_list("user_id", "email_type")
         )
 
-        skipped_no_status = 0
+        backfilled_status = 0
         skipped_errors = 0
         for member in primary_owners:
             try:
-                try:
-                    status = OnboardingStatus.objects.get(user=member.user)
-                except OnboardingStatus.DoesNotExist:
-                    skipped_no_status += 1
+                # Synthetic OIDC bot identities have no row because the creation
+                # signal refuses to make one — that absence is the intended
+                # state, not a gap, and is a plausible source of the skipped
+                # count in the first place. Backfilling them would resurrect a
+                # row an operator deleted, on every run, and list a bot among
+                # onboarding users. Checked with the same helper signals.py and
+                # _is_mailable use, so the three cannot drift.
+                if not _is_mailable(member.user):
                     continue
+
+                # The row is created by a signal on user creation, so a human
+                # primary owner without one predates that signal or was made by
+                # a path that bypassed it. Every other call site in this app
+                # reaches for it with get_or_create; this one used a bare get
+                # and counted the miss, so those owners were stepped over on
+                # every run and the count never converged or said who.
+                #
+                # Backdated to the account rather than to now. created_at is
+                # what days_since_signup and the drip anchor are computed from,
+                # so a fresh row would show "0 days since signup" on the admin
+                # screen for someone who joined years ago, and would restart the
+                # drip at day 0 if welcome_email_sent were ever set.
+                status, created = OnboardingStatus.objects.get_or_create(user=member.user)
+                if created:
+                    joined = getattr(member.user, "date_joined", None)
+                    if joined:
+                        OnboardingStatus.objects.filter(pk=status.pk).update(created_at=joined)
+                        status.refresh_from_db(fields=["created_at"])
+                    backfilled_status += 1
 
                 user_id = member.user.id
 
@@ -275,10 +321,13 @@ class OnboardingEmailService:
                 skipped_errors += 1
                 logger.error("Error processing onboarding sequence for user %s: %s", member.user.id, e, exc_info=True)
 
-        if skipped_no_status:
-            logger.warning(
-                "Skipped %d primary owners with missing OnboardingStatus during sequence processing",
-                skipped_no_status,
+        if backfilled_status:
+            # Info, not warning: the gap is now closed by the time this is
+            # written, and the count converges to zero instead of being
+            # restated every day.
+            logger.info(
+                "Backfilled OnboardingStatus for %d primary owners during sequence processing",
+                backfilled_status,
             )
         if skipped_errors:
             logger.error(

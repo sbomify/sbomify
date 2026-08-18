@@ -1,0 +1,25 @@
+{% comment %}
+The shell every badge shares, in plain Tailwind utilities. Pages use a variant
+component (c-badges.primary and friends); those nest this and pass their recipe
+through variant_class. Shape and size render as one conditional segment, and
+the corner radius as another, so utilities never stack against each other.
+shape="severity" is the squarer, uppercase scale shape used by c-badges.severity.
+Without a variant_class the shell is the neutral tint the bare tw-badge was.
+
+type renders the shell as a button, for the badge that is a control: the re-run
+beside an assessment run's metadata is a badge you press, and a styled span
+with a click handler would be neither focusable nor disableable.
+c-badges.action is that badge; every other variant stays a span. The two
+branches differ only in the element and in the disabled affordance a span
+cannot carry, and must stay in lockstep.
+{% endcomment %}
+<c-vars variant_class shape size pill type class />
+{% if type %}
+    <button type="{{ type }}"
+            class="inline-flex items-center font-semibold transition-all duration-150 border border-solid {% if shape == 'severity' %}px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]{% elif size == 'sm' %}px-1.5 py-0.5 text-[0.625rem] leading-[1.5] tracking-[0.01em]{% else %}px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]{% endif %} {% if shape == 'severity' and not pill %}rounded{% else %}rounded-full{% endif %} {% if variant_class %}{{ variant_class }}{% else %}text-text-muted bg-[color-mix(in_oklab,var(--color-border)_12%,transparent)] border-[color-mix(in_oklab,var(--color-border)_20%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+            {{ attrs }}>{{ slot }}
+    </button>
+{% else %}
+    <span class="inline-flex items-center font-semibold transition-all duration-150 border border-solid {% if shape == 'severity' %}px-2 py-1 text-xs leading-[1.5] uppercase tracking-[0.04em]{% elif size == 'sm' %}px-1.5 py-0.5 text-[0.625rem] leading-[1.5] tracking-[0.01em]{% else %}px-3 py-1 text-xs leading-[1.5] tracking-[0.01em]{% endif %} {% if shape == 'severity' and not pill %}rounded{% else %}rounded-full{% endif %} {% if variant_class %}{{ variant_class }}{% else %}text-text-muted bg-[color-mix(in_oklab,var(--color-border)_12%,transparent)] border-[color-mix(in_oklab,var(--color-border)_20%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+          {{ attrs }}>{{ slot }}</span>
+{% endif %}

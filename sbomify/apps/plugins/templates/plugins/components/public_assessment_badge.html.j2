@@ -6,32 +6,20 @@
    Expected assessment dict:
    - display_name: str
    - category: str (attestation, compliance, security, license)
+   Optional citable facts (rendered when present, omitted when not):
+   - standard_name, standard_version, standard_url: which standard was checked
+   - pass_count, total_findings: how many checks passed
+   - completed_at: when the passing run finished ("verified" date)
 {% endcomment %}
 {% if assessment %}
     {% if assessment.category == 'attestation' %}
-        <span class="public-badge badge-attestation"
-              title="{{ assessment.display_name }}: Attestation verified">
-            <i class="fas fa-certificate"></i>
-            {{ assessment.display_name }}
-        </span>
+        {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-attestation" badge_icon="fa-certificate" status_phrase="Attestation verified" %}
     {% elif assessment.category == 'security' %}
-        <span class="public-badge badge-security"
-              title="{{ assessment.display_name }}: All checks passed">
-            <i class="fas fa-shield-halved"></i>
-            {{ assessment.display_name }}
-        </span>
+        {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-security" badge_icon="fa-shield-halved" status_phrase="No known vulnerabilities in the latest scan" %}
     {% elif assessment.category == 'license' %}
-        <span class="public-badge badge-license"
-              title="{{ assessment.display_name }}: All checks passed">
-            <i class="fas fa-scale-balanced"></i>
-            {{ assessment.display_name }}
-        </span>
+        {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-license" badge_icon="fa-scale-balanced" status_phrase="All checks passed" %}
     {% else %}
         {# Default: compliance or unknown category #}
-        <span class="public-badge badge-compliance"
-              title="{{ assessment.display_name }}: All checks passed">
-            <i class="fas fa-check-circle"></i>
-            {{ assessment.display_name }}
-        </span>
+        {% include 'plugins/components/_public_assessment_badge_inner.html.j2' with badge_class="badge-compliance" badge_icon="fa-check-circle" status_phrase="All checks passed" %}
     {% endif %}
 {% endif %}

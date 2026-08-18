@@ -7,6 +7,8 @@ from collections.abc import Callable
 from math import ceil
 
 from django.conf import settings
+from django.core.cache import caches
+from django.core.cache.backends.base import BaseCache
 from django.http import HttpRequest, HttpResponse
 from ninja.throttling import SimpleRateThrottle
 
@@ -25,6 +27,23 @@ class AccessTokenRateThrottle(SimpleRateThrottle):
 
     def __init__(self, rate: str | None = None) -> None:
         super().__init__(rate or settings.API_TOKEN_RATE_LIMIT)
+
+    @property
+    def cache(self) -> BaseCache:  # type: ignore[override]
+        """The Redis alias that still raises when Redis is unreachable.
+
+        The default alias swallows connection failures so a page renders without
+        its cache instead of 500ing. A throttle cannot borrow that: it decides
+        from the window it reads back, and a swallowed failure reads as an empty
+        window, so every caller is handed a full budget for as long as Redis is
+        unwell. Raising here refuses the request instead, and the subclasses
+        below inherit it — including the per-IP limit on the anonymous surfaces,
+        which is the one an attacker would want gone.
+
+        Resolved per access rather than bound at import so a test that overrides
+        ``CACHES`` is honoured.
+        """
+        return caches["throttle"]
 
     def get_cache_key(self, request: HttpRequest) -> str | None:
         record = getattr(request, "access_token_record", None)
@@ -72,6 +91,72 @@ class AccessTokenHeavyRateThrottle(AccessTokenRateThrottle):
 
     def __init__(self, rate: str | None = None) -> None:
         super().__init__(rate or settings.API_TOKEN_HEAVY_RATE_LIMIT)
+
+
+class AnonymousIPRateThrottle(AccessTokenRateThrottle):
+    """Per-IP limit for the surfaces no token throttle can reach.
+
+    ``AccessTokenRateThrottle`` keys on the resolved token row, so session and
+    anonymous callers get no budget at all. That leaves the public surfaces
+    (Trust Center pages, the ``auth=None`` ninja routes, the document
+    access-request POST, the OIDC exchange) with no limit of any kind.
+
+    Keying on :func:`get_client_ip` rather than ``REMOTE_ADDR`` matters: the app
+    sits behind Caddy, so the peer address is the proxy for every caller and a
+    single shared budget would be trivially exhausted. That helper only honours
+    ``X-Real-IP`` from a trusted proxy, so the key cannot be spoofed to escape
+    the limit either.
+
+    A request that already carries a token is left to the token throttle, so an
+    authenticated integration is not charged twice for one call.
+    """
+
+    cache_key_prefix = "throttle_anon_ip"
+
+    def __init__(self, rate: str | None = None) -> None:
+        super().__init__(rate or settings.API_ANONYMOUS_RATE_LIMIT)
+
+    def get_cache_key(self, request: HttpRequest) -> str | None:
+        if getattr(request, "access_token_record", None) is not None:
+            return None
+        from sbomify.apps.core.utils import get_client_ip
+
+        # No usable address (REMOTE_ADDR absent under a misconfigured proxy or
+        # ASGI server) must not mean "unlimited". Returning None here would skip
+        # the throttle entirely, so a control meant to bound abuse would switch
+        # itself off exactly when the environment is wrong. Everything
+        # unidentifiable shares one bucket instead: worst case a few callers
+        # contend, which is a far better failure than none being limited.
+        client_ip = get_client_ip(request) or "unknown"
+        return f"{self.cache_key_prefix}_{client_ip}"
+
+
+class OnDemandTLSRateThrottle(AnonymousIPRateThrottle):
+    """Budget for Caddy's on-demand TLS ask, separate from the public surfaces.
+
+    The ask is issued once per TLS handshake against an unprovisioned hostname,
+    so its natural rate is set by whoever is connecting rather than by anything
+    sbomify does. Sharing ``AnonymousIPRateThrottle``'s bucket meant a client
+    probing hostnames could spend the whole anonymous budget and take the Trust
+    Center pages and the OIDC exchange down with it — and, in the other
+    direction, ordinary anonymous traffic could throttle certificate issuance.
+    Caddy reads any non-200 as "do not issue", so a throttled ask is a refused
+    certificate.
+
+    The distinct ``cache_key_prefix`` is what separates the two windows; without
+    it this would read and write the same counter it was split off from.
+
+    Still a per-IP limit rather than none: the route is blocked externally at
+    the proxy, but a control that depends on one layer being configured
+    correctly is not a control. Set well above the handshake rate a real
+    workspace produces, since the decision cache in front of it already absorbs
+    the repeats.
+    """
+
+    cache_key_prefix = "throttle_ondemand_tls"
+
+    def __init__(self, rate: str | None = None) -> None:
+        super().__init__(rate or settings.ON_DEMAND_TLS_RATE_LIMIT)
 
 
 class RateLimitHeadersMiddleware:

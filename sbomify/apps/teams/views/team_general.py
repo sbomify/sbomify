@@ -6,10 +6,12 @@ from typing import cast
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.views import View
 
+from sbomify.apps.core.authz import ADMINISTER, OWNER_ONLY
+from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.htmx import htmx_error_response, htmx_success_response
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.apis import get_team
@@ -26,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    """View for managing workspace general settings (name, default, deletion)."""
+    """View for managing workspace general settings (name, default, deletion).
 
-    allowed_roles = ["owner"]
+    Gated at the ``ADMINISTER`` tier (owners and admins). Workspace *deletion* is
+    the exception — ``_delete_workspace`` re-checks for owner, since deleting the
+    workspace is one of the two things an admin may not do.
+    """
+
+    allowed_roles = list(ADMINISTER)
 
     def get(self, request: HttpRequest, team_key: str) -> HttpResponse:
         user = cast(User, request.user)
@@ -36,7 +43,9 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
 
-        form = TeamGeneralSettingsForm(initial={"name": team.name})
+        form = TeamGeneralSettingsForm(
+            initial={"name": team.name, "sbom_freshness_days": team.sbom_freshness_days},
+        )
 
         membership = Member.objects.filter(user=user, team__key=team_key).first()
         is_default_team = membership.is_default_team if membership else False
@@ -59,10 +68,10 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         elif action == "delete_workspace" or action == "delete":
             return self._delete_workspace(request, team_key)
 
-        return self._update_name(request, team_key)
+        return self._update_general(request, team_key)
 
-    def _update_name(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """Update the workspace name."""
+    def _update_general(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        """Update the workspace name and freshness window."""
         status_code, team = get_team(request, team_key)
         if status_code != 200:
             return htmx_error_response(team.get("detail", "Unknown error"))
@@ -72,12 +81,17 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response(form.errors.as_text())
 
         new_name = form.cleaned_data["name"]
+        # None is the cleared state, so this writes through rather than skipping
+        # a falsy value: 0 is a valid window and an emptied field has to unset
+        # the policy.
+        freshness_days = form.cleaned_data["sbom_freshness_days"]
 
         try:
             with transaction.atomic():
                 team_obj = Team.objects.select_for_update().get(key=team_key)
                 team_obj.name = new_name
-                team_obj.save(update_fields=["name"])
+                team_obj.sbom_freshness_days = freshness_days
+                team_obj.save(update_fields=["name", "sbom_freshness_days"])
 
             refresh_current_team_session(request, team_obj)
 
@@ -116,10 +130,20 @@ class TeamGeneralView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return htmx_error_response("Failed to set default workspace. Please try again.")
 
     def _delete_workspace(self, request: HttpRequest, team_key: str) -> HttpResponse:
-        """Delete the workspace."""
+        """Delete the workspace — owner only.
+
+        The class gate admits admins; this is the ``OWNER_ONLY`` carve-out, so
+        re-check here rather than relying on the mixin.
+        """
         user = cast(User, request.user)
         try:
-            membership = Member.objects.select_related("team").get(user=user, team__key=team_key, role="owner")
+            membership = Member.objects.select_related("team").get(user=user, team__key=team_key)
+            if membership.role not in OWNER_ONLY:
+                # A real 403, matching what TeamRoleRequiredMixin returns for the
+                # rest of the view — an authorization failure, not a form error.
+                return error_response(
+                    request, HttpResponseForbidden("Only the workspace owner can delete a workspace.")
+                )
 
             if membership.is_default_team:
                 return htmx_error_response(

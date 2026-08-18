@@ -121,6 +121,18 @@ jobs:
             ignore: "sbomify/apps/core/tests/e2e"
           - name: "SBOM Tests"
             path: "sbomify/apps/sboms/tests/"
+          - name: "Plugin Tests"
+            path: "sbomify/apps/plugins/tests/"
+          - name: "Compliance Tests"
+            path: "sbomify/apps/compliance/tests/"
+          - name: "Vulnerability Scanning Tests"
+            path: "sbomify/apps/vulnerability_scanning/tests/"
+          - name: "TEA Tests"
+            path: "sbomify/apps/tea/tests/"
+          - name: "OIDC Tests"
+            path: "sbomify/apps/oidc/tests/"
+          - name: "Controls Tests"
+            path: "sbomify/apps/controls/tests/"
           - name: "Team Tests"
             path: "sbomify/apps/teams/tests/"
           - name: "Billing Tests"
@@ -130,11 +142,13 @@ jobs:
           - name: "Licensing Tests"
             path: "sbomify/apps/licensing/tests/"
           - name: "Access Token Tests"
-            path: "sbomify/apps/access_tokens/tests.py"
+            path: "sbomify/apps/access_tokens/"
           - name: "Notification Tests"
             path: "sbomify/apps/notifications/tests.py"
           - name: "Onboarding Tests"
             path: "sbomify/apps/onboarding/tests/"
+          - name: "Security Advisory Tests"
+            path: "sbomify/apps/security_advisories/tests/"
     env:
       DJANGO_SETTINGS_MODULE: sbomify.test_settings
       DEBUG: True
@@ -324,6 +338,10 @@ jobs:
           bun run build
 
       - name: Run Frontend Tests
+        # `shell: bash` is required: the default shell is `bash -e` without
+        # pipefail, so `bun test | tee` would report tee's exit status and a
+        # failing test suite would pass silently.
+        shell: bash
         run: |
           echo "## Frontend Test Results" >> $GITHUB_STEP_SUMMARY
           bun test | tee -a $GITHUB_STEP_SUMMARY
@@ -387,7 +405,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -395,7 +413,7 @@ jobs:
 
       - name: Login to Docker Hub
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           username: sbomifyhub
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -488,7 +506,7 @@ jobs:
 
       - name: Attest GitHub Container Registry image
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.meta.outputs.github_image_id }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -496,7 +514,7 @@ jobs:
 
       - name: Attest Docker Hub image
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ${{ steps.meta.outputs.docker_hub_image_id }}
           subject-digest: ${{ steps.build.outputs.digest }}
@@ -596,7 +614,7 @@ jobs:
           OUTPUT_FILE: ${{ matrix.output_file }}
 
       - name: Attest SBOM
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
 
@@ -636,7 +654,7 @@ jobs:
           persist-credentials: false
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -666,7 +684,7 @@ jobs:
           OUTPUT_FILE: ${{ matrix.output_file }}
 
       - name: Attest SBOM
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
 
@@ -743,7 +761,7 @@ jobs:
           OUTPUT_FILE: ${{ matrix.output_file }}
 
       - name: Attest SBOM
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'
 
@@ -782,7 +800,7 @@ jobs:
           persist-credentials: false
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -811,6 +829,6 @@ jobs:
           OUTPUT_FILE: ${{ matrix.output_file }}
 
       - name: Attest SBOM
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: '${{ github.workspace }}/${{ matrix.output_file }}'

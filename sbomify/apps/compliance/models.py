@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from sbomify.apps.core.utils import generate_id
 
@@ -281,6 +284,34 @@ class CRAAssessment(models.Model):
         ),
     )
 
+    # Step 1 — EU Authorized Representative (CRA Art. 22/25, checklist 7.4).
+    # A manufacturer without an EU establishment must appoint an AR *before*
+    # market placement, and the AR's details belong on the accompanying
+    # documentation. ``is_eu_established`` is nullable on purpose: NULL means
+    # nobody has answered yet, which is a different state from "answered no",
+    # and 7.4.1 asks for the determination to be recorded either way.
+    is_eu_established = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Whether the manufacturer has an EU establishment (checklist 7.4.1). "
+            "False makes an Authorized Representative mandatory; NULL means the "
+            "determination has not been made."
+        ),
+    )
+    authorized_rep_name = models.CharField(max_length=255, blank=True, default="")
+    authorized_rep_address = models.TextField(blank=True, default="")
+    authorized_rep_email = models.EmailField(blank=True, default="")
+    authorized_rep_mandate_date = models.DateField(
+        null=True, blank=True, help_text="Date the written mandate was signed (checklist 7.4.2)."
+    )
+    authorized_rep_mandate_reference = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Reference to the mandate document: contract id, DMS link or file name.",
+    )
+
     # Step 3b — Vulnerability disclosure
     vdp_url = models.URLField(blank=True, default="")
     acknowledgment_timeline_days = models.PositiveIntegerField(null=True, blank=True)
@@ -343,6 +374,59 @@ class CRAAssessment(models.Model):
         related_name="+",
         help_text="User who saved the signature on this assessment.",
     )
+
+    @property
+    def requires_authorized_representative(self) -> bool:
+        """Whether CRA Art. 22 obliges this assessment to name an AR.
+
+        Only an explicit "not EU-established" triggers the obligation; an
+        unanswered determination is surfaced as incomplete rather than
+        silently treated as compliant.
+        """
+        return self.is_eu_established is False
+
+    @property
+    def authorized_rep_is_complete(self) -> bool:
+        """Whether the AR block carries what checklist 7.4.2/7.4.3 asks for."""
+        return all(
+            [
+                self.authorized_rep_name.strip(),
+                self.authorized_rep_address.strip(),
+                self.authorized_rep_email.strip(),
+                self.authorized_rep_mandate_date is not None,
+            ]
+        )
+
+    @property
+    def eu_representation_problems(self) -> list[str]:
+        """Reasons the EU-representation block is not yet compliant.
+
+        Two different failures, deliberately not collapsed. An **unanswered**
+        determination is incomplete evidence (7.4.1) and surfaces on the
+        publish/export path, since blocking the wizard on it would strand
+        every assessment created before the question existed. A **missing AR
+        where one is required** is an Art. 22 breach, and that one blocks.
+        """
+        if self.is_eu_established is None:
+            return ["Record whether the manufacturer is established in the EU (CRA Art. 22, checklist 7.4.1)."]
+        if not self.requires_authorized_representative:
+            return []
+        missing = []
+        if not self.authorized_rep_name.strip():
+            missing.append("name")
+        if not self.authorized_rep_address.strip():
+            missing.append("address")
+        if not self.authorized_rep_email.strip():
+            missing.append("contact email")
+        if self.authorized_rep_mandate_date is None:
+            missing.append("mandate date")
+        if not missing:
+            return []
+        return [
+            "A manufacturer without an EU establishment must appoint an Authorized "
+            "Representative before placing the product on the market (CRA Art. 22). "
+            "Missing: " + ", ".join(missing) + "."
+        ]
 
     @property
     def is_signed(self) -> bool:
@@ -412,7 +496,17 @@ class CRAExportPackage(models.Model):
 
     Contains a snapshot of all generated documents plus metadata,
     packaged for download or submission.
+
+    **This row is the durable copy of the evidence.** The live rows behind
+    it age out by design (``prune_assessment_runs`` keeps a bounded window),
+    so once they are gone the exported bundle is the record. CRA Art. 13(15)
+    requires that record kept for at least ten years after market placement,
+    or the support period if longer — which is what ``retain_until`` pins,
+    computed at creation so a later change to the product cannot silently
+    shorten an existing package's floor.
     """
+
+    RETENTION_YEARS = 10
 
     class Meta:
         ordering = ["-created_at"]
@@ -423,6 +517,17 @@ class CRAExportPackage(models.Model):
     storage_key = models.CharField(max_length=500)
     content_hash = models.CharField(max_length=64)
     manifest = models.JSONField()
+    retain_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "CRA Art. 13(15) retention floor: the later of ten years after "
+            "creation and the assessment's support period end. Cleanup jobs "
+            "must not delete the row or its stored bundle before this date. "
+            "NULL only on rows created before the field existed, which are "
+            "treated as retained forever."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
@@ -430,6 +535,50 @@ class CRAExportPackage(models.Model):
 
     def __str__(self) -> str:
         return f"Export package {self.pk} for {self.assessment}"
+
+    @classmethod
+    def retention_floor(cls, assessment: "CRAAssessment", created: Any | None = None) -> Any:
+        """The Art. 13(15) date for a package of this assessment.
+
+        The later of ten years from ``created`` (defaulting to today) and the
+        assessment's declared support period end.
+        """
+        from datetime import date
+
+        base = created or timezone.now().date()
+        if hasattr(base, "date"):
+            base = base.date()
+        # Calendar arithmetic, not a day count. A ten-year span can cross three
+        # leap days (2015-03-01 to 2025-03-01 does), so 365*10 plus two days of
+        # slack lands a day early — and a retention floor that expires early is
+        # a breach, not a rounding error.
+        try:
+            floor = base.replace(year=base.year + cls.RETENTION_YEARS)
+        except ValueError:
+            # 29 February, ten years on from a leap year into one that is not.
+            # Rounding to 1 March keeps the package a day longer than required,
+            # which is the safe direction; 28 February would be a day short.
+            floor = base.replace(year=base.year + cls.RETENTION_YEARS, month=3, day=1)
+        support_end = assessment.support_period_end
+        if isinstance(support_end, date) and support_end > floor:
+            return support_end
+        return floor
+
+    @property
+    def is_retained(self) -> bool:
+        """Whether the Art. 13(15) floor still forbids deleting this package."""
+        return self.retain_until is None or timezone.now().date() <= self.retain_until
+
+    @classmethod
+    def past_retention(cls) -> "models.QuerySet[CRAExportPackage]":
+        """The only rows a cleanup job may delete.
+
+        Anything a sweep removes must come through here; NULL floors (rows
+        predating the field) never qualify. Deleting the S3 object without
+        the row, or vice versa, leaves either a dangling record or an
+        orphaned bundle — a cleanup must remove the pair together.
+        """
+        return cls.objects.filter(retain_until__isnull=False, retain_until__lt=timezone.now().date())
 
 
 class CRAScopeScreening(models.Model):

@@ -7,7 +7,7 @@ import json
 import logging
 import zipfile
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings as django_settings
 from django.utils.text import slugify
@@ -91,8 +91,8 @@ _DOC_PDF_TITLE: dict[CRAGeneratedDocument.DocumentKind, str] = {
 }
 
 
-def _integrity_readme(manifest_sha256: str) -> str:
-    """Human-readable bundle verification guide embedded in the export.
+def _integrity_readme(manifest_sha256: str, retain_until: Any) -> str:
+    """Human-readable bundle verification guide and retention notice.
 
     The commands below are tested end-to-end against the real bundle
     layout — running them from the extracted package root (the folder
@@ -154,7 +154,17 @@ def _integrity_readme(manifest_sha256: str) -> str:
         "should sign the whole ZIP downstream with `cosign sign-blob` "
         "or `gpg --detach-sign` and distribute the detached signature "
         "alongside the bundle. The self-hash above bounds the manifest's "
-        "integrity; a downstream signature bounds the whole package.\n"
+        "integrity; a downstream signature bounds the whole package.\n\n"
+        "## 4. Retention obligation\n\n"
+        "Article 13(15) of Regulation (EU) 2024/2847 requires this evidence "
+        "to be kept for ten years from placing the product on the market, or "
+        "for the declared support period, whichever is longer.\n\n"
+        f"**Keep this bundle until at least {retain_until:%d %B %Y}.**\n\n"
+        "sbomify holds its own copy under the same floor and will not delete "
+        "it earlier. That is not a substitute for the recipient's obligation: "
+        "once this bundle leaves sbomify, retaining the copy you were given "
+        "is yours to do, and any object-store lifecycle rule it comes to rest "
+        "under must not expire it before the date above.\n"
     )
 
 
@@ -263,6 +273,10 @@ def build_export_package(
     import tempfile
 
     manifest_files: list[dict[str, str]] = []
+    # Resolved once, before the bundle is written, so the date embedded in
+    # INTEGRITY.md and the one stored on the row are the same date — computing
+    # it twice would let a build that straddles midnight disagree with itself.
+    retain_until = CRAExportPackage.retention_floor(assessment)
     # Spool to disk if ZIP exceeds 10MB to avoid OOM on large products
     buf = tempfile.SpooledTemporaryFile(max_size=10 * 1024 * 1024)
 
@@ -416,7 +430,7 @@ def build_export_package(
         # 9. INTEGRITY.md — human-readable verification guide.
         zf.writestr(
             f"{prefix}/metadata/INTEGRITY.md",
-            _integrity_readme(manifest_sha256).encode("utf-8"),
+            _integrity_readme(manifest_sha256, retain_until).encode("utf-8"),
         )
 
     # Read entire ZIP into memory for hashing and upload. This is acceptable because
@@ -442,6 +456,9 @@ def build_export_package(
         content_hash=content_hash,
         manifest=manifest,
         created_by=user,
+        # Pinned at creation: the Art. 13(15) floor must survive later
+        # changes to the product's declared support period.
+        retain_until=retain_until,
     )
 
     return ServiceResult.success(package)

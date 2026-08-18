@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Count, Exists, OuterRef
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
@@ -77,8 +77,26 @@ def _prepare_public_components(product_id: str, is_custom_domain: bool) -> list[
     return public_components
 
 
-def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5) -> list[Any]:
+def _get_public_releases(
+    product_id: str, is_custom_domain: bool, product_slug: str, limit: int = 5, sees_all_components: bool = False
+) -> list[Any]:
     """Get releases for a public product (releases inherit visibility from their product)."""
+    from sbomify.apps.core.models import Component
+
+    # Count what the release page will actually list for this caller: for
+    # anyone who cannot manage the release, get_release hides artifacts from
+    # private components, so counting them here would advertise rows the
+    # click-through does not show. A manager sees every artifact there, so
+    # their counts stay unfiltered for the same reason.
+    count_filter: Q | None = None
+    sbom_visibility_filter = Q()
+    if not sees_all_components:
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+        count_filter = Q(artifacts__sbom__component__visibility__in=listable) | Q(
+            artifacts__document__component__visibility__in=listable
+        )
+        sbom_visibility_filter = Q(sbom__component__visibility__in=listable)
+
     # Use annotations to avoid N+1 queries for artifacts_count and has_sboms
     # Exclude the synthetic auto-`latest` release — the product page surfaces it
     # via the "Download Latest Release" CTA, so it shouldn't also occupy a row
@@ -88,10 +106,13 @@ def _get_public_releases(product_id: str, is_custom_domain: bool, product_slug: 
         .exclude(name=LATEST_RELEASE_NAME)
         .select_related("product")
         .annotate(
-            annotated_artifacts_count=Count("artifacts"),
+            annotated_artifacts_count=Count("artifacts", filter=count_filter),
             annotated_has_sboms=Exists(
                 ReleaseArtifact.objects.filter(
-                    release=OuterRef("pk"), sbom__isnull=False, sbom__bom_type=SBOM.BomType.SBOM
+                    sbom_visibility_filter,
+                    release=OuterRef("pk"),
+                    sbom__isnull=False,
+                    sbom__bom_type=SBOM.BomType.SBOM,
                 )
             ),
         )
@@ -172,7 +193,11 @@ class ProductDetailsPublicView(View):
                 request, HttpResponse(status=status_code, content=product.get("detail", "Unknown error"))
             )
 
-        has_downloadable_content = SBOM.objects.filter(component__products__id=resolved_id).exists()
+        # Actual SBOMs only: a product whose components carry nothing but CBOMs or
+        # VEX must not show SBOM download buttons that would 404.
+        product_boms = SBOM.objects.filter(component__products__id=resolved_id)
+        has_downloadable_content = product_boms.filter(bom_type=SBOM.BomType.SBOM).exists()
+        has_cbom = product_boms.filter(bom_type=SBOM.BomType.CBOM).exists()
         team = Team.objects.filter(pk=product.get("team_id")).first()
 
         # Redirect to custom domain if team has a verified one and we're not already on it
@@ -191,9 +216,17 @@ class ProductDetailsPublicView(View):
         back_url = get_back_url_from_referrer(request, team, workspace_public_url)
 
         # Prepare server-side data for Django templates
+        from sbomify.apps.core.authz import can
+
         public_components = _prepare_public_components(resolved_id, is_custom_domain)
         public_releases = _get_public_releases(
-            resolved_id, is_custom_domain, product.get("slug") or resolved_id, limit=3
+            resolved_id,
+            is_custom_domain,
+            product.get("slug") or resolved_id,
+            limit=3,
+            # Same caller test as get_release: a manager's release page lists
+            # every artifact, so their counts here must match it.
+            sees_all_components=can(request, "release:manage", product_obj).allowed,
         )
         product_identifiers = _get_product_identifiers(resolved_id)
         product_links = _get_product_links(resolved_id)
@@ -253,6 +286,7 @@ class ProductDetailsPublicView(View):
         context = {
             "brand": brand,
             "has_downloadable_content": has_downloadable_content,
+            "has_cbom": has_cbom,
             "product": product,
             "product_tei": product_tei,
             # Server-side rendered data

@@ -5,29 +5,29 @@
     <style>
         .onboarding-bg {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgb(var(--color-primary) / 0.08) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, rgb(var(--color-primary) / 0.04) 0%, transparent 50%),
-                rgb(var(--color-background));
+                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 8%, transparent) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 4%, transparent) 0%, transparent 50%),
+                var(--color-background);
         }
         :root.light .onboarding-bg {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgb(var(--color-primary) / 0.06) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, rgb(var(--color-primary) / 0.03) 0%, transparent 50%),
-                rgb(var(--color-background));
+                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 6%, transparent) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 3%, transparent) 0%, transparent 50%),
+                var(--color-background);
         }
         .plan-card {
-            border: 1px solid rgb(var(--color-border) / 0.6);
+            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px rgb(var(--color-border) / 0.3);
+                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
             transition: all 0.2s ease;
         }
         .plan-card:hover,
         .plan-card.selected {
-            border-color: rgb(var(--color-primary));
+            border-color: var(--color-primary);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 2px rgb(var(--color-primary) / 0.3);
+                0 0 0 2px color-mix(in oklab, var(--color-primary) 30%, transparent);
         }
         :root.dark .plan-card {
             box-shadow:
@@ -41,13 +41,8 @@
     <div class="onboarding-bg min-h-screen flex flex-col items-center px-4 py-12 sm:py-16"
          x-data="{ selectedPlan: '{{ plan_hint|default:'' }}', billingPeriod: 'monthly', plans: [], init() { this.plans = window.parseJsonScript('plans-data') || []; }, get selectedPlanData() { return this.plans.find(p => p.key === this.selectedPlan) || null; }, formatPrice(plan) { if (plan.key === 'community') return '$0'; if (plan.key === 'enterprise') return 'Custom'; const price = this.billingPeriod === 'monthly' ? (plan.monthly_price_discounted || plan.monthly_price) : (plan.annual_price_discounted || plan.annual_price); if (!price) return 'Contact us'; return '$' + Math.round(price).toLocaleString(); }, priceLabel(plan) { if (plan.key === 'community') return '/forever'; if (plan.key === 'enterprise') return 'pricing'; return this.billingPeriod === 'monthly' ? '/month' : '/year'; }, monthlyEquiv(plan) { if (this.billingPeriod !== 'annual' || plan.key !== 'business') return ''; const price = plan.annual_price_discounted || plan.annual_price; if (!price) return ''; return '$' + Math.round(price / 12).toLocaleString() + '/mo billed annually'; } }">
         {# Logo #}
-        <div class="flex items-center justify-center gap-3 mb-10">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-8 w-8"
-                 width="32"
-                 height="32">
-            <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
+        <div class="flex items-center justify-center mb-10">
+            {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
         </div>
         {# Heading #}
         <div class="text-center mb-8">
@@ -60,22 +55,13 @@
         <div class="flex items-center justify-center gap-4 mb-10">
             <span class="text-sm font-medium transition-colors"
                   :class="billingPeriod === 'monthly' ? 'text-text' : 'text-text-muted'">Monthly</span>
-            <button @click="billingPeriod = billingPeriod === 'monthly' ? 'annual' : 'monthly'"
-                    class="relative w-14 h-7 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 border border-border"
-                    :class="billingPeriod === 'annual' ? 'bg-primary border-primary' : 'bg-text-muted/20'"
-                    role="switch"
-                    aria-label="Toggle annual billing"
-                    :aria-checked="billingPeriod === 'annual'">
-                <span class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md border border-border/50 transition-transform"
-                      :class="billingPeriod === 'annual' ? 'translate-x-7' : 'translate-x-0'"></span>
-            </button>
+            <c-forms.toggle role="switch" aria-label="Toggle annual billing" ::checked="billingPeriod === 'annual'" @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'" />
             <span class="text-sm font-medium transition-colors flex items-center gap-2"
                   :class="billingPeriod === 'annual' ? 'text-text' : 'text-text-muted'">
                 Annual
                 <template x-for="plan in plans.filter(p => p.key === 'business' && p.annual_savings_percent)"
                           :key="plan.key">
-                    <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-success/10 text-success"
-                          x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'"></span>
+                    <c-badges.success x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'" />
                 </template>
             </span>
         </div>
@@ -215,15 +201,13 @@
               class="w-full max-w-md">
             {% csrf_token %}
             <input type="hidden" name="plan" :value="selectedPlan">
-            <button type="submit"
-                    class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                    :disabled="!selectedPlan">
-                <span x-show="selectedPlan === 'business'">Start Free Trial</span>
-                <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
-                <span x-show="selectedPlan === 'community'">Continue with Community</span>
-                <span x-show="!selectedPlan">Select a plan to continue</span>
-                <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
-            </button>
+            <c-buttons.primary type="submit" size="lg" class="w-full" ::disabled="!selectedPlan">
+            <span x-show="selectedPlan === 'business'">Start Free Trial</span>
+            <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
+            <span x-show="selectedPlan === 'community'">Continue with Community</span>
+            <span x-show="!selectedPlan">Select a plan to continue</span>
+            <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
+            </c-buttons.primary>
         </form>
         <p class="text-center text-text-muted/60 text-xs mt-6">You can change your plan anytime from workspace settings.</p>
     </div>

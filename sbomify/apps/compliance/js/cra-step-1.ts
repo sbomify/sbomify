@@ -65,6 +65,15 @@ function craStep1() {
     supportPeriodMinEnd: '',
     supportPeriodShortJustification: '',
     intendedUse: '',
+    // Tri-state, held as a string because a radio group cannot bind null.
+    // '' is "not determined yet", which the backend stores as NULL and the
+    // export path refuses; 'yes'/'no' are the two determinations.
+    euEstablished: '' as '' | 'yes' | 'no',
+    authorizedRepName: '',
+    authorizedRepAddress: '',
+    authorizedRepEmail: '',
+    authorizedRepMandateDate: '',
+    authorizedRepMandateReference: '',
     conformityAssessmentProcedure: '',
     conformityProcedureOptions: {} as Record<string, string[]>,
     isSaving: false,
@@ -92,6 +101,15 @@ function craStep1() {
         this.supportPeriodMinEnd = (d.support_period_min_end as string) || '';
         this.supportPeriodShortJustification = (d.support_period_short_justification as string) || '';
         this.intendedUse = (d.intended_use as string) || '';
+        const established = d.is_eu_established;
+        this.euEstablished = established === null || established === undefined
+          ? ''
+          : (established ? 'yes' : 'no');
+        this.authorizedRepName = (d.authorized_rep_name as string) || '';
+        this.authorizedRepAddress = (d.authorized_rep_address as string) || '';
+        this.authorizedRepEmail = (d.authorized_rep_email as string) || '';
+        this.authorizedRepMandateDate = (d.authorized_rep_mandate_date as string) || '';
+        this.authorizedRepMandateReference = (d.authorized_rep_mandate_reference as string) || '';
         this.conformityAssessmentProcedure =
           (d.conformity_assessment_procedure as string) || '';
         this.conformityProcedureOptions =
@@ -242,6 +260,12 @@ function craStep1() {
         support_period_end: this.supportPeriodEnd,
         support_period_short_justification: this.supportPeriodShortJustification,
         intended_use: this.intendedUse,
+        is_eu_established: this.euEstablished === '' ? null : this.euEstablished === 'yes',
+        authorized_rep_name: this.authorizedRepName,
+        authorized_rep_address: this.authorizedRepAddress,
+        authorized_rep_email: this.authorizedRepEmail,
+        authorized_rep_mandate_date: this.authorizedRepMandateDate || null,
+        authorized_rep_mandate_reference: this.authorizedRepMandateReference,
       }, (v) => { this.isSaving = v; });
     },
   };

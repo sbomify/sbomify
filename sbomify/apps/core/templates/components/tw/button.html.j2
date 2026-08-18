@@ -3,7 +3,7 @@
         {% if disabled or loading %}disabled{% endif %}
         {{ attrs|safe }}>
     {% if loading %}
-        <span class="tw-spinner tw-spinner-sm"></span>
+        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
     {% elif icon %}
         <i class="{{ icon }}" aria-hidden="true"></i>
     {% endif %}

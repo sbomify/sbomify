@@ -54,7 +54,7 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
 
         from django.utils import timezone
 
-        from sbomify.apps.core.services.dashboard_page import build_dashboard_context
+        from sbomify.apps.core.services.dashboard_page import build_dashboard_context, get_first_component
 
         hour = timezone.localtime().hour
         daypart = "morning" if hour < 12 else "afternoon" if hour < 17 else "evening"
@@ -63,11 +63,29 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if first_name:
             greeting += f", {first_name}"
 
+        dashboard = build_dashboard_context(team.id) if team else {"is_first_visit": True}
+        # Built here rather than in the template: it names the workspace, and the
+        # page header takes its subtitle as one string.
+        if dashboard.get("is_first_visit"):
+            subtitle = "Let's get your first component reporting."
+        else:
+            subtitle = f"The security picture across {current_team.get('name', 'your workspace')}."
+
         context = {
             "current_team": current_team,
             "has_crud_permissions": has_crud_permissions,
             "greeting": greeting,
-            "dashboard": build_dashboard_context(team.id) if team else {"is_first_visit": True},
+            "page_subtitle": subtitle,
+            "dashboard": dashboard,
         }
+
+        # The hero is one Get-started action, not a checklist — the wizard
+        # command sets a repository up end to end. The only per-request lookup
+        # left is whether a component exists yet, which gates the
+        # upload-a-file alternative (an upload needs somewhere to land).
+        if team and context["dashboard"].get("is_first_visit"):
+            context["onboarding"] = {
+                "first_component": get_first_component(team.id),
+            }
 
         return render(request, "core/dashboard.html.j2", context)

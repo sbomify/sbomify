@@ -5,6 +5,8 @@ component → create product → assign all four components → add identifiers
 → add links → edit lifecycle dates.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import Page
 
@@ -81,14 +83,45 @@ def _create_component(page: Page, name: str) -> None:
 
 
 def _assign_items(page: Page, names: list[str]) -> None:
-    """Assign items from the Available panel by clicking their Add buttons."""
+    """Assign components one at a time through the Assign Component modal.
+
+    The dual-panel assignment manager is gone; the Components card now
+    opens a modal with a single select and an Assign confirm. The confirm
+    is matched by exact accessible name so the page's own "Assign
+    component" opener cannot shadow it.
+    """
     for name in names:
-        add_btn = page.locator(f"button[aria-label='Add {name} to assigned']")
-        add_btn.wait_for(state="visible", timeout=10_000)
-        add_btn.scroll_into_view_if_needed()
-        pace(page, 300)
-        hover_and_click(page, add_btn)
+        # A fresh product renders the empty state's "Assign a component";
+        # after the first assignment (each one reloads the page) the header's
+        # "Assign component" takes over. One anchored regex covers both.
+        open_btn = page.get_by_role("button", name=re.compile(r"^Assign (a )?component$"))
+        open_btn.wait_for(state="visible", timeout=15_000)
+        pace(page, 400)
+        hover_and_click(page, open_btn)
+
+        select = page.locator("#pc-assign-select")
+        select.wait_for(state="visible", timeout=10_000)
+        pace(page, 500)
+        select.select_option(label=name)
+        pace(page, 600)
+
+        hover_and_click(page, page.get_by_role("button", name="Assign", exact=True))
+        page.locator(f"a:has-text('{name}')").first.wait_for(state="visible", timeout=10_000)
         pace(page, 800)
+
+
+def _expand_about_row(page: Page, row_label: str, card_id: str) -> None:
+    """Unfold one "About this product" accordion row and wait for its panel.
+
+    Each row lazy-loads its card via HTMX on first expand, so the card id
+    does not exist in the DOM until the row has been clicked.
+    """
+    row = page.locator(f"button:has-text('{row_label}')").first
+    row.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    pace(page, 400)
+    hover_and_click(page, row)
+    page.locator(f"#{card_id}").wait_for(state="visible", timeout=10_000)
+    pace(page, 500)
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +132,7 @@ def _assign_items(page: Page, names: list[str]) -> None:
 def _add_identifier(page: Page, identifier_type: str, value: str) -> None:
     """Open the Add Identifier modal, fill it, and submit."""
     add_btn = page.locator("#product-identifiers-card button:has-text('Add Identifier')")
-    add_btn.scroll_into_view_if_needed()
+    add_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, add_btn)
     pace(page, 600)
@@ -129,7 +162,7 @@ def _add_identifier(page: Page, identifier_type: str, value: str) -> None:
 def _add_link(page: Page, link_type: str, title: str, url: str) -> None:
     """Open the Add Link modal, fill it, and submit."""
     add_btn = page.locator("#product-links-card button:has-text('Add Link')")
-    add_btn.scroll_into_view_if_needed()
+    add_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, add_btn)
     pace(page, 600)
@@ -165,7 +198,7 @@ def _add_link(page: Page, link_type: str, title: str, url: str) -> None:
 def _edit_lifecycle(page: Page) -> None:
     """Click Edit on the lifecycle card, set dates via Alpine, and save."""
     lifecycle_card = page.locator("#product-lifecycle-card")
-    lifecycle_card.scroll_into_view_if_needed()
+    lifecycle_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 400)
 
     edit_btn = lifecycle_card.locator("button:has-text('Edit')")
@@ -179,7 +212,7 @@ def _edit_lifecycle(page: Page) -> None:
 
     for i, (binding, date_value) in enumerate(LIFECYCLE_DATES.items()):
         date_input = date_inputs.nth(i)
-        date_input.scroll_into_view_if_needed()
+        date_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
         pace(page, 300)
 
         hover_and_click(page, date_input)
@@ -199,7 +232,7 @@ def _edit_lifecycle(page: Page) -> None:
         pace(page, 400)
 
     save_btn = lifecycle_card.locator("button[type='submit']")
-    save_btn.scroll_into_view_if_needed()
+    save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, save_btn)
 
@@ -260,26 +293,20 @@ def product_creation(recording_page: Page) -> None:
 
     _assign_items(page, COMPONENTS)
 
-    # ── 5. Add Identifiers ────────────────────────────────────────────────
-    identifiers_card = page.locator("#product-identifiers-card")
-    identifiers_card.wait_for(state="visible", timeout=15_000)
-    pace(page, 600)
+    # ── 5. Add Identifiers (inside the About accordion) ───────────────────
+    _expand_about_row(page, "Product identifiers", "product-identifiers-card")
 
     for id_type, id_value in IDENTIFIERS:
         _add_identifier(page, id_type, id_value)
 
     # ── 6. Add Links ──────────────────────────────────────────────────────
-    links_card = page.locator("#product-links-card")
-    links_card.wait_for(state="visible", timeout=15_000)
-    pace(page, 600)
+    _expand_about_row(page, "Product links", "product-links-card")
 
     for link_type, link_title, link_url in LINKS:
         _add_link(page, link_type, link_title, link_url)
 
     # ── 7. Edit Lifecycle ─────────────────────────────────────────────────
-    lifecycle_card = page.locator("#product-lifecycle-card")
-    lifecycle_card.wait_for(state="visible", timeout=15_000)
-    pace(page, 600)
+    _expand_about_row(page, "Lifecycle", "product-lifecycle-card")
 
     _edit_lifecycle(page)
 

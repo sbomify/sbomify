@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout displayMessage=false; section>
     <#if section = "header">
         ${msg("errorTitle")}
@@ -8,7 +9,7 @@
             <div class="info-panel">
                 <div class="info-content">
                     <div class="brand-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h1 class="info-title">Something Went Wrong</h1>
                     <p class="info-tagline">We encountered an unexpected issue.</p>
@@ -20,7 +21,7 @@
                 <div class="form-card">
                     <!-- Mobile Logo (hidden on desktop) -->
                     <div class="mobile-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <div class="info-message-container">
                         <div class="info-icon-wrapper info-icon-wrapper--error">
@@ -34,7 +35,7 @@
                         </h2>
 
                         <div class="info-message-body">
-                            <p class="instruction">${kcSanitize(message.summary)}</p>
+                            <p class="instruction">${kcSanitize(message.summary)?no_esc}</p>
                         </div>
 
                         <div class="info-footer">

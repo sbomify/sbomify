@@ -6,7 +6,7 @@ Thank you for creating an account with sbomify. To complete your registration an
 
 ${link}
 
-This link will expire in ${linkExpiration} minutes. If it expires, you can request a new verification email from the login page.
+This link will expire in ${linkExpirationFormatter(linkExpiration)}. If it expires, you can request a new verification email from the login page.
 
 If you did not create an account with sbomify, please ignore this email.
 

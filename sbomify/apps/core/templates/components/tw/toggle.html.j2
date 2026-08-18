@@ -2,10 +2,9 @@
     <input type="checkbox"
            id="{{ name }}"
            name="{{ name }}"
-           class="sr-only peer"
+           class="tw-toggle"
            {% if checked %}checked{% endif %}
            {% if disabled %}disabled{% endif %}
            {{ attrs|safe }}>
-    <span class="tw-toggle"></span>
     <span>{{ label }}</span>
 </label>

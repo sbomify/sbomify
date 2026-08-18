@@ -9,15 +9,24 @@ from sbomify.apps.sboms.models import SBOM
 _SEVERITIES = ("critical", "high", "medium", "low")
 
 
-def _row_status(vuln: dict[str, int] | None) -> str:
-    """The single filterable status of a component row — its worst severity,
-    ``clean`` for a scanned row with no findings, ``not_scanned`` otherwise."""
+def _row_status(vuln: dict[str, Any] | None) -> str:
+    """The single filterable status of a component row.
+
+    Its worst severity, else ``clean`` for a row that was scanned and had
+    nothing, ``scanned_nothing`` for one where a scan ran and matched no
+    packages, and ``not_scanned`` where none ran at all.
+
+    The middle case exists because a skipped run stores zero findings exactly
+    as a clean scan does. Folded into ``clean`` it reads as an all-clear over an
+    artifact nothing could be matched against; folded into ``not_scanned`` it
+    hides that a scan did run and needs attention.
+    """
     if vuln is None:
         return "not_scanned"
     for severity in _SEVERITIES:
         if vuln[severity]:
             return severity
-    return "clean"
+    return "scanned_nothing" if vuln.get("scanned_nothing") else "clean"
 
 
 def build_product_components_rows(product_id: str) -> dict[str, Any]:
@@ -29,7 +38,11 @@ def build_product_components_rows(product_id: str) -> dict[str, Any]:
     latest SBOM per component, one for each provider's latest run per SBOM.
     Rows sort worst-first.
     """
-    from sbomify.apps.vulnerability_scanning.utils import extract_finding_rows, merge_findings_by_alias
+    from sbomify.apps.vulnerability_scanning.utils import (
+        extract_finding_rows,
+        merge_findings_by_alias,
+        result_scanned_nothing,
+    )
     from sbomify.apps.vulnerability_scanning.vex import load_vex_suppressions
 
     components = list(Component.objects.filter(products__id=product_id).order_by("name").values("id", "name"))
@@ -91,6 +104,7 @@ def build_product_components_rows(product_id: str) -> dict[str, Any]:
                         (extract_severity_counts(result) for result in provider_results),
                         key=lambda c: c["total"],
                     )
+                counts["scanned_nothing"] = all(result_scanned_nothing(result) for result in provider_results)
                 for severity in _SEVERITIES:
                     rollup[severity] += counts[severity]
                 rollup["total"] += counts["total"]

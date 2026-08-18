@@ -811,9 +811,7 @@ class TestBotReleaseConfinement:
         from sbomify.apps.sboms.models import SBOM
 
         _product, release = self._release_in(team_with_business_plan, bound_component)
-        other_sbom = SBOM.objects.create(
-            name="o", component=other_component, format="cyclonedx", format_version="1.6"
-        )
+        other_sbom = SBOM.objects.create(name="o", component=other_component, format="cyclonedx", format_version="1.6")
 
         resp = Client().post(
             f"/api/v1/releases/{release.id}/artifacts",
@@ -855,6 +853,35 @@ class TestBotReleaseConfinement:
             HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
         )
         assert resp.status_code == 403
+        # The message has to name the cause. This denial, the missing-binding one below and the
+        # workspace-role one all return 403 from the same endpoint, and they have different
+        # remedies, so a CI log showing the shared wording cannot be acted on.
+        detail = resp.json()["detail"]
+        assert bound_component.id in detail
+        assert product.id in detail
+        assert detail != "You do not have permission to create releases"
+
+    def test_bot_without_a_binding_says_so(self, oidc_sbomify_token, bound_component, team_with_business_plan, mocker):
+        """An orphan bot is denied for a different reason than an unattached component.
+
+        Patched rather than deleting the binding row: ``cleanup_bot_user_on_binding_delete``
+        reaps the bot User on delete, so the request would fail earlier and never reach the
+        branch under test.
+        """
+        from sbomify.apps.core.models import Product
+
+        product = Product.objects.create(name="prod-orphan", team=team_with_business_plan)
+        product.components.add(bound_component)
+        mocker.patch("sbomify.apps.oidc.permissions.bound_component_id_for_request", return_value=None)
+
+        resp = Client().post(
+            "/api/v1/releases",
+            data=json.dumps({"product_id": product.id, "name": "v9"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {oidc_sbomify_token}",
+        )
+        assert resp.status_code == 403
+        assert "no component binding" in resp.json()["detail"]
 
     def test_bot_can_tag_its_bound_component(self, oidc_sbomify_token, bound_component, team_with_business_plan):
         """Control: the bot IS allowed to tag its bound component — proving the deny cases above
@@ -862,9 +889,7 @@ class TestBotReleaseConfinement:
         from sbomify.apps.sboms.models import SBOM
 
         _product, release = self._release_in(team_with_business_plan, bound_component)
-        bound_sbom = SBOM.objects.create(
-            name="b", component=bound_component, format="cyclonedx", format_version="1.6"
-        )
+        bound_sbom = SBOM.objects.create(name="b", component=bound_component, format="cyclonedx", format_version="1.6")
 
         resp = Client().post(
             f"/api/v1/releases/{release.id}/artifacts",

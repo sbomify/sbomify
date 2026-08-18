@@ -1,0 +1,68 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% block title %}sbomify Suppliers{% endblock %}
+{% block content %}
+    {# dashboard_base already pads and centres the page; a second wrapper doubled it. #}
+    <div x-data="{ open: false, form: { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }, add() { this.form = { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }; this.open = true; }, edit(data) { this.form = { supplierId: data.supplierId, name: data.supplierName, contactName: data.supplierContactName, contactEmail: data.supplierContactEmail, website: data.supplierWebsite, notes: data.supplierNotes, }; this.open = true; }, }"
+         x-init="if (new URLSearchParams(location.search).has('new')) { add(); history.replaceState(null, '', location.pathname) }"
+         @refresh-suppliers.window="open = false">
+        <c-layout.page-header title="Suppliers" subtitle="The vendors you collect SBOMs and documents from." icon="fas fa-truck-field">
+        {# The page's own entry point: suppliers are reachable by URL only while the feature matures, so there is no New-menu entry to lean on. #}
+        <c-buttons.primary @click="add()">
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier
+        </c-buttons.primary>
+        </c-layout.page-header>
+        {# List. The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="supplier-search" label="Search suppliers" placeholder="Search by name or email" name="search" value="{{ search }}" hx-get="{% url 'teams:suppliers' team.key %}?partial=true" hx-trigger="input changed delay:300ms, search" hx-target="#supplier-rows" hx-swap="innerHTML" />
+        </c-tables.toolbar>
+        <div id="supplier-rows"
+             hx-get="{% url 'teams:suppliers' team.key %}?partial=true"
+             hx-trigger="refresh-suppliers from:body"
+             hx-swap="innerHTML">{% include "teams/components/supplier_rows.html.j2" %}</div>
+        </c-tables.shell>
+        {# Add/edit dialog #}
+        <c-modal id="supplier-dialog" show="open" aria-labelledby="supplier-dialog-title">
+        <h2 id="supplier-dialog-title"
+            class="text-lg font-semibold text-text mt-0 mb-4">
+            <span x-text="form.supplierId ? 'Edit supplier' : 'Add supplier'"></span>
+        </h2>
+        <form method="post"
+              hx-post="{% url 'teams:suppliers' team.key %}"
+              hx-swap="none"
+              class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="supplier_id" :value="form.supplierId">
+            <div>
+                <c-forms.label for="supplier-name">Name</c-forms.label>
+                <c-forms.input id="supplier-name" name="name" x-model="form.name" maxlength="255" required />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <c-forms.label for="supplier-contact-name">Contact name</c-forms.label>
+                    <c-forms.input id="supplier-contact-name" name="contact_name" x-model="form.contactName" maxlength="255" />
+                </div>
+                <div>
+                    <c-forms.label for="supplier-contact-email">Contact email</c-forms.label>
+                    <c-forms.input type="email" id="supplier-contact-email" name="contact_email" x-model="form.contactEmail" maxlength="254" />
+                    <c-forms.hint>Optional. Add it when you know who to ask.</c-forms.hint>
+                </div>
+            </div>
+            <div>
+                <c-forms.label for="supplier-website">Website</c-forms.label>
+                <c-forms.input type="url" id="supplier-website" name="website" x-model="form.website" placeholder="https://example.com" maxlength="500" />
+            </div>
+            <div>
+                <c-forms.label for="supplier-notes">Notes</c-forms.label>
+                <c-forms.textarea id="supplier-notes" name="notes" rows="3" x-model="form.notes" />
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <c-buttons.secondary @click="open = false">Cancel</c-buttons.secondary>
+                <c-buttons.primary type="submit">
+                <i class="fas fa-save mr-2" aria-hidden="true"></i>Save
+                </c-buttons.primary>
+            </div>
+        </form>
+        </c-modal>
+    </div>
+{% endblock content %}

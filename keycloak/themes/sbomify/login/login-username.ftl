@@ -9,7 +9,7 @@
             <div class="info-panel">
                 <div class="info-content">
                     <div class="brand-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h1 class="info-title">Recover Username</h1>
                     <p class="info-tagline">Find your account using email</p>
@@ -21,19 +21,11 @@
                 <div class="form-card">
                     <!-- Mobile Logo (hidden on desktop) -->
                     <div class="mobile-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h2 class="form-title">Forgot Your Username?</h2>
 
-                    <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
-                        <div class="alert alert-${message.type}" role="alert" aria-live="polite">
-                            <#if message.type = 'success'><span class="alert-icon" aria-hidden="true">✓</span></#if>
-                            <#if message.type = 'warning'><span class="alert-icon" aria-hidden="true">⚠</span></#if>
-                            <#if message.type = 'error'><span class="alert-icon" aria-hidden="true">✕</span></#if>
-                            <#if message.type = 'info'><span class="alert-icon" aria-hidden="true">ℹ</span></#if>
-                            <span class="alert-text">${kcSanitize(message.summary)}</span>
-                        </div>
-                    </#if>
+                    <@components.alertBanner />
 
                     <form id="kc-recover-username-form" action="${url.loginAction}" method="post">
                         <@components.formScripts formId="kc-recover-username-form" submittingText="Finding Username..." />

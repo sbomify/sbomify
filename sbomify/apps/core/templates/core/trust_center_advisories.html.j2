@@ -1,0 +1,27 @@
+{% extends "core/public_base.htmx.j2" %}
+{% load static %}
+{% load django_vite %}
+{% block title %}Security Advisories · {{ workspace.name }}{% endblock %}
+{% block meta_description %}
+    Security advisories published by {{ workspace.name }}: affected products, versions, severity and remediation status.
+{% endblock %}
+{% block og_title %}{{ workspace.name }} Security Advisories{% endblock %}
+{% block content %}
+    <h1 class="tc-page-title">{{ workspace.name }} Security Advisories</h1>
+    {% comment %}
+    The open/closed state of the mobile filter panel. It lives out here, in the
+    page shell HTMX never swaps, and the toggle inside the panel is a <label>
+    pointing at it — a label binds to its checkbox at click time, so a freshly
+    swapped-in one still works. That keeps the panel's state entirely out of the
+    swapped DOM, and out of JavaScript: no store to persist, nothing to
+    re-initialise after a swap, and it still opens with scripting disabled.
+    {% endcomment %}
+    <input type="checkbox"
+           id="tcFiltersOpen"
+           class="tc-filters-state"
+           aria-label="Show filters">
+    {% include "core/components/trust_center/advisories_browse.html.j2" %}
+{% endblock %}
+{% block scripts %}
+    {% vite_asset 'sbomify/apps/core/js/main.ts' %}
+{% endblock %}

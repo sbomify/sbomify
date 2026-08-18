@@ -128,6 +128,27 @@ def _bot_email(binding_id: str) -> str:
     return f"{BOT_USERNAME_PREFIX}{binding_id}@{_BOT_EMAIL_DOMAIN}"
 
 
+def is_synthetic_bot_user(user: Any) -> bool:
+    """Return True if ``user`` is a synthetic OIDC bot identity.
+
+    Deliberately matches on the identity convention (``oidc-bot-`` username
+    prefix, or the non-routable ``.local`` email domain) rather than on
+    ``Member.role="bot"`` or the ``OIDCBinding.bot_user`` FK. Neither of those
+    exists yet at the moment it matters most: ``provision_bot_user_for_binding``
+    creates the User first, and the ``post_save`` User signal that queues the
+    welcome email fires before either the Member row or the binding's
+    ``bot_user`` FK is written. The username and email, by contrast, are set in
+    the ``get_or_create`` defaults, so they are correct from the first save.
+
+    Matching the email domain as well as the username prefix keeps this honest
+    as a mail-suppression check: nothing at ``.local`` is deliverable (RFC 6761
+    §6.3), so an address ending there must never be handed to the mailer.
+    """
+    username = getattr(user, "username", "") or ""
+    email = getattr(user, "email", "") or ""
+    return username.startswith(BOT_USERNAME_PREFIX) or email.lower().endswith(f"@{_BOT_EMAIL_DOMAIN}")
+
+
 @transaction.atomic
 def provision_bot_user_for_binding(binding: "OIDCBinding") -> User:
     """Create (or fetch) the bot User + workspace Member for ``binding``.

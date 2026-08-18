@@ -1,5 +1,4 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
 {% block title %}{{ item.name }} - {{ component.component_type_display }}{% endblock %}
@@ -18,106 +17,91 @@
         {{ item.name }} - Download and view this document.
     {% endif %}
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb component 'component' %}
+{% block page_header %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner tc-masthead-detail" x-data>
+            <a class="tc-backlink"
+               href="{% url 'core:component_details_public' component.id %}"
+               @click.prevent="window.history.length > 1 ? window.history.back() : window.location.href = $el.href">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                {{ component.name }}
+            </a>
+            <div class="tc-detail-eyebrow">
+                <p class="tc-eyebrow">
+                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                    {% if component.component_type == 'bom' %}
+                        {{ item.bom_type|default:"SBOM" }}
+                    {% else %}
+                        Document
+                    {% endif %}
+                </p>
+            </div>
+            <h1 class="tc-detail-title">{{ item.name }}</h1>
+            <p class="tc-detail-summary">
+                {% if component.component_type == 'bom' %}
+                    {{ item.bom_type|default:"SBOM"|upper }}
+                {% else %}
+                    Document
+                {% endif %}
+                from {{ component.name }}
+            </p>
+            <div class="tc-detail-meta">
+                {% if component.component_type == 'bom' %}
+                    {# The badge keys its tint off the attribute, so the format has to reach it whole. #}
+                    {% if item.format == 'cyclonedx' %}
+                        <c-badges.format format="cyclonedx">CYCLONEDX {{ item.format_version }}</c-badges.format>
+                    {% elif item.format == 'spdx' %}
+                        <c-badges.format format="spdx">SPDX {{ item.format_version }}</c-badges.format>
+                    {% else %}
+                        <c-badges.format format="spdx">{{ item.format|upper }} {{ item.format_version }}</c-badges.format>
+                    {% endif %}
+                {% elif component.component_type == 'document' %}
+                    <span class="tc-detail-meta-item">
+                        <i class="fas fa-file" aria-hidden="true"></i>
+                        {{ item.document_type|default:"Document" }}
+                    </span>
+                {% endif %}
+                {% if item.version %}
+                    <span class="tc-detail-meta-item tc-detail-meta-mono"
+                          title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
+                {% endif %}
+                {% for assessment in passing_assessments %}
+                    {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
+                {% endfor %}
+            </div>
+        </div>
+    </header>
 {% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        {# Back link #}
-        <div x-data>
-            <a href="{% url 'core:component_details_public' component.id %}"
-               class="inline-flex items-center gap-2 text-text-muted hover:text-text no-underline transition-colors"
-               @click.prevent="window.history.length > 1 ? window.history.back() : window.location.href = $el.href">
-                <i class="fas fa-arrow-left"></i>Back to {{ component.name }}
-            </a>
-        </div>
-        {# Page Header #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="w-14 h-14 rounded-xl bg-info/10 flex items-center justify-center flex-shrink-0">
-                    <i class="fas {% if component.component_type == 'bom' %}fa-file-code{% elif component.component_type == 'document' %}fa-file-alt{% else %}fa-cube{% endif %} text-2xl text-info"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h1 class="text-2xl lg:text-3xl font-bold text-text mb-2">{{ item.name }}</h1>
-                    <p class="text-text-muted text-sm m-0">{{ component.component_type_display }} from {{ component.name }}</p>
-                </div>
+    <div class="tc-panel">
+        <h2 class="tc-panel-title">Download</h2>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div class="min-w-0 flex-1">
+                <p class="text-text font-medium m-0">{{ item.name }}</p>
+                <p class="text-text-muted text-sm m-0 mt-1">The file exactly as it was published. sbomify never modifies artifacts.</p>
             </div>
-            {# Download Button - Desktop #}
-            <div class="hidden lg:block flex-shrink-0">
-                <a href="{% if component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
-                   class="tw-btn-primary inline-flex items-center gap-2 no-underline">
-                    <i class="fas fa-download"></i>
-                    Download {{ component.component_type_display }}
-                </a>
-            </div>
-        </div>
-        {# Stats Badges #}
-        <div class="flex flex-wrap gap-2">
             {% if component.component_type == 'bom' %}
-                <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
-                    {% if item.format == 'cyclonedx' %}
-                        CYCLONEDX
-                    {% elif item.format == 'spdx' %}
-                        SPDX
-                    {% else %}
-                        {{ item.format|upper }}
-                    {% endif %}
-                    {{ item.format_version }}
-                </span>
-                {% if item.version %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-md text-sm">
-                        <i class="fas fa-code-branch text-primary text-xs"></i>
-                        <span class="font-semibold text-primary" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                    </div>
-                {% endif %}
+                {% url 'sboms:sbom_download' item.id as download_url %}
             {% elif component.component_type == 'document' %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-file text-info text-xs"></i>
-                    <span class="font-semibold text-info">{{ item.document_type|default:"Document" }}</span>
-                </div>
-                {% if item.version %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-md text-sm">
-                        <i class="fas fa-code-branch text-primary text-xs"></i>
-                        <span class="font-semibold text-primary" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                    </div>
-                {% endif %}
+                {% url 'documents:document_download' item.id as download_url %}
             {% endif %}
-            {% for assessment in passing_assessments %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm"
-                     title="{{ assessment.display_name }}: All checks passed">
-                    <i class="fas fa-check-circle text-success text-xs"></i>
-                    <span class="font-semibold text-success">{{ assessment.display_name }}</span>
-                </div>
-            {% endfor %}
+            <c-buttons.primary href="{{ download_url }}" class="no-underline">
+            <i class="fas fa-download"></i>
+            Download
+            {% if component.component_type == 'bom' %}
+                {{ item.bom_type|default:"SBOM"|upper }}
+            {% else %}
+                Document
+            {% endif %}
+            </c-buttons.primary>
         </div>
-        {# Download Card #}
-        <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    <i class="fas fa-download text-primary"></i>
-                    Download {{ component.component_type_display }}
-                </h4>
-            </div>
-            <div class="p-6 text-center py-10">
-                <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                    <i class="fas {% if component.component_type == 'bom' %}fa-file-code{% else %}fa-file-alt{% endif %} text-3xl text-primary"></i>
-                </div>
-                <p class="text-text mb-2 font-medium">{{ item.name }}</p>
-                <p class="text-text-muted text-sm mb-6">Download this {{ component.component_type_display|lower }} file</p>
-                <a href="{% if component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
-                   class="tw-btn-primary inline-flex items-center gap-2 no-underline">
-                    <i class="fas fa-download"></i>
-                    Download {{ component.component_type_display }}
-                </a>
-            </div>
-        </div>
-        {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}
-        {% if component.component_type == 'bom' %}
-            <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
-                 hx-trigger="load"
-                 hx-swap="outerHTML"></div>
-        {% endif %}
     </div>
+    {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}
+    {% if component.component_type == 'bom' %}
+        <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+             hx-trigger="load"
+             hx-swap="outerHTML"></div>
+    {% endif %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

@@ -6,35 +6,35 @@
     <style>
         .onboarding-bg {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgb(var(--color-primary) / 0.08) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, rgb(var(--color-primary) / 0.04) 0%, transparent 50%),
-                rgb(var(--color-background));
+                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 8%, transparent) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 4%, transparent) 0%, transparent 50%),
+                var(--color-background);
         }
         :root.light .onboarding-bg {
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgb(var(--color-primary) / 0.06) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 80% 100%, rgb(var(--color-primary) / 0.03) 0%, transparent 50%),
-                rgb(var(--color-background));
+                radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in oklab, var(--color-primary) 6%, transparent) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 80% 100%, color-mix(in oklab, var(--color-primary) 3%, transparent) 0%, transparent 50%),
+                var(--color-background);
         }
         .step-dot {
             width: 8px;
             height: 8px;
             border-radius: 9999px;
-            background-color: rgb(var(--color-border));
+            background-color: var(--color-border);
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .step-dot.active {
             width: 28px;
-            background-color: rgb(var(--color-primary));
+            background-color: var(--color-primary);
         }
         .step-dot.completed {
-            background-color: rgb(var(--color-success));
+            background-color: var(--color-success);
         }
         .onboarding-card {
-            border: 1px solid rgb(var(--color-border) / 0.6);
+            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px rgb(var(--color-border) / 0.3);
+                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
         }
         :root.dark .onboarding-card {
             box-shadow:
@@ -45,23 +45,23 @@
             animation: success-pulse 2s ease-out 0.8s;
         }
         @keyframes success-pulse {
-            0% { box-shadow: 0 0 0 0 rgb(var(--color-success) / 0.4); }
-            70% { box-shadow: 0 0 0 16px rgb(var(--color-success) / 0); }
-            100% { box-shadow: 0 0 0 0 rgb(var(--color-success) / 0); }
+            0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 40%, transparent); }
+            70% { box-shadow: 0 0 0 16px color-mix(in oklab, var(--color-success) 0%, transparent); }
+            100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-success) 0%, transparent); }
         }
         .plan-card {
-            border: 1px solid rgb(var(--color-border) / 0.6);
+            border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 1px rgb(var(--color-border) / 0.3);
+                0 0 0 1px color-mix(in oklab, var(--color-border) 30%, transparent);
             transition: all 0.2s ease;
         }
         .plan-card:hover,
         .plan-card.selected {
-            border-color: rgb(var(--color-primary));
+            border-color: var(--color-primary);
             box-shadow:
                 0 4px 24px -4px rgb(0 0 0 / 0.12),
-                0 0 0 2px rgb(var(--color-primary) / 0.3);
+                0 0 0 2px color-mix(in oklab, var(--color-primary) 30%, transparent);
         }
         :root.dark .plan-card {
             box-shadow:
@@ -77,13 +77,8 @@
 {% block main %}
     <div class="onboarding-bg min-h-screen flex flex-col items-center justify-center px-4 py-12 sm:py-16">
         <!-- Logo -->
-        <div class="flex items-center justify-center gap-3 mb-10">
-            <img src="{% static 'img/sbomify-icon.svg' %}"
-                 alt=""
-                 class="h-8 w-8"
-                 width="32"
-                 height="32">
-            <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
+        <div class="flex items-center justify-center mb-10">
+            {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
         </div>
         <!-- Step Progress (3 dots without billing, 4 with billing) -->
         <div class="flex items-center gap-2 mb-8">
@@ -114,34 +109,33 @@
                     <div class="px-8 sm:px-10 pt-10 sm:pt-12 pb-8 sm:pb-10 text-center">
                         <h1 class="font-display text-2xl sm:text-3xl font-bold text-text mb-3 tracking-tight">Welcome, {{ first_name }}</h1>
                         <p class="text-text-muted text-sm sm:text-base leading-relaxed mb-8">
-                            Know exactly what's inside your software — and keep it secure.
+                            Know exactly what's inside your software, and keep it secure.
                         </p>
                         <!-- Value highlights -->
                         <div class="flex flex-col gap-3 mb-8 text-left">
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                    <i class="fas fa-upload text-primary text-xs"></i>
-                                </div>
+                                <c-chips.icon-chip size="sm">
+                                <i class="fas fa-upload text-xs" aria-hidden="true"></i>
+                                </c-chips.icon-chip>
                                 <span class="text-text-secondary text-sm">See every component in your software supply chain</span>
                             </div>
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                    <i class="fas fa-search text-primary text-xs"></i>
-                                </div>
+                                <c-chips.icon-chip size="sm">
+                                <i class="fas fa-search text-xs" aria-hidden="true"></i>
+                                </c-chips.icon-chip>
                                 <span class="text-text-secondary text-sm">Find vulnerabilities before they become problems</span>
                             </div>
                             <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                    <i class="fas fa-check-circle text-primary text-xs"></i>
-                                </div>
+                                <c-chips.icon-chip size="sm">
+                                <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>
+                                </c-chips.icon-chip>
                                 <span class="text-text-secondary text-sm">Stay compliant with security standards</span>
                             </div>
                         </div>
-                        <a href="{% url 'teams:onboarding_wizard' %}?step=setup"
-                           class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline">
-                            Get Started
-                            <i class="fas fa-arrow-right text-sm"></i>
-                        </a>
+                        <c-buttons.primary size="lg" href="{% url 'teams:onboarding_wizard' %}?step=setup" class="w-full no-underline">
+                        Get Started
+                        <i class="fas fa-arrow-right text-sm"></i>
+                        </c-buttons.primary>
                     </div>
                 </div>
                 <p class="text-center text-text-muted/60 text-xs mt-6">Takes about 2 minutes</p>
@@ -170,128 +164,75 @@
                               @submit="handleSubmit()">
                             {% csrf_token %}
                             {% if form.non_field_errors %}
-                                <div class="tw-form-error mb-6" role="alert">
-                                    {% for error in form.non_field_errors %}{{ error }}{% endfor %}
-                                </div>
+                                <c-forms.error class="mb-6" role="alert">
+                                {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                                </c-forms.error>
                             {% endif %}
                             <div class="space-y-5">
                                 <!-- Company Name -->
                                 <div>
-                                    <label for="id_company_name" class="tw-form-label tw-form-label-required">Company name</label>
-                                    <input type="text"
-                                           class="tw-form-input"
-                                           id="id_company_name"
-                                           name="company_name"
-                                           placeholder="e.g., Acme Corporation"
-                                           required
-                                           minlength="2"
-                                           maxlength="200"
-                                           autocomplete="organization"
-                                           autofocus
-                                           x-model="companyName"
-                                           @blur="markTouched('companyName')"
-                                           :class="getValidationClass('companyName')"
-                                           {% if form.company_name.value %}value="{{ form.company_name.value }}"{% endif %}>
+                                    <c-forms.label for="id_company_name" required>Company name</c-forms.label>
+                                    {% comment %}
+                                        The validation recipe is picked in the
+                                        browser by the wizard's Alpine component,
+                                        so these fields keep their class binding.
+                                    {% endcomment %}
+                                    <c-forms.input id="id_company_name" name="company_name" placeholder="e.g., Acme Corporation" required value="{{ form.company_name.value|default:'' }}" minlength="2" maxlength="200" autocomplete="organization" autofocus x-model="companyName" @blur="markTouched('companyName')" ::class="getValidationClass('companyName')" />
                                     {% if form.company_name.errors %}
-                                        <div class="tw-form-error">
-                                            {% for error in form.company_name.errors %}{{ error }}{% endfor %}
-                                        </div>
+                                        <c-forms.error>
+                                        {% for error in form.company_name.errors %}{{ error }}{% endfor %}
+                                        </c-forms.error>
                                     {% endif %}
-                                    <p class="tw-form-helper">Used to name your workspace and Trust Center.</p>
+                                    <c-forms.hint>Used to name your workspace and Trust Center.</c-forms.hint>
                                 </div>
                                 <!-- Contact Name -->
                                 <div>
-                                    <label for="id_contact_name" class="tw-form-label tw-form-label-required">Your name</label>
-                                    <input type="text"
-                                           class="tw-form-input"
-                                           id="id_contact_name"
-                                           name="contact_name"
-                                           placeholder="e.g., Jane Smith"
-                                           required
-                                           minlength="2"
-                                           maxlength="150"
-                                           autocomplete="name"
-                                           x-model="contactName"
-                                           @blur="markTouched('contactName')"
-                                           :class="getValidationClass('contactName')"
-                                           {% if form.contact_name.value %}value="{{ form.contact_name.value }}"{% endif %}>
+                                    <c-forms.label for="id_contact_name" required>Your name</c-forms.label>
+                                    <c-forms.input id="id_contact_name" name="contact_name" placeholder="e.g., Jane Smith" required value="{{ form.contact_name.value|default:'' }}" minlength="2" maxlength="150" autocomplete="name" x-model="contactName" @blur="markTouched('contactName')" ::class="getValidationClass('contactName')" />
                                     {% if form.contact_name.errors %}
-                                        <div class="tw-form-error">
-                                            {% for error in form.contact_name.errors %}{{ error }}{% endfor %}
-                                        </div>
+                                        <c-forms.error>
+                                        {% for error in form.contact_name.errors %}{{ error }}{% endfor %}
+                                        </c-forms.error>
                                     {% endif %}
-                                    <p class="tw-form-helper">Required for NTIA compliance. Person responsible for SBOM inquiries.</p>
+                                    <c-forms.hint>Required for NTIA compliance. Person responsible for SBOM inquiries.</c-forms.hint>
                                 </div>
                                 <!-- Email -->
                                 <div>
-                                    <label for="id_email" class="tw-form-label">Work email</label>
-                                    <input type="email"
-                                           class="tw-form-input"
-                                           id="id_email"
-                                           name="email"
-                                           placeholder="security@example.com"
-                                           maxlength="254"
-                                           autocomplete="email"
-                                           x-model="email"
-                                           @blur="markTouched('email')"
-                                           :class="getValidationClass('email')"
-                                           {% if form.email.value %}value="{{ form.email.value }}"{% endif %}>
+                                    <c-forms.label for="id_email">Work email</c-forms.label>
+                                    <c-forms.input id="id_email" name="email" type="email" placeholder="security@example.com" value="{{ form.email.value|default:'' }}" maxlength="254" autocomplete="email" x-model="email" @blur="markTouched('email')" ::class="getValidationClass('email')" />
                                     {% if form.email.errors %}
-                                        <div class="tw-form-error">
-                                            {% for error in form.email.errors %}{{ error }}{% endfor %}
-                                        </div>
+                                        <c-forms.error>
+                                        {% for error in form.email.errors %}{{ error }}{% endfor %}
+                                        </c-forms.error>
                                     {% endif %}
-                                    <p class="tw-form-helper">Embedded in SBOM metadata for security inquiries.</p>
+                                    <c-forms.hint>Embedded in SBOM metadata for security inquiries.</c-forms.hint>
                                 </div>
                                 <!-- Website -->
                                 <div>
-                                    <label for="id_website" class="tw-form-label">
-                                        Website <span class="text-text-muted font-normal text-xs">(optional)</span>
-                                    </label>
-                                    <input type="url"
-                                           class="tw-form-input"
-                                           id="id_website"
-                                           name="website"
-                                           placeholder="https://example.com"
-                                           maxlength="500"
-                                           autocomplete="url"
-                                           pattern="https?://.+"
-                                           x-model="website"
-                                           @blur="markTouched('website')"
-                                           :class="getValidationClass('website')"
-                                           {% if form.website.value %}value="{{ form.website.value }}"{% endif %}>
+                                    <c-forms.label for="id_website">
+                                    Website <span class="text-text-muted font-normal text-xs">(optional)</span>
+                                    </c-forms.label>
+                                    <c-forms.input id="id_website" name="website" type="url" placeholder="https://example.com" value="{{ form.website.value|default:'' }}" maxlength="500" autocomplete="url" pattern="https?://.+" x-model="website" @blur="markTouched('website')" ::class="getValidationClass('website')" />
                                     {% if form.website.errors %}
-                                        <div class="tw-form-error">
-                                            {% for error in form.website.errors %}{{ error }}{% endfor %}
-                                        </div>
+                                        <c-forms.error>
+                                        {% for error in form.website.errors %}{{ error }}{% endfor %}
+                                        </c-forms.error>
                                     {% endif %}
-                                    <p class="tw-form-helper">Added to SBOM external references.</p>
+                                    <c-forms.hint>Added to SBOM external references.</c-forms.hint>
                                 </div>
                                 <!-- Goal -->
                                 <div>
-                                    <label for="id_goal" class="tw-form-label">
-                                        What are you trying to accomplish? <span class="text-text-muted font-normal text-xs">(optional)</span>
-                                    </label>
-                                    <textarea class="tw-form-input"
-                                              id="id_goal"
-                                              name="goal"
-                                              rows="3"
-                                              maxlength="1000"
-                                              placeholder="e.g., Track open source dependencies, meet compliance requirements...">{% if form.goal.value %}{{ form.goal.value }}{% endif %}</textarea>
+                                    <c-forms.label for="id_goal">
+                                    What are you trying to accomplish? <span class="text-text-muted font-normal text-xs">(optional)</span>
+                                    </c-forms.label>
+                                    <c-forms.textarea id="id_goal" name="goal" rows="3" maxlength="1000" placeholder="e.g., Track open source dependencies, meet compliance requirements..." value="{{ form.goal.value|default:'' }}" />
                                     {% if form.goal.errors %}
-                                        <div class="tw-form-error">
-                                            {% for error in form.goal.errors %}{{ error }}{% endfor %}
-                                        </div>
+                                        <c-forms.error>
+                                        {% for error in form.goal.errors %}{{ error }}{% endfor %}
+                                        </c-forms.error>
                                     {% endif %}
-                                    <p class="tw-form-helper">Helps us tailor your experience.</p>
+                                    <c-forms.hint>Helps us tailor your experience.</c-forms.hint>
                                 </div>
-                            </div>
-                            <!-- Auto-create note -->
-                            <div class="flex items-start gap-2.5 mt-6 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                                <i class="fas fa-magic text-primary/60 text-xs mt-0.5"></i>
-                                <p class="text-xs text-text-muted leading-relaxed">
-                                    We'll set up a sample product and component so you can start exploring right away.
-                                </p>
                             </div>
                             <!-- Footer -->
                             <div class="flex items-center justify-between mt-8 pt-6 border-t border-border/50">
@@ -299,18 +240,16 @@
                                    class="text-sm text-text-muted hover:text-text no-underline transition-colors flex items-center gap-1.5">
                                     <i class="fas fa-arrow-left text-xs"></i> Back
                                 </a>
-                                <button type="submit"
-                                        class="btn-primary-action py-2.5 px-8 text-sm font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                                        :disabled="!canSubmit">
-                                    <span x-show="!isSubmitting" class="flex items-center gap-2">
-                                        Create Workspace
-                                        <i class="fas fa-arrow-right text-xs"></i>
-                                    </span>
-                                    <span x-show="isSubmitting" x-cloak class="flex items-center gap-2">
-                                        <i class="fas fa-circle-notch animate-spin"></i>
-                                        Creating...
-                                    </span>
-                                </button>
+                                <c-buttons.primary type="submit" ::disabled="!canSubmit">
+                                <span x-show="!isSubmitting" class="flex items-center gap-2">
+                                    Create Workspace
+                                    <i class="fas fa-arrow-right text-xs"></i>
+                                </span>
+                                <span x-show="isSubmitting" x-cloak class="flex items-center gap-2">
+                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                                    Creating...
+                                </span>
+                                </c-buttons.primary>
                             </div>
                         </form>
                     </div>
@@ -357,11 +296,10 @@
                             </div>
                         </div>
                         <!-- Actions -->
-                        <a href="{{ next_url|default:'/dashboard' }}"
-                           class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl no-underline mb-3">
-                            Continue
-                            <i class="fas fa-arrow-right text-sm"></i>
-                        </a>
+                        <c-buttons.primary size="lg" href="{{ next_url|default:'/dashboard' }}" class="w-full no-underline mb-3">
+                        Continue
+                        <i class="fas fa-arrow-right text-sm"></i>
+                        </c-buttons.primary>
                     </div>
                 </div>
             </div>
@@ -382,22 +320,13 @@
                 <div class="flex items-center justify-center gap-4 mb-10">
                     <span class="text-sm font-medium transition-colors"
                           :class="billingPeriod === 'monthly' ? 'text-text' : 'text-text-muted'">Monthly</span>
-                    <button @click="billingPeriod = billingPeriod === 'monthly' ? 'annual' : 'monthly'"
-                            class="relative w-14 h-7 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 border border-border"
-                            :class="billingPeriod === 'annual' ? 'bg-primary border-primary' : 'bg-text-muted/20'"
-                            role="switch"
-                            aria-label="Toggle annual billing"
-                            :aria-checked="billingPeriod === 'annual'">
-                        <span class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-md border border-border/50 transition-transform"
-                              :class="billingPeriod === 'annual' ? 'translate-x-7' : 'translate-x-0'"></span>
-                    </button>
+                    <c-forms.toggle role="switch" aria-label="Toggle annual billing" ::checked="billingPeriod === 'annual'" @change="billingPeriod = $event.target.checked ? 'annual' : 'monthly'" />
                     <span class="text-sm font-medium transition-colors flex items-center gap-2"
                           :class="billingPeriod === 'annual' ? 'text-text' : 'text-text-muted'">
                         Annual
                         <template x-for="plan in plans.filter(p => p.key === 'business' && p.annual_savings_percent)"
                                   :key="plan.key">
-                            <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-success/10 text-success"
-                                  x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'"></span>
+                            <c-badges.success x-text="'Save ' + Math.round(plan.annual_savings_percent) + '%'" />
                         </template>
                     </span>
                 </div>
@@ -537,15 +466,13 @@
                       class="w-full max-w-md mx-auto">
                     {% csrf_token %}
                     <input type="hidden" name="plan" :value="selectedPlan">
-                    <button type="submit"
-                            class="btn-primary-action flex items-center justify-center gap-2.5 w-full py-3.5 px-4 text-base font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                            :disabled="!selectedPlan">
-                        <span x-show="selectedPlan === 'business'">Start Free Trial</span>
-                        <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
-                        <span x-show="selectedPlan === 'community'">Continue with Community</span>
-                        <span x-show="!selectedPlan">Select a plan to continue</span>
-                        <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
-                    </button>
+                    <c-buttons.primary type="submit" size="lg" class="w-full" ::disabled="!selectedPlan">
+                    <span x-show="selectedPlan === 'business'">Start Free Trial</span>
+                    <span x-show="selectedPlan === 'enterprise'">Contact Sales</span>
+                    <span x-show="selectedPlan === 'community'">Continue with Community</span>
+                    <span x-show="!selectedPlan">Select a plan to continue</span>
+                    <i class="fas fa-arrow-right text-sm" x-show="selectedPlan"></i>
+                    </c-buttons.primary>
                 </form>
                 <p class="text-center text-text-muted/60 text-xs mt-6">You can change your plan anytime from workspace settings.</p>
             </div>

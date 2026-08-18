@@ -1,0 +1,293 @@
+{
+  "$comment": [
+    "Spotlight destinations: every place in the app the search bar can take you.",
+    "",
+    "ADDING A DESTINATION — the only file you need to touch:",
+    "  1. Append an object to `destinations` below.",
+    "  2. `url_name` must be a real Django URL name (app_namespace:name).",
+    "     A typo fails loudly in test_spotlight.py rather than 404ing a user.",
+    "  3. `keywords` are what people actually type, including the words we do",
+    "     NOT use in the UI — someone searching 'api key' should land on tokens,",
+    "     and someone searching '2fa' should land wherever that lives. Synonyms",
+    "     are the whole point; the title is already matched separately.",
+    "  4. `roles` restricts visibility. Omit for everyone; ['owner','admin']",
+    "     for anything a guest must not see.",
+    "  5. `args` names URL kwargs the resolver fills from the current session:",
+    "     'team_key' is the only one supported today.",
+    "",
+    "Ordering within a section is by match quality, not by position here.",
+    "Sections themselves are ordered by `SECTION_ORDER` in spotlight.py."
+  ],
+  "destinations": [
+    {
+      "title": "Dashboard",
+      "url_name": "core:dashboard",
+      "section": "navigate",
+      "icon": "fa-house",
+      "keywords": ["home", "overview", "start", "landing"]
+    },
+    {
+      "title": "Products",
+      "url_name": "core:products_dashboard",
+      "section": "navigate",
+      "icon": "fa-cube",
+      "keywords": ["product list", "all products", "portfolio"]
+    },
+    {
+      "title": "Components",
+      "url_name": "core:components_dashboard",
+      "section": "navigate",
+      "icon": "fa-puzzle-piece",
+      "keywords": ["component list", "all components", "libraries", "modules"]
+    },
+    {
+      "title": "Releases",
+      "url_name": "core:releases_dashboard",
+      "section": "navigate",
+      "icon": "fa-tag",
+      "keywords": ["versions", "tags", "release list", "shipped"]
+    },
+    {
+      "title": "Security Advisories",
+      "url_name": "core:security_advisories_dashboard",
+      "section": "navigate",
+      "icon": "fa-shield-halved",
+      "keywords": ["advisory", "cve", "disclosure", "vulnerability disclosure", "psirt"]
+    },
+    {
+      "title": "Plugins",
+      "url_name": "plugins:plugins_page",
+      "section": "navigate",
+      "icon": "fa-plug",
+      "keywords": ["scanners", "integrations", "osv", "dependency track", "assessments"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Suppliers",
+      "url_name": "teams:suppliers",
+      "section": "navigate",
+      "icon": "fa-truck-field",
+      "keywords": ["vendors", "third party", "supply chain", "supplier list"],
+      "args": ["team_key"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "CRA Compliance",
+      "url_name": "compliance:cra_product_list",
+      "section": "navigate",
+      "icon": "fa-scale-balanced",
+      "keywords": ["cra", "cyber resilience act", "compliance", "conformity", "eu regulation", "doc", "declaration"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Vulnerability trends",
+      "url_name": "vulnerability_scanning:vulnerability_trends",
+      "section": "navigate",
+      "icon": "fa-chart-line",
+      "keywords": ["trends", "over time", "history", "vulnerability chart", "graph", "metrics"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Plugin summary",
+      "url_name": "plugins:plugins_summary",
+      "section": "navigate",
+      "icon": "fa-list-check",
+      "keywords": ["assessment summary", "plugin results", "checks overview"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Access requests",
+      "url_name": "documents:access_request_queue",
+      "section": "navigate",
+      "icon": "fa-user-shield",
+      "keywords": ["nda requests", "gated access", "approve access", "document requests", "pending requests"],
+      "args": ["team_key"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "My account settings",
+      "url_name": "core:settings",
+      "section": "settings",
+      "icon": "fa-user",
+      "keywords": ["my profile", "personal settings", "user settings", "email", "password", "my account"]
+    },
+    {
+      "title": "Upgrade plan",
+      "url_name": "billing:select_plan",
+      "section": "actions",
+      "icon": "fa-arrow-up",
+      "keywords": ["change plan", "upgrade", "downgrade", "pricing", "buy", "subscribe"],
+      "args": ["team_key"],
+      "roles": ["owner"]
+    },
+    {
+      "title": "Contact enterprise sales",
+      "url_name": "billing:enterprise_contact",
+      "section": "actions",
+      "icon": "fa-handshake",
+      "keywords": ["enterprise", "sales", "custom plan", "talk to sales", "quote"],
+      "roles": ["owner"]
+    },
+
+    {
+      "title": "New product",
+      "url_name": "core:products_dashboard",
+      "section": "create",
+      "icon": "fa-plus",
+      "keywords": ["create product", "add product"],
+      "query": {"new": "1"},
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "New component",
+      "url_name": "core:components_dashboard",
+      "section": "create",
+      "icon": "fa-plus",
+      "keywords": ["create component", "add component"],
+      "query": {"new": "1"},
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "New advisory",
+      "url_name": "core:security_advisory_new",
+      "section": "create",
+      "icon": "fa-plus",
+      "keywords": ["create advisory", "publish advisory", "disclose"],
+      "roles": ["owner", "admin"]
+    },
+
+    {
+      "title": "Workspace settings",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-sliders",
+      "keywords": ["general settings", "workspace name", "preferences", "configuration"],
+      "args": ["team_key"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Members",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-users",
+      "keywords": ["team", "invite", "users", "people", "permissions", "roles", "access"],
+      "args": ["team_key"],
+      "fragment": "members",
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "API tokens",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-key",
+      "keywords": ["api key", "access token", "pat", "personal access token", "ci token", "secret"],
+      "args": ["team_key"],
+      "fragment": "tokens",
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Contacts",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-address-book",
+      "keywords": ["contact profiles", "supplier contact", "author", "manufacturer"],
+      "args": ["team_key"],
+      "fragment": "contact-profiles",
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Trust Center",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-globe",
+      "keywords": ["public page", "custom domain", "nda", "tea", "security.txt", "publish"],
+      "args": ["team_key"],
+      "fragment": "trust-center",
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Branding",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-palette",
+      "keywords": ["logo", "colors", "theme", "look and feel", "white label"],
+      "args": ["team_key"],
+      "fragment": "branding",
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Billing",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-credit-card",
+      "keywords": ["plan", "subscription", "invoice", "payment", "upgrade", "pricing"],
+      "args": ["team_key"],
+      "fragment": "billing",
+      "roles": ["owner"]
+    },
+    {
+      "title": "Account",
+      "url_name": "teams:team_settings",
+      "section": "settings",
+      "icon": "fa-user-gear",
+      "keywords": ["profile", "my account", "delete workspace", "danger zone"],
+      "args": ["team_key"],
+      "fragment": "account",
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Switch workspace",
+      "url_name": "teams:teams_dashboard",
+      "section": "settings",
+      "icon": "fa-right-left",
+      "keywords": ["change workspace", "other workspace", "my workspaces", "tenant"]
+    },
+
+    {
+      "title": "Upload an SBOM",
+      "url_name": "core:components_dashboard",
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["import sbom", "upload artifact", "add sbom", "cyclonedx", "spdx", "import"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Upload a VEX",
+      "url_name": "core:components_dashboard",
+      "section": "actions",
+      "icon": "fa-upload",
+      "keywords": ["import vex", "vex document", "suppress", "triage import"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Vulnerability scans",
+      "url_name": "vulnerability_scanning:vulnerability_scans",
+      "section": "actions",
+      "icon": "fa-bug",
+      "keywords": ["scan results", "findings", "cves", "vulnerabilities", "security scan"],
+      "args": ["team_key"],
+      "roles": ["owner", "admin"]
+    },
+    {
+      "title": "Public Trust Center page",
+      "url_name": "core:workspace_public_current",
+      "section": "actions",
+      "icon": "fa-arrow-up-right-from-square",
+      "keywords": ["view public page", "customer view", "what customers see"]
+    },
+    {
+      "title": "Get started wizard",
+      "url_name": "teams:onboarding_wizard",
+      "section": "actions",
+      "icon": "fa-rocket",
+      "keywords": ["onboarding", "setup", "tutorial", "first steps", "getting started"]
+    },
+    {
+      "title": "Contact support",
+      "url_name": "core:support_contact",
+      "section": "actions",
+      "icon": "fa-life-ring",
+      "keywords": ["help", "support", "contact us", "bug report", "feedback"]
+    }
+  ]
+}

@@ -21,7 +21,7 @@
         {% endif %}
     </button>
     {# Dropdown Menu #}
-    <div class="absolute z-50 mt-1 min-w-[10rem] py-1 bg-surface rounded-lg border border-border shadow-lg{% if align == 'right' %} right-0{% else %} left-0{% endif %}"
+    <div class="tw-dropdown mt-1{% if align == 'right' %} right-0{% else %} left-0{% endif %}"
          role="menu"
          x-show="open"
          x-transition:enter="transition ease-out duration-100"
@@ -37,13 +37,13 @@
          @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()">
         {% for item in items %}
             {% if item.divider %}
-                <hr class="my-1 border-border">
+                <div class="tw-dropdown-divider"></div>
             {% else %}
                 <a href="{{ item.url|default:'#' }}"
                    role="menuitem"
                    {% if item.disabled %}tabindex="-1" aria-disabled="true"{% endif %}
-                   class="flex items-center gap-2 px-3 py-2 text-sm focus:outline-none focus-visible:bg-text-muted/10 {% if item.danger %}text-danger hover:bg-danger/10{% else %}text-text hover:bg-text-muted/10{% endif %}{% if item.disabled %} opacity-50 pointer-events-none{% endif %}">
-                    {% if item.icon %}<i class="{{ item.icon }} w-4" aria-hidden="true"></i>{% endif %}
+                   class="tw-dropdown-item{% if item.danger %} tw-dropdown-item-danger{% endif %}{% if item.class %} {{ item.class }}{% endif %}">
+                    {% if item.icon %}<i class="{{ item.icon }} tw-dropdown-item-icon" aria-hidden="true"></i>{% endif %}
                     {{ item.label }}
                 </a>
             {% endif %}

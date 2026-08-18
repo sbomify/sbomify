@@ -26,7 +26,24 @@ def load_custom_licenses() -> dict[str, Any]:
         return result
 
 
+def load_spdx_categories() -> dict[str, str]:
+    """SPDX id -> risk category, inverted from the category-keyed data file.
+
+    Static and offline: an id absent from the file stays uncategorised rather
+    than guessed at, because a wrong category on a licence is worse than none
+    when procurement reads it as a risk signal.
+    """
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+    yaml_path = os.path.join(data_dir, "spdx_categories.yaml")
+
+    with open(yaml_path, "r") as f:
+        by_category: dict[str, list[str]] = yaml.safe_load(f) or {}
+
+    return {license_id: category for category, ids in by_category.items() for license_id in (ids or [])}
+
+
 CUSTOM_SYMBOLS = load_custom_licenses()
+SPDX_CATEGORIES = load_spdx_categories()
 
 # Combine all licenses
 ALL_LICENSES = {**SPDX_SYMBOLS, **CUSTOM_SYMBOLS}
@@ -36,16 +53,20 @@ def get_license_list() -> list[dict[str, Any]]:
     """Get a list of all available licenses with their metadata."""
     licenses = []
 
-    # Add SPDX licenses (without category since we can't determine it reliably)
+    # SPDX licences carry a category only where the mapping is unambiguous;
+    # the key is absent otherwise, so "unknown" is distinguishable from a
+    # classification we actually made.
     for key, symbol in SPDX_SYMBOLS.items():
-        licenses.append(
-            {
-                "key": key,
-                "name": str(symbol),
-                "origin": "SPDX",
-                "url": getattr(symbol, "url", None),
-            }
-        )
+        entry: dict[str, Any] = {
+            "key": key,
+            "name": str(symbol),
+            "origin": "SPDX",
+            "url": getattr(symbol, "url", None),
+        }
+        category = SPDX_CATEGORIES.get(key)
+        if category is not None:
+            entry["category"] = category
+        licenses.append(entry)
 
     # Add custom licenses (with category since it's explicitly defined)
     for key, data in CUSTOM_SYMBOLS.items():

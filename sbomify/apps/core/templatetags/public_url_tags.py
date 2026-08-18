@@ -50,6 +50,10 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
         "core_custom_domain:product_releases_public": "product_releases",
         "core:release_details_public": "release",
         "core_custom_domain:release_details_public": "release",
+        "core:workspace_advisories_public": "advisories",
+        "core:workspace_advisories_public_current": "advisories",
+        "core:advisory_details_public": "advisory",
+        "core:advisory_details_public_current": "advisory",
     }
 
     # If on custom domain, use custom URL generation with slugs
@@ -102,6 +106,12 @@ def public_url(context: Any, url_name: Any, *args: Any, **kwargs: Any) -> Any:
                 return get_public_path(
                     "document", document_id or "", is_custom_domain=True, slug=document_slug or document_id
                 )
+        elif resource_type == "advisories":
+            return get_public_path("advisories", "", is_custom_domain=True)
+        elif resource_type == "advisory":
+            advisory_id = kwargs.get("advisory_id")
+            if advisory_id:
+                return get_public_path("advisory", advisory_id, is_custom_domain=True)
 
     # Fall back to standard Django URL resolution (uses IDs)
     # Remove slug-related kwargs before passing to reverse
@@ -192,6 +202,33 @@ def workspace_public_url(context: Any) -> Any:
             pass
 
     # Fallback: return empty string (logo won't be clickable)
+    return ""
+
+
+@register.simple_tag(takes_context=True)
+def workspace_advisories_url(context: Any) -> Any:
+    """The trust center's advisory index URL, resolved like the workspace root.
+
+    Mirrors :func:`workspace_public_url` exactly — custom domain first, then the
+    workspace key from ``brand`` or ``workspace`` — so the two nav links can
+    never resolve against different workspaces. Returns "" when no workspace can
+    be determined, which is the signal for the nav not to render at all.
+    """
+    request = context.get("request")
+    if not request:
+        return ""
+
+    if getattr(request, "is_custom_domain", False):
+        return get_public_path("advisories", "", is_custom_domain=True)
+
+    for source in (context.get("brand"), context.get("workspace")):
+        key = source.get("workspace_key") or source.get("key") if isinstance(source, dict) else None
+        if key:
+            try:
+                return reverse("core:workspace_advisories_public", kwargs={"workspace_key": key})
+            except NoReverseMatch:
+                continue
+
     return ""
 
 

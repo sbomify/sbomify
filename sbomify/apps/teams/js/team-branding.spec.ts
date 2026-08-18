@@ -127,11 +127,11 @@ describe('Team Branding', () => {
 
     describe('Default Colors', () => {
         test('should set default colors', () => {
-            const DEFAULT_BRAND_COLOR = '#4F66DC'
-            const DEFAULT_ACCENT_COLOR = '#4F66DC'
+            const DEFAULT_BRAND_COLOR = '#25293F'
+            const DEFAULT_ACCENT_COLOR = '#4263EB'
 
-            expect(DEFAULT_BRAND_COLOR).toBe('#4F66DC')
-            expect(DEFAULT_ACCENT_COLOR).toBe('#4F66DC')
+            expect(DEFAULT_BRAND_COLOR).toBe('#25293F')
+            expect(DEFAULT_ACCENT_COLOR).toBe('#4263EB')
         })
     })
 

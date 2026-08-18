@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import render
 from django.views import View
 
@@ -11,6 +11,22 @@ from sbomify.apps.sboms.services.sboms_table import build_sboms_table_context, d
 
 
 class SbomsTableView(View):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Gate the private route only, the way DocumentsTableView does.
+
+        One class serves both routes. A public component clears the
+        component-level check even for an anonymous caller, so without this the
+        private route reached the workspace lookup holding AnonymousUser and
+        raised. A blanket login requirement would wrongly close the public route.
+        """
+        if not kwargs.get("is_public_view", False) and not request.user.is_authenticated:
+            from django.contrib.auth.views import redirect_to_login
+            from django.urls import reverse
+
+            return redirect_to_login(request.get_full_path(), reverse("core:keycloak_login"))
+
+        return super().dispatch(request, *args, **kwargs)
+
     def get(self, request: HttpRequest, component_id: str, is_public_view: bool) -> HttpResponse:
         result = build_sboms_table_context(request, component_id, is_public_view)
         if not result.ok:

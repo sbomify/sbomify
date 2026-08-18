@@ -10,6 +10,7 @@ from typing import Any, cast
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 from ninja import Query, Router
@@ -22,7 +23,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import READ_INTERNAL, can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
@@ -32,6 +33,7 @@ from sbomify.apps.core.queries import (
 )
 from sbomify.apps.core.services.validation_response import validation_error_response
 from sbomify.apps.core.utils import broadcast_to_workspace, build_entity_info_dict
+from sbomify.apps.sboms.freshness import with_latest_sbom
 from sbomify.apps.sboms.schemas import ComponentMetaData, ComponentMetaDataPatch, SupplierSchema
 from sbomify.apps.sboms.utils import get_product_sbom_package, get_release_sbom_package
 from sbomify.apps.teams.apis import serialize_contact_profile
@@ -343,6 +345,12 @@ def _build_component_response(
     response["component_type"] = component.component_type
     response["component_type_display"] = component.get_component_type_display()
     response["is_global"] = getattr(component, "is_global", False)
+    # None when the workspace has set no window, or the component has no SBOM
+    # yet: neither is a stale component, and automation should be able to tell
+    # "not stale" from "no policy" without guessing.
+    from sbomify.apps.sboms.freshness import component_freshness
+
+    response["freshness"] = component_freshness(component)
     return response
 
 
@@ -692,8 +700,9 @@ def list_products(request: HttpRequest, page: int = Query(1), page_size: int = Q
         # (e.g. a publish-only CI token) honours its scope: listing products
         # exposes private workspace data, which a non-read token scope must not
         # reach. No behaviour change for sessions or full/unscoped tokens —
-        # product:read is the READ_MEMBER tier every current member already
-        # satisfies; it only adds the token action-scope gate.
+        # product:read is the READ_INTERNAL tier, which every internal member
+        # already satisfies; it only adds the token action-scope gate.
+        # Guests hold no read tier and are denied here, by design.
         team = Team.objects.filter(id=team_id).first()
         if team is not None and not can(request, "product:read", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -761,6 +770,44 @@ def get_product(request: HttpRequest, product_id: str) -> Any:
 
     assert isinstance(result, ProductLookupResult)
     return status, result.payload
+
+
+@router.get(
+    "/products/{product_id}/eol-readiness",
+    response={200: dict[str, Any], 403: ErrorResponse, 404: ErrorResponse},
+    summary="Whether a product can reach end of life with CRA 6.1.6 satisfied",
+    description="Reports the notice period, the critical and high findings neither patched nor formally "
+    "risk-accepted, and whether a final SBOM and VEX exist to publish.",
+)
+def get_product_eol_readiness(request: HttpRequest, product_id: str) -> Any:
+    """The pre-EOL check (CRA checklist 6.1.5/6.1.6)."""
+    from dataclasses import asdict
+
+    from sbomify.apps.core.services.eol import eol_readiness
+
+    status, result = _get_product_with_instance(request, product_id)
+    if status != 200:
+        return status, result
+
+    assert isinstance(result, ProductLookupResult)
+    # _get_product_with_instance only checks access for private products — a
+    # public one is readable by anyone, which is right for the product page and
+    # wrong here. Readiness lists the product's unresolved critical and high
+    # findings by advisory id, which is internal remediation state and not
+    # something being publicly listed makes public.
+    if not can(request, "product:manage", result.instance):
+        return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    readiness = eol_readiness(result.instance)
+    payload = asdict(readiness)
+    # The derived verdicts are the point of the endpoint; a caller should not
+    # have to re-implement the checklist rule to read the answer.
+    payload["is_ready"] = readiness.is_ready
+    payload["blocking_count"] = readiness.blocking_count
+    payload["problems"] = readiness.problems
+    payload["end_of_support"] = readiness.end_of_support.isoformat() if readiness.end_of_support else None
+    payload["end_of_life"] = readiness.end_of_life.isoformat() if readiness.end_of_life else None
+    return 200, payload
 
 
 @router.put(
@@ -1611,13 +1658,14 @@ def list_components(
         # (e.g. a publish-only CI token) honours its scope: listing components
         # exposes private workspace data, which a non-read token scope must not
         # reach. No behaviour change for sessions or full/unscoped tokens —
-        # component:read_internal is the READ_MEMBER tier every current member
-        # already satisfies; it only adds the token action-scope gate.
+        # component:read_internal is the READ_INTERNAL tier, which every internal
+        # member already satisfies; it only adds the token action-scope gate.
+        # Guests hold no read tier and are denied here, by design.
         team = Team.objects.filter(id=team_id).first()
         if team is not None and not can(request, "component:read_internal", team):
             return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
 
-        components_queryset = optimize_component_queryset(Component.objects.filter(team_id=team_id))
+        components_queryset = with_latest_sbom(optimize_component_queryset(Component.objects.filter(team_id=team_id)))
         has_crud_permissions = _get_team_crud_permission(request, team_id)
 
         if isinstance(is_global, str):
@@ -2286,6 +2334,12 @@ def list_component_releases(
         if not can(request, "component:manage", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
+    # Whether the caller is internal to THIS component's workspace. Distinct from
+    # ``is_internal_member`` above, which only says they are a non-guest of
+    # whatever workspace their session points at — for a gated component that let
+    # an owner of workspace B read the private product names of workspace X.
+    has_workspace_access = can(request, "release:read", component).allowed
+
     try:
         # Find all releases that have artifacts from this component
         # This includes both SBOM and document artifacts
@@ -2316,15 +2370,20 @@ def list_component_releases(
             Release.objects.filter(id__in=release_ids).select_related("product").order_by("-released_at", "-created_at")
         )
 
+        # Withhold releases of non-public products from callers outside this
+        # component's workspace. Filter BEFORE paginating: doing it per-row after
+        # the page was cut made the counts describe rows the caller never sees,
+        # so a page could come back empty with has_next=true — and
+        # _paginate_queryset's contract is that clients stop on an empty page,
+        # which would hide the genuinely public releases further down.
+        if not has_workspace_access:
+            releases_queryset = releases_queryset.filter(product__is_public=True)
+
         # Apply pagination
         paginated_releases, pagination_meta = _paginate_queryset(releases_queryset, page, page_size)
 
         response_data = []
         for release in paginated_releases:
-            # Only include public releases if this is a public view (unauthenticated)
-            if not is_internal_member and not release.product.is_public:
-                continue
-
             # Count artifacts for this release
             artifact_count = release.artifacts.count()
 
@@ -2419,7 +2478,13 @@ def get_dashboard_summary(
     # For authenticated users, use their teams; for public access, filter differently
     if is_internal_member:
         current_user: Any = request.user
-        user_teams_qs = Team.objects.filter(member__user=current_user)
+        # Only workspaces this user is INTERNAL in. Filtering on membership alone
+        # aggregated every workspace they belong to in any capacity, so someone
+        # who is internal in their own workspace but only a trust-center guest of
+        # a vendor's still had that vendor's private product/component counts and
+        # latest-upload names summed into their dashboard. The can() gate below
+        # only authorizes the *session* workspace, so it cannot catch this.
+        user_teams_qs = Team.objects.filter(member__user=current_user, member__role__in=READ_INTERNAL)
         # A workspace-scoped API token must only see its own workspace's data:
         # without this, a token bound to workspace A would still aggregate the
         # user's other workspaces (B, C, …) into the dashboard. Sessions (no
@@ -2431,8 +2496,9 @@ def get_dashboard_summary(
         # (e.g. a publish-only CI token) honours its scope: the authenticated
         # dashboard aggregates private workspace data, which a non-read token
         # scope must not reach. No behaviour change for sessions or
-        # full/unscoped tokens — workspace:read is the READ_MEMBER tier every
-        # current member already satisfies; it only adds the token scope gate.
+        # full/unscoped tokens — workspace:read is the READ_INTERNAL tier
+        # every internal member already satisfies; it only adds the token
+        # scope gate. Guests hold no read tier and are denied, by design.
         team_id = _get_user_team_id(request)
         team = Team.objects.filter(id=team_id).first() if team_id else None
         if team is not None and not can(request, "workspace:read", team):
@@ -2550,6 +2616,52 @@ def download_product_sbom(
         return 500, {"detail": "Error generating product SBOM"}
 
 
+@router.get(
+    "/products/{product_id}/cbom/download",
+    response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
+    auth=None,  # Allow unauthenticated access for public products
+    tags=["Products"],
+)
+@decorate_view(optional_token_auth)
+def download_product_cbom(request: HttpRequest, product_id: str, version: str = Query("1.6")) -> Any:  # type: ignore[type-arg]
+    """Download the merged CBOM (Cryptography BOM) for a product's latest release.
+
+    The product-level counterpart of the release CBOM download: resolves the rolling
+    "latest" release and serves its merged crypto BOM, so the Trust Center's product
+    page can offer one CBOM per product next to the consolidated SBOM. Gated exactly
+    like the consolidated SBOM download.
+    """
+    if version not in ("1.6", "1.7"):
+        return 400, {"detail": "version must be 1.6 or 1.7", "error_code": ErrorCode.BAD_REQUEST}
+    try:
+        product = Product.objects.select_related("team").get(pk=product_id)
+    except Product.DoesNotExist:
+        return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
+
+    if not product.is_public:
+        if not request.user or not request.user.is_authenticated:
+            return 403, {"detail": "Authentication required for private products", "error_code": ErrorCode.UNAUTHORIZED}
+        if not can(request, "product:manage", product):
+            return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    release = Release.get_or_create_latest_release(product)
+    document = _release_cbom_document(release, version)
+    if document is None:
+        return 404, {"detail": "No CBOM available for this product", "error_code": ErrorCode.NOT_FOUND}
+
+    content = json.dumps(document, indent=2)
+    filename = _download_filename(product.name, release.name, ".cbom.cdx.json")
+    response = HttpResponse(content, content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    capture_for_request(
+        request,
+        events.RELEASE_CBOM_DOWNLOADED,
+        {"release_id": str(release.id), "product_id": str(product.id)},
+        team_key=product.team.key or "",
+    )
+    return response
+
+
 # =============================================================================
 # RELEASE CRUD ENDPOINTS
 # =============================================================================
@@ -2597,8 +2709,9 @@ def list_all_releases(
                     # listing releases of a private product exposes private
                     # workspace data, which a non-read token scope must not
                     # reach. No behaviour change for sessions or full/unscoped
-                    # tokens — release:read is the READ_MEMBER tier every current
-                    # member already satisfies; it only adds the token scope gate.
+                    # tokens — release:read is the READ_INTERNAL tier every
+                    # internal member already satisfies; it only adds the
+                    # token scope gate.
                     team = Team.objects.filter(id=team_id).first()
                     if team is not None and not can(request, "release:read", team):
                         return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -2626,8 +2739,9 @@ def list_all_releases(
             # (e.g. a publish-only CI token) honours its scope: listing all team
             # releases exposes private workspace data, which a non-read token
             # scope must not reach. No behaviour change for sessions or
-            # full/unscoped tokens — release:read is the READ_MEMBER tier every
-            # current member already satisfies; it only adds the token scope gate.
+            # full/unscoped tokens — release:read is the READ_INTERNAL tier
+            # every internal member already satisfies; it only adds the
+            # token scope gate.
             team = Team.objects.filter(id=team_id).first()
             if team is not None and not can(request, "release:read", team):
                 return 403, {"detail": "Forbidden", "error_code": ErrorCode.FORBIDDEN}
@@ -2698,20 +2812,34 @@ def list_all_releases(
 
 def _build_release_response(request: HttpRequest, release: Release, include_artifacts: bool = False) -> dict[str, Any]:
     """Build a standardized response for releases."""
+    from sbomify.apps.core.models import Component
     from sbomify.apps.sboms.models import SBOM
 
-    # Count artifacts for this release
-    artifact_count = release.artifacts.count()
+    has_crud_permissions = can(request, "release:manage", release.product).allowed
+
+    # To anyone who cannot manage the release, an artifact from a private
+    # component does not exist: the Trust Center's component panel refuses to
+    # list the component, its public page 403s, and the aggregate download
+    # already leaves it out (builders._members_with_files) — so a row for it
+    # here named a component every other public surface denies. Same predicate
+    # as the component panel: public and gated are listable, private is not.
+    # Every derived field below (count, capability flags, rows) comes from this
+    # one queryset so none of them can disagree about what the release holds.
+    artifacts_qs = release.artifacts.all()
+    if not has_crud_permissions:
+        listable = (Component.Visibility.PUBLIC, Component.Visibility.GATED)
+        artifacts_qs = artifacts_qs.filter(
+            Q(sbom__component__visibility__in=listable) | Q(document__component__visibility__in=listable)
+        )
+
+    artifact_count = artifacts_qs.count()
 
     # Which bom_types the release carries — one query drives all the download
     # capability flags (SBOM download, and the Trust Center VEX/CBOM downloads).
-    bom_types_present = set(
-        release.artifacts.filter(sbom__isnull=False).values_list("sbom__bom_type", flat=True).distinct()
-    )
+    bom_types_present = set(artifacts_qs.filter(sbom__isnull=False).values_list("sbom__bom_type", flat=True).distinct())
     has_sboms = SBOM.BomType.SBOM.value in bom_types_present
     has_vex = SBOM.BomType.VEX.value in bom_types_present
     has_cbom = SBOM.BomType.CBOM.value in bom_types_present
-    has_crud_permissions = can(request, "release:manage", release.product).allowed
 
     response = {
         "id": str(release.id),
@@ -2741,7 +2869,7 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 
     if include_artifacts:
         artifacts: Any = []
-        for artifact in release.artifacts.select_related("sbom__component", "document__component"):
+        for artifact in artifacts_qs.select_related("sbom__component", "document__component"):
             if artifact.sbom:
                 artifacts.append(
                     {
@@ -2784,9 +2912,65 @@ def _build_release_response(request: HttpRequest, release: Release, include_arti
 # =============================================================================
 
 
+_RELEASE_VERSION_CONSTRAINT = "unique_product_version_when_not_empty"
+
+
+def _is_release_name_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, name) uniqueness violation.
+
+    Detected positively rather than as "not the version constraint": an
+    unrelated IntegrityError (a foreign key, a NOT NULL, a constraint added
+    later) must surface as itself, not be rewritten into a name collision.
+
+    ``unique_together`` leaves the constraint auto-named, so unlike the version
+    case there is no fixed name to match. Both drivers do name the columns, so
+    this requires a uniqueness violation mentioning both.
+    """
+    cause = exc.__cause__
+    msg = str(exc).lower()
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    if not is_unique:
+        return False
+
+    diag_constraint = ""
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None:
+            diag_constraint = (getattr(diag, "constraint_name", None) or "").lower()
+
+    haystack = f"{msg} {diag_constraint}"
+    table = Release._meta.db_table.lower()
+    return "product_id" in haystack and "name" in haystack and (table in haystack or "product_id" in haystack)
+
+
+def _is_release_version_conflict(exc: IntegrityError) -> bool:
+    """Whether this IntegrityError is the (product, version) constraint.
+
+    Prefers the driver's constraint name over the message, mirroring
+    ``sboms.utils._is_duplicate_integrity_error``: message text is
+    driver-dependent, and getting this wrong would silently turn a real version
+    conflict into an idempotent 200.
+    """
+    cause = exc.__cause__
+    if cause is not None:
+        diag = getattr(cause, "diag", None)
+        if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
+            return True
+    # Postgres without diag, and SQLite, both name the constraint in the message.
+    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+
 @router.post(
     "/releases",
-    response={201: ReleaseResponseSchema, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    # 200 means the release already existed and is returned as-is; see the
+    # IntegrityError branch for why create is idempotent on a name collision.
+    response={
+        200: ReleaseResponseSchema,
+        201: ReleaseResponseSchema,
+        400: ErrorResponse,
+        403: ErrorResponse,
+        404: ErrorResponse,
+    },
     tags=["Releases"],
 )
 def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
@@ -2809,8 +2993,28 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
 
     if request_is_oidc_authed(request):
         bound_component_id = bound_component_id_for_request(request)
-        if bound_component_id is None or not product.components.filter(id=bound_component_id).exists():
-            return 403, {"detail": "You do not have permission to create releases", "error_code": ErrorCode.FORBIDDEN}
+        # Distinct wording per cause. These two share both a status and a call site with the
+        # role denial above, so one shared message leaves a CI log no way to tell which check
+        # rejected it, and the two have opposite remedies. Naming the component and the product
+        # leaks nothing: the caller supplied the product id and holds the binding for the
+        # component.
+        if bound_component_id is None:
+            return 403, {
+                "detail": (
+                    "This OIDC token has no component binding, so it cannot create releases. "
+                    "Re-create the trusted-publishing binding for the component."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
+        if not product.components.filter(id=bound_component_id).exists():
+            return 403, {
+                "detail": (
+                    f"Component {bound_component_id} is not part of product {product.id}, so this "
+                    "OIDC token cannot create releases for it. Add the component to the product, "
+                    "then retry."
+                ),
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
     # Prevent creating releases with name "latest" manually
     if payload.name.lower() == LATEST_RELEASE_NAME.lower():
@@ -2867,14 +3071,35 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
         return 201, _build_release_response(request, release, include_artifacts=True)
 
     except IntegrityError as e:
-        error_msg = str(e).lower()
-        if "unique_product_version" in error_msg:
-            detail = "A release with this version already exists for this product"
-        elif "product_id_name" in error_msg or "product" in error_msg and "name" in error_msg:
-            detail = "A release with this name already exists for this product"
-        else:
-            detail = "A release with this name or version already exists for this product"
-        return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+        # Two CI jobs tagging the same release race here: both read "absent",
+        # both insert, and the loser used to get a 400 that failed its build.
+        # The caller already cleared can() and the OIDC binding above, so it is
+        # entitled to this release; returning the existing row makes create
+        # idempotent and the race harmless.
+        #
+        # A version collision under a *different* name is a genuine conflict, so
+        # that one is identified by constraint name and never swallowed. Only it
+        # needs identifying: for the name case the row's existence is a better
+        # authority than any message, so the decisive branch does no parsing.
+        if _is_release_version_conflict(e):
+            return 400, {
+                "detail": "A release with this version already exists for this product",
+                "error_code": ErrorCode.DUPLICATE_NAME,
+            }
+        if not _is_release_name_conflict(e):
+            # Not a uniqueness violation we recognise: a foreign key, a NOT
+            # NULL, a constraint added later. Report it as itself rather than
+            # dressing it up as a duplicate. Re-raising would escape the sibling
+            # except Exception below and 500, so this mirrors that branch.
+            log.error(f"Unexpected IntegrityError creating release: {e}")
+            return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
+        existing = Release.objects.filter(product=product, name=payload.name).first()
+        if existing is not None:
+            return 200, _build_release_response(request, existing, include_artifacts=True)
+        return 400, {
+            "detail": "A release with this name already exists for this product",
+            "error_code": ErrorCode.DUPLICATE_NAME,
+        }
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3162,7 +3387,8 @@ def download_release(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Guest members can read release artifacts if they have access
+        # Non-public product: internal members only. Guests hold no read tier;
+        # public products already returned above.
         if not can(request, "release:read", release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
@@ -3286,6 +3512,29 @@ def download_release_vex(request: HttpRequest, release_id: str) -> Any:
     return response
 
 
+def _release_cbom_document(release: Release, version: str) -> dict[str, Any] | None:
+    """The merged CBOM for a release, cached by slot state, or None when it has no CBOM.
+
+    Same cache-by-slot-state approach as the VEX download: the merge fans out one
+    S3 fetch per pinned CBOM and the endpoints serving it are open for public products.
+    """
+    from django.core.cache import cache
+    from django.db.models import Count, Max
+
+    from sbomify.apps.sboms.cbom import build_release_cbom
+    from sbomify.apps.sboms.models import SBOM
+
+    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
+        n=Count("id"), newest=Max("sbom__created_at")
+    )
+    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
+    document = cache.get(cache_key)
+    if document is None:
+        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
+        cache.set(cache_key, document, 900)
+    return None if document.get("__absent__") else document
+
+
 @router.get(
     "/releases/{release_id}/cbom/download",
     response={200: None, 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 500: ErrorResponse},
@@ -3316,23 +3565,8 @@ def download_release_cbom(request: HttpRequest, release_id: str, version: str = 
         if not can(request, "release:read", release.product):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    from django.core.cache import cache
-    from django.db.models import Count, Max
-
-    from sbomify.apps.sboms.cbom import build_release_cbom
-    from sbomify.apps.sboms.models import SBOM
-
-    # Same cache-by-slot-state approach as the VEX download: the merge fans out one
-    # S3 fetch per pinned CBOM and the endpoint is open for public products.
-    slot_state = ReleaseArtifact.objects.filter(release=release, sbom__bom_type=SBOM.BomType.CBOM).aggregate(
-        n=Count("id"), newest=Max("sbom__created_at")
-    )
-    cache_key = f"release-cbom:{release.id}:{version}:{slot_state['n']}:{slot_state['newest']}"
-    document = cache.get(cache_key)
+    document = _release_cbom_document(release, version)
     if document is None:
-        document = build_release_cbom(release, spec_version=version) or {"__absent__": True}
-        cache.set(cache_key, document, 900)
-    if document.get("__absent__"):
         return 404, {"detail": "No CBOM available for this release", "error_code": ErrorCode.NOT_FOUND}
 
     content = json.dumps(document, indent=2)
@@ -3731,9 +3965,17 @@ def list_document_releases(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Guest members can download documents if they have access
         if not can(request, "document:read", document.component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # One disclosure policy across every "which releases contain this artifact"
+    # endpoint: if the caller cannot see the product, they do not see its releases
+    # at all. Blanking product_id/product_name was not enough — release names and
+    # descriptions routinely carry the product codename, so the identity stayed
+    # reconstructible, and a UI building a link from an empty product_id rendered
+    # a broken href. Filtered before pagination so the counts describe rows the
+    # caller can actually receive.
+    has_workspace_access = can(request, "release:read", document.component).allowed
 
     # Get all releases containing this document
     release_artifacts_queryset = (
@@ -3741,23 +3983,27 @@ def list_document_releases(
         .select_related("release", "release__product")
         .order_by("-release__released_at", "-release__created_at")
     )
+    if not has_workspace_access:
+        release_artifacts_queryset = release_artifacts_queryset.filter(release__product__is_public=True)
 
     # Apply pagination
     paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
 
-    items = [
-        {
-            "id": str(artifact.release.id),
-            "name": artifact.release.name,
-            "description": artifact.release.description,
-            "is_prerelease": artifact.release.is_prerelease,
-            "is_latest": artifact.release.is_latest,
-            "product_id": str(artifact.release.product.id),
-            "product_name": artifact.release.product.name,
-            "is_public": artifact.release.product.is_public,
-        }
-        for artifact in paginated_artifacts
-    ]
+    items = []
+    for artifact in paginated_artifacts:
+        product = artifact.release.product
+        items.append(
+            {
+                "id": str(artifact.release.id),
+                "name": artifact.release.name,
+                "description": artifact.release.description,
+                "is_prerelease": artifact.release.is_prerelease,
+                "is_latest": artifact.release.is_latest,
+                "product_id": str(product.id),
+                "product_name": product.name,
+                "is_public": product.is_public,
+            }
+        )
 
     return {"items": items, "pagination": pagination_meta}
 
@@ -3904,14 +4150,17 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Guest members can download SBOMs if they have access
+        # PRIVATE component: internal members only. This is a role check, not
+        # the gated/NDA path — public and gated components already returned
+        # above via public_access_allowed. Guests hold no read tier, so they
+        # are denied here and reach gated content through that earlier branch.
         if not can(request, "sbom:read", sbom.component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
 
-    # Whether the requester is a member of the SBOM's workspace. Non-members may
-    # reach this endpoint when the component is public/gated, so private product
-    # names and IDs must be withheld from them to avoid leaking private products.
-    has_workspace_access = can(request, "sbom:read", sbom.component).allowed
+    # Same disclosure policy as the sibling release listings: a caller who cannot
+    # see the product does not see its releases at all. Filtered before pagination
+    # so the counts describe rows the caller can actually receive.
+    has_workspace_access = can(request, "release:read", sbom.component).allowed
 
     # Get all releases containing this SBOM
     release_artifacts_queryset = (
@@ -3919,6 +4168,8 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
         .select_related("release", "release__product")
         .order_by("-release__released_at", "-release__created_at")
     )
+    if not has_workspace_access:
+        release_artifacts_queryset = release_artifacts_queryset.filter(release__product__is_public=True)
 
     # Apply pagination
     paginated_artifacts, pagination_meta = _paginate_queryset(release_artifacts_queryset, page, page_size)
@@ -3926,7 +4177,6 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
     items = []
     for artifact in paginated_artifacts:
         product = artifact.release.product
-        reveal_product = product.is_public or has_workspace_access
         items.append(
             {
                 "id": str(artifact.release.id),
@@ -3934,8 +4184,8 @@ def list_sbom_releases(request: HttpRequest, sbom_id: str, page: int = Query(1),
                 "description": artifact.release.description,
                 "is_prerelease": artifact.release.is_prerelease,
                 "is_latest": artifact.release.is_latest,
-                "product_id": str(product.id) if reveal_product else "",
-                "product_name": product.name if reveal_product else "",
+                "product_id": str(product.id),
+                "product_name": product.name,
                 "is_public": product.is_public,
             }
         )
@@ -4137,9 +4387,18 @@ def list_component_sboms(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Guest members can download components if they have access
+        # PRIVATE component: internal members only. This is a role check, not
+        # the gated/NDA path — public and gated components already returned
+        # above via public_access_allowed. Guests hold no read tier, so they
+        # are denied here and reach gated content through that earlier branch.
         if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # Same disclosure policy as the standalone release listings: the nested
+    # releases[] below must not name a product this caller cannot see. Both
+    # endpoints are reachable unauthenticated whenever the component is public or
+    # gated, so without this an anonymous caller read private product names.
+    has_workspace_access = can(request, "release:read", component).allowed
 
     try:
         from collections import defaultdict
@@ -4191,7 +4450,6 @@ def list_component_sboms(
         from sbomify.apps.plugins.schemas import AssessmentStatusSummary
         from sbomify.apps.plugins.sdk.enums import RunStatus
         from sbomify.apps.vulnerability_scanning.utils import (
-            RESULT_SUMMARY_ANNOTATIONS,
             reconstruct_result_summary,
         )
 
@@ -4234,9 +4492,12 @@ def list_component_sboms(
         # 3. Release artifacts — one query, indexed into a per-SBOM list.
         releases_by_sbom: dict[str, list[dict[str, Any]]] = defaultdict(list)
         try:
-            for artifact in ReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
+            artifact_releases_qs = ReleaseArtifact.objects.filter(sbom_id__in=sbom_ids).select_related(
                 "release", "release__product"
-            ):
+            )
+            if not has_workspace_access:
+                artifact_releases_qs = artifact_releases_qs.filter(release__product__is_public=True)
+            for artifact in artifact_releases_qs:
                 releases_by_sbom[str(artifact.sbom_id)].append(
                     {
                         "id": str(artifact.release.id),
@@ -4283,7 +4544,6 @@ def list_component_sboms(
             latest_runs = list(
                 AssessmentRun.objects.filter(id__in=winner_ids)
                 .defer("result")
-                .annotate(**RESULT_SUMMARY_ANNOTATIONS)
                 # id__in has undefined row order; keep the per-SBOM plugin lists
                 # stable across requests.
                 .order_by("sbom_id", "plugin_name")
@@ -4439,9 +4699,18 @@ def list_component_documents(
         if not request.user or not request.user.is_authenticated:
             return 403, {"detail": "Authentication required for private items", "error_code": ErrorCode.UNAUTHORIZED}
 
-        # Guest members can download components if they have access
+        # PRIVATE component: internal members only. This is a role check, not
+        # the gated/NDA path — public and gated components already returned
+        # above via public_access_allowed. Guests hold no read tier, so they
+        # are denied here and reach gated content through that earlier branch.
         if not can(request, "component:read_internal", component):
             return 403, {"detail": "Access denied", "error_code": ErrorCode.FORBIDDEN}
+
+    # Same disclosure policy as the standalone release listings: the nested
+    # releases[] below must not name a product this caller cannot see. Both
+    # endpoints are reachable unauthenticated whenever the component is public or
+    # gated, so without this an anonymous caller read private product names.
+    has_workspace_access = can(request, "release:read", component).allowed
 
     try:
         from sbomify.apps.documents.models import Document
@@ -4459,6 +4728,8 @@ def list_component_documents(
             release_artifacts = ReleaseArtifact.objects.filter(document=document).select_related(
                 "release", "release__product"
             )
+            if not has_workspace_access:
+                release_artifacts = release_artifacts.filter(release__product__is_public=True)
 
             for artifact in release_artifacts:
                 releases.append(

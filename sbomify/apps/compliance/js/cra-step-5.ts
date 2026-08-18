@@ -7,6 +7,10 @@ import { getAssessmentId } from './cra-shared';
 
 interface StepStatus {
   complete: boolean;
+  /** Why the EU-representation block is not settled, if it is not. A step can
+   *  be complete and still carry one: the establishment determination is
+   *  recorded rather than demanded, and it blocks the export instead. */
+  eu_representation_problems?: string[];
   controls?: {
     total: number;
     satisfied: number;
@@ -88,6 +92,9 @@ function craStep5() {
     isLoadingPreview: false,
     downloadingDocPdf: false,
     stepUrls: {} as Record<string, string>,
+    // Named reasons the export is refused, for when "complete every step" is
+    // not the reason and saying so sends the reader to look in the wrong place.
+    blockers: [] as string[],
 
     init() {
       const data = window.parseJsonScript('step-data') as ComplianceSummary | null;
@@ -97,6 +104,8 @@ function craStep5() {
         this.lastExport = data.last_export || null;
         this.overallReady = !!(data.overall_ready);
         this.exportAvailable = !!(data.export_available);
+        this.blockers = Object.values(data.steps || {})
+          .flatMap((s) => s.eu_representation_problems || []);
       }
       this.assessmentId = getAssessmentId();
       this.stepUrls = (window.parseJsonScript('step-urls') as Record<string, string>) || {};

@@ -59,6 +59,66 @@ class _PluginInfo(TypedDict):
 # Only SBOMs created within this window will be queued for assessment
 BACKFILL_CUTOFF_HOURS = 24
 
+# How long a scheduled sweep leaves an SBOM alone after a plugin reported it
+# could not read the input at all (``metadata.unsupported_input``). Re-running
+# sooner just repeats the rejection; a day still picks up a scanner upgrade
+# that closes the gap without anyone having to intervene.
+UNSUPPORTED_INPUT_SKIP_HOURS = 24
+
+
+def _backed_off_sbom_ids(plugin_name: str, team_ids: set[int], since: Any) -> set[str]:
+    """SBOMs whose *latest* run said the scanner could not read the input.
+
+    Keyed on the latest run rather than on any run in the window, because a
+    later scan changes the answer: an SBOM rejected at 09:00, made scannable by
+    a server upgrade, and scanned successfully at 10:00 would otherwise stay out
+    of the sweep until the original rejection aged out — a paid workspace
+    missing a full day of new advisories on an artifact the scanner can now
+    read.
+
+    Narrowed by ``result_skipped`` before the JSON path is touched. ``result``
+    routinely runs to several MB and every JSON-path read de-TOASTs the whole
+    value, which is why that column was denormalised in the first place; without
+    the pre-filter this sweep would de-TOAST every completed run in the window,
+    across every plugin and team, once an hour.
+    """
+    from ..models import AssessmentRun
+
+    latest_run_id: dict[str, Any] = {}
+    rows = (
+        AssessmentRun.objects.filter(
+            plugin_name=plugin_name,
+            created_at__gte=since,
+            status="completed",
+            sbom__component__team_id__in=team_ids,
+        )
+        .order_by("sbom_id", "-created_at", "-id")
+        .values_list("sbom_id", "id", "result_skipped")
+    )
+    for sbom_id, run_id, skipped in rows:
+        # Only a skipped run can carry the marker, so an SBOM whose latest run
+        # is anything else is out regardless of what it looked like earlier.
+        latest_run_id.setdefault(str(sbom_id), run_id if skipped else None)
+
+    # Selected by run id, not by SBOM id. Restricting the JSON read to a set of
+    # SBOMs still matched any marked run in the window for them, so an SBOM
+    # whose latest run is a *different* skip — no product membership, say —
+    # stayed backed off on the strength of an older unsupported-input run. That
+    # is the same "any run in the window" defect this function was written to
+    # remove, one level down.
+    candidate_ids = [run_id for run_id in latest_run_id.values() if run_id is not None]
+    if not candidate_ids:
+        return set()
+
+    return {
+        str(sbom_id)
+        for sbom_id in AssessmentRun.objects.filter(
+            id__in=candidate_ids,
+            result__metadata__unsupported_input=True,
+        ).values_list("sbom_id", flat=True)
+    }
+
+
 # Retry delays for RetryLaterError (in milliseconds)
 # These delays give external systems time to process:
 # - 1st retry: 2 minutes
@@ -1164,7 +1224,8 @@ def _run_scheduled_security_scans(
         # within the skip window. Scan-once-per-SBOM model — we no longer
         # dedup per (sbom, release) pair because one scan covers all the
         # SBOM's current releases via the AssessmentRun.releases M2M.
-        cutoff = timezone.now() - timedelta(hours=skip_hours)
+        now = timezone.now()
+        cutoff = now - timedelta(hours=skip_hours)
         recent_sbom_ids: set[str] = set(
             AssessmentRun.objects.filter(
                 plugin_name=plugin_name,
@@ -1173,6 +1234,20 @@ def _run_scheduled_security_scans(
                 sbom__component__team_id__in=team_ids,
             ).values_list("sbom_id", flat=True)
         )
+
+        # An SBOM the scanner has declared itself incapable of reading will get
+        # the same answer on the next sweep, so the ordinary skip window is the
+        # wrong clock for it: at skip_hours=1 that is a full re-upload every
+        # hour, rejected every hour, for as long as the artifact exists.
+        #
+        # Backed off rather than blocked, because the capability gap closes on
+        # its own — Dependency Track gains CycloneDX 1.7 in a later release, and
+        # the SBOM becomes scannable with no change here and no operator action.
+        # A day is short enough that a server upgrade is picked up promptly and
+        # long enough that the retry cost stops mattering.
+        incapable_cutoff = now - timedelta(hours=UNSUPPORTED_INPUT_SKIP_HOURS)
+        if incapable_cutoff < cutoff:
+            recent_sbom_ids.update(_backed_off_sbom_ids(plugin_name, team_ids, incapable_cutoff))
 
         # Stream eligible SBOMs directly (not ReleaseArtifact rows). Any SBOM
         # with at least one ReleaseArtifact link is eligible — the scan will
@@ -1334,3 +1409,19 @@ def hourly_dt_scan_task() -> dict[str, Any]:
         task_name="hourly_dt_scan",
         only_cyclonedx=True,
     )
+
+
+@cron("15 3 * * *")  # type: ignore[untyped-decorator]  # Daily, before the other sweeps
+@dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
+def prune_assessment_runs_task() -> int:
+    """Apply the assessment-run retention policy.
+
+    plugins_assessment_runs is append-only and grows with every scan, retry and
+    scheduled run, which feeds TOAST bloat and the long checkpoints seen on
+    staging. See plugins/retention.py for the two rules.
+    """
+    from sbomify.apps.plugins.retention import prune_assessment_runs
+
+    removed = prune_assessment_runs()
+    logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
+    return removed

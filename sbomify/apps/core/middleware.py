@@ -80,6 +80,14 @@ class RequestTimingLoggingMiddleware:
         return response
 
 
+def _comparable_trust_center_domain() -> str:
+    """TRUST_CENTER_DOMAIN in the same form incoming hosts take after
+    normalize_host: lowercase, port stripped. The setting itself keeps the
+    port because URL generation embeds it in links."""
+    domain = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+    return normalize_host(domain) if domain else ""
+
+
 class DynamicHostValidationMiddleware:
     """
     Validate Host headers dynamically using Redis-backed cache.
@@ -125,8 +133,12 @@ class DynamicHostValidationMiddleware:
             # or APP_BASE_URL might be malformed
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-        # TRUST_CENTER_DOMAIN is already normalized (strip + lowercase) in settings.py
-        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+        # The setting keeps its port on purpose (URL generation needs
+        # ``slug.127.0.0.1:8000`` in dev). Every comparison below is against a
+        # host normalize_host has stripped the port from, so strip it here the
+        # same way — otherwise a ported domain can never match and its
+        # subdomains are rejected as invalid hosts.
+        self._trust_center_domain: str = _comparable_trust_center_domain()
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:
@@ -273,8 +285,9 @@ class CustomDomainContextMiddleware:
         except (ImportError, AttributeError, ValueError) as e:
             logger.debug(f"Could not parse APP_BASE_URL during middleware init: {e}")
 
-        # TRUST_CENTER_DOMAIN is already normalized (strip + lowercase) in settings.py
-        self._trust_center_domain: str = getattr(settings, "TRUST_CENTER_DOMAIN", "") or ""
+        # Port-stripped like the hosts it is compared against — see the same
+        # assignment in DynamicHostValidationMiddleware.
+        self._trust_center_domain: str = _comparable_trust_center_domain()
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         try:

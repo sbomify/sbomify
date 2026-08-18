@@ -392,3 +392,106 @@ class TestComponentItemVexAliasEnrichment:
         assert summary["total"] == 1
         assert summary["critical"] == 1
         assert summary["high"] == 0
+
+
+@pytest.mark.django_db
+class TestComponentVulnFilterContext:
+    """The internal drill-down's filter data: suppressed rows stay in the list
+    (revealed by the toggle), the header counts exclude them so they reconcile
+    with the Trust Center posture, and the per-row parallel lists feed the
+    severity / analysis-state / KEV filters."""
+
+    def _component_with_vex(self, team):
+
+        from sbomify.apps.plugins.models import AssessmentRun
+        from sbomify.apps.sboms.models import SBOM
+
+        component = Component.objects.create(
+            name="Filtered Component",
+            team=team,
+            component_type=Component.ComponentType.BOM,
+            visibility=Component.Visibility.PRIVATE,
+        )
+        sbom = SBOM.objects.create(
+            name="app",
+            version="2.0",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="app.json",
+            bom_type=SBOM.BomType.SBOM,
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            category="security",
+            status="completed",
+            result={
+                "findings": [
+                    {"id": "CVE-2026-1", "severity": "critical", "component": {"name": "a", "version": "1"}},
+                    {"id": "CVE-2026-2", "severity": "high", "component": {"name": "b", "version": "1"}},
+                ]
+            },
+        )
+        vex_doc = {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.6",
+            "version": 1,
+            "vulnerabilities": [
+                {
+                    "id": "CVE-2026-2",
+                    "affects": [{"ref": "pkg:pypi/b@1"}],
+                    "analysis": {"state": "not_affected", "justification": "code_not_reachable"},
+                }
+            ],
+        }
+        SBOM.objects.create(
+            name="app-vex",
+            version="1",
+            component=component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="vex.json",
+            bom_type=SBOM.BomType.VEX,
+            source="manual_upload",
+        )
+        return component, vex_doc
+
+    def test_summary_excludes_suppressed_and_lists_feed_the_filters(
+        self, sample_team_with_owner_member, sample_user, mocker
+    ):
+        import json
+
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        mocker.patch(
+            "sbomify.apps.vulnerability_scanning.kev.kev_ids_for_serialization",
+            return_value=frozenset({"cve-2026-1"}),
+        )
+        member = sample_team_with_owner_member
+        component, vex_doc = self._component_with_vex(member.team)
+        mocker.patch("sbomify.apps.core.object_store.S3Client").return_value.get_sbom_data.return_value = json.dumps(
+            vex_doc
+        ).encode()
+        client = Client()
+        setup_authenticated_client_session(client, member.team, sample_user)
+
+        response = client.get(reverse("core:component_details", kwargs={"component_id": component.id}))
+
+        assert response.status_code == 200
+        context = response.context
+        assert context["vuln_summary"] == {
+            "total": 1,
+            "critical": 1,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "suppressed": 1,
+        }
+        rows = {v["id"]: v for v in context["latest_vulns"]}
+        assert rows["CVE-2026-2"]["vex_suppressed"] is True
+        assert rows["CVE-2026-2"]["vex_justification"] == "code_not_reachable"
+        assert rows["CVE-2026-1"]["kev"] is True
+        assert context["latest_vuln_suppressed"] == [False, True]
+        assert context["latest_vuln_states"] == ["open", "not_affected"]
+        assert context["latest_vuln_kev"] == [True, False]

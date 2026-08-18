@@ -1,5 +1,4 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
 {% load public_url_tags %}
@@ -12,109 +11,151 @@
 {% block og_description %}
     {{ product.name }} - View components and download Software Bill of Materials (SBOM) for this product.
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb product 'product' %}
-{% endblock %}
-{% block content %}
-    <div class="public-item-header flex flex-col gap-3">
-        {# Back navigation comes from the breadcrumb (`Trust Center`) — no redundant Back link. #}
-        <h1 class="text-3xl font-bold text-text flex items-center gap-4 m-0">
-            <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <i class="fas fa-box" aria-hidden="true"></i>
-            </span>
-            {{ product.name }}
-        </h1>
-        {% if product.description %}<p class="text-text-muted text-lg m-0">{{ product.description }}</p>{% endif %}
-        {% if product_tei %}
-            <div class="flex items-center gap-2 text-sm text-text-muted">
-                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
+{% block page_header %}
+    {% comment %}
+    The same masthead the advisory pages use, so a product reads as a page of
+    this trust center rather than a card dropped onto it: the way back, what
+    kind of page this is, the name, the description, then the facts a reader
+    checks before scrolling.
+    {% endcomment %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner tc-masthead-detail">
+            {% if workspace_public_url %}
+                <a class="tc-backlink" href="{{ workspace_public_url }}">
+                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                    Trust Center
+                </a>
+            {% endif %}
+            <div class="tc-detail-eyebrow">
+                <p class="tc-eyebrow">
+                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                    Product
+                </p>
             </div>
-        {% endif %}
-        {% if public_components or passing_assessments %}
-            <div class="flex flex-wrap gap-2">
-                {% if public_components %}
-                    <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                        <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
-                        {{ public_components|length }} Component{{ public_components|length|pluralize }}
-                    </span>
-                {% endif %}
+            <h1 class="tc-detail-title">{{ product.name }}</h1>
+            {% if product.description %}<p class="tc-detail-summary">{{ product.description }}</p>{% endif %}
+            <div class="tc-detail-meta">
+                <span class="tc-detail-meta-item">
+                    <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+                    {{ public_components|length }} component{{ public_components|length|pluralize }}
+                </span>
                 {% for assessment in passing_assessments %}
                     {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
                 {% endfor %}
             </div>
-        {% endif %}
-    </div>
-    {% if has_downloadable_content %}
-        <div class="public-section">
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-download text-primary" aria-hidden="true"></i>Download Latest Release
-                    </h4>
-                </div>
-                <div class="p-6">
-                    <p class="text-text-muted mb-4">Combined SBOM from the latest release, containing all artifacts for this product.</p>
+        </div>
+    </header>
+{% endblock %}
+{% block content %}
+    <div class="tc-detail-grid">
+        {# ---- Main column --------------------------------------------------- #}
+        <div class="min-w-0">
+            {% if has_downloadable_content or has_cbom %}
+                <div class="tc-panel">
+                    <h2 class="tc-panel-title">Download latest release</h2>
+                    <p class="tc-prose mb-4">Combined artifacts from the latest release of this product.</p>
+                    {% comment %}
+                    outline-primary, not outline: the workspace accent overrides in
+                    public_base drove the legacy outline button to the accent, and
+                    public_base hands the accent to a library button as its primary.
+                    {% endcomment %}
                     <div class="flex gap-3 flex-wrap">
-                        <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                           href="{% url 'core:sbom_download_product' product.id %}"
-                           title="Download combined SBOM as CycloneDX">
+                        {% if has_downloadable_content %}
+                            <c-buttons.outline-primary href="{% url 'core:sbom_download_product' product.id %}" title="Download combined SBOM as CycloneDX" class="no-underline">
                             <img src="{% static 'img/cyclonedx-logo.svg' %}"
                                  alt="CycloneDX"
                                  class="h-5 w-auto dark:brightness-0 dark:invert"
                                  height="20"
                                  width="20">
-                            <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                        </a>
-                        <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
-                           href="{% url 'core:sbom_download_product' product.id %}?format=spdx"
-                           title="Download combined SBOM as SPDX">
+                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                            </c-buttons.outline-primary>
+                            <c-buttons.outline-primary href="{% url 'core:sbom_download_product' product.id %}?format=spdx" title="Download combined SBOM as SPDX" class="no-underline">
                             <img src="{% static 'img/spdx-logo.svg' %}"
                                  alt="SPDX"
                                  class="h-5 w-auto dark:brightness-0 dark:invert"
                                  height="20"
                                  width="20">
-                            <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
-                        </a>
+                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                            </c-buttons.outline-primary>
+                        {% endif %}
+                        {% if has_cbom %}
+                            <c-buttons.outline-primary href="{% url 'api-1:download_product_cbom' product.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)" class="no-underline">
+                            <i class="fas fa-key" aria-hidden="true"></i>
+                            <span>CBOM</span>
+                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                            </c-buttons.outline-primary>
+                        {% endif %}
                     </div>
                 </div>
-            </div>
-        </div>
-    {% endif %}
-    {% include 'core/components/public_releases_list.html.j2' %}
-    {% include 'core/components/public_product_identifiers.html.j2' %}
-    {% include 'core/components/public_product_links.html.j2' %}
-    {% include 'core/components/public_product_lifecycle.html.j2' %}
-    {% include 'compliance/components/public_vdp_link.html.j2' %}
-    {% include 'compliance/components/public_doc_link.html.j2' %}
-    {% if public_components %}
-        <div class="public-section">
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-puzzle-piece text-primary"></i>Components
-                    </h4>
-                </div>
-                <ul class="divide-y divide-border/40 list-none p-0 m-0">
-                    {% for component in public_components %}
-                        <li class="px-6 py-4 flex items-start justify-between gap-4">
-                            <div class="min-w-0">
-                                <a class="text-text font-medium hover:text-primary no-underline"
-                                   href="{{ component.public_url }}">{{ component.name }}</a>
-                                <div class="text-text-muted text-xs mt-1">{{ component.component_type_display }}</div>
-                            </div>
-                            {% if component.passing_assessments %}
-                                <div class="flex flex-wrap gap-1 shrink-0">
-                                    {% for assessment in component.passing_assessments %}
-                                        {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
-                                    {% endfor %}
+            {% endif %}
+            {% include 'core/components/public_releases_list.html.j2' %}
+            {% if public_components %}
+                <div class="tc-panel">
+                    <h2 class="tc-panel-title">Components</h2>
+                    <ul class="divide-y divide-border/40 list-none p-0 m-0">
+                        {% for component in public_components %}
+                            <li class="py-3 flex items-start justify-between gap-4 {% if forloop.first %}pt-0{% endif %} {% if forloop.last %}pb-0{% endif %}">
+                                <div class="min-w-0">
+                                    <a class="text-text font-medium hover:text-primary no-underline"
+                                       href="{{ component.public_url }}">{{ component.name }}</a>
+                                    <div class="text-text-muted text-xs mt-1">{{ component.component_type_display }}</div>
                                 </div>
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
+                                {% if component.passing_assessments %}
+                                    <div class="flex flex-wrap gap-1 shrink-0 justify-end">
+                                        {% for assessment in component.passing_assessments %}
+                                            {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
         </div>
-    {% endif %}
+        {# ---- Sidebar ------------------------------------------------------- #}
+        <aside>
+            <div class="tc-panel">
+                <h2 class="tc-panel-title">Details</h2>
+                <div class="tc-facts">
+                    <div>
+                        <p class="tc-fact-label">Components</p>
+                        <p class="tc-fact-value">{{ public_components|length }}</p>
+                    </div>
+                    {% if product.release_date %}
+                        <div>
+                            <p class="tc-fact-label">Release date</p>
+                            <p class="tc-fact-value">{{ product.release_date }}</p>
+                        </div>
+                    {% endif %}
+                    {% if product.end_of_support %}
+                        <div>
+                            <p class="tc-fact-label">End of support</p>
+                            <p class="tc-fact-value">{{ product.end_of_support }}</p>
+                        </div>
+                    {% endif %}
+                    {% if product.end_of_life %}
+                        <div>
+                            <p class="tc-fact-label">End of life</p>
+                            <p class="tc-fact-value">{{ product.end_of_life }}</p>
+                        </div>
+                    {% endif %}
+                    {% if product_tei %}
+                        <div>
+                            <p class="tc-fact-label">TEI</p>
+                            <div class="tc-fact-value">
+                                {% include 'core/components/copyable_value.html.j2' with value=product_tei title="TEI: "|add:product_tei|add:" (click to copy)" %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% include 'core/components/public_product_identifiers.html.j2' %}
+            {% include 'core/components/public_product_links.html.j2' %}
+            {% include 'compliance/components/public_vdp_link.html.j2' %}
+            {% include 'compliance/components/public_doc_link.html.j2' %}
+        </aside>
+    </div>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

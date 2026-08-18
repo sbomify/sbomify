@@ -1,0 +1,171 @@
+{# Security Advisories table. Rows come from the advisories projection via json_script; writes are still preview-only. #}
+<div id="advisories-table-container"
+     x-data="{ search: '', filter: 'all', sortColumn: 'updated', sortDirection: 'desc', currentPage: 1, perPage: 10, allAdvisories: [], init() { this.allAdvisories = window.parseJsonScript('advisories-data') || []; this.$el.addEventListener('htmx:afterSettle', () => { this.allAdvisories = window.parseJsonScript('advisories-data') || []; if (this.currentPage > this.totalPages && this.totalPages > 0) { this.currentPage = this.totalPages; } }); }, get filteredData() { let data = [...this.allAdvisories]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.title.toLowerCase().includes(s) || item.id.toLowerCase().includes(s) || (item.vulnerability_id || '').toLowerCase().includes(s) || (item.products || []).map(p => p.name).join(' ').toLowerCase().includes(s) ); } if (this.filter !== 'all') { data = data.filter(item => item.status === this.filter); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal, bVal; if (this.sortColumn === 'severity') { aVal = a.severity_rank; bVal = b.severity_rank; } else if (this.sortColumn === 'status') { aVal = a.status_rank; bVal = b.status_rank; } else { aVal = a[this.sortColumn]; bVal = b[this.sortColumn]; if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.ceil(this.filteredData.length / this.perPage); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, get visiblePages() { const pages = []; const total = this.totalPages; const current = this.currentPage; if (total <= 7) { for (let i = 1; i <= total; i++) pages.push(i); } else { pages.push(1); if (current > 3) pages.push('...'); for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) { pages.push(i); } if (current < total - 2) pages.push('...'); pages.push(total); } return pages; }, titleCase(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; } }"
+     x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
+     hx-get="{% url 'core:security_advisories_table' %}"
+     hx-trigger="refresh-advisories from:body"
+     hx-swap="morph">
+    {# Serialize advisories data for Alpine.js #}
+    {{ advisories|json_script:"advisories-data" }}
+    {% if advisories %}
+        {# The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
+        {# Status filter #}
+        <c-tables.select id="advisories-status-filter" label="Filter by status" x-model="filter">
+        <option value="all">All statuses</option>
+        <option value="identified">Identified</option>
+        <option value="investigating">Investigating</option>
+        <option value="fix_in_progress">Fix in progress</option>
+        <option value="resolved">Resolved</option>
+        <option value="wont_fix">Won't fix</option>
+        </c-tables.select>
+        <c-slot name="right">
+        <c-tables.page-size id="advisories-per-page" x-model.number="perPage">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        </c-tables.page-size>
+        </c-slot>
+        </c-tables.toolbar>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell sort="severity">Severity</c-tables.header-cell>
+        <c-tables.header-cell sort="title">Advisory</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell">Products</c-tables.header-cell>
+        <c-tables.header-cell sort="status">Status</c-tables.header-cell>
+        <c-tables.header-cell sort="updated" date class="hidden sm:table-cell">Updated</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            <template x-for="advisory in paginatedData" :key="advisory.id">
+                <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)">
+                {% comment %}
+                    Status and publication take their variant from the row Alpine
+                    builds, so they bind data-variant rather than pick a variant
+                    component. Severity is not a variant: it binds data-level and
+                    c-badges.severity-dynamic owns the five CVSS recipes.
+                {% endcomment %}
+                <c-tables.cell>
+                <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
+                </c-tables.cell>
+                <c-tables.cell>
+                <div class="min-w-0">
+                    <span class="text-text font-medium block truncate" x-text="advisory.title"></span>
+                    <span class="text-xs text-text-muted font-mono"
+                          x-text="advisory.vulnerability_id || advisory.id"></span>
+                    {# Mobile: show the products the hidden column carries #}
+                    <div class="md:hidden mt-1">
+                        <span class="text-xs text-text-muted"
+                              x-text="(advisory.products || []).map(p => p.name).join(', ')"></span>
+                    </div>
+                </div>
+                </c-tables.cell>
+                <c-tables.cell class="hidden md:table-cell">
+                <div class="flex flex-wrap gap-1.5">
+                    {% comment %}
+                        An advisory can name a product this workspace does not
+                        track, and keeps naming it after one is deleted. Those
+                        have no id, so they render as plain text rather than a
+                        link to nowhere.
+                    {% endcomment %}
+                    <template x-for="product in advisory.products" :key="product.key">
+                        <c-chips.neutral>
+                        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                        <template x-if="product.id">
+                            <a :href="'{% url 'core:product_details' 0 %}'.replace('0', product.id)"
+                               @click.stop
+                               class="transition-colors hover:opacity-80"
+                               x-text="product.name"></a>
+                        </template>
+                        <template x-if="!product.id">
+                            <span x-text="product.name"></span>
+                        </template>
+                        </c-chips.neutral>
+                    </template>
+                    {% comment %}
+                        An advisory naming no product leaves the cell blank,
+                        which against ruled rows reads as a rendering failure
+                        rather than "none".
+                    {% endcomment %}
+                    <template x-if="!(advisory.products || []).length">
+                        <span class="text-text-muted text-sm">None</span>
+                    </template>
+                </div>
+                </c-tables.cell>
+                <c-tables.cell>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    {% comment %}
+                        Two axes: status is where the fix is, publication is who
+                        can read it. A resolved advisory can still be unpublished.
+                    {% endcomment %}
+                    <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.status_variant" x-text="advisory.status_label" />
+                    <template x-if="advisory.publication_status !== 'published'">
+                        <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.publication_variant" x-text="advisory.publication_label" />
+                    </template>
+                </div>
+                </c-tables.cell>
+                <c-tables.cell date class="hidden sm:table-cell">
+                <div class="flex flex-col">
+                    <span class="text-sm text-text-muted"
+                          x-text="window.sbomifyFormatDate(advisory.updated)"></span>
+                    <span class="text-xs text-text-muted/70"
+                          x-text="advisory.updates_count + (advisory.updates_count === 1 ? ' update' : ' updates')"></span>
+                </div>
+                </c-tables.cell>
+                </c-tables.row>
+            </template>
+            <template x-if="paginatedData.length === 0">
+                <tr>
+                    <td colspan="5" class="text-center py-8 text-text-muted">
+                        <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
+                        <p>No advisories match your search</p>
+                        <button type="button"
+                                @click="search = ''; filter = 'all'"
+                                class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+        <template x-if="search || filter !== 'all'">
+            <span>(filtered from <strong x-text="allAdvisories.length"></strong> total)</span>
+        </template>
+        </c-tables.info>
+        {# Paging is client state here, so the buttons bind it rather than link to it. #}
+        <nav class="flex items-center gap-1"
+             aria-label="Pagination"
+             x-show="totalPages > 1">
+            <c-navigation.page-button nav label="Previous page" ::disabled="currentPage === 1" @click="goToPage(currentPage - 1)">
+            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </c-navigation.page-button>
+            <template x-for="page in visiblePages" :key="page">
+                <template x-if="page === '...'">
+                    <c-navigation.page-ellipsis />
+                </template>
+                <template x-if="page !== '...'">
+                    <c-navigation.page-button ::data-active="currentPage === page" @click="goToPage(page)" x-text="page" />
+                </template>
+            </template>
+            <c-navigation.page-button nav label="Next page" ::disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </c-navigation.page-button>
+        </nav>
+        </c-tables.footer>
+        </c-tables.shell>
+    {% else %}
+        <c-cards.card>
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No advisories yet" message="Security advisories track vulnerabilities in your products over time. Create one to open its timeline with a first update.">
+        {% if has_crud_permissions %}
+            <c-buttons.primary href="{% url 'core:security_advisory_new' %}">
+            <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Advisory
+            </c-buttons.primary>
+        {% endif %}
+        </c-feedback.empty-state>
+        </c-cards.card>
+    {% endif %}
+</div>

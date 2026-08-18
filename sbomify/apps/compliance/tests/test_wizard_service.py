@@ -756,9 +756,8 @@ class TestGetComplianceSummary:
         assert data["overall_ready"] is False
         assert data["steps"][3]["controls"]["total"] == 21
 
-    def test_overall_ready_when_all_steps_complete(self, assessment, sample_user):
-        # Complete steps 1-4
-        save_step_data(assessment, 1, {"product_category": "default"}, sample_user)
+    def _complete_steps_1_to_4(self, assessment, sample_user, step_1_extra=None):
+        save_step_data(assessment, 1, {"product_category": "default", **(step_1_extra or {})}, sample_user)
         save_step_data(assessment, 2, {}, sample_user)
 
         # Mark all findings as satisfied or not-applicable
@@ -771,9 +770,34 @@ class TestGetComplianceSummary:
         save_step_data(assessment, 4, {}, sample_user)
         assessment.refresh_from_db()
 
+    def test_overall_ready_when_all_steps_complete(self, assessment, sample_user):
+        """The establishment determination is part of "complete" now, so this
+        answers it. Annex V item 2a cannot be produced without it."""
+        self._complete_steps_1_to_4(assessment, sample_user, {"is_eu_established": True})
+
         result = get_compliance_summary(assessment)
+
         assert result.ok
         assert result.value["overall_ready"] is True
+        assert result.value["steps"][1]["eu_representation_problems"] == []
+
+    def test_not_ready_while_the_establishment_question_is_unanswered(self, assessment, sample_user):
+        """Every step complete and still not ready.
+
+        The determination defaults to unanswered, and an assessment that cannot
+        say whether an Authorised Representative is required cannot produce a
+        declaration — it would silently omit section 2a, which reads as though
+        no representative was needed.
+        """
+        self._complete_steps_1_to_4(assessment, sample_user)
+        assert assessment.is_eu_established is None
+
+        result = get_compliance_summary(assessment)
+
+        assert result.ok
+        assert result.value["overall_ready"] is False
+        assert result.value["export_available"] is False
+        assert result.value["steps"][1]["eu_representation_problems"] != []
 
 
 @pytest.mark.django_db
@@ -867,3 +891,73 @@ class TestStepValidationEdgeCases:
         result = save_step_data(assessment, 3, {"findings": ["not-a-dict"]}, sample_user)
         assert not result.ok
         assert result.status_code == 400
+
+
+@pytest.mark.django_db
+class TestStep1EuRepresentation:
+    """The Art. 22 gate: answering "not EU-established" without naming an AR
+    is a breach the step refuses to record; leaving it unanswered is not."""
+
+    def test_step_1_saves_a_complete_representative_block(self, assessment, sample_user):
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        result = save_step_data(
+            assessment,
+            1,
+            {
+                "is_eu_established": False,
+                "authorized_rep_name": "Acme EU Compliance BV",
+                "authorized_rep_address": "Keizersgracht 1, 1015 Amsterdam, NL",
+                "authorized_rep_email": "ar@acme-eu.example",
+                "authorized_rep_mandate_date": "2026-01-15",
+                "authorized_rep_mandate_reference": "MANDATE-2026-004",
+            },
+            sample_user,
+        )
+
+        assert result.ok, result.error
+        assessment.refresh_from_db()
+        assert assessment.is_eu_established is False
+        assert assessment.authorized_rep_name == "Acme EU Compliance BV"
+        assert assessment.authorized_rep_is_complete is True
+
+    def test_step_1_rejects_a_value_longer_than_its_column(self, assessment, sample_user):
+        """A 400, not a 500. The generic 4000-char cap is far above the
+        CharField/EmailField widths these fields land in, so an over-long value
+        used to pass validation and be rejected by the database instead."""
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        result = save_step_data(
+            assessment,
+            1,
+            {"authorized_rep_name": "A" * 300},
+            sample_user,
+        )
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert "255" in (result.error or "")
+
+    def test_step_1_refuses_non_eu_without_a_representative(self, assessment, sample_user):
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        result = save_step_data(assessment, 1, {"is_eu_established": False}, sample_user)
+
+        assert not result.ok
+        assert result.status_code == 400
+        assert "Art. 22" in (result.error or "")
+
+    def test_step_1_still_saves_when_the_determination_is_unanswered(self, assessment, sample_user):
+        """Blocking here would strand every assessment created before the
+        question existed."""
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        assert save_step_data(assessment, 1, {"intended_use": "Industrial gateway"}, sample_user).ok
+
+    def test_step_1_rejects_a_non_boolean_determination(self, assessment, sample_user):
+        from sbomify.apps.compliance.services.wizard_service import save_step_data
+
+        result = save_step_data(assessment, 1, {"is_eu_established": "yes"}, sample_user)
+
+        assert not result.ok
+        assert "boolean" in (result.error or "")

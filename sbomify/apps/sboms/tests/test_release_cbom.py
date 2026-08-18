@@ -207,6 +207,58 @@ def test_download_release_cbom_private_requires_auth(sample_team_with_owner_memb
     assert resp.status_code == 403
 
 
+def _product_with_cbom_component(team, *, is_public: bool):
+    """A product whose component carries a CBOM, linked so the rolling latest
+    release picks the artifact up when the download endpoint resolves it."""
+    product = Product.objects.create(name="P", team=team, is_public=is_public)
+    component = Component.objects.create(name="c1", team=team)
+    product.components.add(component)
+    sbom = _cbom_sbom(component, "c1.cbom.json")
+    return product, sbom
+
+
+@pytest.mark.django_db
+def test_download_product_cbom_public_returns_attachment(sample_team_with_owner_member, mocker):
+    team = sample_team_with_owner_member.team
+    product, _sbom = _product_with_cbom_component(team, is_public=True)
+    _mock_s3(mocker, {"c1.cbom.json": _doc("crypto/a")})
+    cache.clear()
+
+    resp = Client().get(reverse("api-1:download_product_cbom", kwargs={"product_id": product.id}))
+
+    assert resp.status_code == 200
+    assert "attachment" in resp["Content-Disposition"]
+    assert resp["Content-Disposition"].rstrip('"').endswith(".cbom.cdx.json")
+
+
+@pytest.mark.django_db
+def test_download_product_cbom_404_when_absent(sample_team_with_owner_member):
+    team = sample_team_with_owner_member.team
+    product = Product.objects.create(name="P", team=team, is_public=True)
+    cache.clear()
+    resp = Client().get(reverse("api-1:download_product_cbom", kwargs={"product_id": product.id}))
+    assert resp.status_code == 404
+
+
+@pytest.mark.django_db
+def test_download_product_cbom_private_requires_auth(sample_team_with_owner_member):
+    team = sample_team_with_owner_member.team
+    product, _sbom = _product_with_cbom_component(team, is_public=False)
+    resp = Client().get(reverse("api-1:download_product_cbom", kwargs={"product_id": product.id}))
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_download_product_cbom_rejects_unknown_version(sample_team_with_owner_member):
+    team = sample_team_with_owner_member.team
+    product, _sbom = _product_with_cbom_component(team, is_public=True)
+    resp = Client().get(
+        reverse("api-1:download_product_cbom", kwargs={"product_id": product.id}),
+        {"version": "2.0"},
+    )
+    assert resp.status_code == 400
+
+
 def _lineage_docs() -> dict[str, bytes]:
     legacy = {
         "bomFormat": "CycloneDX",

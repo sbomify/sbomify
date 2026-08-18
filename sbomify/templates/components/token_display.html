@@ -1,0 +1,59 @@
+{% comment %}
+A secret in full, with the controls to reveal and copy it.
+
+masked starts it blurred and adds the reveal toggle. The value is always in the
+page, only out of focus, so copying it needs no round trip and a screen reader
+still reads it; a partially starred string would be neither.
+
+copyable is on by default: pass copyable="false" for a token the page copies
+some other way.
+
+The copied state repaints the action button whole, so it renders as one
+complete Alpine binding rather than a class layered over the resting one: two
+utilities for the same property would be resolved by stylesheet order, not by
+which is "on". The focus ring is the library floor; the tw-* rules never had
+one on these buttons.
+{% endcomment %}
+<c-vars label token masked copyable="true" class />
+<div class="relative flex flex-col gap-2{% if class %} {{ class }}{% endif %}"
+     x-data="{ copied: false, masked: {{ masked|yesno:'true,false' }} }"
+     {{ attrs }}>
+    {% if label %}
+        <div class="flex items-center justify-between gap-2">
+            <span class="text-[0.8125rem] font-semibold text-text">{{ label }}</span>
+        </div>
+    {% endif %}
+    <div class="relative flex items-stretch overflow-hidden bg-background border-[1.5px] border-solid border-border rounded-[0.625rem] transition-all duration-200 focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]">
+        <div class="flex-1 px-4 py-3 font-mono text-[0.8125rem] font-medium leading-normal tracking-[0.025em] text-text bg-transparent break-all selection:bg-[color-mix(in_oklab,var(--color-primary)_20%,transparent)]"
+             :class="masked ? 'blur-[4px] select-none' : ''"
+             x-ref="token">{{ token }}</div>
+        {% comment %}
+            No copy and nothing to reveal means no rail: an empty one is just a
+            band of surface down the right-hand edge.
+        {% endcomment %}
+        {% if copyable != "false" or masked %}
+            <div class="flex items-center gap-1 p-1.5 bg-surface border-l border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]">
+                {% if copyable != "false" %}
+                    <button type="button"
+                            class="flex items-center justify-center w-9 h-9 rounded-lg border-none cursor-pointer transition-all duration-150 active:scale-90 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                            :class="copied ? 'bg-success text-white' : 'bg-transparent text-text-muted hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] hover:text-primary'"
+                            :title="copied ? 'Copied' : 'Copy token'"
+                            :aria-label="copied ? 'Copied' : 'Copy token'"
+                            @click="navigator.clipboard.writeText($refs.token.textContent.trim()); copied = true; setTimeout(() => copied = false, 2000)">
+                        <i :class="copied ? 'fas fa-check' : 'far fa-copy'" aria-hidden="true"></i>
+                    </button>
+                {% endif %}
+                {% if masked %}
+                    <button type="button"
+                            class="flex items-center justify-center w-9 h-9 rounded-lg bg-transparent border-none text-text-muted cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] hover:text-primary active:scale-90 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                            :title="masked ? 'Show token' : 'Hide token'"
+                            :aria-label="masked ? 'Show token' : 'Hide token'"
+                            @click="masked = !masked">
+                        <i :class="masked ? 'far fa-eye' : 'far fa-eye-slash'"
+                           aria-hidden="true"></i>
+                    </button>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>

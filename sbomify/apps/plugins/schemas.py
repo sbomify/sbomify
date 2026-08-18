@@ -31,6 +31,10 @@ class FindingSchema(BaseModel):
     # In CISA's Known Exploited Vulnerabilities catalog; stamped at serialization
     # time from the cached KEV feed, never stored.
     kev: bool = False
+    # Stamped read-time beside kev. Without it declared here django-ninja
+    # serialises against the schema and drops the field, so the badge would
+    # never render however correct the classification was.
+    malicious: bool = False
 
     @field_validator("aliases", mode="before")
     @classmethod
@@ -63,6 +67,9 @@ class AssessmentSummarySchema(BaseModel):
     error_count: int = 0
     by_severity: dict[str, int] | None = None
     suppressed_count: int = 0
+    # Counted beside the severity buckets, not inside them: a malicious package
+    # is a different decision class rather than a slice of the same axis.
+    malicious_count: int = 0
 
 
 class AssessmentResultSchema(BaseModel):

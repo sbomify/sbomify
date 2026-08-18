@@ -347,6 +347,31 @@ def _build_common_context(assessment: CRAAssessment) -> dict[str, Any]:
         "support_period_end": (assessment.support_period_end.isoformat() if assessment.support_period_end else None),
         "manufacturer_name": manufacturer_name,
         "manufacturer_is_placeholder": manufacturer_is_placeholder,
+        # CRA Art. 22/25: the AR's details belong on the accompanying
+        # documentation. ``authorized_rep_required`` lets the DoC warn when
+        # the determination says one is needed but none was captured, rather
+        # than silently omitting a mandatory block.
+        "authorized_rep_required": assessment.requires_authorized_representative,
+        # Distinct from ``not authorized_rep_required``: that is also true when
+        # the manufacturer *is* established in the Union, where omitting 2a is
+        # correct. Unanswered means the document cannot say either way, and a
+        # declaration that quietly leaves out a mandatory block reads as though
+        # the block did not apply.
+        "eu_establishment_unanswered": assessment.is_eu_established is None,
+        "authorized_rep_name": _sanitize(assessment.authorized_rep_name, escape_markdown=True),
+        "authorized_rep_address": _sanitize(assessment.authorized_rep_address, escape_markdown=True),
+        # Escaped like the other AR fields. The nearby manufacturer emails come
+        # from a validated EmailField on the contact profile; this one is typed
+        # into the wizard's Step 1 payload and reaches the document unchecked,
+        # so without escaping a value like ``[x](http://evil)`` renders as a
+        # link in the declaration.
+        "authorized_rep_email": _sanitize(assessment.authorized_rep_email, escape_markdown=True),
+        "authorized_rep_mandate_date": (
+            assessment.authorized_rep_mandate_date.isoformat() if assessment.authorized_rep_mandate_date else None
+        ),
+        "authorized_rep_mandate_reference": _sanitize(
+            assessment.authorized_rep_mandate_reference, escape_markdown=True
+        ),
         "manufacturer_address": _sanitize(manufacturer.address, escape_markdown=True) if manufacturer else "",
         "manufacturer_email": _sanitize(manufacturer.email) if manufacturer else "",
         "manufacturer_website": (

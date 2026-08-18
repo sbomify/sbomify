@@ -1,0 +1,50 @@
+{% comment %}
+Render probe for the cotton badges and tags sets. Unit tests render this file
+and assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-badges.badge>Bare</c-badges.badge>
+<c-badges.primary>Primary</c-badges.primary>
+<c-badges.secondary>Secondary</c-badges.secondary>
+<c-badges.success>Success</c-badges.success>
+<c-badges.warning>Warning</c-badges.warning>
+<c-badges.danger>Danger</c-badges.danger>
+<c-badges.info>Info</c-badges.info>
+<c-badges.accent>Accent</c-badges.accent>
+<c-badges.violet>Violet</c-badges.violet>
+<c-badges.solid-danger>KEV</c-badges.solid-danger>
+<c-badges.primary size="sm">Compact</c-badges.primary>
+<c-badges.info pill>Pilled</c-badges.info>
+<c-badges.primary class="ml-2" hx-get="/probe" @click="pick()" aria-label="Probe badge"><i class="fas fa-star" aria-hidden="true"></i> <span>Nested</span></c-badges.primary>
+<c-badges.severity level="critical">Critical</c-badges.severity>
+<c-badges.severity level="high">High</c-badges.severity>
+<c-badges.severity level="medium">Medium</c-badges.severity>
+<c-badges.severity level="low">Low</c-badges.severity>
+<c-badges.severity level="unknown">Unknown</c-badges.severity>
+<c-badges.severity level="not-a-band">Off scale</c-badges.severity>
+<c-badges.severity level="high" pill>Rounded high</c-badges.severity>
+{# The runtime twin of the severity scale: the band arrives as a data attribute. #}
+<c-badges.severity-dynamic level="critical">Runtime critical</c-badges.severity-dynamic>
+<c-badges.severity-dynamic>Runtime unknown</c-badges.severity-dynamic>
+<c-badges.severity-dynamic level="low" class="shrink-0" ::data-level="f.severity" x-text="f.severity">Runtime low</c-badges.severity-dynamic>
+<c-badges.format format="cyclonedx">CycloneDX</c-badges.format>
+<c-badges.format format="spdx">SPDX</c-badges.format>
+<c-badges.format format="swid">SWID</c-badges.format>
+<c-tags.tag>Neutral</c-tags.tag>
+<c-tags.primary>Tag primary</c-tags.primary>
+<c-tags.success>Tag success</c-tags.success>
+<c-tags.warning>Tag warning</c-tags.warning>
+<c-tags.danger>Tag danger</c-tags.danger>
+<c-tags.tag class="font-mono" title="Probe tag" @click="edit()"><i class="fab fa-python" aria-hidden="true"></i> <span>Python</span></c-tags.tag>
+<c-tags.tag removable label="MIT">MIT</c-tags.tag>
+<c-tags.primary removable label="Ada Lovelace" remove_click="removeContact(index)">Ada Lovelace</c-tags.primary>
+{# Runtime-variant badge and the neutral chip, added with the page migrations. #}
+<c-badges.dynamic variant="danger" data-probe="dyn-danger">Critical</c-badges.dynamic>
+<c-badges.dynamic data-probe="dyn-default">Low</c-badges.dynamic>
+<c-badges.dynamic variant="success" size="sm" data-probe="dyn-sm">Resolved</c-badges.dynamic>
+<c-badges.dynamic variant="violet" data-probe="dyn-violet">VEX</c-badges.dynamic>
+<c-tags.tag removable remove_label="'Remove ' + tag.name" remove_title="Remove license" remove_click="removeTag(index)" data-probe="tag-bound-remove">Bound tag</c-tags.tag>
+<c-chips.neutral data-probe="chip-neutral">+3 more</c-chips.neutral>
+<c-tags.tag href="/components/x" data-probe="tag-link">Linked tag</c-tags.tag>
+{# The badge that is a control: a real button wearing the secondary tint. #}
+<c-badges.action data-probe="badge-action" ::disabled="busy" @click="rerun()"><i class="fas fa-rotate-right mr-1"></i>Re-run</c-badges.action>
+<c-badges.action size="sm" data-probe="badge-action-sm">Re-run</c-badges.action>

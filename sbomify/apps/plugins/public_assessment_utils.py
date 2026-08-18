@@ -7,6 +7,7 @@ Key principle: Only show assessments that PASS. Never show failures on public pa
 """
 
 from dataclasses import dataclass
+from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 from django.db.models import OuterRef, Subquery
@@ -21,11 +22,29 @@ if TYPE_CHECKING:
 
 @dataclass
 class PassingAssessment:
-    """Represents a passing assessment for display."""
+    """Represents a passing assessment for display.
+
+    The optional fields are the citable facts behind the badge — which standard
+    was checked, how many checks passed, and when. They are populated when the
+    assessment comes from a single run (SBOM- and component-level views); the
+    product-level aggregates intersect runs across components, so their counts
+    are dropped there rather than shown for the wrong SBOM.
+    """
 
     plugin_name: str
     plugin_display_name: str
     category: str
+    standard_name: str | None = None
+    standard_version: str | None = None
+    standard_url: str | None = None
+    pass_count: int | None = None
+    total_findings: int | None = None
+    # Checks that warned. Often an optional thing that was absent — no signature,
+    # no provenance — rather than a problem, which is why a run carrying them is
+    # still shown. The badge needs the count because "All checks passed" beside
+    # "1/7" is a contradiction.
+    warning_count: int | None = None
+    completed_at: Any = None
 
 
 @dataclass
@@ -118,6 +137,15 @@ def _is_run_passing(run: AssessmentRun) -> bool:
     "no findings" carries no signal. They're excluded from public "all
     clean" aggregations to avoid showing a green badge for an SBOM whose
     DT scan was skipped (e.g., no release association).
+
+    Security scanners (OSV, Dependency Track) report vulnerabilities via
+    ``by_severity`` and never set ``fail_count``, so a public "pass" for them
+    additionally requires zero findings at every severity — otherwise an SBOM
+    with open criticals would earn a green shield. Mirrors the orchestrator's
+    dependency-gate predicate.
+
+    Compliance-style runs additionally require at least one actual pass:
+    a warnings-only result (``pass_count == 0``) asserts nothing worth a badge.
     """
     if run.status != RunStatus.COMPLETED.value:
         return False
@@ -128,7 +156,99 @@ def _is_run_passing(run: AssessmentRun) -> bool:
     summary = result.get("summary", {})
     fail_count: int = summary.get("fail_count", 0)
     error_count: int = summary.get("error_count", 0)
-    return fail_count == 0 and error_count == 0
+    if fail_count != 0 or error_count != 0:
+        return False
+
+    if run.category == AssessmentCategory.SECURITY.value:
+        by_severity = summary.get("by_severity") or {}
+        findings_total = sum(v for v in by_severity.values() if isinstance(v, int))
+        return findings_total == 0 and not summary.get("malicious_count")
+
+    # ``pass_count`` was added to summary payloads later, so a run predating it
+    # carries no key at all. ``orchestrator._is_passing`` distinguishes that from
+    # a present-and-zero count and lets the legacy run pass; reading a default of
+    # 0 here did not, so the same run satisfied a dependency gate and showed no
+    # public badge. The two encode one judgement and now answer alike.
+    pass_count = summary.get("pass_count")
+    if pass_count is None:
+        return True
+    return bool(pass_count)
+
+
+def _passing_assessment_from_run(run: AssessmentRun, plugin_info: dict[str, tuple[str, str]]) -> PassingAssessment:
+    """Project one passing run into its public shape, carrying the citable facts.
+
+    ``standard_name``/``standard_version``/``standard_url`` come from the result
+    metadata that nearly every compliance plugin already writes; ``pass_count``
+    and ``total_findings`` come from the summary. Counts are withheld for
+    security scanners — their positive claim is "no known vulnerabilities",
+    not "0/0 checks".
+    """
+    display_name, category = plugin_info.get(run.plugin_name, (run.plugin_name, run.category))
+    result = run.result if isinstance(run.result, dict) else {}
+    raw_metadata = result.get("metadata")
+    metadata: dict[str, Any] = raw_metadata if isinstance(raw_metadata, dict) else {}
+    raw_summary = result.get("summary")
+    summary: dict[str, Any] = raw_summary if isinstance(raw_summary, dict) else {}
+
+    is_security = category == AssessmentCategory.SECURITY.value
+    pass_count = summary.get("pass_count") if not is_security else None
+    total_findings = summary.get("total_findings") if not is_security else None
+    warning_count = summary.get("warning_count") if not is_security else None
+    return PassingAssessment(
+        plugin_name=run.plugin_name,
+        plugin_display_name=display_name,
+        category=category,
+        standard_name=metadata.get("standard_name") or None,
+        standard_version=metadata.get("standard_version") or None,
+        standard_url=metadata.get("standard_url") or None,
+        pass_count=pass_count if isinstance(pass_count, int) else None,
+        total_findings=total_findings if isinstance(total_findings, int) else None,
+        warning_count=warning_count if isinstance(warning_count, int) else None,
+        completed_at=run.completed_at,
+    )
+
+
+def _aggregate_passing(
+    common_passing: set[str],
+    details_by_plugin: dict[str, PassingAssessment],
+    plugin_info: dict[str, tuple[str, str]],
+) -> list[PassingAssessment]:
+    """Build the passing list for an intersection of plugin names.
+
+    Per-SBOM counts are dropped — an aggregate spans several runs whose counts
+    differ, and quoting one of them would attribute it to the wrong SBOM. The
+    standard identity and the oldest verification time survive, because those
+    hold for every run in the intersection.
+    """
+    aggregated = []
+    for plugin_name in sorted(common_passing):
+        detail = details_by_plugin.get(plugin_name)
+        if detail is not None:
+            aggregated.append(dataclass_replace(detail, pass_count=None, total_findings=None, warning_count=None))
+        else:
+            display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
+            aggregated.append(
+                PassingAssessment(plugin_name=plugin_name, plugin_display_name=display_name, category=category)
+            )
+    return aggregated
+
+
+def _collect_details(details_by_plugin: dict[str, PassingAssessment], assessments: list[PassingAssessment]) -> None:
+    """Keep one representative per plugin, preferring the oldest verification.
+
+    "Verified since" must not advance just because a second component was
+    scanned more recently — the conservative claim is the earliest time every
+    member of the aggregate had already passed.
+    """
+    for assessment in assessments:
+        existing = details_by_plugin.get(assessment.plugin_name)
+        if (
+            existing is None
+            or existing.completed_at is None
+            or (assessment.completed_at is not None and assessment.completed_at < existing.completed_at)
+        ):
+            details_by_plugin[assessment.plugin_name] = assessment
 
 
 def get_sbom_passing_assessments(sbom_id: str) -> list[PassingAssessment]:
@@ -139,19 +259,7 @@ def get_sbom_passing_assessments(sbom_id: str) -> list[PassingAssessment]:
     plugin_info = _get_plugin_display_names()
     latest_runs = _get_latest_assessment_runs_for_sbom(sbom_id)
 
-    passing = []
-    for run in latest_runs:
-        if _is_run_passing(run):
-            display_name, category = plugin_info.get(run.plugin_name, (run.plugin_name, run.category))
-            passing.append(
-                PassingAssessment(
-                    plugin_name=run.plugin_name,
-                    plugin_display_name=display_name,
-                    category=category,
-                )
-            )
-
-    return passing
+    return [_passing_assessment_from_run(run, plugin_info) for run in latest_runs if _is_run_passing(run)]
 
 
 def get_component_assessment_status(component: "Component") -> ComponentAssessmentStatus:
@@ -176,9 +284,11 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
 
     # Get passing assessments per SBOM
     sbom_passing: dict[str, set[str]] = {}  # sbom_id -> set of passing plugin names
+    details_by_plugin: dict[str, PassingAssessment] = {}
     for sbom_id in sbom_ids:
         passing = get_sbom_passing_assessments(str(sbom_id))
         sbom_passing[str(sbom_id)] = {p.plugin_name for p in passing}
+        _collect_details(details_by_plugin, passing)
 
     # Find assessments that pass for ALL SBOMs
     if not sbom_passing:
@@ -189,18 +299,8 @@ def get_component_assessment_status(component: "Component") -> ComponentAssessme
     # Check if there are any assessments at all
     has_assessments = any(sbom_passing.values())
 
-    # Get display info for common passing assessments
     plugin_info = _get_plugin_display_names()
-    passing_assessments = []
-    for plugin_name in sorted(common_passing):
-        display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
-        passing_assessments.append(
-            PassingAssessment(
-                plugin_name=plugin_name,
-                plugin_display_name=display_name,
-                category=category,
-            )
-        )
+    passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
 
     # all_pass is True if we have assessments and ALL of them pass
     # This means every SBOM passes every assessment that was run on it
@@ -242,12 +342,14 @@ def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus
 
     component_statuses = []
     component_passing: list[set[str]] = []
+    details_by_plugin: dict[str, PassingAssessment] = {}
 
     for component in components:
         status = get_component_assessment_status(component)
         component_statuses.append(status)
         if status.has_assessments:
             component_passing.append({p.plugin_name for p in status.passing_assessments})
+            _collect_details(details_by_plugin, status.passing_assessments)
 
     if not component_passing:
         common_passing: set[str] = set()
@@ -257,16 +359,7 @@ def get_product_assessment_status(product: "Product") -> ProductAssessmentStatus
     has_assessments = any(cs.has_assessments for cs in component_statuses)
 
     plugin_info = _get_plugin_display_names()
-    passing_assessments = []
-    for plugin_name in sorted(common_passing):
-        display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
-        passing_assessments.append(
-            PassingAssessment(
-                plugin_name=plugin_name,
-                plugin_display_name=display_name,
-                category=category,
-            )
-        )
+    passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
 
     all_pass = len(common_passing) > 0 if has_assessments else False
 
@@ -357,6 +450,7 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
 
     # Get latest SBOM assessment status for each component
     component_passing: list[set[str]] = []
+    details_by_plugin: dict[str, PassingAssessment] = {}
     has_any_assessments = False
 
     for component in components:
@@ -367,6 +461,7 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
             # This ensures intersection works correctly: if one component fails,
             # its empty set will result in empty intersection
             component_passing.append({p.plugin_name for p in status.passing_assessments})
+            _collect_details(details_by_plugin, status.passing_assessments)
 
     # Find assessments that pass for ALL components' latest SBOMs
     if not component_passing:
@@ -374,18 +469,8 @@ def get_product_latest_sbom_assessment_status(product: "Product") -> ProductAsse
     else:
         common_passing = set.intersection(*component_passing)
 
-    # Get display info for common passing assessments
     plugin_info = _get_plugin_display_names()
-    passing_assessments = []
-    for plugin_name in sorted(common_passing):
-        display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
-        passing_assessments.append(
-            PassingAssessment(
-                plugin_name=plugin_name,
-                plugin_display_name=display_name,
-                category=category,
-            )
-        )
+    passing_assessments = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
 
     all_pass = len(common_passing) > 0 if has_any_assessments else False
 
@@ -487,21 +572,15 @@ def get_products_latest_sbom_assessments_batch(
     plugin_info = _get_plugin_display_names()
     sbom_passing: dict[str, list[PassingAssessment]] = {sbom_id: [] for sbom_id in sbom_ids}
     sbom_has_assessments: dict[str, bool] = {sbom_id: False for sbom_id in sbom_ids}
+    details_by_plugin: dict[str, PassingAssessment] = {}
 
     for run in all_runs:
         sbom_id = str(run.sbom_id)
         sbom_has_assessments[sbom_id] = True
         if _is_run_passing(run):
-            display_name, category = plugin_info.get(
-                run.plugin_name, (run.plugin_name, AssessmentCategory.COMPLIANCE.value)
-            )
-            sbom_passing[sbom_id].append(
-                PassingAssessment(
-                    plugin_name=run.plugin_name,
-                    plugin_display_name=display_name,
-                    category=category,
-                )
-            )
+            assessment = _passing_assessment_from_run(run, plugin_info)
+            sbom_passing[sbom_id].append(assessment)
+            _collect_details(details_by_plugin, [assessment])
 
     # Step 5: Aggregate per product
     result: dict[str, list[PassingAssessment]] = {}
@@ -537,19 +616,7 @@ def get_products_latest_sbom_assessments_batch(
         # Intersection of all components' passing assessments
         common_passing = set.intersection(*component_passing_sets) if component_passing_sets else set()
 
-        # Build result list
-        passing_assessments = []
-        for plugin_name in sorted(common_passing):
-            display_name, category = plugin_info.get(plugin_name, (plugin_name, AssessmentCategory.COMPLIANCE.value))
-            passing_assessments.append(
-                PassingAssessment(
-                    plugin_name=plugin_name,
-                    plugin_display_name=display_name,
-                    category=category,
-                )
-            )
-
-        result[product_id] = passing_assessments
+        result[product_id] = _aggregate_passing(common_passing, details_by_plugin, plugin_info)
 
     return result
 
@@ -621,16 +688,7 @@ def get_components_latest_sbom_assessments_batch(
     for run in all_runs:
         sbom_id = str(run.sbom_id)
         if _is_run_passing(run):
-            display_name, category = plugin_info.get(
-                run.plugin_name, (run.plugin_name, AssessmentCategory.COMPLIANCE.value)
-            )
-            sbom_passing[sbom_id].append(
-                PassingAssessment(
-                    plugin_name=run.plugin_name,
-                    plugin_display_name=display_name,
-                    category=category,
-                )
-            )
+            sbom_passing[sbom_id].append(_passing_assessment_from_run(run, plugin_info))
 
     # Step 4: Map back to component IDs
     result: dict[str, list[PassingAssessment]] = {cid: [] for cid in component_ids}
@@ -647,6 +705,13 @@ def passing_assessments_to_dict(assessments: list[PassingAssessment]) -> list[di
             "plugin_name": a.plugin_name,
             "display_name": a.plugin_display_name,
             "category": a.category,
+            "standard_name": a.standard_name,
+            "standard_version": a.standard_version,
+            "standard_url": a.standard_url,
+            "pass_count": a.pass_count,
+            "total_findings": a.total_findings,
+            "warning_count": a.warning_count,
+            "completed_at": a.completed_at,
         }
         for a in assessments
     ]

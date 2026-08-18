@@ -1,0 +1,51 @@
+{% load public_url_tags %}
+{% comment %}
+One advisory as the trust center lists it.
+
+Shared by the landing page's recent-advisories panel and the full feed so the
+two cannot drift. Expects `advisory` (a trust_center projection) and
+`workspace` in context.
+{% endcomment %}
+<a class="tc-advisory-row group"
+   href="{% public_url 'core:advisory_details_public' workspace_key=workspace.key advisory_id=advisory.pk %}">
+    <span class="tc-advisory-severity tc-severity-{{ advisory.severity|default:'none' }}"
+          aria-hidden="true"></span>
+    <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="tc-advisory-id">{{ advisory.id }}</span>
+            {% if advisory.is_gated %}
+                <span class="tc-lock-chip"
+                      title="Restricted — visible to you because you have access to the affected products">
+                    <i class="fas fa-lock" aria-hidden="true"></i>Restricted
+                </span>
+            {% endif %}
+            {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
+        </div>
+        <h3 class="tc-advisory-title">{{ advisory.title }}</h3>
+        {% if advisory.summary %}<p class="tc-advisory-summary">{{ advisory.summary }}</p>{% endif %}
+        <div class="tc-advisory-meta">
+            {% if advisory.cve_ids %}
+                <span class="tc-meta-item">
+                    <i class="fas fa-bug" aria-hidden="true"></i>
+                    {{ advisory.cve_ids|join:", " }}
+                </span>
+            {% endif %}
+            {% for product in advisory.products %}<span class="tc-product-chip">{{ product.name }}</span>{% endfor %}
+            {% if advisory.withheld_product_count %}
+                <span class="tc-product-chip tc-product-chip-muted"
+                      title="Products you do not have access to are not listed">
+                    +{{ advisory.withheld_product_count }} not shown
+                </span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="tc-advisory-side">
+        <c-badges.severity level="{{ advisory.severity }}">{{ advisory.severity_label }}</c-badges.severity>
+        {% if advisory.status_label %}
+            <span class="tc-status-line">
+                <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+            </span>
+        {% endif %}
+        <span class="tc-advisory-date">{{ advisory.published_display|default:advisory.updated_display }}</span>
+    </div>
+</a>

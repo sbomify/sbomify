@@ -2,139 +2,255 @@
 {% load static %}
 {% load django_vite %}
 {% load public_url_tags %}
-{% load humanize %}
 {% block title %}{{ workspace.name }} Trust Center{% endblock %}
 {% block meta_description %}
-    {{ workspace.name }} Trust Center: browse public products, releases, and organization-wide compliance artifacts.
+    {{ workspace.name }} Trust Center: security advisories, product SBOMs, releases, and organization-wide compliance artifacts.
 {% endblock %}
 {% block og_title %}{{ workspace.name }} Trust Center{% endblock %}
 {% block og_description %}
-    {{ workspace.name }} Trust Center: browse public products, releases, and organization-wide compliance artifacts.
+    {{ workspace.name }} Trust Center: security advisories, product SBOMs, releases, and organization-wide compliance artifacts.
 {% endblock %}
-{% block content %}
-    {# Hero Section #}
-    <div class="public-hero bg-surface rounded-xl p-8 mb-6 shadow-md relative overflow-hidden">
-        <div class="public-hero-glow" aria-hidden="true"></div>
-        <div class="public-hero-content">
-            <div class="public-eyebrow">
-                <span class="public-eyebrow-dot" aria-hidden="true"></span>
-                TRUST CENTER
-            </div>
-            <h1 class="text-3xl font-bold text-text mb-2">{{ workspace.name }}</h1>
-            <p class="text-lg text-text-muted leading-relaxed mb-6 max-w-3xl">
+{% block page_header %}
+    {% comment %}
+    A real page header, not a card: it spans the viewport and its text lines
+    up with the content below, so the page reads as one document rather than
+    a stack of boxes.
+    {% endcomment %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner">
+            <p class="tc-eyebrow">
+                <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                Trust Center
+            </p>
+            <h1 class="tc-masthead-title">{{ workspace.name }}</h1>
+            <p class="tc-masthead-lede">
                 {% if brand.trust_center_description %}
                     {{ brand.trust_center_description }}
                 {% else %}
-                    Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts.
+                    Security advisories, software bills of materials, and compliance artifacts for everything we ship, published as we publish them.
                 {% endif %}
             </p>
-            <div class="flex gap-3 flex-wrap">
-                {% if global_components %}
-                    <div class="public-hero-stat">
-                        <span class="public-hero-stat-icon">
-                            <i class="fas fa-award" aria-hidden="true"></i>
-                        </span>
-                        <span class="public-hero-stat-value">{{ global_components|length }}</span>
-                        <span class="public-hero-stat-label">Compliance Artifact{{ global_components|length|pluralize }}</span>
-                    </div>
-                {% endif %}
-                {% if products %}
-                    <div class="public-hero-stat">
-                        <span class="public-hero-stat-icon">
-                            <i class="fas fa-cube" aria-hidden="true"></i>
-                        </span>
-                        <span class="public-hero-stat-value">{{ products|length }}</span>
-                        <span class="public-hero-stat-label">Product{{ products|length|pluralize }}</span>
-                    </div>
-                {% endif %}
-            </div>
+            <dl class="tc-stats">
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Advisories</dt>
+                    <dd class="tc-stat-value">
+                        {{ advisories.total }}
+                    </dd>
+                </div>
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Products</dt>
+                    <dd class="tc-stat-value">
+                        {{ products|length }}
+                    </dd>
+                </div>
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Compliance artifacts</dt>
+                    <dd class="tc-stat-value">
+                        {{ global_components|length }}
+                    </dd>
+                </div>
+                <div class="tc-stat">
+                    <dt class="tc-stat-label">Latest advisory</dt>
+                    <dd class="tc-stat-value tc-stat-value-date">
+                        {{ advisories.latest_display|default:"—" }}
+                    </dd>
+                </div>
+            </dl>
         </div>
-    </div>
-    {% if global_components %}
-        {# Organization Compliance Artifacts Section #}
-        <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
-            <div class="mb-6 pb-4 border-b border-border">
-                <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
-                    <i class="fas fa-award text-primary" aria-hidden="true"></i>Organization Compliance Artifacts
-                </h2>
-                <p class="text-sm text-text-muted m-0">
-                    Organization-wide compliance documents, certifications, and security attestations
+    </header>
+{% endblock %}
+{% block content %}
+    {# ---- Security advisories -------------------------------------------- #}
+    <section class="tc-section" id="advisories">
+        <div class="tc-section-head">
+            <div class="tc-section-heading">
+                <h2 class="tc-section-title">Security advisories</h2>
+                <p class="tc-section-sub">Vulnerabilities we have disclosed, what they affect, and where the fix is.</p>
+            </div>
+            {% if advisories.total %}
+                <a class="tc-section-link"
+                   href="{% public_url 'core:workspace_advisories_public' workspace_key=workspace.key %}">
+                    All advisories <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </a>
+            {% endif %}
+        </div>
+        {% if advisories.recent %}
+            <div class="tc-advisory-list">
+                {% for advisory in advisories.recent %}
+                    {% include "core/components/trust_center/advisory_row.html.j2" with advisory=advisory %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="tc-empty">
+                <i class="fas fa-shield-halved tc-empty-icon" aria-hidden="true"></i>
+                <p class="tc-empty-title">No published advisories</p>
+                <p class="tc-empty-body">
+                    {% if advisories.hidden_count %}
+                        No security advisories are visible to you. New disclosures appear here as they are released.
+                    {% else %}
+                        We have not published any security advisories. New disclosures appear here as they are released.
+                    {% endif %}
                 </p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {% for component in global_components %}
-                    <div class="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
-                        <div class="flex justify-between items-start gap-2">
-                            <h3 class="text-base font-semibold text-text m-0 leading-tight flex-1">{{ component.name }}</h3>
-                            <span class="tw-chip-neutral whitespace-nowrap">{{ component.component_type_display }}</span>
-                        </div>
-                        <p class="text-sm text-text-muted leading-relaxed line-clamp-1 min-h-[1.25rem] m-0">
-                            Organization-level compliance artifact available across the entire organization.
-                        </p>
-                        <div class="flex justify-between items-center">
-                            <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-primary/10 text-primary flex items-center gap-1">
-                                <i class="fas fa-building" aria-hidden="true"></i>
-                                Organization-Wide
-                            </span>
-                            <a class="text-primary text-sm font-semibold inline-flex items-center hover:underline"
-                               href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
-                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
-                            </a>
-                        </div>
-                    </div>
-                {% endfor %}
+        {% endif %}
+        {% include "core/components/trust_center/restricted_notice.html.j2" with hidden_count=advisories.hidden_count viewer_is_authenticated=advisories.viewer_is_authenticated viewer_has_gated_grant=advisories.viewer_has_gated_grant %}
+    </section>
+    {# ---- Products -------------------------------------------------------- #}
+    {% comment %}
+    A searchable table rather than a card grid: a visitor with dozens of
+    products is looking one up by name, not browsing. Filtering is client-side
+    Alpine over the server-rendered rows — every product is already on the
+    page, so hiding rows keeps the assessment badges server-rendered and the
+    table intact without JavaScript.
+    {% endcomment %}
+    <section class="tc-section"
+             id="products"
+             x-data="{ q: '', currentPage: 1, perPage: 10, rows: [], init() { this.rows = Array.from(this.$root.querySelectorAll('tr[data-search]')).map(r => r.dataset.search); this.$watch('q', () => this.currentPage = 1) }, get needle() { return this.q.trim().toLowerCase() }, get matched() { const n = this.needle; return this.rows.reduce((acc, s, i) => { if (!n || s.includes(n)) acc.push(i); return acc; }, []) }, get totalPages() { return Math.max(1, Math.ceil(this.matched.length / this.perPage)) }, get pageIdx() { const start = (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage; return this.matched.slice(start, start + this.perPage) }, show(i) { return this.pageIdx.includes(i) }, get startIndex() { return this.matched.length ? (Math.min(this.currentPage, this.totalPages) - 1) * this.perPage + 1 : 0 }, get endIndex() { return Math.min(Math.min(this.currentPage, this.totalPages) * this.perPage, this.matched.length) } }">
+        <div class="tc-section-head">
+            <div class="tc-section-heading">
+                <h2 class="tc-section-title">Products</h2>
+                <p class="tc-section-sub">Our products and their software bills of materials.</p>
             </div>
-        </div>
-    {% endif %}
-    {% if products %}
-        {# Products Section #}
-        <div class="bg-surface rounded-xl p-8 mb-6 shadow-md">
-            <div class="mb-6 pb-4 border-b border-border">
-                <h2 class="text-xl font-semibold text-text mb-1 flex items-center gap-2">
-                    <i class="fas fa-cube text-primary" aria-hidden="true"></i>Products
-                </h2>
-                <p class="text-sm text-text-muted m-0">Explore our products and their software bill of materials (SBOMs)</p>
-            </div>
-            {% if is_workspace_admin and not has_vulnerability_plugin %}
-                <div class="tw-alert tw-alert-info mb-6">
-                    <i class="fas fa-shield-halved tw-alert-icon" aria-hidden="true"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            Enable vulnerability scanning to show security status on your products.
-                            <a href="{% url 'teams:team_settings' workspace.key %}#plugins"
-                               class="text-primary hover:underline font-medium">Settings → Plugins</a>
-                        </p>
-                    </div>
+            {% if products %}
+                {# The search landmark stays on the wrapper; the component is the box inside it. #}
+                <div role="search" class="self-center">
+                    <c-tables.search id="tc-products-search" label="Search products" placeholder="Search products..." x-model="q" />
                 </div>
             {% endif %}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {% for product in products %}
-                    <div class="bg-card border border-border rounded-xl p-3 flex flex-col gap-2 transition-all hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md">
-                        <div class="flex justify-between items-start gap-2">
-                            <h3 class="text-base font-semibold text-text m-0 leading-tight flex-1">{{ product.name }}</h3>
-                            <span class="tw-chip-neutral whitespace-nowrap">{{ product.component_count }} Component{{ product.component_count|pluralize }}</span>
+        </div>
+        {% if is_workspace_admin and not has_vulnerability_plugin %}
+            <c-feedback.alert icon="fas fa-shield-halved" class="mb-4">
+            Enable vulnerability scanning to show security status on your products.
+            {% comment %}
+                Through switch_team: this page is reachable for any workspace the
+                viewer administers, while the Plugins page is scoped to the session's
+                current workspace. Linking straight to it could offer to enable
+                scanning on whichever workspace happened to be selected.
+            {% endcomment %}
+            <a href="{% url 'teams:switch_team' workspace.key %}?next={% url 'plugins:plugins_page' %}"
+               class="font-medium">Plugins</a>
+            </c-feedback.alert>
+        {% endif %}
+        {% if products %}
+            {# The panel already draws the frame, so the table brings only its own parts. #}
+            <div class="tc-panel tc-panel-flush">
+                <c-tables.table>
+                <c-tables.head>
+                <c-tables.header-cell scope="col">Product</c-tables.header-cell>
+                <c-tables.header-cell scope="col" class="hidden md:table-cell">Components</c-tables.header-cell>
+                <c-tables.header-cell scope="col" class="hidden md:table-cell">Assurance</c-tables.header-cell>
+                <c-tables.header-cell scope="col">
+                <span class="sr-only">View</span>
+                </c-tables.header-cell>
+                </c-tables.head>
+                <tbody>
+                    {% for product in products %}
+                        <c-tables.row data-search="{{ product.name|lower }} {{ product.description|default:''|lower }}" x-show="show({{ forloop.counter0 }})">
+                        <c-tables.cell>
+                        <a class="font-medium text-text hover:text-primary no-underline"
+                           href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">{{ product.name }}</a>
+                        {% if product.description %}
+                            <div class="text-xs opacity-75 mt-1" title="{{ product.description }}">{{ product.description|truncatechars:80 }}</div>
+                        {% endif %}
+                        <div class="md:hidden text-xs opacity-75 mt-1">
+                            {{ product.component_count }} component{{ product.component_count|pluralize }}
                         </div>
-                        <p class="text-sm text-text-muted leading-relaxed line-clamp-1 min-h-[1.25rem] m-0">
-                            {{ product.description|default:'' }}
+                        </c-tables.cell>
+                        <c-tables.cell class="hidden md:table-cell whitespace-nowrap">
+                        {{ product.component_count }} component{{ product.component_count|pluralize }}
+                        </c-tables.cell>
+                        <c-tables.cell class="hidden md:table-cell">
+                        {% if product.passing_assessments %}
+                            <span class="inline-flex items-center gap-1">
+                                {% for assessment in product.passing_assessments %}
+                                    {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
+                                {% endfor %}
+                            </span>
+                        {% else %}
+                            <span class="opacity-50">—</span>
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.cell end>
+                        <a class="tc-section-link whitespace-nowrap"
+                           href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}"
+                           aria-label="View {{ product.name }}">
+                            View <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
+                        </c-tables.cell>
+                        </c-tables.row>
+                    {% endfor %}
+                    <c-tables.row x-show="matched.length === 0" x-cloak>
+                    <c-tables.cell colspan="4">
+                    <div class="tc-empty">
+                        <i class="fas fa-magnifying-glass tc-empty-icon" aria-hidden="true"></i>
+                        <p class="tc-empty-title">No products match</p>
+                        <p class="tc-empty-body">
+                            No product name or description contains "<span x-text="q"></span>".
                         </p>
-                        <div class="flex justify-between items-center">
-                            <div class="flex items-center gap-1 flex-wrap">
-                                {% if product.passing_assessments %}
-                                    {% for assessment in product.passing_assessments %}
-                                        {% include 'plugins/components/public_assessment_icon.html.j2' with assessment=assessment %}
-                                    {% endfor %}
-                                {% endif %}
-                            </div>
-                            <a class="text-primary text-sm font-semibold inline-flex items-center hover:underline"
-                               href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
-                                View Details <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
-                            </a>
-                        </div>
                     </div>
-                {% endfor %}
+                    </c-tables.cell>
+                    </c-tables.row>
+                </tbody>
+                </c-tables.table>
+                {% comment %}
+                Pager footer, shown only once the workspace outgrows a single
+                page — a six-product trust center gets no pagination chrome.
+                Counts follow the filtered set, so a search narrows the pager
+                with it.
+                {% endcomment %}
+                <div class="tc-pager-foot px-6 py-3 flex flex-wrap items-center justify-between gap-3"
+                     x-show="rows.length > perPage"
+                     x-cloak>
+                    <c-tables.info>
+                    Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="matched.length"></strong> products
+                    <template x-if="needle">
+                        <span>(filtered from <strong x-text="rows.length"></strong> total)</span>
+                    </template>
+                    </c-tables.info>
+                    <c-tables.pager />
+                </div>
+            </div>
+        {% else %}
+            <div class="tc-empty">
+                <i class="fas fa-cube tc-empty-icon" aria-hidden="true"></i>
+                <p class="tc-empty-title">No public products</p>
+                <p class="tc-empty-body">Products appear here once they are published with at least one public component.</p>
+            </div>
+        {% endif %}
+    </section>
+    {# ---- Compliance artifacts -------------------------------------------- #}
+    <section class="tc-section" id="compliance">
+        <div class="tc-section-head">
+            <div class="tc-section-heading">
+                <h2 class="tc-section-title">Compliance artifacts</h2>
+                <p class="tc-section-sub">Organization-wide certifications, attestations and policy documents.</p>
             </div>
         </div>
-    {% endif %}
+        {% if global_components %}
+            <div class="tc-card-grid">
+                {% for component in global_components %}
+                    <a class="tc-card"
+                       href="{% public_url 'core:component_details_public' component_id=component.id component_slug=component.slug %}">
+                        <div class="tc-card-head">
+                            <h3 class="tc-card-title">{{ component.name }}</h3>
+                            <span class="tc-card-tag">{{ component.component_type_display }}</span>
+                        </div>
+                        <p class="tc-card-desc">Organization-level artifact, applicable across everything we ship.</p>
+                        <div class="tc-card-foot">
+                            <span class="tc-card-count">Organization-wide</span>
+                            <i class="fas fa-arrow-right tc-card-arrow" aria-hidden="true"></i>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="tc-empty">
+                <i class="fas fa-award tc-empty-icon" aria-hidden="true"></i>
+                <p class="tc-empty-title">No compliance artifacts</p>
+                <p class="tc-empty-body">Organization-wide certifications and attestations appear here once published.</p>
+            </div>
+        {% endif %}
+    </section>
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

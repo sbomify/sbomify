@@ -1,4 +1,5 @@
 <#import "template.ftl" as layout>
+<#import "components.ftl" as components>
 <@layout.registrationLayout; section>
     <#if section = "header">
         ${msg("emailLinkIdpTitle", idpAlias)}
@@ -8,7 +9,7 @@
             <div class="info-panel">
                 <div class="info-content">
                     <div class="brand-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <h1 class="info-title">Link Account</h1>
                     <p class="info-tagline">Verify your email to link your account.</p>
@@ -20,7 +21,7 @@
                 <div class="form-card">
                     <!-- Mobile Logo (hidden on desktop) -->
                     <div class="mobile-logo">
-                        <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                        <@components.brandLogo />
                     </div>
                     <div class="info-message-container">
                         <div class="info-icon-wrapper">

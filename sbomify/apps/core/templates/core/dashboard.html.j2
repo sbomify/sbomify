@@ -1,143 +1,118 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
+{% load advisory_tags %}
 {% block title %}sbomify Dashboard{% endblock %}
 {% block dashboard_content %}
+    {# The greeting is this page's title: it is the security picture, not a page label. #}
+    <c-layout.page-header title="{{ greeting }}" subtitle="{{ page_subtitle }}" />
     <div class="space-y-6">
-        {# Greeting header — the security picture, not a page label #}
-        <div class="mb-2">
-            <h1 class="text-2xl font-bold text-text">{{ greeting }}</h1>
-            {% if dashboard.is_first_visit %}
-                <p class="text-text-muted text-sm m-0 mt-1">Let's get your first component reporting.</p>
-            {% else %}
-                <p class="text-text-muted text-sm m-0 mt-1">Here's the security picture across {{ current_team.name }}.</p>
-            {% endif %}
-        </div>
         {% if dashboard.is_first_visit %}
-            {# First visit — the guided journey card owns the page until the first artifact lands. #}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text m-0">Finish setting up</h4>
-                </div>
-                <div class="p-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
-                    <div>
-                        <h5 class="text-base font-semibold text-text mt-0 mb-2">Connect CI/CD — sbomify does the rest</h5>
-                        <p class="text-sm text-text-muted mt-0 mb-4">
-                            Create a component, add one step to your pipeline, and every push generates and uploads an SBOM automatically. No files to manage.
-                        </p>
-                        <ol class="text-sm text-text space-y-3 m-0 pl-0 list-none">
-                            <li class="flex items-start gap-3">
-                                <span class="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                                <span>
-                                    <strong>Create a product and component</strong> with the New button above — the component is what your pipeline pushes to.
-                                </span>
-                            </li>
-                            <li class="flex items-start gap-3">
-                                <span class="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
-                                <span>
-                                    <strong>Copy the pipeline snippet</strong> from CI/CD integration in the component's menu — GitHub Actions, GitLab CI, Bitbucket, Azure, or Jenkins.
-                                </span>
-                            </li>
-                            <li class="flex items-start gap-3">
-                                <span class="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
-                                <span><strong>Push</strong> — the SBOM uploads, scans run, and this page fills in.</span>
-                            </li>
-                        </ol>
-                        <p class="text-sm text-text-muted mt-4 mb-0">
-                            Already have an SBOM file? Upload it manually from the component's menu — you can automate later.
-                        </p>
-                    </div>
-                    <div class="rounded-xl border border-dashed border-border p-5">
-                        <div class="text-[10px] font-bold tracking-wider text-text-muted uppercase mb-3">What happens next</div>
-                        <ol class="text-sm text-text space-y-2 m-0 pl-4">
-                            <li>
-                                <strong>Your first push</strong> lands the SBOM on your component
-                            </li>
-                            <li>
-                                <strong>We scan it</strong> for vulnerabilities within minutes
-                            </li>
-                            <li>
-                                <strong>This page fills in</strong> — trends, findings, and what to fix first
-                            </li>
-                        </ol>
-                        <div class="flex items-center gap-2 mt-5 text-xs text-text-muted">
-                            <span class="px-2 py-1 rounded border border-dashed border-border">Product</span>
-                            <i class="fas fa-arrow-right text-[10px]"></i>
-                            <span class="px-2 py-1 rounded border border-dashed border-border">Component</span>
-                            <i class="fas fa-arrow-right text-[10px]"></i>
-                            <span class="px-2 py-1 rounded border border-dashed border-border">SBOM</span>
-                        </div>
+            {# First visit — a flowing onboarding hero: soft surface, illustration bleeds in. #}
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/5 dark:from-primary/20 via-transparent to-transparent">
+                {# Illustration — SVG used as a mask so it takes the primary (light blue) colour. #}
+                <div aria-hidden="true"
+                     class="hidden md:block absolute right-[6%] top-1/2 -translate-y-1/2 w-[38%] max-w-[380px] opacity-40 bg-primary pointer-events-none select-none"
+                     style="aspect-ratio: 1210 / 680;
+                            -webkit-mask: url('{% static 'img/onboarding.svg' %}') center / contain no-repeat;
+                            mask: url('{% static 'img/onboarding.svg' %}') center / contain no-repeat"></div>
+                <div class="relative p-6 sm:p-8 md:pr-[44%]">
+                    {% comment %}
+                        One action, not a checklist. The wizard command sets a
+                        repository up end to end, so walking someone through
+                        creating a product and a component by hand duplicated
+                        work the command does, and stranded anyone who ran it
+                        first.
+                    {% endcomment %}
+                    <h4 class="text-xl font-semibold text-text m-0">Get started</h4>
+                    <p class="text-sm text-text-muted m-0 mt-1 max-w-md">
+                        Run one command in your repository and push. Your first SBOM
+                        lands here and this page starts reporting.
+                    </p>
+                    <div class="mt-5 flex items-center gap-4 flex-wrap">
+                        <c-buttons.primary class="flex-shrink-0" @click="$dispatch('open-cicd')">
+                        <i class="fas fa-rocket mr-2" aria-hidden="true"></i>Get started
+                        </c-buttons.primary>
+                        {% if onboarding.first_component %}
+                            <span class="text-sm text-text-muted">
+                                Already have an SBOM file?
+                                <button type="button"
+                                        @click="$dispatch('open-upload')"
+                                        class="text-primary hover:underline font-medium">Upload it</button>
+                            </span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
+            {# Reuse the component-page CI/CD and upload modals here — no duplication. #}
+            {% if onboarding.first_component %}
+                {% with component=onboarding.first_component %}
+                    {% include "sboms/components/ci_cd_info.html.j2" %}
+                    {% include "sboms/components/sbom_upload.html.j2" with component_id=component.id %}
+                {% endwith %}
+            {% else %}
+                {% include "sboms/components/ci_cd_info.html.j2" %}
+            {% endif %}
         {% else %}
             {# Needs attention — the worst non-suppressed findings across the workspace #}
             {% if dashboard.needs_attention %}
-                <div class="tw-card">
-                    <div class="px-6 py-4 border-b border-border">
-                        <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
-                            Needs attention
-                            <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-danger/10 text-danger">{{ dashboard.needs_attention|length }}</span>
-                        </h4>
-                    </div>
-                    <div class="divide-y divide-border">
-                        {% for finding in dashboard.needs_attention %}
-                            <div class="px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                {% if finding.severity == 'critical' %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">Critical</span>
-                                {% elif finding.severity == 'high' %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">High</span>
-                                {% elif finding.severity == 'medium' %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-info/10 text-info border border-info/30">Medium</span>
-                                {% else %}
-                                    <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-border/40 text-text-muted border border-border">{{ finding.severity|capfirst }}</span>
-                                {% endif %}
-                                {% if finding.id|slice:":4" == "CVE-" %}
-                                    <a href="https://nvd.nist.gov/vuln/detail/{{ finding.id }}"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="font-mono text-sm text-primary hover:underline">{{ finding.id }}</a>
-                                {% elif finding.id|slice:":5" == "GHSA-" %}
-                                    <a href="https://github.com/advisories/{{ finding.id }}"
+                {# flush: the findings own their gutters, so the list runs to the card's edge. #}
+                <c-cards.card flush>
+                <c-slot name="header">
+                <c-cards.header>
+                <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
+                    Needs attention
+                    <c-badges.danger size="sm">{{ dashboard.needs_attention|length }}</c-badges.danger>
+                </h4>
+                </c-cards.header>
+                </c-slot>
+                <div class="divide-y divide-border">
+                    {% for finding in dashboard.needs_attention %}
+                        <div class="px-6 py-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            {% comment %} unknown / info / malicious are off the CVSS scale, and the
+                            badge renders them in its neutral band. {% endcomment %}
+                            <c-badges.severity level="{{ finding.severity|lower }}">{{ finding.severity|capfirst }}</c-badges.severity>
+                            {% with finding_url=finding.id|advisory_url %}
+                                {% if finding_url %}
+                                    <a href="{{ finding_url }}"
                                        target="_blank"
                                        rel="noopener noreferrer"
                                        class="font-mono text-sm text-primary hover:underline">{{ finding.id }}</a>
                                 {% else %}
-                                    <a href="https://osv.dev/vulnerability/{{ finding.id }}"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="font-mono text-sm text-primary hover:underline">{{ finding.id }}</a>
+                                    <span class="font-mono text-sm text-text-muted">{{ finding.id }}</span>
                                 {% endif %}
-                                <span class="text-sm text-text font-medium">{{ finding.package }}</span>
-                                {% if finding.version %}<span class="text-sm text-text-muted">· {{ finding.version }}</span>{% endif %}
-                                <span class="text-sm text-text-muted">
-                                    in <span class="font-medium text-text">{{ finding.component_name }}</span>
-                                    {% if finding.scanned_at %}· scanned {{ finding.scanned_at|timesince }} ago{% endif %}
-                                </span>
-                                <a href="{% url 'core:component_details' finding.component_id %}"
-                                   class="ml-auto text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
-                                    Review<i class="fas fa-arrow-right text-xs"></i>
-                                </a>
-                            </div>
-                        {% endfor %}
-                    </div>
+                            {% endwith %}
+                            <span class="text-sm text-text font-medium">{{ finding.package }}</span>
+                            {% if finding.version %}<span class="text-sm text-text-muted">· {{ finding.version }}</span>{% endif %}
+                            <span class="text-sm text-text-muted">
+                                in <span class="font-medium text-text">{{ finding.component_name }}</span>
+                                {% if finding.scanned_at %}· scanned {{ finding.scanned_at|timesince }} ago{% endif %}
+                            </span>
+                            <a href="{% url 'core:component_details' finding.component_id %}"
+                               class="ml-auto text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
+                                Review<i class="fas fa-arrow-right text-xs"></i>
+                            </a>
+                        </div>
+                    {% endfor %}
                 </div>
+                </c-cards.card>
             {% endif %}
         {% endif %}
         {# Vulnerability Trends #}
-        <div class="tw-card">
-            <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">
-                <div class="flex flex-col items-center justify-center py-12">
-                    <div class="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin"
-                         role="status">
-                        <span class="sr-only">Loading...</span>
-                    </div>
-                    <p class="mt-3 text-text-muted">Loading vulnerability trends...</p>
-                </div>
-            </div>
+        {# flush: the panel HTMX swaps in brings its own padding. #}
+        <c-cards.card flush>
+        <div hx-get="{% url 'vulnerability_scanning:vulnerability_trends' %}?show_product_filter=true"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <c-feedback.loading message="Loading vulnerability trends..." />
         </div>
+        </c-cards.card>
     </div>
 {% endblock %}
-{% block scripts %}{{ block.super }}{% endblock %}
+{% block scripts %}
+    {{ block.super }}
+    {# The CI/CD + upload modals use Alpine components registered in the sboms bundle. #}
+    {% if dashboard.is_first_visit and onboarding.first_component %}
+        {% vite_asset 'sbomify/apps/sboms/js/main.ts' %}
+    {% endif %}
+{% endblock %}

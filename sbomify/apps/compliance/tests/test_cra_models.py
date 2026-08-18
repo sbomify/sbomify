@@ -280,3 +280,144 @@ class TestCRAExportPackage:
         )
         assert "Export package" in str(pkg)
         assert str(pkg.pk) in str(pkg)
+
+
+@pytest.mark.django_db
+class TestEuAuthorizedRepresentative:
+    """CRA Art. 22/25 (checklist 7.4): a manufacturer without an EU
+    establishment must appoint an AR before market placement."""
+
+    def test_an_unanswered_determination_is_incomplete_but_not_a_breach(self, cra_assessment):
+        assert cra_assessment.is_eu_established is None
+        assert cra_assessment.requires_authorized_representative is False
+        assert "Record whether" in cra_assessment.eu_representation_problems[0]
+
+    def test_an_eu_established_manufacturer_needs_no_representative(self, cra_assessment):
+        cra_assessment.is_eu_established = True
+
+        assert cra_assessment.requires_authorized_representative is False
+        assert cra_assessment.eu_representation_problems == []
+
+    def test_a_non_eu_manufacturer_without_a_representative_is_a_breach(self, cra_assessment):
+        cra_assessment.is_eu_established = False
+
+        assert cra_assessment.requires_authorized_representative is True
+        problem = cra_assessment.eu_representation_problems[0]
+        assert "Art. 22" in problem
+        assert "name" in problem and "mandate date" in problem
+
+    def test_a_complete_representative_block_clears_the_obligation(self, cra_assessment):
+        from datetime import date
+
+        cra_assessment.is_eu_established = False
+        cra_assessment.authorized_rep_name = "Acme EU Compliance BV"
+        cra_assessment.authorized_rep_address = "Keizersgracht 1, 1015 Amsterdam, NL"
+        cra_assessment.authorized_rep_email = "ar@acme-eu.example"
+        cra_assessment.authorized_rep_mandate_date = date(2026, 1, 15)
+
+        assert cra_assessment.authorized_rep_is_complete is True
+        assert cra_assessment.eu_representation_problems == []
+
+    def test_a_partial_block_names_only_what_is_missing(self, cra_assessment):
+        cra_assessment.is_eu_established = False
+        cra_assessment.authorized_rep_name = "Acme EU Compliance BV"
+        cra_assessment.authorized_rep_email = "ar@acme-eu.example"
+
+        problem = cra_assessment.eu_representation_problems[0]
+        assert "address" in problem
+        assert "mandate date" in problem
+        assert "contact email" not in problem
+
+
+@pytest.mark.django_db
+class TestExportPackageRetention:
+    """CRA Art. 13(15): the exported bundle is the durable evidence, so its
+    retention floor is pinned at creation and cleanup must respect it."""
+
+    def _package(self, assessment, **overrides):
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        defaults = dict(
+            assessment=assessment,
+            storage_key="compliance/exports/x/deadbeef.zip",
+            content_hash="0" * 64,
+            manifest={"files": []},
+            retain_until=CRAExportPackage.retention_floor(assessment),
+        )
+        defaults.update(overrides)
+        return CRAExportPackage.objects.create(**defaults)
+
+    def test_floor_is_ten_years_when_support_ends_sooner(self, cra_assessment):
+        from datetime import date, timedelta
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        cra_assessment.support_period_end = date.today() + timedelta(days=365)
+        floor = CRAExportPackage.retention_floor(cra_assessment)
+
+        assert floor >= date.today() + timedelta(days=365 * 10)
+
+    def test_floor_holds_across_a_span_with_three_leap_days(self, cra_assessment):
+        """Ten calendar years, not 3652 days.
+
+        2015-03-01 to 2025-03-01 crosses 2016, 2020 and 2024, so the span is
+        3653 days and a fixed day count lands on 28 February — a day short of
+        the obligation. The date is passed in rather than derived from today,
+        which also keeps the assertion from turning over at midnight.
+        """
+        from datetime import date
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        cra_assessment.support_period_end = None
+
+        assert CRAExportPackage.retention_floor(cra_assessment, date(2015, 3, 1)) == date(2025, 3, 1)
+
+    def test_floor_from_a_leap_day_rounds_the_safe_way(self, cra_assessment):
+        """29 February has no tenth anniversary, so the floor moves to 1 March.
+
+        Later is safe; 28 February would be a day short of the obligation.
+        """
+        from datetime import date
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        cra_assessment.support_period_end = None
+
+        assert CRAExportPackage.retention_floor(cra_assessment, date(2016, 2, 29)) == date(2026, 3, 1)
+
+    def test_floor_is_the_support_period_when_longer(self, cra_assessment):
+        from datetime import date, timedelta
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        far = date.today() + timedelta(days=365 * 15)
+        cra_assessment.support_period_end = far
+
+        assert CRAExportPackage.retention_floor(cra_assessment) == far
+
+    def test_package_inside_the_floor_is_retained_and_undeletable_by_sweeps(self, cra_assessment):
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        package = self._package(cra_assessment)
+
+        assert package.is_retained is True
+        assert package not in CRAExportPackage.past_retention()
+
+    def test_package_past_the_floor_becomes_sweepable(self, cra_assessment):
+        from datetime import date, timedelta
+
+        package = self._package(cra_assessment, retain_until=date.today() - timedelta(days=1))
+
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        assert package.is_retained is False
+        assert list(CRAExportPackage.past_retention()) == [package]
+
+    def test_legacy_rows_without_a_floor_are_retained_forever(self, cra_assessment):
+        from sbomify.apps.compliance.models import CRAExportPackage
+
+        package = self._package(cra_assessment, retain_until=None)
+
+        assert package.is_retained is True
+        assert package not in CRAExportPackage.past_retention()

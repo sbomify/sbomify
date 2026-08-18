@@ -17,11 +17,12 @@ from sbomify.apps.core.url_utils import (
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.plugins.models import TeamPluginSettings
 from sbomify.apps.sboms.models import Component
+from sbomify.apps.security_advisories.services.trust_center import public_advisory_summary
 from sbomify.apps.teams.branding import build_branding_context
 from sbomify.apps.teams.models import Member, Team
 
 
-def _fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict[str, Any]]:
+def fetch_public_team(request: HttpRequest, workspace_key: str | None) -> tuple[int, Team | dict[str, Any]]:
     """
     Resolve a public workspace by explicit key, custom domain, or session fallback.
 
@@ -150,7 +151,7 @@ class WorkspacePublicView(View):
     """Public workspace landing page showing products and global artifacts."""
 
     def get(self, request: HttpRequest, workspace_key: str | None = None) -> HttpResponse:
-        status_code, team_or_error = _fetch_public_team(request, workspace_key)
+        status_code, team_or_error = fetch_public_team(request, workspace_key)
         if status_code != 200 or not isinstance(team_or_error, Team):
             return error_response(request, HttpResponseNotFound(team_or_error.get("detail", "Workspace not found")))  # type: ignore[union-attr]
 
@@ -199,6 +200,10 @@ class WorkspacePublicView(View):
 
             logging.getLogger(__name__).warning("Controls app not available", exc_info=True)
 
+        # Advisories the visitor is entitled to. The service resolves who they
+        # are, so the landing page and /advisories/ cannot disagree about it.
+        advisories = public_advisory_summary(request, team)
+
         return render(
             request,
             "core/workspace_public.html.j2",
@@ -210,6 +215,7 @@ class WorkspacePublicView(View):
                 },
                 "products": products_data,
                 "global_components": global_artifacts_data,
+                "advisories": advisories,
                 "is_custom_domain": is_custom_domain,
                 "custom_domain": team.custom_domain if is_custom_domain else None,
                 "is_workspace_admin": is_workspace_admin,

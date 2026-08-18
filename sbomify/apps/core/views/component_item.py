@@ -307,6 +307,27 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         from sbomify.apps.core.authz import can
 
         can_triage = can(request, "artifact:publish_vex", component)
+        # Same tier the rerun endpoint enforces, so the button is only offered
+        # to a caller the API would actually accept.
+        can_rerun = can(request, "component:manage", component)
+
+        # Page-header context: the icon is conditional and the copy chip and
+        # breadcrumb trail are lists, so the view builds them per the design
+        # system contract.
+        if is_vex:
+            item_kind = "VEX"
+        elif is_cbom:
+            item_kind = "CBOM"
+        elif is_sbom_backed:
+            item_kind = "SBOM"
+        else:
+            item_kind = "Document"
+        header_icon = "fas fa-file-code" if is_sbom_backed else "fas fa-file-alt"
+        header_copy_values = [{"value": item_id, "title": f"ID: {item_id} (click to copy)"}]
+        breadcrumb_items = [
+            {"label": component.name, "url": reverse("core:component_details", args=[component_id])},
+            {"label": f"{item_kind} Details"},
+        ]
 
         return render(
             request,
@@ -315,6 +336,9 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "APP_BASE_URL": settings.APP_BASE_URL,
                 "item": item,
                 "item_type": item_type,
+                "header_icon": header_icon,
+                "header_copy_values": header_copy_values,
+                "breadcrumb_items": breadcrumb_items,
                 "component": component,
                 "component_id": component_id,
                 "vulnerability_summary": vulnerability_summary,
@@ -326,6 +350,7 @@ class ComponentItemView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
                 "is_cbom": is_cbom,
                 "is_sbom_backed": is_sbom_backed,
                 "can_triage": can_triage,
+                "can_rerun": can_rerun,
                 "team_key": component.team.key,
             },
         )

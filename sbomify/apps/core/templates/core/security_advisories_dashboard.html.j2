@@ -1,0 +1,16 @@
+{% extends "core/dashboard_base.htmx.j2" %}
+{% load design_system %}
+{% block title %}sbomify Security Advisories{% endblock %}
+{% comment %}
+    Creating an advisory is a page rather than a modal: the affected-products
+    picker needs room to be usable.
+{% endcomment %}
+{% block dashboard_content %}
+    {% comment %}
+        No action in the header: the navbar's New menu, the empty state and a
+        product's row menu all lead to the same form.
+    {% endcomment %}
+    <c-layout.page-header title="Security advisories" subtitle="Publish advisories for your products." icon="fas fa-shield-halved" />
+    <div class="space-y-6">{% include 'core/security_advisories_table.html.j2' %}</div>
+{% endblock %}
+{% block scripts %}{% endblock %}

@@ -1,0 +1,26 @@
+{% comment %}
+The placeholder an HTMX panel shows while its content is in flight: the brand
+loader with a line of text. The loader stays a Django include, the shared chrome
+a component is allowed to reach for, and its size class is the only tw-* name
+here. row puts the loader beside the text, for a panel that already has a
+skeleton above it; compact trims the padding. The two branches differ in layout,
+not in recipe, and stay in lockstep.
+{% endcomment %}
+<c-vars message size row compact class />
+{% if row %}
+    <div class="flex items-center justify-center {% if compact %}py-2{% else %}py-4{% endif %}{% if class %} {{ class }}{% endif %}"
+         {{ attrs }}>
+        {% with loader_size=size|default:"sm" %}
+            {% include "core/components/brand/loader.html.j2" with class="tw-loader-"|add:loader_size|add:" text-primary" %}
+        {% endwith %}
+        {% if message %}<span class="ml-3 text-sm text-text-muted">{{ message }}</span>{% endif %}
+    </div>
+{% else %}
+    <div class="flex flex-col items-center justify-center {% if compact %}py-6{% else %}py-12{% endif %}{% if class %} {{ class }}{% endif %}"
+         {{ attrs }}>
+        {% with loader_size=size|default:"lg" %}
+            {% include "core/components/brand/loader.html.j2" with class="tw-loader-"|add:loader_size|add:" text-primary" %}
+        {% endwith %}
+        {% if message %}<p class="mt-3 text-text-muted">{{ message }}</p>{% endif %}
+    </div>
+{% endif %}

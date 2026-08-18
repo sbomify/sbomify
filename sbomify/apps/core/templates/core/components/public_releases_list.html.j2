@@ -1,101 +1,51 @@
-{# Public Releases List - Table Format #}
-{% load static %}
+{# Public releases — a tc-panel table matching the advisory detail page. #}
 {% load humanize %}
 {% if public_releases %}
-    <div class="public-section">
-        <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-                <div>
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-tags text-primary" aria-hidden="true"></i>Releases
-                    </h4>
-                    <p class="text-sm text-text-muted mt-1 mb-0">Version history and release information</p>
-                </div>
-                {% if view_all_releases_url %}
-                    <a href="{{ view_all_releases_url }}"
-                       class="inline-flex items-center gap-2 text-sm text-primary hover:underline flex-shrink-0">
-                        View All<i class="fas fa-arrow-right" aria-hidden="true"></i>
-                    </a>
-                {% endif %}
-            </div>
-            <div class="overflow-x-auto">
-                <table class="tw-table w-full text-sm">
-                    <thead>
-                        <tr class="bg-border/30">
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Release</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell">Version</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted">Status</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted hidden lg:table-cell">Description</th>
-                            <th class="text-left py-3 px-4 font-medium text-text-muted hidden md:table-cell">Released</th>
-                            <th class="text-right py-3 px-4 font-medium text-text-muted"></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for release in public_releases %}
-                            <tr class="hover:bg-border/10 transition-colors">
-                                <td class="py-3 px-4">
-                                    <a href="{{ release.public_url }}"
-                                       class="font-semibold text-text hover:text-primary no-underline">
-                                        {{ release.name }}
-                                    </a>
-                                    {# Mobile-only inline meta — duplicates hidden columns on small screens #}
-                                    <div class="md:hidden mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-                                        {% if release.version %}
-                                            <code class="text-primary bg-primary/5 px-1.5 py-0.5 rounded text-xs font-mono">{{ release.version }}</code>
-                                        {% endif %}
-                                        <span>{{ release.released_at|default_if_none:release.created_at|naturaltime }}</span>
-                                    </div>
-                                </td>
-                                <td class="py-3 px-4 hidden md:table-cell">
-                                    {% if release.version %}
-                                        <code class="text-primary bg-primary/5 px-2 py-0.5 rounded text-xs">{{ release.version }}</code>
-                                    {% else %}
-                                        <span class="text-text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td class="py-3 px-4">
-                                    <div class="flex items-center gap-1.5">
-                                        {% if release.is_latest %}
-                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success inline-flex items-center gap-1">
-                                                <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>
-                                                Latest
-                                            </span>
-                                        {% endif %}
-                                        {% if release.is_prerelease %}
-                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/10 text-warning inline-flex items-center gap-1">
-                                                <i class="fas fa-flask text-xs" aria-hidden="true"></i>
-                                                Pre-release
-                                            </span>
-                                        {% endif %}
-                                        {% if not release.is_latest and not release.is_prerelease %}
-                                            <span class="text-text-muted text-xs">Stable</span>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                                <td class="py-3 px-4 text-text-muted max-w-xs hidden lg:table-cell">
-                                    {% if release.description %}
-                                        <span title="{{ release.description }}">{{ release.description|truncatechars:50 }}</span>
-                                    {% else %}
-                                        <span class="text-text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td class="py-3 px-4 text-text-muted text-sm whitespace-nowrap hidden md:table-cell">
-                                    <span title="{{ release.released_at|default_if_none:release.created_at }}">
-                                        {{ release.released_at|default_if_none:release.created_at|naturaltime }}
-                                    </span>
-                                </td>
-                                <td class="py-3 px-4 text-right">
-                                    <a href="{{ release.public_url }}"
-                                       class="inline-flex items-center gap-1.5 min-h-9 px-3 py-2 text-xs font-medium text-primary bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors no-underline">
-                                        View
-                                        <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <div class="tc-panel tc-panel-flush">
+        <div class="tc-timeline-header px-6 pt-5">
+            <h2 class="tc-panel-title tc-panel-title-flush !p-0">Releases</h2>
+            {% if view_all_releases_url %}
+                <a class="tc-section-link" href="{{ view_all_releases_url }}">
+                    All releases <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </a>
+            {% endif %}
         </div>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell>Release</c-tables.header-cell>
+        <c-tables.header-cell>Status</c-tables.header-cell>
+        <c-tables.header-cell date class="hidden md:table-cell">Released</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            {% for release in public_releases %}
+                <c-tables.row>
+                <c-tables.cell>
+                <a class="font-medium text-text hover:text-primary no-underline"
+                   href="{{ release.public_url }}">{{ release.name }}</a>
+                {% if release.description %}
+                    <div class="text-xs opacity-75 mt-1" title="{{ release.description }}">{{ release.description|truncatechars:60 }}</div>
+                {% endif %}
+                <div class="md:hidden text-xs opacity-75 mt-1">
+                    {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                </div>
+                </c-tables.cell>
+                <c-tables.cell>
+                {% if release.is_latest %}
+                    <c-badges.success>Latest</c-badges.success>
+                {% elif release.is_prerelease %}
+                    <c-badges.warning>Pre-release</c-badges.warning>
+                {% else %}
+                    <span class="text-xs opacity-75">Stable</span>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell date class="hidden md:table-cell">
+                <span title="{{ release.released_at|default_if_none:release.created_at }}">
+                    {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                </span>
+                </c-tables.cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
     </div>
 {% endif %}

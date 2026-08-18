@@ -1,212 +1,139 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load widget_tweaks %}
-{% load form_helpers %}
-{% load django_vite %}
 {% block title %}sbomify Settings{% endblock %}
 {% block content %}
-    <div class="p-6">
+    {# No padding wrapper: dashboard_base already pads the page, and a second p-6 gave this page twice the inset of every other one. #}
+    <div>
+        <c-layout.page-header title="Settings" subtitle="Your API tokens and workspace invitations." icon="fas fa-gear" />
         {% if pending_invitations %}
             <div class="mb-6">
-                <div class="flex items-center gap-3 mb-4">
-                    <div class="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                        <i class="fas fa-envelope-open-text text-success text-lg"></i>
-                    </div>
-                    <div>
-                        <h1 class="text-2xl font-bold text-text">Pending Workspace Invitations</h1>
-                        <p class="text-text-muted text-sm">You have been invited to join the following workspaces. Accept or decline below.</p>
-                    </div>
-                </div>
+                <c-layout.section-header level="2" accent="success" icon="fas fa-envelope-open-text" title="Pending invitations" subtitle="Accept or decline the workspaces you have been invited to." />
                 {% include "core/components/pending_invitations.html.j2" %}
             </div>
         {% endif %}
-        {# Page Header #}
-        <div class="mb-6">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-key text-primary text-lg"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Personal Access Tokens</h1>
-                    <p class="text-text-muted text-sm">
-                        Personal access tokens are used to authenticate API requests to sbomify. Use these tokens to access the API programmatically.
-                    </p>
-                </div>
-            </div>
-        </div>
+        <c-layout.section-header level="2" icon="fas fa-key" title="Personal access tokens" subtitle="Tokens let scripts and CI use the sbomify API as you." />
         {# Token Generation Card #}
-        <div class="tw-card mb-6">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text m-0">Generate New Token</h4>
+        <c-cards.card class="mb-6">
+        <c-slot name="header">
+        <c-cards.header>
+        <h4 class="text-lg font-semibold text-text m-0">Generate new token</h4>
+        </c-cards.header>
+        </c-slot>
+        <form method="post" id="tokenGenerationForm">
+            {% csrf_token %}
+            <div class="mb-4">
+                {% for field in create_access_token_form %}
+                    <c-forms.label for="{{ field.id_for_label }}">{{ field.label }}</c-forms.label>
+                    <c-forms.input id="{{ field.id_for_label }}" name="{{ field.html_name }}" value="{{ field.value|default:'' }}" placeholder="e.g., CI/CD Pipeline Token" class="max-w-md" />
+                    {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
+                {% endfor %}
             </div>
-            <div class="p-6">
-                <form method="post" id="tokenGenerationForm">
-                    {% csrf_token %}
-                    <div class="mb-4">
-                        {% for field in create_access_token_form %}
-                            <label class="block text-sm font-medium text-text mb-1"
-                                   for="{{ field.id_for_label }}">{{ field.label }}</label>
-                            <input type="text"
-                                   id="{{ field.id_for_label }}"
-                                   name="{{ field.html_name }}"
-                                   class="tw-form-input max-w-md"
-                                   placeholder="e.g., CI/CD Pipeline Token"
-                                   value="{{ field.value|default:'' }}">
-                            {% for error in field.errors %}<div class="text-danger text-sm mt-1">{{ error }}</div>{% endfor %}
-                        {% endfor %}
-                    </div>
-                    <div class="flex gap-3">
-                        <button type="submit" class="tw-btn-primary">
-                            <i class="fas fa-plus mr-2" aria-hidden="true"></i>
-                            Generate Token
-                        </button>
-                        <button type="button"
-                                class="tw-btn-secondary"
-                                @click="document.getElementById('tokenGenerationForm').reset()">
-                            <i class="fas fa-times mr-2" aria-hidden="true"></i>
-                            Clear
-                        </button>
-                    </div>
-                </form>
+            <div class="flex gap-3">
+                <c-buttons.primary type="submit">
+                <i class="fas fa-plus mr-2" aria-hidden="true"></i>
+                Generate Token
+                </c-buttons.primary>
+                <c-buttons.secondary @click="document.getElementById('tokenGenerationForm').reset()">
+                <i class="fas fa-times mr-2" aria-hidden="true"></i>
+                Clear
+                </c-buttons.secondary>
             </div>
-        </div>
+        </form>
+        </c-cards.card>
         {# New Token Display Card #}
         {% if new_encoded_access_token %}
-            <div class="tw-card mb-6 border-warning/30">
-                <div class="px-6 py-4 border-b border-warning/30">
-                    <h4 class="text-lg font-semibold text-warning flex items-center gap-2 m-0">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Your New Personal Access Token
-                    </h4>
-                </div>
-                <div class="p-6">
-                    <div class="tw-alert tw-alert-warning mb-4">
-                        <i class="fas fa-exclamation-triangle tw-alert-icon"></i>
-                        <div class="tw-alert-content">
-                            <p class="text-sm m-0">Make sure to copy your personal access token now. You won't be able to see it again!</p>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="text-sm font-medium text-text mb-2 block">Personal Access Token</label>
-                        {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
-                    </div>
-                </div>
+            {% comment %} Only the header rule carries the warning tint. The card's own
+            border-warning/30 never reached the element: the legacy card class set the
+            border shorthand from unlayered CSS, which outranks a utility. {% endcomment %}
+            <c-cards.card class="mb-6">
+            <c-slot name="header">
+            <c-cards.header variant_class="border-warning/30">
+            <h4 class="text-lg font-semibold text-warning flex items-center gap-2 m-0">
+                <i class="fas fa-exclamation-triangle"></i>
+                Your New Personal Access Token
+            </h4>
+            </c-cards.header>
+            </c-slot>
+            <c-feedback.alert variant="warning" class="mb-4">
+            Make sure to copy your personal access token now. You won't be able to see it again!
+            </c-feedback.alert>
+            <div>
+                <c-forms.label>Personal Access Token</c-forms.label>
+                {% include 'core/components/copy_token.html.j2' with token=new_encoded_access_token %}
             </div>
+            </c-cards.card>
         {% endif %}
         {# Personal Access Tokens List Card #}
-        <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text m-0">Personal Access Tokens</h4>
+        {# flush: the list and its table run to the card's edge, as they always have. #}
+        <c-cards.card flush>
+        <c-slot name="header">
+        <c-cards.header>
+        <h4 class="text-lg font-semibold text-text m-0">Personal Access Tokens</h4>
+        </c-cards.header>
+        </c-slot>
+        {{ access_tokens|json_script:"access-tokens-data" }}
+        <div x-data="accessTokensList({ tokensDataElementId: 'access-tokens-data', csrfToken: '{{ csrf_token }}' })"
+             x-cloak>
+            {# Empty State #}
+            <c-feedback.empty-state icon="fas fa-key" icon_size="sm" icon_variant="neutral" title="No personal access tokens" message="Generate a personal access token to access the sbomify API from scripts and applications." x-show="tokens.length === 0" />
+            {# Tokens List #}
+            {# nested: the card already draws the frame this table sits in. #}
+            <c-tables.shell nested x-show="tokens.length > 0">
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell>Token</c-tables.header-cell>
+            <c-tables.header-cell date>Created</c-tables.header-cell>
+            <c-tables.actions-cell as="th" />
+            </c-tables.head>
+            <tbody>
+                <template x-for="token in tokens" :key="token.id">
+                    <c-tables.row>
+                    <c-tables.cell>
+                    <div class="font-medium text-text" x-text="token.description"></div>
+                    <div class="text-sm text-text-muted">Personal access token</div>
+                    </c-tables.cell>
+                    <c-tables.cell date>
+                    <span class="text-text-muted text-sm" x-text="formatDate(token.created_at)"></span>
+                    </c-tables.cell>
+                    <c-tables.actions-cell>
+                    <c-buttons.icon variant="danger" label="Delete token" title="Delete token" @click="confirmDelete(token)">
+                    <i class="fas fa-trash" aria-hidden="true"></i>
+                    </c-buttons.icon>
+                    </c-tables.actions-cell>
+                    </c-tables.row>
+                </template>
+            </tbody>
+            </c-tables.table>
+            </c-tables.shell>
+            {# Delete Confirmation Modal #}
+            {% comment %} role: the dialog interrupts to confirm something that cannot be undone.
+            It names itself through the heading in its body, so aria-labelledby is
+            written here rather than derived from a header band it does not have. {% endcomment %}
+            <c-modal show="showDeleteModal" size="sm" role="alertdialog" aria-labelledby="deleteTokenModalLabel">
+            <div class="text-center">
+                <c-buttons.icon label="Close" class="absolute top-4 right-4" @click="showDeleteModal = false">
+                <i class="fas fa-times" aria-hidden="true"></i>
+                </c-buttons.icon>
+                <c-chips.icon-chip size="xl" circle accent="danger" class="mx-auto mb-4">
+                <i class="fas fa-exclamation-triangle"></i>
+                </c-chips.icon-chip>
+                <h4 id="deleteTokenModalLabel"
+                    class="text-lg font-semibold text-text tracking-[-0.01em] mb-2">Delete personal access token?</h4>
+                <p class="text-text mb-3">
+                    Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="font-semibold text-danger"></span>" token?
+                </p>
+                <c-feedback.alert variant="warning" icon="fas fa-info-circle" class="text-left">
+                This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
+                </c-feedback.alert>
             </div>
-            <div class="p-6">
-                {{ access_tokens|json_script:"access-tokens-data" }}
-                <div x-data="accessTokensList({ tokensDataElementId: 'access-tokens-data', csrfToken: '{{ csrf_token }}' })"
-                     x-cloak>
-                    {# Empty State #}
-                    <div x-show="tokens.length === 0"
-                         class="flex flex-col items-center justify-center py-12">
-                        <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                            <i class="fas fa-key text-2xl text-text-muted"></i>
-                        </div>
-                        <h5 class="text-lg font-semibold text-text mb-2">No personal access tokens</h5>
-                        <p class="text-text-muted text-center max-w-md m-0">
-                            Generate a personal access token to access the sbomify API from scripts and applications.
-                        </p>
-                    </div>
-                    {# Tokens List #}
-                    <div x-show="tokens.length > 0"
-                         class="border border-border rounded-lg overflow-hidden">
-                        <div class="grid grid-cols-12 gap-4 px-4 py-3 bg-background/50 border-b border-border text-xs font-semibold text-text-muted uppercase">
-                            <div class="col-span-8">Token</div>
-                            <div class="col-span-4">Created</div>
-                        </div>
-                        <template x-for="token in tokens" :key="token.id">
-                            <div class="grid grid-cols-12 gap-4 px-4 py-3 border-b border-border last:border-b-0 items-center">
-                                <div class="col-span-8">
-                                    <div class="font-medium text-text" x-text="token.description"></div>
-                                    <div class="text-sm text-text-muted">Personal access token</div>
-                                </div>
-                                <div class="col-span-3 text-text-muted text-sm"
-                                     x-text="formatDate(token.created_at)"></div>
-                                <div class="col-span-1 text-right">
-                                    <button class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                                            title="Delete token"
-                                            aria-label="Delete token"
-                                            @click="confirmDelete(token)">
-                                        <i class="fas fa-trash" aria-hidden="true"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                    {# Delete Confirmation Modal #}
-                    <template x-teleport="body">
-                        <div x-show="showDeleteModal"
-                             x-cloak
-                             class="fixed inset-0 z-[100]"
-                             role="alertdialog"
-                             aria-modal="true"
-                             aria-labelledby="deleteTokenModalLabel">
-                            <div x-show="showDeleteModal"
-                                 x-transition:enter="transition ease-out duration-200"
-                                 x-transition:enter-start="opacity-0"
-                                 x-transition:enter-end="opacity-100"
-                                 x-transition:leave="transition ease-in duration-150"
-                                 x-transition:leave-start="opacity-100"
-                                 x-transition:leave-end="opacity-0"
-                                 class="tw-modal-overlay"
-                                 @click="showDeleteModal = false"></div>
-                            <div class="tw-modal"
-                                 x-show="showDeleteModal"
-                                 x-trap.noscroll="showDeleteModal"
-                                 x-transition:enter="transition ease-out duration-200"
-                                 x-transition:enter-start="opacity-0 scale-95"
-                                 x-transition:enter-end="opacity-100 scale-100"
-                                 x-transition:leave="transition ease-in duration-150"
-                                 x-transition:leave-start="opacity-100 scale-100"
-                                 x-transition:leave-end="opacity-0 scale-95"
-                                 @click.stop
-                                 @keydown.escape="if(showDeleteModal) showDeleteModal = false">
-                                <div class="tw-modal-content tw-modal-sm">
-                                    <div class="tw-modal-body text-center py-6">
-                                        <button type="button"
-                                                class="tw-modal-close absolute top-4 right-4"
-                                                @click="showDeleteModal = false"
-                                                aria-label="Close">
-                                            <i class="fas fa-times" aria-hidden="true"></i>
-                                        </button>
-                                        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                                            <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
-                                        </div>
-                                        <h4 id="deleteTokenModalLabel" class="tw-modal-title mb-2">Delete personal access token?</h4>
-                                        <p class="text-text mb-3">
-                                            Are you sure you want to delete the "<span x-text="tokenToDelete?.description" class="font-semibold text-danger"></span>" token?
-                                        </p>
-                                        <div class="tw-alert tw-alert-warning text-left">
-                                            <i class="fas fa-info-circle tw-alert-icon"></i>
-                                            <div class="tw-alert-content">
-                                                <p class="text-sm m-0">
-                                                    This action cannot be undone. Applications using this token will no longer be able to access the sbomify API.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="tw-modal-footer justify-center">
-                                        <button type="button" class="tw-btn-ghost" @click="showDeleteModal = false">Cancel</button>
-                                        <button type="button"
-                                                class="tw-btn-danger"
-                                                @click="deleteToken()"
-                                                :disabled="isDeleting">
-                                            <span x-show="isDeleting"
-                                                  class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-                                            <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
+            <c-slot name="footer">
+            <c-buttons.ghost @click="showDeleteModal = false">Cancel</c-buttons.ghost>
+            <c-buttons.danger @click="deleteToken()" ::disabled="isDeleting">
+            <span x-show="isDeleting">{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
+            <span x-text="isDeleting ? 'Deleting...' : 'Delete token'"></span>
+            </c-buttons.danger>
+            </c-slot>
+            </c-modal>
         </div>
+        </c-cards.card>
     </div>
 {% endblock %}

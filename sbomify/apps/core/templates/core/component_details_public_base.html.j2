@@ -1,5 +1,4 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
 {% block title %}{{ component.name }} - {{ component.component_type_display }}{% endblock %}
@@ -11,121 +10,104 @@
 {% block og_description %}
     {{ component.name }} - {{ component.component_type_display }} component. View and download security artifacts.
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb component 'component' %}
+{% block page_header %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner tc-masthead-detail">
+            {% if parent_product %}
+                <a class="tc-backlink" href="{{ parent_product_url }}">
+                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                    {{ parent_product.name }}
+                </a>
+            {% elif workspace_public_url %}
+                <a class="tc-backlink" href="{{ workspace_public_url }}">
+                    <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                    Trust Center
+                </a>
+            {% endif %}
+            <div class="tc-detail-eyebrow">
+                <p class="tc-eyebrow">
+                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                    Component
+                </p>
+                {% if component.visibility == 'gated' %}
+                    <span class="tc-lock-chip">
+                        <i class="fas fa-lock" aria-hidden="true"></i>Gated access
+                    </span>
+                {% endif %}
+                {% if component.is_global %}<c-badges.info>Workspace-wide</c-badges.info>{% endif %}
+            </div>
+            <h1 class="tc-detail-title">{{ component.name }}</h1>
+            <div class="tc-detail-meta">
+                <span class="tc-detail-meta-item">
+                    <i class="fas fa-tag" aria-hidden="true"></i>
+                    {{ component.component_type_display }}
+                </span>
+                {% for assessment in passing_assessments %}
+                    {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
+                {% endfor %}
+            </div>
+        </div>
+    </header>
 {% endblock %}
 {% block content %}
-    <div class="public-item-header flex flex-col gap-3">
-        {# Parent navigation comes from the breadcrumb (`Trust Center > Product`). #}
-        <h1 class="text-3xl font-bold text-text flex items-center gap-4 m-0">
-            <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                {% if component.component_type == 'document' %}
-                    <i class="fas fa-file-lines" aria-hidden="true"></i>
+    {% if component.visibility == 'gated' %}
+        <div class="mb-5"
+             {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
+            {% if needs_nda_signing %}
+                <c-feedback.alert variant="warning" icon="fas fa-file-signature">
+                <strong>NDA Required:</strong>
+                {% if is_new_nda_version %}
+                    New version of the NDA is available. Please sign the updated NDA to access this component.
                 {% else %}
-                    <i class="fas fa-cube" aria-hidden="true"></i>
+                    Please sign the NDA to access this component.
                 {% endif %}
-            </span>
-            {{ component.name }}
-        </h1>
-        <div class="flex flex-wrap gap-2">
-            <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text-muted flex items-center gap-2">
-                <i class="fas fa-tag" aria-hidden="true"></i>
-                {{ component.component_type_display }}
-            </span>
-            {% if component.is_global %}
-                <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-primary/10 text-primary flex items-center gap-2">
-                    <i class="fas fa-building" aria-hidden="true"></i>
-                    Workspace-wide
-                </span>
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:sign_nda' team.key nda_access_request_id %}">
+                <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
+                </c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
+            {% elif user_has_gated_access %}
+                <c-feedback.alert variant="success" icon="fas fa-check-circle">
+                <strong>Access Granted:</strong> You have access to download from this component.
+                </c-feedback.alert>
+            {% elif pending_request_needs_nda %}
+                <c-feedback.alert variant="warning" icon="fas fa-file-signature">
+                <strong>NDA Required:</strong> Please sign the NDA to complete your access request.
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:sign_nda' team.key pending_request_id %}">
+                <i class="fas fa-signature" aria-hidden="true"></i> Sign NDA
+                </c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
+            {% elif access_request_status == 'pending' %}
+                {# Info, not the primary accent the variant carries: waiting is not a brand moment. #}
+                <c-feedback.alert icon="fas fa-clock" style="--alert-accent: var(--color-info)">
+                <strong>Access Request Pending:</strong> Your request for access is being reviewed.
+                </c-feedback.alert>
+            {% elif access_request_status == 'rejected' %}
+                <c-feedback.alert variant="danger" icon="fas fa-times-circle">
+                <strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:request_access' team.key %}">Request Access Again</c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
+            {% else %}
+                <c-feedback.alert variant="warning" icon="fas fa-lock">
+                <strong>Gated Component:</strong> This component requires approval to download.
+                <c-slot name="action">
+                <c-buttons.primary href="{% url 'documents:request_access' team.key %}">
+                <i class="fas fa-key" aria-hidden="true"></i> Request Access
+                </c-buttons.primary>
+                </c-slot>
+                </c-feedback.alert>
             {% endif %}
-            {% if component.visibility == 'gated' %}
-                <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                    <i class="fas fa-lock" aria-hidden="true"></i>
-                    Gated Access
-                </span>
-            {% endif %}
-            {% for assessment in passing_assessments %}
-                {% include 'plugins/components/public_assessment_badge.html.j2' with assessment=assessment %}
-            {% endfor %}
         </div>
-        {% if component.visibility == 'gated' %}
-            <div class="mt-4"
-                 {% if request.user.is_authenticated %} x-data="{ currentUserId: '{{ request.user.id }}' }" @ws:message.window="if ($event.detail.type === 'access_request_updated' && $event.detail.user_id === currentUserId) { window.location.reload(); }" {% endif %}>
-                {% if needs_nda_signing %}
-                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
-                        <span class="flex items-center gap-2 text-text">
-                            <i class="fas fa-file-signature text-warning"></i>
-                            <span>
-                                <strong>NDA Required:</strong>
-                                {% if is_new_nda_version %}
-                                    New version of the NDA is available. Please sign the updated NDA to access this component.
-                                {% else %}
-                                    Please sign the NDA to access this component.
-                                {% endif %}
-                            </span>
-                        </span>
-                        <a href="{% url 'documents:sign_nda' team.key nda_access_request_id %}"
-                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">
-                            <i class="fas fa-signature mr-1"></i> Sign NDA
-                        </a>
-                    </div>
-                {% elif user_has_gated_access %}
-                    <div class="flex items-center gap-2 p-4 rounded-lg bg-success/10 border border-success/30 text-text">
-                        <i class="fas fa-check-circle text-success"></i>
-                        <span><strong>Access Granted:</strong> You have access to download from this component.</span>
-                    </div>
-                {% elif pending_request_needs_nda %}
-                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
-                        <span class="flex items-center gap-2 text-text">
-                            <i class="fas fa-file-signature text-warning"></i>
-                            <span><strong>NDA Required:</strong> Please sign the NDA to complete your access request.</span>
-                        </span>
-                        <a href="{% url 'documents:sign_nda' team.key pending_request_id %}"
-                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">
-                            <i class="fas fa-signature mr-1"></i> Sign NDA
-                        </a>
-                    </div>
-                {% elif access_request_status == 'pending' %}
-                    <div class="flex items-center gap-2 p-4 rounded-lg bg-info/10 border border-info/30 text-text">
-                        <i class="fas fa-clock text-info" aria-hidden="true"></i>
-                        <span><strong>Access Request Pending:</strong> Your request for access is being reviewed.</span>
-                    </div>
-                {% elif access_request_status == 'rejected' %}
-                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-danger/10 border border-danger/30">
-                        <span class="flex items-center gap-2 text-text">
-                            <i class="fas fa-times-circle text-danger" aria-hidden="true"></i>
-                            <span><strong>Access Request Rejected:</strong> Your request was not approved. You can request access again.</span>
-                        </span>
-                        <a href="{% url 'documents:request_access' team.key %}"
-                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">Request Access Again</a>
-                    </div>
-                {% else %}
-                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 rounded-lg bg-warning/10 border border-warning/30">
-                        <span class="flex items-center gap-2 text-text">
-                            <i class="fas fa-lock text-warning" aria-hidden="true"></i>
-                            <span><strong>Gated Component:</strong> This component requires approval to download.</span>
-                        </span>
-                        <a href="{% url 'documents:request_access' team.key %}"
-                           class="tw-btn-primary text-sm min-h-10 inline-flex items-center whitespace-nowrap">
-                            <i class="fas fa-key mr-1"></i> Request Access
-                        </a>
-                    </div>
-                {% endif %}
-            </div>
-        {% endif %}
-    </div>
-    <div class="public-section">
-        <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                    {% block table_icon %}<i class="fas fa-list text-primary"></i>{% endblock %}
-                    {{ component.component_type_display }} Items
-                </h4>
-            </div>
-            <div class="p-6">
-                {% block table_section %}{% endblock %}
-            </div>
-        </div>
+    {% endif %}
+    {% block before_table %}{% endblock %}
+    <div class="tc-panel">
+        <h2 class="tc-panel-title">{{ component.component_type_display }} items</h2>
+        {% block table_section %}{% endblock %}
     </div>
 {% endblock %}
 {% block scripts %}

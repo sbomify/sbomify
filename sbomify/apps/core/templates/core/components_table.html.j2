@@ -8,226 +8,129 @@
      @ws:message.window="if (['sbom_uploaded', 'sbom_deleted', 'document_uploaded', 'document_deleted', 'component_created', 'component_deleted'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-components')), 500); }">
     {# Serialize components data for Alpine.js #}
     {{ components|json_script:"components-data" }}
-    <div class="tw-dashboard-card">
-        <div class="tw-card-header">
-            <h3 class="text-lg font-semibold text-text">All Components</h3>
-        </div>
-        <div class="tw-card-body p-0">
-            {% if components %}
-                <div class="flex flex-col overflow-hidden">
-                    <div class="tw-data-table-toolbar">
-                        <div class="tw-data-table-toolbar-left">
-                            <div class="tw-data-table-search">
-                                <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <label for="components-search" class="sr-only">Search components</label>
-                                <input type="search"
-                                       id="components-search"
-                                       x-model="search"
-                                       placeholder="Search components..."
-                                       class="tw-data-table-search-input">
-                            </div>
-                            {# Type Filter #}
-                            <label for="components-type-filter" class="sr-only">Filter by type</label>
-                            <select id="components-type-filter"
-                                    x-model="typeFilter"
-                                    class="tw-data-table-page-size-select">
-                                <option value="all">All Types</option>
-                                <template x-for="t in componentTypes" :key="t">
-                                    <option :value="t" x-text="getTypeDisplay(t)"></option>
-                                </template>
-                            </select>
-                            {# Visibility Filter #}
-                            <label for="components-visibility-filter" class="sr-only">Filter by visibility</label>
-                            <select id="components-visibility-filter"
-                                    x-model="visibilityFilter"
-                                    class="tw-data-table-page-size-select">
-                                <option value="all">All</option>
-                                <option value="public">Public</option>
-                                <option value="gated">Gated</option>
-                                <option value="private">Private</option>
-                            </select>
-                        </div>
-                        <div class="tw-data-table-toolbar-right">
-                            <div class="tw-data-table-page-size">
-                                <span>Show</span>
-                                <label for="components-per-page" class="sr-only">Entries per page</label>
-                                <select id="components-per-page"
-                                        x-model.number="perPage"
-                                        class="tw-data-table-page-size-select">
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                </select>
-                                <span>entries</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tw-data-table-container">
-                        <table class="tw-table tw-table-fixed">
-                            <thead>
-                                <tr>
-                                    <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                                @click="sort('name')">
-                                            Component
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden md:table-cell"
-                                        :aria-sort="sortColumn === 'component_type' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'component_type' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'component_type' && sortDirection === 'desc' }"
-                                                @click="sort('component_type')">
-                                            Type
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden lg:table-cell"
-                                        :aria-sort="sortColumn === 'is_global' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'is_global' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_global' && sortDirection === 'desc' }"
-                                                @click="sort('is_global')">
-                                            Scope
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden lg:table-cell"
-                                        :aria-sort="sortColumn === 'sbom_count' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'sbom_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'sbom_count' && sortDirection === 'desc' }"
-                                                @click="sort('sbom_count')">
-                                            Content
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="tw-cell-end"
-                                        :aria-sort="sortColumn === 'visibility' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'visibility' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'visibility' && sortDirection === 'desc' }"
-                                                @click="sort('visibility')">
-                                            Visibility
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="component in paginatedData" :key="component.id">
-                                    <tr class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                        tabindex="0"
-                                        @click="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)"
-                                        @keydown.enter.prevent="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)">
-                                        <td>
-                                            <div class="min-w-0">
-                                                <span class="text-text font-medium block truncate" x-text="component.name"></span>
-                                                {# Mobile: Show type #}
-                                                <div class="md:hidden mt-1">
-                                                    <span class="text-xs text-text-muted"
-                                                          x-text="getTypeDisplay(component.component_type)"></span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="hidden md:table-cell">
-                                            <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg border bg-border/20 text-text-muted border-border/40"
-                                                  x-text="getTypeDisplay(component.component_type)"></span>
-                                        </td>
-                                        <td class="hidden lg:table-cell">
-                                            <template x-if="component.is_global">
-                                                <span class="tw-badge-primary">Workspace</span>
-                                            </template>
-                                            <template x-if="!component.is_global">
-                                                <span class="tw-badge-secondary">Product</span>
-                                            </template>
-                                        </td>
-                                        <td class="hidden lg:table-cell">
-                                            <span class="text-text text-sm" x-text="getContentDisplay(component)"></span>
-                                        </td>
-                                        <td class="tw-cell-end">
-                                            <template x-if="component.visibility === 'public'">
-                                                <span class="tw-badge-success">
-                                                    <i class="fas fa-globe text-[10px] mr-1"></i>
-                                                    Public
-                                                </span>
-                                            </template>
-                                            <template x-if="component.visibility === 'gated'">
-                                                <span class="tw-badge-warning">
-                                                    <i class="fas fa-key text-[10px] mr-1"></i>
-                                                    Gated
-                                                </span>
-                                            </template>
-                                            <template x-if="component.visibility === 'private'">
-                                                <span class="tw-badge-info">
-                                                    <i class="fas fa-lock text-[10px] mr-1"></i>
-                                                    Private
-                                                </span>
-                                            </template>
-                                        </td>
-                                    </tr>
-                                </template>
-                                <template x-if="paginatedData.length === 0">
-                                    <tr>
-                                        <td colspan="5" class="text-center py-8 text-text-muted">
-                                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                            <p>No components match your search</p>
-                                            <button @click="search = ''; typeFilter = 'all'; visibilityFilter = 'all'"
-                                                    class="mt-3 text-xs text-primary hover:underline">
-                                                Clear filters
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="tw-data-table-footer">
-                        <div class="tw-data-table-info">
-                            Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
-                            <template x-if="search || typeFilter !== 'all' || visibilityFilter !== 'all'">
-                                <span>(filtered from <strong x-text="allComponents.length"></strong> total)</span>
-                            </template>
-                        </div>
-                        {% include "components/tw/table_pager.html.j2" %}
+    {% if components %}
+        {# The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="components-search" label="Search components" placeholder="Search components..." x-model="search" />
+        {# Type filter: the options come from the data Alpine already holds. #}
+        <c-tables.select id="components-type-filter" label="Filter by type" x-model="typeFilter">
+        <option value="all">All Types</option>
+        <template x-for="t in componentTypes" :key="t">
+            <option :value="t" x-text="getTypeDisplay(t)"></option>
+        </template>
+        </c-tables.select>
+        <c-tables.select id="components-visibility-filter" label="Filter by visibility" x-model="visibilityFilter">
+        <option value="all">All</option>
+        <option value="public">Public</option>
+        <option value="gated">Gated</option>
+        <option value="private">Private</option>
+        </c-tables.select>
+        <c-slot name="right">
+        <c-tables.page-size id="components-per-page" x-model.number="perPage">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        </c-tables.page-size>
+        </c-slot>
+        </c-tables.toolbar>
+        <c-tables.table fixed>
+        <c-tables.head>
+        <c-tables.header-cell sort="name">Component</c-tables.header-cell>
+        <c-tables.header-cell sort="component_type" class="hidden md:table-cell">Type</c-tables.header-cell>
+        <c-tables.header-cell sort="is_global" class="hidden lg:table-cell">Scope</c-tables.header-cell>
+        <c-tables.header-cell sort="sbom_count" class="hidden lg:table-cell">Content</c-tables.header-cell>
+        <c-tables.header-cell sort="visibility" end>Visibility</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            <template x-for="component in paginatedData" :key="component.id">
+                <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:component_details' 0 %}'.replace('0', component.id)">
+                <c-tables.cell>
+                <div class="min-w-0">
+                    <span class="text-text font-medium block truncate" x-text="component.name"></span>
+                    {% comment %}
+                        Only rendered once the workspace configures a window and the
+                        component has an SBOM; freshness is null otherwise, so an
+                        unconfigured workspace sees no badges at all.
+                    {% endcomment %}
+                    <template x-if="component.freshness && component.freshness.is_stale">
+                        <c-badges.danger class="mt-1" ::title="'SBOM is ' + Math.abs(component.freshness.expires_in_days) + ' days past the ' + component.freshness.window_days + '-day freshness window'">
+                        <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
+                        </c-badges.danger>
+                    </template>
+                    {# Mobile: show the type the hidden column carries #}
+                    <div class="md:hidden mt-1">
+                        <span class="text-xs text-text-muted"
+                              x-text="getTypeDisplay(component.component_type)"></span>
                     </div>
                 </div>
-            {% else %}
-                {# Empty State #}
-                <div class="flex flex-col items-center justify-center py-16 px-6">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
-                        <i class="fas fa-puzzle-piece text-3xl text-primary"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-text mb-2">No components yet</h3>
-                    <p class="text-text-muted text-sm text-center max-w-sm mb-6">
-                        Components are containers for your SBOMs and documents. Create one to start uploading content.
-                    </p>
-                    {% if has_crud_permissions %}
-                        <button @click="$dispatch('open-add-component-modal')" class="tw-btn-primary">
-                            <i class="fas fa-plus mr-2"></i>Create Your First Component
-                        </button>
-                    {% endif %}
-                </div>
-            {% endif %}
-        </div>
-    </div>
+                </c-tables.cell>
+                <c-tables.cell class="hidden md:table-cell">
+                <c-chips.neutral x-text="getTypeDisplay(component.component_type)" />
+                </c-tables.cell>
+                <c-tables.cell class="hidden lg:table-cell">
+                <template x-if="component.is_global">
+                    <c-badges.primary>Workspace</c-badges.primary>
+                </template>
+                <template x-if="!component.is_global">
+                    <c-badges.secondary>Product</c-badges.secondary>
+                </template>
+                </c-tables.cell>
+                <c-tables.cell class="hidden lg:table-cell">
+                <span class="text-text text-sm" x-text="getContentDisplay(component)"></span>
+                </c-tables.cell>
+                <c-tables.cell end>
+                <template x-if="component.visibility === 'public'">
+                    <c-badges.success>
+                    <i class="fas fa-globe text-[10px] mr-1" aria-hidden="true"></i>Public
+                    </c-badges.success>
+                </template>
+                <template x-if="component.visibility === 'gated'">
+                    <c-badges.warning>
+                    <i class="fas fa-key text-[10px] mr-1" aria-hidden="true"></i>Gated
+                    </c-badges.warning>
+                </template>
+                <template x-if="component.visibility === 'private'">
+                    <c-badges.info>
+                    <i class="fas fa-lock text-[10px] mr-1" aria-hidden="true"></i>Private
+                    </c-badges.info>
+                </template>
+                </c-tables.cell>
+                </c-tables.row>
+            </template>
+            <template x-if="paginatedData.length === 0">
+                <tr>
+                    <td colspan="5" class="text-center py-8 text-text-muted">
+                        <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
+                        <p>No components match your search</p>
+                        <button type="button"
+                                @click="search = ''; typeFilter = 'all'; visibilityFilter = 'all'"
+                                class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+        <template x-if="search || typeFilter !== 'all' || visibilityFilter !== 'all'">
+            <span>(filtered from <strong x-text="allComponents.length"></strong> total)</span>
+        </template>
+        </c-tables.info>
+        <c-tables.pager />
+        </c-tables.footer>
+        </c-tables.shell>
+    {% else %}
+        <c-cards.card>
+        <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No components yet" message="Components are containers for your SBOMs and documents. Create one to start uploading content.">
+        {% if has_crud_permissions %}
+            <c-buttons.primary @click="$dispatch('open-add-component-modal')">
+            <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Component
+            </c-buttons.primary>
+        {% endif %}
+        </c-feedback.empty-state>
+        </c-cards.card>
+    {% endif %}
 </div>

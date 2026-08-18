@@ -1,52 +1,50 @@
 {# Contact Profiles Card #}
-<div class="tw-settings-card">
-    <div class="px-6 py-4 border-b border-border">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-address-book text-primary"></i>
-                </div>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Contact Profiles</h5>
-                    <p class="text-text-muted text-sm m-0">Manage security and compliance contacts</p>
-                </div>
+{# The body is flush: the region below swaps between a data table and a form, and each brings its own gutters. #}
+<c-cards.dashboard flush class="mb-6">
+<c-slot name="header">
+<div class="px-6 py-4 border-b border-border">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <c-chips.icon-chip>
+            <i class="fas fa-address-book" aria-hidden="true"></i>
+            </c-chips.icon-chip>
+            <div>
+                <h5 class="text-lg font-semibold text-text m-0">Contact Profiles</h5>
+                <p class="text-text-muted text-sm m-0">Manage security and compliance contacts</p>
             </div>
-            <button class="tw-btn-primary tw-btn-sm"
-                    hx-get="{% url 'teams:contact_profiles_form' team.key %}"
-                    hx-target="#contact-profiles-content"
-                    hx-swap="innerHTML">
-                <i class="fas fa-plus mr-1"></i>
-                Add Profile
-            </button>
         </div>
+        <c-buttons.primary size="sm" hx-get="{% url 'teams:contact_profiles_form' team.key %}" hx-target="#contact-profiles-content" hx-swap="innerHTML">
+        <i class="fas fa-plus mr-1"></i>
+        Add profile
+        </c-buttons.primary>
     </div>
-    <div class="p-0">
-        <div id="contact-profiles-content"
-             hx-get="{% url 'teams:contact_profiles_list' team.key %}"
-             hx-trigger="load, refreshProfileList from:body"
-             hx-swap="innerHTML"
-             data-edit-url="{% url 'teams:contact_profiles_detail_form' team.key '0000' %}"
-             data-list-url="{% url 'teams:contact_profiles_list' team.key %}">
-            {# Skeleton Loading State #}
-            <div class="p-6">
-                <div class="space-y-3">
-                    {% for i in "123" %}
-                        <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
-                            <div class="w-10 h-10 rounded-full bg-border/50 animate-pulse"></div>
-                            <div class="flex-1">
-                                <div class="h-4 w-40 bg-border/50 rounded animate-pulse"></div>
-                                <div class="h-3 w-56 bg-border/30 rounded animate-pulse mt-2"></div>
-                            </div>
-                            <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
-                        </div>
-                    {% endfor %}
+</div>
+</c-slot>
+<div id="contact-profiles-content"
+     hx-get="{% url 'teams:contact_profiles_list' team.key %}"
+     hx-trigger="load, refreshProfileList from:body"
+     hx-swap="innerHTML"
+     data-edit-url="{% url 'teams:contact_profiles_detail_form' team.key '0000' %}"
+     data-list-url="{% url 'teams:contact_profiles_list' team.key %}">
+    {# Skeleton Loading State #}
+    <div class="p-6">
+        <div class="space-y-3">
+            {% for i in "123" %}
+                <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
+                    <div class="w-10 h-10 rounded-full bg-border/50 animate-pulse"></div>
+                    <div class="flex-1">
+                        <div class="h-4 w-40 bg-border/50 rounded animate-pulse"></div>
+                        <div class="h-3 w-56 bg-border/30 rounded animate-pulse mt-2"></div>
+                    </div>
+                    <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
                 </div>
-                <div class="flex items-center justify-center py-4 mt-4">
-                    <div class="tw-spinner tw-spinner-sm"></div>
-                    <span class="ml-3 text-text-muted text-sm">Loading contact profiles...</span>
-                </div>
-            </div>
+            {% endfor %}
+        </div>
+        <div class="flex items-center justify-center py-4 mt-4">
+            <c-feedback.spinner size="sm" class="mx-auto" />
+            <span class="ml-3 text-text-muted text-sm">Loading contact profiles...</span>
         </div>
     </div>
 </div>
+</c-cards.dashboard>
 {% include "teams/contact_profiles/partials/alpine_components.html.j2" %}

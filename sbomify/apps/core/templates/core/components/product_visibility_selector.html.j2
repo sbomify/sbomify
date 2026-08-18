@@ -9,18 +9,14 @@
               @htmx:before-request="isLoading = true"
               @htmx:after-request="afterRequest($event)">
             {% csrf_token %}
-            <select class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 pr-8"
-                    name="is_public"
-                    x-model="vis"
-                    :disabled="isLoading"
-                    aria-label="Product visibility">
-                <option value="false">Private</option>
-                <option value="true">Public</option>
-            </select>
+            <c-forms.select name="is_public" size="sm" x-model="vis" ::disabled="isLoading" aria-label="Product visibility">
+            <option value="false">Private</option>
+            <option value="true">Public</option>
+            </c-forms.select>
         </form>
     </div>
     <div x-show="isLoading" x-cloak class="text-text-muted">
-        <i class="fas fa-spinner fa-spin"></i>
+        <c-feedback.spinner size="inline" />
     </div>
     <span class="text-text-muted cursor-help"
           x-tooltip="'Public products are visible to anyone with the link'">

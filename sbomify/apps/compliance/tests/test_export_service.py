@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -640,7 +641,7 @@ class TestIntegrityReadmeFormatVersion:
     def test_readme_version_matches_constant(self):
         from sbomify.apps.compliance.services.export_service import _MANIFEST_FORMAT_VERSION
 
-        readme = _integrity_readme("deadbeef" * 8)
+        readme = _integrity_readme("deadbeef" * 8, date(2036, 3, 1))
         assert f"**{_MANIFEST_FORMAT_VERSION}**" in readme
 
     def test_readme_uses_metadata_prefixed_paths(self):
@@ -648,7 +649,7 @@ class TestIntegrityReadmeFormatVersion:
         ``metadata/manifest.json`` (full relative path), not bare
         ``manifest.json``, so operators running the commands from the
         bundle root don't get confused."""
-        readme = _integrity_readme("deadbeef" * 8)
+        readme = _integrity_readme("deadbeef" * 8, date(2036, 3, 1))
         assert "`metadata/manifest.json`" in readme
         assert "`metadata/manifest.sha256`" in readme
         assert "`metadata/INTEGRITY.md`" in readme
@@ -658,7 +659,7 @@ class TestIntegrityReadmeFormatVersion:
         operators at ``cosign sign-blob`` / ``gpg --detach-sign`` as
         the downstream-signing path. Bundle signing itself is not
         implemented in-tree."""
-        readme = _integrity_readme("deadbeef" * 8)
+        readme = _integrity_readme("deadbeef" * 8, date(2036, 3, 1))
         assert "About signatures" in readme
         assert "cosign sign-blob" in readme
 
@@ -755,7 +756,7 @@ class TestExportHelpers:
         """The one-argument builder echoes the hash + standard sha256sum
         verification line. Guarantees the rendered README isn't a
         hard-coded stub."""
-        content = _integrity_readme("a" * 64)
+        content = _integrity_readme("a" * 64, date(2036, 3, 1))
         assert "a" * 64 in content
         assert "sha256sum -c metadata/manifest.sha256" in content
         assert "manifest.json" in content
@@ -766,7 +767,7 @@ class TestExportHelpers:
         trickery. The README instructs stripping the ``cra-package-*/``
         prefix and piping straight into ``sha256sum -c -`` — no
         intermediate /tmp file, no parent-directory hop."""
-        content = _integrity_readme("a" * 64)
+        content = _integrity_readme("a" * 64, date(2036, 3, 1))
         # Workflow uses a single pipeline ending in `sha256sum -c -`.
         assert "sha256sum -c -" in content
         # The prefix-stripping jq expression is there — this is the
@@ -783,7 +784,7 @@ class TestExportHelpers:
         manifest.sha256, and INTEGRITY.md are deliberately excluded.
         The new copy has to spell that out so auditors don't chase a
         non-existent gap."""
-        content = _integrity_readme("a" * 64)
+        content = _integrity_readme("a" * 64, date(2036, 3, 1))
         assert "NOT listed" in content or "not listed" in content
         for primitive in ("manifest.json", "manifest.sha256", "INTEGRITY.md"):
             assert primitive in content
@@ -898,3 +899,34 @@ class TestGetSbomContent:
 
         assert result == b"{...}"
         mock_s3_cls.assert_called_once_with("SBOMS")
+
+
+class TestIntegrityReadmeRetention:
+    def test_readme_states_the_retention_floor(self):
+        """Art. 13(15) obliges the recipient, not only sbomify's own storage,
+        so the date has to travel inside the bundle rather than living on a
+        database row the recipient will never see."""
+        content = _integrity_readme("a" * 64, date(2036, 3, 1))
+
+        assert "Retention obligation" in content
+        assert "01 March 2036" in content
+        assert "13(15)" in content
+
+    @pytest.mark.django_db
+    def test_bundle_readme_carries_the_same_date_as_the_row(
+        self, capturing_s3, assessment_with_docs, sample_user
+    ):
+        """A build that straddles midnight must not put one date in the file
+        and another in the database."""
+        import io
+        import zipfile
+
+        captured, _ = capturing_s3
+        result = build_export_package(assessment_with_docs, sample_user)
+
+        assert result.ok, result.error
+        with zipfile.ZipFile(io.BytesIO(captured["bytes"])) as zf:
+            name = next(n for n in zf.namelist() if n.endswith("metadata/INTEGRITY.md"))
+            readme = zf.read(name).decode("utf-8")
+
+        assert f"{result.value.retain_until:%d %B %Y}" in readme

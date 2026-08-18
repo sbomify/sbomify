@@ -3,24 +3,24 @@
 {% block content_after_header %}{% endblock %}
 {% block header_after_meta %}
     <div class="mt-3">
-        <div class="tw-card p-3">
-            <div>
-                <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium {% if component.is_global %}bg-primary/10 text-primary{% else %}bg-border/50 text-text-muted{% endif %}">
-                    {% if component.is_global %}
-                        <i class="fas fa-building"></i>Workspace-wide
-                    {% else %}
-                        <i class="fas fa-cube"></i>Product-scoped
-                    {% endif %}
-                </span>
-                <p class="text-text-muted text-sm mb-0 mt-2">
-                    {% if component.is_global %}
-                        Visible on the workspace Trust Center and not attached to any product.
-                    {% else %}
-                        Restricted to the products this component is assigned to.
-                    {% endif %}
-                </p>
-            </div>
+        <c-cards.card flush class="p-3">
+        <div>
+            <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium {% if component.is_global %}bg-primary/10 text-primary{% else %}bg-border/50 text-text-muted{% endif %}">
+                {% if component.is_global %}
+                    <i class="fas fa-building"></i>Workspace-wide
+                {% else %}
+                    <i class="fas fa-cube"></i>Product-scoped
+                {% endif %}
+            </span>
+            <p class="text-text-muted text-sm mb-0 mt-2">
+                {% if component.is_global %}
+                    Visible on the workspace Trust Center and not attached to any product.
+                {% else %}
+                    Restricted to the products this component is assigned to.
+                {% endif %}
+            </p>
         </div>
+        </c-cards.card>
     </div>
 {% endblock %}
 {% block upload_section %}
@@ -37,13 +37,7 @@
          hx-get="{% url 'documents:documents_table' component.id %}"
          hx-trigger="load, refreshDocumentsTable from:body"
          hx-swap="innerHTML">
-        <div class="text-center py-8">
-            <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"
-                 role="status">
-                <span class="sr-only">Loading...</span>
-            </div>
-            <p class="mt-3 text-text-muted">Loading documents...</p>
-        </div>
+        <c-feedback.loading message="Loading documents..." compact />
     </div>
 {% endblock %}
 {% block scripts_additional %}

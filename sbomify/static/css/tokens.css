@@ -5,31 +5,31 @@
 
 :root {
   /* ===== CORE BRAND COLORS ===== */
-  --brand-primary: #3b7ddd;
-  --brand-secondary: rgb(var(--color-text-muted));
-  --brand-success: rgb(var(--color-success));
-  --brand-danger: rgb(var(--color-danger));
-  --brand-warning: rgb(var(--color-warning));
-  --brand-info: #17a2b8;
-  --brand-primary-rgb: 59, 125, 221;
+  --brand-primary: #25293f;
+  --brand-secondary: var(--color-text-muted);
+  --brand-success: var(--color-success);
+  --brand-danger: var(--color-danger);
+  --brand-warning: var(--color-warning);
+  --brand-info: #4263eb;
+  --brand-primary-rgb: 37, 41, 63;
   --white-rgb: 255, 255, 255;
   --black-rgb: 0, 0, 0;
 
   /* ===== SEMANTIC COLOR SYSTEM ===== */
   --text-primary: #495057;
-  --text-secondary: rgb(var(--color-text-muted));
+  --text-secondary: var(--color-text-muted);
   --text-muted: #7c8b9d;
   --bg-primary: #f9fbfd;
   --bg-secondary: #ffffff;
 
   /* Surface Colors (for Layout) */
   --surface-card: #ffffff;
-  --surface-border: rgb(var(--color-border));
+  --surface-border: var(--color-border);
 
-  --border-color: rgb(var(--color-border));
+  --border-color: var(--color-border);
 
   /* ===== TYPOGRAPHY ===== */
-  --font-family-primary: "Inter", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-family-primary: "Figtree", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
   --font-family-mono: SFMono-Regular, Monaco, Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --font-size-xs: 0.75rem;
@@ -90,21 +90,21 @@
   /* and provide backwards compatibility during Bootstrap phase-out */
 
   /* Override brand colors to use Tailwind */
-  --brand-primary: rgb(var(--color-primary));
-  --brand-success: rgb(var(--color-success));
-  --brand-danger: rgb(var(--color-danger));
-  --brand-warning: rgb(var(--color-warning));
-  --brand-info: rgb(var(--color-info));
+  --brand-primary: var(--color-primary);
+  --brand-success: var(--color-success);
+  --brand-danger: var(--color-danger);
+  --brand-warning: var(--color-warning);
+  --brand-info: var(--color-info);
 
   /* Bridge semantic colors */
-  --text-primary: rgb(var(--color-text));
-  --text-secondary: rgb(var(--color-text-secondary));
-  --text-muted: rgb(var(--color-text-muted));
-  --bg-primary: rgb(var(--color-background));
-  --bg-secondary: rgb(var(--color-surface));
-  --surface-card: rgb(var(--color-surface));
-  --surface-border: rgb(var(--color-border));
-  --border-color: rgb(var(--color-border));
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --bg-primary: var(--color-background);
+  --bg-secondary: var(--color-surface);
+  --surface-card: var(--color-surface);
+  --surface-border: var(--color-border);
+  --border-color: var(--color-border);
 }
 
 /* Alpine.js Utility - Prevent flicker on load */

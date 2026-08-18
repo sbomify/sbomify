@@ -302,6 +302,28 @@ def get_public_path(resource_type: str, resource_id: str, is_custom_domain: bool
             return f"/product/{slug}/releases/"
         return f"/public/product/{resource_id}/releases/"
 
+    elif resource_type == "advisories":
+        # The feed, not one advisory. ``workspace_key`` is optional for the same
+        # reason it is on the workspace path: without it the view falls back to
+        # the session's current workspace.
+        if is_custom_domain:
+            return "/advisories/"
+        workspace_key = kwargs.get("workspace_key")
+        if workspace_key:
+            return f"/public/workspace/{workspace_key}/advisories/"
+        return "/advisories/"
+
+    elif resource_type == "advisory":
+        # Advisories are addressed by tracking id or primary key, never a slug —
+        # the tracking id (ACME-SA-2026-0001) *is* the human-readable form, so
+        # there is nothing for a slug to add.
+        if is_custom_domain:
+            return f"/advisories/{resource_id}/"
+        workspace_key = kwargs.get("workspace_key")
+        if workspace_key:
+            return f"/public/workspace/{workspace_key}/advisories/{resource_id}/"
+        return f"/advisories/{resource_id}/"
+
     else:
         raise ValueError(f"Unknown resource type: {resource_type}")
 

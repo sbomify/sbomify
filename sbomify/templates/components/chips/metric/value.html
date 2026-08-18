@@ -1,0 +1,7 @@
+{% comment %}
+The number in a metric chip. Tabular figures, so a strip of chips does not
+jitter as values change. Colour is inherited from the chip's accent.
+{% endcomment %}
+<c-vars class />
+<span class="font-semibold tabular-nums{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

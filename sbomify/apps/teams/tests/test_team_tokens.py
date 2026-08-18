@@ -53,8 +53,8 @@ class TestTeamTokensView:
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
         assert response.status_code == 200
-        assert b"Generate New Token" in response.content
-        assert b"Your Tokens" in response.content
+        assert b"Generate new token" in response.content
+        assert b"Your tokens" in response.content
 
     def test_get_shows_existing_tokens(self, client: Client, sample_team_with_owner_member):
         """Test that GET shows existing access tokens scoped to this team."""
@@ -209,7 +209,7 @@ class TestTeamTokensView:
         assert "Token B" not in content
 
     def test_unscoped_tokens_shown_with_warning(self, client: Client, sample_team_with_owner_member):
-        """Create unscoped token, verify deprecation warning in response."""
+        """Create unscoped token, verify the banner flags it."""
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
@@ -224,6 +224,21 @@ class TestTeamTokensView:
         assert "Legacy Token" in content
         assert "Unscoped" in content
         assert "Unscoped tokens detected" in content
+
+    def test_banner_promises_no_cutover(self, client: Client, sample_team_with_owner_member):
+        """docs/access-tokens.md says these stay valid until you rotate them, so
+        the banner must not announce a removal nobody has scheduled."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        AccessToken.objects.create(user=user, description="Legacy Token", encoded_token="legacy_token", team=None)
+
+        response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
+        content = response.content.decode()
+
+        assert "deprecated" not in content.lower()
+        assert "no forced cutover" in content
 
     def test_legacy_member_role_is_forbidden(self, client: Client, sample_team_with_owner_member):
         """Legacy ``role="member"`` is now rejected by the tokens view.
@@ -289,22 +304,98 @@ class TestCreateAccessTokenFormExpiry:
         """Omitting the choice falls back to the secure default of 90 days."""
         form = CreateAccessTokenForm({"description": "CI token"})
         assert form.is_valid(), form.errors
-        assert form.expiry_days() == 90
+        assert form.expiry_delta() == timedelta(days=90)
 
     def test_explicit_expiry_choice_is_honoured(self):
-        form = CreateAccessTokenForm({"description": "CI token", "expires_in_days": "30"})
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_hours": str(30 * 24)})
         assert form.is_valid(), form.errors
-        assert form.expiry_days() == 30
+        assert form.expiry_delta() == timedelta(days=30)
+
+    def test_hour_scale_presets_survive_as_hours(self):
+        """The point of the hours switch: a CI token for one run wants 12
+        hours, and days would round that away."""
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_hours": "12"})
+        assert form.is_valid(), form.errors
+        assert form.expiry_delta() == timedelta(hours=12)
+
+    def test_a_custom_ttl_in_hours_is_honoured(self):
+        form = CreateAccessTokenForm(
+            {
+                "description": "CI token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "8",
+                "custom_expiry_unit": "hours",
+            }
+        )
+        assert form.is_valid(), form.errors
+        assert form.expiry_delta() == timedelta(hours=8)
+
+    def test_a_custom_ttl_in_days_is_honoured(self):
+        form = CreateAccessTokenForm(
+            {
+                "description": "CI token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "3",
+                "custom_expiry_unit": "days",
+            }
+        )
+        assert form.is_valid(), form.errors
+        assert form.expiry_delta() == timedelta(days=3)
+
+    def test_custom_without_a_value_is_rejected(self):
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_hours": "custom"})
+        assert not form.is_valid()
+        assert "custom_expiry_value" in form.errors
+
+    def test_a_rejected_value_gets_one_message_not_two(self):
+        """A 0 is caught by the field's own min_value. Adding "enter how long"
+        underneath it tells the user to do the thing they just did."""
+        form = CreateAccessTokenForm(
+            {
+                "description": "CI token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "0",
+                "custom_expiry_unit": "hours",
+            }
+        )
+
+        assert not form.is_valid()
+        assert len(form.errors["custom_expiry_value"]) == 1
+
+    def test_a_custom_ttl_beyond_a_year_is_rejected(self):
+        """Past a year the row is indistinguishable from "never"; say so
+        rather than pretending to honour it."""
+        form = CreateAccessTokenForm(
+            {
+                "description": "CI token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "400",
+                "custom_expiry_unit": "days",
+            }
+        )
+        assert not form.is_valid()
+        assert "custom_expiry_value" in form.errors
+
+    def test_a_zero_custom_ttl_is_rejected(self):
+        form = CreateAccessTokenForm(
+            {
+                "description": "CI token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "0",
+                "custom_expiry_unit": "hours",
+            }
+        )
+        assert not form.is_valid()
 
     def test_no_expiration_choice_returns_none(self):
-        form = CreateAccessTokenForm({"description": "CI token", "expires_in_days": "never"})
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_hours": "never"})
         assert form.is_valid(), form.errors
-        assert form.expiry_days() is None
+        assert form.expiry_delta() is None
 
     def test_invalid_expiry_choice_is_rejected(self):
-        form = CreateAccessTokenForm({"description": "CI token", "expires_in_days": "forever-and-ever"})
+        form = CreateAccessTokenForm({"description": "CI token", "expires_in_hours": "forever-and-ever"})
         assert not form.is_valid()
-        assert "expires_in_days" in form.errors
+        assert "expires_in_hours" in form.errors
 
 
 @pytest.mark.django_db
@@ -334,18 +425,48 @@ class TestTeamTokenExpiry:
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        self._post(client, team, {"description": "Short token", "expires_in_days": "30"})
+        self._post(client, team, {"description": "Short token", "expires_in_hours": str(30 * 24)})
 
         token = AccessToken.objects.get(user=user, description="Short token")
         assert token.expires_at is not None
         assert abs((token.expires_at - token.created_at) - timedelta(days=30)) <= timedelta(minutes=1)
+
+    def test_post_creates_a_twelve_hour_token(self, client: Client, sample_team_with_owner_member):
+        """Viktor's case: a token minted per action run, hours not days."""
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        self._post(client, team, {"description": "Action token", "expires_in_hours": "12"})
+
+        token = AccessToken.objects.get(user=user, description="Action token")
+        assert abs((token.expires_at - token.created_at) - timedelta(hours=12)) <= timedelta(minutes=1)
+
+    def test_post_creates_an_arbitrary_custom_token(self, client: Client, sample_team_with_owner_member):
+        team = sample_team_with_owner_member.team
+        user = sample_team_with_owner_member.user
+        setup_authenticated_client_session(client, team, user)
+
+        self._post(
+            client,
+            team,
+            {
+                "description": "Custom token",
+                "expires_in_hours": "custom",
+                "custom_expiry_value": "36",
+                "custom_expiry_unit": "hours",
+            },
+        )
+
+        token = AccessToken.objects.get(user=user, description="Custom token")
+        assert abs((token.expires_at - token.created_at) - timedelta(hours=36)) <= timedelta(minutes=1)
 
     def test_post_no_expiration_leaves_null(self, client: Client, sample_team_with_owner_member):
         team = sample_team_with_owner_member.team
         user = sample_team_with_owner_member.user
         setup_authenticated_client_session(client, team, user)
 
-        self._post(client, team, {"description": "Forever token", "expires_in_days": "never"})
+        self._post(client, team, {"description": "Forever token", "expires_in_hours": "never"})
 
         token = AccessToken.objects.get(user=user, description="Forever token")
         assert token.expires_at is None

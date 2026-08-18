@@ -37,14 +37,17 @@
             // the linked stylesheets resolve. An inline style on the root element
             // already beats selector-based rules — no !important needed.
             var style = html.style;
+            // Full rgb() values: the tailwind.src.css tokens are whole colors,
+            // so a bare triplet here is invalid for every var() consumer and
+            // silently drops their declarations.
             if(isDark) {
-                style.setProperty('--color-surface','30 41 59');
-                style.setProperty('--color-surface-elevated','51 65 85');
-                style.setProperty('--color-border','51 65 85');
+                style.setProperty('--color-surface','rgb(30 41 59)');
+                style.setProperty('--color-surface-elevated','rgb(51 65 85)');
+                style.setProperty('--color-border','rgb(51 65 85)');
             } else {
-                style.setProperty('--color-surface','255 255 255');
-                style.setProperty('--color-surface-elevated','255 255 255');
-                style.setProperty('--color-border','226 232 240');
+                style.setProperty('--color-surface','rgb(255 255 255)');
+                style.setProperty('--color-surface-elevated','rgb(255 255 255)');
+                style.setProperty('--color-border','rgb(226 232 240)');
             }
         })();
     </script>
@@ -119,8 +122,9 @@
                 {% endwith %}
             {% endwith %}
             {# Fonts #}
-            <link rel="preconnect" href="https://fonts.gstatic.com">
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&display=swap"
                   rel="stylesheet">
             {# CSS #}
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
@@ -137,6 +141,7 @@
                   rel="stylesheet">
             <link href="{% static 'css/public-base.css' %}" rel="stylesheet">
             <link href="{% static 'css/public-pages.css' %}" rel="stylesheet">
+            <link href="{% static 'css/trust-center.css' %}" rel="stylesheet">
             <link rel="stylesheet"
                   href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}">
             {# Custom CSS Variables for Branding #}
@@ -152,10 +157,12 @@
                 --accent-color-light: {{ brand.accent_color|default:'#3b7ddd'|lighten:0.1 }};
                 --accent-color-dark: {{ brand.accent_color|default:'#3b7ddd'|darken:0.1 }};
 
-                /* Override Tailwind primary color with accent color for buttons/links */
-                --color-primary: {{ brand.accent_color|default:'#3b7ddd'|hex_to_rgb }};
-                --color-primary-light: {{ brand.accent_color|default:'#3b7ddd'|lighten:0.1|hex_to_rgb }};
-                --color-primary-dark: {{ brand.accent_color|default:'#3b7ddd'|darken:0.1|hex_to_rgb }};
+                /* Override Tailwind primary color with accent color for buttons/links.
+                   Whole rgb() values: the tokens are whole colors, and a bare
+                   triplet invalidates every var() consumer's declaration. */
+                --color-primary: rgb({{ brand.accent_color|default:'#3b7ddd'|hex_to_rgb }});
+                --color-primary-light: rgb({{ brand.accent_color|default:'#3b7ddd'|lighten:0.1|hex_to_rgb }});
+                --color-primary-dark: rgb({{ brand.accent_color|default:'#3b7ddd'|darken:0.1|hex_to_rgb }});
                 --text-primary: #1a202c;
                 --text-secondary: #64748b;
                 --text-muted: #94a3b8;
@@ -169,7 +176,7 @@
                 --radius-sm: 0.375rem;
                 --radius-md: 0.5rem;
                 --radius-lg: 0.75rem;
-                --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                --font-family-primary: 'Figtree', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
                 /* Bootstrap Overrides */
                 --bs-primary: var(--accent-color);
@@ -268,8 +275,8 @@
                (re-use ``--color-surface-elevated`` and ``--color-text`` so
                future palette tweaks flow through to <code> automatically). */
             html[data-theme="dark"] .prose code {
-                background-color: rgb(var(--color-surface-elevated));
-                color: rgb(var(--color-text));
+                background-color: var(--color-surface-elevated);
+                color: var(--color-text);
             }
 
             /* System theme - light preference */
@@ -356,15 +363,29 @@
                Accent Color: Buttons, links, highlights
                =========================================== */
 
-            /* Links use accent color */
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
+            /* Links use accent color.
+               [data-button] is a library button rendered as an anchor: it carries
+               its own recipe, and the tw-btn-* names in this list are the same
+               exclusion for the buttons that have not been migrated yet. */
+            .public-page a:not([data-button]):not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
                 color: var(--accent-color);
                 text-decoration: none;
                 transition: color 0.15s ease;
             }
 
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
+            .public-page a:not([data-button]):not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
                 color: var(--accent-color-dark);
+            }
+
+            /* Library buttons build their whole recipe from --color-primary, which
+               the app stylesheet owns and loads after this block. Handing them the
+               workspace accent as that token is the same substitution the tw-btn-*
+               rules below make by hand, done once and only on the button, so the
+               recipe itself stays in the component. */
+            .public-page [data-button] {
+                --color-primary: var(--accent-color);
+                --color-primary-light: var(--accent-color-light);
+                --color-primary-dark: var(--accent-color-dark);
             }
 
             /* Primary buttons use accent color */
@@ -457,8 +478,12 @@
                 outline-color: var(--accent-color);
             }
 
+            /* One flat colour from below the header all the way to the footer.
+               The page used to fade from --bg-secondary to --bg-tertiary, which
+               put a second, softer edge under every section and made the
+               content area read as a gradient panel rather than as the page. */
             body.public-page {
-                background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+                background: var(--bg-secondary);
                 color: var(--text-primary);
                 min-height: 100vh;
             }
@@ -572,7 +597,7 @@
             .public-main {
                 flex: 1;
                 position: relative;
-                background: var(--bg-secondary);
+                background: transparent;
             }
 
             .public-content-container {
@@ -591,7 +616,10 @@
             to anonymous trust-center visitors.)
 {% endcomment %}
             .public-footer {
-                background: linear-gradient(180deg, var(--bg-secondary, #ffffff) 0%, var(--bg-tertiary, #f8fafc) 100%);
+                /* Transparent, so the body's single colour carries straight
+                   through. The brand ::before bar is what separates the footer
+                   from the content, not a change of background. */
+                background: transparent;
                 margin-top: auto;
                 position: relative;
                 overflow: hidden;
@@ -681,8 +709,7 @@
 
             @media (max-width: 768px) {
                 .public-header-container {
-                    flex-wrap: wrap;
-                    justify-content: center;
+                    justify-content: space-between;
                     padding: 0 1rem;
                 }
 
@@ -690,16 +717,18 @@
                     display: none;
                 }
 
+                /* One row: logo on the left, actions on the right. Stacking
+                   them centred pushed the toggle onto its own row and doubled
+                   the header's height on phones. */
                 .brand-section {
-                    flex: 0 0 100%;
-                    order: 1;
-                    margin-bottom: 1rem;
+                    flex: 0 1 auto;
+                    justify-content: flex-start;
+                    text-align: left;
                 }
 
                 .header-actions {
-                    flex: 0 0 100%;
-                    justify-content: center;
-                    order: 2;
+                    flex: 1;
+                    justify-content: flex-end;
                 }
             }
 
@@ -710,10 +739,6 @@
 
                 .public-header-container {
                     padding: 0 0.75rem;
-                }
-
-                .brand-section {
-                    margin-bottom: 0.75rem;
                 }
 
                 .brand-logo {
@@ -1013,59 +1038,13 @@
                         {% endif %}
                     </div>
                     <div class="header-actions">
-                        {# Theme Toggle #}
-                        <div class="theme-toggle"
-                             x-data="themeToggle()"
-                             @click.outside="open = false"
-                             @keydown.escape.window="open = false">
-                            <button class="theme-toggle-btn"
-                                    type="button"
-                                    @click="open = !open"
-                                    :aria-expanded="open"
-                                    :title="'Theme: ' + currentLabel">
-                                <i :class="currentIcon"></i>
-                            </button>
-                            <div class="theme-toggle-menu"
-                                 x-show="open"
-                                 x-transition:enter="transition ease-out duration-100"
-                                 x-transition:enter-start="opacity-0 transform scale-95"
-                                 x-transition:enter-end="opacity-100 transform scale-100"
-                                 x-transition:leave="transition ease-in duration-75"
-                                 x-transition:leave-start="opacity-100 transform scale-100"
-                                 x-transition:leave-end="opacity-0 transform scale-95"
-                                 x-cloak>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'light' }"
-                                        @click="setTheme('light')">
-                                    <span class="item-content">
-                                        <i class="fas fa-sun"></i>
-                                        <span>Light</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'light'"></i>
-                                </button>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'dark' }"
-                                        @click="setTheme('dark')">
-                                    <span class="item-content">
-                                        <i class="fas fa-moon"></i>
-                                        <span>Dark</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'dark'"></i>
-                                </button>
-                                <button type="button"
-                                        class="theme-toggle-item"
-                                        :class="{ 'active': theme === 'system' }"
-                                        @click="setTheme('system')">
-                                    <span class="item-content">
-                                        <i class="fas fa-desktop"></i>
-                                        <span>System</span>
-                                    </span>
-                                    <i class="fas fa-check check-icon" x-show="theme === 'system'"></i>
-                                </button>
-                            </div>
-                        </div>
+                        {% comment %}
+                        Appearance sits in the brand header, top right, on every
+                        public page. The nav row below stays purely navigation —
+                        a lone icon pushed to the far end of it read as stray
+                        rather than placed.
+                        {% endcomment %}
+                        {% include "core/components/trust_center/theme_toggle.html.j2" %}
                         {% if user.is_authenticated %}
                             {% load teams %}
                             {% user_workspaces as available_workspaces %}
@@ -1123,8 +1102,16 @@
                     {% block header_content %}{% endblock %}
                 </div>
             </header>
+            {% include "core/components/trust_center/nav.html.j2" %}
             {# Main Content #}
             <main class="public-main">
+                {% comment %}
+                Full-bleed page header, outside the content container so a
+                masthead can span the viewport while its text still lines up
+                with the content below. Pages that do not define it lose nothing.
+                {% endcomment %}
+                {% block page_header %}
+                {% endblock %}
                 <div class="public-content-container">
                     {# Breadcrumb Navigation #}
                     {% block breadcrumb %}{% endblock %}
@@ -1136,15 +1123,11 @@
             <footer class="public-footer">
                 <div class="public-footer-container">
                     <div class="footer-content-wrapper">
-                        <div class="footer-title">
-                            {% if brand.name %}
-                                {{ brand.name }}
-                            {% else %}
-                                sbomify
-                            {% endif %}
-                            Trust Center
-                        </div>
-                        <div class="footer-divider-full"></div>
+                        {% comment %}
+                        The workspace name is already the page's H1 and the
+                        header logo, so repeating it as a footer title said
+                        nothing.
+                        {% endcomment %}
                         <div class="footer-bottom-row">
                             <div class="footer-copyright">
                                 © {% now "Y" %}
@@ -1183,13 +1166,13 @@
                 html.classList.toggle('light', !isDark);
                 html.classList.toggle('dark', isDark);
                 if (isDark) {
-                    style.setProperty('--color-surface', '30 41 59');
-                    style.setProperty('--color-surface-elevated', '51 65 85');
-                    style.setProperty('--color-border', '51 65 85');
+                    style.setProperty('--color-surface', 'rgb(30 41 59)');
+                    style.setProperty('--color-surface-elevated', 'rgb(51 65 85)');
+                    style.setProperty('--color-border', 'rgb(51 65 85)');
                 } else {
-                    style.setProperty('--color-surface', '255 255 255');
-                    style.setProperty('--color-surface-elevated', '255 255 255');
-                    style.setProperty('--color-border', '226 232 240');
+                    style.setProperty('--color-surface', 'rgb(255 255 255)');
+                    style.setProperty('--color-surface-elevated', 'rgb(255 255 255)');
+                    style.setProperty('--color-border', 'rgb(226 232 240)');
                 }
             }
 

@@ -30,7 +30,6 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             )
 
         current_team = request.session.get("current_team", {})
-        is_owner = current_team.get("role") == "owner"
         billing_plan = current_team.get("billing_plan")
 
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
@@ -120,20 +119,28 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
                 .distinct("plugin_name")
                 .values_list("result", flat=True)
             )
-            vex_statements = load_vex_suppressions(component_id)
-            latest_vulns = extract_finding_rows(merge_findings_by_alias(provider_results), vex_statements)
+            from sbomify.apps.vulnerability_scanning.kev import kev_ids_for_serialization
 
-        # The header badge counts the same merged, VEX-filtered view the table
-        # shows — counting a single run would disagree with the rows (e.g. OSV
-        # rates a finding high where DT said medium).
+            vex_statements = load_vex_suppressions(component_id)
+            latest_vulns = extract_finding_rows(
+                merge_findings_by_alias(provider_results),
+                vex_statements=vex_statements,
+                kev_ids=kev_ids_for_serialization(),
+            )
+
+        # The header badge counts the same merged view the table shows, minus
+        # what VEX suppressed — matching the Trust Center posture, which lists
+        # suppressed findings separately rather than inside the severity counts.
         vuln_summary = None
+        open_vulns = [v for v in latest_vulns if not v["vex_suppressed"]]
         if latest_vulns:
             vuln_summary = {
-                "total": len(latest_vulns),
-                "critical": sum(1 for v in latest_vulns if v["severity"] == "critical"),
-                "high": sum(1 for v in latest_vulns if v["severity"] == "high"),
-                "medium": sum(1 for v in latest_vulns if v["severity"] == "medium"),
-                "low": sum(1 for v in latest_vulns if v["severity"] == "low"),
+                "total": len(open_vulns),
+                "critical": sum(1 for v in open_vulns if v["severity"] == "critical"),
+                "high": sum(1 for v in open_vulns if v["severity"] == "high"),
+                "medium": sum(1 for v in open_vulns if v["severity"] == "medium"),
+                "low": sum(1 for v in open_vulns if v["severity"] == "low"),
+                "suppressed": len(latest_vulns) - len(open_vulns),
             }
         elif latest_scan_result:
             vuln_summary = extract_severity_counts(latest_scan_result)
@@ -142,8 +149,12 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         latest_vuln_terms = [
             f"{v['id']} {' '.join(v['aliases'])} {v['package']} {v['ecosystem']}".lower() for v in latest_vulns
         ]
-        # Parallel severity list so the drill-down's type/severity dropdown can filter by index.
+        # Parallel per-row lists so the drill-down's dropdowns and toggles can
+        # filter by index without re-serializing the rows.
         latest_vuln_severities = [v["severity"] for v in latest_vulns]
+        latest_vuln_states = [v["vex_state"] or "open" for v in latest_vulns]
+        latest_vuln_suppressed = [v["vex_suppressed"] for v in latest_vulns]
+        latest_vuln_kev = [v["kev"] for v in latest_vulns]
 
         # CBOM issues drill-down: the newest crypto-bearing artifact's
         # fail/warning compliance findings (newest CBOM, else the newest mixed
@@ -156,8 +167,10 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            # The page header's copy chip is a list, like every other detail
+            # page's, so the header component reads the same shape everywhere.
+            "header_copy_values": [{"value": component_id, "title": f"Component ID: {component_id} (click to copy)"}],
             "current_team": current_team,
-            "is_owner": is_owner,
             "team_billing_plan": billing_plan,
             "company_nda_id": company_nda_id,
             "gated_visibility_allowed": gated_visibility_allowed,
@@ -166,6 +179,9 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "latest_vulns": latest_vulns,
             "latest_vuln_terms": latest_vuln_terms,
             "latest_vuln_severities": latest_vuln_severities,
+            "latest_vuln_states": latest_vuln_states,
+            "latest_vuln_suppressed": latest_vuln_suppressed,
+            "latest_vuln_kev": latest_vuln_kev,
             "latest_vuln_version": latest_sbom["version"] if latest_sbom else None,
             "latest_vuln_sbom_id": latest_sbom_id,
             "latest_cbom_issues": cbom_issues.issues,

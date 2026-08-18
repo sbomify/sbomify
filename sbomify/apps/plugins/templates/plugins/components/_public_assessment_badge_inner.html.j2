@@ -1,0 +1,25 @@
+{% comment %}
+Shared body for the public assessment badge. Expects, via the including
+template: assessment (dict), badge_class, badge_icon, status_phrase.
+
+The visible text stays the plugin's display name (plus a compact "n/n" when
+check counts are known); everything citable — standard, version, verified
+date — goes in the tooltip so the badge row stays scannable.
+{% endcomment %}
+{% comment %}
+``status_phrase`` is the caller's wording for a clean run. It is only used when
+the run was clean: a badge reading "sbom-verification 1/7" with a tooltip saying
+"All checks passed — 1/7 checks passed" contradicts itself in the same sentence.
+
+A warning here is usually an optional thing that was absent — no signature, no
+provenance, no VCS metadata — rather than a failure, which is why the badge is
+still shown. It just does not claim more than happened.
+{% endcomment %}
+<span class="public-badge {{ badge_class }}"
+      title="{% if assessment.standard_name %}{{ assessment.standard_name }}{% if assessment.standard_version %} ({{ assessment.standard_version }}){% endif %}: {% else %}{{ assessment.display_name }}: {% endif %}{% if assessment.warning_count %}No failed checks{% else %}{{ status_phrase }}{% endif %}{% if assessment.pass_count and assessment.total_findings %}. {{ assessment.pass_count }}/{{ assessment.total_findings }} checks passed{% if assessment.warning_count %}, {{ assessment.warning_count }} warned{% endif %}{% endif %}{% if assessment.completed_at %}. Verified {{ assessment.completed_at|date:"j M Y" }}{% endif %}">
+    <i class="fas {{ badge_icon }}"></i>
+    {{ assessment.display_name }}
+    {% if assessment.pass_count and assessment.total_findings %}
+        <span class="public-badge-count">{{ assessment.pass_count }}/{{ assessment.total_findings }}</span>
+    {% endif %}
+</span>

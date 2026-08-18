@@ -20,7 +20,9 @@ class TestPurgeSoftDeletedUsers:
         from sbomify.apps.core.services.account_deletion import SOFT_DELETE_GRACE_DAYS
 
         user = django_user_model.objects.create_user(
-            username="expired_user", email="expired@example.com", password="test",
+            username="expired_user",
+            email="expired@example.com",
+            password="test",
             is_active=False,
         )
         user.deleted_at = timezone.now() - timedelta(days=SOFT_DELETE_GRACE_DAYS + 1)
@@ -38,7 +40,9 @@ class TestPurgeSoftDeletedUsers:
         from sbomify.apps.core.cron import purge_soft_deleted_users
 
         user = django_user_model.objects.create_user(
-            username="recent_user", email="recent@example.com", password="test",
+            username="recent_user",
+            email="recent@example.com",
+            password="test",
             is_active=False,
         )
         user.deleted_at = timezone.now() - timedelta(days=5)
@@ -56,7 +60,9 @@ class TestPurgeSoftDeletedUsers:
         from sbomify.apps.core.services.account_deletion import SOFT_DELETE_GRACE_DAYS
 
         user = django_user_model.objects.create_user(
-            username="active_user", email="active@example.com", password="test",
+            username="active_user",
+            email="active@example.com",
+            password="test",
             is_active=True,
         )
         user.deleted_at = timezone.now() - timedelta(days=SOFT_DELETE_GRACE_DAYS + 10)
@@ -81,26 +87,30 @@ class TestPurgeSoftDeletedUsers:
         from sbomify.apps.core.services.account_deletion import SOFT_DELETE_GRACE_DAYS
 
         user1 = django_user_model.objects.create_user(
-            username="fail_user", email="fail@example.com", password="test",
+            username="fail_user",
+            email="fail@example.com",
+            password="test",
             is_active=False,
         )
         user1.deleted_at = timezone.now() - timedelta(days=SOFT_DELETE_GRACE_DAYS + 1)
         user1.save()
 
         user2 = django_user_model.objects.create_user(
-            username="succeed_user", email="succeed@example.com", password="test",
+            username="succeed_user",
+            email="succeed@example.com",
+            password="test",
             is_active=False,
         )
         user2.deleted_at = timezone.now() - timedelta(days=SOFT_DELETE_GRACE_DAYS + 1)
         user2.save()
         user2_id = user2.id
 
-        call_count = 0
-
+        # Keyed on which user, not on call order. purge_soft_deleted_users
+        # iterates an unordered queryset, so Postgres is free to hand back
+        # either user first; failing "the first call" made the surviving user
+        # a matter of row order, and CI duly ordered it the other way.
         def mock_hard_delete(user):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
+            if user.username == "fail_user":
                 raise Exception("Simulated failure")
             user.delete()
             return True

@@ -1,5 +1,12 @@
-<span class="tw-spinner{% if size %} tw-spinner-{{ size }}{% endif %}{% if variant %} tw-spinner-{{ variant }}{% endif %}{% if class %} {{ class }}{% endif %}"
-      role="status"
-      aria-label="Loading">
-    <span class="sr-only">Loading...</span>
-</span>
+{% comment %}
+  Loading spinner — renders the animated brand loader.
+  This is a shim kept for existing callers; prefer including
+  "core/components/brand/loader.html.j2" directly in new code.
+
+  Parameters:
+  - size: "sm" (default), "md", or "lg"
+  - class: extra classes (positioning, colour override)
+{% endcomment %}
+{% with s=size|default:'sm' extra=class|default:'' %}
+    {% include "core/components/brand/loader.html.j2" with class="tw-loader-"|add:s|add:" text-primary "|add:extra %}
+{% endwith %}

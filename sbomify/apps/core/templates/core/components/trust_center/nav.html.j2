@@ -1,0 +1,37 @@
+{% load public_url_tags %}
+{% comment %}
+Persistent trust-center nav, rendered under the brand header on every public
+page.
+
+A reader who lands on an advisory or a component page from a search result or a
+customer email has no other way back to the workspace root — the logo is a link,
+but nothing says so. This makes "where am I and how do I get back" answerable
+from any page.
+
+Renders nothing when no workspace can be resolved, which is how the public pages
+that are not part of a trust center (standalone document and VDP pages) opt out
+without needing to know about this file.
+{% endcomment %}
+{% workspace_public_url as tc_home_url %}
+{% workspace_advisories_url as tc_advisories_url %}
+{% if tc_home_url %}
+    <nav class="tc-topnav" aria-label="Trust center">
+        <div class="tc-topnav-inner">
+            <a class="tc-topnav-item {% if request.path == tc_home_url %}is-current{% endif %}"
+               href="{{ tc_home_url }}"
+               {% if request.path == tc_home_url %}aria-current="page"{% endif %}>
+                <i class="fas fa-house" aria-hidden="true"></i>
+                Overview
+            </a>
+            {% if tc_advisories_url %}
+                {# startswith, so an advisory detail page still marks the section current. #}
+                <a class="tc-topnav-item {% if tc_advisories_url in request.path %}is-current{% endif %}"
+                   href="{{ tc_advisories_url }}"
+                   {% if tc_advisories_url in request.path %}aria-current="page"{% endif %}>
+                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
+                    Security advisories
+                </a>
+            {% endif %}
+        </div>
+    </nav>
+{% endif %}

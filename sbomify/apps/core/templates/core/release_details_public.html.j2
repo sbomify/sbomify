@@ -1,7 +1,7 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
+{% load public_url_tags %}
 {% load humanize %}
 {% block title %}{{ release.product.name }} - {{ release.name }}{% endblock %}
 {% block meta_description %}
@@ -16,259 +16,167 @@
 {% block og_description %}
     {{ release.name }} release for {{ release.product.name }}. Download SBOM and view release artifacts.
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb release 'release' %}
+{% block page_header %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner tc-masthead-detail">
+            <a class="tc-backlink"
+               href="{% public_url 'core:product_details_public' product_id=release.product.id product_slug=release.product.slug %}">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                {{ release.product.name }}
+            </a>
+            <div class="tc-detail-eyebrow">
+                <p class="tc-eyebrow">
+                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                    Release
+                </p>
+                {% if release.is_latest %}<c-badges.success>Latest</c-badges.success>{% endif %}
+                {% if release.is_prerelease %}<c-badges.warning>Pre-release</c-badges.warning>{% endif %}
+            </div>
+            <h1 class="tc-detail-title">{{ release.name }}</h1>
+            {% if release.description %}<p class="tc-detail-summary">{{ release.description }}</p>{% endif %}
+            <div class="tc-detail-meta">
+                <span class="tc-detail-meta-item">
+                    <i class="far fa-calendar" aria-hidden="true"></i>
+                    Released {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                </span>
+                {% if release.version %}<span class="tc-detail-meta-item tc-detail-meta-mono">{{ release.version }}</span>{% endif %}
+                {% if release.artifacts_count %}
+                    <span class="tc-detail-meta-item">
+                        <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
+                        {{ release.artifacts_count }} artifact{{ release.artifacts_count|pluralize }}
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </header>
 {% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        {# Parent navigation comes from the breadcrumb (`Trust Center > Product`). #}
-        {# Page Header #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 bg-primary/10">
-                    <i class="fas fa-tag text-2xl text-primary" aria-hidden="true"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h1 class="text-2xl lg:text-3xl font-bold text-text mb-2 flex items-center gap-3 flex-wrap">
-                        <span>{{ release.name }}</span>
-                        {% if release.is_latest %}
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-success/10 text-success border border-success/30">
-                                <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>Latest
-                            </span>
-                        {% endif %}
-                        {% if release.is_prerelease %}
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-warning/10 text-warning border border-warning/30">
-                                <i class="fas fa-flask text-xs" aria-hidden="true"></i>Pre-release
-                            </span>
-                        {% endif %}
-                    </h1>
-                    {% if release.description %}
-                        <p class="text-text-muted text-sm m-0">{{ release.description }}</p>
-                    {% else %}
-                        <p class="text-text-muted text-sm m-0">Release from {{ release.product.name }}</p>
-                    {% endif %}
-                </div>
+    {% if release.has_sboms or release.has_vex or release.has_cbom %}
+        <div class="tc-panel">
+            <h2 class="tc-panel-title">Download this release</h2>
+            <p class="tc-prose mb-4">Combined artifacts covering everything in this release.</p>
+            {% comment %}
+            outline-primary, not outline: the workspace accent overrides in
+            public_base drove the legacy outline button to the accent, and
+            public_base hands the accent to a library button as its primary.
+            {% endcomment %}
+            <div class="flex gap-3 flex-wrap">
+                {% if release.has_sboms %}
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release' release.id %}" title="Download release as CycloneDX" class="no-underline">
+                    <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                         alt="CycloneDX"
+                         class="h-5 w-auto dark:brightness-0 dark:invert"
+                         width="20"
+                         height="20">
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release' release.id %}?format=spdx" title="Download release as SPDX" class="no-underline">
+                    <img src="{% static 'img/spdx-logo.svg' %}"
+                         alt="SPDX"
+                         class="h-5 w-auto dark:brightness-0 dark:invert"
+                         width="20"
+                         height="20">
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
+                {% endif %}
+                {% if release.has_vex %}
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release_vex' release.id %}" title="Download latest VEX (CycloneDX)" class="no-underline">
+                    <i class="fas fa-file-contract" aria-hidden="true"></i>
+                    <span>VEX</span>
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
+                {% endif %}
+                {% if release.has_cbom %}
+                    <c-buttons.outline-primary href="{% url 'api-1:download_release_cbom' release.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)" class="no-underline">
+                    <i class="fas fa-key" aria-hidden="true"></i>
+                    <span>CBOM</span>
+                    <i class="fas fa-download text-xs" aria-hidden="true"></i>
+                    </c-buttons.outline-primary>
+                {% endif %}
             </div>
-            {# Download Buttons - Desktop #}
-            {% if release.has_sboms or release.has_vex or release.has_cbom %}
-                <div class="hidden lg:flex gap-2 flex-shrink-0">
-                    {% if release.has_sboms %}
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                           href="{% url 'api-1:download_release' release.id %}"
-                           title="Download release as CycloneDX">
-                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt="CycloneDX"
-                                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                                 width="16"
-                                 height="16">
-                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                        </a>
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                           href="{% url 'api-1:download_release' release.id %}?format=spdx"
-                           title="Download release as SPDX">
-                            <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt="SPDX"
-                                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                                 width="16"
-                                 height="16">
-                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                        </a>
-                    {% endif %}
-                    {% if release.has_vex %}
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                           href="{% url 'api-1:download_release_vex' release.id %}"
-                           title="Download latest VEX (CycloneDX)">
-                            <span class="text-sm font-semibold tracking-wide">VEX</span>
-                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                        </a>
-                    {% endif %}
-                    {% if release.has_cbom %}
-                        <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                           href="{% url 'api-1:download_release_cbom' release.id %}"
-                           title="Download CBOM (Cryptography BOM, CycloneDX)">
-                            <span class="text-sm font-semibold tracking-wide">CBOM</span>
-                            <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                        </a>
-                    {% endif %}
-                </div>
-            {% endif %}
         </div>
-        {# Meta Strip — one muted band with all release facts #}
-        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-text-muted">
-            <span class="inline-flex items-center gap-1.5">
-                <i class="far fa-calendar" aria-hidden="true"></i>
-                <span>Released</span>
-                <span class="font-semibold text-text">{{ release.released_at|default_if_none:release.created_at|naturaltime }}</span>
-            </span>
-            {% if release.version %}
-                <span class="inline-flex items-center gap-1.5">
-                    <i class="fas fa-code-branch" aria-hidden="true"></i>
-                    <code class="text-text font-mono text-xs px-2 py-0.5 rounded bg-border/30">{{ release.version }}</code>
-                </span>
-            {% endif %}
-            {% if release.artifacts_count %}
-                <span class="inline-flex items-center gap-1.5">
-                    <i class="fas fa-puzzle-piece" aria-hidden="true"></i>
-                    <span class="font-semibold text-text">{{ release.artifacts_count }}</span>
-                    <span>artifact{{ release.artifacts_count|pluralize }}</span>
-                </span>
-            {% endif %}
-        </div>
-        {# Download Card - Mobile Only #}
-        {% if release.has_sboms or release.has_vex or release.has_cbom %}
-            <div class="tw-card lg:hidden">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-download text-primary"></i>
-                        Download Release
-                    </h4>
+    {% endif %}
+    {# Vulnerability Posture — the release's VEX-applied posture #}
+    {% if vuln_posture.has_data %}
+        {{ vuln_posture|json_script:"vuln-posture-data" }}
+        <div class="tc-panel"
+             x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); } }"
+             x-init="init()">
+            <h2 class="tc-panel-title">Vulnerability posture</h2>
+            <div class="space-y-5">
+                {# Severity breakdown (VEX applied) #}
+                <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                    <c-layout.stat-card compact>
+                    <c-layout.stat.value x-text="data.counts.total" />
+                    <c-layout.stat.label>Total</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    {% comment %}
+                    The severity bands are not the card's four named accents, so each
+                    one points --stat-accent at its own severity token, exactly as the
+                    stylesheet expected.
+                    {% endcomment %}
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-critical)">
+                    <c-layout.stat.value x-text="data.counts.critical" />
+                    <c-layout.stat.label>Critical</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-high)">
+                    <c-layout.stat.value x-text="data.counts.high" />
+                    <c-layout.stat.label>High</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-medium)">
+                    <c-layout.stat.value x-text="data.counts.medium" />
+                    <c-layout.stat.label>Medium</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact style="--stat-accent: var(--color-severity-low)">
+                    <c-layout.stat.value x-text="data.counts.low" />
+                    <c-layout.stat.label>Low</c-layout.stat.label>
+                    </c-layout.stat-card>
+                    <c-layout.stat-card compact accent="muted">
+                    <c-layout.stat.value x-text="data.counts.unknown" />
+                    <c-layout.stat.label>Unknown</c-layout.stat.label>
+                    </c-layout.stat-card>
                 </div>
-                <div class="p-6">
-                    {% if release.has_sboms %}
-                        <p class="text-text-muted mb-4">Download consolidated SBOM containing all artifacts in this release.</p>
-                    {% endif %}
-                    <div class="flex gap-3 flex-wrap">
-                        {% if release.has_sboms %}
-                            <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                               href="{% url 'api-1:download_release' release.id %}"
-                               title="Download release as CycloneDX">
-                                <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                     alt="CycloneDX"
-                                     class="h-5 w-auto dark:brightness-0 dark:invert"
-                                     width="20"
-                                     height="20">
-                                <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </a>
-                            <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                               href="{% url 'api-1:download_release' release.id %}?format=spdx"
-                               title="Download release as SPDX">
-                                <img src="{% static 'img/spdx-logo.svg' %}"
-                                     alt="SPDX"
-                                     class="h-5 w-auto dark:brightness-0 dark:invert"
-                                     width="20"
-                                     height="20">
-                                <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </a>
-                        {% endif %}
-                        {% if release.has_vex %}
-                            <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                               href="{% url 'api-1:download_release_vex' release.id %}"
-                               title="Download latest VEX (CycloneDX)">
-                                <span class="text-sm font-semibold tracking-wide">VEX</span>
-                                <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </a>
-                        {% endif %}
-                        {% if release.has_cbom %}
-                            <a class="tw-btn-secondary inline-flex items-center gap-2 min-h-10 no-underline"
-                               href="{% url 'api-1:download_release_cbom' release.id %}"
-                               title="Download CBOM (Cryptography BOM, CycloneDX)">
-                                <span class="text-sm font-semibold tracking-wide">CBOM</span>
-                                <i class="fas fa-download text-xs" aria-hidden="true"></i>
-                            </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        {% endif %}
-        {# Vulnerability Posture — the release's VEX-applied posture #}
-        {% if vuln_posture.has_data %}
-            {{ vuln_posture|json_script:"vuln-posture-data" }}
-            <div class="tw-card"
-                 x-data="{ data: { counts: {}, findings: [], suppressed_count: 0 }, init() { this.data = window.parseJsonScript ? window.parseJsonScript('vuln-posture-data') : JSON.parse(document.getElementById('vuln-posture-data').textContent); }, sevPill(sev) { return { critical: 'bg-red-500/10 text-red-600', high: 'bg-orange-500/10 text-orange-600', medium: 'bg-yellow-500/10 text-yellow-700', low: 'bg-cyan-500/10 text-cyan-600' }[sev] || 'bg-border/40 text-text-muted'; } }"
-                 x-init="init()">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-shield-halved text-primary" aria-hidden="true"></i>
-                        Vulnerability Posture
-                    </h4>
-                </div>
-                <div class="p-6 space-y-5">
-                    {# Severity breakdown (VEX applied) #}
-                    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-background border border-border">
-                            <div>
-                                <span class="text-xl font-bold text-text" x-text="data.counts.total"></span>
-                                <span class="block text-xs text-text-muted">Total</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/10">
-                            <div>
-                                <span class="text-xl font-bold text-red-600" x-text="data.counts.critical"></span>
-                                <span class="block text-xs text-text-muted">Critical</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-orange-500/5 border border-orange-500/10">
-                            <div>
-                                <span class="text-xl font-bold text-orange-600" x-text="data.counts.high"></span>
-                                <span class="block text-xs text-text-muted">High</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
-                            <div>
-                                <span class="text-xl font-bold text-yellow-700" x-text="data.counts.medium"></span>
-                                <span class="block text-xs text-text-muted">Medium</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/10">
-                            <div>
-                                <span class="text-xl font-bold text-cyan-600" x-text="data.counts.low"></span>
-                                <span class="block text-xs text-text-muted">Low</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 p-3 rounded-lg bg-background border border-border">
-                            <div>
-                                <span class="text-xl font-bold text-text-muted"
-                                      x-text="data.counts.unknown"></span>
-                                <span class="block text-xs text-text-muted">Unknown</span>
-                            </div>
-                        </div>
-                    </div>
-                    {# Suppression note #}
-                    <p class="text-sm text-text-muted m-0 flex items-center gap-2 flex-wrap"
-                       x-show="data.suppressed_count > 0"
-                       x-cloak>
-                        <i class="fas fa-circle-check text-success" aria-hidden="true"></i>
-                        <span>
-                            <span class="font-semibold text-text" x-text="data.suppressed_count"></span>
-                            finding<span x-show="data.suppressed_count !== 1">s</span>
-                            suppressed by VEX (not affected / false positive).
-                        </span>
-                    </p>
-                    {# Findings list #}
-                    <div class="divide-y divide-border" x-show="data.findings.length" x-cloak>
-                        <template x-for="f in data.findings" :key="f.idx">
-                            <div class="py-2.5 flex items-start gap-3"
-                                 :class="f.suppressed ? 'opacity-50' : ''">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase flex-shrink-0"
-                                      :class="sevPill(f.severity)"
-                                      x-text="f.severity"></span>
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2 flex-wrap">
-                                        <span class="font-mono text-sm text-text px-1.5 py-0.5 rounded bg-border/30"
-                                              x-text="f.id"></span>
-                                        <span class="text-text-muted text-xs"
-                                              x-show="f.component"
-                                              x-text="f.component + (f.component_version ? ' ' + f.component_version : '')"></span>
-                                        <span class="tw-badge tw-badge-secondary text-xs"
-                                              x-show="f.suppressed"
-                                              x-text="f.state.replace(/_/g, ' ')"></span>
-                                    </div>
-                                    <p class="text-xs text-text-muted m-0 mt-0.5"
-                                       x-show="f.suppressed &amp;&amp; f.justification"
-                                       x-text="'VEX: ' + f.justification.replace(/_/g, ' ')"></p>
+                {# Suppression note #}
+                <p class="text-sm text-text-muted m-0 flex items-center gap-2 flex-wrap"
+                   x-show="data.suppressed_count > 0"
+                   x-cloak>
+                    <i class="fas fa-circle-check text-success" aria-hidden="true"></i>
+                    <span>
+                        <span class="font-semibold text-text" x-text="data.suppressed_count"></span>
+                        finding<span x-show="data.suppressed_count !== 1">s</span>
+                        suppressed by VEX (not affected / false positive).
+                    </span>
+                </p>
+                {# Findings list #}
+                <div class="divide-y divide-border" x-show="data.findings.length" x-cloak>
+                    <template x-for="f in data.findings" :key="f.idx">
+                        <div class="py-2.5 flex items-start gap-3"
+                             :class="f.suppressed ? 'opacity-50' : ''">
+                            {# The band comes from the row Alpine builds, so it binds data-level. #}
+                            <c-badges.severity-dynamic class="flex-shrink-0" ::data-level="f.severity" x-text="f.severity" />
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <c-code-inline x-text="f.id" />
+                                    <span class="text-text-muted text-xs"
+                                          x-show="f.component"
+                                          x-text="f.component + (f.component_version ? ' ' + f.component_version : '')"></span>
+                                    <c-badges.secondary x-show="f.suppressed" x-text="f.state.replace(/_/g, ' ')" />
                                 </div>
+                                <p class="text-xs text-text-muted m-0 mt-0.5"
+                                   x-show="f.suppressed &amp;&amp; f.justification"
+                                   x-text="'VEX: ' + f.justification.replace(/_/g, ' ')"></p>
                             </div>
-                        </template>
-                    </div>
-                    <p class="text-sm text-text-muted m-0"
-                       x-show="!data.findings.length"
-                       x-cloak>No vulnerabilities found in this release.</p>
+                        </div>
+                    </template>
                 </div>
+                <p class="text-sm text-text-muted m-0"
+                   x-show="!data.findings.length"
+                   x-cloak>No vulnerabilities found in this release.</p>
             </div>
-        {% endif %}
-        {# Release Artifacts #}
-        {% include 'core/components/public_release_artifacts.html.j2' %}
-    </div>
+        </div>
+    {% endif %}
+    {# Release Artifacts #}
+    {% include 'core/components/public_release_artifacts.html.j2' %}
 {% endblock %}
 {% block scripts %}
     {% vite_asset 'sbomify/apps/core/js/main.ts' %}

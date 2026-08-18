@@ -1,0 +1,1679 @@
+/* ==========================================================================
+   Trust Center
+   --------------------------------------------------------------------------
+   The visitor-facing surface: hero, section nav, advisory feed, product and
+   compliance cards.
+
+   Everything here is theme-driven through the CSS variables public_base.htmx.j2
+   sets per theme (--color-surface, --color-text, --border-color, ...) plus the
+   workspace's own --brand-color / --accent-color. No literal light-mode colour
+   is hardcoded, so a workspace's branding and the visitor's dark-mode toggle
+   both flow through without a second set of rules.
+
+   Prefix is `tc-` so these never collide with the `tw-*` component classes or
+   the older `public-*` rules in public-pages.css.
+   ========================================================================== */
+
+/* --- Masthead ------------------------------------------------------------- */
+/* A page header rather than a card: it spans the viewport, and only its inner
+   container is width-limited, so its text lines up with the content below. */
+
+.tc-masthead {
+    position: relative;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* One soft wash of the workspace's brand colour, top-right. This is the only
+   place branding is expressed as a shape rather than as an accent on a control,
+   which is why the rest of the page can stay plain. */
+.tc-masthead::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(90% 130% at 92% -30%,
+        rgba(var(--brand-color-rgb), 0.13) 0%, transparent 60%);
+}
+
+.tc-masthead-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3.25rem 1rem 2.75rem;
+}
+
+.tc-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--accent-color);
+    margin: 0 0 1rem;
+}
+
+.tc-eyebrow-dot {
+    width: 0.4375rem;
+    height: 0.4375rem;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.18);
+}
+
+.tc-masthead-title {
+    font-size: clamp(2rem, 4.5vw, 2.75rem);
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    color: var(--text-primary);
+    margin: 0 0 0.875rem;
+}
+
+.tc-masthead-lede {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 44rem;
+    margin: 0;
+}
+
+/* --- Masthead stats ------------------------------------------------------- */
+/* A plain row with hairline separators. The previous bordered grid read as a
+   second card sitting inside the first; the numbers are the point, so nothing
+   is drawn around them. */
+
+.tc-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2.75rem;
+    margin: 2.5rem 0 0;
+}
+
+.tc-stat {
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse; /* value renders above its label */
+    gap: 0.3125rem;
+    padding-right: 2.75rem;
+}
+
+.tc-stat:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0.125rem;
+    bottom: 0.125rem;
+    width: 1px;
+    background: var(--border-color);
+}
+
+.tc-stat-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.tc-stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+}
+
+/* A date is not a tally: it gets the same slot but not the same weight, so the
+   row still reads as three numbers and one timestamp. */
+.tc-stat-value-date {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    padding-top: 0.5rem;
+}
+
+@media (max-width: 640px) {
+    .tc-masthead-inner {
+        padding: 2.25rem 1rem 2rem;
+    }
+
+    .tc-stats {
+        gap: 1.5rem 1.75rem;
+    }
+
+    .tc-stat {
+        padding-right: 1.75rem;
+    }
+}
+
+/* --- Sections ------------------------------------------------------------- */
+/* One rhythm for the whole page: 3.5rem between sections, 1.25rem from a
+   section's heading block to its content. */
+
+.tc-section {
+    scroll-margin-top: 4.5rem; /* clears the sticky top nav when jumped to */
+    margin-bottom: 3.5rem;
+}
+
+.tc-section:last-child {
+    margin-bottom: 1rem;
+}
+
+.tc-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+
+.tc-section-heading {
+    min-width: 0;
+}
+
+.tc-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.tc-section-sub {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--text-muted);
+    margin: 0.3125rem 0 0;
+    max-width: 42rem;
+}
+
+.tc-section-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.tc-section-link i {
+    font-size: 0.6875rem;
+    transition: transform 0.15s ease;
+}
+
+.tc-section-link:hover i {
+    transform: translateX(3px);
+}
+
+/* --- Persistent top nav (rendered under the brand header on every page) ---- */
+
+.tc-topnav {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tc-topnav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tc-topnav-inner::-webkit-scrollbar {
+    display: none;
+}
+
+.tc-topnav-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    padding: 0.75rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 550;
+    white-space: nowrap;
+    color: var(--text-secondary) !important;
+    /* Transparent underline reserved up front, so the current-page marker
+       cannot shift the row by a pixel when it appears. */
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tc-topnav-item:hover {
+    color: var(--accent-color) !important;
+    text-decoration: none;
+}
+
+.tc-topnav-item.is-current {
+    color: var(--accent-color) !important;
+    border-bottom-color: var(--accent-color);
+}
+
+.tc-topnav-item i {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+
+/* --- Advisory rows -------------------------------------------------------- */
+
+.tc-advisory-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-color);
+    border-radius: 0.875rem;
+    overflow: hidden;
+    background: var(--surface-card);
+}
+
+.tc-advisory-row {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.125rem 1.25rem 1.125rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    text-decoration: none !important;
+    transition: background 0.15s ease;
+}
+
+.tc-advisory-row:last-child {
+    border-bottom: 0;
+}
+
+.tc-advisory-row:hover {
+    background: var(--bg-secondary);
+}
+
+/* The severity spine: a 3px bar down the left edge of the row. */
+.tc-advisory-severity {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--gray-200);
+}
+
+.tc-severity-critical { background: #dc2626; }
+.tc-severity-high     { background: #ea580c; }
+.tc-severity-medium   { background: #d97706; }
+.tc-severity-low      { background: #2563eb; }
+.tc-severity-none     { background: var(--gray-200); }
+
+.tc-advisory-id {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-muted);
+}
+
+.tc-advisory-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text-primary);
+    margin: 0;
+    transition: color 0.15s ease;
+}
+
+.tc-advisory-row:hover .tc-advisory-title {
+    color: var(--accent-color);
+}
+
+.tc-advisory-summary {
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--text-muted);
+    margin: 0.3125rem 0 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.tc-advisory-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.625rem;
+}
+
+.tc-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+}
+
+.tc-meta-item i {
+    opacity: 0.65;
+}
+
+.tc-product-chip {
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+}
+
+.tc-product-chip-muted {
+    border-style: dashed;
+    color: var(--text-muted);
+    background: transparent;
+}
+
+.tc-advisory-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.4375rem;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.tc-status-line {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.tc-status-line i {
+    font-size: 0.6875rem;
+    opacity: 0.7;
+}
+
+.tc-advisory-date {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.tc-lock-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: 0.375rem;
+    background: rgba(var(--accent-color-rgb), 0.11);
+    color: var(--accent-color);
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.tc-lock-chip i {
+    font-size: 0.625rem;
+}
+
+/* --- Restricted-content notice -------------------------------------------- */
+
+.tc-restricted {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.9375rem 1.125rem;
+    margin-top: 0.875rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 0.75rem;
+    background: var(--bg-secondary);
+}
+
+.tc-restricted-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 0.625rem;
+    background: rgba(var(--accent-color-rgb), 0.11);
+    color: var(--accent-color);
+}
+
+.tc-restricted-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.tc-restricted-body {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin: 0.1875rem 0 0;
+}
+
+/* --- Cards (products, compliance artifacts) -------------------------------- */
+
+.tc-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: 1rem;
+}
+
+.tc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.875rem;
+    background: var(--surface-card);
+    text-decoration: none !important;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tc-card:hover {
+    border-color: rgba(var(--accent-color-rgb), 0.45);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px -10px var(--shadow-color);
+}
+
+.tc-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.625rem;
+}
+
+.tc-card-title {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    line-height: 1.4;
+    color: var(--text-primary);
+    margin: 0;
+    transition: color 0.15s ease;
+}
+
+.tc-card:hover .tc-card-title {
+    color: var(--accent-color);
+}
+
+.tc-card-tag {
+    flex-shrink: 0;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.tc-card-desc {
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--text-muted);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    /* Reserves two lines so every card in a row bottoms out together, whatever
+       its description length. */
+    min-height: 2.5rem;
+}
+
+.tc-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--border-color-light);
+}
+
+.tc-card-foot-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.tc-card-count {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.tc-card-arrow {
+    font-size: 0.75rem;
+    color: var(--accent-color);
+    transition: transform 0.15s ease;
+}
+
+.tc-card:hover .tc-card-arrow {
+    transform: translateX(3px);
+}
+
+/* --- Empty state ---------------------------------------------------------- */
+
+.tc-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 3rem 1.5rem;
+    border: 1px dashed var(--border-color);
+    border-radius: 0.875rem;
+    text-align: center;
+    background: var(--surface-card-muted);
+}
+
+.tc-empty-icon {
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    opacity: 0.55;
+    margin-bottom: 0.25rem;
+}
+
+.tc-empty-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.tc-empty-body {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin: 0;
+    max-width: 28rem;
+}
+
+/* ==========================================================================
+   Advisory index — the filter-sidebar + dense-table dashboard
+   --------------------------------------------------------------------------
+   Modelled on how vendor advisory indexes are read: filter down the left,
+   scan a version matrix on the right. One advisory occupies a <tbody> whose
+   CVSS/summary/date cells rowspan its per-product rows.
+   ========================================================================== */
+
+.tc-page-title {
+    font-size: 1.75rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    color: var(--text-primary);
+    margin: 0 0 1.5rem;
+}
+
+.tc-browse {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .tc-browse {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 1.25rem;
+    }
+}
+
+/* --- Filter sidebar ------------------------------------------------------- */
+
+.tc-filters {
+    position: sticky;
+    top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* The facet groups. On desktop this is just the sidebar's lower half; on a
+   narrow screen it becomes the collapsible part, and .tc-filters-toggle is
+   what opens it. */
+.tc-filters-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+/* Desktop only: the panel is always open, so there is nothing to toggle. */
+.tc-filters-toggle {
+    display: none;
+}
+
+/* The disclosure's state. Visually hidden rather than display:none, so it stays
+   focusable and reachable by keyboard and assistive tech. */
+.tc-filters-state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 900px) {
+    .tc-filters {
+        position: static;
+        gap: 0.875rem;
+    }
+
+    .tc-filters-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        /* 44px: a comfortable thumb target rather than a pointer one. */
+        min-height: 2.75rem;
+        padding: 0.5rem 0.875rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.625rem;
+        background: var(--bg-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        cursor: pointer;
+    }
+
+    .tc-filters-toggle > span:first-of-type {
+        margin-right: auto;
+    }
+
+    .tc-filters-toggle i:first-child {
+        font-size: 0.8125rem;
+        color: var(--accent-color);
+    }
+
+    .tc-filters-chevron {
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        transition: transform 0.2s ease;
+    }
+
+
+    .tc-filters-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.25rem;
+        height: 1.25rem;
+        padding: 0 0.375rem;
+        border-radius: 999px;
+        background: var(--accent-color);
+        color: #ffffff;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* The head is the desktop panel's own title; the toggle already says
+       "Filters" on mobile, so only "Clear all" is worth keeping. */
+    .tc-filters-head {
+        border-bottom: 0;
+        padding-bottom: 0;
+        justify-content: flex-end;
+    }
+
+    .tc-filters-title {
+        display: none;
+    }
+
+    .tc-filters-head:not(:has(.tc-filters-clear)) {
+        display: none;
+    }
+
+    /* Collapsed until #tcFiltersOpen is checked. That checkbox sits in the page
+       shell, outside the region HTMX swaps, so the panel keeps its state across
+       filter changes with no script involved. */
+    .tc-filters-body {
+        display: none;
+        padding: 0.25rem 0.875rem 0.875rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.625rem;
+        background: var(--bg-primary);
+    }
+
+    .tc-filters-state:checked ~ #advisoryBrowse .tc-filters-body {
+        display: flex;
+    }
+
+    .tc-filters-state:checked ~ #advisoryBrowse .tc-filters-chevron {
+        transform: rotate(180deg);
+    }
+
+    /* Keyboard users focus the checkbox, not the label, so the ring has to be
+       drawn on the label the checkbox is hidden behind. */
+    .tc-filters-state:focus-visible ~ #advisoryBrowse .tc-filters-toggle {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15);
+    }
+
+    /* Two columns of facets: severity is five short rows that waste a phone's
+       width stacked, and it halves the height of the open panel. */
+    .tc-filter-group {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.125rem 0.75rem;
+    }
+
+    .tc-filter-heading {
+        grid-column: 1 / -1;
+        margin-top: 0.75rem;
+    }
+
+    .tc-facet {
+        /* Taller rows so a fingertip lands on one checkbox, not between two. */
+        min-height: 2.25rem;
+        margin: 0;
+    }
+
+    .tc-filter-date {
+        grid-column: 1 / -1;
+    }
+
+    .tc-filter-date input {
+        min-height: 2.5rem;
+    }
+
+    .tc-filter-search input {
+        /* 16px stops iOS Safari zooming the viewport on focus. */
+        font-size: 1rem;
+    }
+}
+
+/* Sidebar header. "Clear all" is a quiet text link rather than a button: the
+   filters apply the moment they are ticked, so the only action left is undo,
+   and giving undo button weight would imply the filters need confirming. */
+.tc-filters-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-bottom: 0.625rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tc-filters-title {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.tc-filters-clear {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* The webapp's data-table search box placed in a section head (products table
+   on the overview) sits on the heading's baseline row — centre it instead. */
+.tc-section-head .tw-data-table-search {
+    align-self: center;
+}
+
+/* The same search box slotted into the advisories filter sidebar: the input
+   flexes to the column instead of holding its toolbar min-width, which would
+   overflow the sidebar. */
+.tc-filter-search-slot {
+    width: 100%;
+}
+
+.tc-filter-search-slot .tw-data-table-search-input {
+    width: 100%;
+    min-width: 0;
+}
+
+/* The webapp toolbar's band and divider are declared with color-mix over
+   variables the public theme defines as RGB triplets (see the tw-table note
+   above) — redeclare them in the form these pages use. */
+.tc-panel .tw-data-table-toolbar {
+    background: color-mix(in oklab, var(--color-background) 50%, transparent);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+}
+
+/* Same triplet fix for the search input and select the toolbar carries —
+   their borders, surfaces and focus rings all resolve through the webapp's
+   colour variables and silently vanish on the public theme. */
+.public-page .tw-data-table-search-input,
+.public-page .tw-data-table-page-size-select {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+}
+
+.public-page .tw-data-table-search-input:focus,
+.public-page .tw-data-table-page-size-select:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15);
+}
+
+/* Only reachable with JavaScript off, where the filters cannot self-apply. */
+.tc-filter-apply {
+    padding: 0.4375rem 1.125rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: var(--bg-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.tc-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+/* Title case, at body size. Neither shouted nor lowercased — the group name and
+   the options beneath it are the same kind of word, so they get the same
+   casing, and only weight separates them. */
+.tc-filter-heading {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--text-primary);
+    margin: 0 0 0.4375rem;
+}
+
+.tc-filter-date {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.375rem;
+}
+
+.tc-filter-date label {
+    width: 2.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.tc-filter-date input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.4375rem;
+    background: var(--bg-primary);
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    font-family: inherit;
+}
+
+.tc-filter-date input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15);
+}
+
+/* Facet rows are full-width hit targets with their own hover, so the whole
+   line reads as clickable rather than just the checkbox. */
+.tc-facet {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3125rem 0.5rem;
+    margin: 0 -0.5rem;
+    border-radius: 0.4375rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.tc-facet:hover {
+    background: rgba(var(--accent-color-rgb), 0.07);
+    color: var(--accent-color);
+}
+
+.tc-facet:has(input:checked) {
+    background: rgba(var(--accent-color-rgb), 0.1);
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+/* A facet that would return nothing stays visible — its zero is information —
+   but recedes so the eye skips it. */
+.tc-facet-empty {
+    opacity: 0.45;
+}
+
+.tc-facet input {
+    width: 0.875rem;
+    height: 0.875rem;
+    flex-shrink: 0;
+    accent-color: var(--accent-color);
+    cursor: pointer;
+}
+
+/* Severity swatch, same palette as the CVSS chip in the table, so the sidebar
+   and the results agree about what "high" looks like. */
+.tc-facet-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--gray-200);
+}
+
+.tc-facet-dot.tc-severity-critical { background: #b91c1c; }
+.tc-facet-dot.tc-severity-high     { background: #ea580c; }
+.tc-facet-dot.tc-severity-medium   { background: #d97706; }
+.tc-facet-dot.tc-severity-low      { background: #2563eb; }
+.tc-facet-dot.tc-severity-none     { background: #94a3b8; }
+
+.tc-facet-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.tc-facet-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.tc-facet:has(input:checked) .tc-facet-count {
+    color: inherit;
+}
+
+/* HTMX in flight: dim the region so a slow filter reads as working, not stuck. */
+#advisoryBrowse.htmx-request .tc-results {
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+/* --- Results bar ---------------------------------------------------------- */
+
+.tc-results {
+    min-width: 0;
+}
+
+.tc-results-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-bottom: 0.875rem;
+}
+
+.tc-results-count {
+    margin-right: auto;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.tc-pager {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.tc-pager-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.4375rem;
+    background: var(--bg-primary);
+    font-size: 0.75rem;
+    color: var(--text-secondary) !important;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.tc-pager-btn:hover {
+    border-color: var(--accent-color);
+    background: rgba(var(--accent-color-rgb), 0.07);
+    text-decoration: none;
+}
+
+.tc-pager-btn-off {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.tc-sort {
+    padding: 0.4375rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.4375rem;
+    background: var(--bg-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.tc-sort:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb), 0.15);
+}
+
+/* --- The advisory table --------------------------------------------------- */
+
+/* The table still scrolls inside .tc-table-wrap on a narrow viewport, but the
+   min-width is set so the full column set fits the 1200px content container
+   once the 15rem sidebar and its gap are subtracted — the Updated column being
+   clipped by default would hide the one date a reader checks for freshness. */
+/* Auto layout, not fixed: the version-range cells are nowrap, and a fixed
+   grid would let a long range run under its neighbour instead of widening
+   the column. The percentage widths on the tc-col-* classes still shape the
+   proportions; tc-table-wrap scrolls sideways when ranges outgrow the page. */
+.tc-adv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    min-width: 52rem;
+}
+
+.tc-adv-table thead th {
+    text-align: left;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.tc-adv-table td {
+    padding: 0.75rem;
+    color: var(--text-secondary);
+    vertical-align: top;
+    /* Dotted separators between a single advisory's product rows; the solid
+       rule between advisories comes from the tbody border below. */
+    border-bottom: 1px dotted var(--border-color);
+}
+
+/* One advisory = one tbody. The solid top border is what visually groups its
+   product rows into a single entry. */
+.tc-adv-group + .tc-adv-group {
+    border-top: 1px solid var(--border-color);
+}
+
+.tc-adv-group:hover td {
+    background: var(--bg-secondary);
+}
+
+.tc-adv-group tr:last-child td {
+    border-bottom: 0;
+}
+
+/* Fixed layout, so these widths are the contract rather than a hint. They add
+   up to 100%: 6 + 26 + 15 + 18 + 18 + 8.5 + 8.5. */
+.tc-col-cvss {
+    width: 6%;
+}
+
+.tc-col-summary {
+    width: 26%;
+    /* Auto table layout gives the nowrap version columns whatever they ask
+       for; without a floor the summary is what they take it from. */
+    min-width: 18rem;
+}
+
+/* Version, range and date cells never wrap — a broken "= 2.0" on its own
+   line reads as a different constraint. tc-table-wrap scrolls sideways
+   instead when the ranges outgrow the viewport. */
+.tc-col-product {
+    width: 15%;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.tc-col-versions {
+    width: 18%;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    white-space: nowrap;
+}
+
+.tc-col-date {
+    width: 8.5%;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The CVSS chip. Colour carries the severity band, and the number carries the
+   precision — neither alone is enough, and colour is never the only signal
+   because the score itself is always printed. */
+.tc-cvss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+    padding: 0.25rem 0.4375rem;
+    border-radius: 0.3125rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #ffffff;
+    background: #64748b;
+}
+
+.tc-cvss-critical { background: #b91c1c; }
+.tc-cvss-high     { background: #ea580c; }
+.tc-cvss-medium   { background: #d97706; }
+.tc-cvss-low      { background: #2563eb; }
+.tc-cvss-none     { background: #64748b; }
+
+.tc-adv-link {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--text-primary) !important;
+}
+
+.tc-adv-link:hover {
+    color: var(--accent-color) !important;
+    text-decoration: underline;
+}
+
+.tc-adv-cve {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    color: var(--accent-color);
+}
+
+.tc-adv-tags {
+    display: flex;
+    align-items: center;
+    gap: 0.4375rem;
+    flex-wrap: wrap;
+    margin-top: 0.4375rem;
+}
+
+.tc-adv-id {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+}
+
+.tc-adv-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+}
+
+.tc-adv-status i {
+    font-size: 0.625rem;
+    opacity: 0.75;
+}
+
+.tc-adv-withheld {
+    margin: 0.4375rem 0 0;
+    font-size: 0.6875rem;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+    .tc-results-bar {
+        flex-wrap: wrap;
+    }
+}
+
+/* --- Advisory detail masthead --------------------------------------------- */
+/* Shares .tc-masthead with the trust-center home, so an advisory reads as a
+   page of this site. Only the inner rhythm differs: identity, title, summary,
+   then the facts a reader checks before reading on. */
+
+.tc-masthead-detail {
+    padding-top: 1.75rem;
+}
+
+.tc-backlink {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+}
+
+.tc-backlink i {
+    font-size: 0.6875rem;
+    transition: transform 0.15s ease;
+}
+
+.tc-backlink:hover i {
+    transform: translateX(-3px);
+}
+
+.tc-detail-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.875rem;
+}
+
+.tc-detail-id {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+}
+
+/* Sized below the workspace name on the home masthead: an advisory title is a
+   sentence, not a brand, and it has to stay readable at three lines. */
+.tc-detail-title {
+    font-size: clamp(1.5rem, 3vw, 2.125rem);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+    color: var(--text-primary);
+    margin: 0;
+    max-width: 52rem;
+}
+
+.tc-detail-summary {
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    max-width: 46rem;
+    margin: 0.875rem 0 0;
+}
+
+/* The fact row. Generous gaps so the badges and dates do not read as one
+   run-on line, which is what made the old header feel cramped. */
+.tc-detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem 1.25rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.tc-detail-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.tc-detail-meta-item i {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.tc-detail-meta-mono {
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    font-size: 0.75rem;
+}
+
+/* --- Advisory detail ------------------------------------------------------ */
+
+.tc-detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .tc-detail-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.tc-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 0.875rem;
+    background: var(--surface-card);
+    padding: 1.375rem;
+    margin-bottom: 1.25rem;
+}
+
+.tc-panel-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 0.875rem;
+}
+
+.tc-prose {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    white-space: pre-line;
+}
+
+.tc-facts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.tc-fact-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 0.1875rem;
+}
+
+.tc-fact-value {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin: 0;
+    word-break: break-word;
+}
+
+/* Affected-versions table: horizontally scrollable so a long version range
+   never forces the page body to scroll sideways. */
+.tc-table-wrap {
+    overflow-x: auto;
+}
+
+.tc-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    min-width: 34rem;
+}
+
+/* A panel whose children manage their own padding (the tw-table data tables
+   and the release artifacts table's search bar and rows each carry their
+   own) — the panel contributes only the border, radius and surface. */
+.tc-panel.tc-panel-flush {
+    padding: 0;
+    overflow: hidden;
+}
+
+/* tw-table's own row divider and header band are declared over the webapp's
+   --color-border / --color-background, which the public pages define as RGB
+   triplets — those declarations silently fail here, leaving rows undivided
+   and the header bare. Redeclare them in the triplet form these pages
+   actually use: the header gets the webapp's soft band and full border, rows
+   a half-strength hairline. The last row's divider would double up against
+   the panel's own bottom border, so it is dropped. */
+.tc-panel .tw-table th {
+    background-color: var(--color-background);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.tc-panel .tw-table td {
+    border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+}
+
+.tc-panel .tw-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+/* Pager footer under a flush-panel table. Tailwind's border-border utility
+   resolves --color-border to the public theme's RGB triplet and falls back
+   to currentColor (near-black); declare the hairline in the triplet form. */
+.tc-pager-foot {
+    border-top: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+}
+
+.tc-panel-flush .tc-panel-title {
+    padding: 1.125rem 1.5rem 0;
+}
+
+.tc-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.tc-table td {
+    padding: 0.6875rem 0.75rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color-light);
+    vertical-align: top;
+}
+
+.tc-table tr:last-child td {
+    border-bottom: 0;
+}
+
+/* --- Timeline ------------------------------------------------------------- */
+
+.tc-timeline-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.125rem;
+}
+
+.tc-panel-title-flush {
+    margin-bottom: 0;
+}
+
+.tc-timeline-freshness {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4375rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.tc-timeline-freshness i {
+    font-size: 0.6875rem;
+    opacity: 0.8;
+}
+
+.tc-timeline {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tc-timeline-item {
+    display: flex;
+    gap: 0.875rem;
+}
+
+.tc-timeline-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.tc-timeline-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-muted);
+    font-size: 0.6875rem;
+}
+
+/* The dot is tinted by the event's own variant, so the rail carries the
+   remediation story on its own — green where it resolved, amber where it was
+   withdrawn — without having to read the labels. */
+.tc-dot-success {
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgba(22, 163, 74, 0.12);
+    color: #16a34a;
+}
+
+.tc-dot-info {
+    border-color: rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.12);
+    color: #2563eb;
+}
+
+.tc-dot-warning {
+    border-color: rgba(217, 119, 6, 0.35);
+    background: rgba(217, 119, 6, 0.12);
+    color: #d97706;
+}
+
+.tc-dot-danger {
+    border-color: rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+}
+
+.tc-dot-violet {
+    border-color: rgba(124, 58, 237, 0.35);
+    background: rgba(124, 58, 237, 0.12);
+    color: #7c3aed;
+}
+
+/* The newest entry gets a halo, so "where is this now" is answered before
+   reading a word. */
+.tc-timeline-item.is-latest .tc-timeline-dot {
+    box-shadow: 0 0 0 4px rgba(var(--accent-color-rgb), 0.12);
+}
+
+.tc-timeline-line {
+    width: 2px;
+    flex: 1;
+    background: var(--border-color);
+    margin: 0.375rem 0;
+    border-radius: 2px;
+}
+
+.tc-timeline-body {
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 1.75rem;
+}
+
+.tc-timeline-item:last-child .tc-timeline-body {
+    padding-bottom: 0;
+}
+
+.tc-timeline-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.tc-timeline-label {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    color: var(--text-primary);
+}
+
+.tc-timeline-when {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4375rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.tc-timeline-clock {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Relative age and the gap to the previous entry: the two readings an absolute
+   date cannot give at a glance. */
+.tc-timeline-age {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.tc-timeline-gap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3125rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: 0.3125rem;
+    background: var(--bg-tertiary);
+    font-size: 0.6875rem;
+}
+
+.tc-timeline-gap i {
+    font-size: 0.625rem;
+    opacity: 0.7;
+}
+
+.tc-timeline-note {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin: 0.625rem 0 0;
+    white-space: pre-line;
+}
+
+/* --- Responsive ----------------------------------------------------------- */
+
+@media (max-width: 640px) {
+    .tc-advisory-row {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .tc-advisory-side {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        text-align: left;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .tc-section-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}

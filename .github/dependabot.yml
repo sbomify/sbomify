@@ -17,6 +17,11 @@ updates:
       bun:
         patterns:
           - "*"
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      - dependency-name: "typescript"
+        versions: [">=7.0.0"]
   - package-ecosystem: "uv"
     directory: "/"
     schedule:

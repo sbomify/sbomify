@@ -22,20 +22,9 @@
                         <input type="hidden"
                                name="visibility"
                                :value="isPublic ? 'public' : 'private'" />
-                        <input :id="'toggle-' + itemId"
-                               class="toggle-input"
-                               type="checkbox"
-                               :checked="isPublic"
-                               :disabled="isLoading"
-                               @change="togglePublicStatus()" />
+                        <c-forms.checkbox-input ::id="'toggle-' + itemId" ::checked="isPublic" ::disabled="isLoading" @change="togglePublicStatus()" />
                     {% else %}
-                        <input :id="'toggle-' + itemId"
-                               class="toggle-input"
-                               type="checkbox"
-                               name="is_public"
-                               :checked="isPublic"
-                               :disabled="isLoading"
-                               @change="togglePublicStatus()" />
+                        <c-forms.checkbox-input name="is_public" ::id="'toggle-' + itemId" ::checked="isPublic" ::disabled="isLoading" @change="togglePublicStatus()" />
                     {% endif %}
                     <label :for="'toggle-' + itemId" class="toggle-slider">
                         <span class="sr-only"
@@ -44,7 +33,7 @@
                     </label>
                 </form>
                 <div x-show="isLoading" class="loading-spinner">
-                    <i class="fas fa-spinner fa-spin"></i>
+                    <c-feedback.spinner size="inline" />
                 </div>
             </div>
             {% if not hide_copy %}

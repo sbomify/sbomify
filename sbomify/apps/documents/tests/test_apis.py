@@ -554,13 +554,13 @@ def test_delete_document_forbidden(
 
 
 @pytest.mark.django_db
-def test_delete_document_admin_forbidden(
+def test_delete_document_admin_allowed(
     client: Client,
     guest_user: AbstractBaseUser,  # noqa: F811
     sample_document,
     sample_team,  # noqa: F811
 ):
-    """Admins can edit but NOT delete documents — deletion is owner-only (#468)."""
+    """Deleting a document is the DELETE tier (owner + admin)."""
     Member.objects.create(
         user=guest_user,
         team=sample_team,
@@ -571,9 +571,8 @@ def test_delete_document_admin_forbidden(
 
     response = client.delete(reverse("api-1:delete_document", kwargs={"document_id": sample_document.id}))
 
-    assert response.status_code == 403
-    # Document is NOT deleted.
-    assert Document.objects.filter(id=sample_document.id).exists()
+    assert response.status_code == 204
+    assert not Document.objects.filter(id=sample_document.id).exists()
 
 
 @pytest.mark.django_db

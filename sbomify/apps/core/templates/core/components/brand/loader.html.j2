@@ -1,0 +1,14 @@
+{% comment %}
+  Animated sbomify emblem loader (bars converge continuously).
+  Fills with currentColor; size via tw-loader-sm/md/lg/inline or width classes.
+
+  Parameters:
+  - class: sizing/colour classes (e.g. "tw-loader-md text-primary")
+  - sr_text: screen reader text (default "Loading")
+{% endcomment %}
+<span class="tw-brand-loader{% if class %} {{ class }}{% endif %}"
+      role="status"
+      aria-label="{{ sr_text|default:'Loading' }}">
+    {% include "core/components/brand/emblem.html.j2" %}
+    <span class="sr-only">{{ sr_text|default:"Loading" }}...</span>
+</span>

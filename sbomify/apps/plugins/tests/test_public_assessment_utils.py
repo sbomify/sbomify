@@ -197,11 +197,145 @@ class TestGetSbomPassingAssessments:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.MANUAL.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_sbom_passing_assessments(str(sbom.id))
         assert len(result) == 1
+
+    def test_security_run_with_vulnerabilities_is_not_passing(self, sbom, db):
+        """Security scanners report via by_severity and never set fail_count —
+        an SBOM with open criticals must not earn a public badge."""
+        RegisteredPlugin.objects.get_or_create(
+            name="osv",
+            defaults={
+                "display_name": "OSV Vulnerability Scan",
+                "description": "OSV scanner",
+                "category": AssessmentCategory.SECURITY.value,
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.osv.OSVPlugin",
+                "is_enabled": True,
+            },
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={
+                "summary": {
+                    "total_findings": 40,
+                    "pass_count": 0,
+                    "fail_count": 0,
+                    "error_count": 0,
+                    "by_severity": {"critical": 40, "high": 0, "medium": 0, "low": 0},
+                }
+            },
+        )
+
+        assert get_sbom_passing_assessments(str(sbom.id)) == []
+
+    def test_clean_security_run_is_passing(self, sbom, db):
+        """A security scan with zero findings is the genuine positive claim."""
+        RegisteredPlugin.objects.get_or_create(
+            name="osv",
+            defaults={
+                "display_name": "OSV Vulnerability Scan",
+                "description": "OSV scanner",
+                "category": AssessmentCategory.SECURITY.value,
+                "version": "1.0.0",
+                "plugin_class_path": "sbomify.apps.plugins.builtins.osv.OSVPlugin",
+                "is_enabled": True,
+            },
+        )
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="osv",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.SECURITY.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={
+                "summary": {
+                    "total_findings": 0,
+                    "pass_count": 0,
+                    "fail_count": 0,
+                    "error_count": 0,
+                    "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+                }
+            },
+        )
+
+        result = get_sbom_passing_assessments(str(sbom.id))
+        assert [a.plugin_name for a in result] == ["osv"]
+        # Counts are withheld for security scans: the claim is "no known
+        # vulnerabilities", not "0/0 checks passed".
+        assert result[0].pass_count is None
+        assert result[0].total_findings is None
+
+    def test_warnings_only_compliance_run_is_not_passing(self, sbom, ntia_plugin):
+        """A compliance run with no actual passes asserts nothing badge-worthy."""
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            result={
+                "summary": {
+                    "total_findings": 3,
+                    "pass_count": 0,
+                    "fail_count": 0,
+                    "warning_count": 3,
+                    "error_count": 0,
+                }
+            },
+        )
+
+        assert get_sbom_passing_assessments(str(sbom.id)) == []
+
+    def test_passing_run_carries_citable_facts(self, sbom, ntia_plugin):
+        """The standard identity, check counts and verified date reach the badge."""
+        from django.utils import timezone
+
+        completed = timezone.now()
+        AssessmentRun.objects.create(
+            sbom=sbom,
+            plugin_name="ntia-minimum-elements-2021",
+            plugin_version="1.0.0",
+            plugin_config_hash="abc123",
+            category=AssessmentCategory.COMPLIANCE.value,
+            run_reason=RunReason.ON_UPLOAD.value,
+            status=RunStatus.COMPLETED.value,
+            completed_at=completed,
+            result={
+                "summary": {
+                    "total_findings": 7,
+                    "pass_count": 7,
+                    "fail_count": 0,
+                    "error_count": 0,
+                },
+                "metadata": {
+                    "standard_name": "NTIA Minimum Elements",
+                    "standard_version": "2021-07",
+                    "standard_url": "https://www.ntia.gov/page/minimum-elements-sbom",
+                },
+            },
+        )
+
+        (assessment,) = get_sbom_passing_assessments(str(sbom.id))
+        assert assessment.standard_name == "NTIA Minimum Elements"
+        assert assessment.standard_version == "2021-07"
+        assert assessment.standard_url == "https://www.ntia.gov/page/minimum-elements-sbom"
+        assert assessment.pass_count == 7
+        assert assessment.total_findings == 7
+        assert assessment.completed_at == completed
 
 
 class TestGetComponentAssessmentStatus:
@@ -227,7 +361,7 @@ class TestGetComponentAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_component_assessment_status(public_component)
@@ -255,7 +389,7 @@ class TestGetComponentAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         # Second SBOM fails
@@ -297,7 +431,7 @@ class TestGetProductAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_product_assessment_status(product)
@@ -324,6 +458,13 @@ class TestPassingAssessmentsToDictHelper:
                 "plugin_name": "test-plugin",
                 "display_name": "Test Plugin",
                 "category": "compliance",
+                "standard_name": None,
+                "standard_version": None,
+                "standard_url": None,
+                "pass_count": None,
+                "total_findings": None,
+                "warning_count": None,
+                "completed_at": None,
             }
         ]
 
@@ -397,7 +538,7 @@ class TestGetComponentLatestSbomAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         # Create newer SBOM that fails
@@ -465,7 +606,7 @@ class TestGetComponentLatestSbomAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_component_latest_sbom_assessment_status(public_component)
@@ -534,7 +675,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_product_latest_sbom_assessment_status(product)
@@ -573,7 +714,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         # Create second component with failing latest SBOM
@@ -638,7 +779,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
         AssessmentRun.objects.create(
             sbom=sbom,
@@ -648,7 +789,7 @@ class TestGetProductLatestSbomAssessmentStatus:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_product_latest_sbom_assessment_status(product)
@@ -701,7 +842,7 @@ class TestGetProductsLatestSbomAssessmentsBatch:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         # Product 2 fails
@@ -784,7 +925,7 @@ class TestGetComponentsLatestSbomAssessmentsBatch:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         # Component 2 fails
@@ -861,7 +1002,7 @@ class TestGetLatestAssessmentRunsForSbom:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.MANUAL.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         runs = _get_latest_assessment_runs_for_sbom(str(sbom.id))
@@ -897,7 +1038,7 @@ class TestBatchVisibilityIncludesGated:
             category=AssessmentCategory.COMPLIANCE.value,
             run_reason=RunReason.ON_UPLOAD.value,
             status=RunStatus.COMPLETED.value,
-            result={"summary": {"fail_count": 0, "error_count": 0}},
+            result={"summary": {"pass_count": 7, "fail_count": 0, "error_count": 0}},
         )
 
         result = get_products_latest_sbom_assessments_batch([product])

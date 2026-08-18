@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import asyncio
 import logging
 import os
+import sys
+import warnings
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
@@ -28,6 +30,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import is_benign_shielded_future_error
+from sbomify.sentry_config import resolve_environment, should_warn_missing_dsn
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -179,6 +182,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "django_vite",
     "django_htmx",
+    "django_cotton",
     "ninja",
     "widget_tweaks",
     "allauth",
@@ -203,6 +207,7 @@ INSTALLED_APPS = [
     "sbomify.apps.tea",
     "sbomify.apps.controls",
     "sbomify.apps.oidc",
+    "sbomify.apps.security_advisories",
 ]
 
 
@@ -292,6 +297,17 @@ TEMPLATES = [
         },
     },
 ]
+
+# django-cotton: the component library engine. Components are .html files
+# under sbomify/templates/components/; <c-dir.name> renders them anywhere
+# with no load tag. Isolation keeps components props-only, like a React
+# component: page context does not leak in.
+# The isolation setting is named COTTON_ENABLE_CONTEXT_ISOLATION in 2.7.2.
+# The docs site documents COTTON_ISOLATE_BY_DEFAULT, which this version does
+# not read, so that name silently leaves isolation off. Check the installed
+# package before renaming it.
+COTTON_DIR = "components"
+COTTON_ENABLE_CONTEXT_ISOLATION = True
 
 WSGI_APPLICATION = "sbomify.wsgi.application"
 ASGI_APPLICATION = "sbomify.asgi.application"
@@ -460,38 +476,94 @@ if REDIS_CA_CERTS and not _redis_is_tls:
         "Either use rediss:// or remove REDIS_CA_CERTS."
     )
 
+
 # Cache Configuration
-CACHES: dict[str, dict[str, Any]]
-if DEBUG:
-    # Disable caching in development mode
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-        }
+def build_redis_caches(location: str, ca_certs: str = "") -> dict[str, dict[str, Any]]:
+    """The two Redis cache aliases, which differ in one option only.
+
+    A function rather than an inline literal so a test can read the real pair
+    back and check that the difference between them is the only difference
+    there is.
+
+    Both point at the same Redis. ``default`` swallows connection failures;
+    ``throttle`` does not, and nothing else about them may drift apart.
+    """
+    pool_kwargs: dict[str, Any] = {"max_connections": 10}
+    if ca_certs:
+        pool_kwargs["ssl_ca_certs"] = ca_certs
+    options: dict[str, Any] = {
+        "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        "SOCKET_CONNECT_TIMEOUT": 5,
+        "SOCKET_TIMEOUT": 5,
+        "RETRY_ON_TIMEOUT": True,
+        "CONNECTION_POOL_KWARGS": pool_kwargs,
     }
-else:
-    # Use Redis cache in production
-    _cache_pool_kwargs: dict[str, Any] = {"max_connections": 10}
-    if REDIS_CA_CERTS:
-        _cache_pool_kwargs["ssl_ca_certs"] = REDIS_CA_CERTS
-    CACHES = {
+    return {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_CACHE_URL,
+            "LOCATION": location,
             "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "SOCKET_CONNECT_TIMEOUT": 5,
-                "SOCKET_TIMEOUT": 5,
-                "RETRY_ON_TIMEOUT": True,
-                "CONNECTION_POOL_KWARGS": _cache_pool_kwargs,
+                **options,
+                # Without this, django-redis re-raises every Redis failure out
+                # of cache.get()/cache.set(). Each authenticated page renders
+                # its sidebar and header through {% cache %}, so a socket
+                # timeout (five seconds is easy to blow when the box is
+                # mid-checkpoint) became a 500 on a page that had already done
+                # all its work. A cache that is unreachable should cost
+                # latency, not the page.
+                #
+                # Every read on this alias falls through to the database or to
+                # S3 on a miss, including the custom-domain host checks in
+                # core.middleware, so an outage returns the same answers more
+                # slowly rather than a wrong or more permissive one.
+                "IGNORE_EXCEPTIONS": True,
             },
-        }
+        },
+        # A rate limiter is the exception, because it decides from the counter
+        # it reads back: a swallowed failure reads as an empty window and hands
+        # out a fresh budget, so the limit disappears for as long as Redis is
+        # unwell — which is when a caller hammering the API is a plausible
+        # reason for it being unwell. Raising refuses the call instead.
+        "throttle": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": location,
+            "OPTIONS": dict(options),
+        },
     }
 
+
+CACHES: dict[str, dict[str, Any]]
+if DEBUG:
+    # Disable caching in development mode. The throttle alias is declared here
+    # too so it always resolves; against DummyCache it accumulates no window,
+    # which is the same absence of rate limiting development already had.
+    CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"},
+        "throttle": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"},
+    }
+else:
+    CACHES = build_redis_caches(REDIS_CACHE_URL, REDIS_CA_CERTS)
+
+# django-redis only logs the failures it swallows when this is on; without it an
+# outage is invisible except as latency.
+DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
+DJANGO_REDIS_LOGGER = "sbomify.cache"
+
 # Channel Layers for WebSocket support
-_channels_host: str | dict[str, Any] = REDIS_CHANNELS_URL
+# Keepalive plus proactive health checks: a broker restart is then noticed
+# on the next use and reconnected quietly, instead of surfacing as a
+# mid-command "Connection reset by peer" on every consumer thread at once.
+_redis_resilience: dict[str, Any] = {
+    "socket_keepalive": True,
+    "health_check_interval": 30,
+    "socket_connect_timeout": 5,
+}
+
+# The dict host form is how channels-redis forwards client kwargs (the CA
+# path already relied on it); the resilience kwargs ride the same way.
+_channels_host: dict[str, Any] = {"address": REDIS_CHANNELS_URL, **_redis_resilience}
 if REDIS_CA_CERTS:
-    _channels_host = {"address": REDIS_CHANNELS_URL, "ssl_ca_certs": REDIS_CA_CERTS}
+    _channels_host["ssl_ca_certs"] = REDIS_CA_CERTS
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -507,9 +579,9 @@ CHANNEL_LAYERS = {
 # Pass a pre-built client because Dramatiq's RedisBroker creates a
 # ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
 _dramatiq_redis_options: dict[str, Any] = (
-    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS)}
+    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS, **_redis_resilience)}
     if REDIS_CA_CERTS
-    else {"url": REDIS_WORKER_URL}
+    else {"url": REDIS_WORKER_URL, **_redis_resilience}
 )
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
@@ -555,6 +627,31 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+
+
+# WhiteNoiseMiddleware serves static files with a synchronous file iterator, and
+# whitenoise 6.11 offers no async path (the middleware is not async_capable). Under
+# ASGI, StreamingHttpResponse.__aiter__ therefore falls back to consuming it via
+# sync_to_async and warns once per worker process.
+#
+# Harmless for static assets: the bytes are correct and the files are small. Note the
+# fallback calls list() on the iterator, so the body is fully buffered rather than
+# streamed -- fine here, but it is the reason this filter is pinned to this exact
+# message instead of silencing the warning class. If a large response is ever streamed
+# through a sync iterator, we want that warning to surface.
+warnings.filterwarnings(
+    "ignore",
+    # Anchored at both ends and with the periods escaped, so this suppresses
+    # exactly Django's message and nothing that merely begins with it. Note
+    # Django has a sibling warning for the reverse case ("must consume
+    # asynchronous iterators in order to serve them synchronously") which must
+    # keep surfacing.
+    message=(
+        r"^StreamingHttpResponse must consume synchronous iterators in order to "
+        r"serve them asynchronously\. Use an asynchronous iterator instead\.$"
+    ),
+    category=Warning,
+)
 
 
 # Logging config
@@ -794,10 +891,21 @@ def _sentry_traces_sampler(sampling_context: dict[str, Any]) -> float:
     return base_rate
 
 
+_SENTRY_DSN = os.environ.get("SENTRY_DSN")
+
+# With no DSN the SDK builds a client whose transport is None: every event is
+# dropped silently and is_active() still returns True, so nothing surfaces the
+# misconfiguration. Say so once at startup instead. Written to stderr directly
+# because Django applies LOGGING later in django.setup(), so a logger call here
+# would bypass the configured handlers and formatters.
+if should_warn_missing_dsn(_SENTRY_DSN, debug=DEBUG):
+    sys.stderr.write("SENTRY_DSN is not set - error reporting is disabled and all events will be discarded.\n")
+    sys.stderr.flush()
+
 sentry_sdk.init(
-    dsn=os.environ.get("SENTRY_DSN"),
+    dsn=_SENTRY_DSN,
     release=get_sbomify_version(),
-    environment=os.environ.get("SENTRY_ENVIRONMENT", "development"),
+    environment=resolve_environment(debug=DEBUG),
     integrations=[
         DjangoIntegration(),
         DramatiqIntegration(),
@@ -850,6 +958,19 @@ API_TOKEN_RATE_LIMIT = os.environ.get("API_TOKEN_RATE_LIMIT", "1000/min")
 # alongside the global one (#1070). Lower because each call does real work (parse,
 # S3 write, downstream scan/assessment enqueue).
 API_TOKEN_HEAVY_RATE_LIMIT = os.environ.get("API_TOKEN_HEAVY_RATE_LIMIT", "100/min")
+
+# Anonymous/session callers carry no token, so the per-token limits above never
+# apply to them. Keyed per client IP. Generous enough that a human browsing the
+# Trust Center never notices, low enough to blunt scripted enumeration.
+API_ANONYMOUS_RATE_LIMIT = os.environ.get("API_ANONYMOUS_RATE_LIMIT", "120/min")
+
+# Caddy's on-demand TLS ask, kept out of the bucket above. It fires once per
+# TLS handshake against an unprovisioned hostname, so a client probing
+# hostnames could otherwise spend the whole anonymous budget and take the Trust
+# Center and OIDC exchange with it — while any throttled ask is a certificate
+# Caddy then refuses to issue. Set above the handshake rate real traffic
+# produces; the decision cache in front of the endpoint absorbs the repeats.
+ON_DEMAND_TLS_RATE_LIMIT = os.environ.get("ON_DEMAND_TLS_RATE_LIMIT", "600/min")
 
 # OIDC Trusted Publishing — see sbomify.apps.oidc.
 # Action workflows request an ID token with this audience; the backend
@@ -947,6 +1068,7 @@ TRIAL_ENDING_NOTIFICATION_DAYS = int(os.environ.get("TRIAL_ENDING_NOTIFICATION_D
 
 # Enable specific notification providers
 NOTIFICATION_PROVIDERS = [
+    "sbomify.apps.access_tokens.notifications.get_notifications",
     "sbomify.apps.billing.notifications.get_notifications",
     "sbomify.apps.documents.notifications.get_notifications",
     "sbomify.apps.teams.notifications.get_notifications",

@@ -1,0 +1,35 @@
+{% comment %}
+  Sidebar navigation link — renders both the collapsed (icon square) and
+  expanded (icon + label row) variants; Alpine toggles which one shows.
+
+  Parameters:
+  - url: href target
+  - icon: Font Awesome icon class (e.g. "fa-cube")
+  - label: visible label / aria-label / collapsed tooltip
+  - match: view-name fragment marking the link active when found in
+    current_view_name (inherited from the including scope); omit for
+    links with no active state
+{% endcomment %}
+{# Collapsed #}
+<a x-show="sidebarCollapsed"
+   href="{{ url }}"
+   @click="sidebarMobileOpen = false"
+   title="{{ label }}"
+   aria-label="{{ label }}"
+   {% if match and match in current_view_name %}aria-current="page"{% endif %}
+   class="flex items-center justify-center w-full h-10 rounded-lg transition-colors duration-150 {% if match and match in current_view_name %}bg-primary text-white hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40{% else %}text-text-muted sidebar-link-hover{% endif %}">
+    <i class="fas {{ icon }} text-base" aria-hidden="true"></i>
+</a>
+{# Expanded #}
+<a x-show="!sidebarCollapsed"
+   x-cloak
+   href="{{ url }}"
+   @click="sidebarMobileOpen = false"
+   {% if match and match in current_view_name %}aria-current="page"{% endif %}
+   class="group flex items-center gap-3 px-3 h-10 rounded-lg text-sm font-medium transition-colors duration-150 {% if match and match in current_view_name %}bg-primary text-white hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40{% else %}text-text-secondary sidebar-link-hover{% endif %}">
+    <span class="w-5 flex items-center justify-center shrink-0">
+        <i class="fas {{ icon }} text-sm{% if not match or match not in current_view_name %} text-text-muted transition-colors duration-150 group-hover:text-text{% endif %}"
+           aria-hidden="true"></i>
+    </span>
+    <span>{{ label }}</span>
+</a>

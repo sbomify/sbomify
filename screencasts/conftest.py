@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 from pathlib import Path
@@ -19,8 +20,12 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Member, Team
 
-RECORDING_WIDTH = 1280
-RECORDING_HEIGHT = 720
+# Full HD. Marketplace listings (AWS, GitHub, Atlassian) reject or upscale
+# anything below 1080p, so this is the floor for every recording — the video
+# encoder gets exactly these dimensions. ``device_scale_factor`` below doubles
+# it again for stills, so screenshots land at 3840x2160.
+RECORDING_WIDTH = 1920
+RECORDING_HEIGHT = 1080
 OUTPUT_DIR = Path(__file__).parent / "output"
 
 # Minimal valid PDF for fake uploads in screencasts.
@@ -71,9 +76,13 @@ _SCREENSHOT_INTERVAL_SEC = 3.0
 
 _screenshot_state: dict[str, Any] = {
     "dir": None,
+    "hero_dir": None,
     "last_time": 0.0,
     "counter": 0,
 }
+
+# Hero-shot names become filenames, so keep them to a slug we can trust.
+_HERO_NAME_RE = re.compile(r"^[a-z0-9]+(?:[-_][a-z0-9]+)*$")
 
 
 def _recording_name(request: pytest.FixtureRequest) -> str:
@@ -107,6 +116,73 @@ def _maybe_capture_screenshot(page: Page) -> None:
     _screenshot_state["last_time"] = now
 
 
+def _set_caption_visible(page: Page, visible: bool) -> None:
+    """Toggle the narration caption's visibility without removing it.
+
+    ``visibility`` rather than ``display`` so the caption keeps its box and
+    does not reflow the page between the hide and the restore — a reflow mid
+    recording is visible as a jump in the video.
+    """
+    try:
+        page.evaluate(
+            """(payload) => {
+                const bar = document.getElementById(payload.id);
+                if (bar) bar.style.visibility = payload.visible ? 'visible' : 'hidden';
+            }""",
+            {"id": CAPTION_ID, "visible": visible},
+        )
+    except PlaywrightError:
+        # The page can navigate out from under a hero shot; a missing caption
+        # is not worth failing a recording over.
+        pass
+
+
+def shot(page: Page, name: str, *, full_page: bool = False, settle_ms: int = 400) -> None:
+    """Capture a curated, stably-named still into the recording's ``hero/`` dir.
+
+    The timer-driven frames captured by :func:`pace` are incidental — they
+    land wherever the 3s cadence happens to fall, so half of them catch a
+    modal mid-transition or a table mid-load. Marketplace listings need the
+    opposite: a small, deliberately chosen set of images with names that stay
+    put across re-records, so a listing that embeds ``04-vulnerability-posture.png``
+    keeps working after the next run.
+
+    Call this at the moments worth publishing. ``name`` must be a lowercase
+    slug (digits, dashes, underscores) — it becomes the filename, and a
+    numeric prefix keeps the set in narrative order in a file browser.
+
+    Any :func:`caption` showing is hidden for the duration of the capture and
+    restored afterwards. The video wants the caption — it plays muted and
+    needs the narration; a still does not, because the listing supplies its own
+    caption, and the lower-third would otherwise sit on top of the table rows
+    the screenshot exists to show.
+
+    Args:
+        page: The recording page.
+        name: Slug for the file, e.g. ``"09-vulnerability-posture"``.
+        full_page: Capture the whole scrollable page rather than the viewport.
+            Viewport shots match what the video shows and are the default;
+            full-page is for long surfaces you want to show entirely.
+        settle_ms: Pause before capturing, letting transitions and lazily
+            loaded panels finish so the still is not caught mid-animation.
+    """
+    if not _HERO_NAME_RE.match(name):
+        raise ValueError(f"hero shot name must be a lowercase slug, got {name!r}")
+
+    hero_dir = _screenshot_state["hero_dir"]
+    if hero_dir is None:
+        return
+
+    page.wait_for_timeout(settle_ms)
+    _set_caption_visible(page, False)
+    try:
+        page.screenshot(path=str(hero_dir / f"{name}.png"), full_page=full_page)
+    except PlaywrightError as exc:
+        print(f"[screencasts] hero shot {name!r} failed: {exc}", file=sys.stderr)
+    finally:
+        _set_caption_visible(page, True)
+
+
 def pace(page: Page, ms: int = 600) -> None:
     """Pause for a natural beat between actions.
 
@@ -123,12 +199,37 @@ def pace(page: Page, ms: int = 600) -> None:
     page.wait_for_timeout(remaining_ms)
 
 
+def smooth_scroll(page: Page, locator: Locator, pause_ms: int = 1200) -> None:
+    """Smoothly pan an element to the centre of the viewport, then pause.
+
+    Instant ``scrollIntoView`` jumps read as jarring on the recording; a smooth
+    animation plus a pause lets the pan land before the next action (and before
+    any ``bounding_box`` read that follows).
+    """
+    locator.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    pace(page, pause_ms)
+
+
 def hover_and_click(page: Page, locator: Locator, pause_ms: int = 250) -> None:
     """Move cursor visibly to the element center, pause, then click.
 
     This ensures the cursor dot and click ripple are captured by the video
     encoder — without the pause Playwright clicks happen in a single frame.
+    An off-viewport target is smooth-panned into view first; Playwright's own
+    pre-click auto-scroll is an instant jump the camera would catch.
     """
+    scrolled = locator.evaluate(
+        """el => {
+            const r = el.getBoundingClientRect();
+            if (r.top < 0 || r.bottom > window.innerHeight) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return true;
+            }
+            return false;
+        }"""
+    )
+    if scrolled:
+        page.wait_for_timeout(700)
     box = locator.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
@@ -223,6 +324,127 @@ def rewrite_localhost_urls(page: Page) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Narration — chapter title cards and lower-third captions
+#
+# The FAQ-length recordings need no narration: each shows one action and the
+# surrounding FAQ text carries the explanation. A marketplace walkthrough has
+# no surrounding text — it plays cold, often muted, next to a listing. These
+# two helpers carry the story instead.
+#
+# Both build their DOM node-by-node and set every dynamic string via
+# ``textContent`` rather than ``innerHTML``, matching the existing overlay in
+# ``oidc_trusted_publishing.py`` — keeps automated security linters quiet even
+# though all content originates in these scripts.
+# ---------------------------------------------------------------------------
+
+TITLE_CARD_ID = "__walkthrough-title-card"
+CAPTION_ID = "__walkthrough-caption"
+
+
+def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600) -> None:
+    """Cover the viewport with a branded chapter card, hold, then fade out.
+
+    Used between chapters of the long tour so the viewer gets a beat to
+    reset before the next surface appears. ``eyebrow`` is the small label
+    above the title (e.g. ``"Chapter 2"``).
+    """
+    page.evaluate(
+        """(payload) => {
+            const existing = document.getElementById(payload.id);
+            if (existing) existing.remove();
+
+            const card = document.createElement('div');
+            card.id = payload.id;
+            card.style.cssText = `
+                position: fixed; inset: 0; z-index: 2147483646;
+                display: flex; flex-direction: column;
+                justify-content: center; align-items: center; gap: 14px;
+                background: ${payload.bg};
+                font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+                opacity: 0; transition: opacity 420ms ease;
+            `;
+
+            const eyebrow = document.createElement('div');
+            eyebrow.style.cssText = 'font-size:15px; font-weight:600;' +
+                ' letter-spacing:0.22em; text-transform:uppercase;' +
+                ' color:#818cf8;';
+            eyebrow.textContent = payload.eyebrow;
+
+            const title = document.createElement('div');
+            title.style.cssText = 'font-size:52px; font-weight:700;' +
+                ' color:#f8fafc; letter-spacing:-0.02em; text-align:center;' +
+                ' max-width:70%; line-height:1.15;';
+            title.textContent = payload.title;
+
+            const rule = document.createElement('div');
+            rule.style.cssText = 'width:72px; height:3px; border-radius:2px;' +
+                ' background:linear-gradient(90deg,#6366f1,#a78bfa);';
+
+            card.appendChild(eyebrow);
+            card.appendChild(title);
+            card.appendChild(rule);
+            document.body.appendChild(card);
+            requestAnimationFrame(() => { card.style.opacity = '1'; });
+        }""",
+        {"id": TITLE_CARD_ID, "eyebrow": eyebrow, "title": title, "bg": APP_BG_COLOR},
+    )
+    page.wait_for_timeout(hold_ms)
+    page.evaluate(
+        """(id) => {
+            const card = document.getElementById(id);
+            if (!card) return;
+            card.style.opacity = '0';
+            setTimeout(() => card.remove(), 460);
+        }""",
+        TITLE_CARD_ID,
+    )
+    page.wait_for_timeout(500)
+
+
+def caption(page: Page, text: str) -> None:
+    """Show (or update) a lower-third caption explaining the current step.
+
+    Anchored bottom-centre and ``pointer-events:none`` so it never intercepts
+    a click the recording is about to make. Call :func:`clear_caption` before
+    a navigation — the caption lives in the current document and would
+    otherwise vanish on its own mid-sentence.
+    """
+    page.evaluate(
+        """(payload) => {
+            let bar = document.getElementById(payload.id);
+            if (!bar) {
+                bar = document.createElement('div');
+                bar.id = payload.id;
+                bar.style.cssText = `
+                    position: fixed; bottom: 40px; left: 50%;
+                    transform: translateX(-50%);
+                    z-index: 2147483645; pointer-events: none;
+                    max-width: 74%; padding: 14px 26px;
+                    border-radius: 12px;
+                    background: rgba(10, 10, 35, 0.92);
+                    border: 1px solid rgba(129, 140, 248, 0.28);
+                    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+                    color: #f1f5f9; font-size: 19px; line-height: 1.45;
+                    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+                    text-align: center;
+                    opacity: 0; transition: opacity 260ms ease;
+                `;
+                document.body.appendChild(bar);
+            }
+            bar.textContent = payload.text;
+            requestAnimationFrame(() => { bar.style.opacity = '1'; });
+        }""",
+        {"id": CAPTION_ID, "text": text},
+    )
+    page.wait_for_timeout(260)
+
+
+def clear_caption(page: Page) -> None:
+    """Remove the lower-third caption if one is showing."""
+    page.evaluate(f"document.getElementById({CAPTION_ID!r})?.remove()")
+
+
+# ---------------------------------------------------------------------------
 # Reusable navigation sequences
 # ---------------------------------------------------------------------------
 
@@ -283,10 +505,17 @@ def navigate_to_plugins(page: Page) -> None:
 
 
 def navigate_to_trust_center_tab(page: Page) -> None:
-    """Navigate to Settings, then click the Trust Center tab."""
+    """Navigate to Settings, then click the Trust Center tab.
+
+    The settings tabs used to be in-page panels switched by a ``data-tab``
+    attribute; they are now real links to ``/settings/<tab>``, so the tab is
+    matched by its href and the click is a navigation.
+    """
     navigate_to_settings(page)
-    trust_center_tab = page.locator("a[data-tab='trust-center']")
+    trust_center_tab = page.locator("a.settings-tab[href$='/trust-center']")
+    trust_center_tab.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, trust_center_tab)
+    page.wait_for_load_state("networkidle")
     pace(page, 800)
 
 
@@ -347,13 +576,13 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
     # Attribute selector (not #id) because some plugin slugs contain dots
     # (e.g. bsi-tr03183-v2.1-compliance) which have CSS-special meaning.
     toggle = page.locator(f"[id='plugin-{plugin_slug}']")
-    toggle.scroll_into_view_if_needed()
+    toggle.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
     hover_and_click(page, toggle)
     pace(page, 1200)
 
-    save_btn = page.locator("button[type='submit'][form='plugin-settings-form']")
-    save_btn.scroll_into_view_if_needed()
+    save_btn = page.locator("#plugin-settings-form button[type='submit']")
+    save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 500)
     hover_and_click(page, save_btn)
 
@@ -378,7 +607,7 @@ def enable_and_configure_trust_center(page: Page) -> None:
 
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
-    domain_input.scroll_into_view_if_needed()
+    domain_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
 
     hover_and_click(page, domain_input)
@@ -680,7 +909,10 @@ def recording_page(
 
     screenshot_dir = OUTPUT_DIR / "screenshots" / recording_name
     screenshot_dir.mkdir(parents=True, exist_ok=True)
+    hero_dir = screenshot_dir / "hero"
+    hero_dir.mkdir(parents=True, exist_ok=True)
     _screenshot_state["dir"] = screenshot_dir
+    _screenshot_state["hero_dir"] = hero_dir
     _screenshot_state["last_time"] = 0.0
     _screenshot_state["counter"] = 0
 
@@ -688,6 +920,7 @@ def recording_page(
         yield page
     finally:
         _screenshot_state["dir"] = None
+        _screenshot_state["hero_dir"] = None
 
     # Grab the video handle, close the page (finalizes recording),
     # then save to a meaningful filename.

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import timedelta
 from functools import partial
 from typing import Any, cast
 
@@ -16,6 +15,7 @@ from django.views import View
 
 from sbomify.apps.access_tokens.models import AccessToken
 from sbomify.apps.access_tokens.utils import create_personal_access_token
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.forms import CreateAccessTokenForm
 from sbomify.apps.core.htmx import htmx_error_response
 from sbomify.apps.core.models import User
@@ -36,7 +36,7 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     # accepted into this view. Removing it is a deliberate
     # tightening: those rows were never meant to have token-management
     # privileges, and the canonical role list is the source of truth.
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def _get_team_tokens_context(
         self, team: Any, request: HttpRequest, extra_context: dict[str, Any] | None = None
@@ -87,8 +87,8 @@ class TeamTokensView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # those are reserved for short-lived OIDC tokens). ``get_user_and_token_record``
         # rejects a row once ``expires_at`` is in the past. ``None`` means
         # never expires (the explicit "No expiration" choice).
-        expiry_days = form.expiry_days()
-        expires_at = timezone.now() + timedelta(days=expiry_days) if expiry_days is not None else None
+        expiry_delta = form.expiry_delta()
+        expires_at = timezone.now() + expiry_delta if expiry_delta is not None else None
 
         access_token_str = create_personal_access_token(user)
         token = AccessToken(

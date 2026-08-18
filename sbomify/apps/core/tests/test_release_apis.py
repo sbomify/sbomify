@@ -124,11 +124,14 @@ def test_create_release_with_custom_dates(
 
 
 @pytest.mark.django_db
-def test_create_release_duplicate_name(
+def test_create_release_duplicate_name_is_idempotent(
     sample_product: Product,  # noqa: F811
     sample_access_token: AccessToken,  # noqa: F811
 ):
-    """Test release creation with duplicate name fails."""
+    """Creating the same name twice returns the existing release.
+
+    Idempotent on purpose: two CI jobs tagging the same release race on the
+    insert, and the loser used to get a 400 that failed its build."""
     client = Client()
     url = reverse("api-1:create_release")
 
@@ -148,8 +151,9 @@ def test_create_release_duplicate_name(
         HTTP_AUTHORIZATION=f"Bearer {sample_access_token.encoded_token}",
     )
 
-    assert response.status_code == 400
-    assert "already exists" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["name"] == "v1.0.0"
+    assert Release.objects.filter(product=sample_product, name="v1.0.0").count() == 1
 
 
 @pytest.mark.django_db
@@ -410,6 +414,120 @@ def test_build_release_response_has_vex_flag(
     )
     ReleaseArtifact.objects.create(release=release, sbom=cbom)
     assert _build_release_response(request, release)["has_cbom"] is True
+
+
+@pytest.mark.django_db
+class TestPublicReleaseHidesPrivateComponents:
+    """A public release page must not name components the Trust Center refuses to show.
+
+    From production: a public product's release listed an artifact from a
+    private component — name, id, format — while the product page's Components
+    panel (correctly) left that component out. A visitor sees a component in
+    the release that does not exist anywhere else on the trust center, and its
+    per-artifact download 403s. The aggregate download already excludes
+    non-public members (builders._members_with_files); the metadata listing was
+    the one surface without the filter.
+    """
+
+    def _release_with_mixed_visibility(self, product: Product) -> tuple[Release, dict[str, Component]]:
+        product.is_public = True
+        product.save(update_fields=["is_public"])
+        release = Release.objects.create(product=product, name="v1.0.0")
+        components = {}
+        for visibility in ("public", "private", "gated"):
+            component = Component.objects.create(
+                name=f"{visibility} component", team_id=product.team_id, visibility=visibility
+            )
+            product.components.add(component)
+            sbom = SBOM.objects.create(
+                name=f"{visibility} sbom",
+                format="cyclonedx",
+                format_version="1.6",
+                sbom_filename=f"{visibility}.json",
+                component=component,
+            )
+            ReleaseArtifact.objects.create(release=release, sbom=sbom)
+            components[visibility] = component
+        # A private component's document leaks through the same loop.
+        document = Document.objects.create(
+            name="private doc",
+            version="1.0",
+            document_filename="d.pdf",
+            component=components["private"],
+            source="manual_upload",
+            content_type="application/pdf",
+            file_size=1,
+            document_type="license",
+        )
+        ReleaseArtifact.objects.create(release=release, document=document)
+        return release, components
+
+    def _get_release_as(self, user) -> dict:
+        """The path the public view actually takes: ``get_release`` called as a
+        function (ReleaseDetailsPublicView bypasses the ninja serializer, so
+        the HTTP endpoint would not reproduce the leak — its Detail schema
+        drops the flat artifact keys entirely)."""
+        from django.test import RequestFactory
+
+        from sbomify.apps.core.apis import get_release
+
+        request = RequestFactory().get("/")
+        request.user = user
+        request.session = {}
+        status_code, release = get_release(request, self.release_id)
+        assert status_code == 200
+        return release
+
+    def test_anonymous_caller_sees_only_public_and_gated(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        from django.contrib.auth.models import AnonymousUser
+
+        release, _ = self._release_with_mixed_visibility(sample_product)
+        self.release_id = release.id
+
+        data = self._get_release_as(AnonymousUser())
+
+        names = {a["component_name"] for a in data["artifacts"]}
+        assert names == {"public component", "gated component"}
+
+    def test_team_member_still_sees_everything(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """The owner manages the release through the same code path — hiding
+        rows from them would read as artifacts silently vanishing."""
+        release, _ = self._release_with_mixed_visibility(sample_product)
+        self.release_id = release.id
+        member = sample_product.team.members.first()
+
+        data = self._get_release_as(member)
+
+        artifacts = data["artifacts"]
+        assert {a["component_name"] for a in artifacts} == {"public component", "private component", "gated component"}
+        assert "private doc" in {a["artifact_name"] for a in artifacts}
+
+    def test_product_page_release_counts_follow_the_same_caller_rule(
+        self,
+        sample_product: Product,  # noqa: F811
+    ):
+        """The public product page's releases table must advertise the same
+        number of rows the release page will show to that caller: the filtered
+        count for visitors, the full count for a manager — otherwise a manager
+        reads "2 artifacts" here and finds 4 there."""
+        from sbomify.apps.core.views.product_details_public import _get_public_releases
+
+        release, _ = self._release_with_mixed_visibility(sample_product)
+        # The mixed release is named v1.0.0, so it survives the synthetic
+        # `latest` exclusion. 4 artifacts total; listable = the public and
+        # gated components' SBOMs (the document hangs off the private one).
+        as_visitor = _get_public_releases(str(sample_product.id), False, "slug", sees_all_components=False)
+        as_manager = _get_public_releases(str(sample_product.id), False, "slug", sees_all_components=True)
+
+        by_name = lambda rows: {r["name"]: r["artifacts_count"] for r in rows}  # noqa: E731
+        assert by_name(as_visitor)["v1.0.0"] == 2
+        assert by_name(as_manager)["v1.0.0"] == 4
 
 
 @pytest.mark.django_db
@@ -1864,8 +1982,8 @@ def test_release_with_unicode_version(
 
 
 @pytest.mark.django_db
-def test_delete_release_admin_forbidden(sample_team_with_owner_member: Member):  # noqa: F811
-    """Deleting a release is owner-only (#468); an admin gets 403 and the release survives."""
+def test_delete_release_admin_allowed(sample_team_with_owner_member: Member):  # noqa: F811
+    """Deleting a release is the DELETE tier (owner + admin)."""
     from django.contrib.auth import get_user_model
 
     team = sample_team_with_owner_member.team
@@ -1878,8 +1996,8 @@ def test_delete_release_admin_forbidden(sample_team_with_owner_member: Member): 
     client.force_login(admin)
     response = client.delete(reverse("api-1:delete_release", kwargs={"release_id": release.id}))
 
-    assert response.status_code == 403
-    assert Release.objects.filter(id=release.id).exists()
+    assert response.status_code == 204
+    assert not Release.objects.filter(id=release.id).exists()
 
 
 def test_download_filename_sanitizes_user_names():

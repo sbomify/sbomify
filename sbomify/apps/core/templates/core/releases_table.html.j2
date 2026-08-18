@@ -8,239 +8,134 @@
      @ws:message.window="if (['release_created', 'release_updated', 'release_deleted'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-releases')), 500); }">
     {# Serialize releases data for Alpine.js #}
     {{ releases|json_script:"releases-data" }}
-    <div class="tw-dashboard-card">
-        <div class="tw-card-header">
-            <h3 class="text-lg font-semibold text-text">All Releases</h3>
-        </div>
-        <div class="tw-card-body p-0">
-            {% if releases %}
-                <div class="flex flex-col overflow-hidden">
-                    <div class="tw-data-table-toolbar">
-                        <div class="tw-data-table-toolbar-left">
-                            <div class="tw-data-table-search">
-                                <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <label for="releases-search" class="sr-only">Search releases</label>
-                                <input type="search"
-                                       id="releases-search"
-                                       x-model="search"
-                                       placeholder="Search releases..."
-                                       class="tw-data-table-search-input">
-                            </div>
-                            {# Visibility Filter #}
-                            <label for="releases-visibility-filter" class="sr-only">Filter by visibility</label>
-                            <select id="releases-visibility-filter"
-                                    x-model="filter"
-                                    class="tw-data-table-page-size-select">
-                                <option value="all">All</option>
-                                <option value="public">Public</option>
-                                <option value="private">Private</option>
-                            </select>
-                        </div>
-                        <div class="tw-data-table-toolbar-right">
-                            <div class="tw-data-table-page-size">
-                                <span>Show</span>
-                                <label for="releases-per-page" class="sr-only">Entries per page</label>
-                                <select id="releases-per-page"
-                                        x-model.number="perPage"
-                                        class="tw-data-table-page-size-select">
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                </select>
-                                <span>entries</span>
-                            </div>
-                        </div>
+    {% if releases %}
+        {# The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="releases-search" label="Search releases" placeholder="Search releases..." x-model="search" />
+        {# Visibility filter #}
+        <c-tables.select id="releases-visibility-filter" label="Filter by visibility" x-model="filter">
+        <option value="all">All</option>
+        <option value="public">Public</option>
+        <option value="private">Private</option>
+        </c-tables.select>
+        <c-slot name="right">
+        <c-tables.page-size id="releases-per-page" x-model.number="perPage">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        </c-tables.page-size>
+        </c-slot>
+        </c-tables.toolbar>
+        <c-tables.table fixed>
+        <c-tables.head>
+        <c-tables.header-cell sort="name">Release</c-tables.header-cell>
+        <c-tables.header-cell sort="product_name" class="hidden md:table-cell">Product</c-tables.header-cell>
+        <c-tables.header-cell sort="artifacts_count" class="hidden lg:table-cell">Artifacts</c-tables.header-cell>
+        <c-tables.header-cell sort="created_at" date class="hidden lg:table-cell">Created</c-tables.header-cell>
+        <c-tables.header-cell sort="is_public" end>Visibility</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            <template x-for="release in paginatedData" :key="release.id">
+                <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:release_details' 0 0 %}'.replace('/0/', '/' + release.product_id + '/').replace('/0', '/' + release.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:release_details' 0 0 %}'.replace('/0/', '/' + release.product_id + '/').replace('/0', '/' + release.id)">
+                <c-tables.cell>
+                <div class="min-w-0">
+                    <span class="text-text font-medium block truncate" x-text="release.name"></span>
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        <template x-if="release.is_latest">
+                            <c-badges.success size="sm">Latest</c-badges.success>
+                        </template>
+                        <template x-if="release.is_prerelease">
+                            <c-badges.warning size="sm">Pre-release</c-badges.warning>
+                        </template>
+                        <template x-if="release.version">
+                            <c-badges.secondary size="sm" x-text="release.version" />
+                        </template>
                     </div>
-                    <div class="tw-data-table-container">
-                        <table class="tw-table tw-table-fixed">
-                            <thead>
-                                <tr>
-                                    <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                                @click="sort('name')">
-                                            Release
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden md:table-cell"
-                                        :aria-sort="sortColumn === 'product_name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'product_name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'product_name' && sortDirection === 'desc' }"
-                                                @click="sort('product_name')">
-                                            Product
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden lg:table-cell"
-                                        :aria-sort="sortColumn === 'artifacts_count' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'artifacts_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'artifacts_count' && sortDirection === 'desc' }"
-                                                @click="sort('artifacts_count')">
-                                            Artifacts
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden lg:table-cell"
-                                        :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
-                                                @click="sort('created_at')">
-                                            Created
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="tw-cell-end"
-                                        :aria-sort="sortColumn === 'is_public' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'is_public' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_public' && sortDirection === 'desc' }"
-                                                @click="sort('is_public')">
-                                            Visibility
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="release in paginatedData" :key="release.id">
-                                    <tr class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                        tabindex="0"
-                                        @click="window.location.href = '{% url 'core:release_details' 0 0 %}'.replace('/0/', '/' + release.product_id + '/').replace('/0', '/' + release.id)"
-                                        @keydown.enter.prevent="window.location.href = '{% url 'core:release_details' 0 0 %}'.replace('/0/', '/' + release.product_id + '/').replace('/0', '/' + release.id)">
-                                        <td>
-                                            <div class="min-w-0">
-                                                <span class="text-text font-medium block truncate" x-text="release.name"></span>
-                                                <div class="flex flex-wrap gap-1 mt-1">
-                                                    <template x-if="release.is_latest">
-                                                        <span class="tw-badge-success text-[10px]">Latest</span>
-                                                    </template>
-                                                    <template x-if="release.is_prerelease">
-                                                        <span class="tw-badge-warning text-[10px]">Pre-release</span>
-                                                    </template>
-                                                    <template x-if="release.version">
-                                                        <span class="tw-badge-secondary text-[10px]" x-text="release.version"></span>
-                                                    </template>
-                                                </div>
-                                                <template x-if="release.description">
-                                                    <p class="text-xs text-text-muted truncate max-w-xs mt-1"
-                                                       x-text="release.description.substring(0, 50) + (release.description.length > 50 ? '...' : '')">
-                                                    </p>
-                                                </template>
-                                                {# Mobile: Show product #}
-                                                <div class="md:hidden mt-1">
-                                                    <span class="text-xs text-text-muted" x-text="release.product_name"></span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="hidden md:table-cell">
-                                            <template x-if="release.product_id">
-                                                <a :href="'{% url 'core:product_details' 0 %}'.replace('0', release.product_id)"
-                                                   @click.stop
-                                                   class="inline-flex items-center gap-1.5 text-text hover:text-primary transition-colors">
-                                                    <i class="fas fa-cube text-sm text-text-muted"></i>
-                                                    <span x-text="release.product_name"></span>
-                                                </a>
-                                            </template>
-                                            <template x-if="!release.product_id">
-                                                <span class="text-text-muted italic">Product not found</span>
-                                            </template>
-                                        </td>
-                                        <td class="hidden lg:table-cell">
-                                            <div class="flex items-center gap-3">
-                                                <span class="inline-flex items-center gap-1.5 text-text">
-                                                    <i class="fas fa-puzzle-piece text-sm text-text-muted"></i>
-                                                    <span x-text="release.artifacts_count || 0"></span>
-                                                </span>
-                                                <template x-if="release.has_sboms">
-                                                    <a :href="'{% url 'api-1:download_release' 0 %}'.replace('0', release.id)"
-                                                       @click.stop
-                                                       class="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors"
-                                                       title="Download release SBOM"
-                                                       aria-label="Download release SBOM">
-                                                        <i class="fas fa-download text-sm" aria-hidden="true"></i>
-                                                    </a>
-                                                </template>
-                                            </div>
-                                        </td>
-                                        <td class="hidden lg:table-cell">
-                                            <span class="text-text text-sm"
-                                                  :title="formatDateFull(release.released_at || release.created_at)"
-                                                  x-text="formatDate(release.released_at || release.created_at)"></span>
-                                        </td>
-                                        <td class="tw-cell-end">
-                                            <template x-if="release.is_public">
-                                                <span class="tw-badge-success">
-                                                    <i class="fas fa-globe text-[10px] mr-1"></i>
-                                                    Public
-                                                </span>
-                                            </template>
-                                            <template x-if="!release.is_public">
-                                                <span class="tw-badge-info">
-                                                    <i class="fas fa-lock text-[10px] mr-1"></i>
-                                                    Private
-                                                </span>
-                                            </template>
-                                        </td>
-                                    </tr>
-                                </template>
-                                <template x-if="paginatedData.length === 0">
-                                    <tr>
-                                        <td colspan="5" class="text-center py-8 text-text-muted">
-                                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                            <p>No releases match your search</p>
-                                            <button @click="search = ''; filter = 'all'"
-                                                    class="mt-3 text-xs text-primary hover:underline">
-                                                Clear filters
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="tw-data-table-footer">
-                        <div class="tw-data-table-info">
-                            Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
-                            <template x-if="search || filter !== 'all'">
-                                <span>(filtered from <strong x-text="allReleases.length"></strong> total)</span>
-                            </template>
-                        </div>
-                        {% include "components/tw/table_pager.html.j2" %}
+                    <template x-if="release.description">
+                        <p class="text-xs text-text-muted truncate max-w-xs mt-1"
+                           x-text="release.description.substring(0, 50) + (release.description.length > 50 ? '...' : '')">
+                        </p>
+                    </template>
+                    {# Mobile: show the product the hidden column carries #}
+                    <div class="md:hidden mt-1">
+                        <span class="text-xs text-text-muted" x-text="release.product_name"></span>
                     </div>
                 </div>
-            {% else %}
-                {# Empty State #}
-                <div class="flex flex-col items-center justify-center py-16 px-6">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
-                        <i class="fas fa-tag text-3xl text-primary"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-text mb-2">No releases yet</h3>
-                    <p class="text-text-muted text-sm text-center max-w-sm mb-6">
-                        Create releases for your products to track versions and associated artifacts.
-                    </p>
+                </c-tables.cell>
+                <c-tables.cell class="hidden md:table-cell">
+                <template x-if="release.product_id">
+                    <a :href="'{% url 'core:product_details' 0 %}'.replace('0', release.product_id)"
+                       @click.stop
+                       class="inline-flex items-center gap-1.5 text-text hover:text-primary transition-colors">
+                        <i class="fas fa-cube text-sm text-text-muted" aria-hidden="true"></i>
+                        <span x-text="release.product_name"></span>
+                    </a>
+                </template>
+                <template x-if="!release.product_id">
+                    <span class="text-text-muted italic">Product not found</span>
+                </template>
+                </c-tables.cell>
+                <c-tables.cell class="hidden lg:table-cell">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex items-center gap-1.5 text-text">
+                        <i class="fas fa-puzzle-piece text-sm text-text-muted"
+                           aria-hidden="true"></i>
+                        <span x-text="release.artifacts_count || 0"></span>
+                    </span>
+                    <template x-if="release.has_sboms">
+                        <c-buttons.icon href="#" ::href="'{% url 'api-1:download_release' 0 %}'.replace('0', release.id)" variant="primary" size="sm" label="Download release SBOM" title="Download release SBOM" @click.stop>
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        </c-buttons.icon>
+                    </template>
                 </div>
-            {% endif %}
-        </div>
-    </div>
+                </c-tables.cell>
+                <c-tables.cell date class="hidden lg:table-cell">
+                <span class="text-text text-sm"
+                      ::title="formatDateFull(release.released_at || release.created_at)"
+                      x-text="formatDate(release.released_at || release.created_at)"></span>
+                </c-tables.cell>
+                <c-tables.cell end>
+                <template x-if="release.is_public">
+                    <c-badges.success>
+                    <i class="fas fa-globe text-[10px] mr-1" aria-hidden="true"></i>Public
+                    </c-badges.success>
+                </template>
+                <template x-if="!release.is_public">
+                    <c-badges.info>
+                    <i class="fas fa-lock text-[10px] mr-1" aria-hidden="true"></i>Private
+                    </c-badges.info>
+                </template>
+                </c-tables.cell>
+                </c-tables.row>
+            </template>
+            <template x-if="paginatedData.length === 0">
+                <tr>
+                    <td colspan="5" class="text-center py-8 text-text-muted">
+                        <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
+                        <p>No releases match your search</p>
+                        <button type="button"
+                                @click="search = ''; filter = 'all'"
+                                class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+        <template x-if="search || filter !== 'all'">
+            <span>(filtered from <strong x-text="allReleases.length"></strong> total)</span>
+        </template>
+        </c-tables.info>
+        <c-tables.pager />
+        </c-tables.footer>
+        </c-tables.shell>
+    {% else %}
+        <c-cards.card>
+        <c-feedback.empty-state icon="fas fa-tag" title="No releases yet" message="Create releases for your products to track versions and associated artifacts." />
+        </c-cards.card>
+    {% endif %}
 </div>

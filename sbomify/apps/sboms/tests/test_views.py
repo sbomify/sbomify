@@ -526,3 +526,44 @@ def test_sbom_download_capture_skipped_when_disabled(sample_sbom: SBOM, mocker: 
 
     assert response.status_code == 200
     mock_capture.assert_not_called()
+
+
+@pytest.mark.django_db
+class TestSbomsTableViewAnonymousAccess:
+    """The view serves a public and a private route off the same class.
+
+    A public component passes the component-level check even for an anonymous
+    caller, so the private route used to reach the team lookup with
+    ``AnonymousUser`` and raise. A private component never got that far.
+    """
+
+    def test_private_table_for_a_public_component_does_not_error(self, client, sample_component):  # noqa: F811
+        sample_component.visibility = Component.Visibility.PUBLIC
+        sample_component.save()
+
+        url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
+        response = client.get(url)
+
+        assert response.status_code == 302
+
+    def test_public_table_stays_open_to_anonymous(self, client, sample_component):  # noqa: F811
+        """The guard must not gate the route that is meant to be anonymous."""
+        sample_component.visibility = Component.Visibility.PUBLIC
+        sample_component.save()
+
+        url = reverse("sboms:sboms_table_public", kwargs={"component_id": sample_component.id})
+        response = client.get(url)
+
+        assert response.status_code == 200
+
+    def test_private_table_still_serves_a_member(self, client, sample_component, sample_user):  # noqa: F811
+        sample_component.visibility = Component.Visibility.PUBLIC
+        sample_component.save()
+        Member.objects.get_or_create(user=sample_user, team=sample_component.team, defaults={"role": "owner"})
+        client.force_login(sample_user)
+        setup_test_session(client, sample_component.team, sample_user)
+
+        url = reverse("sboms:sboms_table", kwargs={"component_id": sample_component.id})
+        response = client.get(url)
+
+        assert response.status_code == 200

@@ -42,8 +42,8 @@ def test_product_details_hides_identifiers_when_empty(public_team, public_produc
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Identifiers section should not be shown when empty
-    assert "Product Identifiers" not in content
+    # Identifiers panel should not be shown when empty
+    assert ">Identifiers</h2>" not in content
 
 
 @pytest.mark.django_db
@@ -61,7 +61,7 @@ def test_product_details_shows_identifiers_when_present(public_team, public_prod
     assert response.status_code == 200
     content = response.content.decode()
 
-    assert "Product Identifiers" in content
+    assert ">Identifiers</h2>" in content
     assert "TEST-SKU-123" in content
 
 
@@ -325,8 +325,8 @@ def test_product_details_hides_links_when_empty(public_team, public_product):
     assert response.status_code == 200
     content = response.content.decode()
 
-    # Links section should not be shown when empty (section header is "Resources & Links")
-    assert "Resources &amp; Links" not in content
+    # Links panel should not be shown when empty (panel title is "Resources & links")
+    assert "Resources &amp; links" not in content
 
 
 @pytest.mark.django_db

@@ -101,6 +101,47 @@ class TestTrustCenterSubdomainDetection:
 
 
 @pytest.mark.django_db
+class TestPortedTrustCenterDomain:
+    """TRUST_CENTER_DOMAIN keeps its port on purpose (URL generation needs
+    ``slug.127.0.0.1:8000`` in dev), but the middleware compares it against a
+    host that ``normalize_host`` has already stripped the port from. With a
+    ported setting the endswith test could never be true, so every trust
+    center subdomain fell through to the BYOD lookup and the host validator
+    400'd the request — the trust center was unreachable in any environment
+    whose domain carries a port."""
+
+    PORTED = "trustcenters.test:8000"
+
+    def test_subdomain_of_ported_domain_is_detected(self, request_factory, trust_center_team):
+        request = request_factory.get("/")
+        request.META["HTTP_HOST"] = "acme.trustcenters.test:8000"
+
+        def get_response(req):
+            assert req.is_trust_center_subdomain is True
+            assert req.custom_domain_team.id == trust_center_team.id
+            return None
+
+        with override_settings(TRUST_CENTER_DOMAIN=self.PORTED):
+            CustomDomainContextMiddleware(get_response)(request)
+
+    def test_host_validator_admits_the_same_subdomain(self, request_factory, trust_center_team):
+        from sbomify.apps.core.middleware import DynamicHostValidationMiddleware
+
+        request = request_factory.get("/")
+        request.META["HTTP_HOST"] = "acme.trustcenters.test:8000"
+        reached = {}
+
+        def get_response(req):
+            reached["yes"] = True
+            return None
+
+        with override_settings(TRUST_CENTER_DOMAIN=self.PORTED):
+            response = DynamicHostValidationMiddleware(get_response)(request)
+
+        assert reached.get("yes"), f"request was rejected: {getattr(response, 'content', b'')!r}"
+
+
+@pytest.mark.django_db
 class TestTrustCenterSlugValidation:
     """Test that slug format validation rejects malformed slugs before DB query."""
 

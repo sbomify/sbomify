@@ -1,5 +1,4 @@
 {% extends "core/public_base.htmx.j2" %}
-{% load breadcrumb_tags %}
 {% load django_vite %}
 {% load static %}
 {% load public_url_tags %}
@@ -12,80 +11,98 @@
 {% block og_description %}
     All software releases for {{ product.name }}. Browse release history, download SBOMs, and view release artifacts.
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb releases 'releases' %}
+{% block page_header %}
+    <header class="tc-masthead">
+        <div class="tc-masthead-inner tc-masthead-detail">
+            <a class="tc-backlink"
+               href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">
+                <i class="fas fa-arrow-left" aria-hidden="true"></i>
+                {{ product.name }}
+            </a>
+            <div class="tc-detail-eyebrow">
+                <p class="tc-eyebrow">
+                    <span class="tc-eyebrow-dot" aria-hidden="true"></span>
+                    Releases
+                </p>
+            </div>
+            <h1 class="tc-detail-title">{{ product.name }} releases</h1>
+            <p class="tc-detail-summary">Every release of this product, newest first, with its published artifacts.</p>
+            {% if releases %}
+                <div class="tc-detail-meta">
+                    <span class="tc-detail-meta-item">
+                        <i class="fas fa-tags" aria-hidden="true"></i>
+                        {{ releases|length }} release{{ releases|length|pluralize }}
+                    </span>
+                </div>
+            {% endif %}
+        </div>
+    </header>
 {% endblock %}
 {% block content %}
-    <div class="public-item-header flex flex-col gap-3">
-        {# Parent navigation comes from the breadcrumb (`Trust Center > Product`). #}
-        <h1 class="text-3xl font-bold text-text flex items-center gap-4 m-0">
-            <span class="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                <i class="fas fa-tags" aria-hidden="true"></i>
-            </span>
-            Releases
-        </h1>
-        <p class="text-text-muted text-lg m-0">All software releases for {{ product.name }}</p>
-        {% if releases %}
-            <div class="flex flex-wrap gap-2">
-                <span class="px-3 py-1.5 text-sm font-medium rounded-full bg-border/50 text-text flex items-center gap-2">
-                    <i class="fas fa-tag" aria-hidden="true"></i>
-                    {{ releases|length }} Release{{ releases|length|pluralize }}
-                </span>
-            </div>
-        {% endif %}
-    </div>
     {% if releases %}
-        <div class="public-section">
-            <div class="tw-card">
-                <div class="divide-y divide-border/50">
-                    {% for release in releases %}
-                        <a href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}"
-                           class="flex items-center gap-4 px-6 py-4 hover:bg-border/10 transition-colors no-underline group">
-                            {# Release Icon #}
-                            <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 {% if release.is_latest %}bg-success/10 text-success{% elif release.is_prerelease %}bg-warning/10 text-warning{% else %}bg-primary/10 text-primary{% endif %}">
-                                <i class="fas fa-tag" aria-hidden="true"></i>
-                            </div>
-                            {# Release Info #}
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="font-semibold text-text group-hover:text-primary transition-colors">{{ release.name }}</span>
-                                    {% if release.version %}
-                                        <code class="px-2 py-0.5 text-xs bg-border/50 rounded text-text-muted font-mono">{{ release.version }}</code>
-                                    {% endif %}
-                                    {% if release.is_latest %}
-                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-success/10 text-success">Latest</span>
-                                    {% endif %}
-                                    {% if release.is_prerelease %}
-                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-warning/10 text-warning">Pre-release</span>
-                                    {% endif %}
-                                </div>
-                                <div class="flex items-center gap-4 mt-1">
-                                    <span class="text-xs text-text-muted flex items-center gap-1">
-                                        <i class="far fa-clock" aria-hidden="true"></i>
-                                        {{ release.released_at|default_if_none:release.created_at|naturaltime }}
-                                    </span>
-                                    {% if release.description %}
-                                        <span class="text-xs text-text-muted hidden sm:inline">{{ release.description|truncatechars:60 }}</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {# Arrow #}
-                            <i class="fas fa-chevron-right text-text-muted text-sm group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0"
-                               aria-hidden="true"></i>
-                        </a>
-                    {% endfor %}
-                </div>
-            </div>
+        {# The panel already draws the frame, so the table brings only its own parts. #}
+        <div class="tc-panel tc-panel-flush">
+            <c-tables.table>
+            <c-tables.head>
+            <c-tables.header-cell scope="col">Release</c-tables.header-cell>
+            <c-tables.header-cell scope="col" class="hidden md:table-cell">Version</c-tables.header-cell>
+            <c-tables.header-cell scope="col">Status</c-tables.header-cell>
+            <c-tables.header-cell scope="col" date class="hidden md:table-cell">Released</c-tables.header-cell>
+            <c-tables.header-cell scope="col">
+            <span class="sr-only">View</span>
+            </c-tables.header-cell>
+            </c-tables.head>
+            <tbody>
+                {% for release in releases %}
+                    <c-tables.row>
+                    <c-tables.cell>
+                    <a class="font-medium text-text hover:text-primary no-underline"
+                       href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}">{{ release.name }}</a>
+                    {% if release.description %}
+                        <div class="text-xs opacity-75 mt-1" title="{{ release.description }}">{{ release.description|truncatechars:60 }}</div>
+                    {% endif %}
+                    <div class="md:hidden text-xs opacity-75 mt-1">
+                        {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                    </div>
+                    </c-tables.cell>
+                    <c-tables.cell class="hidden md:table-cell">
+                    {% if release.version %}
+                        <span class="font-mono text-xs">{{ release.version }}</span>
+                    {% else %}
+                        <span class="opacity-50">—</span>
+                    {% endif %}
+                    </c-tables.cell>
+                    <c-tables.cell>
+                    {% if release.is_latest %}
+                        <c-badges.success>Latest</c-badges.success>
+                    {% elif release.is_prerelease %}
+                        <c-badges.warning>Pre-release</c-badges.warning>
+                    {% else %}
+                        <span class="text-xs opacity-75">Stable</span>
+                    {% endif %}
+                    </c-tables.cell>
+                    <c-tables.cell date class="hidden md:table-cell">
+                    <span title="{{ release.released_at|default_if_none:release.created_at }}">
+                        {{ release.released_at|default_if_none:release.created_at|naturaltime }}
+                    </span>
+                    </c-tables.cell>
+                    <c-tables.cell end>
+                    <a class="tc-section-link whitespace-nowrap"
+                       href="{% public_url 'core:release_details_public' product_id=product.id product_slug=product.slug release_id=release.id release_slug=release.slug %}"
+                       aria-label="View {{ release.name }}">
+                        View <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                    </a>
+                    </c-tables.cell>
+                    </c-tables.row>
+                {% endfor %}
+            </tbody>
+            </c-tables.table>
         </div>
     {% else %}
-        <div class="public-section">
-            <div class="tw-card">
-                <div class="p-6 text-center py-12">
-                    <i class="fas fa-tags text-5xl text-text-muted mb-4 block"
-                       aria-hidden="true"></i>
-                    <p class="text-text-muted mb-0">No releases available for this product yet.</p>
-                </div>
-            </div>
+        <div class="tc-empty">
+            <i class="fas fa-tags tc-empty-icon" aria-hidden="true"></i>
+            <p class="tc-empty-title">No releases yet</p>
+            <p class="tc-empty-body">Releases appear here as this product publishes them.</p>
         </div>
     {% endif %}
 {% endblock %}

@@ -2,45 +2,17 @@
 {% load django_vite %}
 {% block title %}sbomify Artifacts: {{ component.name }}{% endblock %}
 {% block content %}
-    <div class="space-y-6">
-        {# Page header with breadcrumb back to the component #}
-        <div class="flex items-start gap-4">
-            <div class="tw-avatar tw-avatar-lg">
-                <i class="fas fa-shield-halved"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-                <h1 class="text-2xl font-bold text-text">
-                    {{ component.name }} <span class="font-normal text-text-muted">all artifacts</span>
-                </h1>
-                <nav aria-label="breadcrumb" class="mt-1">
-                    <ol class="flex items-center gap-2 text-sm text-text-muted">
-                        <li>
-                            <a href="{% url 'core:component_details' component.id %}"
-                               class="text-primary hover:underline no-underline">{{ component.name }}</a>
-                        </li>
-                        <li class="text-text-muted">/</li>
-                        <li class="text-text" aria-current="page">Artifacts</li>
-                    </ol>
-                </nav>
-            </div>
-            <a href="{% url 'core:component_details' component.id %}"
-               class="tw-btn-secondary inline-flex items-center gap-2 no-underline flex-shrink-0">
-                <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to component
-            </a>
-        </div>
-        {# Full artifacts table (all SBOMs, VEX, …) #}
-        <div id="sboms-table-container"
-             hx-get="{% url 'sboms:sboms_table' component.id %}?full=1"
-             hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
-             hx-swap="innerHTML">
-            <div class="text-center py-8">
-                <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"
-                     role="status">
-                    <span class="sr-only">Loading...</span>
-                </div>
-                <p class="mt-3 text-text-muted">Loading artifacts...</p>
-            </div>
-        </div>
+    <c-layout.page-header title="{{ page_title }}" icon="fas fa-shield-halved" mark="avatar" :breadcrumbs="breadcrumb_items">
+    <c-buttons.secondary href="{% url 'core:component_details' component.id %}">
+    <i class="fas fa-arrow-left" aria-hidden="true"></i>Back to component
+    </c-buttons.secondary>
+    </c-layout.page-header>
+    {# Full artifacts table (all SBOMs, VEX, …) #}
+    <div id="sboms-table-container"
+         hx-get="{% url 'sboms:sboms_table' component.id %}?full=1"
+         hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
+         hx-swap="innerHTML">
+        <c-feedback.loading message="Loading artifacts…" />
     </div>
 {% endblock %}
 {% block scripts %}

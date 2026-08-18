@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any
 
 import requests
@@ -15,25 +16,77 @@ class CreateAccessTokenForm(forms.Form):
     # #215); new tokens expire after 90 days unless the user explicitly
     # opts out via the "No expiration" choice.
     DEFAULT_EXPIRY_DAYS = 90
+    # Presets are stored in hours because the short end of the range is where
+    # they matter: a token minted for one CI run wants 12 or 24 hours, and
+    # expressing that in days would round it away.
+    HOUR = 1
+    DAY = 24
+    CUSTOM_CHOICE = "custom"
+    NEVER_CHOICE = "never"
     EXPIRY_CHOICES = [
-        ("30", "30 days"),
-        ("60", "60 days"),
-        ("90", "90 days"),
-        ("365", "1 year"),
-        ("never", "No expiration"),
+        (str(1 * HOUR), "1 hour"),
+        (str(12 * HOUR), "12 hours"),
+        (str(24 * HOUR), "24 hours"),
+        (str(7 * DAY), "7 days"),
+        (str(30 * DAY), "30 days"),
+        (str(60 * DAY), "60 days"),
+        (str(90 * DAY), "90 days"),
+        (str(365 * DAY), "1 year"),
+        (CUSTOM_CHOICE, "Custom…"),
+        (NEVER_CHOICE, "No expiration"),
     ]
+
+    CUSTOM_UNITS = [("hours", "hours"), ("days", "days")]
+    # A year of hours. Past this the row is indistinguishable from "never" in
+    # practice, and an unbounded value would overflow the date arithmetic.
+    MAX_CUSTOM_HOURS = 365 * DAY
 
     description = forms.CharField(
         max_length=255,
         error_messages={"required": "Please provide a name for the token."},
     )
-    expires_in_days = forms.ChoiceField(
+    expires_in_hours = forms.ChoiceField(
         choices=EXPIRY_CHOICES,
         required=False,
-        initial=str(DEFAULT_EXPIRY_DAYS),
+        initial=str(DEFAULT_EXPIRY_DAYS * DAY),
         label="Expiration",
+        widget=forms.Select(attrs={"class": "tw-form-select", "x-model": "expiryChoice"}),
+    )
+    custom_expiry_value = forms.IntegerField(
+        required=False,
+        min_value=1,
+        label="Custom expiry",
+        widget=forms.NumberInput(attrs={"class": "tw-form-input", "placeholder": "e.g. 8"}),
+    )
+    custom_expiry_unit = forms.ChoiceField(
+        choices=CUSTOM_UNITS,
+        required=False,
+        initial="hours",
+        label="Unit",
         widget=forms.Select(attrs={"class": "tw-form-select"}),
     )
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        if cleaned.get("expires_in_hours") != self.CUSTOM_CHOICE:
+            return cleaned
+
+        value = cleaned.get("custom_expiry_value")
+        if value is None:
+            # Only when the field is genuinely empty. A value the field itself
+            # rejected — a 0, a negative, something non-numeric — is also absent
+            # from cleaned_data, and adding "enter how long" underneath the
+            # field's own message tells the user to do what they just did.
+            if "custom_expiry_value" not in self.errors:
+                self.add_error("custom_expiry_value", "Enter how long the token should last.")
+            return cleaned
+        hours = value * (self.DAY if cleaned.get("custom_expiry_unit") == "days" else self.HOUR)
+        if hours > self.MAX_CUSTOM_HOURS:
+            self.add_error(
+                "custom_expiry_value",
+                'A custom expiry cannot exceed one year — choose "No expiration" if that is what you mean.',
+            )
+        return cleaned
 
     # Action scope (#215). "full" = unscoped (legacy default); the others narrow
     # what the token may do regardless of the user's role. Maps to a concrete
@@ -68,15 +121,21 @@ class CreateAccessTokenForm(forms.Form):
         # corrupt the shared SCOPE_PRESETS value (None stays None — full token).
         return list(preset) if preset is not None else None
 
-    def expiry_days(self) -> int | None:
-        """Chosen token lifetime in days, or ``None`` for no expiration.
+    def expiry_delta(self) -> timedelta | None:
+        """Chosen token lifetime, or ``None`` for no expiration.
 
-        An omitted/blank choice falls back to the secure default
-        (90 days); the explicit ``"never"`` sentinel maps to ``None``.
-        Only valid after ``is_valid()``.
+        An omitted or blank choice falls back to the secure default (90 days);
+        the explicit ``"never"`` sentinel maps to ``None``. Only valid after
+        ``is_valid()``.
         """
-        choice = self.cleaned_data.get("expires_in_days") or str(self.DEFAULT_EXPIRY_DAYS)
-        return None if choice == "never" else int(choice)
+        choice = self.cleaned_data.get("expires_in_hours") or str(self.DEFAULT_EXPIRY_DAYS * self.DAY)
+        if choice == self.NEVER_CHOICE:
+            return None
+        if choice == self.CUSTOM_CHOICE:
+            value = self.cleaned_data.get("custom_expiry_value") or 0
+            unit = self.DAY if self.cleaned_data.get("custom_expiry_unit") == "days" else self.HOUR
+            return timedelta(hours=value * unit)
+        return timedelta(hours=int(choice))
 
 
 class TogglePublicStatusForm(forms.Form):

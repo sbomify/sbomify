@@ -34,6 +34,13 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: ci-test-matrix
+        name: CI runs every app's tests
+        entry: uv run python bin/check_ci_test_matrix.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: markdownlint
         name: markdownlint
         entry: bun x markdownlint --fix

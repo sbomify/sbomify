@@ -31,7 +31,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
     """Fill the upload form and submit."""
     # Fill version
     version_input = page.locator("#document-version")
-    version_input.scroll_into_view_if_needed()
+    version_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, version_input)
     pace(page, 200)
@@ -40,7 +40,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
 
     # Select Document Type: Compliance
     type_select = page.locator("#document-type")
-    type_select.scroll_into_view_if_needed()
+    type_select.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, type_select)
     pace(page, 200)
@@ -50,7 +50,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
     # Select Compliance Subcategory: SOC 2
     subcat_select = page.locator("#document-subcategory-compliance")
     subcat_select.wait_for(state="visible", timeout=5_000)
-    subcat_select.scroll_into_view_if_needed()
+    subcat_select.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, subcat_select)
     pace(page, 200)
@@ -59,7 +59,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
 
     # Fill description
     desc_input = page.locator("#document-description")
-    desc_input.scroll_into_view_if_needed()
+    desc_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 300)
     hover_and_click(page, desc_input)
     pace(page, 200)
@@ -74,7 +74,7 @@ def _upload_document(page: Page, pdf_path: str) -> None:
     # Click "Save Document"
     save_btn = page.locator("button:has-text('Save Document')")
     save_btn.wait_for(state="visible", timeout=5_000)
-    save_btn.scroll_into_view_if_needed()
+    save_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 400)
     hover_and_click(page, save_btn)
 

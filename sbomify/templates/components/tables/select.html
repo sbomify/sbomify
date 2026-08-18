@@ -1,0 +1,18 @@
+{% comment %}
+The compact select a table toolbar uses: the page-size control and the filters
+beside the search box. Options are the slot, so the list stays with the view;
+attrs land on the select, which is what a page wires up (x-model="filter").
+
+The native arrow is off and the chevron is drawn on the select itself, so the
+control looks the same in every browser. Its grey is a literal, as it was in
+the stylesheet: it is baked into the SVG, not a theme token.
+
+For a form field use c-forms.select, which is full width and taller. This one
+is toolbar furniture and sizes itself to its content.
+{% endcomment %}
+<c-vars id label class />
+{% if label %}<label for="{{ id }}" class="sr-only">{{ label }}</label>{% endif %}
+<select {% if id %}id="{{ id }}"{% endif %}
+        class="py-1.5 pr-8 pl-3 text-sm leading-[1.5] text-text bg-surface border border-solid border-border rounded-md cursor-pointer appearance-none bg-[url(data:image/svg+xml,%3csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20fill=%27none%27%20viewBox=%270%200%2020%2020%27%3e%3cpath%20stroke=%27%236b7280%27%20stroke-linecap=%27round%27%20stroke-linejoin=%27round%27%20stroke-width=%271.5%27%20d=%27M6%208l4%204%204-4%27/%3e%3c/svg%3e)] bg-[position:right_0.5rem_center] bg-[length:1.25rem] bg-no-repeat focus:outline-none focus:border-primary{% if class %} {{ class }}{% endif %}"
+        {{ attrs }}>{{ slot }}
+</select>

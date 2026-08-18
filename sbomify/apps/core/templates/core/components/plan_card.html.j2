@@ -1,73 +1,74 @@
-<div class="tw-card mt-3"
-     x-data="planCard({ isCurrentPlan: {{ is_current_plan|yesno:'true,false' }}, buttonDisabled: {{ button_disabled|yesno:'true,false' }}, loading: {{ loading|yesno:'true,false' }} })">
-    <div class="rounded-xl overflow-hidden {% if is_current_plan %}shadow-lg ring-2 ring-primary{% else %}shadow{% endif %}">
-        <div class="px-6 py-4 border-b border-border {% if is_current_plan %}bg-primary/10{% endif %}">
-            <div class="flex items-center justify-between">
-                <h4 class="text-lg font-semibold text-text m-0">{{ plan_name }}</h4>
-            </div>
+{% comment %}
+    One plan on the billing page. The card is the surface: the current plan
+    rings it rather than nesting a second framed box inside it.
+{% endcomment %}
+<c-cards.card class="mt-3 overflow-hidden
+{% if is_current_plan %}
+    shadow-lg ring-2 ring-primary
+{% else %}
+    shadow
+{% endif %}
+" x-data="planCard({ isCurrentPlan: {{ is_current_plan|yesno:'true,false' }}, buttonDisabled: {{ button_disabled|yesno:'true,false' }}, loading: {{ loading|yesno:'true,false' }} })">
+<c-slot name="header">
+<c-cards.header class="
+{% if is_current_plan %}bg-primary/10{% endif %}
+">
+<div class="flex items-center justify-between">
+    <h4 class="text-lg font-semibold text-text m-0">{{ plan_name }}</h4>
+</div>
+</c-cards.header>
+</c-slot>
+{% if footer_content %}
+    <c-slot name="footer">
+    {{ footer_content }}
+    </c-slot>
+{% endif %}
+<div class="space-y-4">
+    <div class="text-center py-4">
+        <h1 class="text-4xl font-bold text-text m-0">
+            {% if price == 0 %}
+                Community
+            {% elif price > 0 %}
+                ${{ price }}<small class="text-lg font-normal text-text-muted">{{ price_period|default:"/mo" }}</small>
+            {% else %}
+                Contact Us
+            {% endif %}
+        </h1>
+    </div>
+    {% if description %}
+        <div class="text-center">
+            <p class="text-text-muted m-0">{{ description }}</p>
         </div>
-        <div class="p-6">
-            <div class="space-y-4">
-                <div class="text-center py-4">
-                    <h1 class="text-4xl font-bold text-text m-0">
-                        {% if price == 0 %}
-                            Community
-                        {% elif price > 0 %}
-                            ${{ price }}<small class="text-lg font-normal text-text-muted">{{ price_period|default:"/mo" }}</small>
-                        {% else %}
-                            Contact Us
-                        {% endif %}
-                    </h1>
-                </div>
-                {% if description %}
-                    <div class="text-center">
-                        <p class="text-text-muted m-0">{{ description }}</p>
-                    </div>
-                {% endif %}
-                {% if features %}
-                    <div class="pt-2">
-                        <ul class="space-y-2">
-                            {% for feature in features %}
-                                <li class="flex items-center gap-2 text-text">
-                                    <i class="fas fa-check text-success"></i>
-                                    {{ feature.label }}
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
-                {% if custom_content %}<div class="py-2">{{ custom_content }}</div>{% endif %}
-                {% if warning_message %}
-                    <div class="flex items-start gap-3 p-4 rounded-lg bg-warning/10 border border-warning/30"
-                         role="alert">
-                        <i class="fas fa-exclamation-triangle text-warning mt-0.5"></i>
-                        <span class="text-text">{{ warning_message }}</span>
-                    </div>
-                {% endif %}
-                {% if info_message %}
-                    <div class="flex items-start gap-3 p-4 rounded-lg bg-info/10 border border-info/30"
-                         role="alert">
-                        <i class="fas fa-info-circle text-info mt-0.5"></i>
-                        <span class="text-text">{{ info_message }}</span>
-                    </div>
-                {% endif %}
-                <div class="pt-4">
-                    {% if form_controls %}<div class="mb-3">{{ form_controls }}</div>{% endif %}
-                    <button type="button"
-                            class="w-full py-3 px-4 rounded-lg font-semibold transition-colors"
-                            :class="buttonClasses"
-                            :disabled="isButtonDisabled"
-                            @click="handleAction">
-                        {% if button_icon %}<i class="{{ button_icon }} mr-2"></i>{% endif %}
-                        {{ button_text|default:"Select Plan" }}
-                    </button>
-                </div>
-            </div>
+    {% endif %}
+    {% if features %}
+        <div class="pt-2">
+            <ul class="space-y-2">
+                {% for feature in features %}
+                    <li class="flex items-center gap-2 text-text">
+                        <i class="fas fa-check text-success"></i>
+                        {{ feature.label }}
+                    </li>
+                {% endfor %}
+            </ul>
         </div>
-        {% if footer_content %}
-            <div class="px-6 py-4 border-t border-border {% if is_current_plan %}bg-primary/5{% endif %}">
-                {{ footer_content }}
-            </div>
-        {% endif %}
+    {% endif %}
+    {% if custom_content %}<div class="py-2">{{ custom_content }}</div>{% endif %}
+    {% if warning_message %}<c-feedback.alert variant="warning">{{ warning_message }}</c-feedback.alert>{% endif %}
+    {% if info_message %}<c-feedback.alert>{{ info_message }}</c-feedback.alert>{% endif %}
+    <div class="pt-4">
+        {% if form_controls %}<div class="mb-3">{{ form_controls }}</div>{% endif %}
+        {% comment %}
+            The button's variant is decided in the browser by the plan card's
+            Alpine component, so this one keeps its class binding.
+        {% endcomment %}
+        <button type="button"
+                class="w-full"
+                :class="buttonClasses"
+                :disabled="isButtonDisabled"
+                @click="handleAction">
+            {% if button_icon %}<i class="{{ button_icon }} mr-2"></i>{% endif %}
+            {{ button_text|default:"Select Plan" }}
+        </button>
     </div>
 </div>
+</c-cards.card>

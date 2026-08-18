@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from sbomify.apps.core.consumers import WorkspaceConsumer
+from sbomify.apps.core.consumers import (
+    WS_CLOSE_POLICY_VIOLATION,
+    WS_CLOSE_SERVICE_RESTART,
+    WorkspaceConsumer,
+)
 
 
 class TestWorkspaceConsumer:
@@ -40,8 +44,10 @@ class TestWorkspaceConsumer:
 
         await consumer.connect()
 
-        consumer.close.assert_called_once()
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+        # Accepted first so the code above can reach the client at all: a close
+        # before the handshake completes is an HTTP 403 that carries no code.
+        consumer.accept.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_connect_anonymous_user_rejected(self, consumer, mock_channel_layer):
@@ -60,8 +66,10 @@ class TestWorkspaceConsumer:
 
         await consumer.connect()
 
-        consumer.close.assert_called_once()
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+        # Accepted first so the code above can reach the client at all: a close
+        # before the handshake completes is an HTTP 403 that carries no code.
+        consumer.accept.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_connect_authenticated_user_accepted(self, consumer, mock_channel_layer):
@@ -85,9 +93,7 @@ class TestWorkspaceConsumer:
 
         consumer.accept.assert_called_once()
         consumer.close.assert_not_called()
-        mock_channel_layer.group_add.assert_called_once_with(
-            "workspace_test-workspace", "test-channel"
-        )
+        mock_channel_layer.group_add.assert_called_once_with("workspace_test-workspace", "test-channel")
 
     @pytest.mark.asyncio
     async def test_connect_non_member_rejected(self, consumer, mock_channel_layer):
@@ -109,8 +115,10 @@ class TestWorkspaceConsumer:
 
         await consumer.connect()
 
-        consumer.close.assert_called_once()
-        consumer.accept.assert_not_called()
+        consumer.close.assert_called_once_with(code=WS_CLOSE_POLICY_VIOLATION)
+        # Accepted first so the code above can reach the client at all: a close
+        # before the handshake completes is an HTTP 403 that carries no code.
+        consumer.accept.assert_awaited_once()
         mock_channel_layer.group_add.assert_not_called()
 
     @pytest.mark.asyncio
@@ -151,9 +159,7 @@ class TestWorkspaceConsumer:
 
         await consumer.disconnect(1000)
 
-        mock_channel_layer.group_discard.assert_called_once_with(
-            "workspace_test-workspace", "test-channel"
-        )
+        mock_channel_layer.group_discard.assert_called_once_with("workspace_test-workspace", "test-channel")
 
     @pytest.mark.asyncio
     async def test_disconnect_without_group_name(self, consumer, mock_channel_layer):
@@ -248,6 +254,167 @@ class TestWorkspaceConsumerGroupBroadcast:
 
         # Verify the group name format
         assert consumer.group_name == "workspace_abc-123-def"
-        mock_channel_layer.group_add.assert_called_with(
-            "workspace_abc-123-def", "test-channel"
-        )
+        mock_channel_layer.group_add.assert_called_with("workspace_abc-123-def", "test-channel")
+
+
+class TestBrokerOutageHandling:
+    """A Redis restart must produce an orderly 1012 close, not an ASGI traceback."""
+
+    @pytest.fixture
+    def consumer(self):
+        return WorkspaceConsumer()
+
+    def _authenticated_scope(self, consumer):
+        user = MagicMock()
+        user.is_authenticated = True
+        user.id = 7
+        consumer.scope = {"url_route": {"kwargs": {"workspace_key": "ws-key"}}, "user": user}
+        consumer.channel_name = "chan"
+        consumer.close = AsyncMock()
+        consumer.accept = AsyncMock()
+
+    @pytest.mark.asyncio
+    async def test_group_add_failure_closes_with_service_restart(self, consumer):
+        self._authenticated_scope(consumer)
+        layer = MagicMock()
+        layer.group_add = AsyncMock(side_effect=ConnectionError("reset by peer"))
+        consumer.channel_layer = layer
+
+        with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
+            await consumer.connect()
+
+        consumer.close.assert_called_once_with(code=WS_CLOSE_SERVICE_RESTART)
+        # Accepted first, deliberately: a close sent before the handshake
+        # completes is an HTTP 403 refusal that carries no code at all, so the
+        # code asserted above would never have reached the client.
+        consumer.accept.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_accept_failure_joins_no_group(self, consumer):
+        """A socket that never opened must not leave a membership behind.
+
+        With the accept moved ahead of the join this is structural rather than
+        cleaned up after the fact: there is nothing to discard because nothing
+        was ever joined.
+        """
+        self._authenticated_scope(consumer)
+        layer = MagicMock()
+        layer.group_add = AsyncMock()
+        layer.group_discard = AsyncMock()
+        consumer.channel_layer = layer
+        consumer.accept = AsyncMock(side_effect=ConnectionError("reset by peer"))
+
+        with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
+            await consumer.connect()
+
+        layer.group_add.assert_not_awaited()
+        layer.group_discard.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_accept_failure_does_not_raise(self, consumer):
+        """Whatever killed the accept is usually the broker, and an exception
+        escaping connect() is what uvicorn logs as "Exception in ASGI
+        application" — one stack per socket, which is the noise this whole
+        class exists to prevent."""
+        self._authenticated_scope(consumer)
+        layer = MagicMock()
+        layer.group_add = AsyncMock()
+        consumer.channel_layer = layer
+        consumer.accept = AsyncMock(side_effect=ConnectionError("reset by peer"))
+
+        with patch.object(WorkspaceConsumer, "_check_workspace_membership", AsyncMock(return_value=True)):
+            await consumer.connect()  # must not raise
+
+    @pytest.mark.asyncio
+    async def test_disconnect_swallows_a_dead_broker(self, consumer):
+        consumer.scope = {"user": None}
+        consumer.group_name = "workspace_ws-key"
+        consumer.channel_name = "chan"
+        layer = MagicMock()
+        layer.group_discard = AsyncMock(side_effect=ConnectionError("reset by peer"))
+        consumer.channel_layer = layer
+
+        await consumer.disconnect(1006)
+
+
+class TestBroadcastResilience:
+    """A broadcast fans out to every channel in the group, and a socket may be
+    gone by the time its copy arrives. An exception escaping the handler is what
+    uvicorn logs as "Exception in ASGI application"."""
+
+    @pytest.fixture
+    def consumer(self):
+        return WorkspaceConsumer()
+
+    @pytest.mark.asyncio
+    async def test_a_dead_socket_does_not_raise_into_the_asgi_server(self, consumer):
+        consumer.send_json = AsyncMock(side_effect=ConnectionError("reset by peer"))
+
+        await consumer.workspace_message({"type": "workspace_message", "data": {"type": "sbom_uploaded"}})
+
+        consumer.send_json.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_a_closed_socket_does_not_raise_either(self, consumer):
+        """Channels raises its own error once the socket has been closed."""
+        consumer.send_json = AsyncMock(side_effect=RuntimeError("Cannot call send once a close message has been sent"))
+
+        await consumer.workspace_message({"type": "workspace_message", "data": {"x": 1}})
+
+        # Not raising is only half the claim: a handler that quietly stopped
+        # sending would pass on that alone.
+        consumer.send_json.assert_awaited_once_with({"x": 1})
+
+    @pytest.mark.asyncio
+    async def test_a_payload_that_will_not_serialise_is_not_swallowed(self, consumer):
+        """The half that must stay loud.
+
+        A non-serialisable payload raises from the same call a dead socket does,
+        so catching everything here dropped the broadcast to every socket in the
+        workspace, every time, and said so in one debug line. It is a producer
+        bug, and the only way it gets fixed is by being visible.
+        """
+        consumer.send_json = AsyncMock(side_effect=TypeError("Object of type datetime is not JSON serializable"))
+
+        with pytest.raises(TypeError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"when": object()}})
+
+    @pytest.mark.asyncio
+    async def test_a_recursion_error_is_not_mistaken_for_a_closed_socket(self, consumer):
+        """``RecursionError`` subclasses ``RuntimeError``.
+
+        A payload nested deeply enough makes ``json.dumps`` raise it from the
+        same call Channels raises a plain ``RuntimeError`` from, so matching the
+        base class would swallow it and put the silent drop straight back.
+        """
+        consumer.send_json = AsyncMock(side_effect=RecursionError("maximum recursion depth exceeded"))
+
+        with pytest.raises(RecursionError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"deep": {}}})
+
+    @pytest.mark.asyncio
+    async def test_a_not_implemented_error_is_not_either(self, consumer):
+        """The other ``RuntimeError`` subclass, and squarely a programmer bug."""
+        consumer.send_json = AsyncMock(side_effect=NotImplementedError("encode_json"))
+
+        with pytest.raises(NotImplementedError):
+            await consumer.workspace_message({"type": "workspace_message", "data": {"x": 1}})
+
+    @pytest.mark.asyncio
+    async def test_an_event_with_no_data_is_dropped_not_raised(self, consumer):
+        """A producer bug, not a transport failure — it must not take the socket
+        down with it, and it is the one case worth a warning."""
+        consumer.send_json = AsyncMock()
+
+        await consumer.workspace_message({"type": "workspace_message"})
+
+        consumer.send_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_live_socket_still_receives_the_payload(self, consumer):
+        consumer.send_json = AsyncMock()
+        payload = {"type": "scan_complete", "sbom_id": "123"}
+
+        await consumer.workspace_message({"type": "workspace_message", "data": payload})
+
+        consumer.send_json.assert_awaited_once_with(payload)

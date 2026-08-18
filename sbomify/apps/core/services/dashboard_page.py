@@ -80,6 +80,12 @@ def _digest_rows(component_ids: list[str], component_names: dict[str, str]) -> l
     return findings[:_DIGEST_LIMIT]
 
 
+def get_first_component(team_id: int) -> Component | None:
+    """Uncached on purpose: the digest cache may lag a just-created component,
+    and the onboarding hero must reflect it immediately."""
+    return Component.objects.filter(team_id=team_id).first()
+
+
 def build_dashboard_context(team_id: int) -> dict[str, Any]:
     cache_key = f"dashboard-page:{team_id}"
     cached = django_cache.get(cache_key)

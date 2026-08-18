@@ -6,20 +6,13 @@
         <div class="container mx-auto px-4">
             <div class="flex justify-center">
                 <div class="w-full max-w-sm">
-                    <div class="flex items-center justify-center gap-3 mb-6">
-                        <img src="{% static 'img/sbomify-icon.svg' %}"
-                             alt=""
-                             class="h-8 w-8"
-                             width="32"
-                             height="32">
-                        <span class="text-2xl font-bold text-text tracking-tight">sbomify</span>
+                    <div class="flex items-center justify-center mb-6">
+                        {% include "core/components/brand/logo.html.j2" with class="h-8 w-auto text-text" animate=True label="sbomify" %}
                     </div>
                     <div class="messages-container">{% include "core/components/messages.html.j2" %}</div>
-                    <div class="tw-card shadow-lg">
-                        <div class="p-6">
-                            {% block login_content %}{% endblock %}
-                        </div>
-                    </div>
+                    <c-cards.card>
+                    {% block login_content %}{% endblock %}
+                    </c-cards.card>
                 </div>
             </div>
         </div>

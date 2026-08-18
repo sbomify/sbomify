@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default fallback colors - matches app's primary color (--color-primary: 79 102 220)
-DEFAULT_BRAND_COLOR = "#4F66DC"
-DEFAULT_ACCENT_COLOR = "#4F66DC"
+# Default fallback colors - matches the brand navy ink (--color-primary: 37 41 63)
+DEFAULT_BRAND_COLOR = "#25293F"
+DEFAULT_ACCENT_COLOR = "#4263EB"
 DEFAULT_FALLBACK_GRAY = "#dcdcdc"
 
 
@@ -136,8 +136,8 @@ def build_branding_context(team: Team | None) -> dict[str, Any]:
             "slug": None,
             "brand_color": DEFAULT_BRAND_COLOR,
             "accent_color": DEFAULT_ACCENT_COLOR,
-            "brand_color_rgb": "79, 102, 220",  # Pre-computed for DEFAULT_BRAND_COLOR
-            "accent_color_rgb": "79, 102, 220",  # Pre-computed for DEFAULT_ACCENT_COLOR
+            "brand_color_rgb": "37, 41, 63",  # Pre-computed for DEFAULT_BRAND_COLOR
+            "accent_color_rgb": "66, 99, 235",  # Pre-computed for DEFAULT_ACCENT_COLOR
             "trust_center_description": "",
         }
 

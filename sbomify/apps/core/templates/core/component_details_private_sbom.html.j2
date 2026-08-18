@@ -7,13 +7,7 @@
          hx-get="{% url 'sboms:sboms_table' component.id %}"
          hx-trigger="load, refreshSbomsTable from:body, refreshVexDocuments from:body"
          hx-swap="innerHTML">
-        <div class="text-center py-8">
-            <div class="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto"
-                 role="status">
-                <span class="sr-only">Loading...</span>
-            </div>
-            <p class="mt-3 text-text-muted">Loading SBOMs...</p>
-        </div>
+        <c-feedback.loading message="Loading SBOMs..." compact />
     </div>
     {# Vulnerabilities drill-down for the latest SBOM — hidden when the latest scan is clean #}
     {% include "core/components/component_vulnerabilities.html.j2" %}

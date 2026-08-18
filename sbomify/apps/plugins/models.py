@@ -9,6 +9,9 @@ from typing import Any
 
 from django.apps import apps
 from django.db import models
+from django.utils import timezone
+
+from sbomify.apps.core.utils import generate_id
 
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus
 
@@ -464,3 +467,56 @@ class AssessmentRunRelease(models.Model):
 
     def __str__(self) -> str:
         return f"{self.assessment_run_id} ↔ {self.release_id}"
+
+
+class VulnerabilityLifecycle(models.Model):
+    """When a vulnerability first appeared for a component, and when it went away.
+
+    Findings exist per scan run only, so "age of open criticals" and
+    mean-time-to-remediate could not be computed: both need a first-seen date
+    and a resolved date, and a run is a snapshot rather than a history.
+
+    Derived on write as scan results arrive. The stored run stays immutable
+    (ADR-004): this table is a separate index over them, not an edit.
+
+    Keyed on (component, advisory) rather than (sbom, advisory) because that is
+    the question being asked. A component publishes many SBOMs over time and the
+    same CVE persists across them; keying per SBOM would restart the clock at
+    every upload and make every finding look a day old.
+    """
+
+    class Meta:
+        db_table = apps.get_app_config("plugins").label + "_vulnerability_lifecycle"
+        constraints = [
+            models.UniqueConstraint(fields=["component", "advisory_id"], name="plugins_vuln_lifecycle_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["component", "resolved_at"], name="plugins_vuln_lc_open_idx"),
+            models.Index(fields=["first_seen_at"], name="plugins_vuln_lc_first_seen_idx"),
+        ]
+
+    id = models.CharField(max_length=20, primary_key=True, default=generate_id)
+    component = models.ForeignKey("sboms.Component", on_delete=models.CASCADE, related_name="vulnerability_lifecycles")
+    advisory_id = models.CharField(max_length=255, help_text="CVE, GHSA or other advisory identifier")
+    severity = models.CharField(max_length=20, blank=True, default="", help_text="Severity at the latest sighting")
+
+    first_seen_at = models.DateTimeField(help_text="When this advisory was first seen for this component")
+    last_seen_at = models.DateTimeField(help_text="The most recent scan that still reported it")
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When a scan that did run stopped reporting it. NULL while still open.",
+    )
+
+    def __str__(self) -> str:
+        return f"{self.advisory_id} on {self.component_id}"
+
+    @property
+    def is_open(self) -> bool:
+        return self.resolved_at is None
+
+    @property
+    def age_days(self) -> int:
+        """Days open, or days it took to remediate once resolved."""
+        end = self.resolved_at or timezone.now()
+        return max(0, (end - self.first_seen_at).days)

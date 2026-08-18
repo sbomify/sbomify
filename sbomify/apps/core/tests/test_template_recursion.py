@@ -143,10 +143,6 @@ class TestSpecificProblematicTemplates:
                 {"icon": "fa-test", "title": "Test Title"},
             ),
             (
-                "core/components/_loading_indicator.html.j2",
-                {"indicator_id": "test-spinner"},
-            ),
-            (
                 "core/components/public_card.html.j2",
                 {"title": "Test Card"},
             ),

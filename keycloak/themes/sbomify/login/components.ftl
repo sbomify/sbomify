@@ -1,6 +1,31 @@
+<#--
+  The message banner every form page opens with. One caller, one recipe: the
+  variant class sets --alert-accent and the stylesheet derives fill, border and
+  text from it. Kept here rather than repeated per page so the markup and the
+  aria wiring cannot drift between pages.
+-->
+<#macro alertBanner>
+    <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
+        <div class="alert alert-${message.type}" role="alert" aria-live="polite">
+            <#if message.type = 'success'><span class="alert-icon" aria-hidden="true">✓</span></#if>
+            <#if message.type = 'warning'><span class="alert-icon" aria-hidden="true">⚠</span></#if>
+            <#if message.type = 'error'><span class="alert-icon" aria-hidden="true">✕</span></#if>
+            <#if message.type = 'info'><span class="alert-icon" aria-hidden="true">ℹ</span></#if>
+            <span class="alert-text">${kcSanitize(message.summary)}</span>
+        </div>
+    </#if>
+</#macro>
+
+<#--
+  Client-side validation for a form. Callers place this at the top of the form,
+  so the fields below it are not in the DOM yet when the script runs: everything
+  has to wait for the document to finish parsing, or getElementById returns null
+  and the listeners silently never attach.
+-->
 <#macro formScripts formId submittingText passwordMatch=false passwordId="" passwordConfirmId="">
 <script>
 (function() {
+    const init = function() {
     const form = document.getElementById('${formId}');
     if (!form) return;
 
@@ -137,6 +162,13 @@
         }
     })();
     </#if>
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
 </script>
 </#macro>
@@ -147,7 +179,7 @@
         <div class="info-panel">
             <div class="info-content">
                 <div class="brand-logo">
-                    <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    <@brandLogo />
                 </div>
                 <h1 class="info-title">Verify Your Email</h1>
                 <p class="info-tagline">Please check your inbox to complete registration</p>
@@ -159,7 +191,7 @@
             <div class="form-card">
                 <!-- Mobile Logo (hidden on desktop) -->
                 <div class="mobile-logo">
-                    <img src="${url.resourcesPath}/img/sbomify.svg" alt="sbomify" />
+                    <@brandLogo />
                 </div>
                 <div class="info-message-container">
                     <div class="info-icon-wrapper">
@@ -212,7 +244,7 @@
                             </svg>
                             <span>
                                 <strong>Didn't receive the email?</strong> 
-                                The verification link will expire in a few minutes. You can request a new one if needed.
+                                The verification link expires after a while. You can request a new one if needed.
                             </span>
                         </div>
                     </div>
@@ -229,4 +261,29 @@
             </div>
         </div>
     </div>
+</#macro>
+
+<#--
+  Inline animated sbomify logo. Inlined (not <img>/<object>) because Chrome
+  freezes CSS animations inside external SVG documents. Fill follows
+  currentColor; colour and sizing come from .brand-logo / .mobile-logo CSS.
+-->
+<#macro brandLogo>
+<svg class="brand-anim" viewBox="0 0 571.45 107" role="img" aria-label="sbomify">
+    <path class="bar b1" d="M.92,9.93C-.31,7.83-.31,5.12.92,3.02,2.05,1.08,4.04-.03,6.39,0h27.87c2.35-.02,4.35,1.06,5.48,3.01,1.23,2.1,1.23,4.82,0,6.92-1.12,1.92-3.08,3.01-5.38,3.01H6.39c-2.35.02-4.34-1.07-5.47-3.02Z"/>
+    <path class="bar b2 from-right" d="M47.71,9.93c-1.22-2.1-1.22-4.81,0-6.91C48.85,1.07,50.84-.04,53.19,0h.68s69.45,0,69.45,0c3.56,0,6.46,2.91,6.46,6.48s-2.9,6.46-6.46,6.46H53.09c-2.3,0-4.26-1.09-5.38-3.01Z"/>
+    <path class="bar b3" d="M1.02,28.36c-1.23-2.09-1.23-4.81,0-6.91,1.14-1.95,3.14-3.07,5.47-3.03h50.96c1.73,0,3.35.68,4.57,1.9,1.22,1.23,1.89,2.86,1.88,4.59,0,3.55-2.9,6.45-6.45,6.45H6.4c-2.3,0-4.26-1.09-5.38-3.01Z"/>
+    <path class="bar b4" d="M1.02,46.75c-1.22-2.09-1.22-4.79,0-6.89,1.14-1.95,3.14-3.06,5.48-3.02h.68s69.77,0,69.77,0c3.56,0,6.46,2.9,6.46,6.46s-2.9,6.46-6.46,6.46H6.41c-2.31,0-4.27-1.09-5.39-3.01Z"/>
+    <path class="bar b5 from-right" d="M46.36,61.69c0-3.56,2.9-6.46,6.46-6.46h70.49c2.35-.02,4.34,1.07,5.47,3.01,1.22,2.09,1.22,4.79,0,6.89-1.12,1.92-3.08,3.02-5.38,3.02h-.76s-69.8,0-69.8,0c-3.56,0-6.46-2.9-6.46-6.45Z"/>
+    <path class="bar b6 from-right" d="M67.76,84.67c-1.22-1.23-1.89-2.86-1.89-4.59,0-3.55,2.9-6.45,6.46-6.45h50.97c2.34-.03,4.33,1.06,5.47,3.01,1.23,2.09,1.23,4.81,0,6.91-1.12,1.93-3.08,3.03-5.39,3.03h-51.05c-1.73,0-3.35-.68-4.57-1.9Z"/>
+    <path class="bar b7" d="M82.06,95.07c1.22,2.1,1.22,4.81,0,6.91-1.12,1.93-3.08,3.02-5.38,3.02H6.46C2.9,104.99,0,102.09,0,98.52s2.89-6.45,6.44-6.47h70.15c2.35-.02,4.33,1.07,5.46,3.01Z"/>
+    <path class="bar b8 from-right" d="M128.86,101.98c-1.13,1.95-3.12,3.06-5.47,3.02h-27.97c-2.3,0-4.26-1.09-5.38-3.01-1.23-2.1-1.23-4.82,0-6.92,1.14-1.95,3.14-3.03,5.48-3.01h27.87c2.35-.03,4.34,1.07,5.47,3.02,1.22,2.09,1.22,4.8,0,6.9Z"/>
+    <path class="ltr l1" d="M238.43,67.44c0,12.3-10.69,17.53-22.24,17.53-10.09,0-17.89-3.62-22.24-11.3-.44-.77-.16-1.75.61-2.19l10.98-6.25c.79-.45,1.8-.15,2.22.66,1.58,3.08,4.37,4.76,8.43,4.76,3.85,0,5.77-1.18,5.77-3.31,0-5.88-26.3-2.78-26.3-21.28,0-11.65,9.84-17.53,20.95-17.53,8.07,0,15.31,3.35,19.89,9.95.54.78.26,1.86-.57,2.31l-10.82,5.83c-.72.39-1.62.17-2.08-.51-1.45-2.1-3.44-3.48-6.42-3.48-2.78,0-4.49,1.07-4.49,2.99,0,6.09,26.3,2.03,26.3,21.81Z"/>
+    <path class="ltr l2" d="M301.35,56.75c0,15.93-11.55,28.23-25.55,28.23-7.16,0-12.4-2.46-15.93-6.52v3.42c0,.89-.72,1.61-1.61,1.61h-12.82c-.89,0-1.61-.72-1.61-1.61V10.25c0-.89.72-1.61,1.61-1.61h12.82c.89,0,1.61.72,1.61,1.61v24.8c3.53-4.06,8.77-6.52,15.93-6.52,14.01,0,25.55,12.3,25.55,28.23ZM285.31,56.75c0-8.02-5.35-13.04-12.72-13.04s-12.72,5.02-12.72,13.04,5.35,13.04,12.72,13.04,12.72-5.02,12.72-13.04Z"/>
+    <path class="ltr l3" d="M306.15,56.75c0-15.93,12.62-28.23,28.33-28.23s28.33,12.3,28.33,28.23-12.62,28.23-28.33,28.23-28.33-12.3-28.33-28.23ZM346.78,56.75c0-7.59-5.35-12.62-12.3-12.62s-12.3,5.03-12.3,12.62,5.35,12.62,12.3,12.62,12.3-5.03,12.3-12.62Z"/>
+    <path class="ltr l4" d="M449.64,50.66v31.21c0,.89-.72,1.61-1.61,1.61h-12.82c-.89,0-1.61-.72-1.61-1.61v-29.82c0-5.35-2.57-8.77-7.7-8.77s-8.34,3.74-8.34,10.05v28.54c0,.89-.72,1.61-1.61,1.61h-12.82c-.89,0-1.61-.72-1.61-1.61v-29.82c0-5.35-2.57-8.77-7.7-8.77s-8.34,3.74-8.34,10.05v28.54c0,.89-.72,1.61-1.61,1.61h-12.82c-.89,0-1.61-.72-1.61-1.61V31.63c0-.89.72-1.61,1.61-1.61h12.82c.89,0,1.61.72,1.61,1.61v3.31c2.46-3.63,7.16-6.41,14.33-6.41,6.31,0,11.01,2.57,14.01,7.06,2.99-4.28,7.91-7.06,15.5-7.06,12.3,0,20.31,8.77,20.31,22.13Z"/>
+    <path class="ltr l5" d="M456.43,18.23c-1.94-7.13,4.68-13.75,11.81-11.81,3.26.88,5.87,3.49,6.75,6.75,1.94,7.13-4.68,13.75-11.81,11.81-3.26-.88-5.87-3.49-6.75-6.75ZM459.3,30.02h12.82c.89,0,1.61.72,1.61,1.61v50.24c0,.89-.72,1.61-1.61,1.61h-12.82c-.89,0-1.61-.72-1.61-1.61V31.63c0-.89.72-1.61,1.61-1.61Z"/>
+    <path class="ltr l6" d="M503.7,30.02h6.7c.89,0,1.61.72,1.61,1.61v12.18c0,.89-.72,1.61-1.61,1.61h-6.7v36.45c0,.89-.72,1.61-1.61,1.61h-12.82c-.89,0-1.61-.72-1.61-1.61v-36.45h-5.56c-.89,0-1.61-.72-1.61-1.61v-12.18c0-.89.72-1.61,1.61-1.61h5.56c0-14.52,7.75-23.41,24.41-22.95.87.02,1.57.74,1.57,1.61v12.16c0,.89-.73,1.62-1.62,1.61-5.07-.07-8.33,1.95-8.33,7.57Z"/>
+    <path class="ltr l7" d="M569.84,30.02c1.11,0,1.89,1.1,1.52,2.14l-17.53,49.71c-5.77,16.39-14.82,23.24-28.87,23.04-.88-.01-1.6-.73-1.6-1.61v-11.84c0-.86.68-1.56,1.54-1.6,6.44-.32,9.64-2.78,11.82-8.84l-20.35-48.77c-.44-1.06.34-2.23,1.48-2.23h14.1c.68,0,1.28.42,1.51,1.06l11.48,31.66,9.7-31.58c.21-.68.83-1.14,1.54-1.14h13.65Z"/>
+</svg>
 </#macro>

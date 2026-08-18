@@ -1,29 +1,17 @@
 """Record the VEX usage screencast.
 
 Drives: Dashboard → Components → click into a component that has an
-SBOM already attached → expand the "Upload SBOM File" card → drop a
-CycloneDX VEX file → reload the page → see the new VEX badge
-rendered next to the SBOM badge in the BOMs table.
+SBOM already attached → open Upload artifact from the header's ⋮ menu →
+pick the VEX artifact type → drop a CycloneDX VEX file → watch the
+dry-run preview → apply it → reload → see the row land in the
+component's VEX Documents card.
 
-Two infrastructure notes:
-
-1. **bom_type routing.** Today the in-app uploader POSTs to
-   ``/api/v1/sboms/upload-file/<id>`` without a ``bom_type`` query
-   parameter, so the endpoint defaults to ``sbom``. The endpoint
-   itself *does* accept ``bom_type=vex`` for CycloneDX uploads — we
-   wrap ``window.fetch`` via an init script so the screencast can
-   record the VEX upload flow with the existing UI. The companion
-   FAQ (``how-do-i-use-vex``) keeps the API and CI examples for
-   users who need to upload VEX today.
-2. **S3 short-circuit.** The screencast compose stack does not run
-   an S3 service, so a real upload would fail at the ``put_object``
-   call. We monkeypatch ``S3Client.upload_data_as_file`` to a no-op
-   for the duration of the recording so the upload-file endpoint
-   succeeds end-to-end and writes the SBOM record. The recording
-   then triggers an explicit ``page.reload()`` to land on the
-   post-upload BOMs table — relying on the in-app
-   ``sbom-uploaded`` → setTimeout → reload chain proved unreliable
-   when ``window.fetch`` is wrapped above.
+Infrastructure note: the screencast compose stack does not run an S3
+service, so a real upload would fail at the ``put_object`` call. We
+monkeypatch ``S3Client.upload_data_as_file`` to a no-op for the
+duration of the recording so the upload-file endpoint succeeds
+end-to-end and writes the SBOM record; the recording then reloads
+explicitly to land on the post-upload state.
 """
 
 import json
@@ -105,38 +93,6 @@ def component_with_sbom(deletable_team: Team) -> dict:
     return {"component": component, "sbom": sbom}
 
 
-def _patch_uploads_as_vex(page: Page) -> None:
-    """Wrap window.fetch so upload-file requests carry bom_type=vex.
-
-    The default endpoint behaviour is bom_type=sbom; injecting the
-    query string at the fetch layer lets the recording show the VEX
-    upload flow with the existing UI. We patch fetch via init script
-    rather than ``page.route(continue_)`` because URL rewriting at
-    the route layer leaves the FE waiting on the redirected response
-    in a way that does not unblock the upload spinner.
-    """
-    page.add_init_script(
-        """
-        (() => {
-            const originalFetch = window.fetch.bind(window);
-            window.fetch = function patchedFetch(input, init) {
-                let url = typeof input === 'string' ? input : input.url;
-                if (url && url.includes('/api/v1/sboms/upload-file/') && !url.includes('bom_type=')) {
-                    const sep = url.includes('?') ? '&' : '?';
-                    url = url + sep + 'bom_type=vex';
-                    if (typeof input === 'string') {
-                        input = url;
-                    } else {
-                        input = new Request(url, input);
-                    }
-                }
-                return originalFetch(input, init);
-            };
-        })();
-        """
-    )
-
-
 @pytest.fixture
 def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     """No-op the S3 put so the upload-file endpoint can succeed end-to-end.
@@ -154,7 +110,6 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
 def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit: None) -> None:
     page = recording_page
 
-    _patch_uploads_as_vex(page)
     start_on_dashboard(page)
 
     # ── 1. Navigate to Components ────────────────────────────────────────
@@ -163,34 +118,32 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     # ── 2. Click into the seeded component ───────────────────────────────
     click_into_row(page, COMPONENT_NAME)
 
-    # ── 3. Expand the upload card ────────────────────────────────────────
-    # The "Upload SBOM File" card collapses by default when at least one
-    # SBOM already exists on the component. Clicking the header expands
-    # it and reveals the dropzone with the helper text mentioning every
-    # BOM type the endpoint accepts.
-    upload_header = page.locator("#upload-sbom button").first
-    upload_header.wait_for(state="visible", timeout=15_000)
-    upload_header.scroll_into_view_if_needed()
-    pace(page, 1500)
-    hover_and_click(page, upload_header)
-    pace(page, 1500)
+    # ── 3. Open the upload modal from the header's ⋮ menu ────────────────
+    # Uploading moved off the page body into a modal behind the component
+    # header's meatball menu, so the dropzone does not exist on screen
+    # until "Upload artifact…" is picked.
+    more_actions = page.get_by_role("button", name="More actions")
+    more_actions.wait_for(state="visible", timeout=15_000)
+    pace(page, 800)
+    hover_and_click(page, more_actions)
+    pace(page, 600)
+    hover_and_click(page, page.get_by_role("menuitem", name="Upload artifact"))
+    pace(page, 1000)
 
-    # ── 4. Pause on the helper text so viewers see VEX is supported ─────
-    helper_text = page.locator("#upload-sbom").locator("text=SBOM, VEX, CBOM").first
-    helper_text.wait_for(state="visible", timeout=10_000)
-    helper_text.scroll_into_view_if_needed()
-    pace(page, 2500)
+    # ── 4. Pick the VEX artifact type ────────────────────────────────────
+    type_select = page.locator("#upload-bom-type")
+    type_select.wait_for(state="visible", timeout=10_000)
+    pace(page, 1000)
+    type_select.select_option("vex")
+    pace(page, 1200)
 
-    # ── 5. Drop the VEX file into the hidden file input ─────────────────
+    # ── 5. Drop the VEX file; a dry-run preview shows what would change ──
     # The dropzone proxies to a hidden <input type="file"> via $refs.
-    # Setting files on the input directly mirrors what a real drop does
-    # — Alpine's @change handler runs the same upload path either way,
-    # and the hidden-file approach is reliable in record mode.
+    # Setting files on the input directly mirrors what a real drop does.
+    # A VEX file gets a dry-run preview before anything is stored — the
+    # counts card is the feature the FAQ wants on screen.
     file_input = page.locator("#upload-sbom input[type='file']")
-    with page.expect_response(
-        lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
-        timeout=15_000,
-    ):
+    with page.expect_response(lambda r: "/vex-preview" in r.url and r.status == 200, timeout=15_000):
         file_input.set_input_files(
             files=[
                 {
@@ -200,37 +153,40 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
                 }
             ]
         )
+    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
+    pace(page, 3000)
 
-    # ── 6. Reload to show the new VEX in the BOMs table ─────────────────
-    # The frontend is supposed to reload after a successful upload, but
-    # the auto-reload listener does not fire reliably under the
-    # init-script fetch wrap we use here. Force a reload so the
-    # recording lands on the post-upload state without depending on the
-    # toast → setTimeout chain.
+    # ── 5b. Apply it for real ────────────────────────────────────────────
+    apply_btn = page.locator("button:has-text('Apply this VEX')")
+    with page.expect_response(
+        lambda r: "/api/v1/sboms/upload-file/" in r.url and r.status == 201,
+        timeout=15_000,
+    ):
+        hover_and_click(page, apply_btn)
+
+    # ── 6. Reload to show the new VEX document ───────────────────────────
+    # An explicit reload lands on the post-upload state without depending
+    # on the toast → setTimeout → reload chain.
     pace(page, 1500)
     page.reload()
     page.wait_for_load_state("networkidle")
     pace(page, 2500)
 
-    # ── 7. Show the VEX badge alongside the SBOM badge ──────────────────
-    vex_badge = page.locator("span.tw-badge-warning:text-is('VEX')").first
+    # ── 7. Show the VEX row in the Artifacts & security table ────────────
+    # VEX artifacts are rows of the unified artifacts table (Type column,
+    # violet badge), latest-per-type on the component card.
+    heading = page.locator("h4:has-text('artifacts')").first
+    heading.wait_for(state="visible", timeout=15_000)
+    heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    pace(page, 1500)
+
+    vex_badge = page.locator("span.tw-badge-violet:text-is('VEX')").first
     vex_badge.wait_for(state="visible", timeout=15_000)
-    vex_badge.scroll_into_view_if_needed()
-    pace(page, 1500)
     vex_badge.hover()
-    pace(page, 1500)
+    pace(page, 2000)
 
-    sbom_badge = page.locator("span.tw-badge-info:text-is('SBOM')").first
-    sbom_badge.wait_for(state="visible", timeout=10_000)
-    sbom_badge.scroll_into_view_if_needed()
-    pace(page, 400)
-    sbom_badge.hover()
-    pace(page, 1500)
-
-    # ── 8. Click into the VEX detail page ────────────────────────────────
-    vex_row_link = page.locator("tr", has=vex_badge).locator("a").first
-    vex_row_link.wait_for(state="visible", timeout=10_000)
-    pace(page, 500)
+    # ── 8. Click through to the VEX artifact page ────────────────────────
+    vex_row_link = page.locator("tr:has(span.tw-badge-violet) a").first
     hover_and_click(page, vex_row_link)
     page.wait_for_load_state("networkidle")
-    pace(page, 2500)
+    pace(page, 3000)

@@ -26,6 +26,10 @@ from .models import Invitation, Member, Team, get_team_name_for_user
 from .queries import count_team_members, get_team_user_counts
 
 # Valid tab names for team settings - used for input validation
+# Names still linked to by fragment that have no settings page of their own.
+# Kept as literals so a redirect to one cannot carry a request-derived string.
+FRAGMENT_ONLY_TABS: tuple[str, ...] = ("controls", "integrations")
+
 ALLOWED_TABS = frozenset(
     {
         "general",
@@ -34,7 +38,6 @@ ALLOWED_TABS = frozenset(
         "trust-center",
         "controls",
         "contact-profiles",
-        "plugins",
         "integrations",
         "billing",
         "branding",
@@ -53,8 +56,6 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     Returns:
         HttpResponseRedirect to the team settings page
     """
-    from urllib.parse import quote
-
     from django.shortcuts import redirect
     from django.urls import reverse
 
@@ -62,10 +63,26 @@ def redirect_to_team_settings(team_key: str, active_tab: str | None = None) -> H
     if not Team.objects.filter(key=team_key).exists():
         return redirect("teams:teams_dashboard")
 
+    # Each section is its own page, so a known tab is a URL rather than a
+    # fragment — the browser lands on the section directly instead of loading the
+    # index and being bounced by script.
+    from sbomify.apps.teams.settings_tabs import TABS_BY_KEY
+
+    if active_tab and active_tab in TABS_BY_KEY:
+        return redirect("teams:team_settings_tab", team_key=team_key, tab=active_tab)
+
     base_url = reverse("teams:team_settings", kwargs={"team_key": team_key})
-    if active_tab and active_tab in ALLOWED_TABS:
-        safe_tab = quote(active_tab)
-        return redirect(f"{base_url}#{safe_tab}")
+    # The names still in ALLOWED_TABS with no page of their own keep the old
+    # fragment, so links to them are not broken by the move.
+    #
+    # The fragment is taken from this tuple rather than interpolated from the
+    # argument. Equality proves the two are the same string, but only the
+    # literal is reachable in the URL — so no request-derived value can steer
+    # the redirect, by construction rather than by a validation step a later
+    # edit could drift away from.
+    for known_fragment in FRAGMENT_ONLY_TABS:
+        if active_tab == known_fragment:
+            return redirect(f"{base_url}#{known_fragment}")
     return redirect(base_url)
 
 
@@ -615,6 +632,23 @@ def recover_workspace_session(request: HttpRequest) -> HttpResponse:
     return error_response(request, HttpResponseForbidden("You are not a member of any team"))
 
 
+def on_demand_tls_cache_key(domain_normalized: str) -> str:
+    """Cache key for an on-demand TLS decision.
+
+    Lives here rather than beside the endpoint so the invalidation helpers below
+    can reach it. Deriving it privately in the API module was what left the
+    entry out of every invalidation path — the one domain-keyed cache nothing
+    cleared.
+
+    The hostname is hashed rather than interpolated: it is attacker-controlled,
+    and memcached rejects keys containing spaces or control characters, so a
+    probe crafted around that would otherwise raise instead of being denied.
+    """
+    import hashlib
+
+    return f"ondemand_tls:{hashlib.sha256(domain_normalized.encode()).hexdigest()}"
+
+
 def invalidate_custom_domain_cache(domain: str | None) -> None:
     """
     Invalidate the cache for a custom domain.
@@ -637,6 +671,11 @@ def invalidate_custom_domain_cache(domain: str | None) -> None:
             f"allowed_host:{domain}",  # DynamicHostValidationMiddleware
             f"is_custom_domain:{domain}",  # CustomDomainContextMiddleware
             f"custom_domain_team:{domain}",  # CustomDomainContextMiddleware
+            # Caddy's ask decision. Without this, a customer who pointed DNS at
+            # us before adding the domain — the normal order, since propagation
+            # is slow — keeps being refused a certificate for the whole deny
+            # window after the UI says the domain is configured.
+            on_demand_tls_cache_key(domain.lower()),
         ]
 
         for cache_key in cache_keys:
@@ -658,9 +697,17 @@ def invalidate_trust_center_slug_cache(slug: str | None) -> None:
         return
 
     try:
+        from django.conf import settings
         from django.core.cache import cache
 
         cache.delete(f"trust_center_team:{slug}")
+
+        # And the ask decision for this slug's hostname, for the same reason as
+        # the custom-domain path: a slug denied before the workspace was made
+        # public would keep being denied a certificate afterwards.
+        trust_center_domain = getattr(settings, "TRUST_CENTER_DOMAIN", "")
+        if trust_center_domain:
+            cache.delete(on_demand_tls_cache_key(f"{slug}.{trust_center_domain}".lower()))
 
         logger.debug(f"Invalidated trust center slug cache for: {slug}")
     except Exception as e:
