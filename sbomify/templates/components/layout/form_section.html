@@ -1,0 +1,43 @@
+{% comment %}
+A step in a long form: what this part is on the left, the fields on the right,
+stacking into one column below 64rem where there is no room for two. The rule
+between steps is each step's own top border, so steps can be added or removed
+without minding separators, and the first one drops both that rule and the
+padding above it from its position, not from a prop the caller would have to
+keep in step with the order.
+
+The step marker is c-chips.icon-chip: pass step for the number a numbered form
+counts with, or icon for a mark. accent reaches the chip untouched, so a step
+outside the count can read quieter.
+
+The title is an h2, because a form step is a section of the page and the steps
+are its outline. The description is a prop for the same reason c-layout.section-header
+makes it one: it is one line, and a slot would invite markup into a heading
+block.
+
+The fields are the slot, and the rhythm between them comes from the caller
+(space-y-5), because the spacing between fields belongs to the fields.
+
+The line-height is stated on the description: text-sm alone brings 1.25rem
+where the old rule inherited 1.5, which takes a pixel off every wrapped line.
+{% endcomment %}
+<c-vars title description step icon accent class />
+<div class="grid gap-y-4 gap-x-12 py-8 border-t border-solid border-border first-of-type:border-t-0 first-of-type:pt-0 lg:grid-cols-[15rem_minmax(0,1fr)]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div>
+        <h2 class="flex items-center gap-2.5 text-base leading-[1.5] font-semibold text-text m-0">
+            {% if step or icon %}
+                <c-chips.icon-chip size="sm" accent="{{ accent }}" aria-hidden="true">
+                {% if icon %}
+                    <i class="{{ icon }}"></i>
+                {% else %}
+                    {{ step }}
+                {% endif %}
+                </c-chips.icon-chip>
+            {% endif %}
+            {{ title }}
+        </h2>
+        {% if description %}<p class="text-sm leading-[1.5] text-text-muted mt-1.5">{{ description }}</p>{% endif %}
+    </div>
+    <div>{{ slot }}</div>
+</div>

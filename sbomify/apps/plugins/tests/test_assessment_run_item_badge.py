@@ -10,6 +10,11 @@ from __future__ import annotations
 
 from django.template.loader import render_to_string
 
+# The card takes its border from c-cards.collapsible's level; this is the recipe
+# that level="warning" emits, and its absence is what "not a warning" means now
+# that the card carries no tw-collapsible-card--warning class.
+WARNING_BORDER = "border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)]"
+
 
 def _run(**overrides) -> dict:
     run = {
@@ -87,7 +92,7 @@ class TestSkippedRunBadge:
 
         html = _render(run)
 
-        assert "tw-collapsible-card--warning" not in html
+        assert WARNING_BORDER not in html
 
     def test_a_skipped_compliance_run_reads_the_same(self):
         """PQC skips a document with no crypto assets. Different category, same
@@ -205,7 +210,7 @@ class TestSkippedSecurityRunBadge:
         run = _security_run()
         run["result"]["metadata"] = {"skipped": True}
 
-        assert "tw-collapsible-card--warning" not in _render(run)
+        assert WARNING_BORDER not in _render(run)
 
     def test_a_real_scan_is_untouched(self):
         """The case beside it on the same page: OSV reporting real findings."""

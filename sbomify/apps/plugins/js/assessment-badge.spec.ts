@@ -8,6 +8,9 @@ mock.module('alpinejs', () => ({
     }
 }))
 
+// Imported after the Alpine mock is installed so the real module registers against it.
+const { registerAssessmentBadge } = await import('./assessment-badge')
+
 type OverallStatus = 'all_pass' | 'has_failures' | 'pending' | 'in_progress' | 'no_assessments' | 'no_plugins_enabled'
 type PluginStatus = 'pass' | 'fail' | 'pending' | 'error'
 
@@ -35,32 +38,61 @@ describe('Assessment Badge', () => {
     })
 
     describe('Badge Classes', () => {
-        test('should return success class for all_pass status', () => {
-            const getBadgeClasses = (status: OverallStatus, isAvailable: boolean): string => {
-                if (!isAvailable) {
-                    return 'bg-secondary-subtle text-secondary'
-                }
+        // Exercises the real Alpine component. This block used to re-implement
+        // getBadgeClasses inline and assert against its own copy, so it passed while
+        // the shipped function returned Bootstrap classes that this build never
+        // generated — every assessment badge rendered unstyled.
+        const badgeFor = (status: OverallStatus, plan: string, totalAssessments = 1) => {
+            mockAlpineData.mockClear()
+            registerAssessmentBadge()
+            const factory = mockAlpineData.mock.calls[0]![1] as unknown as (
+                sbomId: string,
+                componentId: string,
+                assessmentsDataJson: string,
+                teamBillingPlan: string
+            ) => { getBadgeClasses(): string; getPluginStatusBadgeClass(status: string): string }
 
-                switch (status) {
-                    case 'all_pass':
-                        return 'bg-success-subtle text-success'
-                    case 'has_failures':
-                        return 'bg-warning-subtle text-warning'
-                    case 'pending':
-                    case 'in_progress':
-                        return 'bg-info-subtle text-info assessment-checking'
-                    case 'no_plugins_enabled':
-                        return 'bg-secondary-subtle text-secondary'
-                    default:
-                        return 'bg-secondary-subtle text-secondary'
+            const data: AssessmentsData = {
+                sbom_id: 'sbom-1',
+                overall_status: status,
+                total_assessments: totalAssessments,
+                passing_count: 0,
+                failing_count: 0,
+                pending_count: 0,
+                plugins: []
+            }
+            return factory('sbom-1', 'component-1', JSON.stringify(data), plan)
+        }
+
+        test('maps each status onto a library badge variant', () => {
+            expect(badgeFor('all_pass', 'business').getBadgeClasses()).toBe('tw-badge-success')
+            expect(badgeFor('has_failures', 'business').getBadgeClasses()).toBe('tw-badge-warning')
+            expect(badgeFor('pending', 'business').getBadgeClasses()).toBe('tw-badge-info assessment-checking')
+            expect(badgeFor('in_progress', 'business').getBadgeClasses()).toBe('tw-badge-info assessment-checking')
+            expect(badgeFor('no_plugins_enabled', 'business').getBadgeClasses()).toBe('tw-badge-secondary')
+            expect(badgeFor('no_assessments', 'community', 0).getBadgeClasses()).toBe('tw-badge-secondary')
+            expect(badgeFor('no_assessments', 'business').getBadgeClasses()).toBe('tw-badge-info assessment-checking')
+        })
+
+        test('only ever emits classes the design system defines', () => {
+            const statuses: OverallStatus[] = [
+                'all_pass',
+                'has_failures',
+                'pending',
+                'in_progress',
+                'no_assessments',
+                'no_plugins_enabled'
+            ]
+            for (const plan of ['community', 'business', 'enterprise']) {
+                for (const status of statuses) {
+                    const emitted = badgeFor(status, plan).getBadgeClasses().split(' ')
+                    for (const cls of emitted) {
+                        // Either a library badge variant or the local pulse animation.
+                        expect(cls === 'assessment-checking' || cls.startsWith('tw-badge-')).toBe(true)
+                    }
                 }
             }
-
-            expect(getBadgeClasses('all_pass', true)).toBe('bg-success-subtle text-success')
-            expect(getBadgeClasses('has_failures', true)).toBe('bg-warning-subtle text-warning')
-            expect(getBadgeClasses('pending', true)).toBe('bg-info-subtle text-info assessment-checking')
-            expect(getBadgeClasses('no_plugins_enabled', true)).toBe('bg-secondary-subtle text-secondary')
-            expect(getBadgeClasses('no_assessments', false)).toBe('bg-secondary-subtle text-secondary')
+            expect(badgeFor('all_pass', 'business').getPluginStatusBadgeClass('pass')).toBe('tw-badge-secondary')
         })
     })
 

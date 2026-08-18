@@ -30,7 +30,6 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             )
 
         current_team = request.session.get("current_team", {})
-        is_owner = current_team.get("role") == "owner"
         billing_plan = current_team.get("billing_plan")
 
         # Get company NDA ID for visibility selector and check if gated visibility is allowed
@@ -168,8 +167,10 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            # The page header's copy chip is a list, like every other detail
+            # page's, so the header component reads the same shape everywhere.
+            "header_copy_values": [{"value": component_id, "title": f"Component ID: {component_id} (click to copy)"}],
             "current_team": current_team,
-            "is_owner": is_owner,
             "team_billing_plan": billing_plan,
             "company_nda_id": company_nda_id,
             "gated_visibility_allowed": gated_visibility_allowed,

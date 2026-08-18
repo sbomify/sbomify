@@ -6,7 +6,7 @@ We received a request to reset your password for your sbomify account. Click the
 
 ${link}
 
-This link will expire in ${linkExpiration} minutes. If it expires, you can request a new password reset from the login page.
+This link will expire in ${linkExpirationFormatter(linkExpiration)}. If it expires, you can request a new password reset from the login page.
 
 If you did not request a password reset, please ignore this email. Your password will remain unchanged.
 

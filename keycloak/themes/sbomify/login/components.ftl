@@ -1,6 +1,31 @@
+<#--
+  The message banner every form page opens with. One caller, one recipe: the
+  variant class sets --alert-accent and the stylesheet derives fill, border and
+  text from it. Kept here rather than repeated per page so the markup and the
+  aria wiring cannot drift between pages.
+-->
+<#macro alertBanner>
+    <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
+        <div class="alert alert-${message.type}" role="alert" aria-live="polite">
+            <#if message.type = 'success'><span class="alert-icon" aria-hidden="true">✓</span></#if>
+            <#if message.type = 'warning'><span class="alert-icon" aria-hidden="true">⚠</span></#if>
+            <#if message.type = 'error'><span class="alert-icon" aria-hidden="true">✕</span></#if>
+            <#if message.type = 'info'><span class="alert-icon" aria-hidden="true">ℹ</span></#if>
+            <span class="alert-text">${kcSanitize(message.summary)}</span>
+        </div>
+    </#if>
+</#macro>
+
+<#--
+  Client-side validation for a form. Callers place this at the top of the form,
+  so the fields below it are not in the DOM yet when the script runs: everything
+  has to wait for the document to finish parsing, or getElementById returns null
+  and the listeners silently never attach.
+-->
 <#macro formScripts formId submittingText passwordMatch=false passwordId="" passwordConfirmId="">
 <script>
 (function() {
+    const init = function() {
     const form = document.getElementById('${formId}');
     if (!form) return;
 
@@ -137,6 +162,13 @@
         }
     })();
     </#if>
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
 </script>
 </#macro>
@@ -212,7 +244,7 @@
                             </svg>
                             <span>
                                 <strong>Didn't receive the email?</strong> 
-                                The verification link will expire in a few minutes. You can request a new one if needed.
+                                The verification link expires after a while. You can request a new one if needed.
                             </span>
                         </div>
                     </div>

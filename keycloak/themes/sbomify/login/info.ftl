@@ -32,7 +32,7 @@
 
                         <h2 class="info-message-title">
                             <#if message?has_content>
-                                ${kcSanitize(message.summary)}
+                                ${kcSanitize(message.summary)?no_esc}
                             <#else>
                                 Check Your Email
                             </#if>
@@ -75,11 +75,11 @@
                                     </svg>
                                     <span>
                                         <strong>Didn't receive the email?</strong> 
-                                        The link will expire in a few minutes. You can request a new verification email if needed.
+                                        The link expires after a while. You can request a new verification email if needed.
                                     </span>
                                 </div>
                             <#elseif message?has_content>
-                                <p>${kcSanitize(message.summary)}</p>
+                                <p>${kcSanitize(message.summary)?no_esc}</p>
                             <#else>
                                 <p>Check your inbox for further instructions.</p>
                             </#if>
@@ -93,33 +93,24 @@
                                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012 0m6 0a2 2 0 012 0m-6 4h.01M6 20h12"></path>
                                         </svg>
-                                        <span>${kcSanitize(action)}</span>
+                                        <span>${kcSanitize(action)?no_esc}</span>
                                     </div>
                                 </#list>
                             </div>
                         </#if>
 
-                        <#if skipLink??>
-                            <div class="info-actions">
-                                <a href="${skipLink}" class="btn-skip">
+                        <#-- skipLink is a boolean flag Keycloak sets to suppress the return link -->
+
+                        <#if !(skipLink??)>
+                            <div class="info-footer">
+                                <a href="${(pageRedirectUri)!(actionUri)!(url.loginRestartFlowUrl)!url.loginUrl}" class="btn-back">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                                        <path d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                                     </svg>
-                                    <span>Skip</span>
+                                    <span>Back to Login</span>
                                 </a>
                             </div>
                         </#if>
-
-
-
-                        <div class="info-footer">
-                            <a href="${(client.baseUrl)!url.loginRestartFlowUrl!url.loginUrl}" class="btn-back">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                                </svg>
-                                <span>Back to Login</span>
-                            </a>
-                        </div>
                     </div>
                 </div>
             </div>
