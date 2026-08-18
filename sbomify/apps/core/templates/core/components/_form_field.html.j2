@@ -16,59 +16,60 @@
   - horizontal: Set to true for horizontal form layout
   - label_cols: Column width for label in horizontal layout (default: 3)
   - input_cols: Column width for input in horizontal layout (default: 9)
+
+  The control here is Django's own widget, rendered by the form and painted with
+  widget_tweaks, so it keeps the legacy tw-form-* classes: a class name is the
+  only thing add_class can attach, and c-forms.input paints an element this
+  partial never gets to write. The label, the hint and the error are the
+  library's.
 {% endcomment %}
 {% load widget_tweaks %}
-{% if horizontal %}
-    <div class="grid grid-cols-12 gap-4 mb-4 items-start">
-        <label for="{{ field.id_for_label }}"
-               style="grid-column: span {{ label_cols|default:3 }}"
-               class="text-sm font-medium text-text pt-2 {{ label_class }}">
+{% with is_required=required|default:field.required %}
+    {% if horizontal %}
+        <div class="grid grid-cols-12 gap-4 mb-4 items-start">
+            <c-forms.label for="{{ field.id_for_label }}" :required="is_required" class="mb-0 pt-2 {{ label_class }}" style="grid-column: span {{ label_cols|default:3 }}">
             {{ field.label }}
-            {% if required|default:field.required %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
-        </label>
-        <div style="grid-column: span {{ input_cols|default:9 }}">
-            {{ field|add_class:"tw-form-input"|add_class:input_class }}
-            {% if help_text or field.help_text %}
-                <p id="{{ field.id_for_label }}-help"
-                   class="text-text-muted text-xs mt-1">{{ help_text|default:field.help_text }}</p>
-            {% endif %}
-            {% if field.errors %}
-                <div class="text-danger text-sm mt-1" role="alert">
+            </c-forms.label>
+            <div style="grid-column: span {{ input_cols|default:9 }}">
+                {{ field|add_class:"tw-form-input"|add_class:input_class }}
+                {% if help_text or field.help_text %}
+                    <c-forms.hint id="{{ field.id_for_label }}-help">{{ help_text|default:field.help_text }}</c-forms.hint>
+                {% endif %}
+                {% if field.errors %}
+                    <c-forms.error role="alert">
                     {% for error in field.errors %}
                         {{ error }}
                         {% if not forloop.last %}<br>{% endif %}
                     {% endfor %}
-                </div>
-            {% endif %}
-        </div>
-    </div>
-{% else %}
-    <div class="mb-4">
-        <label for="{{ field.id_for_label }}"
-               class="block text-sm font-medium text-text mb-1 {{ label_class }}">
-            {{ field.label }}
-            {% if required|default:field.required %}<span class="text-danger" aria-hidden="true">*</span>{% endif %}
-        </label>
-        {% if field.field.widget.input_type == 'select' %}
-            {{ field|add_class:"tw-form-input"|add_class:input_class }}
-        {% elif field.field.widget.input_type == 'checkbox' %}
-            <div class="flex items-center gap-2">
-                {{ field|add_class:"w-4 h-4 rounded border-border text-primary focus:ring-primary"|add_class:input_class }}
+                    </c-forms.error>
+                {% endif %}
             </div>
-        {% else %}
-            {{ field|add_class:"tw-form-input"|add_class:input_class }}
-        {% endif %}
-        {% if help_text or field.help_text %}
-            <p id="{{ field.id_for_label }}-help"
-               class="text-text-muted text-xs mt-1">{{ help_text|default:field.help_text }}</p>
-        {% endif %}
-        {% if field.errors %}
-            <div class="text-danger text-sm mt-1" role="alert">
+        </div>
+    {% else %}
+        <div class="mb-4">
+            <c-forms.label for="{{ field.id_for_label }}" :required="is_required" class="mb-1 {{ label_class }}">
+            {{ field.label }}
+            </c-forms.label>
+            {% if field.field.widget.input_type == 'select' %}
+                {{ field|add_class:"tw-form-select"|add_class:input_class }}
+            {% elif field.field.widget.input_type == 'checkbox' %}
+                <div class="flex items-center gap-2">
+                    {{ field|add_class:"w-4 h-4 rounded border-border text-primary focus:ring-primary"|add_class:input_class }}
+                </div>
+            {% else %}
+                {{ field|add_class:"tw-form-input"|add_class:input_class }}
+            {% endif %}
+            {% if help_text or field.help_text %}
+                <c-forms.hint id="{{ field.id_for_label }}-help">{{ help_text|default:field.help_text }}</c-forms.hint>
+            {% endif %}
+            {% if field.errors %}
+                <c-forms.error role="alert">
                 {% for error in field.errors %}
                     {{ error }}
                     {% if not forloop.last %}<br>{% endif %}
                 {% endfor %}
-            </div>
-        {% endif %}
-    </div>
-{% endif %}
+                </c-forms.error>
+            {% endif %}
+        </div>
+    {% endif %}
+{% endwith %}

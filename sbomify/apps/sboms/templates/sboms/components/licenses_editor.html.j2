@@ -3,51 +3,29 @@
     <template x-if="licenseTags.length > 0">
         <div class="flex flex-wrap gap-2 mb-3">
             <template x-for="(tag, index) in licenseTags" :key="index">
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border"
-                      :class="{ 'cursor-pointer hover:bg-border/70': tag.isCustom }"
-                      :title="tag.isCustom ? 'Click to edit custom license' : ''"
-                      @click="tag.isCustom ? editCustomLicense(index) : null">
-                    <span x-text="tag.isCustom ? (tag.displayValue + ' (custom)') : tag.displayValue"></span>
-                    <button type="button"
-                            class="p-0.5 rounded-full hover:bg-border transition-colors"
-                            title="Remove license"
-                            :aria-label="'Remove ' + tag.displayValue + ' license'"
-                            @click.stop="removeTag(index)">
-                        <i class="fas fa-times text-xs text-text-muted" aria-hidden="true"></i>
-                    </button>
-                </span>
+                {% comment %}
+                The tag is built in the browser, so the close button's name is
+                bound rather than written: the tag names itself from the row.
+                {% endcomment %}
+                <c-tags.tag removable remove_label="'Remove ' + tag.displayValue + ' license'" remove_title="Remove license" remove_click="removeTag(index)" ::class="{ 'cursor-pointer hover:bg-border/70': tag.isCustom }" ::title="tag.isCustom ? 'Click to edit custom license' : ''" @click="tag.isCustom ? editCustomLicense(index) : null">
+                <span x-text="tag.isCustom ? (tag.displayValue + ' (custom)') : tag.displayValue"></span>
+                </c-tags.tag>
             </template>
         </div>
     </template>
     <!-- License Input with Autocomplete -->
     <div class="relative">
         <div class="flex gap-2 mb-3">
-            <input type="text"
-                   class="flex-1 px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                   :class="{ 'border-danger': validationError, 'border-border': !validationError }"
-                   x-model="licenseExpression"
-                   x-ref="licenseInput"
-                   aria-label="License expression"
-                   placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')"
-                   @input="onInput()"
-                   @keydown="handleKeyDown($event)"
-                   @focus="showSuggestions = true"
-                   @blur="handleBlur()">
-            <button type="button"
-                    class="tw-btn-primary px-4"
-                    :disabled="!licenseExpression.trim()"
-                    title="Add license as tag"
-                    @click="addCurrentExpression()">Add</button>
-            <button type="button"
-                    class="tw-btn-secondary"
-                    title="Add custom license"
-                    @click="showCustomLicenseForm = true">
-                <i class="fas fa-plus mr-1"></i>Custom
-            </button>
+            <c-forms.input class="flex-1" x-model="licenseExpression" x-ref="licenseInput" aria-label="License expression" placeholder="Enter license expression (e.g., 'MIT' or 'Apache-2.0 WITH Commons-Clause')" ::data-state="validationError ? 'error' : ''" @input="onInput()" @keydown="handleKeyDown($event)" @focus="showSuggestions = true" @blur="handleBlur()" />
+            <c-buttons.primary title="Add license as tag" ::disabled="!licenseExpression.trim()" @click="addCurrentExpression()">Add</c-buttons.primary>
+            <c-buttons.secondary title="Add custom license" @click="showCustomLicenseForm = true">
+            <i class="fas fa-plus mr-1"></i>Custom
+            </c-buttons.secondary>
         </div>
         <!-- Autocomplete Suggestions -->
         <template x-if="showSuggestions && filteredLicenses.length > 0">
-            <div class="absolute z-50 w-full bg-surface border border-border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <c-dropdowns.dropdown flush role="" class="w-full">
+            <div class="max-h-64 overflow-y-auto">
                 <template x-for="(license, index) in filteredLicenses" :key="license.key">
                     <div class="px-4 py-2 cursor-pointer transition-colors"
                          :class="{ 'bg-primary/10': index === selectedIndex, 'hover:bg-background/50': index !== selectedIndex }"
@@ -62,6 +40,7 @@
                     </div>
                 </template>
             </div>
+            </c-dropdowns.dropdown>
         </template>
         <!-- Validation Error -->
         <template x-if="validationError">
@@ -78,8 +57,7 @@
                     <div class="text-text">
                         <h5 class="font-semibold mb-1">Unknown License Detected</h5>
                         <p class="text-sm mb-1">
-                            The following license identifier is not recognized: <span class="px-2 py-0.5 bg-border/30 rounded font-mono text-sm"
-       x-text="unknownTokens[0]"></span>
+                            The following license identifier is not recognized: <c-code-inline x-text="unknownTokens[0]"></c-code-inline>
                         </p>
                         <p class="text-sm m-0 text-text-muted">Please provide additional information to register this custom license.</p>
                     </div>
@@ -96,69 +74,54 @@
                 </div>
             </template>
             <!-- Custom License Card -->
-            <div class="tw-card shadow-sm">
-                <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-                    <h6 class="font-semibold text-text m-0"
-                        x-text="(editingCustomLicense ? 'Edit' : 'Create') + ' Custom License'"></h6>
-                    <button type="button"
-                            class="p-2 text-text-muted hover:text-text rounded-lg hover:bg-border/50 transition-colors"
-                            aria-label="Close"
-                            @click="closeCustomLicenseForm()">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="p-6">
-                    <form @submit.prevent="submitCustomLicense()">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-text mb-1">
-                                    License Name <span class="text-danger">*</span>
-                                </label>
-                                <input type="text"
-                                       class="w-full px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                       :class="{ 'border-danger': formErrors.name, 'border-border': !formErrors.name }"
-                                       x-model="customLicense.name"
-                                       placeholder="Enter license name"
-                                       required>
-                                <template x-if="formErrors.name">
-                                    <div class="text-danger text-sm mt-1" x-text="formErrors.name"></div>
-                                </template>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-text mb-1">License URL</label>
-                                <input type="url"
-                                       class="w-full px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                       :class="{ 'border-danger': formErrors.url, 'border-border': !formErrors.url }"
-                                       x-model="customLicense.url"
-                                       placeholder="https://example.com/license">
-                                <template x-if="formErrors.url">
-                                    <div class="text-danger text-sm mt-1" x-text="formErrors.url"></div>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="mt-4">
-                            <label class="block text-sm font-medium text-text mb-1">License Text</label>
-                            <textarea class="w-full px-3 py-2 border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                                      :class="{ 'border-danger': formErrors.text, 'border-border': !formErrors.text }"
-                                      x-model="customLicense.text"
-                                      rows="4"
-                                      placeholder="Enter the full text of the license"></textarea>
-                            <template x-if="formErrors.text">
-                                <div class="text-danger text-sm mt-1" x-text="formErrors.text"></div>
-                            </template>
-                        </div>
-                        <div class="flex justify-end gap-2 mt-4">
-                            <button type="button"
-                                    class="tw-btn-secondary"
-                                    @click="closeCustomLicenseForm()">Cancel</button>
-                            <button type="submit"
-                                    class="tw-btn-primary"
-                                    :disabled="!customLicense.name"
-                                    x-text="(editingCustomLicense ? 'Update' : 'Add') + ' License'"></button>
-                        </div>
-                    </form>
-                </div>
+            {# shadow-sm was dead here: the card class it sat beside is unlayered and outranked it. #}
+            <c-cards.card>
+            <c-slot name="header">
+            {% comment %}
+                The band the app's cards carry: shorter than the library header
+                and without its wash. Kept as the page's own markup so the
+                migration moves no pixels; the library has no matching part yet.
+            {% endcomment %}
+            <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+                <h6 class="font-semibold text-text m-0"
+                    x-text="(editingCustomLicense ? 'Edit' : 'Create') + ' Custom License'"></h6>
+                <c-buttons.icon label="Close" @click="closeCustomLicenseForm()">
+                <i class="fas fa-times"></i>
+                </c-buttons.icon>
             </div>
+            </c-slot>
+            <form @submit.prevent="submitCustomLicense()">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-text mb-1">
+                            License Name <span class="text-danger">*</span>
+                        </label>
+                        <c-forms.input x-model="customLicense.name" placeholder="Enter license name" required ::data-state="formErrors.name ? 'error' : ''" />
+                        <template x-if="formErrors.name">
+                            <div class="text-danger text-sm mt-1" x-text="formErrors.name"></div>
+                        </template>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-text mb-1">License URL</label>
+                        <c-forms.input type="url" x-model="customLicense.url" placeholder="https://example.com/license" ::data-state="formErrors.url ? 'error' : ''" />
+                        <template x-if="formErrors.url">
+                            <div class="text-danger text-sm mt-1" x-text="formErrors.url"></div>
+                        </template>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-text mb-1">License Text</label>
+                    <c-forms.textarea rows="4" placeholder="Enter the full text of the license" x-model="customLicense.text" ::data-state="formErrors.text ? 'error' : ''" />
+                    <template x-if="formErrors.text">
+                        <div class="text-danger text-sm mt-1" x-text="formErrors.text"></div>
+                    </template>
+                </div>
+                <div class="flex justify-end gap-2 mt-4">
+                    <c-buttons.secondary @click="closeCustomLicenseForm()">Cancel</c-buttons.secondary>
+                    <c-buttons.primary type="submit" ::disabled="!customLicense.name" x-text="(editingCustomLicense ? 'Update' : 'Add') + ' License'"></c-buttons.primary>
+                </div>
+            </form>
+            </c-cards.card>
         </div>
     </template>
     <!-- Success Message -->

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.apis import get_release
@@ -35,6 +36,21 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
 
         sibling_releases = sibling_releases_for(current_team.get("id"), product_id, exclude_release_id=release_id)
 
+        # Page-header context per the design system contract: the copy chip and
+        # breadcrumb trail are lists built here, and an empty editable type
+        # renders the title read-only (the latest release cannot be renamed).
+        can_edit_release = bool(release.get("has_crud_permissions")) and not release.get("is_latest")
+        header_copy_values = [
+            {"value": release["id"], "title": f"Release ID: {release['id']} (click to copy)"},
+        ]
+        breadcrumb_items = [
+            {
+                "label": release["product"]["name"],
+                "url": reverse("core:product_details", args=[release["product"]["id"]]),
+            },
+            {"label": release["name"]},
+        ]
+
         return render(
             request,
             "core/release_details_private.html.j2",
@@ -43,6 +59,9 @@ class ReleaseDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vie
                 "current_team": current_team,
                 "release": release,
                 "sibling_releases": sibling_releases,
+                "header_editable_type": "release" if can_edit_release else "",
+                "header_copy_values": header_copy_values,
+                "breadcrumb_items": breadcrumb_items,
             },
         )
 

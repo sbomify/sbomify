@@ -160,3 +160,58 @@ class TestNothingLeaksBeforeTheVerdict:
         await _drive(_User())
 
         group_add.assert_not_awaited()
+
+
+class TestARejectedSocketDoesNotTouchTheBroker:
+    """Accepting before the verdict means Channels runs ``disconnect()`` for
+    rejected sockets too, and that would discard a group they never joined.
+
+    Harmless-looking until you notice where it lands hardest: when
+    ``group_add`` has just failed because the broker is down, every rejected
+    socket would add another call to the broker that is already failing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_policy_rejection_discards_no_group(self, monkeypatch) -> None:
+        from channels.layers import get_channel_layer
+
+        discard = AsyncMock()
+        monkeypatch.setattr(get_channel_layer(), "group_discard", discard)
+
+        await _drive(None)
+
+        discard.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_broker_failure_does_not_call_it_again(self, monkeypatch) -> None:
+        from channels.layers import get_channel_layer
+
+        discard = AsyncMock()
+        monkeypatch.setattr(get_channel_layer(), "group_discard", discard)
+        monkeypatch.setattr(
+            WorkspaceConsumer,
+            "_check_workspace_membership",
+            AsyncMock(return_value=True),
+        )
+
+        await _drive(_User(), group_add_error=ConnectionError("reset by peer"), monkeypatch=monkeypatch)
+
+        discard.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_accepted_socket_still_cleans_up(self, monkeypatch) -> None:
+        """The invariant that must survive: a socket that did join has to leave."""
+        from channels.layers import get_channel_layer
+
+        discard = AsyncMock()
+        monkeypatch.setattr(get_channel_layer(), "group_add", AsyncMock())
+        monkeypatch.setattr(get_channel_layer(), "group_discard", discard)
+        monkeypatch.setattr(
+            WorkspaceConsumer,
+            "_check_workspace_membership",
+            AsyncMock(return_value=True),
+        )
+
+        await _drive(_User())
+
+        discard.assert_awaited()

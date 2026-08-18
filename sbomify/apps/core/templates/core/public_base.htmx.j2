@@ -37,14 +37,17 @@
             // the linked stylesheets resolve. An inline style on the root element
             // already beats selector-based rules — no !important needed.
             var style = html.style;
+            // Full rgb() values: the tailwind.src.css tokens are whole colors,
+            // so a bare triplet here is invalid for every var() consumer and
+            // silently drops their declarations.
             if(isDark) {
-                style.setProperty('--color-surface','30 41 59');
-                style.setProperty('--color-surface-elevated','51 65 85');
-                style.setProperty('--color-border','51 65 85');
+                style.setProperty('--color-surface','rgb(30 41 59)');
+                style.setProperty('--color-surface-elevated','rgb(51 65 85)');
+                style.setProperty('--color-border','rgb(51 65 85)');
             } else {
-                style.setProperty('--color-surface','255 255 255');
-                style.setProperty('--color-surface-elevated','255 255 255');
-                style.setProperty('--color-border','226 232 240');
+                style.setProperty('--color-surface','rgb(255 255 255)');
+                style.setProperty('--color-surface-elevated','rgb(255 255 255)');
+                style.setProperty('--color-border','rgb(226 232 240)');
             }
         })();
     </script>
@@ -154,10 +157,12 @@
                 --accent-color-light: {{ brand.accent_color|default:'#3b7ddd'|lighten:0.1 }};
                 --accent-color-dark: {{ brand.accent_color|default:'#3b7ddd'|darken:0.1 }};
 
-                /* Override Tailwind primary color with accent color for buttons/links */
-                --color-primary: {{ brand.accent_color|default:'#3b7ddd'|hex_to_rgb }};
-                --color-primary-light: {{ brand.accent_color|default:'#3b7ddd'|lighten:0.1|hex_to_rgb }};
-                --color-primary-dark: {{ brand.accent_color|default:'#3b7ddd'|darken:0.1|hex_to_rgb }};
+                /* Override Tailwind primary color with accent color for buttons/links.
+                   Whole rgb() values: the tokens are whole colors, and a bare
+                   triplet invalidates every var() consumer's declaration. */
+                --color-primary: rgb({{ brand.accent_color|default:'#3b7ddd'|hex_to_rgb }});
+                --color-primary-light: rgb({{ brand.accent_color|default:'#3b7ddd'|lighten:0.1|hex_to_rgb }});
+                --color-primary-dark: rgb({{ brand.accent_color|default:'#3b7ddd'|darken:0.1|hex_to_rgb }});
                 --text-primary: #1a202c;
                 --text-secondary: #64748b;
                 --text-muted: #94a3b8;
@@ -358,15 +363,29 @@
                Accent Color: Buttons, links, highlights
                =========================================== */
 
-            /* Links use accent color */
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
+            /* Links use accent color.
+               [data-button] is a library button rendered as an anchor: it carries
+               its own recipe, and the tw-btn-* names in this list are the same
+               exclusion for the buttons that have not been migrated yet. */
+            .public-page a:not([data-button]):not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link) {
                 color: var(--accent-color);
                 text-decoration: none;
                 transition: color 0.15s ease;
             }
 
-            .public-page a:not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
+            .public-page a:not([data-button]):not(.tw-btn-primary):not(.tw-btn-secondary):not(.tw-btn-outline):not(.brand-logo-link):not(.workspace-dropdown-item):not(.theme-toggle-item):not(.footer-powered-link):hover {
                 color: var(--accent-color-dark);
+            }
+
+            /* Library buttons build their whole recipe from --color-primary, which
+               the app stylesheet owns and loads after this block. Handing them the
+               workspace accent as that token is the same substitution the tw-btn-*
+               rules below make by hand, done once and only on the button, so the
+               recipe itself stays in the component. */
+            .public-page [data-button] {
+                --color-primary: var(--accent-color);
+                --color-primary-light: var(--accent-color-light);
+                --color-primary-dark: var(--accent-color-dark);
             }
 
             /* Primary buttons use accent color */
@@ -1147,13 +1166,13 @@
                 html.classList.toggle('light', !isDark);
                 html.classList.toggle('dark', isDark);
                 if (isDark) {
-                    style.setProperty('--color-surface', '30 41 59');
-                    style.setProperty('--color-surface-elevated', '51 65 85');
-                    style.setProperty('--color-border', '51 65 85');
+                    style.setProperty('--color-surface', 'rgb(30 41 59)');
+                    style.setProperty('--color-surface-elevated', 'rgb(51 65 85)');
+                    style.setProperty('--color-border', 'rgb(51 65 85)');
                 } else {
-                    style.setProperty('--color-surface', '255 255 255');
-                    style.setProperty('--color-surface-elevated', '255 255 255');
-                    style.setProperty('--color-border', '226 232 240');
+                    style.setProperty('--color-surface', 'rgb(255 255 255)');
+                    style.setProperty('--color-surface-elevated', 'rgb(255 255 255)');
+                    style.setProperty('--color-border', 'rgb(226 232 240)');
                 }
             }
 

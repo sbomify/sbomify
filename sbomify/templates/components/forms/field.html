@@ -1,0 +1,28 @@
+{% comment %}
+A field: the label, the control, and the one line of help under it. The control
+is the slot, so the same wrapper holds an input, a select, a textarea or a group
+of checkboxes without knowing which.
+
+An error replaces the hint, never stacks with it. The message is written here;
+the border that goes with it belongs to the control, which takes state="error",
+so the two live where they are read from.
+
+for names the control the label points at, and is passed straight through to
+c-forms.label.
+
+The parts below are wrapped in a with block that blanks class: the field's own
+class is layout for the field, and the label and the help line would otherwise
+inherit it and repeat that layout on every row.
+{% endcomment %}
+<c-vars label for required hint error class />
+<div class="space-y-1.5{% if class %} {{ class }}{% endif %}" {{ attrs }}>
+    {% with class="" %}
+        {% if label %}<c-forms.label for="{{ for }}" :required="required">{{ label }}</c-forms.label>{% endif %}
+        {{ slot }}
+        {% if error %}
+            <c-forms.error>{{ error }}</c-forms.error>
+        {% elif hint %}
+            <c-forms.hint>{{ hint }}</c-forms.hint>
+        {% endif %}
+    {% endwith %}
+</div>

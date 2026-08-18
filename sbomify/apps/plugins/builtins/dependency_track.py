@@ -240,6 +240,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
                             "This Dependency Track server does not accept this CycloneDX spec "
                             f"version, so vulnerability scanning was skipped. Server response: {e}"
                         ),
+                        unsupported_input=True,
                     )
                 logger.error(f"[DT] Failed to upload SBOM {sbom_id} to DT: {e}")
                 return self._create_error_result(f"DT upload failed: {e}")
@@ -905,6 +906,7 @@ class DependencyTrackPlugin(AssessmentPlugin):
         finding_id: str,
         title: str,
         description: str,
+        unsupported_input: bool = False,
     ) -> AssessmentResult:
         """Create a non-failing result indicating the assessment was skipped.
 
@@ -924,17 +926,27 @@ class DependencyTrackPlugin(AssessmentPlugin):
             finding_id: Stable identifier for the finding.
             title: Human-readable title.
             description: Detailed reason the assessment was skipped.
+            unsupported_input: True when the skip is because the server could
+                not read the artifact at all, rather than because a
+                per-run precondition was unmet. Re-running such an SBOM on the
+                next sweep repeats the rejection verbatim, so the scheduled
+                task backs it off; see ``UNSUPPORTED_INPUT_SKIP_HOURS``.
 
         Returns:
-            AssessmentResult with a single warning finding and
-            metadata={"skipped": True}.
+            AssessmentResult with a single warning finding and metadata
+            containing ``skipped: True``, plus ``unsupported_input: True`` when
+            that argument is set. Consumers should test for the keys they care
+            about rather than compare the dict, since this shape grows.
         """
+        metadata: dict[str, Any] = {"skipped": True}
+        if unsupported_input:
+            metadata["unsupported_input"] = True
         return self._build_single_finding_result(
             finding_id=finding_id,
             title=title,
             description=description,
             status="warning",
             severity="info",
-            metadata={"skipped": True},
+            metadata=metadata,
             warning_count=1,
         )

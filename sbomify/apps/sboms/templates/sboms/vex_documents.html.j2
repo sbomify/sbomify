@@ -5,129 +5,106 @@ is excluded — it is managed from the per-finding Triage modal, not here.
 Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
 {% endcomment %}
 <div x-data="{ confirmId: '', confirmName: '' }">
-    <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
-            <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
-                <i class="fas fa-shield-halved text-primary" aria-hidden="true"></i>VEX Documents
-            </h4>
-            <span class="tw-badge tw-badge-secondary text-xs">{{ vex_documents|length }}</span>
-        </div>
-        {% if vex_documents %}
-            <div class="tw-data-table-container">
-                <table class="tw-table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th class="hidden md:table-cell">Format</th>
-                            <th class="hidden md:table-cell">Source</th>
-                            <th>Suppresses</th>
-                            <th class="hidden lg:table-cell">Created</th>
-                            <th class="text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for doc in vex_documents %}
-                            <tr class="hover:bg-background/50 transition-colors">
-                                <td class="break-all">
-                                    <span class="font-medium text-text">{{ doc.name }}</span>
-                                    {% if doc.unreadable %}
-                                        <span class="tw-badge tw-badge-violet text-xs ml-1"
-                                              title="Could not read this document from storage">unreadable</span>
-                                    {% endif %}
-                                </td>
-                                <td class="hidden md:table-cell">
-                                    <span class="tw-badge tw-badge-violet text-xs">VEX</span>
-                                    <span class="text-text-muted text-xs ml-1">{{ doc.format_label }}</span>
-                                </td>
-                                <td class="hidden md:table-cell text-text-muted text-sm">{{ doc.source_label }}</td>
-                                <td>
-                                    {% if doc.statement_count %}
-                                        <div class="flex flex-wrap gap-1 items-center">
-                                            {% for c in doc.cve_summary %}
-                                                <span class="tw-badge tw-badge-info text-xs" title="{{ c.state }}">{{ c.id }}</span>
-                                            {% endfor %}
-                                            {% if doc.extra_cve_count %}<span class="text-text-muted text-xs">+{{ doc.extra_cve_count }}</span>{% endif %}
-                                        </div>
-                                    {% else %}
-                                        <span class="text-text-muted text-xs">No suppressions</span>
-                                    {% endif %}
-                                </td>
-                                <td class="hidden lg:table-cell text-text-muted text-sm">{{ doc.created_at|date:"M j, Y" }}</td>
-                                <td>
-                                    <div class="flex items-center justify-center gap-1">
-                                        <a href="{% url 'sboms:sbom_download' doc.id %}"
-                                           title="Download"
-                                           aria-label="Download VEX document"
-                                           class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
-                                            <i class="fas fa-download" aria-hidden="true"></i>
-                                        </a>
-                                        {% if has_crud_permissions %}
-                                            <button type="button"
-                                                    title="Delete"
-                                                    aria-label="Delete VEX document"
-                                                    class="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                                                    @click="confirmId='{{ doc.id|escapejs }}'; confirmName='{{ doc.name|escapejs }}'">
-                                                <i class="fas fa-trash" aria-hidden="true"></i>
-                                            </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="p-6 text-text-muted text-sm">
-                No VEX documents uploaded yet. Use <strong>Upload Artifact</strong> above and choose
-                <strong>VEX</strong>, or push one via the API.
-            </div>
-        {% endif %}
+    {# The shell draws the frame itself, so the table needs no card around it. #}
+    <c-tables.shell>
+    <div class="px-6 py-4 border-b border-border flex items-center justify-between">
+        <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
+            <i class="fas fa-shield-halved text-primary" aria-hidden="true"></i>VEX Documents
+        </h4>
+        <c-badges.secondary>{{ vex_documents|length }}</c-badges.secondary>
     </div>
+    {% if vex_documents %}
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell>Name</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell">Format</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell">Source</c-tables.header-cell>
+        <c-tables.header-cell>Suppresses</c-tables.header-cell>
+        <c-tables.header-cell date class="hidden lg:table-cell">Created</c-tables.header-cell>
+        <c-tables.actions-cell as="th" />
+        </c-tables.head>
+        <tbody>
+            {% for doc in vex_documents %}
+                <c-tables.row>
+                <c-tables.cell class="break-all">
+                <span class="font-medium text-text">{{ doc.name }}</span>
+                {% if doc.unreadable %}
+                    <c-badges.violet class="ml-1" title="Could not read this document from storage">unreadable</c-badges.violet>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell class="hidden md:table-cell">
+                <c-badges.violet>VEX</c-badges.violet>
+                <span class="text-text-muted text-xs ml-1">{{ doc.format_label }}</span>
+                </c-tables.cell>
+                {% comment %}
+                    The muted ink these cells named never applied: the stylesheet's
+                    unlayered `.tw-table td` colour outranked the utility, so the
+                    source and the date have always read in the body colour.
+                {% endcomment %}
+                <c-tables.cell class="hidden md:table-cell">{{ doc.source_label }}</c-tables.cell>
+                <c-tables.cell>
+                {% if doc.statement_count %}
+                    <div class="flex flex-wrap gap-1 items-center">
+                        {% for c in doc.cve_summary %}<c-badges.info title="{{ c.state }}">{{ c.id }}</c-badges.info>{% endfor %}
+                        {% if doc.extra_cve_count %}<span class="text-text-muted text-xs">+{{ doc.extra_cve_count }}</span>{% endif %}
+                    </div>
+                {% else %}
+                    <span class="text-text-muted text-xs">No suppressions</span>
+                {% endif %}
+                </c-tables.cell>
+                <c-tables.cell date class="hidden lg:table-cell">{{ doc.created_at|date:"j M Y" }}</c-tables.cell>
+                <c-tables.actions-cell>
+                <c-actions-menu label="VEX document actions">
+                <c-dropdowns.item icon="fas fa-download" href="{% url 'sboms:sbom_download' doc.id %}">
+                Download
+                </c-dropdowns.item>
+                {% if has_crud_permissions %}
+                    <c-dropdowns.item-danger icon="fas fa-trash" @click="confirmId='{{ doc.id|escapejs }}'; confirmName='{{ doc.name|escapejs }}'">
+                    Delete
+                    </c-dropdowns.item-danger>
+                {% endif %}
+                </c-actions-menu>
+                </c-tables.actions-cell>
+                </c-tables.row>
+            {% endfor %}
+        </tbody>
+        </c-tables.table>
+    {% else %}
+        <div class="p-6 text-text-muted text-sm">
+            No VEX documents uploaded yet. Use <strong>Upload Artifact</strong> above and choose
+            <strong>VEX</strong>, or push one via the API.
+        </div>
+    {% endif %}
+    </c-tables.shell>
     {% comment %}
-    Not teleported: HTMX only wires hx-* on content present at swap time, and
-    x-teleport moves this out after that, so the form would fall back to a
-    native submit. The container is a top-level card, so a fixed-position modal
-    here still overlays correctly.
+        Not teleported: HTMX only wires hx-* on content present at swap time, and
+        x-teleport moves this out after that, so the form would fall back to a
+        native submit. The container is a top-level card, so a fixed-position modal
+        here still overlays correctly.
     {% endcomment %}
     {% if has_crud_permissions %}
-        <div x-show="confirmId"
-             x-cloak
-             class="fixed inset-0 z-[100]"
-             role="dialog"
-             aria-modal="true"
-             @keydown.escape="confirmId=''">
-            <div class="tw-modal-overlay" @click="confirmId=''"></div>
-            <div class="tw-modal tw-modal-sm" x-trap.noscroll="confirmId" @click.stop>
-                <div class="tw-modal-content tw-modal-sm">
-                    <div class="tw-modal-header">
-                        <h4 class="tw-modal-title">Delete VEX document</h4>
-                        <button type="button"
-                                class="tw-modal-close"
-                                aria-label="Close"
-                                @click="confirmId=''">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <form hx-post="{% url 'sboms:component_vex_documents' component_id %}"
-                          hx-swap="none"
-                          @htmx:after-request="confirmId=''">
-                        {% csrf_token %}
-                        <input type="hidden" name="_method" value="DELETE">
-                        <input type="hidden" name="sbom_id" :value="confirmId">
-                        <div class="tw-modal-body">
-                            <p class="text-text text-sm">
-                                Permanently delete <span class="font-medium" x-text="confirmName"></span>? Its
-                                suppressions stop applying and the finding counts recompute. This cannot be undone.
-                            </p>
-                        </div>
-                        <div class="tw-modal-footer flex justify-end gap-2">
-                            <button type="button" class="tw-btn-secondary" @click="confirmId=''">Cancel</button>
-                            <button type="submit" class="tw-btn-danger">Delete</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
+        <c-modal id="delete-vex-modal" show="confirmId" close="confirmId=''" size="sm" title="Delete VEX document" teleport="false">
+        {% comment %}
+            The submit button sits in the dialog's footer band and names its
+            form, which is what keeps the actions on the band the library draws
+            rather than inside the scrolling body.
+        {% endcomment %}
+        <form id="delete-vex-form"
+              hx-post="{% url 'sboms:component_vex_documents' component_id %}"
+              hx-swap="none"
+              @htmx:after-request="confirmId=''">
+            {% csrf_token %}
+            <input type="hidden" name="_method" value="DELETE">
+            <input type="hidden" name="sbom_id" :value="confirmId">
+            <p class="text-text text-sm">
+                Permanently delete <span class="font-medium" x-text="confirmName"></span>? Its
+                suppressions stop applying and the finding counts recompute. This cannot be undone.
+            </p>
+        </form>
+        <c-slot name="footer">
+        <c-buttons.secondary @click="confirmId=''">Cancel</c-buttons.secondary>
+        <c-buttons.danger type="submit" form="delete-vex-form">Delete</c-buttons.danger>
+        </c-slot>
+        </c-modal>
     {% endif %}
 </div>
