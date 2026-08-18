@@ -5,7 +5,7 @@ Runs database migrations and clears the Redis cache as part of the deployment pr
 
 Pre-apply, the script logs the migration plan via ``migrate --plan`` so the
 operator can grep the deploy log to see exactly which migrations a release is
-about to apply. The plan is informational only — it does not gate the deploy;
+about to apply. The plan is informational only. It does not gate the deploy;
 if a destructive migration is unexpected, the operator must catch it in the
 log review.
 
@@ -79,7 +79,7 @@ def _apply_session_timeouts(connection: BaseDatabaseWrapper) -> None:
     """Bound how long a migration may block, when the operator asks for it.
 
     A migration that needs ACCESS EXCLUSIVE queues behind existing queries and,
-    once queued, blocks every query that arrives after it — turning a fast
+    once queued, blocks every query that arrives after it, turning a fast
     ALTER TABLE into a site-wide stall. lock_timeout makes the migration give up
     and fail instead, so the deploy retries rather than taking traffic down.
 
@@ -112,7 +112,7 @@ def main() -> None:
     lock_connection = None
     if use_lock:
         # Deliberately a dedicated connection, not the one `migrate` uses. The
-        # lock is session scoped, so it lives and dies with its connection — if
+        # lock is session scoped, so it lives and dies with its connection, if
         # anything in the migration path were to close or recycle the shared
         # connection, the lock would silently disappear underneath a migration
         # that is still running, which is precisely the window this is meant to
@@ -133,7 +133,7 @@ def main() -> None:
 
     try:
         # Log the migration plan BEFORE applying. `--plan` only prints which
-        # migrations would run, in order — it doesn't apply anything, so it's
+        # migrations would run, in order. It doesn't apply anything, so it's
         # safe to run unconditionally. Output goes to stdout, captured by
         # container logs / deploy log aggregation. Operators can grep for
         # "[release] Migration plan:" to find this section in the deploy log.

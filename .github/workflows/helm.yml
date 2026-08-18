@@ -53,6 +53,10 @@ jobs:
             --set database.password=hunter2 \
             --set redis.host=redis.internal \
             --set objectStorage.endpointUrl=https://s3.example.com \
+            --set objectStorage.sboms.accessKeyId=key \
+            --set objectStorage.sboms.secretAccessKey=secret \
+            --set objectStorage.media.accessKeyId=key \
+            --set objectStorage.media.secretAccessKey=secret \
             --set auth.keycloak.serverUrl=https://sso.example.com/ \
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
@@ -117,11 +121,21 @@ jobs:
             --values "$CHART/values-local.yaml" \
             --set secrets.signedUrlSalt=""
 
+          # Blank storage credentials used to render as empty AWS_* variables,
+          # which fails at runtime nowhere near the configuration.
+          assert_rejected "blank object storage credentials" \
+            --values "$CHART/values-local.yaml" \
+            --set objectStorage.sboms.accessKeyId=""
+
           assert_rejected "public ACME with the placeholder email" \
             --set app.baseUrl=https://a.example.com \
             --set database.host=pg --set database.password=p \
             --set redis.host=r \
             --set objectStorage.endpointUrl=https://s3.example.com \
+            --set objectStorage.sboms.accessKeyId=key \
+            --set objectStorage.sboms.secretAccessKey=secret \
+            --set objectStorage.media.accessKeyId=key \
+            --set objectStorage.media.secretAccessKey=secret \
             --set auth.keycloak.serverUrl=https://sso.example.com/ \
             --set auth.keycloak.clientSecret=x \
             --set secrets.secretKey=k --set secrets.signedUrlSalt=s
@@ -137,7 +151,7 @@ jobs:
             | /tmp/kubeconform -strict -summary -ignore-missing-schemas
 
       # kubeconform above proves the manifests are valid API objects; this is
-      # the separate question of whether they are well-built ones — dropped
+      # the separate question of whether they are well-built ones, dropped
       # capabilities, read-only root filesystems, resource bounds, no floating
       # image tags. Linted against the production-shaped render because
       # values-local.yaml pins `latest` on purpose.
@@ -153,6 +167,10 @@ jobs:
             --set database.password=hunter2 \
             --set redis.host=redis.internal \
             --set objectStorage.endpointUrl=https://s3.example.com \
+            --set objectStorage.sboms.accessKeyId=key \
+            --set objectStorage.sboms.secretAccessKey=secret \
+            --set objectStorage.media.accessKeyId=key \
+            --set objectStorage.media.secretAccessKey=secret \
             --set auth.keycloak.serverUrl=https://sso.example.com/ \
             --set auth.keycloak.clientSecret=secret \
             --set secrets.secretKey=lint-only-not-a-real-key \
@@ -239,8 +257,8 @@ jobs:
             ghcr.io/sbomify/sbomify:latest \
             postgres:17-alpine \
             redis:8-alpine \
-            minio/minio:latest \
-            minio/mc:latest \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z \
+            minio/mc:RELEASE.2025-08-13T08-35-41Z \
             caddy:2-alpine \
             quay.io/keycloak/keycloak:26.4.7
           do
@@ -275,8 +293,8 @@ jobs:
       - name: helm install
         run: |
           # Keep the migration Job after it succeeds. The chart's default
-          # (before-hook-creation,hook-succeeded) has Helm delete the Job — and
-          # cascade its pod — the moment the hook passes, so the assertion below
+          # (before-hook-creation,hook-succeeded) has Helm delete the Job, and
+          # cascade its pod. The moment the hook passes, so the assertion below
           # would find no logs to read.
           helm upgrade --install sbomify "$CHART" \
             --namespace sbomify \

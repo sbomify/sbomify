@@ -1,7 +1,7 @@
 {{- include "sbomify.validateValues" . -}}
 {{/*
 The data block is a named template because the pre-install migrations hook
-needs its own short-lived copy of it — see job-migrations-hookenv.yaml.
+needs its own short-lived copy of it. See job-migrations-hookenv.yaml.
 */}}
 {{- define "sbomify.configMapData" -}}
 APP_BASE_URL: {{ .Values.app.baseUrl | quote }}

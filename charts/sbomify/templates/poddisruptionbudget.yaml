@@ -4,7 +4,7 @@
 {{- if gt (int $replicas) 1 }}
 ---
 # Keeps a voluntary disruption (node drain, cluster upgrade) from taking the
-# whole tier down at once. Only rendered when there is more than one replica —
+# whole tier down at once. Only rendered when there is more than one replica,
 # a PDB over a single replica would block drains indefinitely.
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -14,7 +14,7 @@ metadata:
     {{- include "sbomify.componentLabels" (dict "ctx" $ "component" $component) | nindent 4 }}
 spec:
   # Without this, a PDB also blocks eviction of pods that are already unhealthy,
-  # so a tier that is down stays undrainable and wedges node maintenance — the
+  # so a tier that is down stays undrainable and wedges node maintenance. The
   # opposite of what a disruption budget is for. AlwaysAllow lets the cluster
   # evict a pod that was never Ready in the first place.
   unhealthyPodEvictionPolicy: {{ $cfg.podDisruptionBudget.unhealthyPodEvictionPolicy }}

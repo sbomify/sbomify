@@ -1,6 +1,7 @@
 # sbomify Helm chart
 
-Deploys [sbomify](https://sbomify.com) — SBOM and compliance document management — on Kubernetes.
+Deploys [sbomify](https://sbomify.com) on Kubernetes: SBOM and compliance
+document management.
 
 The chart deploys **the application only**: Caddy at the edge, a
 gunicorn/uvicorn web tier, a pool of Dramatiq workers, a singleton cron
@@ -9,10 +10,10 @@ Static assets are served by WhiteNoise from inside the app, so there is no
 separate static tier.
 
 It does **not** deploy PostgreSQL, Redis, object storage or Keycloak. You point
-it at ones you provide, and it refuses to render if you have not — see
+it at ones you provide, and it refuses to render if you have not. See
 *Backing services* below.
 
-There is also **no Ingress and no ingress controller** — see *Why Caddy and not
+There is also **no Ingress and no ingress controller**. See *Why Caddy and not
 an Ingress*.
 
 ## Quick start (local kind cluster)
@@ -22,8 +23,8 @@ an Ingress*.
 ```
 
 That creates a three-node [kind](https://kind.sigs.k8s.io/) cluster, applies
-[`deploy/local/dependencies.yaml`](../../deploy/local/dependencies.yaml) —
-throwaway PostgreSQL, Redis, MinIO and Keycloak for the laptop — and then
+[`deploy/local/dependencies.yaml`](../../deploy/local/dependencies.yaml),
+throwaway PostgreSQL, Redis, MinIO and Keycloak for the laptop, and then
 installs this chart with `values-local.yaml` pointed at them. Caddy issues its
 own certificates from its internal CA, so there is nothing to pre-generate.
 
@@ -31,7 +32,7 @@ Note the local setup provisions the datastores *outside* the chart, exactly as
 production does. There is no separate "all-in-one" code path to drift.
 
 ```text
-sbomify   https://sbomify.localtest.me      (Caddy internal CA — the browser will warn)
+sbomify   https://sbomify.localtest.me      (Caddy internal CA, so the browser warns)
 Keycloak  http://keycloak.localtest.me      (admin / admin)
 Logins    jdoe / foobar123, ssmith / foobar123
 ```
@@ -50,6 +51,10 @@ helm install sbomify ./charts/sbomify \
   --set database.password=... \
   --set redis.host=redis.internal \
   --set objectStorage.endpointUrl=https://fly.storage.tigris.dev \
+  --set objectStorage.sboms.accessKeyId=... \
+  --set objectStorage.sboms.secretAccessKey=... \
+  --set objectStorage.media.accessKeyId=... \
+  --set objectStorage.media.secretAccessKey=... \
   --set auth.keycloak.serverUrl=https://sso.example.com/ \
   --set auth.keycloak.clientSecret=... \
   --set secrets.secretKey="$(openssl rand -base64 48)" \
@@ -57,11 +62,14 @@ helm install sbomify ./charts/sbomify \
   --set caddy.acme.email=ops@example.com
 ```
 
-`secretKey` and `signedUrlSalt` are required — the chart will not invent them.
+On AWS you can drop the four storage credentials by setting
+`objectStorage.useWorkloadIdentity=true`. See *Keyless object storage* below.
+
+`secretKey` and `signedUrlSalt` are required. The chart will not invent them.
 Losing them logs out every user and invalidates every signed URL, so generate
 once and store them like any other credential (see *External secret managers*).
 
-Then point DNS for your domain — and every workspace custom domain — at the
+Then point DNS for your domain, and every workspace custom domain, at the
 `-caddy` Service's external address.
 
 In practice, put credentials in a Secret you manage (External Secrets, SOPS,
@@ -82,14 +90,14 @@ That Secret must provide `SECRET_KEY`, `SIGNED_URL_SALT`, `DATABASE_URL`,
 | `-web` | Deployment | gunicorn + uvicorn workers, behind Caddy |
 | `-worker` | Deployment | `manage.py rundramatiq` |
 | `-scheduler` | Deployment | `manage.py crontab`, pinned to 1 replica |
-| `-migrations` | Job | `bin/release.py` — see *Migrations* below |
+| `-migrations` | Job | `bin/release.py`. See *Migrations* below |
 | `-caddy` | Deployment + Service | TLS termination, routing, on-demand certificates |
 
 ## Backing services
 
 The chart requires four things to already exist. It does not stand them up:
-stateful services have their own operational lifecycle — backups, restores,
-failover, version upgrades, storage tuning — and coupling that to an application
+stateful services have their own operational lifecycle (backups, restores,
+failover, version upgrades, storage tuning), and coupling that to an application
 release means every `helm upgrade` of the app is also a change window for the
 database. Owning them separately also keeps the blast radius of a bad app
 release away from your data.
@@ -102,7 +110,7 @@ release away from your data.
 | Keycloak | `auth.keycloak.*` | The [Keycloak Operator](https://www.keycloak.org/guides) |
 
 On Keycloak: the project **deliberately does not publish an official Helm
-chart** — the Operator is its official Kubernetes path. Community charts exist
+chart**. The Operator is its official Kubernetes path. Community charts exist
 (codecentric, Bitnami and others) if you prefer Helm, but they are not
 maintained by the Keycloak project.
 
@@ -120,7 +128,7 @@ Two constraints worth knowing:
 ## External secret managers
 
 The chart never needs to own your secrets. Point it at a Secret something else
-materialises — External Secrets Operator (Google Secret Manager, AWS Secrets
+materialises: External Secrets Operator (Google Secret Manager, AWS Secrets
 Manager, Azure Key Vault), the Vault Agent injector, vault-secrets-operator,
 Sealed Secrets, or your platform's own tooling:
 
@@ -183,8 +191,8 @@ web:
     vault.hashicorp.com/agent-inject-secret-env: secret/data/sbomify
 ```
 
-Note the migration Job needs the same annotations via `migrations.podAnnotations`
-— it runs as a Helm hook, separately from the Deployments.
+Note the migration Job needs the same annotations via `migrations.podAnnotations`.
+It runs as a Helm hook, separately from the Deployments.
 
 ### Secrets Store CSI driver
 
@@ -218,11 +226,35 @@ serviceAccount:
 ```
 
 This matters for the migration Job specifically. It runs as a `pre-install`
-hook, before Helm creates any ordinary resource — so a chart-created
+hook, before Helm creates any ordinary resource, so a chart-created
 ServiceAccount does not exist yet and the Job falls back to `default`. A
 ServiceAccount you manage already exists, so the Job uses it and keeps its cloud
 identity. `migrations.serviceAccountName` overrides it independently if you want
 a separate, more privileged identity for schema changes.
+
+### Keyless object storage
+
+Static storage keys can be dropped entirely where the platform can vouch for the
+workload:
+
+```yaml
+objectStorage:
+  useWorkloadIdentity: true    # EKS IRSA or Pod Identity
+serviceAccount:
+  create: false
+  name: sbomify                # you manage it, annotated with the cloud role
+```
+
+The chart then omits every `AWS_*_ACCESS_KEY_ID` / `SECRET_ACCESS_KEY`
+variable so boto3 falls through to its default credential chain. Omitting them
+is the whole point: setting them to empty strings would leave boto3 holding
+blank credentials rather than looking for an identity. Bucket names and the
+endpoint are still configured normally, only the credentials become implicit.
+
+This follows [ADR-0007](../../docs/ADR/0007-gcs-support-and-cloud-workload-identity.md),
+which makes the S3 credentials optional and adds native GCS support. Until that
+lands, `useWorkloadIdentity` is useful on AWS, where boto3 already discovers
+IRSA and Pod Identity credentials on its own.
 
 ### Supplemental variables
 
@@ -246,7 +278,7 @@ Caddy's on-demand TLS can: on the first TLS handshake for an unknown hostname it
 calls `/api/v1/internal/domains?domain=…`, and the app answers `200` for domains
 it recognises (main domain, trust-center subdomains, and custom domains on
 Business/Enterprise plans) or `404` otherwise. A certificate appears without a
-redeploy, and an unrecognised domain gets nothing — which is what stops the
+redeploy, and an unrecognised domain gets nothing, which is what stops the
 endpoint from becoming a way to burn ACME rate limits.
 
 Two secondary benefits: it is the same proxy and the same `Caddyfile` semantics
@@ -264,7 +296,7 @@ Worth knowing before you scale it:
 - **More than one Caddy replica needs shared certificate storage.** With the
   default `file` storage each replica keeps its own certificates and runs its own
   ACME issuance for the same domains. Set `caddy.storage.module` (e.g. `redis`)
-  and point `caddy.image` at a Caddy build that includes that plugin — the
+  and point `caddy.image` at a Caddy build that includes that plugin. The
   upstream image has none. The chart refuses `replicaCount > 1` otherwise.
 - **The certificate PVC is marked `helm.sh/resource-policy: keep`**, so
   `helm uninstall` leaves it. Re-issuing every certificate from scratch is a fast
@@ -275,7 +307,7 @@ Worth knowing before you scale it:
   in front genuinely terminates TLS (a Cloudflare Tunnel, a cloud LB): it makes
   Caddy serve plain-HTTP requests carrying `X-Forwarded-Proto: https` instead of
   redirecting them. That header is client-settable, so leaving it on
-  unconditionally would let any caller skip the HTTPS redirect — which is why it
+  unconditionally would let any caller skip the HTTPS redirect, which is why it
   is paired with `fromCidrs`, restricting the behaviour to the proxy that
   actually does the termination.
 
@@ -286,18 +318,18 @@ runs to completion before any new pod starts, so new code never serves traffic
 against an un-migrated schema, and a failed migration fails the release.
 
 Helm runs *all* pre-install hooks before it creates *any* ordinary resource, so
-the Job cannot mount the release's own ConfigMap/Secret — they do not exist yet.
+the Job cannot mount the release's own ConfigMap/Secret. They do not exist yet.
 It gets short-lived hook copies instead (`-migrations-config` /
 `-migrations-secrets`, weight `-10`) that delete themselves once the hook
 succeeds. Annotating the real ones as hooks would also work, but hook resources
 are untracked: `helm uninstall` would strip the release and leave them behind,
 and the next install would fail with *invalid ownership metadata*.
 
-This same ordering rule is why the database has to exist before install — see
+This same ordering rule is why the database has to exist before install. See
 *Backing services*.
 
 **Only one runner can migrate at a time.** Django does not serialise `migrate`,
-and a Kubernetes Job is *at least once* — a node partition can leave the original
+and a Kubernetes Job is *at least once*. A node partition can leave the original
 pod running while a replacement starts, and two concurrent runs deadlock or
 double-apply. `bin/release.py` therefore wraps the whole step in a PostgreSQL
 session-level advisory lock, and the Job sets `podReplacementPolicy: Failed` so a
@@ -307,13 +339,13 @@ deploys. Covered by `sbomify/apps/core/tests/test_release_script.py`.
 
 **Set `migrations.lockTimeout` in production.** A migration needing
 `ACCESS EXCLUSIVE` queues behind in-flight queries, and once queued it blocks
-every query arriving after it — one slow reader turns a millisecond
+every query arriving after it. One slow reader turns a millisecond
 `ALTER TABLE` into a site-wide stall. With `lock_timeout` the migration fails
 fast, the Job retries, and traffic is never held hostage.
 
 **Migrations are forward-only.** `helm rollback` reverts manifests, not schema.
 Deploying a rollback against a migrated database only works if the previous
-release tolerates the new schema — which is the usual argument for
+release tolerates the new schema, which is the usual argument for
 expand/contract: add columns nullable, backfill, switch reads, drop later, so
 old and new code overlap safely. The chart cannot enforce this; `release.py`
 logs `migrate --plan` before applying so a destructive step is visible in the
@@ -335,7 +367,7 @@ business knowing about.
 
 **Probes send an explicit `Host` header.** `DynamicHostValidationMiddleware`
 rejects requests whose `Host` it does not recognise, and kubelet probes default
-to the pod IP — which would return `400`, not `200`. Every probe therefore sets
+to the pod IP, which would return `400`, not `200`. Every probe therefore sets
 `Host: localhost`, one of the app's statically allowed hosts.
 
 **The scheduler is a singleton with a `Recreate` strategy.** `dramatiq-crontab`
@@ -343,7 +375,7 @@ takes a Redis lock and a second instance exits immediately. A rolling update
 would surge a second pod that CrashLoops until the old one finally exited.
 
 **Workers get a long grace period.** 300s by default, because a Dramatiq worker
-stops consuming on `SIGTERM` and then drains in-flight messages — and a
+stops consuming on `SIGTERM` and then drains in-flight messages, and a
 vulnerability scan can run for minutes. Killing it early just means the task is
 redelivered and redone.
 
@@ -355,7 +387,7 @@ stops accepting, so a rollout does not drop in-flight requests.
 does, because Docker offers nothing better. Here the upstream is a Service, and
 kubelet readiness probes already remove unhealthy pods from the endpoint list.
 Worse, an active probe carries the upstream's own name in `Host`, which the
-app's host validation answers with `400` — so every backend would be marked
+app's host validation answers with `400`, so every backend would be marked
 permanently down.
 
 **Pods are hardened.** The upstream image is distroless and runs as UID 65532,
@@ -365,8 +397,8 @@ writes to: `/tmp` (its `HOME`) and `/var/lib/dramatiq-prometheus`. The app never
 calls the Kubernetes API, so its ServiceAccount token is not mounted.
 
 **`/api/v1/internal/*` is blocked at the edge**, by a flat deny rather than a
-private-CIDR allow list. Behind a NodePort — or any load balancer that does not
-preserve the source IP — every request arrives wearing a private node address,
+private-CIDR allow list. Behind a NodePort, or any load balancer that does not
+preserve the source IP, every request arrives wearing a private node address,
 so an allow list of RFC1918 ranges would wave the whole internet through. Add
 CIDRs to `caddy.internalApiAllowedCidrs` only after confirming they arrive
 un-translated. Blocking this path does not affect on-demand TLS: Caddy reaches
@@ -378,12 +410,12 @@ them was wrong three ways: the Secret template renders more than once per releas
 annotation), and `randAlphaNum` runs afresh each time, so the three disagreed;
 `helm template` became non-deterministic, making diffs unreadable; and a value
 only Helm knows is one `helm uninstall` away from logging out every user and
-invalidating every signed URL. They are credentials — keep them where the
+invalidating every signed URL. They are credentials: keep them where the
 database password lives.
 
 ## Configuration
 
-See [`values.yaml`](values.yaml) — every key is commented. The most important:
+See [`values.yaml`](values.yaml). Every key is commented. The most important:
 
 | Key | Default | Purpose |
 | --- | --- | --- |
@@ -394,7 +426,7 @@ See [`values.yaml`](values.yaml) — every key is commented. The most important:
 | `caddy.acme.email` | `admin@example.com` | Must be a real address; the chart refuses the placeholder |
 | `caddy.onDemandTLS.enabled` | `true` | Certificates for workspace custom domains |
 | `caddy.storage.module` | `file` | Set to a shared module to run more than one Caddy replica |
-| `migrations.lockTimeout` | `""` | PostgreSQL `lock_timeout` for migrations — set this in production |
+| `migrations.lockTimeout` | `""` | PostgreSQL `lock_timeout` for migrations, set this in production |
 | `networkPolicy.enabled` | `false` | Needs a CNI that enforces policies |
 | `database.*` / `redis.*` | required | Backing services you provide |
 | `objectStorage.*` / `auth.keycloak.*` | required | Backing services you provide |
@@ -409,7 +441,7 @@ Runs two Pods: one calls the app's health endpoint through the Service, the
 other exercises the Caddy edge (edge health, the app health path proxied
 through it, the internal-API block, and the HTTPS redirect) and fails on any
 unexpected status. The Pod is deliberately kept after a successful run so
-that `helm test --logs` has something to read — the next run replaces it. One
+that `helm test --logs` has something to read. The next run replaces it. One
 consequence: `helm uninstall` leaves that one Completed Pod behind.
 
 ## Caveats
@@ -421,7 +453,7 @@ consequence: `helm uninstall` leaves that one Completed Pod behind.
   `networkPolicy.enabled` is off in `values-local.yaml` rather than providing
   isolation that is not actually there.
 - Caddy runs a single replica by default. Raising it requires shared certificate
-  storage and a custom Caddy image — see *Why Caddy and not an Ingress*.
+  storage and a custom Caddy image. See *Why Caddy and not an Ingress*.
 - The application exposes no Prometheus `/metrics` endpoint today, so the chart
   ships no ServiceMonitor.
 - Keycloak's issuer URL has to resolve identically for the browser and for the
@@ -433,10 +465,10 @@ consequence: `helm uninstall` leaves that one Completed Pod behind.
 `.github/workflows/helm.yml` runs on any change under `charts/`, to
 `bin/kind-up.sh` or to `bin/release.py`:
 
-- **lint** — `helm lint` against both value sets, `kubeconform` over the rendered
+- **lint**, `helm lint` against both value sets, `kubeconform` over the rendered
   manifests, `caddy validate` on the generated Caddyfile in three
   configurations, and assertions that the chart still *rejects* each invalid
   combination it is supposed to catch.
-- **install** — a real kind cluster, `helm install`, `helm test`, then edge
+- **install**. A real kind cluster, `helm install`, `helm test`, then edge
   checks through Caddy (HTTPS redirect, health, the internal-API block, Keycloak
   routing), a migration check, and an idempotent `helm upgrade`.

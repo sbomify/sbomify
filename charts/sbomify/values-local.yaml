@@ -4,14 +4,14 @@
 # The chart itself deploys only sbomify. PostgreSQL, Redis, MinIO and Keycloak
 # are provisioned separately by bin/kind-up.sh from
 # deploy/local/dependencies.yaml, and are referenced here by their in-cluster
-# Service names — the same shape as pointing at managed services in production.
+# Service names. The same shape as pointing at managed services in production.
 #
 # NOT for production: those dev dependencies are single-replica with no backups,
 # and the credentials below are published in this repository.
 
 app:
   # kind publishes the Caddy edge on host ports 80/443, and *.localtest.me
-  # resolves to 127.0.0.1 for everyone — so no /etc/hosts entry is needed.
+  # resolves to 127.0.0.1 for everyone, so no /etc/hosts entry is needed.
   baseUrl: "https://sbomify.localtest.me"
   debug: false
   billing: false
@@ -118,7 +118,7 @@ caddy:
     nodePorts:
       http: 30080
       https: 30443
-  # Caddy's internal CA instead of Let's Encrypt — no public CA can validate
+  # Caddy's internal CA instead of Let's Encrypt. No public CA can validate
   # localtest.me. Browsers will warn, which is expected locally.
   localCerts: true
   onDemandTLS:

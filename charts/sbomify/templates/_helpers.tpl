@@ -91,7 +91,7 @@ default
 {{/*
 Fully-qualified image reference, digest-pinned when provided.
 
-With no explicit tag this resolves to v<appVersion> — an actual release — rather
+With no explicit tag this resolves to v<appVersion>, an actual release, rather
 than a floating "latest" that changes under a running deployment. Released
 images carry the "v" prefix; an explicit image.tag is used verbatim.
 */}}
@@ -113,7 +113,7 @@ images carry the "v" prefix; an explicit image.tag is used verbatim.
 Percent-encode a value for use in URL userinfo (the user:password part).
 
 `urlquery` is Go's url.QueryEscape, which encodes a space as "+". That is only
-space-equivalent inside a query string — in userinfo Python's urllib.parse
+space-equivalent inside a query string, in userinfo Python's urllib.parse
 (and therefore dj_database_url) reads "+" literally, so a password containing a
 space would silently arrive wrong. Re-encode it as %20.
 */}}
@@ -136,7 +136,7 @@ the individual DATABASE_* variables, so it is the single source of truth here.
 {{- end }}
 
 {{/*
-REDIS_URL. Must NOT carry a database number — settings.py derives DB 0/1/2 for
+REDIS_URL. Must NOT carry a database number, settings.py derives DB 0/1/2 for
 cache, task queue and websocket channels from this base URL.
 */}}
 {{- define "sbomify.redisUrl" -}}
@@ -184,8 +184,8 @@ Service name.
 {{/*
 Normalised to end in exactly one "/".
 
-settings.py builds the discovery URL by bare concatenation —
-f"{KEYCLOAK_SERVER_URL}realms/{REALM}/.well-known/openid-configuration" — so a
+settings.py builds the discovery URL by bare concatenation,
+f"{KEYCLOAK_SERVER_URL}realms/{REALM}/.well-known/openid-configuration", so a
 value written the natural way, without a trailing slash, silently yields
 "https://sso.example.comrealms/..." and breaks every login. Migration 0004
 persists that same string into the SocialApp row, so the damage outlives the
@@ -238,6 +238,7 @@ Secret, so a rotation of either rolls the pods via the checksum annotations.
     secretKeyRef:
       name: {{ $secretName }}
       key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "REDIS_URL") }}
+{{- if not $ctx.Values.objectStorage.useWorkloadIdentity }}
 - name: AWS_ACCESS_KEY_ID
   valueFrom:
     secretKeyRef:
@@ -268,6 +269,7 @@ Secret, so a rotation of either rolls the pods via the checksum annotations.
     secretKeyRef:
       name: {{ $secretName }}
       key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "AWS_SBOMS_SECRET_ACCESS_KEY") }}
+{{- end }}
 - name: KEYCLOAK_CLIENT_SECRET
   valueFrom:
     secretKeyRef:
@@ -385,7 +387,7 @@ dependency has not finished starting.
 {{- define "sbomify.waitForDepsInitContainer" -}}
 - name: wait-for-dependencies
   # Deliberately the application image, not a postgres one. The node has already
-  # pulled this for the main container, so the check costs nothing extra —
+  # pulled this for the main container, so the check costs nothing extra,
   # whereas a postgres image would mean shipping and pulling ~120MB on every
   # node purely to run pg_isready once.
   image: {{ include "sbomify.image" . | quote }}
@@ -399,7 +401,7 @@ dependency has not finished starting.
       # A TCP check rather than a driver-level one on purpose: connecting for
       # real would need the credentials, and would fail closed on TLS details
       # (a private CA, sslmode=verify-full) that this container has no business
-      # knowing about. Reachability is all this gate is for — the migration Job
+      # knowing about. Reachability is all this gate is for. The migration Job
       # and the app surface genuine connection errors themselves.
       deadline = time.monotonic() + float(os.environ.get("WAIT_TIMEOUT_SECONDS", "300"))
 

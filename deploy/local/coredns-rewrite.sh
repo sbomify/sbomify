@@ -4,7 +4,7 @@
 #
 # *.localtest.me resolves to 127.0.0.1, which is right from the host and
 # useless from inside a pod. Rewriting these names to the Caddy Service makes
-# the Keycloak issuer URL resolve identically on both sides — without it, OIDC
+# the Keycloak issuer URL resolve identically on both sides, without it, OIDC
 # discovery hands the browser and the application pods different endpoints.
 #
 # Shared by bin/kind-up.sh and .github/workflows/helm.yml. It lives in one file
@@ -28,7 +28,7 @@ echo "Adding CoreDNS rewrites for ${APP_HOST} and ${KEYCLOAK_HOST} -> ${CADDY_SV
 
 # Written out in full rather than patched in place: string-splicing a Corefile
 # is fragile, and this is kind's stock config plus two rewrites. Note every
-# block opens at end-of-line and closes on its own line — CoreDNS uses Caddy's
+# block opens at end-of-line and closes on its own line, CoreDNS uses Caddy's
 # parser and will not accept `health { lameduck 5s }` inline.
 kubectl -n kube-system create configmap coredns --dry-run=client -o yaml \
   --from-literal=Corefile=".:53 {

@@ -2,7 +2,7 @@
 # Default values for the sbomify chart.
 #
 # This chart deploys the sbomify application only. PostgreSQL, Redis, object
-# storage and Keycloak are NOT bundled — you provide them, and the chart fails
+# storage and Keycloak are NOT bundled. You provide them, and the chart fails
 # at template time if you have not. Stateful backing services have their own
 # operational lifecycle (backups, failover, version upgrades, tuning) that
 # should not be coupled to an application release.
@@ -14,7 +14,7 @@ fullnameOverride: ""
 
 image:
   repository: ghcr.io/sbomify/sbomify
-  # Empty resolves to v<appVersion> from Chart.yaml — a real release rather than
+  # Empty resolves to v<appVersion> from Chart.yaml: a real release rather than
   # a floating tag. Set `digest` instead to pin immutably.
   tag: ""
   pullPolicy: IfNotPresent
@@ -28,7 +28,7 @@ dependencyWaitTimeoutSeconds: 300
 
 # -- Application-level configuration. Rendered into a ConfigMap (non-secret).
 app:
-  # Public base URL. MUST match the hostname clients use — Django validates the
+  # Public base URL. MUST match the hostname clients use. Django validates the
   # Host header against it (DynamicHostValidationMiddleware) and builds absolute
   # URLs from it. Include the scheme, and the port if non-standard.
   baseUrl: "https://sbomify.example.com"
@@ -64,14 +64,14 @@ secrets:
   # Name of a Secret you manage. This is the integration point for an external
   # secret manager: have External Secrets Operator, the Vault Agent injector,
   # vault-secrets-operator, Sealed Secrets or your platform's own tooling
-  # materialise a Secret, then name it here. The chart only reads it — it never
+  # materialise a Secret, then name it here. The chart only reads it. It never
   # creates, mutates or deletes it, so rotation is entirely yours to drive.
   #
   # See "External secret managers" in README.md for worked examples.
   existingSecret: ""
 
   # Map each variable the app needs onto the key it lives under in
-  # `existingSecret`. Only list the ones that differ — anything unlisted uses
+  # `existingSecret`. Only list the ones that differ. Anything unlisted uses
   # its own name. This exists because external stores rarely let you choose key
   # names freely (a GCP secret is `projects/../secrets/sbomify-db-url`, a Vault
   # path has its own layout), and renaming keys just to satisfy a chart is
@@ -85,9 +85,9 @@ secrets:
   # user and invalidating every signed URL, and generating it makes
   # `helm template` non-deterministic.
   #
-  # Django SECRET_KEY — `openssl rand -base64 48`.
+  # Django SECRET_KEY: `openssl rand -base64 48`.
   secretKey: ""
-  # Salt for signed download URLs — `openssl rand -base64 32`.
+  # Salt for signed download URLs: `openssl rand -base64 32`.
   # Rotating it invalidates outstanding links.
   signedUrlSalt: ""
 
@@ -110,6 +110,19 @@ auth:
 objectStorage:
   endpointUrl: ""
   region: "auto"
+
+  # Authenticate with the workload's own cloud identity instead of static keys:
+  # EKS IRSA or Pod Identity today, GKE Workload Identity once ADR-0007 lands.
+  #
+  # When true the chart omits every AWS_*_ACCESS_KEY_ID / SECRET_ACCESS_KEY
+  # variable so boto3 falls through to its default credential chain. Omitting
+  # them is the point: setting them to empty strings would leave boto3 holding
+  # blank credentials rather than looking for an identity.
+  #
+  # Annotate the ServiceAccount with the cloud role and set
+  # serviceAccount.create=false if your platform manages it. See
+  # docs/ADR/0007-gcs-support-and-cloud-workload-identity.md.
+  useWorkloadIdentity: false
   media:
     bucket: "sbomify-media"
     # Public base URL for media objects. Defaults to "<endpointUrl>/<bucket>".
@@ -208,7 +221,7 @@ web:
   tolerations: []
   affinity: {}
   # Spread replicas across nodes; degrade to best-effort on small clusters.
-  # The labelSelector is generated per release — only override it if you need
+  # The labelSelector is generated per release. Only override it if you need
   # to spread against a different set of pods.
   topologySpreadConstraints:
     - maxSkew: 1
@@ -315,7 +328,7 @@ migrations:
   #
   # Strongly recommended once you have real traffic. A migration that needs
   # ACCESS EXCLUSIVE queues behind in-flight queries, and once queued it blocks
-  # every query that arrives after it — so one slow reader can turn a
+  # every query that arrives after it, so one slow reader can turn a
   # millisecond ALTER TABLE into a site-wide stall. With lock_timeout the
   # migration gives up instead, the Job retries, and traffic is never held
   # hostage. Empty means no timeout (PostgreSQL's default: wait forever).
@@ -328,7 +341,7 @@ migrations:
   hookDeletePolicy: before-hook-creation,hook-succeeded
 
   # The migration Job runs as a pre-install hook, before the chart's own
-  # ServiceAccount exists — so it falls back to `default`. Name a ServiceAccount
+  # ServiceAccount exists, so it falls back to `default`. Name a ServiceAccount
   # you manage here when the Job needs an identity: IRSA / GKE Workload Identity
   # for an external secret manager, or IAM authentication to the database.
   # (Setting serviceAccount.create=false with serviceAccount.name achieves the
@@ -394,7 +407,7 @@ caddy:
       https: ""
 
   acme:
-    # REQUIRED for production issuance — Let's Encrypt sends expiry notices here.
+    # REQUIRED for production issuance: Let's Encrypt sends expiry notices here.
     email: "admin@example.com"
     ca: "https://acme-v02.api.letsencrypt.org/directory"
   # Use Caddy's internal CA instead of a public ACME endpoint. Local clusters
@@ -406,7 +419,7 @@ caddy:
     # Endpoint Caddy asks before issuing for an unknown hostname. Without this
     # check, anyone pointing DNS at the load balancer could burn ACME rate
     # limits. Modern Caddy dropped the old interval/burst throttles, so the ask
-    # endpoint is the only gate — it must answer 2xx *only* for domains the
+    # endpoint is the only gate. It must answer 2xx *only* for domains the
     # application actually recognises.
     ask: "/api/v1/internal/domains"
 
@@ -414,9 +427,9 @@ caddy:
   # (X-Forwarded-Proto: https), rather than redirecting them to HTTPS.
   #
   # OFF by default, because Caddy terminates TLS itself here. Only turn this on
-  # when something genuinely sits in front doing TLS — a Cloudflare Tunnel or a
-  # cloud load balancer — otherwise it is a way for any client to skip the HTTPS
-  # redirect simply by setting a header.
+  # when something genuinely sits in front doing TLS, such as a Cloudflare
+  # Tunnel or a cloud load balancer. Otherwise it is a way for any client to
+  # skip the HTTPS redirect simply by setting a header.
   #
   # When enabled, list the proxy's source ranges in fromCidrs so only it can
   # select that path. Leaving fromCidrs empty accepts the header from ANY
@@ -463,8 +476,8 @@ caddy:
   logLevel: "INFO"
 
   # Certificate storage.
-  #   file  — a PersistentVolumeClaim below. Single replica only.
-  #   other — a Caddy storage module (e.g. redis, s3) for multi-replica setups.
+  #   file: a PersistentVolumeClaim below. Single replica only.
+  #   other: a Caddy storage module (e.g. redis, s3) for multi-replica setups.
   #           These are NOT in the upstream image: build your own Caddy with the
   #           plugin and point caddy.image at it. The chart refuses
   #           replicaCount > 1 with `file` rather than let replicas each run
@@ -526,7 +539,7 @@ serviceAccount:
   create: true
   name: ""
   annotations: {}
-  # sbomify never talks to the Kubernetes API — do not hand it a token.
+  # sbomify never talks to the Kubernetes API, so do not hand it a token.
   automountServiceAccountToken: false
 
 # The production image ships Chainguard's `nonroot` user (UID/GID 65532).
@@ -547,7 +560,7 @@ securityContext:
 
 # NetworkPolicy: default-deny ingress to the app pods, allowing only the
 # ingress controller and in-cluster peers. Requires a CNI that enforces them
-# (kind's default kindnet does NOT — the policies are inert there).
+# (kind's default kindnet does NOT, so the policies are inert there).
 networkPolicy:
   enabled: false
   # Extra ingress rules appended to the web policy.

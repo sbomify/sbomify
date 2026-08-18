@@ -78,7 +78,7 @@ For full production deployment instructions, see [the deployment guide](docs/dep
 ### Kubernetes
 
 A Helm chart lives in [`charts/sbomify`](charts/sbomify/README.md). It deploys
-the application only — you provide PostgreSQL, Redis, S3-compatible storage and
+the application only. You provide PostgreSQL, Redis, S3-compatible storage and
 Keycloak.
 
 To try the whole stack on a local [kind](https://kind.sigs.k8s.io/) cluster

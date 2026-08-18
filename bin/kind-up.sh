@@ -67,7 +67,7 @@ require docker kind kubectl helm
 # Cluster
 # ---------------------------------------------------------------------------
 if kind get clusters 2>/dev/null | grep -qx "${CLUSTER_NAME}"; then
-  log "kind cluster '${CLUSTER_NAME}' already exists — reusing it"
+  log "kind cluster '${CLUSTER_NAME}' already exists, reusing it"
 else
   log "Creating kind cluster '${CLUSTER_NAME}'"
   kind create cluster --config "${LOCAL_DIR}/kind-cluster.yaml" --wait 300s
@@ -92,7 +92,7 @@ fi
 # ---------------------------------------------------------------------------
 # Backing services
 # ---------------------------------------------------------------------------
-# The chart does not ship PostgreSQL, Redis, object storage or Keycloak — it
+# The chart does not ship PostgreSQL, Redis, object storage or Keycloak. It
 # expects you to provide them. On a laptop, "provide them" means this file.
 kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${NAMESPACE}"
 
@@ -129,7 +129,7 @@ kubectl -n "${NAMESPACE}" get pods
 
 cat <<EOF
 
-  sbomify   https://${APP_HOST}       (Caddy internal CA — your browser will warn)
+  sbomify   https://${APP_HOST}       (Caddy internal CA. Your browser will warn)
   Keycloak  http://${KEYCLOAK_HOST}   (admin / admin)
 
   Dev logins: jdoe / foobar123, ssmith / foobar123

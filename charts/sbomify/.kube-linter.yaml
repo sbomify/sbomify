@@ -5,7 +5,7 @@
 # required namespace) that say nothing about whether this chart is correct, and
 # 100+ findings of that kind would train everyone to ignore the linter.
 #
-# Run against the PRODUCTION-shaped render — see .github/workflows/helm.yml.
+# Run against the PRODUCTION-shaped render. See .github/workflows/helm.yml.
 # values-local.yaml deliberately pins the `latest` image tag so local
 # development tracks master, which would trip latest-tag for a reason that does
 # not apply to a real install.
