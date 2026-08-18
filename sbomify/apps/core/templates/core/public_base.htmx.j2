@@ -9,46 +9,25 @@
 <!DOCTYPE html>
 <html lang="en">
     <script>
-        // Blocking script to prevent theme flash (runs before CSS)
+        {% comment %}
+            Public pages are light only for now. The workspace's brand is the
+            only colour that varies here, and a second axis of light and dark
+            doubles what a brand colour has to stay readable against, so the
+            dark path and its toggle are off until that is worth the cost.
+
+            Still set inline: the stylesheets below key off data-theme, and the
+            critical variables beat selector rules without !important, so the
+            page paints its final colours before they resolve.
+        {% endcomment %}
         (function(){
-            var t=localStorage.getItem('public-theme');
             var html=document.documentElement;
-            var isDark = t==='dark' || (t!=='light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            // Always set data-theme based on effective theme (not just stored preference)
-            // This ensures CSS rules apply immediately without relying on @media queries
-            if(isDark) {
-                html.setAttribute('data-theme','dark');
-                // tailwind.src.css uses :root as the dark default and
-                // :root.light as the light override — remove .light so the
-                // dark Tailwind variables apply. Also add .dark so the
-                // @custom-variant dark in tailwind.src.css fires for
-                // `dark:*` utilities used by other public templates
-                // (e.g. `dark:prose-invert` in doc/vdp/early-warning).
-                html.classList.remove('light');
-                html.classList.add('dark');
-            } else {
-                html.setAttribute('data-theme','light');
-                html.classList.add('light');
-                html.classList.remove('dark');
-            }
-            // Also mark if using system preference for the toggle component
-            if(!t || t==='system') html.setAttribute('data-theme-source','system');
-            // Set critical CSS variables on the root element to prevent flash before
-            // the linked stylesheets resolve. An inline style on the root element
-            // already beats selector-based rules — no !important needed.
+            html.setAttribute('data-theme','light');
+            html.classList.add('light');
+            html.classList.remove('dark');
             var style = html.style;
-            // Full rgb() values: the tailwind.src.css tokens are whole colors,
-            // so a bare triplet here is invalid for every var() consumer and
-            // silently drops their declarations.
-            if(isDark) {
-                style.setProperty('--color-surface','rgb(30 41 59)');
-                style.setProperty('--color-surface-elevated','rgb(51 65 85)');
-                style.setProperty('--color-border','rgb(51 65 85)');
-            } else {
-                style.setProperty('--color-surface','rgb(255 255 255)');
-                style.setProperty('--color-surface-elevated','rgb(255 255 255)');
-                style.setProperty('--color-border','rgb(226 232 240)');
-            }
+            style.setProperty('--color-surface','rgb(255 255 255)');
+            style.setProperty('--color-surface-elevated','rgb(255 255 255)');
+            style.setProperty('--color-border','rgb(226 232 240)');
         })();
     </script>
     <head>
@@ -1054,7 +1033,6 @@
                         a lone icon pushed to the far end of it read as stray
                         rather than placed.
                         {% endcomment %}
-                        {% include "core/components/trust_center/theme_toggle.html.j2" %}
                         {% if user.is_authenticated %}
                             {% load teams %}
                             {% user_workspaces as available_workspaces %}
