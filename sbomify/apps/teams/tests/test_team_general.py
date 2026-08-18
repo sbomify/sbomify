@@ -127,7 +127,6 @@ class TestTeamGeneralView:
         from django.contrib.auth import get_user_model
 
         team = sample_team_with_owner_member.team
-        owner = sample_team_with_owner_member.user
 
         User = get_user_model()
         admin_user = User.objects.create_user(
@@ -202,14 +201,17 @@ class TestTeamGeneralView:
         team.refresh_from_db()
         assert team.name == "Updated Team Name"
 
-    def test_update_workspace_name_requires_owner(
+    def test_update_workspace_name_allows_admin(
         self, client: Client, sample_team_with_owner_member
     ):
-        """Test that only owners can update workspace name."""
+        """Renaming the workspace is ADMINISTER, so admins may do it.
+
+        Contrast with test_delete_workspace_requires_owner: deleting the
+        workspace stays OWNER_ONLY.
+        """
         from django.contrib.auth import get_user_model
 
         team = sample_team_with_owner_member.team
-        owner = sample_team_with_owner_member.user
 
         User = get_user_model()
         admin_user = User.objects.create_user(
@@ -219,15 +221,14 @@ class TestTeamGeneralView:
 
         setup_authenticated_client_session(client, team, admin_user)
 
-        original_name = team.name
         response = client.post(
             reverse("teams:team_general", kwargs={"team_key": team.key}),
-            {"name": "Unauthorized Name Change"},
+            {"name": "Admin Renamed This"},
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 200
         team.refresh_from_db()
-        assert team.name == original_name
+        assert team.name == "Admin Renamed This"
 
 
     def test_setting_the_freshness_window(

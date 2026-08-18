@@ -16,7 +16,7 @@
     <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
     <p class="text-secondary" style="word-break: break-all;">${link}</p>
     <div class="expiry-notice">
-        This link will expire in ${linkExpiration} minutes.
+        This link will expire in ${linkExpirationFormatter(linkExpiration)}.
     </div>
     <p>If you did not expect this email, please contact your administrator.</p>
 </@layout.emailLayout>

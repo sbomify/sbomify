@@ -14,6 +14,11 @@ x-data attribute meant escaping shell quotes and newlines through an HTML
 attribute, and djlint collapses that attribute onto one line, which turns any
 // comment in it into a comment over the rest of the code.
 
+That span is also why the block is not c-code-block: that component takes its
+code as a prop, because whitespace inside a pre element is content, and a prop
+cannot carry a bound span. The block keeps the two stylesheet classes it always
+had.
+
 The token is minted on click, not on open. Rendering this dialog is not a
 decision to create a credential, and someone opening it three times to read the
 command should not leave three live tokens behind.
@@ -25,97 +30,52 @@ The ``as`` form swallows NoReverseMatch, so a session without a workspace
 leaves it empty and the button is not offered rather than 500ing the page.
 {% endcomment %}
 {% url 'teams:ci_token' team_key=request.session.current_team.key as ci_token_url %}
+{# Reachable from onboarding, where there is no component, so the copy
+   target needs an id that still resolves. #}
+{% firstof component.id 'onboarding' as cicd_copy_suffix %}
 <div x-data="{ cicdOpen: false }"
      @open-cicd.window="cicdOpen = true"
      @keydown.escape.window="if (cicdOpen) cicdOpen = false">
-    <div x-show="cicdOpen"
-         x-cloak
-         class="fixed inset-0 z-[100]"
-         role="dialog"
-         aria-modal="true"
-         aria-label="CI/CD integration">
-        <div x-show="cicdOpen"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="tw-modal-overlay"
-             @click="cicdOpen = false"></div>
-        <div class="tw-modal"
-             x-show="cicdOpen"
-             x-trap.noscroll="cicdOpen"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 scale-95"
-             x-transition:enter-end="opacity-100 scale-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100 scale-100"
-             x-transition:leave-end="opacity-0 scale-95"
-             @click.stop>
-            <div class="tw-modal-content"
-                 x-data="ciCdToken('{{ ci_token_url|escapejs }}')">
-                <div class="tw-modal-header">
-                    <h4 class="tw-modal-title flex items-center gap-2">
-                        <i class="fas fa-gears text-primary"></i>CI/CD Integration
-                    </h4>
-                    <button type="button"
-                            class="tw-modal-close"
-                            @click="cicdOpen = false"
-                            aria-label="Close">
-                        <i class="fas fa-times" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div class="tw-modal-body">
-                    <p class="text-sm text-text-muted mt-0 mb-4">
-                        Run this in your repository. The wizard detects your CI platform and package
-                        manager, then writes the pipeline configuration for you.
-                    </p>
-                    <div class="relative bg-[#1e1e1e] rounded-lg overflow-hidden">
-                        <pre class="p-4 m-0 overflow-x-auto"><code id="ci-cd-command-{{ component.id }}" class="text-sm text-white">docker run --rm -it \
+    <c-modal show="cicdOpen" title="Get started" icon="fas fa-rocket" x-data="ciCdToken('{{ ci_token_url|escapejs }}')">
+    <p class="text-sm text-text-muted mt-0 mb-4">
+        Run this in your repository. The wizard detects your CI platform and package
+        manager, then writes the pipeline configuration for you.
+    </p>
+    <div class="tw-code-block">
+        <div class="tw-code-block-content">
+            <pre><code id="ci-cd-command-{{ cicd_copy_suffix }}">docker run --rm -it \
   -v "$(pwd):/github/workspace" \
   -w /github/workspace \
   -e SBOMIFY_TOKEN=<span x-text="token || '$SBOMIFY_TOKEN'">$SBOMIFY_TOKEN</span> \
   ghcr.io/sbomify/sbomify-action \
   sbomify-action wizard</code></pre>
-                        <div class="absolute top-2 right-2">
-                            {% include "core/components/copyable_value.html.j2" with copy_from="ci-cd-command-"|add:component.id title="Copy command" hide_value=True %}
-                        </div>
-                    </div>
-                    {# Before minting: the command reads an env var the reader may already have. #}
-                    <div x-show="!token" class="mt-4 flex flex-wrap items-center gap-3">
-                        {% if not ci_token_url %}
-                            <span class="text-xs text-text-muted">Set <code class="px-1 py-0.5 bg-border/30 rounded">SBOMIFY_TOKEN</code> to a token from Settings → API tokens.</span>
-                        {% endif %}
-                        {% if ci_token_url %}
-                            <button type="button"
-                                    @click="mint()"
-                                    :disabled="minting"
-                                    data-testid="mint-ci-token"
-                                    class="tw-btn-secondary tw-btn-sm">
-                                <span x-show="!minting"><i class="fas fa-key mr-2"></i>Add a 7-day token</span>
-                                <span x-show="minting" x-cloak>Creating…</span>
-                            </button>
-                            <span class="text-xs text-text-muted">Or set <code class="px-1 py-0.5 bg-border/30 rounded">SBOMIFY_TOKEN</code> yourself.</span>
-                        {% endif %}
-                    </div>
-                    {# After minting: say what it can do and when it stops, because it is now on screen. #}
-                    <div x-show="token" x-cloak class="tw-alert tw-alert-info mt-4">
-                        <i class="fas fa-key tw-alert-icon" aria-hidden="true"></i>
-                        <div class="tw-alert-content">
-                            <p class="text-sm m-0">
-                                Expires <span x-text="expiresAt" class="font-medium"></span>. It can upload artifacts
-                                and tag releases, nothing else. Revoke it any time in Settings → API tokens.
-                            </p>
-                        </div>
-                    </div>
-                    <p x-show="error"
-                       x-cloak
-                       x-text="error"
-                       class="text-xs text-danger mt-3 mb-0"></p>
-                    <p class="text-xs text-text-muted mt-3 mb-0">For a manual one-off, use Upload artifact in the component menu.</p>
-                </div>
-            </div>
+        </div>
+        <div class="absolute top-2 right-2">
+            {% include "core/components/copyable_value.html.j2" with copy_from="ci-cd-command-"|add:cicd_copy_suffix title="Copy command" hide_value=True %}
         </div>
     </div>
+    {# Before minting: the command reads an env var the reader may already have. #}
+    <div x-show="!token" class="mt-4 flex flex-wrap items-center gap-3">
+        {% if not ci_token_url %}
+            <span class="text-xs text-text-muted">Set <c-code-inline>SBOMIFY_TOKEN</c-code-inline> to a token from Settings → API tokens.</span>
+        {% endif %}
+        {% if ci_token_url %}
+            <c-buttons.secondary size="sm" @click="mint()" ::disabled="minting" data-testid="mint-ci-token">
+            <span x-show="!minting"><i class="fas fa-key mr-2"></i>Add a 7-day token</span>
+            <span x-show="minting" x-cloak>Creating…</span>
+            </c-buttons.secondary>
+            <span class="text-xs text-text-muted">Or set <c-code-inline>SBOMIFY_TOKEN</c-code-inline> yourself.</span>
+        {% endif %}
+    </div>
+    {# After minting: say what it can do and when it stops, because it is now on screen. #}
+    <c-feedback.alert variant="info" icon="fas fa-key" class="mt-4" x-show="token" x-cloak>
+    Expires <span x-text="expiresAt" class="font-medium"></span>. It can upload artifacts
+    and tag releases, nothing else. Revoke it any time in Settings → API tokens.
+    </c-feedback.alert>
+    <p x-show="error"
+       x-cloak
+       x-text="error"
+       class="text-xs text-danger mt-3 mb-0"></p>
+    <p class="text-xs text-text-muted mt-3 mb-0">For a manual one-off, use Upload artifact in the component menu.</p>
+    </c-modal>
 </div>

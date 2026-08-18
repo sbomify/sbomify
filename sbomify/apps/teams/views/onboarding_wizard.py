@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.billing.config import is_billing_enabled
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
 from sbomify.apps.teams.forms import OnboardingCompanyForm
 from sbomify.apps.teams.models import (
@@ -130,7 +131,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect("core:dashboard")
 
         team = self._get_current_team(request)
-        if not team or not self._is_team_owner(request.user, team):
+        if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
 
         if team.has_selected_billing_plan:
@@ -164,7 +165,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
             return redirect(plan_url)
 
         team = self._get_current_team(request)
-        if not team or not self._is_team_owner(request.user, team):
+        if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
 
         if team.has_selected_billing_plan:
@@ -263,8 +264,9 @@ class OnboardingWizardView(LoginRequiredMixin, View):
         return member.team if member else None
 
     @staticmethod
-    def _is_team_owner(user: Any, team: Team) -> bool:
-        return Member.objects.filter(user=user, team=team, role="owner").exists()
+    def _can_administer_team(user: Any, team: Team) -> bool:
+        """The wizard configures the workspace, so it's the ADMINISTER tier."""
+        return Member.objects.filter(user=user, team=team, role__in=ADMINISTER).exists()
 
     @staticmethod
     def _pop_wizard_session(request: HttpRequest) -> None:
@@ -317,7 +319,7 @@ class OnboardingWizardView(LoginRequiredMixin, View):
     def _process_setup(self, request: HttpRequest) -> HttpResponse:
 
         team = self._get_current_team(request)
-        if not team or not self._is_team_owner(request.user, team):
+        if not team or not self._can_administer_team(request.user, team):
             return redirect("core:dashboard")
 
         if team.is_payment_restricted:

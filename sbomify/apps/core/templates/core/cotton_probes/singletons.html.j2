@@ -1,0 +1,65 @@
+{% comment %}
+Render probe for the cotton singletons: the top-level components that have no
+variants of their own. Unit tests render this file and assert on the output; it
+is not routed anywhere. Every instance carries a data-probe attribute, which is
+both the test's handle and a check that caller attributes reach the root
+element.
+{% endcomment %}
+<c-modal id="ds-modal" title="Assign a component" data-probe="modal-default">
+<p>Modal body</p>
+</c-modal>
+<c-modal id="ds-modal-lg" title="Wide dialog" size="lg" icon="fas fa-cube" show="showPanel" class="mt-2" hx-get="/probe" data-probe="modal-lg">
+<p>Sized body</p>
+<c-slot name="footer">
+<c-buttons.secondary>Cancel</c-buttons.secondary>
+<c-buttons.primary>Save</c-buttons.primary>
+</c-slot>
+</c-modal>
+<c-modal id="ds-modal-sm" size="sm" closable="false" data-probe="modal-sm">
+<p>No header</p>
+</c-modal>
+<c-modal id="ds-modal-row" title="Remove component" show="removeTarget" close="removeTarget = null" data-probe="modal-close">
+<p>Row-held dialog</p>
+</c-modal>
+<c-modal id="ds-modal-alert" size="sm" role="alertdialog" data-probe="modal-alert">
+<p>Destructive confirmation</p>
+</c-modal>
+<c-avatar initials="AB" data-probe="avatar-default" />
+<c-avatar initials="JD" size="sm" data-probe="avatar-sm" />
+<c-avatar initials="CD" size="lg" data-probe="avatar-lg" />
+<c-avatar initials="EF" size="xl" class="ml-2" data-probe="avatar-xl" />
+<c-avatar data-probe="avatar-fallback" />
+<c-avatar size="lg" data-probe="avatar-icon"><i class="fas fa-shield-halved"></i></c-avatar>
+<c-avatar src="/static/img/user.png" alt="Jane Doe" data-probe="avatar-image" />
+<c-avatar initials="ON" status="online" data-probe="avatar-online" />
+<c-avatar initials="BS" status="busy" data-probe="avatar-busy" />
+<c-avatar initials="OF" status="offline" style="--avatar-accent: var(--color-warning)" data-probe="avatar-offline" />
+<c-progress value="72" label_text="Coverage" data-probe="progress-labelled" />
+<c-progress value="100" variant="success" data-probe="progress-success" />
+<c-progress value="45" variant="warning" data-probe="progress-warning" />
+<c-progress value="15" variant="danger" data-probe="progress-danger" />
+<c-progress value="60" size="sm" data-probe="progress-sm" />
+<c-progress value="60" size="lg" class="mt-2" data-probe="progress-lg" />
+<c-code-block code="echo hello" language="bash" filename="upload.sh" data-probe="code-named" />
+<c-code-block code="print(1)" data-probe="code-bare" />
+<c-code-block code="SELECT 1" max_height="12rem" copyable="false" data-probe="code-capped" />
+<c-code-inline data-probe="code-inline-plain">/.well-known/security.txt</c-code-inline>
+<c-code-inline accent="primary" class="ml-1" data-probe="code-inline-primary">CRA-13-4</c-code-inline>
+<c-token-display label="Personal access token" token="sbom_pat_9f2Ac41ZzQ0m7Ktb" masked data-probe="token-masked" />
+<c-token-display token="sbom_pat_visible" data-probe="token-plain" />
+<c-token-display token="sbom_pat_nocopy" copyable="false" class="mt-2" data-probe="token-nocopy" />
+<c-copy-button value="https://sbomify.com/t/acme" data-probe="copy-default" />
+<c-copy-button value="DLyQjCBkNJkB" label="Copy ID" copied_text="Copied ID" class="ml-2" @click.stop="track()" data-probe="copy-labelled" />
+<c-inline-copy x-data="copyableValue({ value: 'DLyQjCBkNJkB' })" ::data-copied="copied" @click="copyToClipboard()" data-probe="inline-copy">
+<span x-text="value" class="min-w-0 break-all">DLyQjCBkNJkB</span>
+</c-inline-copy>
+<c-inline-copy class="ml-2" data-probe="inline-copy-classed" />
+<c-actions-menu label="Product actions" width="w-56" data-probe="menu-default">
+<c-dropdowns.header>Advisories</c-dropdowns.header>
+<c-dropdowns.item icon="fas fa-shield-halved" href="/advisories/new">Add security advisory</c-dropdowns.item>
+<c-dropdowns.divider />
+<c-dropdowns.item-danger icon="fas fa-trash" hx-delete="/products/1">Delete product</c-dropdowns.item-danger>
+</c-actions-menu>
+<c-actions-menu label="Quick presets" icon="fas fa-clock" stretch class="ml-2" data-probe="menu-stretch">
+<c-dropdowns.item icon="fas fa-bolt">Last 7 days</c-dropdowns.item>
+</c-actions-menu>

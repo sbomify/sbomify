@@ -1,0 +1,46 @@
+{% comment %}
+One tile in a choice group: a real radio, hidden but still focusable and still
+submitted, wearing the icon and the accent that the same value wears elsewhere,
+so picking "Critical" here looks like the Critical badge it produces. Selection
+is painted from :has(:checked), so the highlight cannot drift from what submits.
+
+accent is a prop rather than a file: it names a badge family, of which there are
+eleven counting the severity scale, and it sets one custom property that the
+border, the wash and the icon all read, so a file per accent would restate the
+same recipe eleven times. It renders as one conditional segment.
+
+The label text is the slot. selected is the group's current value: a tile checks
+itself when its value matches, which is how one value reaches a list of tiles.
+Full-contrast text on the tint is deliberate: amber and cyan accents cannot
+carry label text on their own wash in either theme, so the accent stays on the
+icon, the border and the fill.
+
+x_name, x_checked, x_disabled and x_click are the Alpine-expression forms of
+the same-named attributes, for a tile whose group and state the browser works
+out (a row rendered from JSON, a status the page derives). They are props
+because attrs land on the label, and these belong on the real input: the
+checked look is painted from :has(:checked), so a bound tile has to drive the
+control itself rather than a class. x_name replaces the static name rather than
+adding to it, so a page of bound tiles is never briefly one radio group before
+Alpine runs. Everything else the caller passes, ::style and ::title included,
+still reaches the label.
+{% endcomment %}
+<c-vars name value icon accent checked selected disabled required x_name x_checked x_disabled x_click class />
+<label class="inline-flex items-center gap-2 px-3 py-2 rounded-[0.625rem] border border-solid border-border bg-surface text-sm leading-[1.5] font-semibold text-text-muted cursor-pointer select-none transition-all duration-150 hover:border-[color-mix(in_oklab,var(--choice-accent,var(--color-primary))_40%,transparent)] hover:text-text has-[:checked]:border-[color:var(--choice-accent,var(--color-primary))] has-[:checked]:bg-[color-mix(in_oklab,var(--choice-accent,var(--color-primary))_12%,transparent)] has-[:checked]:text-text has-[:focus-visible]:outline-none has-[:focus-visible]:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_45%,transparent)] has-[:disabled]:opacity-50 has-[:disabled]:cursor-not-allowed {% if accent == 'primary' %}[--choice-accent:var(--color-primary)]{% elif accent == 'secondary' %}[--choice-accent:var(--color-text-muted)]{% elif accent == 'success' %}[--choice-accent:var(--color-success)]{% elif accent == 'warning' %}[--choice-accent:var(--color-warning)]{% elif accent == 'danger' %}[--choice-accent:var(--color-danger)]{% elif accent == 'info' %}[--choice-accent:var(--color-info)]{% elif accent == 'violet' %}[--choice-accent:var(--color-accent)]{% elif accent == 'severity-critical' %}[--choice-accent:var(--color-severity-critical)]{% elif accent == 'severity-high' %}[--choice-accent:var(--color-severity-high)]{% elif accent == 'severity-medium' %}[--choice-accent:var(--color-severity-medium)]{% elif accent == 'severity-low' %}[--choice-accent:var(--color-severity-low)]{% endif %}{% if class %} {{ class }}{% endif %}"
+       {{ attrs }}>
+    <input type="radio"
+           {% if x_name %}:name="{{ x_name }}"{% else %}name="{{ name }}"{% endif %}
+           value="{{ value }}"
+           class="absolute w-px h-px opacity-0 pointer-events-none"
+           {% if checked or selected and value == selected %}checked{% endif %}
+           {% if disabled %}disabled{% endif %}
+           {% if required %}required{% endif %}
+           {% if x_checked %}:checked="{{ x_checked }}"{% endif %}
+           {% if x_disabled %}:disabled="{{ x_disabled }}"{% endif %}
+           {% if x_click %}@click="{{ x_click }}"{% endif %}>
+    {% if icon %}
+        <i class="{{ icon }} text-sm text-[color:var(--choice-accent,var(--color-text-muted))]"
+           aria-hidden="true"></i>
+    {% endif %}
+    <span>{{ slot }}</span>
+</label>

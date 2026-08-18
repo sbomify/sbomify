@@ -1,6 +1,6 @@
 .page-header {
-    background: linear-gradient(135deg, rgb(var(--color-surface)), rgb(var(--color-background)));
-    border: 1px solid rgb(var(--color-border));
+    background: linear-gradient(135deg, var(--color-surface), var(--color-background));
+    border: 1px solid var(--color-border);
     border-radius: 12px;
     padding: 2rem;
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
@@ -10,7 +10,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    border-bottom: 1px solid rgb(var(--color-border));
+    border-bottom: 1px solid var(--color-border);
     padding-bottom: 1.5rem;
 }
 
@@ -26,7 +26,7 @@
 }
 
 .breadcrumb-item a {
-    color: rgb(var(--color-primary));
+    color: var(--color-primary);
     text-decoration: none;
 }
 
@@ -37,13 +37,13 @@
 .item-title {
     font-size: 2rem;
     font-weight: 700;
-    color: rgb(var(--color-text));
+    color: var(--color-text);
     margin: 0;
     line-height: 1.2;
 }
 
 .item-subtitle {
-    color: rgb(var(--color-text-muted));
+    color: var(--color-text-muted);
     font-size: 1.1rem;
     margin: 0.5rem 0 0 0;
 }
@@ -64,7 +64,7 @@
     display: flex;
     align-items: center;
     font-size: 0.875rem;
-    color: rgb(var(--color-text-muted));
+    color: var(--color-text-muted);
 }
 
 .meta-label {
@@ -72,7 +72,7 @@
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #6366f1, rgb(var(--color-primary)));
+    background: linear-gradient(135deg, #6366f1, var(--color-primary));
     border: none;
     border-radius: 8px;
     padding: 0.75rem 1.5rem;
@@ -82,7 +82,7 @@
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, rgb(var(--color-primary)), #4338ca);
+    background: linear-gradient(135deg, var(--color-primary), #4338ca);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
 }
@@ -94,13 +94,13 @@
 }
 
 .modal-header {
-    border-bottom: 1px solid rgb(var(--color-border));
+    border-bottom: 1px solid var(--color-border);
     padding: 1.5rem;
 }
 
 .modal-title {
     font-weight: 600;
-    color: rgb(var(--color-text));
+    color: var(--color-text);
 }
 
 .modal-body {
@@ -109,24 +109,24 @@
 
 .form-control {
     border-radius: 8px;
-    border: 1px solid rgb(var(--color-border));
+    border: 1px solid var(--color-border);
     padding: 0.75rem 1rem;
     transition: all 0.2s ease;
 }
 
 .form-control:focus {
-    border-color: rgb(var(--color-primary));
-    box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.1);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 10%, transparent);
 }
 
 .form-label {
     font-weight: 600;
-    color: rgb(var(--color-text-secondary));
+    color: var(--color-text-secondary);
     margin-bottom: 0.5rem;
 }
 
 .form-text {
-    color: rgb(var(--color-text-muted));
+    color: var(--color-text-muted);
     font-size: 0.875rem;
 }
 

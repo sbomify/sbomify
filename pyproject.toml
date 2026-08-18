@@ -68,6 +68,7 @@ dependencies = [
     "defusedxml>=0.7.1",
     "defusedcsv>=3.0.0",
     "jsonschema>=4.26,<5",
+    "django-cotton>=2.7.2",
 ]
 
 [project.urls]

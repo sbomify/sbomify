@@ -9,7 +9,7 @@
     <p class="text-secondary">If you cannot click the button above, copy and paste this link into your browser:</p>
     <p class="text-secondary" style="word-break: break-all;">${link}</p>
     <div class="expiry-notice">
-        This link will expire in ${linkExpiration} minutes. If it expires, you can request a new password reset from the login page.
+        This link will expire in ${linkExpirationFormatter(linkExpiration)}. If it expires, you can request a new password reset from the login page.
     </div>
     <p>If you did not request a password reset, please ignore this email. Your password will remain unchanged.</p>
 </@layout.emailLayout>

@@ -1,5 +1,4 @@
 {% extends "core/dashboard_base.html.j2" %}
-{% load widget_tweaks %}
 {% block title %}sbomify Workspace Invite{% endblock %}
 {% block content %}
     <div class="max-w-xl mx-auto">
@@ -11,54 +10,49 @@
         <div class="flex flex-col items-center">
             <div class="w-full">
                 <h3 class="text-xl font-semibold text-text mb-4">Invite Workspace Member</h3>
-                <div class="tw-card">
-                    <div class="p-6">
-                        <form action="{% url 'teams:invite_user' team_key %}" method="post">
-                            {% csrf_token %}
-                            {% for hidden in invite_user_form.hidden_fields %}{{ hidden }}{% endfor %}
-                            {% if invite_user_form.non_field_errors %}
-                                <div class="flex items-start gap-3 p-4 bg-danger/10 border border-danger/30 rounded-lg mb-4"
-                                     role="alert">
-                                    <i class="fas fa-exclamation-circle text-danger mt-0.5"></i>
-                                    <div class="text-danger">
-                                        {% for error in invite_user_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
-                                    </div>
-                                </div>
-                            {% endif %}
-                            <div class="mb-4">
-                                <label for="{{ invite_user_form.email.id_for_label }}"
-                                       class="block text-sm font-medium text-text mb-2">
-                                    {{ invite_user_form.email.label }}
-                                </label>
-                                {{ invite_user_form.email|add_class:'tw-form-input' }}
-                                {% for error in invite_user_form.email.errors %}
-                                    <span class="text-danger text-sm mt-1 block">{{ error }}</span>
-                                {% endfor %}
-                            </div>
-                            <div class="mb-4">
-                                <label for="{{ invite_user_form.role.id_for_label }}"
-                                       class="block text-sm font-medium text-text mb-2">
-                                    {{ invite_user_form.role.label }}
-                                </label>
-                                {{ invite_user_form.role|add_class:'tw-form-input' }}
-                                {% for error in invite_user_form.role.errors %}
-                                    <span class="text-danger text-sm mt-1 block">{{ error }}</span>
-                                {% endfor %}
-                                <ul class="mt-4 space-y-2 text-sm text-text-muted">
-                                    <li>
-                                        <strong class="text-text">Owner</strong> has full control including removing the workspace and inviting other users.
-                                    </li>
-                                    <li>
-                                        <strong class="text-text">Admin</strong> can create products and components, upload/manage SBOMs.
-                                    </li>
-                                </ul>
-                            </div>
-                            <div class="flex justify-end">
-                                <button type="submit" class="tw-btn-primary">Invite to workspace</button>
-                            </div>
-                        </form>
+                <c-cards.card>
+                <form action="{% url 'teams:invite_user' team_key %}" method="post">
+                    {% csrf_token %}
+                    {% for hidden in invite_user_form.hidden_fields %}{{ hidden }}{% endfor %}
+                    {% if invite_user_form.non_field_errors %}
+                        <c-feedback.alert variant="danger" class="mb-4">
+                        {% for error in invite_user_form.non_field_errors %}<span class="block text-sm">{{ error }}</span>{% endfor %}
+                        </c-feedback.alert>
+                    {% endif %}
+                    <div class="mb-4">
+                        {% with field=invite_user_form.email %}
+                            <c-forms.label for="{{ field.id_for_label }}">{{ field.label }}</c-forms.label>
+                            <c-forms.input type="email" id="{{ field.id_for_label }}" name="{{ field.html_name }}" value="{{ field.value|default:'' }}" required />
+                            {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
+                        {% endwith %}
                     </div>
-                </div>
+                    <div class="mb-4">
+                        {% with field=invite_user_form.role %}
+                            <c-forms.label for="{{ field.id_for_label }}">{{ field.label }}</c-forms.label>
+                            <c-forms.select id="{{ field.id_for_label }}" name="{{ field.html_name }}" required>
+                            {% for value, label in field.field.choices %}
+                                <option value="{{ value }}"
+                                        {% if field.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                            </c-forms.select>
+                            {% for error in field.errors %}<c-forms.error>{{ error }}</c-forms.error>{% endfor %}
+                        {% endwith %}
+                        <ul class="mt-4 space-y-2 text-sm text-text-muted">
+                            <li>
+                                <strong class="text-text">Owner</strong> has full control including removing the workspace and inviting other users.
+                            </li>
+                            <li>
+                                <strong class="text-text">Admin</strong> can create products and components, upload/manage SBOMs.
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="flex justify-end">
+                        <c-buttons.primary type="submit">Invite to workspace</c-buttons.primary>
+                    </div>
+                </form>
+                </c-cards.card>
             </div>
         </div>
     </div>
