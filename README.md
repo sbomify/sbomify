@@ -79,6 +79,20 @@ See [docs/deployment.md](docs/deployment.md).
 
 For full production deployment instructions, see [the deployment guide](docs/deployment.md).
 
+### Kubernetes
+
+A Helm chart lives in [`charts/sbomify`](charts/sbomify/README.md). It deploys
+the application only — you provide PostgreSQL, Redis, S3-compatible storage and
+Keycloak.
+
+To try the whole stack on a local [kind](https://kind.sigs.k8s.io/) cluster
+(which also provisions throwaway versions of those four):
+
+```bash
+./bin/kind-up.sh          # create the cluster and deploy
+./bin/kind-up.sh --down   # tear it down
+```
+
 ## Local Development
 
 ### Authentication During Development

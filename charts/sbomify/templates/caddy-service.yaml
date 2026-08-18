@@ -1,0 +1,46 @@
+{{- $name := printf "%s-caddy" (include "sbomify.fullname" .) -}}
+---
+# The cluster's edge. This is what public DNS — including every workspace
+# custom domain — should point at.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
+  {{- with .Values.caddy.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.caddy.service.type }}
+  {{- if eq .Values.caddy.service.type "LoadBalancer" }}
+  # Preserve the client IP so Caddy's client_ip matchers (the internal-API
+  # guard) and the application's rate limiting see the real caller rather than
+  # a node address.
+  externalTrafficPolicy: {{ .Values.caddy.service.externalTrafficPolicy }}
+  {{- with .Values.caddy.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.caddy.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+      {{- if and (eq .Values.caddy.service.type "NodePort") .Values.caddy.service.nodePorts.http }}
+      nodePort: {{ .Values.caddy.service.nodePorts.http }}
+      {{- end }}
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+      {{- if and (eq .Values.caddy.service.type "NodePort") .Values.caddy.service.nodePorts.https }}
+      nodePort: {{ .Values.caddy.service.nodePorts.https }}
+      {{- end }}
+  selector:
+    {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}

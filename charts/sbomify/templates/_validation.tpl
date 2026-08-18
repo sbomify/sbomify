@@ -1,0 +1,72 @@
+{{/*
+Fail fast on misconfiguration, at template time, with a message that says what
+to set — rather than letting the pods come up and crash-loop on a missing
+connection string. Included from configmap.yaml so it always runs.
+*/}}
+{{- define "sbomify.validateValues" -}}
+
+{{- if not .Values.app.baseUrl }}
+{{- fail "sbomify: app.baseUrl is required — the app validates the Host header against it and builds absolute URLs from it" }}
+{{- end }}
+
+{{- if not (regexMatch "^https?://" .Values.app.baseUrl) }}
+{{- fail (printf "sbomify: app.baseUrl must include a scheme (http:// or https://), got %q" .Values.app.baseUrl) }}
+{{- end }}
+
+{{/*
+The backing services are deliberately not bundled — see values.yaml. Each of
+these is a hard requirement, so say plainly what is missing.
+*/}}
+{{- if not .Values.database.host }}
+{{- fail "sbomify: database.host is required. This chart does not run PostgreSQL for you — point it at a managed instance or one provisioned separately (e.g. the CloudNativePG operator). See charts/sbomify/README.md." }}
+{{- end }}
+
+{{- if not .Values.database.password }}
+{{- fail "sbomify: database.password is required (or supply DATABASE_URL via secrets.existingSecret)" }}
+{{- end }}
+
+{{- if not .Values.redis.host }}
+{{- fail "sbomify: redis.host is required. This chart does not run Redis for you — point it at a managed instance or one provisioned separately. See charts/sbomify/README.md." }}
+{{- end }}
+
+{{- if not .Values.objectStorage.endpointUrl }}
+{{- fail "sbomify: objectStorage.endpointUrl is required — S3, R2, Tigris, or a MinIO you operate" }}
+{{- end }}
+
+{{- if not .Values.auth.keycloak.serverUrl }}
+{{- fail "sbomify: auth.keycloak.serverUrl is required. This chart does not run Keycloak for you — deploy it with the Keycloak Operator (the project's official Kubernetes path) and point this at it. See charts/sbomify/README.md." }}
+{{- end }}
+
+{{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.secretKey) }}
+{{- fail "sbomify: secrets.secretKey is required (or supply SECRET_KEY via secrets.existingSecret). Generate one with: openssl rand -base64 48 — and keep it, because losing it invalidates every session and every signed URL." }}
+{{- end }}
+
+{{- if and (not .Values.secrets.existingSecret) (not .Values.secrets.signedUrlSalt) }}
+{{- fail "sbomify: secrets.signedUrlSalt is required (or supply SIGNED_URL_SALT via secrets.existingSecret). Generate one with: openssl rand -base64 32 — rotating it invalidates outstanding download links." }}
+{{- end }}
+
+{{- if and .Values.caddy.trustUpstreamTls.enabled (not .Values.caddy.trustUpstreamTls.fromCidrs) }}
+{{- fail "sbomify: caddy.trustUpstreamTls.enabled requires caddy.trustUpstreamTls.fromCidrs. X-Forwarded-Proto is client-settable, so with no source restriction ANY caller can have the app served over plain HTTP — and Django's SECURE_PROXY_SSL_HEADER would believe the connection was secure, so its own HTTPS redirect would not fire either. List the CIDRs of the proxy that terminates TLS. If you genuinely need to accept it from anywhere (the listener is unreachable except through that proxy), say so explicitly with fromCidrs: [\"0.0.0.0/0\", \"::/0\"]." }}
+{{- end }}
+
+{{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) }}
+{{- fail "sbomify: set auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
+{{- end }}
+
+{{- if and .Values.app.billing (not .Values.app.extraEnvFrom) (not .Values.app.extraEnv) }}
+{{- fail "sbomify: app.billing=true needs the STRIPE_* variables — supply them via app.extraEnvFrom (a Secret ref) or app.extraEnv" }}
+{{- end }}
+
+{{- if and (gt (int .Values.caddy.replicaCount) 1) (eq .Values.caddy.storage.module "file") }}
+{{- fail "sbomify: caddy.replicaCount > 1 needs shared certificate storage. With the default `file` storage each replica keeps its own certificates and runs its own ACME issuance for the same domains, which duplicates certificates and burns rate limits. Set caddy.storage.module (e.g. redis) and point caddy.image at a Caddy build that includes that storage plugin, or keep replicaCount at 1." }}
+{{- end }}
+
+{{- if and .Values.caddy.onDemandTLS.enabled (not .Values.caddy.onDemandTLS.ask) }}
+{{- fail "sbomify: caddy.onDemandTLS.enabled requires caddy.onDemandTLS.ask. Without the ask endpoint Caddy will attempt issuance for ANY hostname pointed at it, which is an open door to ACME rate-limit exhaustion." }}
+{{- end }}
+
+{{- if and .Values.caddy.onDemandTLS.enabled (not .Values.caddy.localCerts) (or (not .Values.caddy.acme.email) (eq .Values.caddy.acme.email "admin@example.com")) }}
+{{- fail "sbomify: set caddy.acme.email to a real address — Let's Encrypt sends expiry and revocation notices there. Use caddy.localCerts=true for local clusters that should not touch a public CA." }}
+{{- end }}
+
+{{- end -}}
