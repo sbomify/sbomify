@@ -67,7 +67,8 @@ def assessment_with_docs(assessment):
     that uses this fixture; with ``StorageClient`` patched at the import
     site, each ``generate_document`` short-circuits at the upload and
     the total cost is bounded to ORM work."""
-    with patch("sbomify.apps.core.object_store.StorageClient"):        regenerate_all(assessment)
+    with patch("sbomify.apps.core.object_store.StorageClient"):
+        regenerate_all(assessment)
     return assessment
 
 
@@ -277,9 +278,7 @@ class TestBuildExportPackage:
 
     @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
-    def test_manifest_format_version_bump(
-        self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
-    ):
+    def test_manifest_format_version_bump(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         """Manifest format bumped to 1.2 when the per-document PDF
         rendering shipped — downstream consumers that pin on the version
         can decide whether to expect a sibling ``.pdf`` next to each
@@ -348,8 +347,7 @@ class TestBuildExportPackage:
                 relative = prefix_re.sub("", full_path)
                 actual = hashlib.sha256(zf.read(full_path)).hexdigest()
                 assert recorded == actual, (
-                    f"manifest entry for {relative!r} declares "
-                    f"{recorded}, but the ZIP bytes hash to {actual}"
+                    f"manifest entry for {relative!r} declares {recorded}, but the ZIP bytes hash to {actual}"
                 )
 
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
@@ -406,9 +404,7 @@ class TestBuildExportPackage:
 
     @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
-    def test_bundle_skips_unknown_doc_kind(
-        self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
-    ):
+    def test_bundle_skips_unknown_doc_kind(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         """A CRAGeneratedDocument with an unmapped kind (forward-compat
         ingestion of newer DB rows) must be silently skipped, not
         crash the export."""
@@ -501,8 +497,7 @@ class TestBuildExportPackage:
 
         # Manifest entry assertions — lines 258-266 of export_service.
         sbom_entries = [
-            f for f in result.value.manifest["files"]
-            if "/sboms/" in f["path"] and f["path"].endswith(".cdx.json")
+            f for f in result.value.manifest["files"] if "/sboms/" in f["path"] and f["path"].endswith(".cdx.json")
         ]
         assert len(sbom_entries) == 1, f"expected exactly one SBOM entry, got {sbom_entries}"
         entry = sbom_entries[0]
@@ -577,9 +572,7 @@ class TestBuildExportPackageFailurePaths:
         assert result.status_code == 502
         assert "storage" in (result.error or "").lower()
 
-    def test_bundle_prefix_falls_back_to_product_id_when_slug_empty(
-        self, sample_team_with_owner_member, sample_user
-    ):
+    def test_bundle_prefix_falls_back_to_product_id_when_slug_empty(self, sample_team_with_owner_member, sample_user):
         """Product name made of punctuation only: ``slugify`` returns
         empty, so the bundle root would be ``cra-package-/``. The
         fallback to ``product.id`` keeps the slug segment non-empty,
@@ -670,6 +663,7 @@ class TestGetDownloadUrl:
         mock_package.storage_key = "compliance/exports/test/abc.zip"
 
         result = get_download_url(mock_package)
+
         assert result.ok
         assert result.value == "https://s3.example.com/presigned"
 
@@ -709,9 +703,7 @@ class TestGetDownloadUrl:
         result = get_download_url(mock_package)
 
         assert result.ok
-        disposition = mock_s3_client.generate_presigned_url.call_args.kwargs["Params"][
-            "ResponseContentDisposition"
-        ]
+        disposition = mock_s3_client.generate_presigned_url.call_args.kwargs["Params"]["ResponseContentDisposition"]
         assert 'filename="cra-package-prod-abc123-001122334455.zip"' in disposition
 
     def test_handles_s3_error(self):
@@ -911,9 +903,7 @@ class TestIntegrityReadmeRetention:
         assert "13(15)" in content
 
     @pytest.mark.django_db
-    def test_bundle_readme_carries_the_same_date_as_the_row(
-        self, capturing_s3, assessment_with_docs, sample_user
-    ):
+    def test_bundle_readme_carries_the_same_date_as_the_row(self, capturing_s3, assessment_with_docs, sample_user):
         """A build that straddles midnight must not put one date in the file
         and another in the database."""
         import io
