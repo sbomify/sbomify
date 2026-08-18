@@ -28,6 +28,7 @@ import sys
 import time
 
 import django
+from django.db.backends.base.base import BaseDatabaseWrapper
 
 # Arbitrary but STABLE application-wide identifier for the migration lock.
 # Every runner must use the same value, so never change it casually.
@@ -39,7 +40,7 @@ def _log(message: str) -> None:
     sys.stderr.flush()
 
 
-def _acquire_migration_lock(connection, timeout: float) -> bool:
+def _acquire_migration_lock(connection: BaseDatabaseWrapper, timeout: float) -> bool:
     """Take the advisory lock, polling so we can report progress while waiting.
 
     Returns True if the lock was acquired. Uses pg_try_advisory_lock rather than
@@ -66,7 +67,7 @@ def _acquire_migration_lock(connection, timeout: float) -> bool:
         time.sleep(2)
 
 
-def _release_migration_lock(connection) -> None:
+def _release_migration_lock(connection: BaseDatabaseWrapper) -> None:
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT pg_advisory_unlock(%s)", [MIGRATION_LOCK_ID])
@@ -74,7 +75,7 @@ def _release_migration_lock(connection) -> None:
         _log(f"[release] Warning: could not release the migration advisory lock: {e}")
 
 
-def _apply_session_timeouts(connection) -> None:
+def _apply_session_timeouts(connection: BaseDatabaseWrapper) -> None:
     """Bound how long a migration may block, when the operator asks for it.
 
     A migration that needs ACCESS EXCLUSIVE queues behind existing queries and,

@@ -21,7 +21,6 @@ AWS_SBOMS_STORAGE_BUCKET_URL: {{ include "sbomify.s3SbomsBucketUrl" . | quote }}
 
 # OIDC / Keycloak
 KEYCLOAK_SERVER_URL: {{ include "sbomify.keycloakServerUrl" . | quote }}
-KC_HOSTNAME_URL: {{ include "sbomify.keycloakHostnameUrl" . | quote }}
 KEYCLOAK_REALM: {{ .Values.auth.keycloak.realm | quote }}
 KEYCLOAK_CLIENT_ID: {{ .Values.auth.keycloak.clientId | quote }}
 

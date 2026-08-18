@@ -97,7 +97,7 @@ spec:
             failureThreshold: {{ .Values.web.probes.readiness.failureThreshold }}
           {{- if gt (int .Values.web.preStopSleep) 0 }}
           # Keep serving for a moment after the pod is marked Terminating so the
-          # ingress controller can remove it from its endpoint list first.
+          # Caddy edge can remove it from its endpoint list first.
           lifecycle:
             preStop:
               sleep:

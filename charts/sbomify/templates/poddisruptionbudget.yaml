@@ -13,6 +13,11 @@ metadata:
   labels:
     {{- include "sbomify.componentLabels" (dict "ctx" $ "component" $component) | nindent 4 }}
 spec:
+  # Without this, a PDB also blocks eviction of pods that are already unhealthy,
+  # so a tier that is down stays undrainable and wedges node maintenance — the
+  # opposite of what a disruption budget is for. AlwaysAllow lets the cluster
+  # evict a pod that was never Ready in the first place.
+  unhealthyPodEvictionPolicy: {{ $cfg.podDisruptionBudget.unhealthyPodEvictionPolicy }}
   {{- if $cfg.podDisruptionBudget.maxUnavailable }}
   maxUnavailable: {{ $cfg.podDisruptionBudget.maxUnavailable }}
   {{- else }}

@@ -1,7 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
 {{- $fullname := include "sbomify.fullname" . }}
 ---
-# Only the ingress controller may reach the web tier directly. Note this needs
+# Only the Caddy edge may reach the web tier directly. Note this needs
 # a CNI that enforces NetworkPolicy — kind's default kindnet does not, so these
 # objects exist but are inert there.
 apiVersion: networking.k8s.io/v1

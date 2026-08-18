@@ -182,23 +182,19 @@ Service name.
 {{- end }}
 
 {{/*
-Browser-facing Keycloak issuer URL.
+Normalised to end in exactly one "/".
 
-Both this and the server URL are normalised to end in exactly one "/".
 settings.py builds the discovery URL by bare concatenation —
 f"{KEYCLOAK_SERVER_URL}realms/{REALM}/.well-known/openid-configuration" — so a
 value written the natural way, without a trailing slash, silently yields
 "https://sso.example.comrealms/..." and breaks every login. Migration 0004
 persists that same string into the SocialApp row, so the damage outlives the
 misconfiguration.
+
+There is deliberately no separate browser-facing URL: the application reads only
+KEYCLOAK_SERVER_URL, and OIDC discovery hands the browser whatever endpoints it
+finds there. A second value would be a knob that silently does nothing.
 */}}
-{{- define "sbomify.keycloakHostnameUrl" -}}
-{{- if .Values.auth.keycloak.hostnameUrl -}}
-{{- printf "%s/" (trimSuffix "/" .Values.auth.keycloak.hostnameUrl) -}}
-{{- else -}}
-{{- include "sbomify.keycloakServerUrl" . -}}
-{{- end -}}
-{{- end }}
 
 {{/* Public hostname, parsed out of app.baseUrl. */}}
 {{- define "sbomify.appHost" -}}

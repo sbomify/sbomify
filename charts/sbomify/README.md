@@ -372,10 +372,14 @@ CIDRs to `caddy.internalApiAllowedCidrs` only after confirming they arrive
 un-translated. Blocking this path does not affect on-demand TLS: Caddy reaches
 the ask endpoint over the Service, not back through the listener.
 
-**Generated secrets survive upgrades.** If you do not set `secrets.secretKey`,
-one is generated on first install and then recovered via `lookup` on subsequent
-upgrades — without that, every `helm upgrade` would mint a new `SECRET_KEY` and
-log every user out.
+**`SECRET_KEY` and `SIGNED_URL_SALT` are required, not generated.** Generating
+them was wrong three ways: the Secret template renders more than once per release
+(the Secret itself, the migration hook's copy, and the `checksum/secret`
+annotation), and `randAlphaNum` runs afresh each time, so the three disagreed;
+`helm template` became non-deterministic, making diffs unreadable; and a value
+only Helm knows is one `helm uninstall` away from logging out every user and
+invalidating every signed URL. They are credentials — keep them where the
+database password lives.
 
 ## Configuration
 

@@ -78,45 +78,11 @@ kubectl config use-context "kind-${CLUSTER_NAME}" >/dev/null
 # ---------------------------------------------------------------------------
 # In-cluster DNS for the public hostnames
 # ---------------------------------------------------------------------------
-# *.localtest.me resolves to 127.0.0.1, which is right from the host and
-# useless from inside a pod. Rewriting these names to the Caddy edge Service
-# makes the Keycloak issuer URL resolve identically on both sides — without it,
-# OIDC discovery hands the browser and the app pods different endpoints.
-CADDY_SVC="${RELEASE}-caddy.${NAMESPACE}.svc.cluster.local"
-
-if kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' | grep -q "rewrite name ${KEYCLOAK_HOST}"; then
-  log "CoreDNS rewrites already in place"
-else
-  log "Adding CoreDNS rewrites for ${APP_HOST} and ${KEYCLOAK_HOST}"
-  # Written out in full rather than patched in place: string-splicing a
-  # Corefile is fragile, and this is kind's stock config plus two rewrites.
-  kubectl -n kube-system create configmap coredns --dry-run=client -o yaml \
-    --from-literal=Corefile=".:53 {
-    errors
-    health {
-       lameduck 5s
-    }
-    ready
-    rewrite name ${APP_HOST} ${CADDY_SVC}
-    rewrite name ${KEYCLOAK_HOST} ${CADDY_SVC}
-    kubernetes cluster.local in-addr.arpa ip6.arpa {
-       pods insecure
-       fallthrough in-addr.arpa ip6.arpa
-       ttl 30
-    }
-    prometheus :9153
-    forward . /etc/resolv.conf {
-       max_concurrent 1000
-    }
-    cache 30
-    loop
-    reload
-    loadbalance
-}
-" | kubectl apply -f -
-  kubectl -n kube-system rollout restart deployment coredns
-  kubectl -n kube-system rollout status deployment coredns --timeout=120s
-fi
+log "Pointing ${APP_HOST} and ${KEYCLOAK_HOST} at the Caddy edge"
+APP_HOST="${APP_HOST}" \
+KEYCLOAK_HOST="${KEYCLOAK_HOST}" \
+CADDY_SVC="${RELEASE}-caddy.${NAMESPACE}.svc.cluster.local" \
+  "${LOCAL_DIR}/coredns-rewrite.sh"
 
 if [ "${DEPLOY}" -eq 0 ]; then
   log "Cluster ready. Skipping deploy (--no-deploy)."

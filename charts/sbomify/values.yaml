@@ -101,8 +101,6 @@ auth:
     # discovery hands the *browser* whatever endpoints it finds here, so the
     # app pods and the browser have to agree on it.
     serverUrl: ""
-    # Public/browser-facing issuer URL. Defaults to serverUrl when empty.
-    hostnameUrl: ""
     realm: "sbomify"
     clientId: "sbomify"
     clientSecret: ""
@@ -184,6 +182,9 @@ web:
     enabled: true
     minAvailable: 1
     maxUnavailable: ""
+    # AlwaysAllow so an unhealthy pod can still be evicted; IfHealthyBudget
+    # (the Kubernetes default) can leave a broken tier undrainable.
+    unhealthyPodEvictionPolicy: AlwaysAllow
 
   # Probe tuning. The startup probe is what tolerates a slow cold start; the
   # liveness probe stays fast and cheap so a slow dependency cannot cause a
@@ -247,6 +248,9 @@ worker:
     enabled: true
     minAvailable: 1
     maxUnavailable: ""
+    # AlwaysAllow so an unhealthy pod can still be evicted; IfHealthyBudget
+    # (the Kubernetes default) can leave a broken tier undrainable.
+    unhealthyPodEvictionPolicy: AlwaysAllow
 
   podAnnotations: {}
   podLabels: {}

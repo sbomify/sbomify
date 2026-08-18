@@ -136,6 +136,32 @@ jobs:
           helm template sbomify "$CHART" --values "$CHART/values-local.yaml" \
             | /tmp/kubeconform -strict -summary -ignore-missing-schemas
 
+      # kubeconform above proves the manifests are valid API objects; this is
+      # the separate question of whether they are well-built ones — dropped
+      # capabilities, read-only root filesystems, resource bounds, no floating
+      # image tags. Linted against the production-shaped render because
+      # values-local.yaml pins `latest` on purpose.
+      - name: Rendered manifests pass kube-linter
+        run: |
+          curl -sSLo /tmp/kube-linter.tar.gz \
+            https://github.com/stackrox/kube-linter/releases/download/v0.7.2/kube-linter-linux.tar.gz
+          tar -xzf /tmp/kube-linter.tar.gz -C /tmp kube-linter
+
+          helm template sbomify "$CHART" \
+            --set app.baseUrl=https://sbom.example.com \
+            --set database.host=pg.internal \
+            --set database.password=hunter2 \
+            --set redis.host=redis.internal \
+            --set objectStorage.endpointUrl=https://s3.example.com \
+            --set auth.keycloak.serverUrl=https://sso.example.com/ \
+            --set auth.keycloak.clientSecret=secret \
+            --set secrets.secretKey=lint-only-not-a-real-key \
+            --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
+            --set caddy.acme.email=ops@example.com \
+            > /tmp/rendered-prod.yaml
+
+          /tmp/kube-linter lint /tmp/rendered-prod.yaml --config "$CHART/.kube-linter.yaml"
+
       - name: Caddyfile is valid Caddy configuration
         run: |
           python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
@@ -232,33 +258,12 @@ jobs:
             rm -f /tmp/img.tar
           done
 
+      # Same script bin/kind-up.sh uses. The workflow used to carry its own
+      # copy of the Corefile, which drifted into invalid syntax and failed
+      # every run on the CoreDNS rollout timeout.
       - name: CoreDNS rewrites for the public hostnames
-        run: |
-          kubectl -n kube-system create configmap coredns --dry-run=client -o yaml \
-            --from-literal=Corefile=".:53 {
-              errors
-              health { lameduck 5s }
-              ready
-              rewrite name sbomify.localtest.me sbomify-caddy.sbomify.svc.cluster.local
-              rewrite name keycloak.localtest.me sbomify-caddy.sbomify.svc.cluster.local
-              kubernetes cluster.local in-addr.arpa ip6.arpa {
-                pods insecure
-                fallthrough in-addr.arpa ip6.arpa
-                ttl 30
-              }
-              prometheus :9153
-              forward . /etc/resolv.conf { max_concurrent 1000 }
-              cache 30
-              loop
-              reload
-              loadbalance
-          }
-          " | kubectl apply -f -
-          kubectl -n kube-system rollout restart deployment coredns
-          kubectl -n kube-system rollout status deployment coredns --timeout=120s
+        run: ./deploy/local/coredns-rewrite.sh
 
-      # Not part of the chart: the chart requires these to already exist, so CI
-      # provisions them the same way bin/kind-up.sh does locally.
       - name: Provision backing services
         run: |
           kubectl create namespace sbomify

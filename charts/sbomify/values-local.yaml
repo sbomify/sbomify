@@ -63,7 +63,6 @@ auth:
     # name also resolves in-cluster, and HTTP avoids having to trust Caddy's
     # local CA from inside the app.
     serverUrl: "http://keycloak.localtest.me/"
-    hostnameUrl: "http://keycloak.localtest.me/"
 
 web:
   replicaCount: 2

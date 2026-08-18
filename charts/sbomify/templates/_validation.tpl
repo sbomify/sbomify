@@ -21,7 +21,15 @@ these is a hard requirement, so say plainly what is missing.
 {{- fail "sbomify: database.host is required. This chart does not run PostgreSQL for you — point it at a managed instance or one provisioned separately (e.g. the CloudNativePG operator). See charts/sbomify/README.md." }}
 {{- end }}
 
-{{- if not .Values.database.password }}
+{{/*
+Only when the chart builds DATABASE_URL itself. With secrets.existingSecret the
+whole connection string comes from outside — an external secret manager is
+exactly where a database password should live, so requiring it here too would
+block the configuration this chart is meant to encourage. database.host stays
+required either way: the dependency-wait init container needs an address, and it
+never sees the Secret.
+*/}}
+{{- if and (not .Values.secrets.existingSecret) (not .Values.database.password) }}
 {{- fail "sbomify: database.password is required (or supply DATABASE_URL via secrets.existingSecret)" }}
 {{- end }}
 
