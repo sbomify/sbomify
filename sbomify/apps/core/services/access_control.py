@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from django.http import HttpRequest
 
+from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.models import User
 from sbomify.apps.core.utils import verify_item_access
 from sbomify.apps.sboms.models import Component
@@ -82,28 +83,42 @@ def _check_gated_access(user: User, team: Team) -> tuple[bool, bool]:
     from sbomify.apps.documents.access_models import AccessRequest
     from sbomify.apps.teams.models import Member
 
-    # First check if user has a revoked access request - if so, deny access regardless of membership
-    # This ensures revoked users lose access even if member deletion hasn't completed yet
+    # Membership is resolved BEFORE the revocation check. Revocation is an
+    # *external* access control — it withdraws a trust-center grant — so it must
+    # not out-rank an internal role. Checking it first meant a stale REVOKED row
+    # permanently locked an internal member out of their own workspace's gated
+    # content: revoke an external user, then later hire them and invite them as
+    # an admin, and because their guest Member row was deleted a *new* row is
+    # created, so neither the guest-upgrade cleanup (which returns early when the
+    # row is `created`) nor the invitation-accept cleanup (which only fires when
+    # an existing membership changes role) removes the REVOKED request. With no
+    # UI to clear it, every gated check denied them, telling them to request
+    # access from themselves.
+    member = Member.objects.filter(team=team, user=user).select_related("team", "user").first()
+    if member and member.role in READ_INTERNAL:
+        # Internal members have full access without signing an NDA — the NDA
+        # gates *external* access, and they can already read the workspace.
+        return True, False
+
+    # Revoked access request — deny regardless of any *guest* membership, so a
+    # revoked user loses access even if member deletion hasn't completed yet.
     revoked_request = (
         AccessRequest.objects.filter(team=team, user=user, status=AccessRequest.Status.REVOKED)
         .select_related("team", "user")
         .first()
     )
     if revoked_request:
-        # User's access has been revoked, deny access
-        # Also ensure guest membership is removed (in case deletion failed)
-        Member.objects.filter(team=team, user=user, role="guest").delete()
+        # Ensure the guest membership is gone (in case revocation's own deletion
+        # failed). ``member`` was already fetched above, so only issue the write
+        # when there is actually a guest row to remove — this is a read path, and
+        # an unconditional DELETE took row locks on every check for a revoked
+        # user, almost always deleting nothing.
+        if member is not None and member.role == ROLE_GUEST:
+            Member.objects.filter(team=team, user=user, role=ROLE_GUEST).delete()
         return False, False
 
-    # Optimize: Check member first (most common case for owners/admins)
-    # This avoids querying AccessRequest if user is already a member
-    member = Member.objects.filter(team=team, user=user).select_related("team", "user").first()
     if member:
-        if member.role in ("owner", "admin"):
-            # Owners/admins have full access without signing NDA
-            # (revoked requests don't apply to owners/admins as they're not guest access)
-            return True, False
-        if member.role == "guest":
+        if member.role == ROLE_GUEST:
             # Guest members must have signed the current NDA
             if not _user_has_signed_current_nda(user, team):
                 return False, True  # Access denied, needs to re-sign NDA
@@ -232,7 +247,7 @@ def check_component_access(
                 requires_access_request=False,
             )
 
-        if verify_item_access(request, component, ["owner", "admin"]):
+        if verify_item_access(request, component, list(READ_INTERNAL)):
             return ComponentAccessResult(
                 has_access=True,
                 reason="private_access_granted",

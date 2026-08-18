@@ -165,10 +165,17 @@ def pending_access_requests_context(request: Any) -> Any:
 
 def team_context(request: Any) -> Any:
     """
-    Add current team and user role to context.
+    Add current team, user role, and derived capability flags to context.
 
-    This enables global access to 'team' and 'is_owner' for banners/navigation
-    without requiring every view to pass them explicitly.
+    This enables global access to 'team', 'is_owner' and the ``can_*`` flags for
+    banners/navigation without requiring every view to pass them explicitly.
+
+    The ``can_*`` flags are derived from the capability tiers in
+    ``sbomify.apps.core.authz`` rather than from hardcoded role strings, so a
+    template gate and the ``can()`` check guarding the same action can't drift
+    apart. Templates should branch on these, not on
+    ``request.session.current_team.role`` — the session role is a cache with a
+    300s TTL, while the role read here comes from the live ``Member`` row.
 
     Reads billing status from the DB only — no Stripe API calls. ``billing_plan_limits``
     is kept current by Stripe webhooks plus a daily safety-net sync task.
@@ -195,18 +202,23 @@ def team_context(request: Any) -> Any:
         # client disconnect. The DB is kept current by Stripe webhooks
         # (customer.subscription.updated / invoice.*) plus a daily safety-net
         # task (billing.cron.daily_subscription_sync).
-        is_owner = False
         member = Member.objects.filter(team=team, user=request.user).first()
-        if member and member.role == "owner":
-            is_owner = True
+        role = member.role if member else None
 
         from django.conf import settings
 
         from sbomify.apps.billing.config import is_billing_enabled
+        from sbomify.apps.core.authz import ADMINISTER, DELETE, MANAGE, ROLE_OWNER
 
         return {
             "team": team,
-            "is_owner": is_owner,
+            "workspace_role": role,
+            "is_owner": role == ROLE_OWNER,
+            # Capability flags — see the docstring. Keep these derived from the
+            # authz tiers; never re-introduce a hardcoded role list here.
+            "can_administer": role in ADMINISTER,
+            "can_manage": role in MANAGE,
+            "can_delete": role in DELETE,
             "grace_period_days": getattr(settings, "PAYMENT_GRACE_PERIOD_DAYS", 3),
             "billing_enabled": is_billing_enabled(),
         }

@@ -191,3 +191,31 @@ class TestItResolvesNothing:
             result = _as_dict(plugin.assess("test-sbom", sbom_file))
 
         assert run_scanned(self._run(result)) is True
+
+
+class TestTheSkipDoesNotPageAnyone:
+    """settings wires Sentry to capture on ``logger.error``, so the level is
+    not cosmetic: leaving 128 in the error branch raised an incident every hour
+    for an SBOM the scanner simply had no packages to match."""
+
+    def test_exit_128_is_not_logged_as_an_error(self, plugin: OSVPlugin, sbom_file) -> None:
+        from sbomify.apps.plugins.builtins import osv as osv_module
+
+        with (
+            patch("subprocess.run", return_value=_scanner_exiting(128)),
+            patch.object(osv_module.logger, "error") as error,
+        ):
+            plugin.assess("test-sbom", sbom_file)
+
+        assert not [c for c in error.call_args_list if "Scanner" in c.args[0]]
+
+    def test_a_genuine_failure_still_is(self, plugin: OSVPlugin, sbom_file) -> None:
+        from sbomify.apps.plugins.builtins import osv as osv_module
+
+        with (
+            patch("subprocess.run", return_value=_scanner_exiting(127)),
+            patch.object(osv_module.logger, "error") as error,
+        ):
+            plugin.assess("test-sbom", sbom_file)
+
+        assert [c for c in error.call_args_list if "Scanner returned code" in c.args[0]]

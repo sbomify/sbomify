@@ -1,32 +1,36 @@
 {% comment %}
-    Regulatory callout header — icon badge + title + legal-basis pill + description.
+    Regulatory callout header — icon chip + title + legal-basis pill + description.
     Shared by Step 1 (Harmonised standard, Support period) and Step 3 (per-finding
-    Justification). Use inside the standard callout wrapper:
+    Justification). Use inside the library callout wrapper:
 
-        <div role="status" aria-live="polite" class="rounded-lg border-y border-r border-border border-l-4 border-l-amber-500 dark:border-l-amber-400 bg-surface shadow-sm">
+        <c-feedback.callout variant="warning" role="status" aria-live="polite">
             {% include "compliance/components/_callout_regulatory_header.html.j2"
                 with icon="fa-shield-halved" title="Harmonised standard required"
                 pill_label="CRA Art 32(2)" pill_href=cra_oj_url description="…" %}
-            ... callout body (checkbox, textarea+helper, etc.) ...
-        </div>
+            <c-feedback.callout-body>… checkbox, textarea+helper, etc. …</c-feedback.callout-body>
+        </c-feedback.callout>
+
+    The pill is a link wearing a badge, and badges are not polymorphic, so the
+    anchor wraps the badge and carries the hover and the focus ring.
 {% endcomment %}
-<div class="flex items-start gap-3 px-4 pt-4">
-    <div class="flex items-center justify-center w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 shrink-0"
-         aria-hidden="true">
-        <i class="fas {{ icon }} text-sm text-amber-700 dark:text-amber-300"></i>
+<c-feedback.callout-header>
+<c-chips.icon-chip accent="warning" circle aria-hidden="true">
+<i class="fas {{ icon }}"></i>
+</c-chips.icon-chip>
+<div class="flex-1 min-w-0">
+    <div class="flex items-center gap-2 flex-wrap">
+        <span class="font-semibold text-sm text-text">{{ title }}</span>
+        <a href="{{ pill_href }}"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning focus-visible:ring-offset-2 focus-visible:ring-offset-surface rounded-full">
+            <c-badges.warning size="sm">
+            {{ pill_label }}
+            <i class="fas fa-up-right-from-square text-[9px] opacity-70 ml-1"
+               aria-hidden="true"></i>
+            </c-badges.warning>
+        </a>
     </div>
-    <div class="flex-1 min-w-0 pt-0.5">
-        <div class="flex items-center gap-2 flex-wrap">
-            <span class="font-semibold text-sm text-text">{{ title }}</span>
-            <a href="{{ pill_href }}"
-               target="_blank"
-               rel="noopener noreferrer"
-               class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded text-amber-700 dark:text-amber-300 border border-amber-400 dark:border-amber-500/70 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-surface">
-                {{ pill_label }}
-                <i class="fas fa-up-right-from-square text-[9px] opacity-70"
-                   aria-hidden="true"></i>
-            </a>
-        </div>
-        <p class="text-xs text-text-muted mt-1 m-0 leading-snug">{{ description }}</p>
-    </div>
+    <p class="text-xs text-text-muted mt-1 m-0 leading-snug">{{ description }}</p>
 </div>
+</c-feedback.callout-header>

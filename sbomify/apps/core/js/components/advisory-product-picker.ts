@@ -11,7 +11,7 @@ export interface PickerProduct {
 }
 
 /**
- * Product and version picker for the New Advisory modal.
+ * Product and version picker for the New Advisory form.
  *
  * An advisory routinely covers a whole product line — several products, or a
  * run of consecutive versions — so ticking one box at a time is the wrong unit
@@ -24,13 +24,25 @@ export interface PickerProduct {
  * from hidden inputs instead. That keeps one source of truth and means a
  * range-select and a plain click go through exactly the same path.
  */
-export function advisoryProductPicker(products: PickerProduct[] = []) {
+export function advisoryProductPicker(products: PickerProduct[] = [], preselected: unknown = []) {
     return {
         products,
-        selectedProducts: [] as string[],
+        // Products the caller arrived with already chosen — the products page's
+        // row menu links here with the product it was opened from. Coerced,
+        // because a template that never sets them serialises an empty string.
+        selectedProducts: (Array.isArray(preselected) ? [...preselected] : []) as string[],
         selectedReleases: [] as string[],
-        expanded: [] as string[],
         filter: '',
+
+        /**
+         * The product whose versions the detail pane is showing.
+         *
+         * One at a time, rather than many rows expanded in place: a product with
+         * a release-per-build has hundreds of versions, and opening it inline
+         * pushed every other product off screen. The versions get their own
+         * scroll area instead, and the product list stays where it was.
+         */
+        activeProductId: null as string | null,
 
         /** Index of the last product row clicked, for shift-click ranges. */
         anchor: null as number | null,
@@ -45,8 +57,28 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             return this.selectedReleases.includes(id);
         },
 
-        isExpanded(id: string): boolean {
-            return this.expanded.includes(id);
+        isActive(id: string): boolean {
+            return this.activeProductId === id;
+        },
+
+        /** Open a product in the detail pane, or close it if it is already open. */
+        openProduct(id: string): void {
+            this.activeProductId = this.activeProductId === id ? null : id;
+        },
+
+        get activeProduct(): PickerProduct | null {
+            return this.products.find((product) => product.id === this.activeProductId) ?? null;
+        },
+
+        /**
+         * The versions the detail pane lists.
+         *
+         * Filtered the same way the list is, so typing a build number narrows
+         * the open product to it instead of showing every sibling build.
+         */
+        get activeReleases(): PickerRelease[] {
+            const product = this.activeProduct;
+            return product ? this.visibleReleases(product) : [];
         },
 
         /**
@@ -89,12 +121,6 @@ export function advisoryProductPicker(products: PickerProduct[] = []) {
             const term = this.filterTerm;
             if (!term || product.name.toLowerCase().includes(term)) return product.releases;
             return product.releases.filter((release) => release.label.toLowerCase().includes(term));
-        },
-
-        toggleExpanded(id: string): void {
-            this.expanded = this.isExpanded(id)
-                ? this.expanded.filter((value) => value !== id)
-                : [...this.expanded, id];
         },
 
         get allSelected(): boolean {

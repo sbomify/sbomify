@@ -1,0 +1,29 @@
+{% comment %}
+One notification surface. Like the alert, the four kinds differ only by their
+accent, so variant is a prop and the conditional segment sets --toast-accent,
+which the icon's colour and tint read. The message is the slot; title is a prop.
+The close button is on by default, as it was in the macro: pass
+dismissible="false" for a toast the page removes itself. Its handler is plain
+JavaScript, not Alpine, because a server-rendered toast has no Alpine scope; it
+targets the data-toast root now that the toast carries no tw-* class.
+{% endcomment %}
+<c-vars variant="info" title icon dismissible="true" class />
+<div class="flex items-start gap-3 py-4 px-4.5 bg-surface rounded-xl border border-solid border-border shadow-[0_10px_40px_-10px_rgb(0_0_0/0.3)] min-w-80 max-w-md animate-[slideInRight_0.3s_cubic-bezier(0.4,0,0.2,1)] {% if variant == 'success' %}[--toast-accent:var(--color-success)]{% elif variant == 'warning' %}[--toast-accent:var(--color-warning)]{% elif variant == 'danger' %}[--toast-accent:var(--color-danger)]{% else %}[--toast-accent:var(--color-primary)]{% endif %}{% if class %} {{ class }}{% endif %}"
+     role="alert"
+     data-toast
+     {{ attrs }}>
+    <i class="{% if icon %}{{ icon }}{% elif variant == 'success' %}fas fa-check-circle{% elif variant == 'warning' %}fas fa-exclamation-triangle{% elif variant == 'danger' %}fas fa-times-circle{% else %}fas fa-info-circle{% endif %} shrink-0 flex items-center justify-center w-8 h-8 rounded-lg text-sm text-[var(--toast-accent,var(--color-primary))] bg-[color-mix(in_oklab,var(--toast-accent,var(--color-primary))_12%,transparent)]"
+       aria-hidden="true"></i>
+    <div class="flex-1 min-w-0">
+        {% if title %}<p class="text-[0.9375rem] font-semibold text-text mb-0.5">{{ title }}</p>{% endif %}
+        <p class="text-sm leading-[1.4] text-text-muted">{{ slot }}</p>
+    </div>
+    {% if dismissible != "false" %}
+        <button type="button"
+                class="shrink-0 flex items-center justify-center w-7 h-7 -my-1 -mr-1 ml-0 rounded-md text-text-muted transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-text focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                aria-label="Dismiss"
+                onclick="this.closest('[data-toast]')?.remove()">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+    {% endif %}
+</div>

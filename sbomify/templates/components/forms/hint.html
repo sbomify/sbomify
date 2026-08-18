@@ -1,0 +1,8 @@
+{% comment %}
+The help line under a control. One sentence, in the muted ink. A field shows
+either this or its error, never both, which c-forms.field enforces.
+{% endcomment %}
+<c-vars class />
+<p class="block text-xs leading-[1.5] text-text-muted mt-1.5{% if class %} {{ class }}{% endif %}"
+   {{ attrs }}>{{ slot }}
+</p>

@@ -37,6 +37,19 @@ def get_member_role(user_id: int, team_id: str) -> str | None:
     return Member.objects.filter(user_id=user_id, team_id=team_id).values_list("role", flat=True).first()
 
 
+def has_pending_invitation(email: str) -> bool:
+    """Is there a live invitation for this address?
+
+    "Pending" means unexpired. Kept beside get_pending_invitations_for_email so
+    the two cannot disagree about what pending means — a caller that filters on
+    neither expiry nor case ends up honouring an invitation that lapsed months
+    ago.
+    """
+    if not email:
+        return False
+    return Invitation.objects.filter(email__iexact=email, expires_at__gt=timezone.now()).exists()
+
+
 def get_pending_invitations_for_email(email: str) -> list[Invitation]:
     """Return non-expired pending invitations matching the given email."""
     return list(

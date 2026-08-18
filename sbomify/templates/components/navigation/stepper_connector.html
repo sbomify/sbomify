@@ -1,0 +1,8 @@
+{% comment %}
+The rail between two steps. completed fills it with the success gradient; the
+plain one stays the border colour. On a vertical stepper it stands up and
+narrows, which it reads from the rail's data-stepper-vertical.
+{% endcomment %}
+<c-vars completed class />
+<span class="relative flex-1 h-[3px] mx-4 rounded-full overflow-hidden [[data-stepper-vertical]_&]:w-[3px] [[data-stepper-vertical]_&]:h-8 [[data-stepper-vertical]_&]:my-2 [[data-stepper-vertical]_&]:ml-[1.1875rem] [[data-stepper-vertical]_&]:mr-0 {% if completed %}bg-[linear-gradient(90deg,var(--color-success)_0%,var(--color-success-dark)_100%)]{% else %}bg-border{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}></span>

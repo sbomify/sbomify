@@ -1,0 +1,18 @@
+{% comment %}
+One pill of the stats strip under a page header: an icon, a label and a value
+on a bordered surface. The parts go in the slot as c-chips.metric.label and
+c-chips.metric.value, because a chip reads "12 Components" or "Scanned 3h ago"
+depending on the metric, and the icon is the caller's own.
+
+accent names a token (info, success, warning, danger) and renders as one
+conditional segment carrying the fill, the border colour and the text colour
+together, so no two of them ever land on the same chip. The label stays muted
+under every accent; the value and the icon take it.
+
+The line-height is stated because the chip's height is its value's line box:
+text-sm alone brings 1.25rem where the old rule inherited 1.5, which took a
+pixel off every chip and off the strip they sit in.
+{% endcomment %}
+<c-vars accent class />
+<span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-solid text-sm leading-[1.5] {% if accent == 'info' %}bg-[color-mix(in_oklab,var(--color-info)_10%,transparent)] border-[color-mix(in_oklab,var(--color-info)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-info)_60%,var(--color-text))]{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-success)_60%,var(--color-text))]{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-warning)_60%,var(--color-text))]{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] text-[color:color-mix(in_oklab,var(--color-danger)_60%,var(--color-text))]{% else %}bg-surface border-border text-text{% endif %}{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

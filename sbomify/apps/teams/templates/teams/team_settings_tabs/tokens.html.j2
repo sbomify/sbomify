@@ -5,37 +5,34 @@
      hx-swap="innerHTML">
     <div id="team-tokens-content">
         {# Skeleton Loading State #}
-        <div class="tw-settings-card">
-            <div class="px-6 py-4 border-b border-border">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
-                        <div>
-                            <div class="h-5 w-28 bg-border/50 rounded animate-pulse"></div>
-                            <div class="h-4 w-40 bg-border/30 rounded animate-pulse mt-1"></div>
-                        </div>
-                    </div>
-                    <div class="h-9 w-32 bg-border/50 rounded-lg animate-pulse"></div>
+        <c-cards.dashboard class="mb-6">
+        <c-slot name="header">
+        <c-cards.header>
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+                <div>
+                    <div class="h-5 w-28 bg-border/50 rounded animate-pulse"></div>
+                    <div class="h-4 w-40 bg-border/30 rounded animate-pulse mt-1"></div>
                 </div>
             </div>
-            <div class="p-6">
-                <div class="space-y-3">
-                    {% for i in "123" %}
-                        <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
-                            <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
-                            <div class="flex-1">
-                                <div class="h-4 w-48 bg-border/50 rounded animate-pulse"></div>
-                                <div class="h-3 w-32 bg-border/30 rounded animate-pulse mt-2"></div>
-                            </div>
-                            <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
-                        </div>
-                    {% endfor %}
-                </div>
-                <div class="flex items-center justify-center py-4 mt-4">
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
-                    <span class="ml-3 text-text-muted text-sm">Loading API tokens...</span>
-                </div>
-            </div>
+            <div class="h-9 w-32 bg-border/50 rounded-lg animate-pulse"></div>
         </div>
+        </c-cards.header>
+        </c-slot>
+        <div class="space-y-3">
+            {% for i in "123" %}
+                <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
+                    <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+                    <div class="flex-1">
+                        <div class="h-4 w-48 bg-border/50 rounded animate-pulse"></div>
+                        <div class="h-3 w-32 bg-border/30 rounded animate-pulse mt-2"></div>
+                    </div>
+                    <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
+                </div>
+            {% endfor %}
+        </div>
+        <c-feedback.loading row message="Loading API tokens..." class="mt-4" />
+        </c-cards.dashboard>
     </div>
 </div>

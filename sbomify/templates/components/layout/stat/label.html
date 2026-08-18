@@ -1,0 +1,9 @@
+{% comment %}
+The metric's name: small, uppercase and muted, above its number. Its rhythm is
+a custom property with the standard card's spacing as the fallback, so the
+compact card, where the number comes first, can flip it without the call site
+repeating what the card already knows.
+{% endcomment %}
+<c-vars class />
+<span class="block text-xs font-semibold uppercase tracking-[0.06em] text-text-muted mt-[var(--stat-label-mt,0px)] mb-[var(--stat-label-mb,0.5rem)]{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

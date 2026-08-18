@@ -27,7 +27,7 @@ document.querySelector lookup is unambiguous.
                             </svg>
                             <span x-show="!barcodeRendered['{{ identifier.id }}'] && !barcodeErrors['{{ identifier.id }}']"
                                   class="text-text-muted text-xs">
-                                {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                                <c-feedback.spinner size="inline" />
                             </span>
                         </div>
                     {% endif %}

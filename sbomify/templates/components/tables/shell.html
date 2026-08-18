@@ -1,0 +1,13 @@
+{% comment %}
+The frame a data table sits in: toolbar, table and footer stacked, clipped so
+the header band and the footer take its corners.
+
+Wrapping the shell in a card is the caller's choice. Inside a card the card
+already draws the frame, so pass nested and the shell drops its own surface,
+border and radius. The frame renders as one conditional segment, so the two
+never stack.
+{% endcomment %}
+<c-vars nested class />
+<div class="flex flex-col overflow-hidden {% if nested %}bg-transparent{% else %}bg-surface border border-solid border-border rounded-xl{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>
