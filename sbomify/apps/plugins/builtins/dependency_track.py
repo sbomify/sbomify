@@ -689,13 +689,13 @@ class DependencyTrackPlugin(AssessmentPlugin):
         if not decided:
             return
 
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
         from sbomify.apps.sboms.models import SBOM as SBOMModel
         from sbomify.apps.sboms.services.sboms import schedule_vex_reapply
 
         component = version_row.sbom.component
         normalized = self._normalized_vex(doc)
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
 
         newest = (
             SBOMModel.objects.filter(component=component, bom_type=SBOMModel.BomType.VEX.value)

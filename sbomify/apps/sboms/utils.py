@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product
 
-# S3Client import moved to function level to support test mocking
+# StorageClient import moved to function level to support test mocking
 from sbomify.apps.sboms.models import SBOM
 from sbomify.apps.sboms.sbom_format_schemas import cyclonedx_1_6 as cdx16
 from sbomify.apps.teams.models import ContactProfile
@@ -108,9 +108,9 @@ def get_sbom_data(sbom_id: str) -> tuple[SBOM, dict[str, Any]]:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
 
     # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
-    s3_client = S3Client(bucket_type="SBOMS")
+    s3_client = StorageClient(bucket_type="SBOMS")
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
@@ -300,9 +300,9 @@ def sbom_was_generated_by_sbomify_action(sbom: SBOM) -> bool:
         return False
 
     try:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
-        sbom_bytes = S3Client(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
+        sbom_bytes = StorageClient(bucket_type="SBOMS").get_sbom_data(sbom.sbom_filename)
         if not sbom_bytes:
             # Treat empty / missing as transient — the row points at a blob
             # we couldn't read, so we should retry sooner than a day.
@@ -375,9 +375,9 @@ def get_sbom_data_bytes(sbom_id: str) -> tuple[SBOM, bytes]:
         raise SBOMDataError(f"SBOM ID: {sbom_id} has no sbom_filename")
 
     # 2) Download SBOM data from S3
-    from sbomify.apps.core.object_store import S3Client
+    from sbomify.apps.core.object_store import StorageClient
 
-    s3_client = S3Client(bucket_type="SBOMS")
+    s3_client = StorageClient(bucket_type="SBOMS")
     sbom_bytes = s3_client.get_sbom_data(sbom_instance.sbom_filename)
 
     if not sbom_bytes:
@@ -1175,7 +1175,7 @@ class ProductSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if no SBOM found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         # Use the prefetched SBOMs to avoid additional queries
         sboms = list(component.sbom_set.all())
@@ -1190,7 +1190,7 @@ class ProductSBOMBuilder:
         sbom = sboms[0]
 
         # Download SBOM data from S3
-        s3_client = S3Client("SBOMS")
+        s3_client = StorageClient("SBOMS")
         try:
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
@@ -1423,7 +1423,7 @@ class ReleaseSBOMBuilder:
         Returns:
             Tuple of (Path to the downloaded SBOM file, SBOM ID), or None if not found
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         if not sbom.sbom_filename:
             return None
@@ -1431,7 +1431,7 @@ class ReleaseSBOMBuilder:
         download_path = None
         try:
             # Download SBOM data from S3
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)
@@ -1903,13 +1903,13 @@ def get_release_sbom_package(
     # without a possibly-undefined flow; it's only USED on the cached public path.
     resolved_version = _resolve_output_version(format_lower, version)
     if release.product.is_public:
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         fingerprint = compute_release_aggregate_fingerprint(release)
         cache_key = f"aggregates/release/{release.id}/{format_lower}-{resolved_version}-{fingerprint}.json"
         from botocore.exceptions import BotoCoreError, ClientError
 
-        s3 = S3Client("SBOMS")
+        s3 = StorageClient("SBOMS")
         # The cache is an optimization — a read failure scoped to the cache
         # (e.g. AccessDenied on the aggregates/ prefix while members stay
         # readable) falls back to a rebuild rather than 500'ing the download. A

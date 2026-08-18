@@ -165,13 +165,13 @@ class BaseSBOMBuilder(ABC):
         Returns:
             Tuple of (Path to downloaded file, SBOM ID) or None
         """
-        from sbomify.apps.core.object_store import S3Client
+        from sbomify.apps.core.object_store import StorageClient
 
         if not sbom.sbom_filename:
             return None
 
         try:
-            s3_client = S3Client("SBOMS")
+            s3_client = StorageClient("SBOMS")
             sbom_data = s3_client.get_sbom_data(sbom.sbom_filename)
             download_path = self.target_folder / sbom.sbom_filename
             download_path.write_bytes(sbom_data)
@@ -192,7 +192,7 @@ class BaseSBOMBuilder(ABC):
 
         Parallelizes only the S3 I/O; callers still iterate members serially to
         build the aggregate deterministically. ``download_sbom_file`` is safe to
-        run across threads: it constructs a fresh ``S3Client`` per call, touches
+        run across threads: it constructs a fresh ``StorageClient`` per call, touches
         no ORM, and its only shared writes (``temp_files.append`` /
         ``had_member_fetch_error``) are GIL-atomic. Output files are named by
         ``sbom.sbom_filename``, which is the content sha256, so two members can

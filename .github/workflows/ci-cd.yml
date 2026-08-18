@@ -369,6 +369,42 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
+      # The Dockerfile does `COPY . .`, so .dockerignore is the only thing
+      # keeping non-application files out of the published image. Probe the
+      # real build context with a throwaway image rather than grepping
+      # .dockerignore, so the check reflects what Docker actually copies.
+      - name: Build context excludes non-application files
+        run: |
+          set -e
+          # Pinned: a floating tag would let the probe change under CI without a commit.
+          printf 'FROM busybox:1.37.0\nWORKDIR /code\nCOPY . .\n' > /tmp/context-probe.Dockerfile
+          docker build -q -f /tmp/context-probe.Dockerfile -t sbomify-context-probe:ci . >/dev/null
+          # `ls -1A`, not `find -printf`: the probe is busybox, whose find has
+          # no -printf. -1 forces one entry per line so the `grep -qx` checks
+          # below cannot be defeated by column formatting.
+          contents=$(docker run --rm sbomify-context-probe:ci ls -1A /code)
+
+          fails=0
+          for path in charts deploy .github docs; do
+            if echo "$contents" | grep -qx "$path"; then
+              echo "::error::'$path' is in the Docker build context. Add it to .dockerignore"
+              fails=$((fails + 1))
+            else
+              echo "ok - '$path' excluded from the image"
+            fi
+          done
+
+          # Sanity check the probe itself: if the app were missing, every
+          # assertion above would pass for the wrong reason.
+          for path in sbomify bin manage.py pyproject.toml; do
+            echo "$contents" | grep -qx "$path" || {
+              echo "::error::'$path' is MISSING from the build context"
+              fails=$((fails + 1))
+            }
+          done
+
+          exit $fails
+
       - name: Log in to GitHub Container Registry
         if: ${{ github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v') }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0

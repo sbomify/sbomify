@@ -1,0 +1,266 @@
+{{- if not .Values.caddy.existingConfigMap }}
+{{/*
+Upstream is the web Service, so this is service.port (80 by default), not the
+container's 8000. docker-compose talks to the container port directly; in
+Kubernetes that address does not exist.
+*/}}
+{{- $web := printf "%s-web:%v" (include "sbomify.fullname" .) .Values.service.port -}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sbomify.fullname" . }}-caddy
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
+data:
+  Caddyfile: |
+    {
+      admin off
+      {{- if .Values.caddy.localCerts }}
+      # Issue from Caddy's own local CA instead of a public ACME endpoint.
+      # For local clusters only: browsers will not trust these.
+      local_certs
+      {{- else }}
+      email {{ .Values.caddy.acme.email }}
+      acme_ca {{ .Values.caddy.acme.ca }}
+      {{- end }}
+
+      {{- if .Values.caddy.onDemandTLS.enabled }}
+      # On-demand TLS is what makes per-workspace custom domains possible: the
+      # set of hostnames is unbounded and changes at runtime, so it cannot be
+      # declared up front the way an Ingress or a Gateway listener requires.
+      # Before issuing, Caddy asks the application whether it recognises the
+      # domain. Without that check this endpoint would be an open invitation
+      # to exhaust ACME rate limits.
+      on_demand_tls {
+        # Asks via the loopback listener defined below rather than the Service
+        # directly. The app validates the Host header and only accepts a known
+        # set of names, so a request addressed to the Service name comes back
+        # 400 and every custom-domain certificate gets refused. The loopback
+        # hop exists purely to rewrite Host to one the app trusts.
+        ask http://127.0.0.1:{{ .Values.caddy.askProxyPort }}{{ .Values.caddy.onDemandTLS.ask }}
+      }
+      {{- end }}
+
+      {{- with .Values.caddy.trustedProxies }}
+      {{/*
+        Only when there is a proxy to trust. Caddy consults client_ip_headers
+        exclusively for requests arriving from a trusted proxy, so with none
+        listed the whole block would say nothing, and an argument-less
+        `trusted_proxies static` says even less.
+      */}}
+      servers {
+        trusted_proxies static {{ join " " . }}
+        trusted_proxies_strict
+        {{- with $.Values.caddy.clientIpHeaders }}
+        client_ip_headers {{ join " " . }}
+        {{- end }}
+      }
+      {{- end }}
+
+      {{- with .Values.caddy.storage }}
+      {{- if ne .module "file" }}
+      # Shared certificate storage so every replica sees the same certificates
+      # and only one of them performs each ACME issuance.
+      storage {{ .module }} {
+        {{- range $k, $v := .config }}
+        {{ $k }} {{ $v }}
+        {{- end }}
+      }
+      {{- end }}
+      {{- end }}
+    }
+
+    # Health endpoints live in their own snippet because Caddy scopes matcher
+    # names to the whole site block: importing them from inside a `handle` as
+    # well as at the top level would redefine @health and fail to parse.
+    (health_endpoints) {
+      # Liveness/readiness target for kubelet. Answered by Caddy itself so the
+      # probe reports on the proxy, not on the application behind it.
+      @health path /health
+      handle @health {
+        log_skip
+        respond "OK" 200
+      }
+
+      # The Django health endpoint, passed through without an HTTPS redirect so
+      # it stays reachable over plain HTTP inside the cluster.
+      @django_health path {{ .Values.caddy.healthPath }}*
+      handle @django_health {
+        log_skip
+        reverse_proxy {{ $web }} {
+          header_up X-Real-IP {remote_host}
+          header_up Host {host}
+          header_down -Server
+        }
+      }
+    }
+
+    (proxy_common) {
+      {{- if .Values.caddy.blockInternalApi }}
+      # Internal endpoints must never be reachable from the internet. Note this
+      # does NOT affect on-demand TLS: Caddy calls the `ask` endpoint directly
+      # over the Service, not back through this listener, so denying it here
+      # costs nothing.
+      #
+      # Deliberately a flat deny by default rather than a private-CIDR allow
+      # list. Behind a NodePort, or any LoadBalancer that does not preserve the
+      # source IP, every request arrives wearing a private node address, so a
+      # private-range allow list would wave the whole internet through.
+      @internal_api path /api/v1/internal/*
+      handle @internal_api {
+        {{- if .Values.caddy.internalApiAllowedCidrs }}
+        @allowed_internal client_ip {{ join " " .Values.caddy.internalApiAllowedCidrs }}
+        handle @allowed_internal {
+          reverse_proxy {{ $web }} {
+            header_up X-Real-IP {remote_host}
+            header_up Host {host}
+            header_down -Server
+          }
+        }
+        {{- end }}
+        handle {
+          respond "Forbidden" 403
+        }
+      }
+      {{- end }}
+
+      # Caddy upgrades WebSocket connections through reverse_proxy automatically,
+      # which is what Django Channels needs.
+      reverse_proxy {{ $web }} {
+        header_up X-Real-IP {remote_host}
+        header_up Host {host}
+        header_down -Server
+
+        transport http {
+          dial_timeout {{ .Values.caddy.timeouts.dial }}
+          response_header_timeout {{ .Values.caddy.timeouts.responseHeader }}
+          # 0 = no timeout, required for long-lived WebSocket connections.
+          read_timeout 0
+          write_timeout 0
+        }
+
+        # No active health checking, deliberately. The compose Caddyfile needs
+        # it because Docker has nothing better, but here the upstream is a
+        # Service: kubelet readiness probes already pull unhealthy pods out of
+        # the endpoint list, so Caddy would be duplicating that with worse
+        # information. It would also break: an active probe carries the
+        # upstream's own name as Host, which the app's host validation rejects
+        # with a 400, so every backend would be marked permanently down.
+        lb_try_duration 60s
+        lb_try_interval 100ms
+        fail_duration 30s
+        max_fails 5
+      }
+
+      encode gzip zstd
+    }
+
+    (security_headers) {
+      header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        {{- if gt (int .Values.caddy.hsts.maxAge) 0 }}
+        # This edge serves workspace custom domains, so the same header lands on
+        # hostnames we do not own. includeSubDomains would then bind subdomains
+        # the customer runs themselves and we never serve, and preload is a
+        # long-lived, awkward-to-reverse submission. Both are off unless the
+        # operator says every served domain is theirs.
+        Strict-Transport-Security "max-age={{ int64 .Values.caddy.hsts.maxAge }}{{ if .Values.caddy.hsts.includeSubDomains }}; includeSubDomains{{ end }}{{ if .Values.caddy.hsts.preload }}; preload{{ end }}"
+        {{- end }}
+        -Server
+      }
+    }
+
+    {{- if .Values.caddy.onDemandTLS.enabled }}
+
+    # Loopback-only helper for the on-demand-TLS `ask` above. Bound to
+    # 127.0.0.1 so nothing outside this pod can reach it, and it forwards only
+    # the ask path, not a general back door into the internal API.
+    http://127.0.0.1:{{ .Values.caddy.askProxyPort }} {
+      handle {{ .Values.caddy.onDemandTLS.ask }}* {
+        reverse_proxy {{ $web }} {
+          # A Host the application's validation middleware already trusts.
+          header_up Host localhost
+        }
+      }
+      handle {
+        respond "Not Found" 404
+      }
+    }
+    {{- end }}
+    {{- range .Values.caddy.extraRoutes }}
+
+    # Extra host routed through this edge. Typically an in-cluster Keycloak, so
+    # that its issuer URL resolves the same way for the browser and for the app
+    # pods. OIDC breaks if they disagree.
+    {{ .scheme | default "https" }}://{{ .host }} {
+      reverse_proxy {{ .upstream }} {
+        header_up X-Real-IP {remote_host}
+        header_up Host {host}
+      }
+    }
+    {{- end }}
+
+    # Every HTTPS hostname: the primary domain plus any workspace custom domain.
+    https:// {
+      {{- if .Values.caddy.onDemandTLS.enabled }}
+      tls {
+        on_demand
+      }
+      {{- end }}
+
+      log {
+        output stdout
+        format {{ .Values.caddy.logFormat }}
+        level {{ .Values.caddy.logLevel }}
+      }
+
+      import security_headers
+      import health_endpoints
+      import proxy_common
+    }
+
+    :80 {
+      log {
+        output stdout
+        format {{ .Values.caddy.logFormat }}
+        level {{ .Values.caddy.logLevel }}
+      }
+
+      # Before the HTTPS redirect, so probes and container-to-container health
+      # checks are not bounced to a scheme they are not speaking.
+      import health_endpoints
+
+      {{- if .Values.caddy.trustUpstreamTls.enabled }}
+      # Opt-in: serve requests that arrive already TLS-terminated upstream
+      # (Cloudflare Tunnel, a cloud LB) instead of bouncing them into a redirect
+      # loop.
+      #
+      # X-Forwarded-Proto is client-settable, so on its own this header match
+      # would let ANY caller skip the HTTPS redirect. It is therefore paired
+      # with a client_ip check: only the proxy that actually terminates TLS can
+      # select this path.
+      @behind_https_proxy {
+        header X-Forwarded-Proto https
+        {{- with .Values.caddy.trustUpstreamTls.fromCidrs }}
+        client_ip {{ join " " . }}
+        {{- end }}
+      }
+      handle @behind_https_proxy {
+        import security_headers
+        import proxy_common
+      }
+      {{- end }}
+
+      handle {
+        redir https://{host}{uri} permanent
+      }
+    }
+    {{- with .Values.caddy.extraConfig }}
+
+    {{ . | nindent 4 | trim }}
+    {{- end }}
+{{- end }}

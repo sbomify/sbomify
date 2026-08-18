@@ -1,0 +1,197 @@
+{{- $name := printf "%s-caddy" (include "sbomify.fullname" .) -}}
+{{- $sharedStorage := ne .Values.caddy.storage.module "file" -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
+spec:
+  replicas: {{ .Values.caddy.replicaCount }}
+  revisionHistoryLimit: 3
+  strategy:
+    {{- if and (not $sharedStorage) .Values.caddy.persistence.enabled }}
+    # A ReadWriteOnce certificate volume cannot be attached to a surging second
+    # pod, so the old one has to go first. Shared storage lifts this.
+    type: Recreate
+    {{- else }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "caddy") | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/caddyfile: {{ include (print $.Template.BasePath "/caddy-configmap.yaml") . | sha256sum }}
+        {{- with .Values.caddy.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 8 }}
+        {{- with .Values.caddy.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sbomify.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.caddy.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.caddy.runAsUser }}
+        runAsGroup: {{ .Values.caddy.runAsUser }}
+        fsGroup: {{ .Values.caddy.runAsUser }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: caddy
+          image: {{ printf "%s:%s" .Values.caddy.image.repository .Values.caddy.image.tag | quote }}
+          imagePullPolicy: {{ .Values.caddy.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              # Binding :80/:443 as a non-root user. The official image ships the
+              # caddy binary with cap_net_bind_service=ep, so the capability only
+              # has to be present in the container's bounding set for the
+              # unprivileged process to raise it.
+              add:
+                - NET_BIND_SERVICE
+          # The upstream image sets no ENTRYPOINT, the binary is the first
+          # element of CMD, so this has to be `command`, not `args`.
+          command:
+            - caddy
+            - run
+            - --config
+            - /etc/caddy/Caddyfile
+            - --adapter
+            - caddyfile
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            {{- if .Values.caddy.onDemandTLS.enabled }}
+            - name: https-udp
+              containerPort: 443
+              protocol: UDP
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 30
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          {{- if gt (int .Values.caddy.preStopSleep) 0 }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.caddy.preStopSleep }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.caddy.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/caddy
+              readOnly: true
+            # Certificates and ACME account keys. Losing this means re-issuing
+            # every certificate on restart, which burns Let's Encrypt rate limits.
+            - name: data
+              mountPath: /data
+            - name: caddy-config
+              mountPath: /config
+            # Caddy's local CA writes a temporary copy of the root certificate
+            # here while trying to install it into the trust store. With a
+            # read-only root filesystem and no writable /tmp that fails.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ .Values.caddy.existingConfigMap | default $name }}
+        - name: caddy-config
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: data
+          {{- if and .Values.caddy.persistence.enabled (not $sharedStorage) }}
+          persistentVolumeClaim:
+            claimName: {{ $name }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.caddy.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.caddy.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.caddy.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.caddy.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- include "sbomify.topologySpread" (dict "ctx" $ "component" "caddy" "constraints" .) | nindent 8 }}
+      {{- end }}
+{{- if and .Values.caddy.persistence.enabled (not $sharedStorage) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
+  annotations:
+    # Keep the certificate store when the release goes away. Reinstalling and
+    # re-issuing everything from scratch is a fast route into ACME rate limits.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- with .Values.caddy.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.caddy.persistence.size }}
+{{- end }}
+{{- if gt (int .Values.caddy.replicaCount) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "caddy") | nindent 6 }}
+{{- end }}

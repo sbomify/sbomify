@@ -22,9 +22,9 @@ def s3(mocker):
         store[name] = content
         return name
 
-    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_sbom", side_effect=upload)
-    mocker.patch("sbomify.apps.core.object_store.S3Client.get_sbom_data", side_effect=lambda name: store.get(name))
-    mocker.patch("sbomify.apps.core.object_store.S3Client.delete_object", return_value=None)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.upload_sbom", side_effect=upload)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.get_sbom_data", side_effect=lambda name: store.get(name))
+    mocker.patch("sbomify.apps.core.object_store.StorageClient.delete_object", return_value=None)
     return store
 
 

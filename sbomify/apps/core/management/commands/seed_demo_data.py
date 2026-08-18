@@ -31,7 +31,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from sbomify.apps.core.models import Component, Product, Release
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.utils import add_artifact_to_release
 from sbomify.apps.documents.models import Document
 from sbomify.apps.sboms.apis import sbom_upload_cyclonedx, sbom_upload_spdx
@@ -788,7 +788,7 @@ class Command(BaseCommand):
         if doc_type == Document.DocumentType.COMPLIANCE and "non-disclosure" in name.lower():
             subcategory = Document.ComplianceSubcategory.NDA
 
-        filename = S3Client("DOCUMENTS").upload_document(body)
+        filename = StorageClient("DOCUMENTS").upload_document(body)
         document = Document.objects.create(
             name=name,
             version=version,

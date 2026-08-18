@@ -1,0 +1,18 @@
+# kube-linter configuration for the sbomify chart.
+#
+# Deliberately the curated default check set rather than addAllBuiltIn: the full
+# set includes org-specific conventions (owner labels, email annotations, a
+# required namespace) that say nothing about whether this chart is correct, and
+# 100+ findings of that kind would train everyone to ignore the linter.
+#
+# Run against the PRODUCTION-shaped render. See .github/workflows/helm.yml.
+# values-local.yaml deliberately pins the `latest` image tag so local
+# development tracks master, which would trip latest-tag for a reason that does
+# not apply to a real install.
+checks:
+  exclude:
+    # Replicas are spread with topologySpreadConstraints, not podAntiAffinity.
+    # Same goal, newer mechanism, and it degrades to best-effort on a small
+    # cluster where a required anti-affinity rule would leave replicas Pending.
+    # kube-linter only knows how to look for podAntiAffinity.
+    - "no-anti-affinity"

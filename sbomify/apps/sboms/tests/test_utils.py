@@ -103,8 +103,8 @@ def mock_s3_client(mocker):
         }
     ).encode()
 
-    # Mock the S3Client class to return our mock instance
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    # Mock the StorageClient class to return our mock instance
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
     return mock_client
 
 
@@ -329,7 +329,7 @@ def test_product_sbom_file_generation(tmp_path):
     product.components.add(component1, component2)
 
     # Mock S3 client
-    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.StorageClient") as mock_s3:
         mock_s3_instance = mock_s3.return_value
 
         def mock_get_sbom_data(filename):
@@ -406,7 +406,7 @@ def test_sbom_vendor_and_remote_file_references(tmp_path):
     product.components.add(component)
 
     # Mock S3 client
-    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.StorageClient") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {
@@ -730,7 +730,7 @@ def test_sbom_serialization_uses_schema_alias(tmp_path):
     )
     product.components.add(component)
 
-    with patch("sbomify.apps.core.object_store.S3Client") as mock_s3:
+    with patch("sbomify.apps.core.object_store.StorageClient") as mock_s3:
         mock_s3_instance = mock_s3.return_value
         mock_s3_instance.get_sbom_data.return_value = json.dumps(
             {
@@ -987,10 +987,10 @@ def clear_sbomify_action_cache():
 
 def _mock_sbom_content(mocker, content: dict) -> None:
     """Stand in for an S3 fetch: returns ``content`` JSON-encoded for the
-    one call site that matters (``S3Client(...).get_sbom_data``)."""
+    one call site that matters (``StorageClient(...).get_sbom_data``)."""
     mock_client = mocker.MagicMock()
     mock_client.get_sbom_data.return_value = json.dumps(content).encode()
-    mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+    mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
 
 @pytest.mark.django_db
@@ -1139,7 +1139,7 @@ class TestSbomWasGeneratedBySbomifyAction:
 
         mock_client = mocker.MagicMock()
         mock_client.get_sbom_data.side_effect = RuntimeError("S3 boom")
-        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
 
@@ -1154,7 +1154,7 @@ class TestSbomWasGeneratedBySbomifyAction:
         mock_client.get_sbom_data.return_value = json.dumps(
             {"specVersion": "1.6", "metadata": {"tools": {"components": [{"name": "sbomify-action"}]}}}
         ).encode()
-        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is True
@@ -1176,7 +1176,7 @@ class TestSbomWasGeneratedBySbomifyAction:
         mocker.patch("django.core.cache.cache.get", return_value=None)
         mock_client = mocker.MagicMock()
         mock_client.get_sbom_data.side_effect = RuntimeError("S3 down")
-        mocker.patch("sbomify.apps.core.object_store.S3Client", return_value=mock_client)
+        mocker.patch("sbomify.apps.core.object_store.StorageClient", return_value=mock_client)
 
         assert sbom_was_generated_by_sbomify_action(sample_sbom) is False
 

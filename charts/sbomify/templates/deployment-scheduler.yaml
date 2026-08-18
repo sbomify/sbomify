@@ -1,0 +1,86 @@
+{{- if .Values.scheduler.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sbomify.fullname" . }}-scheduler
+  labels:
+    {{- include "sbomify.componentLabels" (dict "ctx" . "component" "scheduler") | nindent 4 }}
+spec:
+  # Singleton. dramatiq-crontab guards itself with a Redis lock, so a second
+  # instance exits immediately with "Another scheduler is already running."
+  replicas: 1
+  revisionHistoryLimit: 3
+  # Recreate, not RollingUpdate: a surge pod would race the outgoing pod for the
+  # scheduler lock and CrashLoop until the old one finally exited.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "sbomify.componentSelectorLabels" (dict "ctx" . "component" "scheduler") | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- include "sbomify.configChecksums" . | nindent 8 }}
+        {{- with .Values.scheduler.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "sbomify.componentLabels" (dict "ctx" . "component" "scheduler") | nindent 8 }}
+        {{- with .Values.scheduler.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sbomify.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.scheduler.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- include "sbomify.waitForDepsInitContainer" . | nindent 8 }}
+      containers:
+        - name: scheduler
+          image: {{ include "sbomify.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command:
+            - python
+            - manage.py
+            - crontab
+          envFrom:
+            {{- include "sbomify.envFrom" (dict "ctx" .) | nindent 12 }}
+          env:
+            {{- include "sbomify.env" (dict "ctx" .) | nindent 12 }}
+            {{- with .Values.scheduler.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.scheduler.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "sbomify.scratchVolumeMounts" . | nindent 12 }}
+            {{- with .Values.scheduler.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- include "sbomify.scratchVolumes" . | nindent 8 }}
+        {{- with .Values.scheduler.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.scheduler.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scheduler.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.scheduler.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,603 @@
+---
+# Default values for the sbomify chart.
+#
+# This chart deploys the sbomify application only. PostgreSQL, Redis, object
+# storage and Keycloak are NOT bundled. You provide them, and the chart fails
+# at template time if you have not. Stateful backing services have their own
+# operational lifecycle (backups, failover, version upgrades, tuning) that
+# should not be coupled to an application release.
+#
+# See charts/sbomify/README.md for suggested ways to provide each one.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: ghcr.io/sbomify/sbomify
+  # Empty resolves to v<appVersion> from Chart.yaml: a real release rather than
+  # a floating tag. Set `digest` instead to pin immutably.
+  tag: ""
+  pullPolicy: IfNotPresent
+  # digest: sha256:...
+imagePullSecrets: []
+
+# How long every workload waits for PostgreSQL and Redis to accept connections
+# before giving up. The check runs in an init container built from the
+# application image, so no extra image is pulled.
+dependencyWaitTimeoutSeconds: 300
+
+# -- Application-level configuration. Rendered into a ConfigMap (non-secret).
+app:
+  # Public base URL. MUST match the hostname clients use. Django validates the
+  # Host header against it (DynamicHostValidationMiddleware) and builds absolute
+  # URLs from it. Include the scheme, and the port if non-standard.
+  baseUrl: "https://sbomify.example.com"
+  # Django DEBUG. Never enable in production.
+  debug: false
+  logLevel: "INFO"
+  # Stripe-backed billing. Requires the STRIPE_* secrets when true.
+  billing: false
+  # Optional apex domain for slug-based Trust Center subdomains.
+  trustCenterDomain: ""
+  # Optional analytics.
+  posthog:
+    apiKey: ""
+    host: "https://us.i.posthog.com"
+  # Free-form extra env applied to every sbomify workload (web/worker/scheduler/migrations).
+  extraEnv: []
+  #  - name: SENTRY_ENVIRONMENT
+  #    value: production
+  # Extra envFrom sources (ConfigMap/Secret refs) applied to every sbomify workload.
+  extraEnvFrom: []
+  #  - secretRef:
+  #      name: sbomify-stripe
+
+# -- Secrets the application needs. Leave `existingSecret` empty to have the
+# chart create a Secret from the inline values below.
+#
+# When `existingSecret` is set, that Secret must supply these keys:
+#   SECRET_KEY, SIGNED_URL_SALT, DATABASE_URL, REDIS_URL, KEYCLOAK_CLIENT_SECRET
+# plus, unless objectStorage.useWorkloadIdentity is true:
+#   AWS_MEDIA_ACCESS_KEY_ID, AWS_MEDIA_SECRET_ACCESS_KEY,
+#   AWS_SBOMS_ACCESS_KEY_ID, AWS_SBOMS_SECRET_ACCESS_KEY
+secrets:
+  # Name of a Secret you manage. This is the integration point for an external
+  # secret manager: have External Secrets Operator, the Vault Agent injector,
+  # vault-secrets-operator, Sealed Secrets or your platform's own tooling
+  # materialise a Secret, then name it here. The chart only reads it. It never
+  # creates, mutates or deletes it, so rotation is entirely yours to drive.
+  #
+  # See "External secret managers" in README.md for worked examples.
+  existingSecret: ""
+
+  # Map each variable the app needs onto the key it lives under in
+  # `existingSecret`. Only list the ones that differ. Anything unlisted uses
+  # its own name. This exists because external stores rarely let you choose key
+  # names freely (a GCP secret is `projects/../secrets/sbomify-db-url`, a Vault
+  # path has its own layout), and renaming keys just to satisfy a chart is
+  # avoidable friction.
+  keys: {}
+  #   DATABASE_URL: db-url
+  #   SECRET_KEY: django-secret-key
+
+  # REQUIRED when existingSecret is empty. Deliberately not generated for you:
+  # a value only Helm knows is one `helm uninstall` away from logging out every
+  # user and invalidating every signed URL, and generating it makes
+  # `helm template` non-deterministic.
+  #
+  # Django SECRET_KEY: `openssl rand -base64 48`.
+  secretKey: ""
+  # Salt for signed download URLs: `openssl rand -base64 32`.
+  # Rotating it invalidates outstanding links.
+  signedUrlSalt: ""
+
+# -- OIDC / Keycloak client configuration (the app is the OIDC *client*).
+auth:
+  keycloak:
+    # REQUIRED. Keycloak base URL the app talks to, with a trailing slash,
+    # e.g. https://sso.example.com/
+    #
+    # Usually the PUBLIC url rather than an in-cluster Service name: OIDC
+    # discovery hands the *browser* whatever endpoints it finds here, so the
+    # app pods and the browser have to agree on it.
+    serverUrl: ""
+    realm: "sbomify"
+    clientId: "sbomify"
+    clientSecret: ""
+
+# -- REQUIRED. Object storage, S3 compatible: AWS S3, Cloudflare R2, Tigris,
+# or a MinIO you operate.
+objectStorage:
+  endpointUrl: ""
+  region: "auto"
+
+  # Authenticate with the workload's own cloud identity instead of static keys.
+  #
+  # When true the chart omits every AWS_*_ACCESS_KEY_ID / SECRET_ACCESS_KEY
+  # variable, which is what lets boto3 reach its default credential chain.
+  # Omitting them is the point: setting them to empty strings would leave boto3
+  # holding blank credentials rather than looking for an identity.
+  #
+  # Requires an image containing ADR-0007 phase 1 (in this branch), where
+  # object_store.py resolves the credentials as `getattr(...) or None`. Before
+  # that change the application passed "" to boto3 explicitly and boto3 read the
+  # empty string as a credential, so the chain was never reached.
+  #
+  # Annotate the ServiceAccount with the cloud role (EKS IRSA or Pod Identity)
+  # and set serviceAccount.create=false if your platform manages it. See
+  # docs/ADR/0007-gcs-support-and-cloud-workload-identity.md.
+  useWorkloadIdentity: false
+  media:
+    bucket: "sbomify-media"
+    # Public base URL for media objects. Defaults to "<endpointUrl>/<bucket>".
+    bucketUrl: ""
+    accessKeyId: ""
+    secretAccessKey: ""
+  sboms:
+    bucket: "sbomify-sboms"
+    bucketUrl: ""
+    accessKeyId: ""
+    secretAccessKey: ""
+
+# -- REQUIRED. PostgreSQL you provide: a managed service (RDS, Cloud SQL,
+# Neon...) or an in-cluster operator such as CloudNativePG.
+database:
+  host: ""
+  port: 5432
+  database: "sbomify"
+  username: "sbomify"
+  password: ""
+  # sslmode for the connection (disable/require/verify-ca/verify-full).
+  sslMode: "require"
+
+# -- REQUIRED. Redis you provide: a managed service (ElastiCache, Upstash...)
+# or an in-cluster operator.
+#
+# sbomify uses DB 0 (cache), 1 (task queue) and 2 (websocket channels), so
+# these settings must point at the server, not a specific database number.
+redis:
+  host: ""
+  port: 6379
+  password: ""
+  # Use TLS (rediss://).
+  tls: false
+
+# ---------------------------------------------------------------------------
+# Web (gunicorn/uvicorn ASGI) tier
+# ---------------------------------------------------------------------------
+web:
+  replicaCount: 2
+  # Gunicorn worker processes per pod.
+  workers: 2
+  # Max seconds for a single request (large SBOM uploads need headroom).
+  timeout: 120
+  # Seconds workers get to drain in-flight requests on SIGTERM.
+  gracefulTimeout: 30
+  # Extra seconds the pod stays in Terminating before SIGTERM, so kube-proxy
+  # and the Caddy edge have time to drop it from the Service endpoints. Must be
+  # < terminationGracePeriod.
+  preStopSleep: 5
+  terminationGracePeriodSeconds: 45
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      # CPU limits are deliberately omitted: throttling a latency-sensitive web
+      # tier hurts more than it helps. Set one if your platform requires it.
+      memory: 1Gi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: ""
+    behavior: {}
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: ""
+    # AlwaysAllow so an unhealthy pod can still be evicted; IfHealthyBudget
+    # (the Kubernetes default) can leave a broken tier undrainable.
+    unhealthyPodEvictionPolicy: AlwaysAllow
+
+  # Probe tuning. The startup probe is what tolerates a slow cold start; the
+  # liveness probe stays fast and cheap so a slow dependency cannot cause a
+  # restart storm.
+  probes:
+    startup:
+      failureThreshold: 30
+      periodSeconds: 5
+    liveness:
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Spread replicas across nodes; degrade to best-effort on small clusters.
+  # The labelSelector is generated per release. Only override it if you need
+  # to spread against a different set of pods.
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+# ---------------------------------------------------------------------------
+# Dramatiq worker tier
+# ---------------------------------------------------------------------------
+worker:
+  enabled: true
+  replicaCount: 2
+  processes: 1
+  threads: 4
+  # Long, because a worker must be allowed to finish an in-flight scan.
+  terminationGracePeriodSeconds: 300
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 768Mi
+    limits:
+      memory: 2Gi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: ""
+    behavior: {}
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+    maxUnavailable: ""
+    # AlwaysAllow so an unhealthy pod can still be evicted; IfHealthyBudget
+    # (the Kubernetes default) can leave a broken tier undrainable.
+    unhealthyPodEvictionPolicy: AlwaysAllow
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+# ---------------------------------------------------------------------------
+# Cron scheduler (dramatiq-crontab)
+# ---------------------------------------------------------------------------
+# Singleton by design: dramatiq-crontab takes a Redis lock, and any extra
+# instance exits with "Another scheduler is already running." The chart pins
+# replicas to 1 and uses the Recreate strategy so a rollout never overlaps.
+scheduler:
+  enabled: true
+  terminationGracePeriodSeconds: 60
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+
+# ---------------------------------------------------------------------------
+# Database migrations (pre-install / pre-upgrade Helm hook)
+# ---------------------------------------------------------------------------
+migrations:
+  enabled: true
+  # Hard ceiling on the Job, including retries. Empty means no deadline, which
+  # is the safer default: when the deadline fires Kubernetes kills the pod
+  # mid-statement, and while an atomic migration rolls back cleanly, a
+  # non-atomic one can leave partial state behind. Helm's own --timeout already
+  # bounds the release. Set a number only if you would rather fail than wait.
+  activeDeadlineSeconds: ""
+  # Retries cover transient failures (a database failover mid-deploy). They are
+  # safe to re-run: Django skips migrations already recorded in django_migrations,
+  # and the advisory lock keeps a retry from overlapping its predecessor.
+  backoffLimit: 3
+
+  # -- Migration concurrency and locking (see bin/release.py)
+  #
+  # How long release.py waits for the PostgreSQL advisory lock before failing.
+  # Long enough to sit behind a legitimately slow migration, short enough that a
+  # wedged run surfaces as an error rather than an indefinite hang.
+  lockWaitSeconds: 600
+  # PostgreSQL lock_timeout for the migration session, e.g. "5s".
+  #
+  # Strongly recommended once you have real traffic. A migration that needs
+  # ACCESS EXCLUSIVE queues behind in-flight queries, and once queued it blocks
+  # every query that arrives after it, so one slow reader can turn a
+  # millisecond ALTER TABLE into a site-wide stall. With lock_timeout the
+  # migration gives up instead, the Job retries, and traffic is never held
+  # hostage. Empty means no timeout (PostgreSQL's default: wait forever).
+  lockTimeout: ""
+  # PostgreSQL statement_timeout for the migration session, e.g. "300s". Guards
+  # against a single runaway statement. Leave empty for data migrations that are
+  # legitimately long-running.
+  statementTimeout: ""
+  # Keep the Job around on failure so its logs can be inspected.
+  hookDeletePolicy: before-hook-creation,hook-succeeded
+
+  # The migration Job runs as a pre-install hook, before the chart's own
+  # ServiceAccount exists, so it falls back to `default`. Name a ServiceAccount
+  # you manage here when the Job needs an identity: IRSA / GKE Workload Identity
+  # for an external secret manager, or IAM authentication to the database.
+  # (Setting serviceAccount.create=false with serviceAccount.name achieves the
+  # same thing for every workload at once.)
+  serviceAccountName: ""
+  # Workload identity needs the projected token, so this has to be settable.
+  automountServiceAccountToken: false
+
+  # Mount a CSI secrets volume, a Vault-injected file, or a CA bundle.
+  extraVolumes: []
+  extraVolumeMounts: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# Service and edge
+# ---------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Edge proxy (Caddy)
+# ---------------------------------------------------------------------------
+# Caddy is the cluster edge, not an Ingress. That is a deliberate choice, for a
+# reason specific to this application: a workspace can bring its own domain
+# (Team.custom_domain), so the set of TLS hostnames is unbounded and changes at
+# runtime. Ingress and Gateway API both require hostnames to be declared ahead
+# of time, so neither can serve them. Caddy's on-demand TLS asks the
+# application whether a domain is known and issues on the fly.
+#
+# It also sidesteps the ingress-nginx retirement (end of life March 2026).
+caddy:
+  replicaCount: 1
+  image:
+    repository: caddy
+    tag: "2-alpine"
+    pullPolicy: IfNotPresent
+  # UID the container runs as. The upstream image carries
+  # cap_net_bind_service=ep on the binary, so non-root can still bind :80/:443.
+  runAsUser: 1000
+
+  service:
+    # LoadBalancer in a real cluster; NodePort for kind (see values-local.yaml).
+    type: LoadBalancer
+    # Local preserves the client source IP, which the internal-API client_ip
+    # guard and the application's rate limiting both depend on.
+    externalTrafficPolicy: Local
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    nodePorts:
+      http: ""
+      https: ""
+
+  acme:
+    # REQUIRED for production issuance: Let's Encrypt sends expiry notices here.
+    email: "admin@example.com"
+    ca: "https://acme-v02.api.letsencrypt.org/directory"
+  # Use Caddy's internal CA instead of a public ACME endpoint. Local clusters
+  # only: certificates are real but untrusted by browsers.
+  localCerts: false
+
+  onDemandTLS:
+    enabled: true
+    # Endpoint Caddy asks before issuing for an unknown hostname. Without this
+    # check, anyone pointing DNS at the load balancer could burn ACME rate
+    # limits. Modern Caddy dropped the old interval/burst throttles, so the ask
+    # endpoint is the only gate. It must answer 2xx *only* for domains the
+    # application actually recognises.
+    ask: "/api/v1/internal/domains"
+
+  # Serve plain-HTTP requests that claim TLS was already terminated upstream
+  # (X-Forwarded-Proto: https), rather than redirecting them to HTTPS.
+  #
+  # OFF by default, because Caddy terminates TLS itself here. Only turn this on
+  # when something genuinely sits in front doing TLS, such as a Cloudflare
+  # Tunnel or a cloud load balancer. Otherwise it is a way for any client to
+  # skip the HTTPS redirect simply by setting a header.
+  #
+  # When enabled, list the proxy's source ranges in fromCidrs so only it can
+  # select that path. Leaving fromCidrs empty accepts the header from ANY
+  # caller, which is only defensible if the :80 listener is unreachable except
+  # through that proxy.
+  trustUpstreamTls:
+    enabled: false
+    fromCidrs: []
+
+  # HSTS, applied to every hostname this edge serves.
+  #
+  # includeSubDomains and preload are off by default because on-demand TLS means
+  # some of those hostnames belong to customers. Asserting either on a domain
+  # you do not control reaches beyond what you serve, and preload is difficult
+  # to undo. Turn them on when every domain behind this edge is yours.
+  # maxAge: 0 omits the header entirely.
+  hsts:
+    maxAge: 31536000
+    includeSubDomains: false
+    preload: false
+
+  # Path of the Django health endpoint, exempt from the HTTPS redirect.
+  # Mirrors the application, which registers this path in urls.py and exempts
+  # it in SECURE_REDIRECT_EXEMPT. It is a value because the Caddyfile, the
+  # probes and the edge test all need it, not because it can be changed: the
+  # chart refuses any other value.
+  healthPath: "/UuPha8mu/"
+
+  # Loopback port Caddy uses to reach the on-demand-TLS ask endpoint with a
+  # rewritten Host header. Bound to 127.0.0.1 inside the Caddy pod only.
+  askProxyPort: 9080
+
+  # Serve /api/v1/internal/* only to in-cluster callers. Note the on-demand-TLS
+  # ask endpoint lives under this prefix, and Caddy reaches it over the Service
+  # rather than through this listener, so blocking it here is safe.
+  blockInternalApi: true
+  # Empty = deny every external caller, which is the safe default. Do NOT put
+  # private ranges here reflexively: unless the load balancer preserves the
+  # client IP, external requests arrive with a private node address and would
+  # match. Only list CIDRs you have confirmed arrive un-translated.
+  internalApiAllowedCidrs: []
+
+  # Networks Caddy will believe X-Forwarded-* / client-IP headers from. Keep
+  # this tight: anything listed here can spoof the client IP, and the
+  # internal-API guard is enforced on that IP. Add your cloud LB or CDN ranges.
+  # Empty means trust nobody: the client IP is the peer Caddy actually sees.
+  # It previously defaulted to the private ranges, which contradicted the advice
+  # directly above it. Every pod in the cluster has a private address, so that
+  # default let any of them set X-Forwarded-For and choose their own client_ip,
+  # which is what the internal-API allow list and the rate limiting are keyed on.
+  #
+  # List the ranges of the proxy in front, and only that. With a LoadBalancer on
+  # externalTrafficPolicy: Local the client IP already arrives intact and this
+  # can stay empty.
+  trustedProxies: []
+  # Only consulted for requests arriving from trustedProxies, so an empty list
+  # above makes these inert.
+  clientIpHeaders:
+    - Cf-Connecting-Ip
+    - X-Forwarded-For
+    - X-Real-IP
+
+  timeouts:
+    dial: "10s"
+    responseHeader: "30s"
+
+  logFormat: "console"
+  logLevel: "INFO"
+
+  # Certificate storage.
+  #   file: a PersistentVolumeClaim below. Single replica only.
+  #   other: a Caddy storage module (e.g. redis, s3) for multi-replica setups.
+  #           These are NOT in the upstream image: build your own Caddy with the
+  #           plugin and point caddy.image at it. The chart refuses
+  #           replicaCount > 1 with `file` rather than let replicas each run
+  #           their own ACME issuance against the same domains.
+  storage:
+    module: file
+    config: {}
+    #   module: redis
+    #   config:
+    #     host: sbomify-redis
+    #     port: "6379"
+    #     db: "3"
+
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+  # Seconds to keep serving after the pod is marked Terminating, so the load
+  # balancer stops sending new connections before Caddy goes away.
+  preStopSleep: 5
+  terminationGracePeriodSeconds: 30
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  # Additional hostnames to route through this edge. The common case is an
+  # in-cluster Keycloak: the browser and the app pods must reach its issuer URL
+  # at the same address, and routing it here achieves that without a second
+  # public entry point.
+  #   - host: sso.example.com
+  #     upstream: keycloak.identity.svc.cluster.local:8080
+  #     scheme: https   # https (default) or http
+  extraRoutes: []
+
+  # Appended verbatim to the end of the Caddyfile.
+  extraConfig: ""
+  # Supply the whole Caddyfile yourself instead of rendering one.
+  existingConfigMap: ""
+
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+
+# ---------------------------------------------------------------------------
+# Pod hardening
+# ---------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # sbomify never talks to the Kubernetes API, so do not hand it a token.
+  automountServiceAccountToken: false
+
+# The production image ships Chainguard's `nonroot` user (UID/GID 65532).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# NetworkPolicy: default-deny ingress to the app pods, allowing only the Caddy
+# edge and in-cluster peers. ("ingress" here is the Kubernetes policy direction,
+# not an Ingress controller; this chart deploys none.) Requires a CNI that
+# enforces them (kind's default kindnet does NOT, so the policies are inert
+# there).
+networkPolicy:
+  enabled: false
+  # Extra ingress rules appended to the web policy.
+  extraIngress: []
+
+# Note: the application does not currently expose a Prometheus /metrics
+# endpoint, so this chart ships no ServiceMonitor. The dramatiq workers do
+# write Prometheus multiprocess files to /var/lib/dramatiq-prometheus (mounted
+# as an emptyDir); wire up an exporter sidecar there if you need worker metrics.
