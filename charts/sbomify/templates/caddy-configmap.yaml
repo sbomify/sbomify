@@ -1,6 +1,6 @@
 {{- if not .Values.caddy.existingConfigMap }}
 {{/*
-Upstream is the web Service, so this is service.port (80 by default) — not the
+Upstream is the web Service, so this is service.port (80 by default), not the
 container's 8000. docker-compose talks to the container port directly; in
 Kubernetes that address does not exist.
 */}}
@@ -18,7 +18,7 @@ data:
       admin off
       {{- if .Values.caddy.localCerts }}
       # Issue from Caddy's own local CA instead of a public ACME endpoint.
-      # For local clusters only — browsers will not trust these.
+      # For local clusters only: browsers will not trust these.
       local_certs
       {{- else }}
       email {{ .Values.caddy.acme.email }}
@@ -30,7 +30,7 @@ data:
       # set of hostnames is unbounded and changes at runtime, so it cannot be
       # declared up front the way an Ingress or a Gateway listener requires.
       # Before issuing, Caddy asks the application whether it recognises the
-      # domain — without that check this endpoint would be an open invitation
+      # domain. Without that check this endpoint would be an open invitation
       # to exhaust ACME rate limits.
       on_demand_tls {
         # Asks via the loopback listener defined below rather than the Service
@@ -107,7 +107,7 @@ data:
       #
       # Deliberately a flat deny by default rather than a private-CIDR allow
       # list. Behind a NodePort, or any LoadBalancer that does not preserve the
-      # source IP, every request arrives wearing a private node address — so a
+      # source IP, every request arrives wearing a private node address, so a
       # private-range allow list would wave the whole internet through.
       @internal_api path /api/v1/internal/*
       handle @internal_api {
@@ -146,7 +146,7 @@ data:
         # it because Docker has nothing better, but here the upstream is a
         # Service: kubelet readiness probes already pull unhealthy pods out of
         # the endpoint list, so Caddy would be duplicating that with worse
-        # information. It would also break — an active probe carries the
+        # information. It would also break: an active probe carries the
         # upstream's own name as Host, which the app's host validation rejects
         # with a 400, so every backend would be marked permanently down.
         lb_try_duration 60s
@@ -173,7 +173,7 @@ data:
 
     # Loopback-only helper for the on-demand-TLS `ask` above. Bound to
     # 127.0.0.1 so nothing outside this pod can reach it, and it forwards only
-    # the ask path — it is not a general back door into the internal API.
+    # the ask path, not a general back door into the internal API.
     http://127.0.0.1:{{ .Values.caddy.askProxyPort }} {
       handle {{ .Values.caddy.onDemandTLS.ask }}* {
         reverse_proxy {{ $web }} {
@@ -190,7 +190,7 @@ data:
 
     # Extra host routed through this edge. Typically an in-cluster Keycloak, so
     # that its issuer URL resolves the same way for the browser and for the app
-    # pods — OIDC breaks if they disagree.
+    # pods. OIDC breaks if they disagree.
     {{ .scheme | default "https" }}://{{ .host }} {
       reverse_proxy {{ .upstream }} {
         header_up X-Real-IP {remote_host}

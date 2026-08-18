@@ -10,7 +10,7 @@ Proposed
 
 sbomify currently requires static, long-lived credentials for object storage. The `S3Client` in `object_store.py` passes explicit `aws_access_key_id` and `aws_secret_access_key` to `boto3.resource()`, bypassing boto3's default credential chain. This has two consequences:
 
-1. **No native GCP support.** Users deploying sbomify on Google Cloud Platform cannot use Google Cloud Storage (GCS) as their object store. GCS offers an S3-compatible API via HMAC keys, but HMAC keys are static credentials — they defeat the purpose of GCP's keyless authentication model.
+1. **No native GCP support.** Users deploying sbomify on Google Cloud Platform cannot use Google Cloud Storage (GCS) as their object store. GCS offers an S3-compatible API via HMAC keys, but HMAC keys are static credentials: they defeat the purpose of GCP's keyless authentication model.
 
 2. **AWS workload identity is blocked.** Even on AWS, passing explicit credentials prevents boto3 from discovering IAM credentials automatically. AWS users on EKS with IRSA (IAM Roles for Service Accounts) or Pod Identity cannot use keyless authentication because the explicit credentials take precedence over the default credential chain.
 
@@ -35,9 +35,9 @@ All object storage access is isolated in `sbomify/apps/core/object_store.py` (~1
 
 **Production backend:** sbomify uses [Cloudflare R2](https://developers.cloudflare.com/r2/) as its production object store. R2 is S3-compatible, so the existing `S3Client` with boto3 works unchanged. Development uses Minio.
 
-**Presigned URLs:** The CRA export download flow (`compliance/services/export_service.py`) uses S3 presigned URLs to generate time-limited download links. However, this is implemented outside `S3Client` — `get_download_url()` constructs a separate `boto3.client()` with hardcoded credentials and calls `generate_presigned_url()` directly. This works for S3 and R2 (which supports S3 presigned URLs identically) but would not work for GCS without modification.
+**Presigned URLs:** The CRA export download flow (`compliance/services/export_service.py`) uses S3 presigned URLs to generate time-limited download links. However, this is implemented outside `S3Client`: `get_download_url()` constructs a separate `boto3.client()` with hardcoded credentials and calls `generate_presigned_url()` directly. This works for S3 and R2 (which supports S3 presigned URLs identically) but would not work for GCS without modification.
 
-Note: The Django signed-token system used for SBOM/document downloads (`/api/v1/sboms/{id}/download?token=...`) is application-level auth that calls `S3Client.get_file_data()` to fetch bytes server-side — it is not a storage-layer concern and is unaffected by this ADR.
+Note: The Django signed-token system used for SBOM/document downloads (`/api/v1/sboms/{id}/download?token=...`) is application-level auth that calls `S3Client.get_file_data()` to fetch bytes server-side. It is not a storage-layer concern and is unaffected by this ADR.
 
 ## Decision
 
@@ -62,7 +62,7 @@ class S3ObjectStoreClient(ObjectStoreClient): ...
 class GCSObjectStoreClient(ObjectStoreClient): ...
 ```
 
-A configuration flag (`STORAGE_BACKEND=s3|gcs`, defaulting to `s3`) selects which concrete class to instantiate. The existing `S3Client` public API remains unchanged — the abstraction is introduced beneath it so callers are unaffected.
+A configuration flag (`STORAGE_BACKEND=s3|gcs`, defaulting to `s3`) selects which concrete class to instantiate. The existing `S3Client` public API remains unchanged: the abstraction is introduced beneath it so callers are unaffected.
 
 ### 2. Native GCS Implementation
 
@@ -96,7 +96,7 @@ The `get_download_url()` function in `export_service.py` currently bypasses `S3C
 - S3/R2 presigned URLs continue to work via `boto3.client.generate_presigned_url()`
 - GCS signed URLs are supported via `google-cloud-storage`'s `blob.generate_signed_url()`
 
-**GCS signed URL complexity:** With Workload Identity, GCS signed URLs require an extra step. The pod's ADC credentials cannot sign URLs directly — they must use `impersonated_credentials` to call the IAM SignBlob API on behalf of a service account. This means the GCS implementation needs the target service account email as configuration, and the service account must have the `iam.serviceAccountTokenCreator` role. This is more complex than S3/R2 where presigned URLs work with any valid credential.
+**GCS signed URL complexity:** With Workload Identity, GCS signed URLs require an extra step. The pod's ADC credentials cannot sign URLs directly: they must use `impersonated_credentials` to call the IAM SignBlob API on behalf of a service account. This means the GCS implementation needs the target service account email as configuration, and the service account must have the `iam.serviceAccountTokenCreator` role. This is more complex than S3/R2 where presigned URLs work with any valid credential.
 
 ### 5. Testing with fake-gcs-server
 
@@ -146,7 +146,7 @@ fake-gcs:
 
 ### Positive
 
-- **Eliminates static credentials on GCP**: Pods authenticate via Workload Identity — no keys to provision, store, or rotate.
+- **Eliminates static credentials on GCP**: Pods authenticate via Workload Identity, with no keys to provision, store, or rotate.
 - **Unlocks AWS workload identity**: Making credentials optional lets boto3 discover IRSA/Pod Identity tokens automatically. This is a security improvement for existing AWS deployments.
 - **Reduced secret sprawl**: Up to six credential values (`ACCESS_KEY_ID` + `SECRET_ACCESS_KEY` × 3 buckets) can be eliminated entirely.
 - **Smaller blast radius**: Short-lived, automatically-rotated tokens replace long-lived static keys.
@@ -168,7 +168,7 @@ fake-gcs:
 
 | Library | S3/R2 | GCS | Workload Identity | Presigned URLs | Fit for sbomify |
 | --- | --- | --- | --- | --- | --- |
-| **boto3 + google-cloud-storage** | Yes | Yes | Yes | Yes | Best fit — matches current stack |
+| **boto3 + google-cloud-storage** | Yes | Yes | Yes | Yes | Best fit, matches current stack |
 | **obstore** | Yes | Yes | Yes | No | Missing presigned URLs |
 | **django-storages** | Yes | Yes | Yes | Yes | Doesn't fit sbomify's storage pattern |
 | apache-libcloud | Yes | Yes | No | ? | No workload identity |
@@ -180,13 +180,13 @@ fake-gcs:
 
 GCS exposes an S3-compatible endpoint (`storage.googleapis.com`) that works with boto3. Users would configure HMAC keys as `AWS_*_ACCESS_KEY_ID` / `AWS_*_SECRET_ACCESS_KEY`.
 
-**Why rejected:** HMAC keys are static credentials — they have the same rotation burden and blast radius as AWS access keys. This defeats the purpose of Workload Identity. It also doesn't help AWS users who want keyless auth.
+**Why rejected:** HMAC keys are static credentials: they have the same rotation burden and blast radius as AWS access keys. This defeats the purpose of Workload Identity. It also doesn't help AWS users who want keyless auth.
 
 ### 2. Abstract Storage via django-storages
 
-[django-storages](https://django-storages.readthedocs.io/) supports S3, GCS, Azure, and more with a unified API. It integrates with Django's storage system — `FileField`, `default_storage`, and the `STORAGES` setting. It does support workload identity for both clouds and presigned URLs.
+[django-storages](https://django-storages.readthedocs.io/) supports S3, GCS, Azure, and more with a unified API. It integrates with Django's storage system: `FileField`, `default_storage`, and the `STORAGES` setting. It does support workload identity for both clouds and presigned URLs.
 
-**Why rejected:** sbomify doesn't use Django's file storage API (`FileField`, `default_storage`). The `S3Client` is a thin, purpose-built wrapper (~100 lines) for direct bucket operations — `put_object`, `get`, `delete`. Adopting django-storages would require restructuring the storage layer to use Django's file API, adding a dependency that provides no benefit for sbomify's direct byte-level operations. There is also a maintenance concern — the last release was April 2025 and the most recent commits are from June 2025, meaning the project has seen no activity for ~9 months.
+**Why rejected:** sbomify doesn't use Django's file storage API (`FileField`, `default_storage`). The `S3Client` is a thin, purpose-built wrapper (~100 lines) for direct bucket operations: `put_object`, `get`, `delete`. Adopting django-storages would require restructuring the storage layer to use Django's file API, adding a dependency that provides no benefit for sbomify's direct byte-level operations. There is also a maintenance concern: the last release was April 2025 and the most recent commits are from June 2025, meaning the project has seen no activity for ~9 months.
 
 ### 3. Unified Object Store via obstore
 
@@ -210,11 +210,11 @@ content = result.bytes()
 store.delete("path/to/object.json")
 ```
 
-The underlying `object_store` Rust crate is production-grade — originally developed by the InfluxData IOx team, then donated to the Apache Arrow project. obstore has ~2.5M PyPI downloads/month and a regular release cadence (~16 releases in 18 months).[^obstore]
+The underlying `object_store` Rust crate is production-grade: originally developed by the InfluxData IOx team, then donated to the Apache Arrow project. obstore has ~2.5M PyPI downloads/month and a regular release cadence (~16 releases in 18 months).[^obstore]
 
-**Key caveat:** obstore does not support presigned URL generation — it focuses on data-plane operations (put/get/delete). Since sbomify uses presigned URLs for CRA export downloads, obstore cannot be the sole storage dependency. Using both obstore (for data operations) + boto3/google-cloud-storage (for presigned URLs) adds complexity without clear benefit over just using boto3 + google-cloud-storage directly.
+**Key caveat:** obstore does not support presigned URL generation: it focuses on data-plane operations (put/get/delete). Since sbomify uses presigned URLs for CRA export downloads, obstore cannot be the sole storage dependency. Using both obstore (for data operations) + boto3/google-cloud-storage (for presigned URLs) adds complexity without clear benefit over just using boto3 + google-cloud-storage directly.
 
-[^obstore]: Maintained by [Development Seed](https://developmentseed.org/), backed by the Apache Arrow `object_store` Rust crate (used in production by InfluxDB, crates.io, DataFusion). Compatible with sbomify's Chainguard distroless image. Pre-1.0 API — pin to `>=0.9,<0.10`.
+[^obstore]: Maintained by [Development Seed](https://developmentseed.org/), backed by the Apache Arrow `object_store` Rust crate (used in production by InfluxDB, crates.io, DataFusion). Compatible with sbomify's Chainguard distroless image. Pre-1.0 API, so pin to `>=0.9,<0.10`.
 
 ### 4. Keep S3-Only, Document GCS HMAC Workaround
 
@@ -224,7 +224,7 @@ Document how to use GCS's S3-compatible API with HMAC keys as a workaround for G
 
 ## Relationship to Other ADRs
 
-- **ADR-004 (Immutable Security Artifacts)**: The storage backend abstraction does not affect artifact immutability. Both S3 and GCS backends store and retrieve bytes identically — artifacts remain unchanged regardless of the underlying storage service.
+- **ADR-004 (Immutable Security Artifacts)**: The storage backend abstraction does not affect artifact immutability. Both S3 and GCS backends store and retrieve bytes identically, so artifacts remain unchanged regardless of the underlying storage service.
 
 ## References
 
@@ -233,7 +233,7 @@ Document how to use GCS's S3-compatible API with HMAC keys as a workaround for G
 - [AWS IRSA (IAM Roles for Service Accounts)](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html)
 - [AWS EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
 - [google-cloud-storage Python library](https://cloud.google.com/python/docs/reference/storage/latest)
-- [Cloudflare R2](https://developers.cloudflare.com/r2/) — sbomify's production object store
-- [fake-gcs-server](https://github.com/fsouza/fake-gcs-server) — GCS emulator for testing
-- [obstore](https://github.com/developmentseed/obstore) — Rust-backed unified object store for Python
-- [Apache Arrow object_store Rust crate](https://github.com/apache/arrow-rs-object-store) — the foundation obstore wraps
+- [Cloudflare R2](https://developers.cloudflare.com/r2/): sbomify's production object store
+- [fake-gcs-server](https://github.com/fsouza/fake-gcs-server): GCS emulator for testing
+- [obstore](https://github.com/developmentseed/obstore): Rust-backed unified object store for Python
+- [Apache Arrow object_store Rust crate](https://github.com/apache/arrow-rs-object-store): the foundation obstore wraps

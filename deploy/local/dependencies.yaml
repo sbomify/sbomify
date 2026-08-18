@@ -2,7 +2,7 @@
 # Backing services for the LOCAL kind cluster only.
 #
 # These are deliberately NOT part of the Helm chart. Stateful services have
-# their own operational lifecycle — backups, failover, version upgrades — that
+# their own operational lifecycle (backups, failover, version upgrades) that
 # should not be coupled to an application release. The chart therefore requires
 # you to point it at PostgreSQL, Redis, object storage and Keycloak that you
 # provide; this file is simply what "you provide" means on a laptop.
@@ -12,7 +12,7 @@
 #   PostgreSQL  a managed service, or the CloudNativePG operator
 #   Redis       a managed service, or an operator
 #   Storage     S3 / Cloudflare R2 / Tigris, or a MinIO you operate
-#   Keycloak    the Keycloak Operator — the project's official Kubernetes path
+#   Keycloak    the Keycloak Operator, the project's official Kubernetes path
 #               (Keycloak deliberately publishes no official Helm chart)
 #
 # Applied by bin/kind-up.sh before the chart is installed.
