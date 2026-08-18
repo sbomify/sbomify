@@ -89,13 +89,13 @@ def _get_pending_access_requests(team: Team) -> QuerySet[AccessRequest]:
     base_queryset = (
         AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
         .select_related("user", "decided_by")
-        .prefetch_related("nda_signature__nda_document")
+        .prefetch_related("nda_signatures__nda_document")
         .order_by("-requested_at")
     )
 
     if requires_nda:
         # Only show requests that have NDA signature (request is complete)
-        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         return base_queryset.filter(id__in=signed_request_ids)
 
     return base_queryset
@@ -113,7 +113,7 @@ def _get_approved_access_requests(team: Team) -> QuerySet[AccessRequest]:
     return (
         AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
         .select_related("user", "decided_by")
-        .prefetch_related("nda_signature__nda_document")
+        .prefetch_related("nda_signatures__nda_document")
         .order_by("-decided_at")
     )
 
@@ -148,9 +148,9 @@ def _annotate_nda_signature_status(requests: list[AccessRequest], company_nda: D
         # Prefetch all signatures for these requests in one query
         request_ids = [req.id for req in requests]
         current_signatures = set(
-            NDASignature.objects.filter(access_request_id__in=request_ids, nda_document=company_nda).values_list(
-                "access_request_id", flat=True
-            )
+            NDASignature.objects.live()
+            .filter(access_request_id__in=request_ids, nda_document=company_nda)
+            .values_list("access_request_id", flat=True)
         )
         for req in requests:
             req.has_current_nda_signature = req.id in current_signatures  # type: ignore[attr-defined]
@@ -194,7 +194,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
         review_link = f"{get_base_url()}{review_url}"
 
         # Check if NDA has actually been signed
-        nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
+        nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
 
         # Send email to each admin/owner
         for admin_member in admin_members:
@@ -363,7 +363,7 @@ class AccessRequestView(View):
         if pending_request:
             # Check if NDA is required and not signed yet
             if requires_nda:
-                has_signed = NDASignature.objects.filter(access_request=pending_request).exists()
+                has_signed = NDASignature.objects.live().filter(access_request=pending_request).exists()
                 if not has_signed:
                     # Request exists but NDA not signed - redirect to sign NDA page
                     return redirect("documents:sign_nda", team_key=team_key, request_id=pending_request.id)
@@ -382,10 +382,11 @@ class AccessRequestView(View):
             if existing_request:
                 # If request is REVOKED or REJECTED, update it to PENDING
                 if existing_request.status in (AccessRequest.Status.REVOKED, AccessRequest.Status.REJECTED):
-                    # NDA signature should have been deleted when request was rejected/revoked
-                    # If it still exists (edge case), delete it to ensure user must sign again
-                    if hasattr(existing_request, "nda_signature"):
-                        existing_request.nda_signature.delete()
+                    # Rejection/revocation superseded the signature already; if a
+                    # live one survives (edge case), supersede it here so the
+                    # fresh request must sign again. Never deleted — the rows
+                    # are the record of what was accepted.
+                    existing_request.nda_signatures.live().update(superseded_at=timezone.now())
 
                     # Update existing request to PENDING status
                     existing_request.status = AccessRequest.Status.PENDING
@@ -495,9 +496,9 @@ class NDASigningView(View):
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed for the current NDA document
-        existing_signature = NDASignature.objects.filter(
-            access_request=access_request, nda_document=company_nda
-        ).first()
+        existing_signature = (
+            NDASignature.objects.live().filter(access_request=access_request, nda_document=company_nda).first()
+        )
         if existing_signature:
             messages.info(request, "NDA has already been signed for this request.")
             # Redirect to return URL if available, otherwise to workspace public page
@@ -550,9 +551,9 @@ class NDASigningView(View):
             return error_response(request, HttpResponse(status=404, content="NDA document not found"))
 
         # Check if already signed for the current NDA document
-        existing_signature = NDASignature.objects.filter(
-            access_request=access_request, nda_document=company_nda
-        ).first()
+        existing_signature = (
+            NDASignature.objects.live().filter(access_request=access_request, nda_document=company_nda).first()
+        )
         if existing_signature:
             messages.info(request, "NDA has already been signed for this request.")
             # Redirect to return URL if available, otherwise to workspace public page
@@ -595,21 +596,9 @@ class NDASigningView(View):
 
             # Wrap NDA signing and related operations in a transaction
             with transaction.atomic():
-                # Check if there's an existing signature for a different NDA document
-                # (e.g., user signed old version, now signing new version)
-                # Since OneToOneField only allows one signature per access_request,
-                # we need to delete the old one before creating the new one
-                # NOTE: This loses audit history. For full audit trail, consider changing
-                # the model to allow multiple signatures per access_request.
-                if hasattr(access_request, "nda_signature"):
-                    old_signature = access_request.nda_signature
-                    if old_signature.nda_document != company_nda:
-                        logger.info(
-                            f"Replacing old NDA signature {old_signature.id} "
-                            f"for document {old_signature.nda_document.id} "
-                            f"with new signature for document {company_nda.id}"
-                        )
-                        old_signature.delete()
+                # A signature for an earlier NDA version stays untouched: each
+                # row is the record of one acceptance, and signing the current
+                # version adds to that history rather than rewriting it.
 
                 # Create NDA signature
                 NDASignature.objects.create(
@@ -622,7 +611,7 @@ class NDASigningView(View):
                 )
 
                 # Reload access request with NDA signature relationship
-                access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
+                access_request = AccessRequest.objects.prefetch_related("nda_signatures").get(pk=access_request.id)
 
                 # Inside the atomic block so transaction.on_commit deferral applies.
                 transaction.on_commit(lambda: capture_for_request(request, "nda:signed", team_key=team_key))
@@ -1087,27 +1076,29 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 requires_nda = company_nda is not None
 
                 if requires_nda:
-                    signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+                    signed_request_ids = (
+                        NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
+                    )
                     pending_requests = list(
                         AccessRequest.objects.filter(
                             team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
                         )
                         .select_related("user", "decided_by")
-                        .prefetch_related("nda_signature__nda_document")
+                        .prefetch_related("nda_signatures__nda_document")
                         .order_by("-requested_at")
                     )
                 else:
                     pending_requests = list(
                         AccessRequest.objects.filter(team=team, status=AccessRequest.Status.PENDING)
                         .select_related("user", "decided_by")
-                        .prefetch_related("nda_signature__nda_document")
+                        .prefetch_related("nda_signatures__nda_document")
                         .order_by("-requested_at")
                     )
 
                 approved_requests = list(
                     AccessRequest.objects.filter(team=team, status=AccessRequest.Status.APPROVED)
                     .select_related("user", "decided_by")
-                    .prefetch_related("nda_signature__nda_document")
+                    .prefetch_related("nda_signatures__nda_document")
                     .order_by("-decided_at")
                 )
 
@@ -1220,9 +1211,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
 
-                # Delete NDA signature so user must sign again when requesting access
-                if hasattr(access_request, "nda_signature"):
-                    access_request.nda_signature.delete()
+                # Supersede the live signature so a re-request must sign again;
+                # the row itself is the record of what was accepted and survives.
+                access_request.nda_signatures.live().update(superseded_at=timezone.now())
 
                 access_request.status = AccessRequest.Status.REJECTED
                 access_request.decided_by = user
@@ -1241,9 +1232,9 @@ class AccessRequestQueueView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                         return response
                     return redirect("documents:access_request_queue", team_key=team_key)
 
-                # Delete NDA signature so user must sign again when requesting access
-                if hasattr(access_request, "nda_signature"):
-                    access_request.nda_signature.delete()
+                # Supersede the live signature so a re-request must sign again;
+                # the row itself is the record of what was accepted and survives.
+                access_request.nda_signatures.live().update(superseded_at=timezone.now())
 
                 access_request.status = AccessRequest.Status.REVOKED
                 access_request.revoked_by = user

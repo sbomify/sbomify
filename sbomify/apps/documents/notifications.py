@@ -58,7 +58,7 @@ def get_notifications(request: HttpRequest) -> list[NotificationSchema]:
     # Get pending requests query
     if requires_nda:
         # Only count requests that have NDA signature (request is complete)
-        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         pending_requests = AccessRequest.objects.filter(
             team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
         )

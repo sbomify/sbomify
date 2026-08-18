@@ -4940,3 +4940,151 @@ def export_user_data_endpoint(request: HttpRequest) -> Any:
             "detail": "Failed to export user data. Please try again later.",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
+
+
+# ---------------------------------------------------------------------------
+# CSV exports — auditor-facing tabular downloads
+# ---------------------------------------------------------------------------
+
+
+def _export_team(request: HttpRequest) -> tuple[Any, tuple[int, ErrorResponse] | None]:
+    """The caller's workspace for an export, or an error pair."""
+    from sbomify.apps.teams.models import Team
+
+    team_id = _get_user_team_id(request)
+    if not team_id:
+        return None, (403, ErrorResponse(detail="No workspace context"))
+    team = Team.objects.filter(id=team_id).first()
+    if team is None:
+        return None, (403, ErrorResponse(detail="No workspace context"))
+    if not can(request, "workspace:read", team):
+        return None, (403, ErrorResponse(detail="Forbidden"))
+    return team, None
+
+
+def _csv_response(csv_text: str, filename: str) -> HttpResponse:
+    response = HttpResponse(csv_text, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@router.get(
+    "/exports/inventory.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export the package inventory as CSV",
+    tags=["Exports"],
+)
+def export_inventory(request: HttpRequest, product_id: str | None = None) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Package inventory across the newest SBOM per component: name, version,
+    supplier, licenses and PURL — workspace-wide, or one product."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    product = None
+    if product_id:
+        product = Product.objects.filter(id=product_id, team=team).first()
+        if product is None:
+            return 404, ErrorResponse(detail="Product not found")
+
+    result = csv_exports.export_inventory_csv(team, product=product)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    scope = product.name if product else team.name
+    safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-")
+    return _csv_response(result.value or "", f"{safe}-inventory.csv")
+
+
+@router.get(
+    "/exports/licenses.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export the license list as CSV",
+    tags=["Exports"],
+)
+def export_licenses(
+    request: HttpRequest, product_id: str | None = None, release_id: str | None = None
+) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Distinct licenses in scope with package and component counts —
+    workspace-wide, one product, or one release."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    product = None
+    release = None
+    if release_id:
+        release = Release.objects.filter(id=release_id, product__team=team).first()
+        if release is None:
+            return 404, ErrorResponse(detail="Release not found")
+    elif product_id:
+        product = Product.objects.filter(id=product_id, team=team).first()
+        if product is None:
+            return 404, ErrorResponse(detail="Product not found")
+
+    result = csv_exports.export_licenses_csv(team, product=product, release=release)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    return _csv_response(result.value or "", "licenses.csv")
+
+
+@router.get(
+    "/exports/findings.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export assessment findings as CSV",
+    tags=["Exports"],
+)
+def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Latest compliance findings per plugin for one SBOM (NTIA, BSI, FDA...)."""
+    from sbomify.apps.core.services import csv_exports
+    from sbomify.apps.sboms.models import SBOM as SBOMModel
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    sbom = SBOMModel.objects.filter(id=sbom_id, component__team=team).select_related("component").first()
+    if sbom is None:
+        return 404, ErrorResponse(detail="SBOM not found")
+
+    result = csv_exports.export_findings_csv(sbom)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    return _csv_response(result.value or "", f"{sbom_id}-findings.csv")
+
+
+@router.get(
+    "/exports/vulnerabilities.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export vulnerability findings as CSV",
+    tags=["Exports"],
+)
+def export_vulnerabilities(
+    request: HttpRequest, component_id: str | None = None, release_id: str | None = None
+) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Vulnerability findings with the post-VEX analysis state — the same
+    alias-merged numbers the dashboards show."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    component = None
+    release = None
+    if release_id:
+        release = Release.objects.filter(id=release_id, product__team=team).first()
+        if release is None:
+            return 404, ErrorResponse(detail="Release not found")
+    elif component_id:
+        component = Component.objects.filter(id=component_id, team=team).first()
+        if component is None:
+            return 404, ErrorResponse(detail="Component not found")
+
+    result = csv_exports.export_vulnerabilities_csv(team, component=component, release=release)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    return _csv_response(result.value or "", "vulnerabilities.csv")
