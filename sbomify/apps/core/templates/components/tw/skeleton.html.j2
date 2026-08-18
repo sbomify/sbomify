@@ -8,18 +8,24 @@
          style="{% if width %}width: {{ width }};
                 {% endif %}{% if height %}height: {{ height }};
                 {% endif %}"></div>
-{% elif type == "card" %}
-    <div class="tw-skeleton tw-skeleton-card{% if class %} {{ class }}{% endif %}"
+{% elif type == "image" %}
+    <div class="tw-skeleton tw-skeleton-image{% if class %} {{ class }}{% endif %}"
          style="{% if width %}width: {{ width }};
                 {% endif %}{% if height %}height: {{ height }};
                 {% endif %}"></div>
 {% elif type == "paragraph" %}
+    {% comment %}
+        `slice` takes the first N when given a bare count, so this is "lines rows",
+        defaulting to 3 when the caller does not say.
+    {% endcomment %}
     <div class="space-y-2{% if class %} {{ class }}{% endif %}">
-        {% for i in "123456789"|make_list|slice:lines|default:"123" %}
-            <div class="tw-skeleton tw-skeleton-text"
-                 style="width: {% if forloop.last %}60%{% else %}100%{% endif %};
-                        {% if height %}height: {{ height }};{% endif %}"></div>
-        {% endfor %}
+        {% with count=lines|default:3 %}
+            {% for i in "123456789"|make_list|slice:count %}
+                <div class="tw-skeleton tw-skeleton-text"
+                     style="width: {% if forloop.last %}60%{% else %}100%{% endif %};
+                            {% if height %}height: {{ height }};{% endif %}"></div>
+            {% endfor %}
+        {% endwith %}
     </div>
 {% else %}
     <div class="tw-skeleton tw-skeleton-text{% if class %} {{ class }}{% endif %}"

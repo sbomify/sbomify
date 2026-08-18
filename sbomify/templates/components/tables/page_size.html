@@ -1,0 +1,16 @@
+{% comment %}
+The "Show N entries" control on the toolbar's right. The sizes a page offers
+are the slot, as option elements, so the list stays with the view; attrs land
+on the select, which is what a page wires up (x-model.number="perPage").
+
+The select itself is c-tables.select, shared with the toolbar's filters, so
+the two controls beside each other are the same control.
+{% endcomment %}
+<c-vars id label="Entries per page" class />
+<div class="flex items-center gap-2 text-sm leading-[1.5] text-text-muted{% if class %} {{ class }}{% endif %}">
+    <span>Show</span>
+    {% with class="" %}
+        <c-tables.select id="{{ id }}" label="{{ label }}" :attrs="attrs">{{ slot }}</c-tables.select>
+    {% endwith %}
+    <span>entries</span>
+</div>

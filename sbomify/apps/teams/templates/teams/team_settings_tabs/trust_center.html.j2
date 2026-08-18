@@ -1,13 +1,14 @@
 {% load public_url_tags %}
 {# Trust Center Availability Section #}
-<div class="tw-settings-card mb-6">
+<div class="tw-dashboard-card mb-6">
     <div class="px-6 py-4 border-b border-border">
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg {% if team.is_public %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
-                <i class="fas {% if team.is_public %}fa-globe text-success{% else %}fa-lock text-text-muted{% endif %}"></i>
-            </div>
+            <span class="tw-icon-chip {% if team.is_public %}tw-icon-chip-success{% else %}tw-icon-chip-neutral{% endif %}">
+                <i class="fas {% if team.is_public %}fa-globe{% else %}fa-lock{% endif %}"
+                   aria-hidden="true"></i>
+            </span>
             <div>
-                <h5 class="text-lg font-semibold text-text m-0">Trust Center Availability</h5>
+                <h5 class="text-lg font-semibold text-text m-0">Trust Center availability</h5>
                 <p class="text-text-muted text-sm m-0">Control public access to your Trust Center</p>
             </div>
         </div>
@@ -24,15 +25,7 @@
                 <input type="hidden" name="visibility_action" value="update">
                 <input type="hidden" name="is_public" value="false">
                 <input type="hidden" name="active_tab" value="trust-center">
-                <input id="workspace-visibility-toggle"
-                       type="checkbox"
-                       name="is_public"
-                       value="true"
-                       aria-label="Make workspace publicly visible"
-                       class="tw-checkbox"
-                       {% if team.is_public %}checked{% endif %}
-                       {% if not can_administer %}disabled{% endif %}
-                       onchange="this.form.submit()">
+                <c-forms.toggle id="workspace-visibility-toggle" name="is_public" value="true" aria-label="Make workspace publicly visible" checked="{{ team.is_public|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
                 <button type="submit" class="sr-only">Save visibility</button>
             </form>
         </div>
@@ -51,13 +44,13 @@
                 <div class="flex items-center gap-2">
                     <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
                     <button type="button"
-                            class="tw-btn-secondary tw-btn-sm flex-shrink-0"
-                            :class="{ 'tw-btn-success': copied }"
+                            class="tw-copy-btn flex-shrink-0"
+                            :class="{ copied: copied }"
                             title="Copy public URL"
                             aria-label="Copy public URL"
                             @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
-                        <i x-show="!copied" class="fas fa-copy"></i>
-                        <i x-show="copied" x-cloak class="fas fa-check"></i>
+                        <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
+                        <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                         <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                     </button>
                     <a href="{{ public_url }}"
@@ -90,12 +83,12 @@
 </div>
 {# Trust Center Slug Section #}
 {% if team.is_public and trust_center_domain %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-link text-primary"></i>
-                </div>
+                <span class="tw-icon-chip">
+                    <i class="fas fa-link" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Trust Center Slug</h5>
                     <p class="text-text-muted text-sm m-0">Customize your Trust Center subdomain</p>
@@ -123,21 +116,21 @@
                                minlength="3"
                                pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
                                placeholder="my-company"
-                               {% if not can_administer %}disabled{% endif %}>
+                               disabled="{{ can_administer|yesno:',1' }}">
                     </div>
-                    <p class="tw-form-helper mt-2">
+                    <p class="tw-form-hint mt-2">
                         Your Trust Center will be available at:
                         <code class="text-primary"
                               x-text="slug ? (slug + '.{{ trust_center_domain }}') : '...'"></code>
                     </p>
-                    <p class="tw-form-helper">
+                    <p class="tw-form-hint">
                         Lowercase letters, numbers, and hyphens only. Must not start or end with a hyphen. 3–63 characters.
                     </p>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not can_administer %}disabled{% endif %}>
+                            disabled="{{ can_administer|yesno:',1' }}">
                         <i class="fas fa-save mr-2"></i>Save Slug
                     </button>
                 </div>
@@ -147,12 +140,12 @@
 {% endif %}
 {# TEA Section - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg {% if team_obj.tea_enabled %}bg-success/10{% else %}bg-border/30{% endif %} flex items-center justify-center">
-                    <i class="fas {% if team_obj.tea_enabled %}fa-exchange-alt text-success{% else %}fa-exchange-alt text-text-muted{% endif %}"></i>
-                </div>
+                <span class="tw-icon-chip {% if team_obj.tea_enabled %}tw-icon-chip-success{% else %}tw-icon-chip-neutral{% endif %}">
+                    <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">
                         Transparency Exchange API (TEA)
@@ -176,15 +169,7 @@
                     <input type="hidden" name="tea_action" value="update">
                     <input type="hidden" name="tea_enabled" value="false">
                     <input type="hidden" name="active_tab" value="trust-center">
-                    <input id="tea-toggle"
-                           type="checkbox"
-                           name="tea_enabled"
-                           value="true"
-                           aria-label="Enable Transparency Exchange API"
-                           class="tw-checkbox"
-                           {% if team_obj.tea_enabled %}checked{% endif %}
-                           {% if not can_administer %}disabled{% endif %}
-                           onchange="this.form.submit()">
+                    <c-forms.toggle id="tea-toggle" name="tea_enabled" value="true" aria-label="Enable Transparency Exchange API" checked="{{ team_obj.tea_enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
                     <button type="submit" class="sr-only">Save TEA setting</button>
                 </form>
             </div>
@@ -203,13 +188,13 @@
                     <div class="flex items-center gap-2">
                         <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.custom_domain }}/.well-known/tea</code>
                         <button type="button"
-                                class="tw-btn-secondary tw-btn-sm flex-shrink-0"
-                                :class="{ 'tw-btn-success': copied }"
+                                class="tw-copy-btn flex-shrink-0"
+                                :class="{ copied: copied }"
                                 title="Copy TEA discovery URL"
                                 aria-label="Copy TEA discovery URL"
                                 @click="navigator.clipboard.writeText('https://{{ team_obj.custom_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                            <i x-show="!copied" class="fas fa-copy"></i>
-                            <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
+                            <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                             <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                         </button>
                     </div>
@@ -221,13 +206,13 @@
                     <div class="flex items-center gap-2">
                         <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea</code>
                         <button type="button"
-                                class="tw-btn-secondary tw-btn-sm flex-shrink-0"
-                                :class="{ 'tw-btn-success': copied }"
+                                class="tw-copy-btn flex-shrink-0"
+                                :class="{ copied: copied }"
                                 title="Copy TEA discovery URL"
                                 aria-label="Copy TEA discovery URL"
                                 @click="navigator.clipboard.writeText('https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                            <i x-show="!copied" class="fas fa-copy"></i>
-                            <i x-show="copied" x-cloak class="fas fa-check"></i>
+                            <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
+                            <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
                             <span x-text="copied ? 'Copied!' : 'Copy'"></span>
                         </button>
                     </div>
@@ -255,15 +240,14 @@
 {% endif %}
 {# Security.txt (RFC 9116) Section #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6"
+    <div class="tw-dashboard-card mb-6"
          x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg flex items-center justify-center"
-                     :class="securityTxtEnabled ? 'bg-success/10' : 'bg-border/30'">
-                    <i class="fas fa-shield-alt"
-                       :class="securityTxtEnabled ? 'text-success' : 'text-text-muted'"></i>
-                </div>
+                <span class="tw-icon-chip"
+                      :class="securityTxtEnabled ? 'tw-icon-chip-success' : 'tw-icon-chip-neutral'">
+                    <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">
                         Security.txt
@@ -294,15 +278,7 @@
                             Served at <code class="text-xs">/.well-known/security.txt</code> on your Trust Center domain and any validated custom domains
                         </p>
                     </div>
-                    <input id="security-txt-toggle"
-                           type="checkbox"
-                           name="security_txt_enabled"
-                           value="true"
-                           aria-label="Enable security.txt"
-                           class="tw-checkbox"
-                           {% if security_txt_config.enabled %}checked{% endif %}
-                           {% if not can_administer %}disabled{% endif %}
-                           x-model="securityTxtEnabled">
+                    <c-forms.toggle id="security-txt-toggle" name="security_txt_enabled" value="true" aria-label="Enable security.txt" checked="{{ security_txt_config.enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" x-model="securityTxtEnabled" />
                 </div>
                 {# Configuration fields — shown when enabled #}
                 <div x-show="securityTxtEnabled" x-cloak>
@@ -315,8 +291,8 @@
                             <label for="security_txt_contact_id" class="tw-form-label">Contact for vulnerability reports</label>
                             <select id="security_txt_contact_id"
                                     name="security_txt_contact_id"
-                                    class="tw-form-input"
-                                    {% if not can_administer %}disabled{% endif %}>
+                                    class="tw-form-select"
+                                    disabled="{{ can_administer|yesno:',1' }}">
                                 <option value="">Auto-detect (security contact from default profile)</option>
                                 {% for contact in security_txt_contacts %}
                                     <option value="{{ contact.id }}"
@@ -326,7 +302,7 @@
                                     </option>
                                 {% endfor %}
                             </select>
-                            <p class="tw-form-helper mt-1">
+                            <p class="tw-form-hint mt-1">
                                 Choose who receives vulnerability reports.
                                 Manage contacts in
                                 <a href="{% url 'teams:team_settings' team.key %}#contact-profiles"
@@ -348,8 +324,8 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.policy_url|default:'' }}"
                                        placeholder="https://example.com/security-policy"
-                                       {% if not can_administer %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Vulnerability disclosure policy</p>
+                                       disabled="{{ can_administer|yesno:',1' }}">
+                                <p class="tw-form-hint mt-1">Vulnerability disclosure policy</p>
                             </div>
                             {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
                             <div x-data="{ urls: (() => { let d = JSON.parse(document.getElementById('encryption-urls-data')?.textContent || '[]'); return Array.isArray(d) ? d : []; })() }">
@@ -361,11 +337,11 @@
                                                class="tw-form-input flex-1"
                                                x-model="urls[index]"
                                                placeholder="https://example.com/pgp-key.txt"
-                                               {% if not can_administer %}disabled{% endif %}>
+                                               disabled="{{ can_administer|yesno:',1' }}">
                                         <button type="button"
                                                 @click="urls.splice(index, 1)"
                                                 class="tw-btn-outline-primary tw-btn-sm text-danger"
-                                                {% if not can_administer %}disabled{% endif %}>
+                                                disabled="{{ can_administer|yesno:',1' }}">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
@@ -373,13 +349,13 @@
                                 <button type="button"
                                         @click="urls.push('')"
                                         class="text-xs text-primary hover:underline"
-                                        {% if not can_administer %}disabled{% endif %}>
+                                        disabled="{{ can_administer|yesno:',1' }}">
                                     <i class="fas fa-plus mr-1"></i>Add encryption key URL
                                 </button>
                                 <input type="hidden"
                                        name="security_txt_encryption_urls"
                                        :value="JSON.stringify(urls)">
-                                <p class="tw-form-helper mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</p>
+                                <p class="tw-form-hint mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</p>
                             </div>
                             <div>
                                 <label for="security_txt_acknowledgments_url" class="tw-form-label">Acknowledgments URL</label>
@@ -389,8 +365,8 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.acknowledgments_url|default:'' }}"
                                        placeholder="https://example.com/hall-of-fame"
-                                       {% if not can_administer %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Security researcher acknowledgments</p>
+                                       disabled="{{ can_administer|yesno:',1' }}">
+                                <p class="tw-form-hint mt-1">Security researcher acknowledgments</p>
                             </div>
                             <div>
                                 <label for="security_txt_hiring_url" class="tw-form-label">Hiring URL</label>
@@ -400,8 +376,8 @@
                                        class="tw-form-input"
                                        value="{{ security_txt_config.hiring_url|default:'' }}"
                                        placeholder="https://example.com/security-jobs"
-                                       {% if not can_administer %}disabled{% endif %}>
-                                <p class="tw-form-helper mt-1">Security-related job openings</p>
+                                       disabled="{{ can_administer|yesno:',1' }}">
+                                <p class="tw-form-hint mt-1">Security-related job openings</p>
                             </div>
                         </div>
                     </div>
@@ -417,7 +393,7 @@
                                 <button type="button"
                                         @click="open = !open"
                                         class="tw-form-input w-full text-left flex items-center justify-between"
-                                        {% if not can_administer %}disabled{% endif %}>
+                                        disabled="{{ can_administer|yesno:',1' }}">
                                     <span x-text="selected.length ? selected.join(', ') : 'Select languages'"
                                           class="truncate"
                                           :class="{ 'text-text-muted': !selected.length }"></span>
@@ -442,7 +418,7 @@
                                 <input type="hidden"
                                        name="security_txt_preferred_languages"
                                        :value="selected.join(', ')">
-                                <p class="tw-form-helper mt-1">English is selected by default</p>
+                                <p class="tw-form-hint mt-1">English is selected by default</p>
                             </div>
                             <div>
                                 <label class="tw-form-label">Canonical URL</label>
@@ -456,7 +432,7 @@
                                 <input type="hidden"
                                        name="security_txt_canonical_url"
                                        value="{% if trust_center_url %}{{ trust_center_url }}/.well-known/security.txt{% endif %}">
-                                <p class="tw-form-helper mt-1">Automatically set to your Trust Center's security.txt URL</p>
+                                <p class="tw-form-hint mt-1">Automatically set to your Trust Center's security.txt URL</p>
                             </div>
                         </div>
                     </div>
@@ -480,7 +456,7 @@
                     {% endif %}
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not can_administer %}disabled{% endif %}>
+                            disabled="{{ can_administer|yesno:',1' }}">
                         <i class="fas fa-save mr-2"></i>Save
                     </button>
                 </div>
@@ -490,12 +466,12 @@
 {% endif %}
 {# Trust Center Description Section #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-align-left text-primary"></i>
-                </div>
+                <span class="tw-icon-chip">
+                    <i class="fas fa-align-left" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Trust Center Description</h5>
                     <p class="text-text-muted text-sm m-0">Customize your landing page messaging</p>
@@ -517,13 +493,13 @@
                               rows="4"
                               maxlength="500"
                               placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
-                              {% if not can_administer %}disabled{% endif %}>{{ branding_info.trust_center_description|default:'' }}</textarea>
-                    <span class="tw-form-helper">Max 500 characters. Leave empty to use the default description.</span>
+                              disabled="{{ can_administer|yesno:',1' }}">{{ branding_info.trust_center_description|default:'' }}</textarea>
+                    <span class="tw-form-hint">Max 500 characters. Leave empty to use the default description.</span>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not can_administer %}disabled{% endif %}>
+                            disabled="{{ can_administer|yesno:',1' }}">
                         <i class="fas fa-save mr-2"></i>Save Description
                     </button>
                 </div>
@@ -533,12 +509,12 @@
 {% endif %}
 {# Company NDA Section #}
 {% if team.is_public %}
-    <div class="tw-settings-card mb-6">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                    <i class="fas fa-file-contract text-warning"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-warning">
+                    <i class="fas fa-file-contract" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Company NDA</h5>
                     <p class="text-text-muted text-sm m-0">Non-disclosure agreement for gated content</p>
@@ -550,9 +526,9 @@
                 {# Current NDA Display #}
                 <div class="mb-6 p-4 bg-success/5 border border-success/20 rounded-xl">
                     <div class="flex items-start gap-4">
-                        <div class="w-12 h-12 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
-                            <i class="fas fa-file-pdf text-success text-xl"></i>
-                        </div>
+                        <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-success">
+                            <i class="fas fa-file-pdf text-xl" aria-hidden="true"></i>
+                        </span>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 mb-1">
                                 <h6 class="font-medium text-text m-0 truncate">{{ company_nda_document.name }}</h6>
@@ -598,7 +574,7 @@
                            name="company_nda_file"
                            class="sr-only"
                            accept=".pdf"
-                           {% if not can_administer %}disabled{% endif %}
+                           disabled="{{ can_administer|yesno:',1' }}"
                            required
                            @change="fileName = $event.target.files[0] ? $event.target.files[0].name : ''">
                     <div class="tw-file-upload-icon">
@@ -617,7 +593,7 @@
                 <div class="flex justify-end">
                     <button type="submit"
                             class="tw-btn-primary"
-                            {% if not can_administer %}disabled{% endif %}>
+                            disabled="{{ can_administer|yesno:',1' }}">
                         <i class="fas fa-upload mr-2"></i>
                         {% if company_nda_document %}
                             Upload New Version
@@ -638,7 +614,7 @@
          hx-trigger="load, refreshAccessRequests from:body"
          hx-swap="innerHTML"
          @ws:message.window="if ($event.detail.type === 'access_request_updated') { document.body.dispatchEvent(new CustomEvent('refreshAccessRequests')); }">
-        <div class="tw-settings-card mb-6">
+        <div class="tw-dashboard-card mb-6">
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
@@ -665,7 +641,7 @@
          hx-get="{% url 'teams:team_custom_domain' team.key %}"
          hx-trigger="load, refreshTeamCustomDomain from:body"
          hx-swap="innerHTML">
-        <div class="tw-settings-card">
+        <div class="tw-dashboard-card mb-6">
             <div class="px-6 py-4 border-b border-border">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
@@ -686,12 +662,12 @@
         </div>
     </div>
 {% else %}
-    <div class="tw-settings-card">
+    <div class="tw-dashboard-card mb-6">
         <div class="px-6 py-4 border-b border-border">
             <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-border/30 flex items-center justify-center">
-                    <i class="fas fa-globe text-text-muted"></i>
-                </div>
+                <span class="tw-icon-chip tw-icon-chip-neutral">
+                    <i class="fas fa-globe" aria-hidden="true"></i>
+                </span>
                 <div>
                     <h5 class="text-lg font-semibold text-text m-0">Custom Domain</h5>
                     <p class="text-text-muted text-sm m-0">Use your own domain for the Trust Center</p>

@@ -1,5 +1,6 @@
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.template.loader import render_to_string
 
 from sbomify.apps.core.models import Component
@@ -11,6 +12,7 @@ class TestComponentMetaInfoTemplates:
     def test_component_meta_info_wrapper_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
+        request.user = AnonymousUser()
         request.session = {"current_team": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory(
@@ -60,6 +62,7 @@ class TestComponentMetaInfoTemplates:
     def test_component_meta_info_editor_rendering(self, rf, component_factory, product_factory):
         # Setup
         request = rf.get("/")
+        request.user = AnonymousUser()
         request.session = {"current_team": {"key": "test-team"}}
         product = product_factory("Test Product")
         component = component_factory("Test Component", product=product)

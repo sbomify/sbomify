@@ -1,0 +1,29 @@
+{% comment %}
+A list row that is clickable in full: clicking anywhere in it toggles the
+control it contains, so the hover has to say so. The selected state is painted
+from :has(:checked) rather than a class, so it cannot fall out of step with the
+control, and the row keeps a real checkbox for the keyboard and for form
+submission. The row click is a pointer convenience on top, and it stands aside
+when the click already landed on something interactive.
+
+The control and the body are both the slot: a checkbox belongs to the form set,
+not to the row, and the row toggles the first input it finds. Alpine state that
+a row needs (a delete modal, an x-model) goes in the x_data prop, so the row
+carries one x-data attribute rather than two.
+
+toggle_ref names the x-ref of the control the row toggles, for a row whose body
+holds inputs of its own: a plugin row with its config fields open would
+otherwise toggle the first of those rather than the row's own switch. Without
+it the row clicks the first input it contains, which is right whenever the
+control is the only one.
+
+disabled dims the row. What actually blocks it is the control's own disabled
+attribute, which is what :has(input:disabled) reads, so the two can never
+disagree.
+{% endcomment %}
+<c-vars x_data toggle_ref disabled class />
+<div class="flex items-start gap-4 p-4 cursor-pointer transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_6%,transparent)] has-[:checked]:bg-[color-mix(in_oklab,var(--color-primary)_4%,transparent)] has-[:checked]:hover:bg-[color-mix(in_oklab,var(--color-primary)_9%,transparent)] has-[:focus-visible]:bg-[color-mix(in_oklab,var(--color-primary)_8%,transparent)] has-[input:disabled]:cursor-not-allowed has-[input:disabled]:hover:bg-transparent{% if disabled %} opacity-50 grayscale{% endif %}{% if class %} {{ class }}{% endif %}"
+     {% if x_data %}x-data="{{ x_data }}"{% else %}x-data{% endif %}
+     {% if toggle_ref %}@click="if (!$event.target.closest('a, button, select, input, textarea, label')) $refs.{{ toggle_ref }}.click()"{% else %}@click="if (!$event.target.closest('a, button, select, input, textarea, label')) $el.querySelector('input')?.click()"{% endif %}
+     {{ attrs }}>{{ slot }}
+</div>

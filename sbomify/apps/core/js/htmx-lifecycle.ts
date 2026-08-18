@@ -120,8 +120,13 @@ export function initHtmxLifecycle(): void {
             return;
         }
 
-        // If a form was submitted, focus first input
-        if (target.tagName === 'FORM' || target.querySelector('form')) {
+        // If a form was *submitted*, focus its first input. afterSettle fires for
+        // every swap, including the plain GETs that load a panel on page load, so
+        // this has to check the verb: without it, any HTMX-loaded panel containing
+        // a form stole focus to its first field the moment the page opened.
+        const verb = (event.detail as { requestConfig?: { verb?: string } })?.requestConfig?.verb;
+        const wasSubmission = typeof verb === 'string' && verb.toLowerCase() !== 'get';
+        if (wasSubmission && (target.tagName === 'FORM' || target.querySelector('form'))) {
             const firstInput = target.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select');
             if (firstInput) {
                 firstInput.focus();

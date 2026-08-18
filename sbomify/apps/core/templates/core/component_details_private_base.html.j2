@@ -5,177 +5,115 @@
 {% load public_url_tags %}
 {% block title %}sbomify Component: {{ component.name }}{% endblock %}
 {% block content %}
-    <div class="space-y-6"
-         x-data="{ compMenu: false, visibility: '{{ component.visibility|escapejs }}' }"
-         @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
-        {# Page Header - matches product page pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-puzzle-piece"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <h1 class="text-2xl font-bold text-text">
-                            {% if component.has_crud_permissions %}
-                                {% include 'core/components/editable_single_field.html.j2' with item_type='component' item_id=component.id item_value=component.name %}
-                            {% else %}
-                                {{ component.name }}
-                            {% endif %}
-                        </h1>
-                        <div class="flex items-center gap-2 text-sm text-text-muted">
-                            {% include 'core/components/copyable_value.html.j2' with value=component.id title="Component ID: "|add:component.id|add:" (click to copy)" %}
-                        </div>
-                        {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
-                        {% if component.freshness.is_stale %}
-                            <span class="tw-badge-secondary text-danger"
-                                  title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
-                                <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
-                            </span>
-                        {% endif %}
-                    </div>
-                    {# Component Type Label #}
-                    <p class="text-text-muted text-sm m-0 mt-1">{{ component.component_type_display }} Component</p>
-                </div>
-            </div>
-            {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
-            {% if component.has_crud_permissions or component.component_type == 'bom' %}
-                <div class="flex-shrink-0 flex items-stretch gap-2">
-                    {% if component.has_crud_permissions %}
-                        {% url 'core:component_details_public' component.id as component_public_url %}
-                        {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
-                    {% endif %}
-                    {# Meatball menu — moves secondary surfaces off the page body (design review p8/p9): upload, metadata, CI/CD integration, trusted publishers all open from here. #}
-                    <div class="relative flex" @keydown.escape.window="compMenu = false">
-                        <button type="button"
-                                class="w-12 min-h-10 h-full rounded-lg border border-border bg-background text-text-muted hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center"
-                                @click="compMenu = !compMenu"
-                                :aria-expanded="compMenu"
-                                aria-haspopup="true"
-                                aria-label="More actions">
-                            <i class="fas fa-ellipsis-vertical" aria-hidden="true"></i>
-                        </button>
-                        <div x-show="compMenu"
-                             x-cloak
-                             x-transition
-                             @click.outside="compMenu = false"
-                             class="absolute right-0 top-full mt-2 w-60 bg-surface border border-border rounded-xl shadow-lg p-1.5 z-40"
-                             role="menu">
-                            {% if component.has_crud_permissions %}
-                                {% block meatball_artifacts %}
-                                    <div class="px-2.5 pt-1.5 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Artifacts</div>
-                                    <button type="button"
-                                            role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                            @click="compMenu = false; $dispatch('open-upload')">
-                                        <i class="fas fa-upload w-4 text-text-muted" aria-hidden="true"></i>Upload artifact…
-                                    </button>
-                                    <hr class="my-1.5 border-border">
-                                {% endblock %}
-                            {% endif %}
-                            <div class="px-2.5 pt-1 pb-1 text-[10px] font-bold tracking-wider text-text-muted uppercase">Component</div>
-                            {% if component.component_type == 'bom' %}
-                                <button type="button"
-                                        role="menuitem"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                        @click="compMenu = false; $dispatch('open-metadata')">
-                                    <i class="fas fa-address-card w-4 text-text-muted" aria-hidden="true"></i>Metadata…
-                                </button>
-                            {% endif %}
-                            {% if component.has_crud_permissions %}
-                                {% if component.component_type == 'bom' %}
-                                    <button type="button"
-                                            role="menuitem"
-                                            class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                            @click="compMenu = false; $dispatch('open-cicd')">
-                                        <i class="fas fa-gears w-4 text-text-muted" aria-hidden="true"></i>CI/CD integration…
-                                    </button>
-                                {% endif %}
-                                <button type="button"
-                                        role="menuitem"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                        @click="compMenu = false; $dispatch('open-trusted-publishers')">
-                                    <i class="fas fa-shield-halved w-4 text-text-muted" aria-hidden="true"></i>Trusted publishers…
-                                </button>
-                                {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
-                                <button type="button"
-                                        role="menuitem"
-                                        x-show="visibility === 'public' || visibility === 'gated'"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                        @click="compMenu = false; $dispatch('copy-url')">
-                                    <i class="fas fa-link w-4 text-text-muted" aria-hidden="true"></i>Copy public URL
-                                </button>
-                                <button type="button"
-                                        role="menuitem"
-                                        x-show="visibility === 'public' || visibility === 'gated'"
-                                        class="flex items-center gap-3 w-full px-2.5 py-2 rounded-lg text-sm font-semibold text-text hover:bg-background text-left"
-                                        @click="compMenu = false; $dispatch('copy-badge')">
-                                    <i class="fas fa-certificate w-4 text-text-muted" aria-hidden="true"></i>Copy badge
-                                </button>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+    {% comment %}The visibility state lives on the header because only its menu items read it. The freshness badge goes in the header's meta slot, beside the title.{% endcomment %}
+    <c-layout.page-header title="{{ component.name }}" subtitle="{{ component.component_type_display }} Component" icon="fas fa-puzzle-piece" mark="avatar" editable_item_type="{{ component.has_crud_permissions|yesno:'component,' }}" editable_item_id="{{ component.id }}" :copy_values="header_copy_values" x-data="{ visibility: '{{ component.visibility|escapejs }}' }" @public-status-changed.window="if ($event.detail.itemId === '{{ component.id|escapejs }}') visibility = $event.detail.visibility">
+    {% comment %}Absent unless the workspace configures a window and the component has an SBOM, so an unconfigured workspace sees no badge.{% endcomment %}
+    {% if component.freshness.is_stale %}
+        <c-slot name="meta">
+        <c-badges.danger title="SBOM is {{ component.freshness.expires_in_days|stringformat:'d'|cut:'-' }} days past the {{ component.freshness.window_days }}-day freshness window">
+        <i class="fas fa-hourglass-end mr-1" aria-hidden="true"></i>Stale
+        </c-badges.danger>
+        </c-slot>
+    {% endif %}
+    {# Visibility Toggle + meatball menu. The menu renders for every member (metadata is a read surface); write actions inside stay CRUD-gated. #}
+    {% if component.has_crud_permissions or component.component_type == 'bom' %}
+        <div class="flex items-stretch gap-2">
+            {% if component.has_crud_permissions %}
+                {% url 'core:component_details_public' component.id as component_public_url %}
+                {% include 'core/components/component_visibility_selector.html.j2' with component=component component_public_url=component_public_url company_nda_id=company_nda_id gated_visibility_allowed=gated_visibility_allowed team_key=team_key APP_BASE_URL=APP_BASE_URL %}
             {% endif %}
+            {# Meatball menu — moves secondary surfaces off the page body (design review p8/p9): upload, metadata, CI/CD integration, trusted publishers all open from here. #}
+            <c-actions-menu label="Component actions" stretch>
+            {% if component.has_crud_permissions %}
+                {% block meatball_artifacts %}
+                    <c-dropdowns.header>Artifacts</c-dropdowns.header>
+                    <c-dropdowns.item icon="fas fa-upload" @click="$dispatch('open-upload')">Upload artifact…</c-dropdowns.item>
+                    <c-dropdowns.divider />
+                {% endblock %}
+            {% endif %}
+            <c-dropdowns.header>Component</c-dropdowns.header>
+            {% if component.component_type == 'bom' %}
+                <c-dropdowns.item icon="fas fa-address-card" @click="$dispatch('open-metadata')">Metadata…</c-dropdowns.item>
+            {% endif %}
+            {% if component.has_crud_permissions %}
+                {% if component.component_type == 'bom' %}
+                    <c-dropdowns.item icon="fas fa-gears" @click="$dispatch('open-cicd')">CI/CD integration…</c-dropdowns.item>
+                {% endif %}
+                <c-dropdowns.item icon="fas fa-shield-halved" @click="$dispatch('open-trusted-publishers')">Trusted publishers…</c-dropdowns.item>
+                {# Public-only actions; visibility is reactive so these appear/disappear the moment it changes, no reload. #}
+                <c-dropdowns.item icon="fas fa-link" x-show="visibility === 'public' || visibility === 'gated'" @click="$dispatch('copy-url')">Copy public URL</c-dropdowns.item>
+                <c-dropdowns.item icon="fas fa-certificate" x-show="visibility === 'public' || visibility === 'gated'" @click="$dispatch('copy-badge')">Copy badge</c-dropdowns.item>
+            {% endif %}
+            </c-actions-menu>
         </div>
+    {% endif %}
+    </c-layout.page-header>
+    <div class="space-y-6">
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"></i>
-                <span class="font-semibold text-text">
-                    {% if component.component_type == 'bom' %}
-                        {{ component.sbom_count|default:0 }}
+            <c-chips.metric-chip>
+            <i class="fas fa-{% if component.component_type == 'bom' %}file-code{% else %}file-alt{% endif %} text-primary text-xs"
+               aria-hidden="true"></i>
+            <c-chips.metric.value>
+            {% if component.component_type == 'bom' %}
+                {{ component.sbom_count|default:0 }}
+            {% else %}
+                {{ component.document_count|default:0 }}
+            {% endif %}
+            </c-chips.metric.value>
+            <c-chips.metric.label>
+            {% if component.component_type == 'bom' %}
+                BOMs
+            {% else %}
+                Documents
+            {% endif %}
+            </c-chips.metric.label>
+            </c-chips.metric-chip>
+            <c-chips.metric-chip>
+            <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
+                <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
+                <span>
+                    {% if component.is_global %}
+                        Workspace-wide
                     {% else %}
-                        {{ component.document_count|default:0 }}
+                        Product-scoped
                     {% endif %}
                 </span>
-                <span class="text-text-muted">
-                    {% if component.component_type == 'bom' %}
-                        BOMs
-                    {% else %}
-                        Documents
-                    {% endif %}
-                </span>
-            </div>
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <span class="inline-flex items-center gap-1 {% if component.is_global %}text-primary{% else %}text-text-muted{% endif %}">
-                    <i class="fas fa-{% if component.is_global %}building{% else %}cube{% endif %} text-xs"></i>
-                    <span>
-                        {% if component.is_global %}
-                            Workspace-wide
-                        {% else %}
-                            Product-scoped
-                        {% endif %}
-                    </span>
-                </span>
-            </div>
+            </span>
+            </c-chips.metric-chip>
             {# Latest-scan vulnerability summary (design review / mock). #}
             {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium or vuln_summary.low or vuln_summary.suppressed %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm {% if vuln_summary.critical or vuln_summary.high %}bg-danger/10 border border-danger/20{% else %}bg-warning/10 border border-warning/20{% endif %}">
-                    <i class="fas fa-triangle-exclamation text-xs {% if vuln_summary.critical or vuln_summary.high %}text-danger{% else %}text-warning{% endif %}"></i>
-                    {% if vuln_summary.critical %}
-                        <span class="font-semibold text-danger">{{ vuln_summary.critical }} Critical</span>
+                {% comment %}The accent is settled first: a prop written as an inline {% if %} is one djlint reformat away from arriving with newlines in it, and a padded value matches no branch in the component.{% endcomment %}
+                {% if vuln_summary.critical or vuln_summary.high %}
+                    {% firstof "danger" as vuln_chip_accent %}
+                {% else %}
+                    {% firstof "warning" as vuln_chip_accent %}
+                {% endif %}
+                <c-chips.metric-chip accent="{{ vuln_chip_accent }}">
+                <i class="fas fa-triangle-exclamation text-xs" aria-hidden="true"></i>
+                {% if vuln_summary.critical %}
+                    <c-chips.metric.value>{{ vuln_summary.critical }} Critical</c-chips.metric.value>
+                {% endif %}
+                {% if vuln_summary.high %}
+                    {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
+                    <c-chips.metric.value>{{ vuln_summary.high }} High</c-chips.metric.value>
+                {% endif %}
+                {% if vuln_summary.medium %}
+                    {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
+                    <c-chips.metric.value>{{ vuln_summary.medium }} Medium</c-chips.metric.value>
+                {% endif %}
+                {% if vuln_summary.low %}
+                    {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
+                        <span class="text-text-muted">·</span>
                     {% endif %}
-                    {% if vuln_summary.high %}
-                        {% if vuln_summary.critical %}<span class="text-text-muted">·</span>{% endif %}
-                        <span class="font-semibold text-severity-high">{{ vuln_summary.high }} High</span>
-                    {% endif %}
-                    {% if vuln_summary.medium %}
-                        {% if vuln_summary.critical or vuln_summary.high %}<span class="text-text-muted">·</span>{% endif %}
-                        <span class="font-semibold text-info">{{ vuln_summary.medium }} Medium</span>
-                    {% endif %}
-                    {% if vuln_summary.low %}
-                        {% if vuln_summary.critical or vuln_summary.high or vuln_summary.medium %}
-                            <span class="text-text-muted">·</span>
-                        {% endif %}
-                        <span class="font-semibold text-text-muted">{{ vuln_summary.low }} Low</span>
-                    {% endif %}
-                    {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
-                    {% if vuln_summary.suppressed %}
-                        <span class="text-text-muted">· {{ vuln_summary.suppressed }} suppressed</span>
-                    {% endif %}
-                    <span class="text-text-muted">· latest scan</span>
-                </div>
+                    <c-chips.metric.value>{{ vuln_summary.low }} Low</c-chips.metric.value>
+                {% endif %}
+                {% comment %}Counts above exclude what VEX cleared, matching the Trust Center posture; the suppressed tally says so rather than letting the numbers silently shrink.{% endcomment %}
+                {% if vuln_summary.suppressed %}
+                    <c-chips.metric.label>· {{ vuln_summary.suppressed }} suppressed</c-chips.metric.label>
+                {% endif %}
+                <c-chips.metric.label>· latest scan</c-chips.metric.label>
+                </c-chips.metric-chip>
             {% endif %}
         </div>
         {% block header_after_meta %}{% endblock %}

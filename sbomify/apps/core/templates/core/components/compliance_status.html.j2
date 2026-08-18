@@ -10,84 +10,99 @@ Parameters:
 - total_standards: Total number of standards tracked
 - details_url: Optional URL to detailed compliance view
 {% endcomment %}
-<div class="tw-card h-full">
-    <div class="px-6 py-4 border-b border-border">
-        <h3 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-clipboard-check text-primary"></i>
-            Compliance Status
-        </h3>
+<c-cards.card class="h-full">
+<c-slot name="header">
+<c-cards.header>
+<h3 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-clipboard-check text-primary"></i>
+    Compliance Status
+</h3>
+</c-cards.header>
+</c-slot>
+{# Summary Badge #}
+<div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-2">
+        <span class="text-2xl font-bold text-text">{{ standards_met|default:0 }}/{{ total_standards|default:3 }}</span>
+        <span class="text-sm text-text-muted">standards met</span>
     </div>
-    <div class="p-6">
-        {# Summary Badge #}
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center gap-2">
-                <span class="text-2xl font-bold text-text">{{ standards_met|default:0 }}/{{ total_standards|default:3 }}</span>
-                <span class="text-sm text-text-muted">standards met</span>
-            </div>
-            {% if standards_met == total_standards %}
-                <span class="px-2.5 py-1 bg-success/10 text-success text-xs font-medium rounded-full">
-                    <i class="fas fa-check mr-1"></i>All compliant
-                </span>
-            {% elif standards_met > 0 %}
-                <span class="px-2.5 py-1 bg-warning/10 text-warning text-xs font-medium rounded-full">
-                    <i class="fas fa-exclamation-triangle mr-1"></i>Partial
-                </span>
-            {% else %}
-                <span class="px-2.5 py-1 bg-danger/10 text-danger text-xs font-medium rounded-full">
-                    <i class="fas fa-times mr-1"></i>Non-compliant
-                </span>
-            {% endif %}
+    {% if standards_met == total_standards %}
+        <c-badges.success>
+        <i class="fas fa-check mr-1" aria-hidden="true"></i>All compliant
+        </c-badges.success>
+    {% elif standards_met > 0 %}
+        <c-badges.warning>
+        <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i>Partial
+        </c-badges.warning>
+    {% else %}
+        <c-badges.danger>
+        <i class="fas fa-times mr-1" aria-hidden="true"></i>Non-compliant
+        </c-badges.danger>
+    {% endif %}
+</div>
+{# Progress Bars for Each Standard #}
+<div class="space-y-4">
+    {# NTIA Minimum Elements #}
+    <div>
+        <div class="flex items-center justify-between mb-1.5">
+            <span class="text-sm font-medium text-text">NTIA Minimum Elements</span>
+            <span class="text-sm font-semibold {% if ntia_pct >= 100 %}text-success{% elif ntia_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                {{ ntia_pct|default:0 }}%
+            </span>
         </div>
-        {# Progress Bars for Each Standard #}
-        <div class="space-y-4">
-            {# NTIA Minimum Elements #}
-            <div>
-                <div class="flex items-center justify-between mb-1.5">
-                    <span class="text-sm font-medium text-text">NTIA Minimum Elements</span>
-                    <span class="text-sm font-semibold {% if ntia_pct >= 100 %}text-success{% elif ntia_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">
-                        {{ ntia_pct|default:0 }}%
-                    </span>
-                </div>
-                <div class="w-full h-2 bg-border rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-300 {% if ntia_pct >= 100 %}bg-success{% elif ntia_pct >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
-                         style="width: {{ ntia_pct|default:0 }}%"></div>
-                </div>
-            </div>
-            {# CycloneDX #}
-            <div>
-                <div class="flex items-center justify-between mb-1.5">
-                    <span class="text-sm font-medium text-text">CycloneDX</span>
-                    <span class="text-sm font-semibold {% if cyclonedx_pct >= 100 %}text-success{% elif cyclonedx_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">
-                        {{ cyclonedx_pct|default:0 }}%
-                    </span>
-                </div>
-                <div class="w-full h-2 bg-border rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-300 {% if cyclonedx_pct >= 100 %}bg-success{% elif cyclonedx_pct >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
-                         style="width: {{ cyclonedx_pct|default:0 }}%"></div>
-                </div>
-            </div>
-            {# SPDX #}
-            <div>
-                <div class="flex items-center justify-between mb-1.5">
-                    <span class="text-sm font-medium text-text">SPDX</span>
-                    <span class="text-sm font-semibold {% if spdx_pct >= 100 %}text-success{% elif spdx_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">
-                        {{ spdx_pct|default:0 }}%
-                    </span>
-                </div>
-                <div class="w-full h-2 bg-border rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-300 {% if spdx_pct >= 100 %}bg-success{% elif spdx_pct >= 50 %}bg-warning{% else %}bg-danger{% endif %}"
-                         style="width: {{ spdx_pct|default:0 }}%"></div>
-                </div>
-            </div>
-        </div>
-        {% if details_url %}
-            <div class="mt-6 pt-4 border-t border-border">
-                <a href="{{ details_url }}"
-                   class="text-sm text-primary hover:text-primary-dark flex items-center gap-1">
-                    View compliance details
-                    <i class="fas fa-arrow-right text-xs"></i>
-                </a>
-            </div>
+        <c-progress value="{{ ntia_pct|default:0 }}" variant="
+        {% if ntia_pct >= 100 %}
+            success
+        {% elif ntia_pct >= 50 %}
+            warning
+        {% else %}
+            danger
         {% endif %}
+        " aria-label="NTIA Minimum Elements" />
+    </div>
+    {# CycloneDX #}
+    <div>
+        <div class="flex items-center justify-between mb-1.5">
+            <span class="text-sm font-medium text-text">CycloneDX</span>
+            <span class="text-sm font-semibold {% if cyclonedx_pct >= 100 %}text-success{% elif cyclonedx_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                {{ cyclonedx_pct|default:0 }}%
+            </span>
+        </div>
+        <c-progress value="{{ cyclonedx_pct|default:0 }}" variant="
+        {% if cyclonedx_pct >= 100 %}
+            success
+        {% elif cyclonedx_pct >= 50 %}
+            warning
+        {% else %}
+            danger
+        {% endif %}
+        " aria-label="CycloneDX" />
+    </div>
+    {# SPDX #}
+    <div>
+        <div class="flex items-center justify-between mb-1.5">
+            <span class="text-sm font-medium text-text">SPDX</span>
+            <span class="text-sm font-semibold {% if spdx_pct >= 100 %}text-success{% elif spdx_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                {{ spdx_pct|default:0 }}%
+            </span>
+        </div>
+        <c-progress value="{{ spdx_pct|default:0 }}" variant="
+        {% if spdx_pct >= 100 %}
+            success
+        {% elif spdx_pct >= 50 %}
+            warning
+        {% else %}
+            danger
+        {% endif %}
+        " aria-label="SPDX" />
     </div>
 </div>
+{% if details_url %}
+    <div class="mt-6 pt-4 border-t border-border">
+        <a href="{{ details_url }}"
+           class="text-sm text-primary hover:text-primary-dark flex items-center gap-1">
+            View compliance details
+            <i class="fas fa-arrow-right text-xs"></i>
+        </a>
+    </div>
+{% endif %}
+</c-cards.card>

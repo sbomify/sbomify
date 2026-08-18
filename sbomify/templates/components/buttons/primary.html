@@ -1,0 +1,8 @@
+{% comment %}
+hover:text-white repeats the resting ink on purpose: as a link on a public
+page the button meets the pre-Tailwind `a:hover { color: … }`, which outranks
+a plain text-white. The other variants that invert on hover already state
+theirs.
+{% endcomment %}
+<c-vars size type="button" href loading disabled class />
+<c-buttons.button variant_class="text-white hover:text-white border-[0.5px] border-solid border-primary bg-[linear-gradient(135deg,var(--color-primary)_0%,var(--color-primary-dark)_100%)] shadow-[0_1px_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent),inset_0_2px_0_rgb(255_255_255/0.2)] hover:bg-[linear-gradient(135deg,var(--color-primary-light)_0%,var(--color-primary)_100%)] hover:shadow-[0_1px_2px_color-mix(in_oklab,var(--color-primary)_30%,transparent),inset_0_2px_0_rgb(255_255_255/0.1)] active:scale-[0.98] active:shadow-[0_1px_3px_color-mix(in_oklab,var(--color-primary)_30%,transparent),inset_0_2px_4px_rgb(0_0_0/0.1)]" size="{{ size }}" type="{{ type }}" href="{{ href }}" :loading="loading" :disabled="disabled" class="{{ class }}" :attrs="attrs">{{ slot }}</c-buttons.button>

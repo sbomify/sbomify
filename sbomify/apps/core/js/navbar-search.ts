@@ -115,7 +115,10 @@ function highlightActive(dropdown: HTMLElement): void {
 
 async function performSearch(query: string): Promise<void> {
   const dropdown = document.getElementById('search-results-dropdown');
-  if (!dropdown) return;
+  // The dropdown is a flush panel that owns overflow, so results render into
+  // the inner list element, which carries the scroll cap.
+  const list = document.getElementById('search-results-list');
+  if (!dropdown || !list) return;
 
   if (query.length < 2) {
     dropdown.style.display = 'none';
@@ -135,7 +138,7 @@ async function performSearch(query: string): Promise<void> {
     // them the way back.
     if (response.status === 401) {
       if (query !== currentSearchQuery) return;
-      dropdown.innerHTML =
+      list.innerHTML =
         '<p class="px-4 py-6 text-center text-sm text-text-muted m-0">' +
         'Your session has expired. <a href="/login" class="font-medium underline">Sign in again</a>' +
         '</p>';
@@ -153,12 +156,12 @@ async function performSearch(query: string): Promise<void> {
     // list rather than the raw one.
     activeResults = groupBySection(ranked).flat;
     activeIndex = activeResults.length ? 0 : -1;
-    dropdown.innerHTML = renderResults(ranked, query);
+    list.innerHTML = renderResults(ranked, query);
     dropdown.style.display = 'block';
     highlightActive(dropdown);
   } catch {
     if (query !== currentSearchQuery) return;
-    dropdown.innerHTML = '<p class="px-4 py-6 text-center text-sm text-danger m-0">Search is unavailable right now.</p>';
+    list.innerHTML = '<p class="px-4 py-6 text-center text-sm text-danger m-0">Search is unavailable right now.</p>';
     dropdown.style.display = 'block';
   }
 }

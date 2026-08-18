@@ -1,7 +1,7 @@
 {# Compact table pager — expects `currentPage`, `totalPages` in the Alpine scope. #}
 <div class="flex items-center gap-2">
     <button type="button"
-            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
             :disabled="currentPage === 1"
             @click="if (currentPage > 1) currentPage--"
             aria-label="Previous page">
@@ -9,7 +9,7 @@
     </button>
     <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
     <button type="button"
-            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="tw-btn-secondary text-sm disabled:opacity-50 disabled:cursor-not-allowed tw-btn-sm"
             :disabled="currentPage === totalPages"
             @click="if (currentPage < totalPages) currentPage++"
             aria-label="Next page">

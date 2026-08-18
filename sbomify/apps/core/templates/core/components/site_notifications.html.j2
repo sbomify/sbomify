@@ -1,38 +1,21 @@
 <!-- Site-wide notifications/alerts that require urgent user action -->
 {% with team=request.session.current_team %}
     {% if team and team.billing_plan_limits and team.billing_plan_limits.subscription_status == 'past_due' and can_administer %}
+        {% comment %}
+            The action sits in the alert's message, which is the only region the
+            alert component gives a caller: the notice and the way out of it read
+            as one sentence.
+        {% endcomment %}
         {% if team.is_in_grace_period %}
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 mb-6 rounded-xl bg-warning/10 border border-warning/30 shadow-sm">
-                <div class="flex items-start gap-3">
-                    <div class="text-2xl text-warning">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </div>
-                    <div>
-                        <h5 class="font-bold text-text mb-1">Payment Failed</h5>
-                        <p class="text-text-muted text-sm m-0">
-                            Your grace period is active. Update your payment method within {{ grace_period_days }} days to avoid service interruption.
-                        </p>
-                    </div>
-                </div>
-                <a href="{% url 'billing:create_portal_session' team.key %}"
-                   class="px-4 py-2 text-sm font-bold rounded-lg bg-warning text-white hover:bg-warning/90 transition-colors no-underline whitespace-nowrap">Fix Payment</a>
-            </div>
+            <c-feedback.alert variant="warning" title="Payment Failed" class="mb-6">
+            Your grace period is active. Update your payment method within {{ grace_period_days }} days to avoid service interruption.
+            <c-buttons.warning size="sm" href="{% url 'billing:create_portal_session' team.key %}" class="ml-2 align-middle no-underline">Fix Payment</c-buttons.warning>
+            </c-feedback.alert>
         {% else %}
-            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 mb-6 rounded-xl bg-danger/10 border border-danger/30 shadow-sm">
-                <div class="flex items-start gap-3">
-                    <div class="text-2xl text-danger">
-                        <i class="fas fa-ban"></i>
-                    </div>
-                    <div>
-                        <h5 class="font-bold text-text mb-1">Account Suspended</h5>
-                        <p class="text-text-muted text-sm m-0">
-                            Your account is restricted due to payment failure. Creation of new resources is blocked.
-                        </p>
-                    </div>
-                </div>
-                <a href="{% url 'billing:create_portal_session' team.key %}"
-                   class="px-4 py-2 text-sm font-bold rounded-lg bg-danger text-white hover:bg-danger/90 transition-colors no-underline whitespace-nowrap">Reactivate Subscription</a>
-            </div>
+            <c-feedback.alert variant="danger" title="Account Suspended" icon="fas fa-ban" class="mb-6">
+            Your account is restricted due to payment failure. Creation of new resources is blocked.
+            <c-buttons.danger size="sm" href="{% url 'billing:create_portal_session' team.key %}" class="ml-2 align-middle no-underline">Reactivate Subscription</c-buttons.danger>
+            </c-feedback.alert>
         {% endif %}
     {% endif %}
 {% endwith %}

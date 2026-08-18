@@ -1,0 +1,55 @@
+{% comment %}
+The full pager: previous, the numbered pages the view chose, and next.
+
+current, total and page_range come from the view, and current and total are
+numbers, so pass them with cotton's dynamic prefix (:current="page_obj.number").
+page_range is the list of page numbers to show, with "…" where it skips.
+base_url is the path the ?page= query is hung on.
+
+query carries the filters the page is already showing (query="days=30"), which
+every link keeps so paging a filtered table does not silently reset it. It is
+the query string without its leading ? or &, and the page number is written
+first, so a link reads ?page=2&days=30. Its separator is resolved once, into
+sep below, rather than with an {% if %} inside each href: a template tag inside
+an attribute is what the formatter breaks across lines, and the newline would
+land inside the URL.
+
+label is the pager's accessible name. A page with one pager takes the default;
+name it where the page carries more than one, or where the surrounding copy
+already says which list this pages ("Vulnerability scans pagination").
+
+Pass show_prev_next="" for a numbers-only pager. Every cell is a
+c-navigation.page-link, so the pager owns the row and nothing else, and each
+cell is rendered `only`, on its own props, so nothing the pager holds (its
+class, above all) can fall through into it.
+{% endcomment %}
+<c-vars current total page_range base_url query label="Pagination" show_prev_next="1" class />
+{% with sep=query|default:""|yesno:"&," %}
+    <nav aria-label="{{ label }}"
+         class="flex items-center gap-1{% if class %} {{ class }}{% endif %}"
+         {{ attrs }}>
+        {% if show_prev_next %}
+            {% if current > 1 %}
+                <c-navigation.page-link nav label="Previous page" href="{{ base_url }}?page={{ current|add:'-1' }}{{ sep }}{{ query }}" only><i class="fas fa-chevron-left" aria-hidden="true"></i></c-navigation.page-link>
+            {% else %}
+                <c-navigation.page-link nav label="Previous page" href="#" disabled only><i class="fas fa-chevron-left" aria-hidden="true"></i></c-navigation.page-link>
+            {% endif %}
+        {% endif %}
+        {% for page_num in page_range %}
+            {% if page_num == current %}
+                <c-navigation.page-link active only>{{ page_num }}</c-navigation.page-link>
+            {% elif page_num == '…' or page_num == '...' %}
+                <c-navigation.page-ellipsis />
+            {% else %}
+                <c-navigation.page-link href="{{ base_url }}?page={{ page_num }}{{ sep }}{{ query }}" only>{{ page_num }}</c-navigation.page-link>
+            {% endif %}
+        {% endfor %}
+        {% if show_prev_next %}
+            {% if current < total %}
+                <c-navigation.page-link nav label="Next page" href="{{ base_url }}?page={{ current|add:'1' }}{{ sep }}{{ query }}" only><i class="fas fa-chevron-right" aria-hidden="true"></i></c-navigation.page-link>
+            {% else %}
+                <c-navigation.page-link nav label="Next page" href="#" disabled only><i class="fas fa-chevron-right" aria-hidden="true"></i></c-navigation.page-link>
+            {% endif %}
+        {% endif %}
+    </nav>
+{% endwith %}

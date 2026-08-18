@@ -1,0 +1,18 @@
+{% comment %}
+The row-actions column, the one holding the actions menu. Wide enough for the
+button to sit in the cell's own right gutter, so it lines up with the toolbar
+above rather than crowding the shell's edge, and a fixed width so an equal-width
+table never hands it a full share. Narrower on a phone, where every pixel this
+column keeps comes out of the name beside it.
+
+as="th" renders the header twin, whose only content is the screen-reader name
+for a column with no visible heading; the body cell renders the slot. The two
+branches differ in the cell they nest and in nothing else, and both state their
+own gutters, so the default ones never stack against them.
+{% endcomment %}
+<c-vars as label="Actions" class />
+{% if as == 'th' %}
+    <c-tables.header-cell end date variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs"><span class="sr-only">{{ label }}</span></c-tables.header-cell>
+{% else %}
+    <c-tables.cell end date variant_class="w-22 last:pr-4 max-sm:w-16 max-sm:pl-1 max-sm:pr-2" class="{{ class }}" :attrs="attrs">{{ slot }}</c-tables.cell>
+{% endif %}

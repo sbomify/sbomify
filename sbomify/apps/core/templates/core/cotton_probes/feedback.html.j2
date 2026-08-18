@@ -1,0 +1,51 @@
+{% comment %}
+Render probe for the cotton feedback set. Unit tests render this file and
+assert on the output; it is not routed anywhere. Every instance carries a
+data-probe attribute, which is both the test's handle and a check that caller
+attributes reach the root element.
+{% endcomment %}
+<c-feedback.alert data-probe="alert-info">Info body</c-feedback.alert>
+<c-feedback.alert variant="success" title="Saved" data-probe="alert-success">Success body</c-feedback.alert>
+<c-feedback.alert variant="warning" dismissible data-probe="alert-warning">Warning body</c-feedback.alert>
+<c-feedback.alert variant="danger" icon="fas fa-bomb" class="mb-4" hx-get="/probe" @click.stop="fire()" data-probe="alert-danger">Danger body</c-feedback.alert>
+<c-feedback.alert variant="success" title="security.txt" data-probe="alert-actioned">
+Served at the well-known path.
+<c-slot name="action">
+<c-buttons.outline-primary size="sm" href="/settings" class="shrink-0">Manage</c-buttons.outline-primary>
+</c-slot>
+</c-feedback.alert>
+<c-feedback.alert variant="warning" title="No Scan Data Available" data-probe="alert-body">
+<c-slot name="body">
+<p class="mb-2">No vulnerability scan data found for this SBOM.</p>
+<pre class="mt-2 p-4">scanner said no</pre>
+</c-slot>
+</c-feedback.alert>
+<c-feedback.alert variant="info" title="Processing" data-probe="alert-marked">
+<c-slot name="mark">
+<span class="brand-loader-stand-in"></span>
+</c-slot>
+Still scanning.
+</c-feedback.alert>
+<c-feedback.callout variant="warning" class="mb-2" data-probe="callout-warning">
+<c-feedback.callout-header data-probe="callout-header"><span>Callout heading</span></c-feedback.callout-header>
+<c-feedback.callout-body class="flex flex-wrap gap-2" data-probe="callout-body"><span>Callout controls</span></c-feedback.callout-body>
+</c-feedback.callout>
+<c-feedback.callout data-probe="callout-plain">
+<c-feedback.callout-header>Plain callout</c-feedback.callout-header>
+</c-feedback.callout>
+<c-feedback.empty-state icon="fas fa-cube" title="No components yet" message="Create your first component." secondary_text="or read the docs" secondary_url="/docs" data-probe="empty-default">
+<c-buttons.primary href="/components/new">Add component</c-buttons.primary>
+</c-feedback.empty-state>
+<c-feedback.empty-state compact icon_size="sm" icon_variant="neutral" title="No releases yet" data-probe="empty-compact" />
+<c-feedback.empty-state compact icon="fas fa-address-card" icon_size="sm" icon_variant="neutral" message="No entities in this profile" data-probe="empty-untitled" />
+<c-feedback.skeleton data-probe="skeleton-text" />
+<c-feedback.skeleton type="title" data-probe="skeleton-title" />
+<c-feedback.skeleton type="avatar" data-probe="skeleton-avatar" />
+<c-feedback.skeleton type="button" width="7rem" data-probe="skeleton-button" />
+<c-feedback.skeleton type="image" height="9rem" data-probe="skeleton-image" />
+<c-feedback.skeleton type="paragraph" lines="2" class="mt-2" data-probe="skeleton-paragraph" />
+<c-feedback.loading message="Loading artifacts…" data-probe="loading-panel" />
+<c-feedback.loading row compact size="md" message="Refreshing…" hx-swap-oob="true" data-probe="loading-row" />
+<c-feedback.toast variant="success" title="Saved" data-probe="toast-success">Component updated.</c-feedback.toast>
+<c-feedback.toast variant="danger" title="Failed" dismissible="false" class="mt-2" data-probe="toast-danger">Could not parse the SBOM.</c-feedback.toast>
+<c-feedback.toast-container />

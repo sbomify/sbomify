@@ -16,13 +16,9 @@
                 <h6 class="uppercase text-text-muted font-bold text-xs tracking-wider m-0 flex items-center gap-2">
                     <i class="fas fa-building"></i>Organizations & Contacts
                 </h6>
-                <button type="button"
-                        class="tw-btn-primary text-sm"
-                        @click="addEntity"
-                        :disabled="manufacturerCount >= 1 && supplierCount >= 1"
-                        :title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled. Edit the existing entity to change roles.' : 'Add an organization or author group'">
-                    <i class="fas fa-plus mr-1"></i>Add Entity
-                </button>
+                <c-buttons.primary size="sm" @click="addEntity" ::disabled="manufacturerCount >= 1 && supplierCount >= 1" ::title="manufacturerCount >= 1 && supplierCount >= 1 ? 'Both manufacturer and supplier roles are filled. Edit the existing entity to change roles.' : 'Add an organization or author group'">
+                <i class="fas fa-plus mr-1"></i>Add Entity
+                </c-buttons.primary>
             </div>
             <p class="text-text-muted text-sm mb-4 flex items-start gap-2">
                 <i class="fas fa-info-circle mt-0.5"></i>
@@ -36,37 +32,24 @@
                 {% endfor %}
             </div>
             {# Empty state when no entities #}
-            <div class="text-center p-6 bg-border/10 rounded-xl border border-dashed border-border"
-                 x-show="visibleEntitiesCount === 0"
-                 x-transition>
-                <div class="mb-3 text-text-muted opacity-50">
-                    <i class="fas fa-building text-4xl"></i>
-                </div>
-                <h6 class="font-semibold text-text mb-2">No Entities Added</h6>
-                <p class="text-text-muted text-sm mb-4">Add an entity as manufacturer, supplier, author, or a combination.</p>
-                <button type="button"
-                        class="px-3 py-1.5 text-sm rounded-lg border border-primary text-primary hover:bg-primary/10 transition-colors"
-                        @click="addEntity"
-                        title="Add an organization or author group">
-                    <i class="fas fa-plus mr-1"></i>Add Entity
-                </button>
+            <div x-show="visibleEntitiesCount === 0" x-transition>
+                <c-feedback.empty-state compact icon="fas fa-building" icon_size="sm" icon_variant="neutral" title="No Entities Added" message="Add an entity as manufacturer, supplier, author, or a combination.">
+                <c-buttons.outline-primary size="sm" title="Add an organization or author group" @click="addEntity">
+                <i class="fas fa-plus mr-1"></i>Add Entity
+                </c-buttons.outline-primary>
+                </c-feedback.empty-state>
             </div>
         </div>
         {# Form actions #}
         <div class="flex justify-end gap-2 pt-4 border-t border-border">
-            <button type="button"
-                    class="px-4 py-2 rounded-lg border border-border text-text hover:bg-border/30 transition-colors"
-                    @click="$dispatch('cancel-custom-form')">Cancel</button>
-            <button type="submit" class="tw-btn-primary px-4" :disabled="hasErrors">
-                <i class="fas fa-save mr-1"></i>Save Contact Info
-            </button>
+            <c-buttons.secondary @click="$dispatch('cancel-custom-form')">Cancel</c-buttons.secondary>
+            <c-buttons.primary type="submit" ::disabled="hasErrors">
+            <i class="fas fa-save mr-1"></i>Save Contact Info
+            </c-buttons.primary>
         </div>
         {# Templates for Alpine.js to clone #}
         <template id="entity-template">
             {% include "teams/contact_profiles/forms/entity.html.j2" with form=entities_formset.empty_form contacts_formset=None %}
-        </template>
-        <template id="contact-template">
-            <div class="contact-template-placeholder"></div>
         </template>
     </form>
 </div>

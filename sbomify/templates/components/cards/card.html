@@ -1,0 +1,50 @@
+{% comment %}
+The card surface, in plain Tailwind utilities: a still container with a
+hairline border and the resting card shadow. Containers do not move, so there
+is no hover lift and no entrance animation.
+
+The default slot is the body. Pass title (with subtitle and icon) for the
+standard header, or fill the named header slot to build one by hand; the named
+footer slot adds the footer band. Variants are files (c-cards.dashboard,
+c-cards.dangerzone): they nest this and pass their recipes through
+variant_class, header_class, body_class, title_class and icon_class, so the
+surface, the header tint, the body tint and the header's ink each resolve to
+exactly one segment and never stack against each other.
+
+flush drops the body band for content that owns its own padding: a data table
+that must run to the card's edge, a list of rows, a single dense row. It is the
+card's counterpart to c-tables.shell's nested, and it renders as one branch, so
+the padded body and the bare slot are never both emitted.
+
+The parts below are wrapped in a with block that blanks class: the card's own
+class is layout for the card, and the header, body and footer would otherwise
+inherit it and repeat that layout on every band.
+{% endcomment %}
+<c-vars title subtitle icon variant_class header_class body_class title_class icon_class flush class />
+<div class="rounded-xl transition-all duration-300 {% if variant_class %}{{ variant_class }}{% else %}bg-surface border border-solid border-border shadow-[var(--shadow-card)]{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% with class="" %}
+        {% if header %}
+            {{ header }}
+        {% elif title %}
+            <c-cards.header variant_class="{{ header_class }}">
+            {% if icon %}
+                <i class="{{ icon }} {% if icon_class %}{{ icon_class }}{% else %}text-text-muted mr-2{% endif %}"
+                   aria-hidden="true"></i>
+            {% endif %}
+            <div>
+                <h3 class="text-lg font-semibold m-0 {% if title_class %}{{ title_class }}{% else %}text-text{% endif %}">
+                    {{ title }}
+                </h3>
+                {% if subtitle %}<p class="text-sm text-text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
+            </div>
+            </c-cards.header>
+        {% endif %}
+        {% if flush %}
+            {{ slot }}
+        {% else %}
+            <c-cards.body variant_class="{{ body_class }}">{{ slot }}</c-cards.body>
+        {% endif %}
+        {% if footer %}<c-cards.footer>{{ footer }}</c-cards.footer>{% endif %}
+    {% endwith %}
+</div>

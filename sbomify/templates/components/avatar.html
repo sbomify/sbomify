@@ -1,0 +1,41 @@
+{% comment %}
+A person, as an image or as their initials. With neither it falls back to the
+generic user mark, so a row never renders an empty circle.
+
+The slot is the mark for a subject that is not a person: the round mark a
+detail page opens with carries the icon of the thing it is about (an advisory's
+shield, a product's cube). Image, initials, slot, fallback are one branch, so
+exactly one mark ever renders.
+
+The tint runs on --avatar-accent with a primary fallback. Custom properties
+inherit, so the caller sets it on the avatar or on any ancestor:
+style="--avatar-accent: var(--color-warning)". It is not a prop, it is an
+override, and it arrives through attrs untouched.
+
+Size carries every dimension, so it renders as one conditional segment; the
+status dot's colour is a second one.
+{% endcomment %}
+<c-vars initials src alt size status class />
+<div class="relative flex items-center justify-center shrink-0 rounded-full font-semibold bg-[linear-gradient(135deg,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_20%,transparent)_0%,color-mix(in_oklab,var(--avatar-accent,var(--color-primary))_10%,transparent)_100%)] text-[color:var(--avatar-accent,var(--color-primary))] {% if size == 'sm' %}w-8 h-8 text-xs{% elif size == 'lg' %}w-14 h-14 text-lg{% elif size == 'xl' %}w-20 h-20 text-2xl{% else %}w-10 h-10 text-sm{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if src %}
+        {% comment %}
+            The intrinsic size is a CLS hint only. The utilities below size the
+            image to the container, so the size segment still wins.
+        {% endcomment %}
+        <img src="{{ src }}"
+             alt="{{ alt }}"
+             width="40"
+             height="40"
+             class="w-full h-full object-cover rounded-full">
+    {% elif initials %}
+        {{ initials }}
+    {% elif slot.strip %}
+        {{ slot }}
+    {% else %}
+        <i class="fas fa-user" aria-hidden="true"></i>
+    {% endif %}
+    {% if status %}
+        <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-solid border-surface {% if status == 'online' %}bg-success{% elif status == 'busy' %}bg-danger{% else %}bg-text-muted{% endif %}"></span>
+    {% endif %}
+</div>

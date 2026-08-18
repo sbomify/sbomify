@@ -1,0 +1,101 @@
+{% comment %}
+Render probe for the cotton layout set. Unit tests render this file with the
+few lists a view would build (breadcrumbs, copy values, choice options) and
+assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-layout.page-header title="Acme Gateway" subtitle="Quantum readiness across all components." icon="fas fa-box" hx-get="/probe/header" data-probe="page-header">
+<c-buttons.secondary size="sm">Assign component</c-buttons.secondary>
+<c-buttons.primary size="sm">New release</c-buttons.primary>
+</c-layout.page-header>
+<c-layout.page-header mark="avatar" icon="fas fa-cube" title="Acme Vault" :breadcrumbs="probe_breadcrumbs" :copy_values="probe_copy_values" editable_item_type="product" editable_item_id="probe-product"></c-layout.page-header>
+<c-layout.page-header title="Flush header" flush class="max-w-3xl"></c-layout.page-header>
+<c-layout.page-header title="Acme Registry" icon="fas fa-puzzle-piece" mark="avatar" subtitle="Container Component">
+<c-slot name="meta">
+<c-badges.danger data-probe="header-meta">Stale</c-badges.danger>
+</c-slot>
+</c-layout.page-header>
+<c-layout.section-header icon="fas fa-plus-circle" title="Generate a new token" subtitle="Tokens are shown once and cannot be retrieved later." />
+<c-layout.section-header level="2" accent="success" icon="fas fa-envelope-open-text" title="Pending invitations" data-probe="section-h2" />
+<c-layout.section-header icon="fas fa-building" accent="success" title="Entities" subtitle="Organizations (Manufacturer, Supplier, Author)" data-probe="section-actioned">
+<c-slot name="actions">
+<c-buttons.primary size="sm">Add entity</c-buttons.primary>
+</c-slot>
+</c-layout.section-header>
+<c-layout.section-body class="space-y-3">
+<p class="m-0">Indented to the title's left edge.</p>
+</c-layout.section-body>
+<c-layout.form-section step="1" title="What it is" description="A title is all a draft needs." data-probe="form-section-step">
+<p class="m-0">Step fields</p>
+</c-layout.form-section>
+<c-layout.form-section icon="fas fa-list-check" accent="neutral" title="What it affects" class="max-w-5xl" data-probe="form-section-icon">
+<p class="m-0">Iconned step fields</p>
+</c-layout.form-section>
+<c-layout.form-section title="No mark" data-probe="form-section-bare">
+<p class="m-0">Bare step fields</p>
+</c-layout.form-section>
+<c-layout.stat-card data-probe="stat-plain">
+<c-layout.stat.label>Total products</c-layout.stat.label>
+<c-layout.stat.row>
+<c-layout.stat.value>1,234</c-layout.stat.value>
+<c-layout.stat.change-up><i class="fas fa-arrow-up" aria-hidden="true"></i> 12%</c-layout.stat.change-up>
+</c-layout.stat.row>
+</c-layout.stat-card>
+<c-layout.stat-card accent="danger" icon="fas fa-shield-halved">
+<c-layout.stat.label>Vulnerabilities</c-layout.stat.label>
+<c-layout.stat.row>
+<c-layout.stat.value>17</c-layout.stat.value>
+<c-layout.stat.change-down><i class="fas fa-arrow-down" aria-hidden="true"></i> 5</c-layout.stat.change-down>
+</c-layout.stat.row>
+</c-layout.stat-card>
+<c-layout.stat-card accent="warning" icon="fas fa-clock" class="lg:col-span-2" @click="drill()">
+<c-layout.stat.label>Stale scans</c-layout.stat.label>
+<c-layout.stat.value>4</c-layout.stat.value>
+</c-layout.stat-card>
+<c-layout.stat-card compact accent="success">
+<c-layout.stat.value>41</c-layout.stat.value>
+<c-layout.stat.label>Ready</c-layout.stat.label>
+</c-layout.stat-card>
+<c-layout.stat-card compact>
+<c-layout.stat.value>51</c-layout.stat.value>
+<c-layout.stat.label>Total</c-layout.stat.label>
+</c-layout.stat-card>
+<c-layout.stat.change data-probe="bare-change">unchanged</c-layout.stat.change>
+<c-layout.choice-group name="probe-severity" label="Severity" :options="probe_choices" selected="medium" hint="Pick the band it reports under." required data-probe="choice-options"></c-layout.choice-group>
+<c-layout.choice-group name="probe-visibility" class="max-w-md">
+<c-layout.choice name="probe-visibility" value="public" accent="info" icon="fas fa-globe" checked>Public</c-layout.choice>
+<c-layout.choice name="probe-visibility" value="private" accent="secondary" icon="fas fa-lock" disabled>Private</c-layout.choice>
+</c-layout.choice-group>
+<c-layout.choice-group class="shrink-0">
+<c-layout.choice value="satisfied" accent="success" icon="fas fa-check" x_name="'finding-' + finding.id" x_checked="state(finding) === 'satisfied'" x_click="setStatus(finding, 'satisfied')" data-probe="choice-bound">Satisfied</c-layout.choice>
+<c-layout.choice value="not-applicable" accent="secondary" x_name="'finding-' + finding.id" x_checked="state(finding) === 'not-applicable'" x_disabled="finding.is_mandatory" x_click="setStatus(finding, 'not-applicable')" ::style="state(finding) === 'pending' ? '--choice-accent: var(--color-warning)' : ''" ::title="finding.hint" data-probe="choice-pending">N/A</c-layout.choice>
+</c-layout.choice-group>
+<c-layout.select-row>
+<div class="flex-1 min-w-0">
+    <label class="font-medium text-text" for="probe-row-1">BSI TR-03183-2</label>
+</div>
+<input type="checkbox" id="probe-row-1" checked>
+</c-layout.select-row>
+<c-layout.select-row disabled>
+<span>Dependency Track</span>
+<input type="checkbox" id="probe-row-2" disabled>
+</c-layout.select-row>
+<c-layout.select-row x_data="{ showDeleteModal: false }" class="rounded-b-xl" hx-get="/probe/row" @keydown.enter="open()">
+<span>CNSA 2.0</span>
+<input type="checkbox" id="probe-row-3">
+</c-layout.select-row>
+{# toggle_ref: the row's own switch, for a body that holds inputs of its own. #}
+<c-layout.select-row toggle_ref="toggle" x_data="{ enabled: false }">
+<span>OSV Vulnerability Scanner</span>
+<input type="text" id="probe-row-4-config">
+<input type="checkbox" id="probe-row-4" x-ref="toggle" x-model="enabled">
+</c-layout.select-row>
+{# Action tiles and data boxes, added when the dashboard's quick actions and the metadata boxes were componentized. #}
+<c-layout.action-tile href="/upload" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a bill of materials" data-probe="tile-link" />
+<c-layout.action-tile icon="fas fa-cube" title="Create product" description="Opens a dialog" data-probe="tile-button" @click="open()" />
+<c-layout.action-tile disabled icon="fas fa-file-alt" title="Generate report" description="Coming soon" data-probe="tile-disabled">
+<c-slot name="trailing">
+<c-badges.secondary size="sm">Soon</c-badges.secondary>
+</c-slot>
+</c-layout.action-tile>
+<c-layout.data-box label="Release" value_x_text="fmt(item.released)" data-probe="databox-bound" />
+<c-layout.data-box label="Version" data-probe="databox-static">1.4.0</c-layout.data-box>

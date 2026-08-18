@@ -1,100 +1,48 @@
-<template x-teleport="body">
-    <div x-show="{{ modal_id }}"
-         x-cloak
-         x-ref="modalOverlay"
-         class="fixed inset-0 z-[100]"
-         tabindex="-1"
-         role="alertdialog"
-         aria-modal="true"
-         aria-labelledby="delete-modal-title-{{ modal_id }}"
-         aria-describedby="delete-modal-desc-{{ modal_id }}"
-         @keydown.escape="{{ modal_id }} = false">
-        {# Backdrop #}
-        <div x-show="{{ modal_id }}"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="tw-modal-overlay"
-             @click="{{ modal_id }} = false"></div>
-        {# Modal Content #}
-        <div class="tw-modal"
-             x-show="{{ modal_id }}"
-             x-trap.noscroll="{{ modal_id }}"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 scale-95"
-             x-transition:enter-end="opacity-100 scale-100"
-             x-transition:leave="transition ease-in duration-150"
-             x-transition:leave-start="opacity-100 scale-100"
-             x-transition:leave-end="opacity-0 scale-95"
-             @click.stop>
-            <div class="tw-modal-content tw-modal-sm">
-                {# Body with warning icon #}
-                <div class="tw-modal-body text-center py-6">
-                    <button type="button"
-                            class="tw-modal-close absolute top-4 right-4"
-                            @click="{{ modal_id }} = false"
-                            x-ref="closeButton"
-                            aria-label="Close modal">
-                        <i class="fas fa-times" aria-hidden="true"></i>
-                    </button>
-                    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                        <i class="fas fa-exclamation-triangle text-danger text-xl"
-                           aria-hidden="true"></i>
-                    </div>
-                    <h4 id="delete-modal-title-{{ modal_id }}" class="tw-modal-title mb-2">{{ title|default:'Confirm Delete' }}</h4>
-                    <p class="text-text mb-2">
-                        {{ message|default:'Are you sure you want to delete' }}
-                        {% if item_name_expression %}
-                            <span class="font-semibold text-danger" x-text="{{ item_name_expression }}"></span>?
-                        {% elif item_name %}
-                            <span class="font-semibold text-danger">{{ item_name }}</span>?
-                        {% endif %}
-                    </p>
-                    <p id="delete-modal-desc-{{ modal_id }}" class="text-text-muted text-sm">
-                        {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}
-                    </p>
-                </div>
-                {# Footer #}
-                <div class="tw-modal-footer justify-center">
-                    <button type="button"
-                            class="tw-btn-ghost"
-                            @click="{{ modal_id }} = false"
-                            x-ref="cancelButton">{{ cancel_text|default:'Cancel' }}</button>
-                    {# djlint:off #}
-                    <button type="button"
-                            class="tw-btn-danger"
-                            x-ref="deleteButton"
-                            {% if hx_url %}
-                            x-data="window.getDeleteModalData({
-                                modalId: '{{ modal_id }}',
-                                hxUrl: '{{ hx_url }}',
-                                hxMethod: '{{ hx_method|default:'DELETE'|upper }}',
-                                successMessage: '{{ success_message|default:'Deleted successfully!' }}',
-                                csrfToken: '{{ csrf_token }}',
-                                redirectUrl: '{{ redirect_url|default:'' }}',
-                                refreshEvent: '{{ refresh_event|default:'' }}'
-                            })"
-                            @click="handleDelete()"
-                            :disabled="isLoading"
-                            :class="{ 'opacity-75 cursor-not-allowed': isLoading }"
-                            {% elif confirm_callback %}
-                            @click="{{ confirm_callback }}"
-                            {% endif %}>
-                        {% if hx_url %}
-                        <span x-show="isLoading" x-cloak>{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
-                        <i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
-                        <span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
-                        {% else %}
-                        <i class="fas fa-trash mr-2" aria-hidden="true"></i>
-                        {{ confirm_text|default:'Delete' }}
-                        {% endif %}
-                    </button>
-                    {# djlint:on #}
-                </div>
-            </div>
-        </div>
+{% comment %}
+    The destructive confirmation. It keeps its own centred body rather than the
+    dialog's title band: the medallion, the sentence and the warning read as one
+    block, and the close control sits over them.
+
+    The close button is pulled back by half the body's gutter so it lands where
+    it always has, an even 1rem inside the panel.
+{% endcomment %}
+<c-modal show="{{ modal_id }}" size="sm" role="alertdialog" x-ref="modalOverlay" tabindex="-1" aria-labelledby="delete-modal-title-{{ modal_id }}" aria-describedby="delete-modal-desc-{{ modal_id }}">
+<div class="relative text-center">
+    <c-buttons.icon label="Close modal" class="absolute -top-2 -right-2" x-ref="closeButton" @click="{{ modal_id }} = false">
+    <i class="fas fa-times" aria-hidden="true"></i>
+    </c-buttons.icon>
+    <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+        <i class="fas fa-exclamation-triangle text-danger text-xl"
+           aria-hidden="true"></i>
     </div>
-</template>
+    <h4 id="delete-modal-title-{{ modal_id }}"
+        class="text-lg font-semibold text-text tracking-[-0.01em] mb-2">{{ title|default:'Confirm Delete' }}</h4>
+    <p class="text-text mb-2">
+        {{ message|default:'Are you sure you want to delete' }}
+        {% if item_name_expression %}
+            <span class="font-semibold text-danger" x-text="{{ item_name_expression }}"></span>?
+        {% elif item_name %}
+            <span class="font-semibold text-danger">{{ item_name }}</span>?
+        {% endif %}
+    </p>
+    <p id="delete-modal-desc-{{ modal_id }}" class="text-text-muted text-sm">
+        {{ warning_message|default:'This action cannot be undone and will permanently remove the item from the system.' }}
+    </p>
+</div>
+<c-slot name="footer">
+<c-buttons.ghost x-ref="cancelButton" @click="{{ modal_id }} = false">{{ cancel_text|default:'Cancel' }}</c-buttons.ghost>
+{# djlint:off #}
+{% if hx_url %}
+<c-buttons.danger x-ref="deleteButton" x-data="window.getDeleteModalData({ modalId: '{{ modal_id }}', hxUrl: '{{ hx_url }}', hxMethod: '{{ hx_method|default:'DELETE'|upper }}', successMessage: '{{ success_message|default:'Deleted successfully!' }}', csrfToken: '{{ csrf_token }}', redirectUrl: '{{ redirect_url|default:'' }}', refreshEvent: '{{ refresh_event|default:'' }}' })" @click="handleDelete()" ::disabled="isLoading">
+<span x-show="isLoading" x-cloak>{% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}</span>
+<i class="fas fa-trash" x-show="!isLoading" aria-hidden="true"></i>
+<span x-text="isLoading ? 'Deleting...' : '{{ confirm_text|default:'Delete' }}'"></span>
+</c-buttons.danger>
+{% else %}
+<c-buttons.danger x-ref="deleteButton" {% if confirm_callback %}@click="{{ confirm_callback }}"{% endif %}>
+<i class="fas fa-trash mr-2" aria-hidden="true"></i>{{ confirm_text|default:'Delete' }}
+</c-buttons.danger>
+{% endif %}
+{# djlint:on #}
+</c-slot>
+</c-modal>

@@ -1,0 +1,31 @@
+{% comment %}
+The select, in plain Tailwind utilities. The native control is kept and the
+browser's arrow is replaced by the chevron the design system draws, so the
+option list stays the platform's own.
+
+options is a list of {value, label} built in the view, because a list is data,
+not content. The slot takes over for callers that render their own options
+(an Alpine template, an optgroup).
+
+Two conditional segments, each complete on its own: size owns width, padding
+and font-size; the colour segment owns background, border, ink and the focus
+ring together. accent is the state the select holds, tinting it the way a badge
+of the same value would; state is validation and outranks it, so an errored
+status select reads as an error. The focus border stays primary throughout.
+{% endcomment %}
+<c-vars name id options selected placeholder size accent state required disabled class />
+<select {% if id or name %}id="{% firstof id name %}"{% endif %}
+        {% if name %}name="{{ name }}"{% endif %}
+        class="appearance-none cursor-pointer border-[1.5px] border-solid rounded-lg leading-[1.5] transition-all duration-200 bg-no-repeat bg-[position:right_0.75rem_center] bg-[length:1.25rem] bg-[url('data:image/svg+xml,%3csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20fill=%22none%22%20viewBox=%220%200%2020%2020%22%3e%3cpath%20stroke=%22%236b7280%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%20stroke-width=%221.5%22%20d=%22M6%208l4%204%204-4%22/%3e%3c/svg%3e')] hover:not-focus:border-border-light focus:outline-none focus:border-primary {% if size == 'sm' %}w-auto py-1 pr-7 pl-2 text-xs{% else %}w-full py-3 pr-10 pl-4 text-sm{% endif %} {% if state == 'error' %}bg-surface border-danger text-text focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]{% elif state == 'success' %}bg-surface border-success text-text focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% elif accent == 'success' %}bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] text-success focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% elif accent == 'warning' %}bg-[color-mix(in_oklab,var(--color-warning)_10%,transparent)] border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)] text-warning focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% elif accent == 'danger' %}bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] text-danger focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% else %}bg-surface border-border text-text focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+        {% if required %}required{% endif %}
+        {% if disabled %}disabled{% endif %}
+        {{ attrs }}>
+    {% if placeholder %}
+        <option value="" disabled {% if not selected %}selected{% endif %}>{{ placeholder }}</option>
+    {% endif %}
+    {% for option in options %}
+        <option value="{{ option.value }}"
+                {% if option.value == selected %}selected{% endif %}>{{ option.label }}</option>
+    {% endfor %}
+    {{ slot }}
+</select>

@@ -1,0 +1,23 @@
+{% comment %}
+The CVSS band badge. Five bands would be five near-identical files and pages
+interpolate the band they were given, so the band is a level prop: critical,
+high, medium, low, and unknown for anything off the scale. The shape comes from
+the shell (shape="severity"): squarer and uppercase, so the shape carries the
+"this is a severity" signal, not just the colour. The text mixes the accent
+toward the theme text colour, because amber and cyan on their own tint fail
+contrast in both themes.
+{% endcomment %}
+<c-vars level pill class />
+<c-badges.badge shape="severity" variant_class="
+{% if level == 'critical' %}
+    text-[color-mix(in_oklab,var(--color-severity-critical)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-severity-critical)_12%,transparent)] border-[color-mix(in_oklab,var(--color-severity-critical)_20%,transparent)]
+{% elif level == 'high' %}
+    text-[color-mix(in_oklab,var(--color-severity-high)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-severity-high)_12%,transparent)] border-[color-mix(in_oklab,var(--color-severity-high)_20%,transparent)]
+{% elif level == 'medium' %}
+    text-[color-mix(in_oklab,var(--color-severity-medium)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-severity-medium)_12%,transparent)] border-[color-mix(in_oklab,var(--color-severity-medium)_20%,transparent)]
+{% elif level == 'low' %}
+    text-[color-mix(in_oklab,var(--color-severity-low)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-severity-low)_12%,transparent)] border-[color-mix(in_oklab,var(--color-severity-low)_20%,transparent)]
+{% else %}
+    text-[color-mix(in_oklab,var(--color-text-muted)_70%,var(--color-text))] bg-[color-mix(in_oklab,var(--color-text-muted)_12%,transparent)] border-[color-mix(in_oklab,var(--color-text-muted)_20%,transparent)]
+{% endif %}
+" :pill="pill" class="{{ class }}" :attrs="attrs">{{ slot }}</c-badges.badge>

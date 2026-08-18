@@ -1,0 +1,37 @@
+{% comment %}
+An identifier you click to copy: a monospace chip that confirms in place rather
+than raising a toast, because these sit in page headers and identifier tables
+where one toast per click is far too loud. For a labelled control beside a value
+already on the page use c-copy-button; for a secret use c-token-display.
+
+The chip is a button, so the keyboard reaches it and it announces itself as an
+action. The value and the copy handler are the caller's: it brings the x-data
+that holds them (copyableValue) and binds the confirmation with
+::data-copied="copied", the way a dynamic badge binds its variant. The copied
+recipe repaints surface, hairline and ink together off that one attribute, so
+the look cannot drift from the state, and the icon reads the same marker from
+the group rather than carrying a second copy of it.
+
+The icon is here rather than in the slot because it is the chip's own furniture:
+the slot is the value.
+
+The chip states no line-height, which is the one place the usual rule is wrong:
+its font-size is an arbitrary value, so Tailwind attaches no line-height to
+cancel, and the public trust-center pages read 1.6 where the app reads 1.5. A
+stated 1.5 would shorten every identifier chip on those pages by a pixel a line.
+{% endcomment %}
+<c-vars class />
+<button type="button"
+        data-copied="false"
+        class="group inline-flex max-w-full items-center gap-1.5 px-2 py-1 font-mono text-[0.8125rem] text-text bg-background border border-solid border-border rounded-md cursor-pointer transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] hover:border-[color-mix(in_oklab,var(--color-primary)_40%,transparent)] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] data-[copied=true]:bg-success data-[copied=true]:border-success data-[copied=true]:text-white{% if class %} {{ class }}{% endif %}"
+        {{ attrs }}>
+    {{ slot }}
+    <i class="fas shrink-0 text-[0.6875rem] text-text-muted transition-all duration-150 group-hover:text-primary group-data-[copied=true]:text-white"
+       :class="copied ? 'fa-check' : 'fa-copy'"
+       aria-hidden="true"></i>
+    {# Announce the result to screen readers, which cannot see the colour change. #}
+    <span class="sr-only"
+          role="status"
+          aria-live="polite"
+          x-text="copied ? 'Copied to clipboard' : ''"></span>
+</button>

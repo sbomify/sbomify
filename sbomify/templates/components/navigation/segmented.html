@@ -1,0 +1,17 @@
+{% comment %}
+The tray a segmented control sits in: one tinted strip holding buttons that
+switch what is already on screen, such as the chart a trends panel draws.
+
+It is a group, not a tablist: nothing here labels a panel, so there is no
+aria-selected to keep and no roving tab stop to manage; every segment stays in
+the tab order. Reach for c-navigation.tabs-pills where the buttons really do
+select panels.
+
+The recipe is the pills row's, so the two read as one control wherever they
+appear; c-navigation.segment carries the matching button.
+{% endcomment %}
+<c-vars class />
+<div class="flex gap-0 bg-background p-1 rounded-lg{% if class %} {{ class }}{% endif %}"
+     role="group"
+     {{ attrs }}>{{ slot }}
+</div>

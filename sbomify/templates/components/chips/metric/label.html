@@ -1,0 +1,7 @@
+{% comment %}
+The muted half of a metric chip. Muted under every accent, so it never carries
+the chip's colour.
+{% endcomment %}
+<c-vars class />
+<span class="text-text-muted{% if class %} {{ class }}{% endif %}"
+      {{ attrs }}>{{ slot }}</span>

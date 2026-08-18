@@ -61,6 +61,38 @@ describe('selecting products', () => {
     })
 })
 
+describe('arriving with a product already chosen', () => {
+    test('a preselected product is ticked, covering every version', () => {
+        const opened = advisoryProductPicker(structuredClone(PRODUCTS), ['p2'])
+
+        expect(opened.selectedProducts).toEqual(['p2'])
+        expect(opened.selectionSummary).toBe('Vault: every version, now and in future')
+    })
+
+    test('it can still be cleared like any other selection', () => {
+        const opened = advisoryProductPicker(structuredClone(PRODUCTS), ['p1'])
+        opened.toggleProduct(0, plain)
+
+        expect(opened.selectedProducts).toEqual([])
+    })
+
+    test('nothing preselected is the normal empty start', () => {
+        expect(advisoryProductPicker(structuredClone(PRODUCTS)).selectedProducts).toEqual([])
+    })
+
+    test('a template that never set the ids serialises an empty string, not a list', () => {
+        expect(advisoryProductPicker(structuredClone(PRODUCTS), '').selectedProducts).toEqual([])
+    })
+
+    test('the caller\'s list is copied, not adopted', () => {
+        const ids = ['p1']
+        const opened = advisoryProductPicker(structuredClone(PRODUCTS), ids)
+        opened.toggleProduct(1, plain)
+
+        expect(ids).toEqual(['p1'])
+    })
+})
+
 describe('selecting versions', () => {
     test('ticking a version implies its product', () => {
         picker.toggleRelease(picker.products[0], 1, plain)
@@ -117,14 +149,44 @@ describe('the collapsed row summary', () => {
     })
 })
 
-describe('expanding rows', () => {
-    test('expansion is independent of selection', () => {
-        picker.toggleExpanded('p1')
-        expect(picker.isExpanded('p1')).toBe(true)
+describe('opening a product in the detail pane', () => {
+    test('opening is independent of selection', () => {
+        picker.openProduct('p1')
+        expect(picker.isActive('p1')).toBe(true)
         expect(picker.isProductSelected('p1')).toBe(false)
 
-        picker.toggleExpanded('p1')
-        expect(picker.isExpanded('p1')).toBe(false)
+        picker.openProduct('p1')
+        expect(picker.isActive('p1')).toBe(false)
+    })
+
+    test('only one product is open at a time', () => {
+        picker.openProduct('p1')
+        picker.openProduct('p2')
+
+        expect(picker.isActive('p2')).toBe(true)
+        expect(picker.isActive('p1')).toBe(false)
+    })
+
+    test('the open product exposes its own versions', () => {
+        picker.openProduct('p1')
+
+        expect(picker.activeProduct?.id).toBe('p1')
+        expect(picker.activeReleases.map((release) => release.id)).toEqual(
+            picker.products[0]!.releases.map((release) => release.id),
+        )
+    })
+
+    test('nothing open means no versions to show', () => {
+        expect(picker.activeProduct).toBeNull()
+        expect(picker.activeReleases).toEqual([])
+    })
+
+    test('the open product narrows to the filter, like the list does', () => {
+        const [target] = picker.products[0]!.releases
+        picker.openProduct('p1')
+        picker.setFilter(target!.label)
+
+        expect(picker.activeReleases.map((release) => release.id)).toEqual([target!.id])
     })
 })
 

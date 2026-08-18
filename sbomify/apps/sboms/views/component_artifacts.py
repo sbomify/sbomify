@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views import View
 
 from sbomify.apps.core.apis import get_component
@@ -24,4 +25,18 @@ class ComponentArtifactsView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
             return error_response(
                 request, HttpResponse(status=status_code, content=component.get("detail", "Unknown error"))
             )
-        return render(request, "sboms/component_artifacts.html.j2", {"component": component})
+        # Page-header context per the design system contract: the title string
+        # and breadcrumb trail are built here, not inline in the template.
+        breadcrumb_items = [
+            {"label": component["name"], "url": reverse("core:component_details", args=[component["id"]])},
+            {"label": "Artifacts"},
+        ]
+        return render(
+            request,
+            "sboms/component_artifacts.html.j2",
+            {
+                "component": component,
+                "page_title": f"{component['name']} artifacts",
+                "breadcrumb_items": breadcrumb_items,
+            },
+        )

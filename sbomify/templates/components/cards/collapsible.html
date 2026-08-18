@@ -1,0 +1,16 @@
+{% comment %}
+The collapsible card: a card whose body a header row reveals.
+
+Status is a level prop, not a file per level. The levels are one semantic scale
+(success, warning, danger) that a page picks from an expression about a run's
+result, and each only repaints the border, so files would multiply for nothing.
+The border colour renders as one segment.
+
+Compose it with c-cards.collapsible-trigger and c-cards.collapsible-body. The
+open state is an Alpine expression the caller owns, so one x-data can drive a
+whole stack of these and keep only one of them open.
+{% endcomment %}
+<c-vars level class />
+<div class="bg-surface rounded-xl overflow-hidden border border-solid transition-shadow duration-300 {% if level == 'success' %}border-[color-mix(in_oklab,var(--color-success)_30%,transparent)]{% elif level == 'warning' %}border-[color-mix(in_oklab,var(--color-warning)_30%,transparent)]{% elif level == 'danger' %}border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)]{% else %}border-border{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

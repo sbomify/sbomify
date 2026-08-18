@@ -63,11 +63,20 @@ class DashboardView(GuestAccessBlockedMixin, ValidateWorkspaceMixin, LoginRequir
         if first_name:
             greeting += f", {first_name}"
 
+        dashboard = build_dashboard_context(team.id) if team else {"is_first_visit": True}
+        # Built here rather than in the template: it names the workspace, and the
+        # page header takes its subtitle as one string.
+        if dashboard.get("is_first_visit"):
+            subtitle = "Let's get your first component reporting."
+        else:
+            subtitle = f"The security picture across {current_team.get('name', 'your workspace')}."
+
         context = {
             "current_team": current_team,
             "has_crud_permissions": has_crud_permissions,
             "greeting": greeting,
-            "dashboard": build_dashboard_context(team.id) if team else {"is_first_visit": True},
+            "page_subtitle": subtitle,
+            "dashboard": dashboard,
         }
 
         # The hero is one Get-started action, not a checklist — the wizard

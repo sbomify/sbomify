@@ -1,0 +1,36 @@
+{% comment %}
+The page trail. items is a list of {label, url} built in the view, oldest
+first; the last crumb is the current page, so it renders as text even when it
+carries a url, and it is the one that says so with aria-current. separator is
+the Font Awesome class of the chevron between crumbs.
+
+A crumb may also carry icon and title, which the public trails use: the mark
+beside the label, and the full name of a label the trail had to shorten. The
+icon brings the row layout it needs with it, so a trail of plain labels renders
+exactly as it did before there were icons.
+{% endcomment %}
+<c-vars items separator="fas fa-chevron-right" class />
+<nav aria-label="Breadcrumb"
+     {% if class %}class="{{ class }}"{% endif %}
+     {{ attrs }}>
+    <ol class="flex items-center gap-2 text-sm">
+        {% for item in items %}
+            <li class="flex items-center gap-2">
+                {% if not forloop.first %}<i class="{{ separator }} text-xs text-text-muted" aria-hidden="true"></i>{% endif %}
+                {% if item.url and not forloop.last %}
+                    <a href="{{ item.url }}"
+                       class="text-text-muted hover:text-text transition-colors{% if item.icon %} flex items-center gap-1{% endif %}"
+                       {% if item.title %}title="{{ item.title }}"{% endif %}>
+                        {% if item.icon %}<i class="{{ item.icon }} opacity-80" aria-hidden="true"></i>{% endif %}
+                    {{ item.label }}</a>
+                {% else %}
+                    <span class="text-text{% if forloop.last %} font-medium{% endif %}{% if item.icon %} flex items-center gap-1{% endif %}"
+                          {% if forloop.last %}aria-current="page"{% endif %}
+                          {% if item.title %}title="{{ item.title }}"{% endif %}>
+                        {% if item.icon %}<i class="{{ item.icon }} opacity-80" aria-hidden="true"></i>{% endif %}
+                    {{ item.label }}</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ol>
+</nav>

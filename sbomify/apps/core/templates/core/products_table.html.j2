@@ -1,6 +1,7 @@
+{% load design_system %}
 {# WebSocket listener for real-time updates #}
 <div id="products-table-container"
-     x-data="{ search: '', filter: 'all', sortColumn: 'name', sortDirection: 'asc', currentPage: 1, perPage: 10, allProducts: [], init() { this.allProducts = window.parseJsonScript('products-data') || []; this.$el.addEventListener('htmx:afterSettle', () => { this.allProducts = window.parseJsonScript('products-data') || []; if (this.currentPage > this.totalPages && this.totalPages > 0) { this.currentPage = this.totalPages; } }); }, get filteredData() { let data = [...this.allProducts]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.name.toLowerCase().includes(s) || (item.description && item.description.toLowerCase().includes(s)) ); } if (this.filter === 'public') { data = data.filter(item => item.is_public); } else if (this.filter === 'private') { data = data.filter(item => !item.is_public); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal = a[this.sortColumn]; let bVal = b[this.sortColumn]; if (this.sortColumn === 'components_count') { aVal = a.components?.length || 0; bVal = b.components?.length || 0; } if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.max(1, Math.ceil(this.filteredData.length / this.perPage)); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, getComponentPillColor(idx) { return 'bg-border/20 text-text-muted border-border/40'; } }"
+     x-data="{ search: '', filter: 'all', sortColumn: 'name', sortDirection: 'asc', currentPage: 1, perPage: 10, allProducts: [], init() { this.allProducts = window.parseJsonScript('products-data') || []; this.$el.addEventListener('htmx:afterSettle', () => { this.allProducts = window.parseJsonScript('products-data') || []; if (this.currentPage > this.totalPages && this.totalPages > 0) { this.currentPage = this.totalPages; } }); }, get filteredData() { let data = [...this.allProducts]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.name.toLowerCase().includes(s) || (item.description && item.description.toLowerCase().includes(s)) ); } if (this.filter === 'public') { data = data.filter(item => item.is_public); } else if (this.filter === 'private') { data = data.filter(item => !item.is_public); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal = a[this.sortColumn]; let bVal = b[this.sortColumn]; if (this.sortColumn === 'components_count') { aVal = a.components?.length || 0; bVal = b.components?.length || 0; } if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.max(1, Math.ceil(this.filteredData.length / this.perPage)); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } } }"
      x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
      hx-get="{% url 'core:products_table' %}"
      hx-trigger="refresh-products from:body"
@@ -8,196 +9,137 @@
      @ws:message.window="if (['product_created', 'product_deleted', 'component_created', 'component_deleted'].includes($event.detail.type)) { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => document.body.dispatchEvent(new CustomEvent('refresh-products')), 500); }">
     {# Serialize products data for Alpine.js #}
     {{ products|json_script:"products-data" }}
-    <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border">
-            <h3 class="text-lg font-semibold text-text m-0">All Products</h3>
-        </div>
-        <div>
-            {% if products %}
-                <div class="flex flex-col overflow-hidden">
-                    <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3 justify-between">
-                        <div class="tw-data-table-toolbar-left">
-                            <div class="tw-data-table-search">
-                                <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <label for="products-search" class="sr-only">Search products</label>
-                                <input type="search"
-                                       id="products-search"
-                                       x-model="search"
-                                       placeholder="Search products..."
-                                       class="tw-data-table-search-input">
-                            </div>
-                            {# Visibility Filter #}
-                            <label for="products-visibility-filter" class="sr-only">Filter by visibility</label>
-                            <select id="products-visibility-filter"
-                                    x-model="filter"
-                                    class="tw-data-table-page-size-select">
-                                <option value="all">All</option>
-                                <option value="public">Public</option>
-                                <option value="private">Private</option>
-                            </select>
-                        </div>
-                        <div class="tw-data-table-toolbar-right">
-                            <div class="tw-data-table-page-size">
-                                <span>Show</span>
-                                <label for="products-per-page" class="sr-only">Entries per page</label>
-                                <select id="products-per-page"
-                                        x-model.number="perPage"
-                                        class="tw-data-table-page-size-select">
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                    <option value="25">25</option>
-                                    <option value="50">50</option>
-                                </select>
-                                <span>entries</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="tw-data-table-container">
-                        <table class="tw-table tw-table-fixed">
-                            <thead>
-                                <tr>
-                                    <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                                @click="sort('name')">
-                                            Product
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="hidden md:table-cell"
-                                        :aria-sort="sortColumn === 'components_count' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'components_count' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'components_count' && sortDirection === 'desc' }"
-                                                @click="sort('components_count')">
-                                            Components
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                    <th class="tw-cell-end"
-                                        :aria-sort="sortColumn === 'is_public' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                        <button type="button"
-                                                class="tw-table-sortable"
-                                                :class="{ 'sorted-asc': sortColumn === 'is_public' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'is_public' && sortDirection === 'desc' }"
-                                                @click="sort('is_public')">
-                                            Visibility
-                                            <span class="tw-table-sort-icon" aria-hidden="true">
-                                                <i class="fas fa-caret-up"></i>
-                                                <i class="fas fa-caret-down"></i>
-                                            </span>
-                                        </button>
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="product in paginatedData" :key="product.id">
-                                    <tr class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                        tabindex="0"
-                                        @click="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)"
-                                        @keydown.enter.prevent="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)">
-                                        <td>
-                                            <div class="min-w-0">
-                                                <span class="text-text font-medium block truncate" x-text="product.name"></span>
-                                                <template x-if="product.description">
-                                                    <p class="text-xs text-text-muted truncate max-w-xs"
-                                                       x-text="product.description.substring(0, 50) + (product.description.length > 50 ? '...' : '')">
-                                                    </p>
-                                                </template>
-                                                {# Mobile: Show components count #}
-                                                <div class="md:hidden mt-1">
-                                                    <span class="text-xs text-text-muted"
-                                                          x-text="(product.components?.length || 0) + ' component' + ((product.components?.length || 0) !== 1 ? 's' : '')"></span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="hidden md:table-cell">
-                                            <template x-if="product.components && product.components.length > 0">
-                                                <div class="flex flex-wrap gap-1.5">
-                                                    <template x-for="(component, idx) in product.components.slice(0, 3)"
-                                                              :key="component.id">
-                                                        <a :href="'{% url 'core:component_details' 0 %}'.replace('0', component.id)"
-                                                           @click.stop
-                                                           class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors hover:opacity-80"
-                                                           :class="getComponentPillColor(idx)">
-                                                            <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
-                                                            <span x-text="component.name"></span>
-                                                        </a>
-                                                    </template>
-                                                    <template x-if="product.components.length > 3">
-                                                        <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/30 text-text-muted"
-                                                              x-text="'+' + (product.components.length - 3) + ' more'"></span>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                            <template x-if="!product.components || product.components.length === 0">
-                                                <span class="text-text-muted text-sm italic">No components</span>
-                                            </template>
-                                        </td>
-                                        <td class="tw-cell-end">
-                                            <template x-if="product.is_public">
-                                                <span class="tw-badge-success">
-                                                    <i class="fas fa-globe text-[10px] mr-1"></i>
-                                                    Public
-                                                </span>
-                                            </template>
-                                            <template x-if="!product.is_public">
-                                                <span class="tw-badge-info">
-                                                    <i class="fas fa-lock text-[10px] mr-1"></i>
-                                                    Private
-                                                </span>
-                                            </template>
-                                        </td>
-                                    </tr>
-                                </template>
-                                <template x-if="paginatedData.length === 0">
-                                    <tr>
-                                        <td colspan="3" class="text-center py-8 text-text-muted">
-                                            <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                            <p>No products match your search</p>
-                                            <button @click="search = ''; filter = 'all'"
-                                                    class="mt-3 text-xs text-primary hover:underline">
-                                                Clear filters
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                        <div class="tw-data-table-info">
-                            Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
-                            <template x-if="search || filter !== 'all'">
-                                <span>(filtered from <strong x-text="allProducts.length"></strong> total)</span>
-                            </template>
-                        </div>
-                        {% include "components/tw/table_pager.html.j2" %}
+    {% if products %}
+        {# The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="products-search" label="Search products" placeholder="Search products..." x-model="search" />
+        {# Visibility filter #}
+        <c-tables.select id="products-visibility-filter" label="Filter by visibility" x-model="filter">
+        <option value="all">All</option>
+        <option value="public">Public</option>
+        <option value="private">Private</option>
+        </c-tables.select>
+        <c-slot name="right">
+        <c-tables.page-size id="products-per-page" x-model.number="perPage">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        </c-tables.page-size>
+        </c-slot>
+        </c-tables.toolbar>
+        <c-tables.table fixed>
+        <c-tables.head>
+        <c-tables.header-cell sort="name">Product</c-tables.header-cell>
+        <c-tables.header-cell sort="components_count" class="hidden md:table-cell">Components</c-tables.header-cell>
+        <c-tables.header-cell sort="is_public" end>Visibility</c-tables.header-cell>
+        <c-tables.actions-cell as="th" label="Actions" />
+        </c-tables.head>
+        <tbody>
+            <template x-for="product in paginatedData" :key="product.id">
+                <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)">
+                <c-tables.cell>
+                <div class="min-w-0">
+                    <span class="text-text font-medium block truncate" x-text="product.name"></span>
+                    <template x-if="product.description">
+                        <p class="text-xs text-text-muted truncate max-w-xs"
+                           x-text="product.description.substring(0, 50) + (product.description.length > 50 ? '...' : '')">
+                        </p>
+                    </template>
+                    {# Mobile: show the components count the hidden column carries #}
+                    <div class="md:hidden mt-1">
+                        <span class="text-xs text-text-muted"
+                              x-text="(product.components?.length || 0) + ' component' + ((product.components?.length || 0) !== 1 ? 's' : '')"></span>
                     </div>
                 </div>
-            {% else %}
-                {# Empty State #}
-                <div class="flex flex-col items-center justify-center py-16 px-6">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
-                        <i class="fas fa-cube text-3xl text-primary"></i>
+                </c-tables.cell>
+                <c-tables.cell class="hidden md:table-cell">
+                <template x-if="product.components && product.components.length > 0">
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="component in product.components.slice(0, 3)"
+                                  :key="component.id">
+                            <c-tags.tag href="#" class="hover:opacity-80" ::href="'{% url 'core:component_details' 0 %}'.replace('0', component.id)" @click.stop>
+                            <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                            <span x-text="component.name"></span>
+                            </c-tags.tag>
+                        </template>
+                        <template x-if="product.components.length > 3">
+                            <c-chips.neutral x-text="'+' + (product.components.length - 3) + ' more'" />
+                        </template>
                     </div>
-                    <h3 class="text-lg font-semibold text-text mb-2">No products yet</h3>
-                    <p class="text-text-muted text-sm text-center max-w-sm mb-6">
-                        Products help you organize your software releases and their associated components, SBOMs, and documentation.
-                    </p>
-                    {% if has_crud_permissions %}
-                        <button @click="$dispatch('open-add-product-modal')" class="tw-btn-primary">
-                            <i class="fas fa-plus mr-2"></i>Create Your First Product
-                        </button>
-                    {% endif %}
-                </div>
-            {% endif %}
-        </div>
-    </div>
+                </template>
+                <template x-if="!product.components || product.components.length === 0">
+                    <span class="text-text-muted text-sm italic">No components</span>
+                </template>
+                </c-tables.cell>
+                <c-tables.cell end>
+                <template x-if="product.is_public">
+                    <c-badges.success>
+                    <i class="fas fa-globe text-[10px] mr-1" aria-hidden="true"></i>Public
+                    </c-badges.success>
+                </template>
+                <template x-if="!product.is_public">
+                    <c-badges.info>
+                    <i class="fas fa-lock text-[10px] mr-1" aria-hidden="true"></i>Private
+                    </c-badges.info>
+                </template>
+                </c-tables.cell>
+                {% comment %}
+                    Row actions. The cell swallows its own clicks so reaching
+                    for the menu never navigates to the product.
+                {% endcomment %}
+                <c-tables.actions-cell @click.stop>
+                <c-actions-menu label="Product actions" width="w-56">
+                {% if has_crud_permissions %}
+                    <c-dropdowns.item icon="fas fa-shield-halved" href="#" ::href="'{% url 'core:security_advisory_new' %}?product=' + product.id">
+                    Add security advisory
+                    </c-dropdowns.item>
+                    <c-dropdowns.divider />
+                    <c-dropdowns.header>Download SBOM</c-dropdowns.header>
+                {% endif %}
+                <c-dropdowns.item icon="fas fa-download" href="#" ::href="'{% url 'core:sbom_download_product' 0 %}'.replace('0', product.id)">
+                CycloneDX
+                </c-dropdowns.item>
+                <c-dropdowns.item icon="fas fa-download" href="#" ::href="'{% url 'core:sbom_download_product' 0 %}'.replace('0', product.id) + '?format=spdx'">
+                SPDX
+                </c-dropdowns.item>
+                </c-actions-menu>
+                </c-tables.actions-cell>
+                </c-tables.row>
+            </template>
+            <template x-if="paginatedData.length === 0">
+                <tr>
+                    <td colspan="4" class="text-center py-8 text-text-muted">
+                        <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
+                        <p>No products match your search</p>
+                        <button type="button"
+                                @click="search = ''; filter = 'all'"
+                                class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+        <template x-if="search || filter !== 'all'">
+            <span>(filtered from <strong x-text="allProducts.length"></strong> total)</span>
+        </template>
+        </c-tables.info>
+        <c-tables.pager />
+        </c-tables.footer>
+        </c-tables.shell>
+    {% else %}
+        <c-cards.card>
+        <c-feedback.empty-state icon="fas fa-cube" title="No products yet" message="Products help you organize your software releases and their associated components, SBOMs, and documentation.">
+        {% if has_crud_permissions %}
+            <c-buttons.primary @click="$dispatch('open-add-product-modal')">
+            <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Product
+            </c-buttons.primary>
+        {% endif %}
+        </c-feedback.empty-state>
+        </c-cards.card>
+    {% endif %}
 </div>

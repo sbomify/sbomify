@@ -6,99 +6,102 @@
      class="mt-4"
      x-data
      @ws:message.window=" if ($event.detail.type === 'assessment_complete' && $event.detail.sbom_id === '{{ sbom_id }}') { location.reload(); } ">
-    <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-            <div>
-                <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
-                    <i class="fas fa-clipboard-check"></i>Assessment Results
-                </h4>
-            </div>
-            <div>
-                {% with status=assessment_runs.status_summary %}
-                    {% if status.overall_status == 'all_pass' %}
-                        <span class="tw-badge-secondary flex items-center gap-1">
-                            <i class="fas fa-check-circle"></i>All Passed
-                        </span>
-                    {% elif status.overall_status == 'has_failures' %}
-                        <span class="tw-badge-secondary flex items-center gap-1">
-                            <i class="fas fa-exclamation-triangle"></i>Issues Found
-                        </span>
-                    {% elif status.overall_status == 'pending' or status.overall_status == 'in_progress' %}
-                        <span class="tw-badge-secondary flex items-center gap-1">
-                            {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
-                            Processing
-                        </span>
-                    {% else %}
-                        <span class="tw-badge-secondary flex items-center gap-1">
-                            <i class="fas fa-clock"></i>Pending
-                        </span>
-                    {% endif %}
-                {% endwith %}
-            </div>
+    <c-cards.card flush>
+    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
+        <div>
+            <h4 class="text-lg font-semibold text-text m-0 flex items-center gap-2">
+                <i class="fas fa-clipboard-check"></i>Assessment Results
+            </h4>
         </div>
-        <div class="p-6">
+        <div>
             {% with status=assessment_runs.status_summary %}
-                {% if status.total_assessments > 0 %}
-                    <!-- Compact summary: total + status chips (matches the vuln-scan strip) -->
-                    <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-                        <div class="flex items-baseline gap-2">
-                            <span class="text-3xl font-bold text-text leading-none">{{ status.total_assessments }}</span>
-                            <span class="text-sm text-text-muted">assessments</span>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success/10 border border-success/20 text-success text-sm font-medium">
-                                <span class="font-bold">{{ status.passing_count }}</span> Passed
-                            </span>
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/20 text-warning text-sm font-medium">
-                                <span class="font-bold">{{ status.failing_count }}</span> Issues
-                            </span>
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-info/10 border border-info/20 text-info text-sm font-medium">
-                                <span class="font-bold">{{ status.pending_count|add:status.in_progress_count }}</span> Pending
-                            </span>
-                        </div>
-                    </div>
-                    <!-- Consulting CTA for compliance failures -->
-                    {% if assessment_runs|has_compliance_failures %}
-                        <div class="flex items-center justify-between flex-wrap gap-3 p-4 bg-primary/5 border border-primary/20 rounded-lg mt-4">
-                            <div class="flex items-center gap-2 text-text">
-                                <i class="fas fa-hands-helping text-primary"></i>
-                                <span>Need help resolving these compliance issues? Our experts can help.</span>
-                            </div>
-                            <a href="{% url 'core:support_contact' %}"
-                               class="tw-btn-primary text-sm">
-                                <i class="fas fa-envelope mr-1"></i>Contact Us
-                            </a>
-                        </div>
-                    {% endif %}
-                    <!-- Plugin Results -->
-                    <div class="plugin-results-section">
-                        <h6 class="section-title">
-                            <i class="fas fa-puzzle-piece mr-2"></i>Plugin Results
-                        </h6>
-                        <div class="space-y-3">
-                            {% for run in assessment_runs.latest_runs %}
-                                {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
-                            {% empty %}
-                                <div class="assessment-no-results">
-                                    <div class="no-results-icon">
-                                        <i class="fas fa-info-circle"></i>
-                                    </div>
-                                    <p>No assessment runs found.</p>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
+                {% if status.overall_status == 'all_pass' %}
+                    <c-badges.secondary class="gap-1">
+                    <i class="fas fa-check-circle"></i>All Passed
+                    </c-badges.secondary>
+                {% elif status.overall_status == 'has_failures' %}
+                    <c-badges.secondary class="gap-1">
+                    <i class="fas fa-exclamation-triangle"></i>Issues Found
+                    </c-badges.secondary>
+                {% elif status.overall_status == 'pending' or status.overall_status == 'in_progress' %}
+                    <c-badges.secondary class="gap-1">
+                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+                    Processing
+                    </c-badges.secondary>
                 {% else %}
-                    <!-- No Assessments Message -->
-                    <div class="assessment-no-results">
-                        <div class="no-results-icon">
-                            <i class="fas fa-hourglass-half"></i>
-                        </div>
-                        <p>Assessment results will appear here once processing completes.</p>
-                        <small>This usually takes a few minutes after SBOM upload.</small>
-                    </div>
+                    <c-badges.secondary class="gap-1">
+                    <i class="fas fa-clock"></i>Pending
+                    </c-badges.secondary>
                 {% endif %}
             {% endwith %}
         </div>
     </div>
+    <div class="p-6">
+        {% with status=assessment_runs.status_summary %}
+            {% if status.total_assessments > 0 %}
+                <!-- Compact summary: total + status chips (matches the vuln-scan strip) -->
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-3xl font-bold text-text leading-none">{{ status.total_assessments }}</span>
+                        <span class="text-sm text-text-muted">assessments</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+                        <c-chips.metric-chip accent="success">
+                        <c-chips.metric.value>{{ status.passing_count }}</c-chips.metric.value>
+                        <c-chips.metric.label>Passed</c-chips.metric.label>
+                        </c-chips.metric-chip>
+                        <c-chips.metric-chip accent="warning">
+                        <c-chips.metric.value>{{ status.failing_count }}</c-chips.metric.value>
+                        <c-chips.metric.label>Issues</c-chips.metric.label>
+                        </c-chips.metric-chip>
+                        <c-chips.metric-chip accent="info">
+                        <c-chips.metric.value>{{ status.pending_count|add:status.in_progress_count }}</c-chips.metric.value>
+                        <c-chips.metric.label>Pending</c-chips.metric.label>
+                        </c-chips.metric-chip>
+                    </div>
+                </div>
+                <!-- Consulting CTA for compliance failures -->
+                {% if assessment_runs|has_compliance_failures %}
+                    <c-feedback.alert icon="fas fa-hands-helping" class="mt-4">
+                    <c-slot name="body">
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <span>Need help resolving these compliance issues? Our experts can help.</span>
+                        <c-buttons.primary size="sm" href="{% url 'core:support_contact' %}" class="no-underline">
+                        <i class="fas fa-envelope mr-1"></i>Contact Us
+                        </c-buttons.primary>
+                    </div>
+                    </c-slot>
+                    </c-feedback.alert>
+                {% endif %}
+                <!-- Plugin Results -->
+                <div class="plugin-results-section">
+                    <h6 class="section-title">
+                        <i class="fas fa-puzzle-piece mr-2"></i>Plugin Results
+                    </h6>
+                    <div class="space-y-3">
+                        {% for run in assessment_runs.latest_runs %}
+                            {% include 'plugins/components/_assessment_run_item.html.j2' with run=run loop_index=forloop.counter %}
+                        {% empty %}
+                            <div class="assessment-no-results">
+                                <div class="no-results-icon">
+                                    <i class="fas fa-info-circle"></i>
+                                </div>
+                                <p>No assessment runs found.</p>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- No Assessments Message -->
+                <div class="assessment-no-results">
+                    <div class="no-results-icon">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <p>Assessment results will appear here once processing completes.</p>
+                    <small>This usually takes a few minutes after SBOM upload.</small>
+                </div>
+            {% endif %}
+        {% endwith %}
+    </div>
+    </c-cards.card>
 </div>

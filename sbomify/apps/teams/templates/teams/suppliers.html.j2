@@ -1,129 +1,68 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% block title %}sbomify Suppliers{% endblock %}
 {% block content %}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-         x-data="{ open: false, form: { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }, add() { this.form = { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }; this.open = true; }, edit(data) { this.form = { supplierId: data.supplierId, name: data.supplierName, contactName: data.supplierContactName, contactEmail: data.supplierContactEmail, website: data.supplierWebsite, notes: data.supplierNotes, }; this.open = true; }, }"
+    {# dashboard_base already pads and centres the page; a second wrapper doubled it. #}
+    <div x-data="{ open: false, form: { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }, add() { this.form = { supplierId: '', name: '', contactName: '', contactEmail: '', website: '', notes: '' }; this.open = true; }, edit(data) { this.form = { supplierId: data.supplierId, name: data.supplierName, contactName: data.supplierContactName, contactEmail: data.supplierContactEmail, website: data.supplierWebsite, notes: data.supplierNotes, }; this.open = true; }, }"
          x-init="if (new URLSearchParams(location.search).has('new')) { add(); history.replaceState(null, '', location.pathname) }"
          @refresh-suppliers.window="open = false">
-        {# Page header #}
-        <div class="flex items-start justify-between gap-4 flex-wrap mb-8">
-            <div class="flex items-center gap-4">
-                <div class="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-truck-field text-primary text-xl" aria-hidden="true"></i>
+        <c-layout.page-header title="Suppliers" subtitle="The vendors you collect SBOMs and documents from." icon="fas fa-truck-field">
+        {# The page's own entry point: suppliers are reachable by URL only while the feature matures, so there is no New-menu entry to lean on. #}
+        <c-buttons.primary @click="add()">
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier
+        </c-buttons.primary>
+        </c-layout.page-header>
+        {# List. The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="supplier-search" label="Search suppliers" placeholder="Search by name or email" name="search" value="{{ search }}" hx-get="{% url 'teams:suppliers' team.key %}?partial=true" hx-trigger="input changed delay:300ms, search" hx-target="#supplier-rows" hx-swap="innerHTML" />
+        </c-tables.toolbar>
+        <div id="supplier-rows"
+             hx-get="{% url 'teams:suppliers' team.key %}?partial=true"
+             hx-trigger="refresh-suppliers from:body"
+             hx-swap="innerHTML">{% include "teams/components/supplier_rows.html.j2" %}</div>
+        </c-tables.shell>
+        {# Add/edit dialog #}
+        <c-modal id="supplier-dialog" show="open" aria-labelledby="supplier-dialog-title">
+        <h2 id="supplier-dialog-title"
+            class="text-lg font-semibold text-text mt-0 mb-4">
+            <span x-text="form.supplierId ? 'Edit supplier' : 'Add supplier'"></span>
+        </h2>
+        <form method="post"
+              hx-post="{% url 'teams:suppliers' team.key %}"
+              hx-swap="none"
+              class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="supplier_id" :value="form.supplierId">
+            <div>
+                <c-forms.label for="supplier-name">Name</c-forms.label>
+                <c-forms.input id="supplier-name" name="name" x-model="form.name" maxlength="255" required />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <c-forms.label for="supplier-contact-name">Contact name</c-forms.label>
+                    <c-forms.input id="supplier-contact-name" name="contact_name" x-model="form.contactName" maxlength="255" />
                 </div>
                 <div>
-                    <h1 class="text-2xl font-bold text-text m-0">Suppliers</h1>
-                    <p class="text-text-muted text-sm m-0">The vendors you collect SBOMs and documents from</p>
+                    <c-forms.label for="supplier-contact-email">Contact email</c-forms.label>
+                    <c-forms.input type="email" id="supplier-contact-email" name="contact_email" x-model="form.contactEmail" maxlength="254" />
+                    <c-forms.hint>Optional. Add it when you know who to ask.</c-forms.hint>
                 </div>
             </div>
-            {# The page's own entry point: suppliers are reachable by URL only while the feature matures, so there is no New-menu entry to lean on. #}
-            <button type="button" class="tw-btn-primary" @click="add()">
-                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add supplier
-            </button>
-        </div>
-        {# List #}
-        <div class="tw-card">
-            <div class="px-6 py-4 border-b border-border">
-                <label for="supplier-search" class="sr-only">Search suppliers</label>
-                <div class="relative max-w-md">
-                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none"
-                       aria-hidden="true"></i>
-                    <input type="search"
-                           id="supplier-search"
-                           name="search"
-                           class="tw-form-input !pl-9"
-                           placeholder="Search by name or email"
-                           value="{{ search }}"
-                           hx-get="{% url 'teams:suppliers' team.key %}?partial=true"
-                           hx-trigger="input changed delay:300ms, search"
-                           hx-target="#supplier-rows"
-                           hx-swap="innerHTML">
-                </div>
+            <div>
+                <c-forms.label for="supplier-website">Website</c-forms.label>
+                <c-forms.input type="url" id="supplier-website" name="website" x-model="form.website" placeholder="https://example.com" maxlength="500" />
             </div>
-            <div id="supplier-rows"
-                 hx-get="{% url 'teams:suppliers' team.key %}?partial=true"
-                 hx-trigger="refresh-suppliers from:body"
-                 hx-swap="innerHTML">{% include "teams/components/supplier_rows.html.j2" %}</div>
-        </div>
-        {# Add/edit dialog #}
-        <div x-show="open"
-             x-cloak
-             x-transition.opacity
-             @keydown.escape.window="open = false"
-             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="supplier-dialog-title">
-            <div class="tw-card w-full max-w-lg" @click.outside="open = false">
-                <div class="px-6 py-4 border-b border-border">
-                    <h2 id="supplier-dialog-title"
-                        class="text-lg font-semibold text-text m-0">
-                        <span x-text="form.supplierId ? 'Edit supplier' : 'Add supplier'"></span>
-                    </h2>
-                </div>
-                <form method="post"
-                      hx-post="{% url 'teams:suppliers' team.key %}"
-                      hx-swap="none"
-                      class="p-6 space-y-4">
-                    {% csrf_token %}
-                    <input type="hidden" name="supplier_id" :value="form.supplierId">
-                    <div>
-                        <label for="supplier-name" class="tw-form-label">Name</label>
-                        <input type="text"
-                               id="supplier-name"
-                               name="name"
-                               class="tw-form-input"
-                               x-model="form.name"
-                               maxlength="255"
-                               required>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label for="supplier-contact-name" class="tw-form-label">Contact name</label>
-                            <input type="text"
-                                   id="supplier-contact-name"
-                                   name="contact_name"
-                                   class="tw-form-input"
-                                   x-model="form.contactName"
-                                   maxlength="255">
-                        </div>
-                        <div>
-                            <label for="supplier-contact-email" class="tw-form-label">Contact email</label>
-                            <input type="email"
-                                   id="supplier-contact-email"
-                                   name="contact_email"
-                                   class="tw-form-input"
-                                   x-model="form.contactEmail"
-                                   maxlength="254">
-                            <p class="tw-form-hint">Optional. Add it when you know who to ask.</p>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="supplier-website" class="tw-form-label">Website</label>
-                        <input type="url"
-                               id="supplier-website"
-                               name="website"
-                               class="tw-form-input"
-                               x-model="form.website"
-                               placeholder="https://example.com"
-                               maxlength="500">
-                    </div>
-                    <div>
-                        <label for="supplier-notes" class="tw-form-label">Notes</label>
-                        <textarea id="supplier-notes"
-                                  name="notes"
-                                  class="tw-form-input"
-                                  x-model="form.notes"
-                                  rows="3"></textarea>
-                    </div>
-                    <div class="flex items-center justify-end gap-2 pt-2">
-                        <button type="button" class="tw-btn-secondary" @click="open = false">Cancel</button>
-                        <button type="submit" class="tw-btn-primary">
-                            <i class="fas fa-save mr-2" aria-hidden="true"></i>Save
-                        </button>
-                    </div>
-                </form>
+            <div>
+                <c-forms.label for="supplier-notes">Notes</c-forms.label>
+                <c-forms.textarea id="supplier-notes" name="notes" rows="3" x-model="form.notes" />
             </div>
-        </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <c-buttons.secondary @click="open = false">Cancel</c-buttons.secondary>
+                <c-buttons.primary type="submit">
+                <i class="fas fa-save mr-2" aria-hidden="true"></i>Save
+                </c-buttons.primary>
+            </div>
+        </form>
+        </c-modal>
     </div>
 {% endblock content %}

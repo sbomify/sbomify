@@ -1,0 +1,18 @@
+{% comment %}
+A boxed label over its value: the small tinted panels that carry a date, a
+count or an identifier inside a grid. Quieter than a metric chip, which is a
+pill in a strip; this one is a cell in a grid of facts.
+
+The value is usually bound, so value_x_text puts the binding on the value
+element itself rather than on a span inside it:
+
+    <c-layout.data-box label="Release" value_x_text="formatDate(item.released)" />
+    <c-layout.data-box label="Version">1.4.0</c-layout.data-box>
+{% endcomment %}
+<c-vars label value_x_text class />
+<div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div class="text-xs text-text-muted">{{ label }}</div>
+    <div class="text-sm font-medium text-text"
+         {% if value_x_text %}x-text="{{ value_x_text }}"{% endif %}>{{ slot }}</div>
+</div>

@@ -1,0 +1,24 @@
+{% comment %}
+The toolbar's search box. The magnifier sits inside the field, and the name of
+the field is a screen-reader label, so the placeholder is never the only thing
+naming it: pass both id and label.
+
+attrs land on the input, which is what a page wires up (x-model="search"), and
+class is layout for the box around it.
+
+The field states its font-size bare and its radius as a length. The old rule
+set a font-size and let the line-height inherit, which is 1.6 on a public page
+and 1.5 in the app, and the public base still loads the pre-Tailwind
+static/css/utilities.css, whose `.rounded-lg` is an !important 0.75rem.
+{% endcomment %}
+<c-vars id label placeholder class />
+<div class="relative flex items-center{% if class %} {{ class }}{% endif %}">
+    <i class="fas fa-search absolute left-3 text-sm text-text-muted pointer-events-none"
+       aria-hidden="true"></i>
+    <label for="{{ id }}" class="sr-only">{{ label }}</label>
+    <input type="search"
+           id="{{ id }}"
+           class="py-2 pr-3 pl-9 min-w-[240px] text-[0.875rem] text-text bg-surface border border-solid border-border rounded-[0.5rem] transition-all duration-200 placeholder:text-text-muted focus:outline-none focus:border-primary focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_10%,transparent)]"
+           {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+           {{ attrs }}>
+</div>

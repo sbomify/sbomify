@@ -1,9 +1,13 @@
+{% comment %}
+    The disabled look hangs off the real `aria-disabled` state rather than a
+    separate class, so the state and its styling cannot drift apart.
+{% endcomment %}
 <nav class="tw-pagination{% if class %} {{ class }}{% endif %}"
      aria-label="Pagination">
     {# Previous #}
     {% if show_prev_next != False %}
         <a href="{% if current > 1 %}{{ base_url }}?page={{ current|add:'-1' }}{% else %}#{% endif %}"
-           class="tw-pagination-item{% if current <= 1 %} tw-pagination-disabled{% endif %}"
+           class="tw-pagination-btn tw-pagination-btn-nav"
            {% if current <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}
            aria-label="Previous page">
             <i class="fas fa-chevron-left" aria-hidden="true"></i>
@@ -12,17 +16,18 @@
     {# Page Numbers - expects page_range list from view context #}
     {% for page_num in page_range %}
         {% if page_num == current %}
-            <span class="tw-pagination-item tw-pagination-active" aria-current="page">{{ page_num }}</span>
+            <span class="tw-pagination-btn tw-pagination-btn-active"
+                  aria-current="page">{{ page_num }}</span>
         {% elif page_num == '…' or page_num == '...' %}
             <span class="tw-pagination-ellipsis">...</span>
         {% else %}
-            <a href="{{ base_url }}?page={{ page_num }}" class="tw-pagination-item">{{ page_num }}</a>
+            <a href="{{ base_url }}?page={{ page_num }}" class="tw-pagination-btn">{{ page_num }}</a>
         {% endif %}
     {% endfor %}
     {# Next #}
     {% if show_prev_next != False %}
         <a href="{% if current < total %}{{ base_url }}?page={{ current|add:'1' }}{% else %}#{% endif %}"
-           class="tw-pagination-item{% if current >= total %} tw-pagination-disabled{% endif %}"
+           class="tw-pagination-btn tw-pagination-btn-nav"
            {% if current >= total %}aria-disabled="true" tabindex="-1"{% endif %}
            aria-label="Next page">
             <i class="fas fa-chevron-right" aria-hidden="true"></i>

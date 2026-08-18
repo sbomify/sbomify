@@ -1,0 +1,10 @@
+{% comment %}
+The card body: the padded region content lives in. Standalone, for a card built
+from its parts. variant_class carries a variant's tint (the danger zone washes
+the body); the default is bare, so the segment is empty unless a variant fills
+it.
+{% endcomment %}
+<c-vars variant_class class />
+<div class="p-6{% if variant_class %} {{ variant_class }}{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

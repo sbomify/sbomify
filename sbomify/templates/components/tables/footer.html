@@ -1,0 +1,8 @@
+{% comment %}
+The band below the table: the count on one side, the pager on the other. It
+wraps, so a narrow viewport stacks them instead of squeezing the count.
+{% endcomment %}
+<c-vars class />
+<div class="flex flex-wrap items-center justify-between gap-4 px-4 py-3.5 bg-[color-mix(in_oklab,var(--color-background)_50%,transparent)] border-t border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

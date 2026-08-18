@@ -1,14 +1,10 @@
 {% comment %}Re-run control for one plugin against one SBOM. Included from both branches of _assessment_run_item so the markup lives in one place. Expects run, sbom_id and can_rerun from the surrounding context. Posts to the ninja endpoint directly, the way the triage modal and the danger zones do, because ninja routes carry no Django url name.{% endcomment %}
 {% if can_rerun and sbom_id and run.status != 'running' and run.status != 'pending' %}
     <span x-data="{ busy: false, done: false, err: '' }" @click.stop>
-        <button type="button"
-                class="tw-badge-secondary hover:text-primary disabled:opacity-50"
-                :disabled="busy || done"
-                :title="err || (done ? 'Queued. Results appear once the run finishes.' : 'Run this plugin again')"
-                @click="busy = true; err = ''; fetch('/api/v1/plugins/assessments/{{ sbom_id|escapejs }}/{{ run.plugin_name|escapejs }}/rerun', { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' } }) .then(async r => { if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || ('Request failed (' + r.status + ')')); } done = true; if (window.showToast) window.showToast({ title: 'Re-run queued', type: 'success', message: 'Results appear once the run finishes.' }); }) .catch(e => { err = e.message; if (window.showToast) window.showToast({ title: 'Re-run failed', type: 'error', message: e.message }); }) .finally(() => { busy = false; })">
-            <i class="fas mr-1"
-               :class="busy ? 'fa-spinner fa-spin' : (done ? 'fa-check' : 'fa-rotate-right')"></i>
-            <span x-text="done ? 'Queued' : 'Re-run'"></span>
-        </button>
+        <c-badges.action ::disabled="busy || done" ::title="err || (done ? 'Queued. Results appear once the run finishes.' : 'Run this plugin again')" @click="busy = true; err = ''; fetch('/api/v1/plugins/assessments/{{ sbom_id|escapejs }}/{{ run.plugin_name|escapejs }}/rerun', { method: 'POST', headers: { 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '' } }) .then(async r => { if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || ('Request failed (' + r.status + ')')); } done = true; if (window.showToast) window.showToast({ title: 'Re-run queued', type: 'success', message: 'Results appear once the run finishes.' }); }) .catch(e => { err = e.message; if (window.showToast) window.showToast({ title: 'Re-run failed', type: 'error', message: e.message }); }) .finally(() => { busy = false; })">
+        <i class="fas mr-1"
+           :class="busy ? 'fa-spinner fa-spin' : (done ? 'fa-check' : 'fa-rotate-right')"></i>
+        <span x-text="done ? 'Queued' : 'Re-run'"></span>
+        </c-badges.action>
     </span>
 {% endif %}

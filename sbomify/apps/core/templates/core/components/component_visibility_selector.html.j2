@@ -17,21 +17,18 @@
               @htmx:before-request="beforeRequestHandler()"
               @htmx:after-request="afterRequestHandler($event)">
             {% csrf_token %}
-            <select class="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-text focus:outline-none focus:ring-2 focus:ring-primary/50 pr-8"
-                    name="visibility"
-                    x-model="visibility"
-                    :disabled="isLoading">
-                <option value="public">Public</option>
-                <option value="private">Private</option>
-                <option value="gated" :disabled="!gatedVisibilityAllowed">
-                    Gated
-                    {% if not gated_visibility_allowed %}(Requires Business/Enterprise plan){% endif %}
-                </option>
-            </select>
+            <c-forms.select name="visibility" size="sm" x-model="visibility" ::disabled="isLoading">
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+            <option value="gated" :disabled="!gatedVisibilityAllowed">
+                Gated
+                {% if not gated_visibility_allowed %}(Requires Business/Enterprise plan){% endif %}
+            </option>
+            </c-forms.select>
         </form>
     </div>
     <div x-show="isLoading" x-cloak class="text-text-muted">
-        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline" %}
+        <c-feedback.spinner size="inline" />
     </div>
     <span class="text-text-muted cursor-help"
           x-tooltip="'Control who can access this component'">

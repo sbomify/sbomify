@@ -1,0 +1,47 @@
+{% comment %}
+    A radio group rendered as tiles, for a short set of values that carry an
+    icon and a colour elsewhere in the app — severity, remediation status,
+    visibility. A plain select spells those out as bare words, which makes the
+    reader translate "medium" into the amber badge they will see afterwards;
+    here the option already looks like the badge.
+
+    Use it for up to about six options that fit on one line each. More than that,
+    or free text, belongs in `select`.
+
+    Params:
+      name      field name shared by every radio
+      options   list of {value, label, icon, variant, disabled}, where `variant`
+                is a badge family — primary, secondary, success, warning, danger,
+                info, violet, severity-critical/high/medium/low
+      selected  the value that starts checked
+      label     group label
+      hint      helper line under the group
+      required  marks the group required
+      class     extra classes on the wrapper
+{% endcomment %}
+<div class="space-y-1.5{% if class %} {{ class }}{% endif %}">
+    {% if label %}
+        <span class="tw-form-label">
+            {{ label }}
+            {% if required %}<span class="text-danger">*</span>{% endif %}
+        </span>
+    {% endif %}
+    <div class="tw-choice-group"
+         role="radiogroup"
+         {% if label %}aria-label="{{ label }}"{% endif %}
+         {{ attrs|safe }}>
+        {% for option in options %}
+            <label class="tw-choice{% if option.variant %} tw-choice-{{ option.variant }}{% endif %}">
+                <input type="radio"
+                       name="{{ name }}"
+                       value="{{ option.value }}"
+                       {% if option.value == selected %}checked{% endif %}
+                       {% if option.disabled %}disabled{% endif %}
+                       {% if required %}required{% endif %}>
+                {% if option.icon %}<i class="{{ option.icon }} tw-choice-icon" aria-hidden="true"></i>{% endif %}
+                <span>{{ option.label }}</span>
+            </label>
+        {% endfor %}
+    </div>
+    {% if hint %}<p class="tw-form-hint">{{ hint }}</p>{% endif %}
+</div>

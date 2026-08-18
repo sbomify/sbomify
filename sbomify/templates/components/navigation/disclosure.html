@@ -1,0 +1,36 @@
+{% comment %}
+One section of an accordion that the browser opens by itself: a details/summary
+pair, for a page with no Alpine on it. It is c-navigation.accordion-item's twin
+and carries the same recipe, so the two read identically inside the same
+c-navigation.accordion; only what drives the open state differs, which is why
+this is a file and not a prop.
+
+Native state uses the native attribute: the panel shows because the details
+element is open, and the chevron turns on group-open, so the mark can never
+drift from the state that drives it. open renders the section open on arrival.
+
+label is the trigger text, or pass a label slot for a richer row (an icon and
+a caption). label_class is layout for that label and only for it, as on
+c-navigation.accordion-item.
+
+The summary's list marker is dropped by display:flex, which is how the
+stylesheet's trigger dropped it too.
+
+The compact size is the bare font-size, not text-sm: the stylesheet's compact
+trigger set a size and inherited its line-height, which is 1.5, and text-sm
+carries 1.4286 — a pixel shorter on every row, which a dialog sized around it
+then moves by half a pixel.
+{% endcomment %}
+<c-vars label label_class open class />
+<details class="group border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] last:border-b-0{% if class %} {{ class }}{% endif %}"
+         {% if open %}open{% endif %}
+         {{ attrs }}>
+    <summary class="flex w-full cursor-pointer items-center justify-between px-6 py-5 text-left text-[0.9375rem] font-medium text-text bg-transparent transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] [[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:py-3 [[data-accordion-sm]_&]:text-[0.875rem]">
+        <span {% if label_class %}class="{{ label_class }}"{% endif %}>{{ label }}</span>
+        <i class="fas fa-chevron-down text-text-muted transition-transform duration-300 group-open:rotate-180"
+           aria-hidden="true"></i>
+    </summary>
+    <div class="px-6 pb-5 text-sm leading-[1.6] text-text-muted [[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:pb-3">
+        {{ slot }}
+    </div>
+</details>

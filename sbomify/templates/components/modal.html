@@ -1,0 +1,109 @@
+{% comment %}
+The dialog, in plain Tailwind utilities. It teleports to the body so no
+scrolling or clipping ancestor can trap it, and it is driven by an Alpine
+expression the caller owns: show names the boolean that is true while the
+dialog is open, so one x-data can hold several dialogs.
+
+The default slot is the body; the named footer slot adds the footer band, which
+is where the actions go. A form may wrap body and footer: the [&>form] segment
+puts it into the panel's flex column, so the body still scrolls and the footer
+stays pinned under the 90vh cap.
+
+Size is one conditional segment on the panel, so two max-widths never land on
+it. The backdrop is the click catcher, and it carries a light wash of the page
+background: enough to sit the dialog above the page rather than in it, not
+enough to black the content out. It is mixed from --color-background so it
+reads the same way in both themes.
+
+role is a prop rather than a passthrough attribute because the element already
+carries one: a second role in attrs would be a duplicate attribute the browser
+ignores. Pass role="alertdialog" for a dialog that interrupts to confirm
+something destructive.
+
+teleport="false" leaves the dialog where it was written. HTMX wires hx-* on the
+content present at swap time and the teleport moves the dialog out after that,
+so a dialog living inside an HTMX-swapped partial loses its form handling and
+falls back to a native submit. Only the wrapper differs between the two, so the
+panel below is written once and never copied.
+
+close is the expression that shuts the dialog, and it defaults to setting show
+to false, which is right whenever show is a boolean. A dialog whose open state
+is the thing it acts on — a row held in removeTarget, open while it is not null
+— passes its own, because "removeTarget !== null = false" is not a statement.
+The three ways out (escape, the backdrop, the close button) all run it, so they
+cannot drift apart.
+{% endcomment %}
+<c-vars id show="open" close title icon size role="dialog" closable="true" teleport="true" class />
+{% firstof close show|add:" = false" as dismiss %}
+{# djlint:off #}
+{% if teleport != "false" %}<template x-teleport="body">{% endif %}
+{# djlint:on #}
+<div x-show="{{ show }}"
+     x-cloak
+     {% if id %}id="{{ id }}"{% endif %}
+     class="fixed inset-0 z-[100]{% if class %} {{ class }}{% endif %}"
+     role="{{ role }}"
+     aria-modal="true"
+     {% if id and title %}aria-labelledby="{{ id }}-title"{% endif %}
+     @keydown.escape="{{ dismiss }}"
+     {{ attrs }}>
+    <div x-show="{{ show }}"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-[101] bg-[color-mix(in_oklab,var(--color-background)_45%,transparent)]"
+         @click="{{ dismiss }}"></div>
+    <div class="fixed inset-0 z-[101] flex items-center justify-center p-4"
+         x-show="{{ show }}"
+         x-trap.noscroll="{{ show }}"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95"
+         @click.stop>
+        <div class="flex flex-col w-full {% if size == 'sm' %}max-w-sm{% elif size == 'lg' %}max-w-3xl{% elif size == 'xl' %}max-w-5xl{% elif size == 'wide' %}max-w-4xl{% else %}max-w-lg{% endif %} max-h-[90vh] overflow-hidden bg-surface border border-solid border-border rounded-2xl shadow-[0_25px_50px_-12px_rgb(0_0_0/0.4)] [&>form]:flex [&>form]:flex-col [&>form]:flex-auto [&>form]:min-h-0 [&>form]:overflow-hidden">
+            {% if title %}
+                <div class="flex items-center justify-between shrink-0 px-6 py-5 border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)]">
+                    <div class="flex items-center gap-3">
+                        {% comment %}
+                                Blanked so the chip reads neither: class is layout
+                                for the dialog and size is the panel's width, and
+                                the chip would take both as its own.
+                        {% endcomment %}
+                        {% if icon %}
+                            {% with class="" size="" %}
+                                <c-chips.icon-chip>
+                                <i class="{{ icon }}" aria-hidden="true"></i>
+                                </c-chips.icon-chip>
+                            {% endwith %}
+                        {% endif %}
+                        <h4 {% if id %}id="{{ id }}-title"{% endif %}
+                            class="text-lg font-semibold text-text tracking-[-0.01em]">{{ title }}</h4>
+                    </div>
+                    {% if closable != "false" %}
+                        <button type="button"
+                                class="flex items-center justify-center w-11 h-11 min-w-11 min-h-11 rounded-lg text-text-muted transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-text hover:rotate-90 focus-visible:outline-none focus-visible:text-text focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                                @click="{{ dismiss }}"
+                                aria-label="Close">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    {% endif %}
+                </div>
+            {% endif %}
+            <div class="flex-auto min-h-0 p-6 overflow-y-auto">{{ slot }}</div>
+            {% if footer %}
+                <div class="flex items-center justify-end gap-3 shrink-0 px-6 py-5 border-t border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] bg-[color-mix(in_oklab,var(--color-background)_30%,transparent)]">
+                    {{ footer }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{# djlint:off #}
+    {% if teleport != "false" %}</template>{% endif %}
+{# djlint:on #}

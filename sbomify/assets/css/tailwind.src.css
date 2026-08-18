@@ -90,19 +90,9 @@
     100% { background-position: 200% 0; }
   }
 
-  @keyframes progress-stripe {
-    0% { background-position: 1rem 0; }
-    100% { background-position: 0 0; }
-  }
-
   @keyframes pulse-ring {
     0% { transform: scale(0.8); opacity: 1; }
     100% { transform: scale(2); opacity: 0; }
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
   }
 
   /* Palette — real colours so Tailwind generates all utilities (incl. gradients). Dark defaults; :root.light overrides. */
@@ -195,6 +185,12 @@
   --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.3);
   --shadow-xl: 0 20px 40px -10px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.05);
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.3);
+  /* Raised edges for surface-coloured controls. Filled buttons get their top
+     highlight from white over an accent; a surface button cannot, so each theme
+     states its own: on dark the surface is navy and takes a light top edge, on
+     light it is pure white and can only read as raised via the bottom edge. */
+  --edge-highlight: rgb(255 255 255 / 0.1);
+  --edge-underline: rgb(0 0 0 / 0.2);
   --shadow-glow-primary: 0 0 20px rgb(124 140 255 / 0.25), 0 0 40px rgb(124 140 255 / 0.1);
   --shadow-glow-success: 0 0 15px rgb(54 197 143 / 0.3);
   --shadow-glow-danger: 0 0 15px rgb(240 104 108 / 0.3);
@@ -266,6 +262,10 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+  /* Pure-white surface: a white top highlight would be invisible, so the raise
+     comes from a soft bottom edge instead. */
+  --edge-highlight: rgb(255 255 255 / 0.9);
+  --edge-underline: rgb(0 0 0 / 0.07);
   --shadow-glow-primary: 0 0 20px rgb(37 41 63 / 0.15);
   --shadow-glow-success: 0 0 15px rgb(31 169 113 / 0.15);
   --shadow-glow-danger: 0 0 15px rgb(229 72 77 / 0.15);
@@ -316,6 +316,14 @@
    Smooth Theme Transitions
    Prevents CSS flash when switching themes
    ============================================ */
+/* Hold the scrollbar's space whether or not the page is long enough to need
+   one. Without it a short page (an empty component, the Account tab) is 15px
+   wider than a long one, and the sidebar, content column and top bar all jump
+   sideways on every navigation. */
+html {
+  scrollbar-gutter: stable;
+}
+
 html,
 body,
 .tw-card,
@@ -421,21 +429,69 @@ html.no-transitions * {
   background-color: var(--color-accent-orange);
 }
 
-/* Flatten a tw-card rendered inside an About-group collapsible row: the row is
-   the chrome, so the embedded card sheds its border and duplicate heading while
-   keeping its own action buttons. */
-.tw-embed .tw-card {
+/* Flatten the panel rendered inside an About-group collapsible row: the row is
+   already the chrome, so the panel sheds its frame and its duplicate heading
+   while keeping its own action controls.
+
+   Matched structurally rather than by class. This block used to target
+   `.tw-card` and an `h4`; the panels now render through c-cards.card and
+   c-tables.shell, which emit neither, so every selector missed and each row
+   drew a bordered card headed with the row's own title a second time. The two
+   panels do not share a wrapper class, but they do share a shape: one root
+   element, whose first child is the title band. */
+.tw-embed > * {
   border: 0;
   background: transparent;
   box-shadow: none;
 }
-.tw-embed .tw-card > div:first-child {
+
+.tw-embed > * > :first-child {
   border-bottom: 0;
   padding-top: 0;
   justify-content: flex-end;
 }
-.tw-embed .tw-card > div:first-child h4 {
+
+.tw-embed > * > :first-child :is(h2, h3, h4) {
   display: none;
+}
+
+/* A title band holding nothing but the duplicate title leaves an empty padded
+   strip once the heading goes, so it drops out whole. One that also carries a
+   control keeps its place, minus the heading. */
+.tw-embed > * > :first-child:not(:has(button, a, input, select)) {
+  display: none;
+}
+
+/* Native colour input. Left alone, the browser paints its own control chrome
+   over the fill (a grey handle bar above an inset swatch), which next to the
+   app's own controls reads as a broken image placeholder rather than a colour.
+   Stripped back so the control is nothing but the colour it holds, and it can
+   sit flush inside whatever tile the page gives it.
+
+   Keyed on the type attribute rather than a class so a colour field is right
+   wherever it appears; the selector outranks the form component's own
+   background and border utilities on specificity. */
+input[type="color"] {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: inherit;
+}
+
+input[type="color"]::-moz-color-swatch {
+  border: 0;
+  border-radius: inherit;
 }
 
 /* High-severity orange — distinct from amber warnings (CVSS convention). */
@@ -727,18 +783,12 @@ html.no-transitions * {
    ============================================ */
 .tw-card,
 .tw-dashboard-card,
-.tw-settings-card,
 .tw-dangerzone-card {
   background-color: var(--color-surface);
   border-radius: 0.75rem;
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.tw-card:hover,
-.tw-settings-card:hover {
-  box-shadow: var(--shadow-card-hover);
 }
 
 /* Card sub-components */
@@ -758,42 +808,10 @@ html.no-transitions * {
   background: color-mix(in oklab, var(--color-background) 30%, transparent);
 }
 
-/* Dashboard Card - with animated top border */
+/* Dashboard Card */
 .tw-dashboard-card {
-  animation: fadeInUp 0.4s ease-out;
   position: relative;
   overflow: hidden;
-}
-
-.tw-dashboard-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.tw-dashboard-card:hover {
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-2px);
-  border-color: var(--color-border-light);
-}
-
-.tw-dashboard-card:hover::before {
-  opacity: 1;
-}
-
-/* Settings Card - with margin bottom */
-.tw-settings-card {
-  margin-bottom: 1.5rem;
-}
-
-.tw-settings-card:hover {
-  border-color: var(--color-border-light);
 }
 
 /* Danger Zone Card - red accent */
@@ -828,6 +846,20 @@ html.no-transitions * {
   background: color-mix(in oklab, var(--color-danger) 2%, transparent);
 }
 
+/* Inset card: the quiet sub-panel inside a card body. Sunken, not raised: no
+   shadow, no entrance animation, no hover. */
+.tw-inset-card {
+  background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+/* One nesting level stays legible: the inner panel goes solid. */
+.tw-inset-card .tw-inset-card {
+  background-color: var(--color-background);
+}
+
 /* ============================================
    Component Classes - Buttons
    Base button class - use with variant classes
@@ -840,6 +872,7 @@ html.no-transitions * {
 .tw-btn-ghost,
 .tw-btn-success,
 .tw-btn-warning,
+.tw-btn-outline,
 .tw-btn-outline-primary,
 .tw-btn-outline-danger,
 .tw-btn-outline-warning {
@@ -874,6 +907,7 @@ html.no-transitions * {
 .tw-btn-ghost:focus-visible,
 .tw-btn-success:focus-visible,
 .tw-btn-warning:focus-visible,
+.tw-btn-outline:focus-visible,
 .tw-btn-outline-primary:focus-visible,
 .tw-btn-outline-danger:focus-visible,
 .tw-btn-outline-warning:focus-visible {
@@ -889,6 +923,7 @@ html.no-transitions * {
 .tw-btn-ghost:disabled,
 .tw-btn-success:disabled,
 .tw-btn-warning:disabled,
+.tw-btn-outline:disabled,
 .tw-btn-outline-primary:disabled,
 .tw-btn-outline-danger:disabled,
 .tw-btn-outline-warning:disabled {
@@ -897,31 +932,71 @@ html.no-transitions * {
   transform: none !important;
 }
 
+/* Filled buttons — every variant derives from the primary recipe,
+   parameterized by --btn-accent / --btn-accent-dark / --btn-accent-hover / --btn-text */
+.tw-btn-primary,
+.tw-btn-danger,
+.tw-btn-success,
+.tw-btn-warning {
+  background: linear-gradient(135deg, var(--btn-accent) 0%, var(--btn-accent-dark) 100%);
+  color: var(--btn-text, white);
+  border: solid var(--btn-accent) 0.5px;
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.2);
+}
+
+.tw-btn-primary:hover,
+.tw-btn-danger:hover,
+.tw-btn-success:hover,
+.tw-btn-warning:hover {
+  background: linear-gradient(135deg, var(--btn-accent-hover) 0%, var(--btn-accent) 100%);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-primary:active,
+.tw-btn-danger:active,
+.tw-btn-success:active,
+.tw-btn-warning:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 4px rgb(0 0 0 / 0.1);
+}
+
 /* Primary Button */
 .tw-btn-primary {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: white;
-  border: solid var(--color-primary) 0.5px;
-  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.2);
+  --btn-accent: var(--color-primary);
+  --btn-accent-dark: var(--color-primary-dark);
+  --btn-accent-hover: var(--color-primary-light);
 }
 
-.tw-btn-primary:hover {
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
-  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+/* Danger Button */
+.tw-btn-danger {
+  --btn-accent: var(--color-danger);
+  --btn-accent-dark: var(--color-danger-dark);
+  --btn-accent-hover: color-mix(in oklab, var(--color-danger) 72%, white);
 }
 
-.tw-btn-primary:active {
-  transform: translateY(0) scale(0.98);
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-primary) 30%, transparent), inset 0 2px 4px rgb(0 0 0 / 0.1);
+/* Success Button */
+.tw-btn-success {
+  --btn-accent: var(--color-success);
+  --btn-accent-dark: var(--color-success-dark);
+  --btn-accent-hover: color-mix(in oklab, var(--color-success) 72%, white);
 }
 
-/* Gradient Button */
+/* Warning Button */
+.tw-btn-warning {
+  --btn-accent: var(--color-warning);
+  --btn-accent-dark: var(--color-warning-dark);
+  --btn-accent-hover: color-mix(in oklab, var(--color-warning) 72%, white);
+  --btn-text: rgb(15 23 42);
+}
+
+/* Gradient Button — special CTA; brand gradient fill on the primary base treatment */
 .tw-btn-gradient {
   color: white;
-  background: linear-gradient(135deg, var(--color-primary-dark) 0%, #CC58BB 50%, #F4B57F 100%);
+  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-accent-pink) 50%, var(--color-accent-orange) 100%);
   background-size: 200% 200%;
-  animation: gradient-shift 3s ease infinite paused;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.15);
+  animation: gradient-shift 1s ease infinite paused;
+  border: solid var(--color-accent) 0.5px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2), inset 0 2px 0 rgb(255 255 255 / 0.2);
 }
 
 @keyframes gradient-shift {
@@ -931,48 +1006,44 @@ html.no-transitions * {
 
 .tw-btn-gradient:hover {
   animation-play-state: running;
-  box-shadow: 0 4px 12px rgb(204 88 187 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.15);
-  transform: translateY(-1px);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--color-accent-pink) 30%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
 }
 
 .tw-btn-gradient:active {
   transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2), inset 0 2px 4px rgb(0 0 0 / 0.1);
 }
 
 /* Secondary Button */
+/* Secondary carries the same raised edge as the filled variants — a light top
+   edge and a soft bottom one — so it reads as the same family of control rather
+   than a flat outline. */
+/* A ghost button whose action is destructive: revoke, remove, delete. */
+.tw-btn-ghost-danger {
+  color: var(--color-danger);
+}
+
+.tw-btn-ghost-danger:hover {
+  background-color: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  color: var(--color-danger);
+}
+
 .tw-btn-secondary {
   background-color: var(--color-surface);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-xs);
+  box-shadow: var(--shadow-xs), inset 0 1px 0 var(--edge-highlight), inset 0 -1px 0 var(--edge-underline);
 }
 
 .tw-btn-secondary:hover {
   background-color: var(--color-surface-elevated);
   border-color: var(--color-border-light);
-  box-shadow: var(--shadow-card);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs), inset 0 1px 0 var(--edge-highlight), inset 0 -1px 0 var(--edge-underline);
 }
 
 .tw-btn-secondary:active {
   transform: translateY(0) scale(0.98);
   box-shadow: var(--shadow-inner);
-}
-
-/* Danger Button */
-.tw-btn-danger {
-  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
-  color: white;
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-danger) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-}
-
-.tw-btn-danger:hover {
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-danger) 40%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-  transform: translateY(-1px);
-}
-
-.tw-btn-danger:active {
-  transform: translateY(0) scale(0.98);
 }
 
 /* Ghost Button */
@@ -990,30 +1061,7 @@ html.no-transitions * {
 
 .tw-btn-ghost:active {
   background-color: color-mix(in oklab, var(--color-border) 30%, transparent);
-}
-
-/* Success Button */
-.tw-btn-success {
-  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-dark) 100%);
-  color: white;
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-success) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.1);
-}
-
-.tw-btn-success:hover {
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-success) 40%, transparent);
-  transform: translateY(-1px);
-}
-
-/* Warning Button */
-.tw-btn-warning {
-  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%);
-  color: rgb(15 23 42);
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--color-warning) 30%, transparent), inset 0 1px 0 rgb(255 255 255 / 0.2);
-}
-
-.tw-btn-warning:hover {
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-warning) 40%, transparent);
-  transform: translateY(-1px);
+  transform: translateY(0) scale(0.98);
 }
 
 /* Button Sizes */
@@ -1031,44 +1079,62 @@ html.no-transitions * {
   border-radius: 0.625rem;
 }
 
-/* Outline Button Variants */
-.tw-btn-outline-primary {
+/* Outline Button Variants — hover fills with the same recipe as the filled buttons */
+.tw-btn-outline-primary,
+.tw-btn-outline-danger,
+.tw-btn-outline-warning {
   background-color: transparent;
-  color: var(--color-primary);
-  border: 1.5px solid var(--color-primary);
+  color: var(--btn-accent);
+  border: 1.5px solid var(--btn-accent);
 }
 
-.tw-btn-outline-primary:hover {
-  background-color: var(--color-primary);
-  color: white;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-primary) 30%, transparent);
-  transform: translateY(-1px);
+.tw-btn-outline-primary:hover,
+.tw-btn-outline-danger:hover,
+.tw-btn-outline-warning:hover {
+  background: linear-gradient(135deg, var(--btn-accent) 0%, var(--btn-accent-dark) 100%);
+  color: var(--btn-text, white);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--btn-accent) 50%, transparent), inset 0 2px 0 rgb(255 255 255 / 0.1);
+}
+
+.tw-btn-outline-primary:active,
+.tw-btn-outline-danger:active,
+.tw-btn-outline-warning:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--btn-accent) 30%, transparent), inset 0 2px 4px rgb(0 0 0 / 0.1);
+}
+
+.tw-btn-outline-primary {
+  --btn-accent: var(--color-primary);
+  --btn-accent-dark: var(--color-primary-dark);
 }
 
 .tw-btn-outline-danger {
-  background-color: transparent;
-  color: var(--color-danger);
-  border: 1.5px solid var(--color-danger);
-}
-
-.tw-btn-outline-danger:hover {
-  background-color: var(--color-danger);
-  color: white;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-danger) 30%, transparent);
-  transform: translateY(-1px);
+  --btn-accent: var(--color-danger);
+  --btn-accent-dark: var(--color-danger-dark);
 }
 
 .tw-btn-outline-warning {
-  background-color: transparent;
-  color: var(--color-warning);
-  border: 1.5px solid var(--color-warning);
+  --btn-accent: var(--color-warning);
+  --btn-accent-dark: var(--color-warning-dark);
+  --btn-text: rgb(15 23 42);
 }
 
-.tw-btn-outline-warning:hover {
-  background-color: var(--color-warning);
-  color: white;
-  box-shadow: 0 4px 12px color-mix(in oklab, var(--color-warning) 30%, transparent);
-  transform: translateY(-1px);
+/* Neutral outline. It completes the outline set the way tw-btn-secondary
+   completes the filled set. Neutral is not accent-tinted, so it keeps its own
+   small recipe instead of the outline accent fill, whose hover fills with the
+   accent gradient and white text. */
+.tw-btn-outline {
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1.5px solid var(--color-border);
+}
+
+.tw-btn-outline:hover {
+  background-color: color-mix(in oklab, var(--color-border) 30%, transparent);
+}
+
+.tw-btn-outline:active {
+  transform: scale(0.98);
 }
 
 /* Cancel Button with Danger Hover */
@@ -1153,7 +1219,35 @@ html.no-transitions * {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-success) 15%, transparent);
 }
 
-.tw-form-helper {
+/* Small-caps label sitting over a value — the documented "labels over data"
+   pattern. */
+.tw-data-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+/* Inline code inside prose: an identifier, path or token mentioned mid-sentence.
+   Accent and tint are parameterized; unset, the reads collapse to today's
+   neutral border tint and plain text. */
+.tw-code-inline {
+  padding: 0.125rem 0.375rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125em;
+  background-color: color-mix(in oklab, var(--code-inline-accent, var(--color-border)) var(--code-inline-tint, 35%), transparent);
+  color: color-mix(in oklab, var(--code-inline-accent, var(--color-text)) 70%, var(--color-text));
+  border-radius: 0.25rem;
+}
+
+/* Brand-tinted identifier chip: control IDs and linked advisory IDs. */
+.tw-code-inline-primary {
+  --code-inline-accent: var(--color-primary);
+  --code-inline-tint: 12%;
+}
+
+.tw-form-hint {
   display: block;
   font-size: 0.75rem;
   color: var(--color-text-muted);
@@ -1285,7 +1379,21 @@ html.no-transitions * {
   cursor: not-allowed;
 }
 
-/* Toggle Switch */
+/* Toggle Switch — tw-toggle goes on the checkbox input itself */
+.tw-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.tw-toggle-label:has(.tw-toggle:disabled) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .tw-toggle {
   position: relative;
   width: 3rem;
@@ -1473,79 +1581,6 @@ html.no-transitions * {
   color: var(--color-text);
 }
 
-/* Primary action button - works in both light and dark mode */
-.btn-primary-action {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  color: white !important;
-  box-shadow: 0 10px 25px -5px color-mix(in oklab, var(--color-primary) 40%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.15) inset;
-}
-
-.btn-primary-action:hover:not(:disabled) {
-  box-shadow: 0 15px 35px -5px color-mix(in oklab, var(--color-primary) 50%, transparent),
-              0 0 0 1px rgb(255 255 255 / 0.2) inset;
-}
-
-.btn-primary-action:disabled {
-  background: linear-gradient(135deg, rgb(156 163 175) 0%, rgb(107 114 128) 100%);
-  box-shadow: none;
-}
-
-:root.light .btn-primary-action {
-  box-shadow: 0 10px 25px -5px color-mix(in oklab, var(--color-primary) 35%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.05);
-}
-
-:root.light .btn-primary-action:hover:not(:disabled) {
-  box-shadow: 0 15px 35px -5px color-mix(in oklab, var(--color-primary) 45%, transparent),
-              0 0 0 1px rgb(0 0 0 / 0.08);
-}
-
-/* Dropdown item hover state - gradient */
-.dropdown-item-hover {
-  text-decoration: none !important;
-}
-
-.dropdown-item-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-  text-decoration: none !important;
-}
-
-.dropdown-item-hover:focus-visible {
-  outline: none;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-/* Dropdown item danger hover state - gradient for sign out */
-.dropdown-item-danger-hover {
-  text-decoration: none !important;
-}
-
-.dropdown-item-danger-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-danger) 15%, transparent) 0%, color-mix(in oklab, var(--color-danger) 5%, transparent) 100%) !important;
-  color: var(--color-danger) !important;
-  text-decoration: none !important;
-}
-
-.dropdown-item-danger-hover:focus-visible {
-  outline: none;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-danger) 15%, transparent) 0%, color-mix(in oklab, var(--color-danger) 5%, transparent) 100%) !important;
-  color: var(--color-danger) !important;
-}
-
-/* Theme button hover state - gradient for inactive theme buttons */
-.theme-button-hover:hover {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
-  color: var(--color-text) !important;
-}
-
-.theme-button-hover:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent) !important;
-}
-
 /* Header button hover state - gradient for topnav icon buttons */
 .header-btn-hover:hover {
   background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%) !important;
@@ -1561,6 +1596,9 @@ html.no-transitions * {
    Component Classes - Badges
    Base badge class - use with variant classes
    ============================================ */
+/* Every tinted badge is the same three declarations over a different accent, so
+   the accent is the only thing a variant sets. `secondary` and `accent` keep
+   their own rules below because they are not accent-tinted. */
 .tw-badge,
 .tw-badge-primary,
 .tw-badge-secondary,
@@ -1570,7 +1608,13 @@ html.no-transitions * {
 .tw-badge-accent,
 .tw-badge-info,
 .tw-badge-violet,
-.tw-badge-dot {
+.tw-badge-dot,
+.tw-badge-severity-critical,
+.tw-badge-severity-high,
+.tw-badge-severity-medium,
+.tw-badge-severity-low,
+.tw-badge-severity-unknown,
+.tw-badge-solid-danger {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
@@ -1579,13 +1623,16 @@ html.no-transitions * {
   border-radius: 9999px;
   letter-spacing: 0.01em;
   transition: all 0.15s;
+  /* Solid variants override --badge-fill and --badge-text; unset, the reads
+     collapse to the tinted defaults. */
+  color: var(--badge-text, var(--badge-accent, var(--color-text-muted)));
+  background-color: color-mix(in oklab, var(--badge-accent, var(--color-border)) var(--badge-fill, 12%), transparent);
+  border: 1px solid color-mix(in oklab, var(--badge-accent, var(--color-border)) 20%, transparent);
 }
 
 /* Badge Variants */
 .tw-badge-primary {
-  color: var(--color-primary);
-  background-color: color-mix(in oklab, var(--color-primary) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-primary) 20%, transparent);
+  --badge-accent: var(--color-primary);
 }
 
 .tw-badge-secondary {
@@ -1595,21 +1642,52 @@ html.no-transitions * {
 }
 
 .tw-badge-success {
-  color: var(--color-success);
-  background-color: color-mix(in oklab, var(--color-success) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-success) 20%, transparent);
+  --badge-accent: var(--color-success);
 }
 
 .tw-badge-warning {
-  color: var(--color-warning);
-  background-color: color-mix(in oklab, var(--color-warning) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-warning) 20%, transparent);
+  --badge-accent: var(--color-warning);
 }
 
 .tw-badge-danger {
-  color: var(--color-danger);
-  background-color: color-mix(in oklab, var(--color-danger) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-danger) 20%, transparent);
+  --badge-accent: var(--color-danger);
+}
+
+/* Severity badges read as a scale, so they are squarer and uppercase — the
+   shape carries the "this is a CVSS band" signal, not just the colour. */
+.tw-badge-severity-critical {
+  --badge-accent: var(--color-severity-critical);
+}
+
+.tw-badge-severity-high {
+  --badge-accent: var(--color-severity-high);
+}
+
+.tw-badge-severity-medium {
+  --badge-accent: var(--color-severity-medium);
+}
+
+.tw-badge-severity-low {
+  --badge-accent: var(--color-severity-low);
+}
+
+/* Values off the CVSS scale keep the scale's shape with a neutral accent. */
+.tw-badge-severity-unknown {
+  --badge-accent: var(--color-text-muted);
+}
+
+.tw-badge-severity-critical,
+.tw-badge-severity-high,
+.tw-badge-severity-medium,
+.tw-badge-severity-low,
+.tw-badge-severity-unknown {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  /* Mixed toward the theme text colour rather than the raw accent — amber and
+     cyan on their own 12% tint fail contrast in both themes. */
+  color: color-mix(in oklab, var(--badge-accent) 70%, var(--color-text));
 }
 
 .tw-badge-accent {
@@ -1619,16 +1697,20 @@ html.no-transitions * {
 }
 
 .tw-badge-info {
-  color: var(--color-info);
-  background-color: color-mix(in oklab, var(--color-info) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-info) 20%, transparent);
+  --badge-accent: var(--color-info);
 }
 
 /* Soft violet — attestation artifacts (VEX); distinct from every severity hue. */
 .tw-badge-violet {
-  color: var(--color-accent);
-  background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
-  border: 1px solid color-mix(in oklab, var(--color-accent) 20%, transparent);
+  --badge-accent: var(--color-accent);
+}
+
+/* Solid fill is reserved: confirmed-exploitation alarms (KEV, malicious
+   package) and alert counters. Everything else stays a tint. */
+.tw-badge-solid-danger {
+  --badge-accent: var(--color-danger);
+  --badge-fill: 100%;
+  --badge-text: white;
 }
 
 /* Neutral chip — squared variant for table-like contexts (counts, types).
@@ -1647,6 +1729,13 @@ html.no-transitions * {
 }
 
 /* Dot Badge - with status indicator */
+/* The badge at label size, for a badge inside a table cell or beside a heading
+   where the default reads as loud as the text it annotates. */
+.tw-badge-sm {
+  padding: 0.125rem 0.375rem;
+  font-size: 0.625rem;
+}
+
 .tw-badge-dot {
   gap: 0.375rem;
   font-weight: 500;
@@ -1845,6 +1934,7 @@ html.no-transitions * {
   width: 1.25rem;
   height: 1.25rem;
   margin-top: 0.125rem;
+  color: var(--alert-accent, currentColor);
 }
 
 .tw-alert-content {
@@ -1857,28 +1947,31 @@ html.no-transitions * {
   margin-bottom: 0.25rem;
 }
 
+/* Alert variants share one recipe via --alert-accent; text mixes the accent
+   toward the theme text colour so it stays readable on the tinted background */
+.tw-alert-info,
+.tw-alert-success,
+.tw-alert-warning,
+.tw-alert-danger {
+  background: linear-gradient(135deg, color-mix(in oklab, var(--alert-accent) 10%, transparent) 0%, color-mix(in oklab, var(--alert-accent) 5%, transparent) 100%);
+  border: 1px solid color-mix(in oklab, var(--alert-accent) 20%, transparent);
+  color: color-mix(in oklab, var(--alert-accent) 60%, var(--color-text));
+}
+
 .tw-alert-info {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%);
-  border: 1px solid color-mix(in oklab, var(--color-primary) 20%, transparent);
-  color: var(--color-primary);
+  --alert-accent: var(--color-primary);
 }
 
 .tw-alert-success {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-success) 10%, transparent) 0%, color-mix(in oklab, var(--color-success) 5%, transparent) 100%);
-  border: 1px solid color-mix(in oklab, var(--color-success) 20%, transparent);
-  color: var(--color-success);
+  --alert-accent: var(--color-success);
 }
 
 .tw-alert-warning {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 10%, transparent) 0%, color-mix(in oklab, var(--color-warning) 5%, transparent) 100%);
-  border: 1px solid color-mix(in oklab, var(--color-warning) 20%, transparent);
-  color: var(--color-warning);
+  --alert-accent: var(--color-warning);
 }
 
 .tw-alert-danger {
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-danger) 10%, transparent) 0%, color-mix(in oklab, var(--color-danger) 5%, transparent) 100%);
-  border: 1px solid color-mix(in oklab, var(--color-danger) 20%, transparent);
-  color: var(--color-danger);
+  --alert-accent: var(--color-danger);
 }
 
 .tw-alert-dismissible {
@@ -1907,6 +2000,35 @@ html.no-transitions * {
 }
 
 /* ============================================
+   Component Classes - Callout
+   ============================================ */
+/* A regulatory notice panel: an icon chip, a title, a legal-basis pill and a
+   body that carries controls. Structurally richer than an alert. The border
+   consumes the accent with an exact-neutral fallback, so the accent tints the
+   full hairline, never a side border. */
+.tw-callout {
+  background-color: var(--color-surface);
+  border: 1px solid color-mix(in oklab, var(--callout-accent, var(--color-border)) 30%, var(--color-border));
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.tw-callout-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0;
+}
+
+.tw-callout-body {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.tw-callout-warning {
+  --callout-accent: var(--color-warning);
+}
+
+/* ============================================
    Component Classes - Empty State
    ============================================ */
 .tw-empty-state {
@@ -1914,9 +2036,12 @@ html.no-transitions * {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4rem 2rem;
+  padding: 3rem 2rem;
   text-align: center;
-  animation: fadeInUp 0.5s ease-out;
+}
+
+.tw-empty-state-compact {
+  padding: 2rem 2rem;
 }
 
 .tw-empty-state-icon {
@@ -1929,7 +2054,21 @@ html.no-transitions * {
   background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%);
   color: var(--color-primary);
   margin-bottom: 1.5rem;
-  animation: float 3s ease-in-out infinite;
+}
+
+/* Smaller and neutral variants — the "nothing here yet" circle inside a card or
+   a table body, where the 5rem primary medallion is too loud. Declared after the
+   base so they win at equal specificity. */
+.tw-empty-state-icon-sm {
+  width: 4rem;
+  height: 4rem;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.tw-empty-state-icon-neutral {
+  background: color-mix(in oklab, var(--color-border) 30%, transparent);
+  color: var(--color-text-muted);
 }
 
 .tw-empty-state-title {
@@ -2073,26 +2212,8 @@ html.no-transitions * {
    Component Classes - Modal
    ============================================ */
 .tw-modal-overlay,
-.tw-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(8px);
-  z-index: 100;
-}
-
 /* Modal wrapper - uses flexbox centering approach */
 .tw-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 101;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.tw-modal-container {
   position: fixed;
   inset: 0;
   z-index: 101;
@@ -2320,12 +2441,12 @@ html.no-transitions * {
 /* Edge cells breathe away from the card frame so rows don't read as packed. */
 .tw-table th:first-child {
   border-top-left-radius: 0.5rem;
-  padding-left: 1.5rem;
+  padding-left: 1rem;
 }
 
 .tw-table th:last-child {
   border-top-right-radius: 0.5rem;
-  padding-right: 1.5rem;
+  padding-right: 1rem;
 }
 
 .tw-table td {
@@ -2337,11 +2458,11 @@ html.no-transitions * {
 }
 
 .tw-table td:first-child {
-  padding-left: 1.5rem;
+  padding-left: 1rem;
 }
 
 .tw-table td:last-child {
-  padding-right: 1.5rem;
+  padding-right: 1rem;
 }
 
 .tw-table tbody tr {
@@ -2371,16 +2492,20 @@ html.no-transitions * {
 
 /* In an equal-width (fixed) table, centre every column between the first
    and the last so all columns are spaced equally — the first column stays
-   left-aligned and the last is right-aligned via tw-cell-end. */
-.tw-table-fixed th:not(:first-child):not(:last-child),
-.tw-table-fixed td:not(:first-child):not(:last-child) {
+   left-aligned and the last is right-aligned via tw-cell-end.
+   A cell that states its own alignment is left alone: adding a trailing
+   actions column turns the previous last column into a middle one, and this
+   rule is more specific than `.tw-table td.tw-cell-end`, so without the
+   exclusion a column that asked to be right-aligned drifted to the centre. */
+.tw-table-fixed th:not(:first-child):not(:last-child):not(.tw-cell-end),
+.tw-table-fixed td:not(:first-child):not(:last-child):not(.tw-cell-end) {
   text-align: center;
 }
 
 /* text-align doesn't reach a block-level flex container (e.g. a row of
    pills), so centre those too, keeping cell content aligned with its
    centred header. */
-.tw-table-fixed td:not(:first-child):not(:last-child) > .flex {
+.tw-table-fixed td:not(:first-child):not(:last-child):not(.tw-cell-end) > .flex {
   justify-content: center;
 }
 
@@ -2390,15 +2515,47 @@ html.no-transitions * {
   table-layout: fixed;
 }
 
-/* Tighter table cell padding on small screens for public trust-center
-   pages only, so 3-column tables (Name + Created + Actions) fit in
-   375px viewports without a horizontal scrollbar. Scoped to .public-page
-   so the app-wide tw-table padding stays unchanged on internal pages. */
+/* A date or time column stays on one line. "10 Aug 2026" broken across two
+   lines reads as two values, and "M d, Y at H:i" broken after the comma reads
+   as a date and a stray number. Put it on both the th and the td so the header
+   and the value agree. Stacked content inside the cell (a date over a count)
+   still stacks: give it a block or flex wrapper, which nowrap does not touch. */
+.tw-cell-date {
+  white-space: nowrap;
+}
+
+/* The row-actions column, holding one icon button — the actions menu. Wide
+   enough for the button to sit inside the cell's own right gutter, so it lines
+   up with the toolbar above rather than crowding the card's edge, and a fixed
+   width so it never takes an equal share of the split. */
+.tw-table th.tw-table-actions,
+.tw-table td.tw-table-actions {
+  width: 5.5rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+
+/* Tighter cell padding on small screens, so a three-column table fits a 375px
+   viewport without a horizontal scrollbar. It began scoped to the public
+   trust-center pages; 1.25rem either side of every cell is luxury on a phone
+   anywhere, and app tables now carry a row-actions column too, which takes its
+   width out of the name column. The first and last cells keep a wider outer
+   gutter so the rows still line up with the card around them. */
 @media (max-width: 640px) {
-  .public-page .tw-table th,
-  .public-page .tw-table td {
+  .tw-table th,
+  .tw-table td {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
+  }
+
+  /* Narrower still: at 375px a fixed table splits what is left equally, so
+     every pixel this column keeps comes out of the name beside it. The button
+     keeps its own size — it is the tap target. */
+  .tw-table th.tw-table-actions,
+  .tw-table td.tw-table-actions {
+    width: 4rem;
+    padding-left: 0.25rem;
   }
 }
 
@@ -2451,10 +2608,6 @@ html.no-transitions * {
 }
 
 /* Striped table */
-.tw-table-striped tbody tr:nth-child(even) {
-  background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
-}
-
 /* Data Table Container */
 .tw-data-table {
   display: flex;
@@ -2467,8 +2620,7 @@ html.no-transitions * {
 
 /* Strip nested border/radius when data table is inside a card */
 .tw-card .tw-data-table,
-.tw-dashboard-card .tw-data-table,
-.tw-settings-card .tw-data-table {
+.tw-dashboard-card .tw-data-table {
   border: none;
   border-radius: 0;
   background-color: transparent;
@@ -2480,6 +2632,8 @@ html.no-transitions * {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  /* Horizontal padding matches tw-table's first/last cell gutter, so the
+     search box and the first column share an edge. */
   padding: 1rem;
   background-color: color-mix(in oklab, var(--color-background) 50%, transparent);
   border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
@@ -2616,17 +2770,20 @@ html.no-transitions * {
   cursor: pointer;
 }
 
-.tw-pagination-btn:hover:not(:disabled):not(.tw-pagination-btn-active) {
+.tw-pagination-btn:hover:not(:disabled):not([aria-disabled='true']):not(.tw-pagination-btn-active) {
   background-color: var(--color-surface);
   border-color: var(--color-border);
   color: var(--color-text);
 }
 
-.tw-pagination-btn:active:not(:disabled) {
+.tw-pagination-btn:active:not(:disabled):not([aria-disabled='true']) {
   transform: scale(0.95);
 }
 
-.tw-pagination-btn:disabled {
+/* Pagination items are often links, which can never match :disabled — the
+   real state on a link is aria-disabled, so both spell the same look. */
+.tw-pagination-btn:disabled,
+.tw-pagination-btn[aria-disabled='true'] {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -2692,6 +2849,48 @@ html.no-transitions * {
   border-radius: 0.375rem;
 }
 
+/* Destructive icon action — the row-level delete/revoke button. */
+.tw-icon-btn-danger {
+  color: var(--color-danger);
+}
+
+.tw-icon-btn-danger:hover {
+  background-color: color-mix(in oklab, var(--color-danger) 12%, transparent);
+  border-color: color-mix(in oklab, var(--color-danger) 30%, transparent);
+  color: var(--color-danger);
+}
+
+/* Outlined, and as tall as the control beside it — the meatball in a page
+   header's action row, which sits next to a taller visibility select. Fixed
+   square sizes leave it floating against that select's edge. */
+.tw-icon-btn-stretch {
+  width: 3rem;
+  height: 100%;
+  min-height: 2.5rem;
+  background-color: var(--color-background);
+  border-color: var(--color-border);
+}
+
+.tw-icon-btn-stretch:hover {
+  background-color: var(--color-background);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+  color: var(--color-primary);
+  /* No scale: it is sized to a neighbour, so growing on hover breaks the pair. */
+  transform: none;
+}
+
+/* Success accent, mirroring tw-icon-btn-danger: the approve action beside a
+   reject one. */
+.tw-icon-btn-success {
+  color: var(--color-success);
+}
+
+.tw-icon-btn-success:hover {
+  background-color: color-mix(in oklab, var(--color-success) 12%, transparent);
+  border-color: color-mix(in oklab, var(--color-success) 30%, transparent);
+  color: var(--color-success);
+}
+
 .tw-icon-btn-lg {
   width: 3rem;  /* 48px - comfortable for large buttons */
   height: 3rem; /* 48px - comfortable for large buttons */
@@ -2709,30 +2908,193 @@ html.no-transitions * {
   color: white;
 }
 
+/* An inline select sized for a table cell. */
+.tw-form-select-sm {
+  width: auto;
+  padding: 0.25rem 1.75rem 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* A select that shows the state it holds: the accent tints it and colours its
+   text and border, the way a badge of the same value would. */
+.tw-form-select-success,
+.tw-form-select-warning,
+.tw-form-select-danger {
+  background-color: color-mix(in oklab, var(--field-accent) 10%, transparent);
+  border-color: color-mix(in oklab, var(--field-accent) 30%, transparent);
+  color: var(--field-accent);
+}
+
+.tw-form-select-success {
+  --field-accent: var(--color-success);
+}
+
+.tw-form-select-warning {
+  --field-accent: var(--color-warning);
+}
+
+.tw-form-select-danger {
+  --field-accent: var(--color-danger);
+}
+
+/* ============================================
+   Component Classes - Choice Group
+   ============================================ */
+
+/* A radio group whose options read as tiles rather than lines in a select:
+   each carries the icon and the accent that the same value wears elsewhere, so
+   picking "Critical" here looks like the Critical badge on the advisory it
+   creates. Selection is painted from :has(:checked), so what is highlighted
+   cannot drift from what is submitted. */
+.tw-choice-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tw-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  background-color: var(--color-surface);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The control keeps the state and the keyboard, but takes no space: the tile
+   around it is the whole affordance. Not `display: none`, which would drop it
+   out of the tab order and off the accessibility tree. */
+.tw-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tw-choice-icon {
+  color: var(--choice-accent, var(--color-text-muted));
+  font-size: 0.875rem;
+}
+
+.tw-choice:hover {
+  border-color: color-mix(in oklab, var(--choice-accent, var(--color-primary)) 40%, transparent);
+  color: var(--color-text);
+}
+
+.tw-choice:has(:checked) {
+  border-color: var(--choice-accent, var(--color-primary));
+  background-color: color-mix(in oklab, var(--choice-accent, var(--color-primary)) 12%, transparent);
+  /* Full-contrast text on the tint: amber and cyan accents cannot carry label
+     text on their own tint in either theme, so the accent stays on the icon,
+     the border and the wash. */
+  color: var(--color-text);
+}
+
+.tw-choice:has(:focus-visible) {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 45%, transparent);
+}
+
+.tw-choice:has(:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Accents, named as the badge families are, so one value reads the same
+   wherever it appears. */
+.tw-choice-primary {
+  --choice-accent: var(--color-primary);
+}
+
+.tw-choice-secondary {
+  --choice-accent: var(--color-text-muted);
+}
+
+.tw-choice-success {
+  --choice-accent: var(--color-success);
+}
+
+.tw-choice-warning {
+  --choice-accent: var(--color-warning);
+}
+
+.tw-choice-danger {
+  --choice-accent: var(--color-danger);
+}
+
+.tw-choice-info {
+  --choice-accent: var(--color-info);
+}
+
+.tw-choice-violet {
+  --choice-accent: var(--color-accent);
+}
+
+.tw-choice-severity-critical {
+  --choice-accent: var(--color-severity-critical);
+}
+
+.tw-choice-severity-high {
+  --choice-accent: var(--color-severity-high);
+}
+
+.tw-choice-severity-medium {
+  --choice-accent: var(--color-severity-medium);
+}
+
+.tw-choice-severity-low {
+  --choice-accent: var(--color-severity-low);
+}
+
 /* ============================================
    Component Classes - Dropdown
    ============================================ */
 .tw-dropdown {
   position: absolute;
   min-width: 12rem;
+  /* Items carry their own radius, so they sit inset from the menu edge. */
+  padding: 0.375rem;
   background-color: var(--color-surface);
   border-radius: 0.75rem;
   box-shadow: 0 10px 40px -10px rgb(0 0 0 / 0.3);
   border: 1px solid var(--color-border);
   z-index: 50;
-  overflow: hidden;
   animation: scaleIn 0.15s ease-out;
   transform-origin: top;
 }
 
+/* A menu teleported to the body, positioned against its trigger in JS. Used by
+   the actions menu, whose triggers sit inside tables that clip. The cap keeps a
+   long menu inside the viewport wherever the trigger happens to be. */
+.tw-dropdown-floating {
+  position: fixed;
+  max-height: min(70vh, 32rem);
+  overflow-y: auto;
+}
+
+/* Full-bleed variant of the popover panel: sections and option lists run to
+   the edge and the radius clips them. Scrolling content goes on an inner
+   element, because this class owns overflow. */
+.tw-dropdown-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
 .tw-dropdown-header {
-  padding: 0.75rem 1rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0.375rem 0.625rem 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--color-text-muted);
-  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
 }
 
 .tw-dropdown-item {
@@ -2740,32 +3102,57 @@ html.no-transitions * {
   align-items: center;
   gap: 0.75rem;
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
   font-size: 0.875rem;
+  font-weight: 600;
   color: var(--color-text);
+  /* Menu items are usually <button>s, which get no pointer cursor of their own. */
+  cursor: pointer;
+  text-align: left;
+  /* Items are just as often links, which must not arrive underlined. */
+  text-decoration: none;
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.tw-dropdown-item:hover {
+.tw-dropdown-item:disabled,
+.tw-dropdown-item[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  /* aria-disabled alone does not stop a link being followed. */
+  pointer-events: none;
+}
+
+.tw-dropdown-item:hover:not(:disabled):not([aria-disabled='true']) {
+  background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
+  color: var(--color-primary);
+}
+
+.tw-dropdown-item:focus-visible {
+  outline: none;
   background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
   color: var(--color-primary);
 }
 
 .tw-dropdown-item-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  opacity: 0.7;
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+  color: var(--color-text-muted);
 }
 
-.tw-dropdown-item:hover .tw-dropdown-item-icon {
-  opacity: 1;
+/* The icon follows the item's own colour on hover rather than staying muted. */
+.tw-dropdown-item:hover .tw-dropdown-item-icon,
+.tw-dropdown-item:focus-visible .tw-dropdown-item-icon {
+  color: inherit;
 }
 
 .tw-dropdown-item-danger {
   color: var(--color-danger);
 }
 
-.tw-dropdown-item-danger:hover {
+.tw-dropdown-item-danger:hover:not(:disabled):not([aria-disabled='true']),
+.tw-dropdown-item-danger:focus-visible {
   background-color: color-mix(in oklab, var(--color-danger) 10%, transparent);
   color: var(--color-danger);
 }
@@ -2777,16 +3164,62 @@ html.no-transitions * {
 }
 
 /* ============================================
+   Component Classes - Selectable Row
+   ============================================ */
+/* A list row that is clickable in full: clicking anywhere in it toggles the
+   control it contains, so the hover has to say so. The selected state comes from
+   `:has(:checked)` rather than a class, so it cannot fall out of step with the
+   control. Rows keep a real checkbox for keyboard and form submission — the row
+   click is a pointer convenience on top. */
+.tw-select-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tw-select-row:hover {
+  background-color: color-mix(in oklab, var(--color-primary) 6%, transparent);
+}
+
+.tw-select-row:has(:checked) {
+  background-color: color-mix(in oklab, var(--color-primary) 4%, transparent);
+}
+
+.tw-select-row:has(:checked):hover {
+  background-color: color-mix(in oklab, var(--color-primary) 9%, transparent);
+}
+
+/* Keyboard users land on the control, so the row shows the focus. */
+.tw-select-row:has(:focus-visible) {
+  background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
+}
+
+/* A row whose control is disabled is not clickable, and must not pretend to be. */
+.tw-select-row:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.tw-select-row:has(input:disabled):hover {
+  background-color: transparent;
+}
+
+/* ============================================
    Component Classes - Avatar
    ============================================ */
+/* The tint runs on --avatar-accent with a primary fallback. Custom properties
+   inherit, so a caller can set the accent on the avatar or on an ancestor:
+   style="--avatar-accent: var(--color-warning)". */
 .tw-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
   font-weight: 600;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 20%, transparent) 0%, color-mix(in oklab, var(--color-primary) 10%, transparent) 100%);
-  color: var(--color-primary);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--avatar-accent, var(--color-primary)) 20%, transparent) 0%, color-mix(in oklab, var(--avatar-accent, var(--color-primary)) 10%, transparent) 100%);
+  color: var(--avatar-accent, var(--color-primary));
   position: relative;
   flex-shrink: 0;
 }
@@ -2846,137 +3279,61 @@ html.no-transitions * {
 }
 
 /* Avatar group */
-.tw-avatar-group {
-  display: flex;
-}
-
-.tw-avatar-group .tw-avatar {
-  border: 2px solid var(--color-surface);
-  margin-left: -0.75rem;
-}
-
-.tw-avatar-group .tw-avatar:first-child {
-  margin-left: 0;
-}
-
-/* ============================================
-   Component Classes - Tooltip
-   ============================================ */
-.tw-tooltip {
-  position: relative;
-  display: inline-flex;
-}
-
-.tw-tooltip-content {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.5rem 0.875rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-  background-color: var(--color-text);
-  color: var(--color-background);
-  border-radius: 0.5rem;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 100;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
-}
-
-.tw-tooltip-content::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: var(--color-text);
-}
-
-.tw-tooltip:hover .tw-tooltip-content {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(-2px);
-}
-
-/* Tooltip positions */
-.tw-tooltip-bottom .tw-tooltip-content {
-  bottom: auto;
-  top: calc(100% + 8px);
-}
-
-.tw-tooltip-bottom .tw-tooltip-content::after {
-  top: auto;
-  bottom: 100%;
-  border-top-color: transparent;
-  border-bottom-color: var(--color-text);
-}
-
 /* ============================================
    Component Classes - Progress Bar
    ============================================ */
+/* Progress — flat accent bar on a quiet track, parameterized via
+   --progress-accent. Static fill; the width transition is the only motion. */
 .tw-progress {
   width: 100%;
-  height: 0.625rem;
+  height: 0.5rem;
   background-color: color-mix(in oklab, var(--color-border) 50%, transparent);
   border-radius: 9999px;
   overflow: hidden;
-  position: relative;
+}
+
+.tw-progress-sm {
+  height: 0.375rem;
+}
+
+.tw-progress-lg {
+  height: 0.75rem;
 }
 
 .tw-progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  background-color: var(--progress-accent, var(--color-primary));
   border-radius: 9999px;
   transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-}
-
-.tw-progress-bar::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.2), transparent);
-  animation: shimmer 2s infinite;
 }
 
 .tw-progress-bar-success {
-  background: linear-gradient(90deg, var(--color-success) 0%, var(--color-success-dark) 100%);
+  --progress-accent: var(--color-success);
 }
 
 .tw-progress-bar-warning {
-  background: linear-gradient(90deg, var(--color-warning) 0%, var(--color-warning-dark) 100%);
+  --progress-accent: var(--color-warning);
 }
 
 .tw-progress-bar-danger {
-  background: linear-gradient(90deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
+  --progress-accent: var(--color-danger);
 }
 
-/* Striped progress bar */
-.tw-progress-striped .tw-progress-bar {
-  background-image: linear-gradient(
-    45deg,
-    rgb(255 255 255 / 0.15) 25%,
-    transparent 25%,
-    transparent 50%,
-    rgb(255 255 255 / 0.15) 50%,
-    rgb(255 255 255 / 0.15) 75%,
-    transparent 75%,
-    transparent
-  );
-  background-size: 1rem 1rem;
-  animation: progress-stripe 1s linear infinite;
-}
-
-.tw-progress-label {
+/* Header row above the track: label left, tabular value right */
+.tw-progress-header {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
+  gap: 0.75rem;
+  margin-bottom: 0.375rem;
   font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text-muted);
+}
+
+.tw-progress-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }
 
 /* ============================================
@@ -3020,13 +3377,13 @@ html.no-transitions * {
 }
 
 .tw-copy-btn.copied {
+  background-color: var(--color-success);
   border-color: var(--color-success);
-  background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
-  color: var(--color-success);
+  color: white;
 }
 
 .tw-copy-btn.copied .tw-copy-btn-icon {
-  color: var(--color-success);
+  color: white;
 }
 
 /* Token Display Block */
@@ -3123,8 +3480,9 @@ html.no-transitions * {
 }
 
 .tw-token-action-btn.copied {
-  background-color: color-mix(in oklab, var(--color-success) 15%, transparent);
-  color: var(--color-success);
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
 }
 
 /* Token Alert */
@@ -3217,9 +3575,9 @@ html.no-transitions * {
 }
 
 .tw-code-block-copy-btn.copied {
-  background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
-  border-color: color-mix(in oklab, var(--color-success) 20%, transparent);
-  color: var(--color-success);
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
 }
 
 .tw-code-block-content {
@@ -3240,15 +3598,19 @@ html.no-transitions * {
 }
 
 /* Inline Copy */
+/* An identifier you can click to copy. Confirmation is the chip's own `copied`
+   state — a toast is too heavy for something this small and this frequent. */
 .tw-inline-copy {
   display: inline-flex;
+  max-width: 100%;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
   padding: 0.25rem 0.5rem;
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.8125rem;
   color: var(--color-text);
   background-color: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 0.375rem;
   cursor: pointer;
   transition: all 0.15s;
@@ -3256,110 +3618,376 @@ html.no-transitions * {
 
 .tw-inline-copy:hover {
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
 }
 
+.tw-inline-copy:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 50%, transparent);
+}
+
+/* Visible at rest: a copy affordance you cannot see is not an affordance. */
 .tw-inline-copy-icon {
+  flex-shrink: 0;
   font-size: 0.6875rem;
   color: var(--color-text-muted);
-  opacity: 0;
   transition: all 0.15s;
 }
 
 .tw-inline-copy:hover .tw-inline-copy-icon {
-  opacity: 1;
   color: var(--color-primary);
 }
 
-.tw-inline-copy.copied .tw-inline-copy-icon {
-  opacity: 1;
-  color: var(--color-success);
+.tw-inline-copy.copied {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
+}
+
+.tw-inline-copy.copied,
+.tw-inline-copy.copied .tw-inline-copy-icon,
+.tw-inline-copy.copied:hover .tw-inline-copy-icon {
+  color: white;
+}
+
+/* ============================================
+   Component Classes - Icon Chip
+   ============================================ */
+/* The accent carrier of the design language: a flat 12% tint of the accent with
+   the accent as foreground. Every "icon next to a heading" in the app is one of
+   these — stat cards, section headers, modal headers, empty states.
+   Parameterized via --chip-accent, defaulting to primary. */
+.tw-icon-chip,
+.tw-stat-icon {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: color-mix(in oklab, var(--chip-accent, var(--color-primary)) 12%, transparent);
+  color: var(--chip-accent, var(--color-primary));
+}
+
+.tw-icon-chip-sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.875rem;
+  border-radius: 0.375rem;
+}
+
+.tw-icon-chip-lg {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.125rem;
+  border-radius: 0.625rem;
+}
+
+.tw-icon-chip-xl {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: 1.25rem;
+  border-radius: 0.75rem;
+}
+
+/* Circular chip — the medallion above a destructive confirmation, and the
+   standalone status circles that are not empty states. */
+.tw-icon-chip-circle {
+  border-radius: 9999px;
+}
+
+.tw-icon-chip-neutral {
+  --chip-accent: var(--color-text-muted);
+}
+
+.tw-icon-chip-info {
+  --chip-accent: var(--color-info);
+}
+
+.tw-icon-chip-success {
+  --chip-accent: var(--color-success);
+}
+
+.tw-icon-chip-warning {
+  --chip-accent: var(--color-warning);
+}
+
+.tw-icon-chip-danger {
+  --chip-accent: var(--color-danger);
+}
+
+/* ============================================
+   Component Classes - Page & Section Headers
+   ============================================ */
+/* Page header: title block left, actions right, actions wrapping below the
+   title on narrow screens. The page supplies the content; this owns the layout. */
+.tw-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Inside a `space-y-*` stack the parent already supplies the rhythm. */
+.tw-page-header-flush {
+  margin-bottom: 0;
+}
+
+/* Most detail pages put a mark — an avatar or an icon chip — to the left of the
+   title, so the left half of the header is itself a row. */
+.tw-page-header-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+.tw-page-header-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.tw-page-header-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.tw-page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Section header: a chip, a title and optional subtitle introducing a block
+   inside a card. tw-section-body indents the block to the title's left edge,
+   replacing the hand-written `ml-11`. */
+.tw-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.tw-section-header-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.tw-section-header-subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0.125rem 0 0;
+}
+
+.tw-section-body {
+  margin-left: 2.75rem;
+}
+
+/* A step in a long form: what this part is on the left, the fields on the right.
+   Stacks into one column below 64rem, where there is no room for two. The rule
+   between sections is the section's own top border, so sections can be added or
+   removed without minding separators. */
+.tw-form-section {
+  display: grid;
+  gap: 1rem 3rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.tw-form-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (width >= 64rem) {
+  .tw-form-section {
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+}
+
+.tw-form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.tw-form-section-description {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin: 0.375rem 0 0;
+}
+
+/* Metric chip: the stats strip under a page header — a bordered surface pill
+   holding an icon, a muted label and a value. */
+.tw-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.tw-metric-chip-label {
+  color: var(--color-text-muted);
+}
+
+.tw-metric-chip-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accent variants share one tint recipe over --metric-chip-accent. The text
+   mixes toward the theme text colour so contrast holds in both themes. */
+.tw-metric-chip-info,
+.tw-metric-chip-success,
+.tw-metric-chip-warning,
+.tw-metric-chip-danger {
+  background-color: color-mix(in oklab, var(--metric-chip-accent) 10%, transparent);
+  border-color: color-mix(in oklab, var(--metric-chip-accent) 30%, transparent);
+  color: color-mix(in oklab, var(--metric-chip-accent) 60%, var(--color-text));
+}
+
+.tw-metric-chip-info {
+  --metric-chip-accent: var(--color-info);
+}
+
+.tw-metric-chip-success {
+  --metric-chip-accent: var(--color-success);
+}
+
+.tw-metric-chip-warning {
+  --metric-chip-accent: var(--color-warning);
+}
+
+.tw-metric-chip-danger {
+  --metric-chip-accent: var(--color-danger);
+}
+
+@media (width < 40rem) {
+  .tw-section-body {
+    margin-left: 0;
+  }
 }
 
 /* ============================================
    Component Classes - Stat Card
    ============================================ */
+/* Stat Cards — instrument-readout style: tabular numerals, delta on the value
+   baseline, flat tinted icon chip. Per-metric accent via --stat-accent
+   (tw-stat-accent-* modifiers), defaulting to primary. Static — no hover motion. */
 .tw-stat-card {
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   background-color: var(--color-surface);
   border-radius: 0.75rem;
   border: 1px solid var(--color-border);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 
-.tw-stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.3s;
+/* Compact readout: a centred number over its label, for the dense metric strips
+   above a table. The number takes the card's accent, so colour comes from a
+   tw-stat-accent-* modifier — a Tailwind colour utility would lose to
+   .tw-stat-value, which sets colour and is emitted later. */
+.tw-stat-card-compact {
+  padding: 0.75rem 1rem;
+  align-items: center;
+  text-align: center;
 }
 
-.tw-stat-card:hover {
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-2px);
-}
-
-.tw-stat-card:hover::before {
-  transform: scaleX(1);
+.tw-stat-card-compact .tw-stat-value {
+  color: var(--stat-accent, var(--color-text));
 }
 
 .tw-stat-icon {
-  width: 3rem;
-  height: 3rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.75rem;
-  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 15%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%);
-  color: var(--color-primary);
-  margin-bottom: 1rem;
+  /* Same chip as tw-icon-chip, driven by the stat card's per-metric accent. */
+  --chip-accent: var(--stat-accent, var(--color-primary));
+  border-radius: 0.625rem;
+  margin-bottom: 0.375rem;
 }
 
 .tw-stat-label {
+  display: block;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--color-text-muted);
   margin-bottom: 0.5rem;
 }
 
 .tw-stat-value {
-  font-size: 2rem;
+  display: block;
+  font-size: 2.25rem;
   font-weight: 700;
   color: var(--color-text);
   line-height: 1;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Optional wrapper putting the delta on the value's baseline */
+.tw-stat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
 }
 
 .tw-stat-change {
   display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  font-size: 0.75rem;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  margin-top: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 9999px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.5rem;
+}
+
+.tw-stat-row .tw-stat-change {
+  margin-top: 0;
 }
 
 .tw-stat-change-up {
-  color: var(--color-success);
-  background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
+  color: color-mix(in oklab, var(--color-success) 70%, var(--color-text));
 }
 
 .tw-stat-change-down {
-  color: var(--color-danger);
-  background-color: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  color: color-mix(in oklab, var(--color-danger) 70%, var(--color-text));
+}
+
+/* Per-metric accents (icon chip) */
+.tw-stat-accent-success {
+  --stat-accent: var(--color-success);
+}
+
+.tw-stat-accent-warning {
+  --stat-accent: var(--color-warning);
+}
+
+.tw-stat-accent-danger {
+  --stat-accent: var(--color-danger);
+}
+
+.tw-stat-accent-muted {
+  --stat-accent: var(--color-text-muted);
 }
 
 /* ============================================
@@ -3494,10 +4122,6 @@ html.no-transitions * {
   border-color: color-mix(in oklab, var(--color-danger) 30%, transparent);
 }
 
-.tw-collapsible-card:hover {
-  box-shadow: var(--shadow-card);
-}
-
 .tw-collapsible-header {
   display: flex;
   align-items: center;
@@ -3591,6 +4215,16 @@ html.no-transitions * {
   line-height: 1.6;
 }
 
+/* Density modifier, the same descendant pattern as tw-calendar-compact. */
+.tw-accordion-sm .tw-accordion-trigger {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.tw-accordion-sm .tw-accordion-content {
+  padding: 0 1rem 0.75rem;
+}
+
 /* ============================================
    Component Classes - Search Input
    ============================================ */
@@ -3607,6 +4241,11 @@ html.no-transitions * {
   color: var(--color-text);
   font-size: 0.875rem;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Room on the right for a trailing shortcut hint (the navbar's ⌘K). */
+.tw-search-input-hint input {
+  padding-right: 3.5rem;
 }
 
 .tw-search-input input::placeholder {
@@ -3868,96 +4507,6 @@ html.no-transitions * {
 }
 
 /* Outline tags */
-.tw-tag-outline {
-  background-color: transparent;
-  border: 1px solid var(--color-border);
-}
-
-.tw-tag-outline-primary {
-  background-color: transparent;
-  border: 1px solid color-mix(in oklab, var(--color-primary) 50%, transparent);
-  color: var(--color-primary);
-}
-
-/* ============================================
-   Component Classes - Timeline
-   ============================================ */
-.tw-timeline {
-  position: relative;
-  padding-left: 2rem;
-}
-
-.tw-timeline::before {
-  content: '';
-  position: absolute;
-  left: 0.5625rem;
-  top: 0.5rem;
-  bottom: 0.5rem;
-  width: 2px;
-  background: linear-gradient(to bottom, var(--color-border), color-mix(in oklab, var(--color-border) 30%, transparent));
-  border-radius: 9999px;
-}
-
-.tw-timeline-item {
-  position: relative;
-  padding-bottom: 1.75rem;
-}
-
-.tw-timeline-item:last-child {
-  padding-bottom: 0;
-}
-
-.tw-timeline-dot {
-  position: absolute;
-  left: -2rem;
-  top: 0.375rem;
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 9999px;
-  background-color: var(--color-primary);
-  border: 3px solid var(--color-surface);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 20%, transparent);
-  z-index: 1;
-}
-
-.tw-timeline-dot-success {
-  background-color: var(--color-success);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-success) 20%, transparent);
-}
-
-.tw-timeline-dot-warning {
-  background-color: var(--color-warning);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-warning) 20%, transparent);
-}
-
-.tw-timeline-dot-danger {
-  background-color: var(--color-danger);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-danger) 20%, transparent);
-}
-
-.tw-timeline-content {
-  padding-left: 0.5rem;
-}
-
-.tw-timeline-title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: 0.25rem;
-}
-
-.tw-timeline-description {
-  font-size: 0.875rem;
-  color: var(--color-text-muted);
-  line-height: 1.5;
-}
-
-.tw-timeline-time {
-  font-size: 0.75rem;
-  color: color-mix(in oklab, var(--color-text-muted) 70%, transparent);
-  margin-top: 0.375rem;
-}
-
 /* ============================================
    Component Classes - Stepper
    ============================================ */
@@ -4046,8 +4595,8 @@ html.no-transitions * {
 .tw-toast {
   display: flex;
   align-items: flex-start;
-  gap: 0.875rem;
-  padding: 1.125rem 1.25rem;
+  gap: 0.75rem;
+  padding: 1rem 1.125rem;
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
@@ -4059,11 +4608,15 @@ html.no-transitions * {
 
 .tw-toast-icon {
   flex-shrink: 0;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--toast-accent, var(--color-primary));
+  background-color: color-mix(in oklab, var(--toast-accent, var(--color-primary)) 12%, transparent);
 }
 
 .tw-toast-content {
@@ -4103,206 +4656,19 @@ html.no-transitions * {
 }
 
 .tw-toast-success {
-  border-left: 4px solid var(--color-success);
-}
-
-.tw-toast-success .tw-toast-icon {
-  color: var(--color-success);
+  --toast-accent: var(--color-success);
 }
 
 .tw-toast-warning {
-  border-left: 4px solid var(--color-warning);
-}
-
-.tw-toast-warning .tw-toast-icon {
-  color: var(--color-warning);
+  --toast-accent: var(--color-warning);
 }
 
 .tw-toast-danger {
-  border-left: 4px solid var(--color-danger);
-}
-
-.tw-toast-danger .tw-toast-icon {
-  color: var(--color-danger);
+  --toast-accent: var(--color-danger);
 }
 
 .tw-toast-info {
-  border-left: 4px solid var(--color-primary);
-}
-
-.tw-toast-info .tw-toast-icon {
-  color: var(--color-primary);
-}
-
-/* ============================================
-   Component Classes - Range Slider
-   ============================================ */
-.tw-range {
-  width: 100%;
-  height: 0.5rem;
-  background-color: var(--color-border);
-  border-radius: 9999px;
-  appearance: none;
-  cursor: pointer;
-  position: relative;
-}
-
-.tw-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 6px color-mix(in oklab, var(--color-primary) 30%, transparent);
-  border: 3px solid white;
-}
-
-.tw-range::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 4px 10px color-mix(in oklab, var(--color-primary) 40%, transparent);
-}
-
-.tw-range::-webkit-slider-thumb:active {
-  transform: scale(1.1);
-}
-
-.tw-range::-moz-range-thumb {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  cursor: pointer;
-  border: 3px solid white;
-}
-
-.tw-range:focus {
-  outline: none;
-}
-
-.tw-range:focus::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-primary) 25%, transparent);
-}
-
-.tw-range-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  margin-top: 0.5rem;
-}
-
-/* ============================================
-   Component Classes - Notification Badge
-   ============================================ */
-.tw-notification-badge {
-  position: relative;
-  display: inline-flex;
-}
-
-.tw-notification-dot {
-  position: absolute;
-  top: -0.125rem;
-  right: -0.125rem;
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 9999px;
-  background-color: var(--color-danger);
-  border: 2px solid var(--color-surface);
-}
-
-.tw-notification-dot-pulse {
-  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.tw-notification-dot-pulse::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  background-color: var(--color-danger);
-  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.tw-notification-count {
-  position: absolute;
-  top: -0.5rem;
-  right: -0.5rem;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.375rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, var(--color-danger) 0%, var(--color-danger-dark) 100%);
-  color: white;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid var(--color-surface);
-  box-shadow: 0 2px 4px color-mix(in oklab, var(--color-danger) 30%, transparent);
-}
-
-/* ============================================
-   Component Classes - List Group
-   ============================================ */
-.tw-list-group {
-  border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
-  overflow: hidden;
-  background-color: var(--color-surface);
-}
-
-.tw-list-group-item {
-  display: flex;
-  align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.tw-list-group-item:last-child {
-  border-bottom: none;
-}
-
-.tw-list-group-item:hover {
-  background-color: color-mix(in oklab, var(--color-primary) 4%, transparent);
-}
-
-.tw-list-group-item-active {
-  background: linear-gradient(90deg, color-mix(in oklab, var(--color-primary) 10%, transparent) 0%, color-mix(in oklab, var(--color-primary) 5%, transparent) 100%);
-  border-left: 3px solid var(--color-primary);
-}
-
-.tw-list-group-item-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.5rem;
-  background-color: var(--color-background);
-  color: var(--color-text-muted);
-  margin-right: 1rem;
-  flex-shrink: 0;
-}
-
-.tw-list-group-item-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.tw-list-group-item-title {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.tw-list-group-item-description {
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-  margin-top: 0.125rem;
+  --toast-accent: var(--color-primary);
 }
 
 /* ============================================
@@ -4492,12 +4858,14 @@ html.no-transitions * {
 }
 
 /* Compact month/year grids */
-.tw-calendar-compact .grid {
+.tw-calendar-compact .tw-calendar-month-grid,
+.tw-calendar-compact .tw-calendar-year-grid {
   gap: 0.25rem;
   padding: 0.25rem;
 }
 
-.tw-calendar-compact .grid button {
+.tw-calendar-compact .tw-calendar-month-btn,
+.tw-calendar-compact .tw-calendar-year-btn {
   padding: 0.25rem 0.375rem;
   font-size: 0.6875rem;
 }
@@ -4714,7 +5082,7 @@ html.no-transitions * {
   transition: all 0.15s;
 }
 
-.tw-calendar-month-btn:hover {
+.tw-calendar-month-btn:hover:not(.tw-calendar-month-btn-selected) {
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
@@ -4743,7 +5111,7 @@ html.no-transitions * {
   transition: all 0.15s;
 }
 
-.tw-calendar-year-btn:hover {
+.tw-calendar-year-btn:hover:not(.tw-calendar-year-btn-selected) {
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
   color: var(--color-primary);
 }
@@ -4923,50 +5291,6 @@ html.no-transitions * {
 }
 
 /* ============================================
-   Component Classes - Dividers
-   ============================================ */
-.tw-divider {
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
-  margin: 1.5rem 0;
-}
-
-.tw-divider-solid {
-  background: var(--color-border);
-}
-
-.tw-divider-vertical {
-  width: 1px;
-  height: auto;
-  align-self: stretch;
-  background: linear-gradient(180deg, transparent, var(--color-border), transparent);
-  margin: 0 1.5rem;
-}
-
-.tw-divider-text {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.tw-divider-text::before,
-.tw-divider-text::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-border));
-}
-
-.tw-divider-text::after {
-  background: linear-gradient(90deg, var(--color-border), transparent);
-}
-
-/* ============================================
    Utility Classes
    ============================================ */
 .tw-scrollbar-thin {
@@ -5079,17 +5403,6 @@ html.no-transitions * {
   .tw-skeleton {
     animation: none !important;
   }
-
-  /* Disable progress bar stripes animation */
-  .tw-progress-striped .tw-progress-bar {
-    animation: none !important;
-  }
-
-  /* Disable notification pulse */
-  .tw-notification-dot-pulse,
-  .tw-notification-dot-pulse::before {
-    animation: none !important;
-  }
 }
 
 /* ==========================================================================
@@ -5116,51 +5429,13 @@ html.no-transitions * {
   align-self: flex-start;
   font-size: 0.8125rem;
   font-weight: 550;
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
 }
 
-.settings-masthead-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
 
-.settings-title {
-  font-size: 1.875rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: rgb(var(--color-text));
-  margin: 0;
-}
 
-.settings-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
-.settings-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4375rem;
-  padding: 0.3125rem 0.75rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: color-mix(in oklab, rgb(var(--color-primary)) 10%, transparent);
-  color: rgb(var(--color-primary));
-}
 
-.settings-chip.is-success {
-  background: color-mix(in oklab, rgb(var(--color-success)) 12%, transparent);
-  color: rgb(var(--color-success));
-}
-
-.settings-chip i {
-  font-size: 0.6875rem;
-}
 
 /* --- Tabs ----------------------------------------------------------------- */
 /* A single hairline runs the width of the row, and the active tab sits on a
@@ -5176,7 +5451,7 @@ html.no-transitions * {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  border-bottom: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid var(--color-border);
 }
 
 .settings-tabs::-webkit-scrollbar {
@@ -5193,18 +5468,18 @@ html.no-transitions * {
   font-size: 0.875rem;
   font-weight: 550;
   white-space: nowrap;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .settings-tab:hover {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   text-decoration: none;
 }
 
 .settings-tab.is-active {
-  color: rgb(var(--color-primary));
-  border-bottom-color: rgb(var(--color-primary));
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
 .settings-tab i {
@@ -5215,8 +5490,8 @@ html.no-transitions * {
 .settings-tab-badge {
   padding: 0.0625rem 0.4375rem;
   border-radius: 999px;
-  background: color-mix(in oklab, rgb(var(--color-warning)) 15%, transparent);
-  color: rgb(var(--color-warning));
+  background: color-mix(in oklab, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
   font-size: 0.6875rem;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
@@ -5226,7 +5501,7 @@ html.no-transitions * {
 
 /* The panel is a plain container, not a surface.
 
-   Each section template already opens with its own .tw-settings-card, and those
+   Each section template already opens with its own .tw-dashboard-card, and those
    are the design. Wrapping them in a second card put boxes inside a box;
    flattening them instead left the page unstructured. So the cards stay as they
    are and the wrapper adds nothing but a landmark — which also means the cards'
@@ -5234,10 +5509,4 @@ html.no-transitions * {
    their width from the page container rather than from a nested padding. */
 .settings-panel {
   min-width: 0;
-}
-
-@media (max-width: 640px) {
-  .settings-title {
-    font-size: 1.5rem;
-  }
 }

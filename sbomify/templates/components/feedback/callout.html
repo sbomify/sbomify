@@ -1,0 +1,12 @@
+{% comment %}
+A regulatory notice panel: richer than an alert, and assembled from parts
+(c-feedback.callout-header and c-feedback.callout-body) because the body carries
+form controls. The accent tints the whole hairline, never a side border, and it
+travels as --callout-accent so the border utility below stays static. warning is
+the only accent the design system ships; without it the border falls back to the
+plain hairline.
+{% endcomment %}
+<c-vars variant class />
+<div class="bg-surface rounded-xl border border-solid border-[color-mix(in_oklab,var(--callout-accent,var(--color-border))_30%,var(--color-border))] shadow-[var(--shadow-xs)]{% if variant == 'warning' %} [--callout-accent:var(--color-warning)]{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

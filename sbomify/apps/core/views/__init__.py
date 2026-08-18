@@ -44,6 +44,7 @@ from sbomify.apps.core.views.component_scope import ComponentScopeView as Compon
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
+from sbomify.apps.core.views.design_system import DesignSystemView as DesignSystemView
 from sbomify.apps.core.views.product_details_private import ProductDetailsPrivateView as ProductDetailsPrivateView
 from sbomify.apps.core.views.product_details_public import ProductDetailsPublicView as ProductDetailsPublicView
 from sbomify.apps.core.views.product_identifiers import ProductIdentifiersView as ProductIdentifiersView
@@ -63,8 +64,8 @@ from sbomify.apps.core.views.security_advisories import (
     SecurityAdvisoriesDashboardView as SecurityAdvisoriesDashboardView,
 )
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoriesTableView as SecurityAdvisoriesTableView
+from sbomify.apps.core.views.security_advisories import SecurityAdvisoryCreateView as SecurityAdvisoryCreateView
 from sbomify.apps.core.views.security_advisories import SecurityAdvisoryDetailView as SecurityAdvisoryDetailView
-from sbomify.apps.core.views.tailwind_test import TailwindTestView as TailwindTestView
 from sbomify.apps.core.views.toggle_public_status import TogglePublicStatusView as TogglePublicStatusView
 from sbomify.apps.core.views.trust_center_advisories import (
     TrustCenterAdvisoriesView as TrustCenterAdvisoriesView,

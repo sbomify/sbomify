@@ -1,0 +1,57 @@
+{% comment %}
+A colour, as a field. The label sits above and the hint below, through
+c-forms.field, so it reads as one of the form's fields rather than a decorative
+block beside them.
+
+The control is a text input carrying the hex with the swatch attached to its
+leading edge. Both halves are the same value: the swatch is the native colour
+input, stripped of the browser's own chrome by the stylesheet and stretched to
+fill its cell, so clicking the colour opens the picker. Typing is the point,
+though. A brand colour usually arrives as a hex from a designer or a brand
+book, and the previous version could only be set by eye through the OS picker.
+
+The border, radius and focus ring live on the wrapper rather than either input,
+because the two of them are one control: focus-within paints the same ring
+c-forms.input paints on itself, so a keyboard user sees the whole field light
+up wherever they landed inside it.
+
+Both inputs are plain HTML, so their Alpine bindings are written with a single
+colon. The double-colon escape is only for a <c-*> tag, where cotton would
+otherwise read the leading colon as its own dynamic-prop prefix.
+
+The Alpine expressions are props, not attrs, because they belong on different
+elements. colour is read by both inputs, on_input fires from either, and
+submit_value is what the form posts. The caller owns the state; this renders it.
+
+colour has to be a real hex rather than a display string: it is now the value of
+an input the user edits, so a friendly "Not set" would be both un-typeable and
+wrong the moment they started typing. The empty case is the placeholder's job.
+{% endcomment %}
+<c-vars name id label hint colour on_input submit_value required class />
+<c-forms.field label="{{ label }}" for="{{ id }}" hint="{{ hint }}" :required="required" class="{{ class }}">
+<div class="flex items-stretch overflow-hidden rounded-lg border-[1.5px] border-solid border-border bg-surface transition-all duration-200 hover:not-focus-within:border-border-light focus-within:border-primary focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]"
+     {{ attrs }}>
+    {% comment %}
+        The swatch is the native colour input itself, not a tile with one hidden
+        behind it: what the user clicks is the colour.
+    {% endcomment %}
+    <div class="relative w-12 shrink-0 border-r border-solid border-border">
+        <input type="color"
+               id="{{ id }}-swatch"
+               class="absolute inset-0 h-full w-full cursor-pointer"
+               aria-label="{{ label }}, colour picker"
+               :value="{{ colour }}"
+               @input="{{ on_input }}">
+    </div>
+    <input type="text"
+           id="{{ id }}"
+           class="min-w-0 flex-1 bg-transparent px-3 py-3 font-mono text-sm leading-[1.5] text-text placeholder:text-text-muted focus:outline-none"
+           placeholder="#000000"
+           maxlength="7"
+           spellcheck="false"
+           autocomplete="off"
+           :value="{{ colour }}"
+           @input="{{ on_input }}">
+</div>
+{% if name %}<input type="hidden" name="{{ name }}" :value="{{ submit_value }}">{% endif %}
+</c-forms.field>

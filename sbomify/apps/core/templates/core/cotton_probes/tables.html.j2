@@ -1,0 +1,60 @@
+{% comment %}
+Render probe for the cotton tables set. Unit tests render this file and assert
+on the output; it is not routed anywhere.
+{% endcomment %}
+<c-tables.shell class="mb-8" data-probe="shell">
+<c-tables.toolbar>
+<c-tables.search id="probe-search" label="Search components" placeholder="Search components" x-model="search" />
+<c-slot name="right">
+<c-tables.page-size id="probe-per-page" x-model.number="perPage">
+<option value="10">Ten</option>
+</c-tables.page-size>
+</c-slot>
+</c-tables.toolbar>
+<c-tables.table fixed data-probe="table">
+<c-tables.head>
+<c-tables.header-cell sort="name">Name column</c-tables.header-cell>
+<c-tables.header-cell date class="hidden md:table-cell">Created column</c-tables.header-cell>
+<c-tables.header-cell sort="is_public" end>Visibility column</c-tables.header-cell>
+<c-tables.actions-cell as="th" label="Row actions" />
+</c-tables.head>
+<tbody>
+    <c-tables.row tabindex="0" @click="open()">
+    <c-tables.cell class="font-medium">Plain body cell</c-tables.cell>
+    <c-tables.cell date>10 Aug 2026</c-tables.cell>
+    <c-tables.cell end hx-get="/probe">Right cell</c-tables.cell>
+    <c-tables.cell muted>Muted cell</c-tables.cell>
+    <c-tables.actions-cell @click.stop><c-buttons.icon label="Component actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
+    </c-tables.row>
+</tbody>
+</c-tables.table>
+<c-tables.footer>
+<c-tables.info>Showing <strong>1</strong> to <strong>2</strong> of <strong>2</strong> entries</c-tables.info>
+<c-tables.pager />
+</c-tables.footer>
+</c-tables.shell>
+<c-tables.shell nested>
+<c-tables.toolbar>
+<span>Toolbar without a right group</span>
+</c-tables.toolbar>
+<c-tables.table>
+<c-tables.head class="align-bottom">
+<c-tables.header-cell>Unsorted head</c-tables.header-cell>
+</c-tables.head>
+<tbody>
+    <c-tables.row>
+    <c-tables.cell>Unfixed body cell</c-tables.cell>
+    </c-tables.row>
+</tbody>
+</c-tables.table>
+<c-tables.table sized data-probe="table-sized">
+<c-tables.head>
+<c-tables.header-cell class="w-1/4">Sized head</c-tables.header-cell>
+</c-tables.head>
+<tbody>
+    <c-tables.row>
+    <c-tables.cell>Sized body cell</c-tables.cell>
+    </c-tables.row>
+</tbody>
+</c-tables.table>
+</c-tables.shell>

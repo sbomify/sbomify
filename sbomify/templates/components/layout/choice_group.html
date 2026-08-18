@@ -1,0 +1,33 @@
+{% comment %}
+Radios as tiles, for a short set of values that carry an icon and a colour
+elsewhere in the app: severity, remediation status, visibility. A plain select
+spells those out as bare words, which leaves the reader translating "medium"
+into the amber badge they will see afterwards; here the option already looks
+like the badge. Up to about six options that fit on one line each. Longer or
+free-form lists stay in c-forms.select.
+
+The label and the hint are c-forms.field's, so a group of tiles is labelled and
+explained exactly like every other field on the page. The group itself carries
+the radiogroup role and the accessible name, because the tiles, not the label,
+are the control.
+
+options is a list built in the view, each {value, label, icon, variant,
+disabled}, where variant is the badge family the tile wears and reaches
+c-layout.choice as its accent. With no options the group renders its slot, so a
+page can write the tiles by hand.
+{% endcomment %}
+<c-vars name options selected label hint required class />
+<c-forms.field label="{{ label }}" hint="{{ hint }}" :required="required" class="{{ class }}">
+<div class="flex flex-wrap gap-2"
+     role="radiogroup"
+     {% if label %}aria-label="{{ label }}"{% endif %}
+     {{ attrs }}>
+    {% if options %}
+        {% for option in options %}
+            <c-layout.choice name="{{ name }}" :value="option.value" :selected="selected" icon="{{ option.icon }}" accent="{{ option.variant }}" :disabled="option.disabled" :required="required">{{ option.label }}</c-layout.choice>
+        {% endfor %}
+    {% else %}
+        {{ slot }}
+    {% endif %}
+</div>
+</c-forms.field>

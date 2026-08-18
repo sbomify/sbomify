@@ -1,0 +1,61 @@
+{% comment %}
+Render probe for the cotton dropdowns and chips sets. Unit tests render this
+file and assert on the output; it is not routed anywhere.
+{% endcomment %}
+<c-dropdowns.dropdown class="w-64">
+<c-dropdowns.header>Component actions</c-dropdowns.header>
+<c-dropdowns.item icon="fas fa-pen" @click="edit()">Edit</c-dropdowns.item>
+<c-dropdowns.item icon="fas fa-copy" href="/components/1/duplicate" hx-boost="false">Duplicate</c-dropdowns.item>
+<c-dropdowns.divider />
+<c-dropdowns.item disabled>Locked</c-dropdowns.item>
+<c-dropdowns.item href="/components/1/archive" disabled>Archive</c-dropdowns.item>
+<c-dropdowns.item-danger icon="fas fa-trash" hx-delete="/components/1" hx-confirm="Really?">Delete component</c-dropdowns.item-danger>
+<c-dropdowns.item-danger href="/components/1/leave"><span>Leave workspace</span></c-dropdowns.item-danger>
+</c-dropdowns.dropdown>
+<c-dropdowns.dropdown floating class="w-60" x-ref="menu" x-show="open" x-cloak ::style="style" @click.outside="close()">
+<c-dropdowns.item icon="fas fa-download">Download</c-dropdowns.item>
+</c-dropdowns.dropdown>
+<c-dropdowns.dropdown flush role="" class="w-72">
+<div class="max-h-24 overflow-y-auto">
+    <p class="text-sm text-text m-0">SBOM uploaded</p>
+</div>
+</c-dropdowns.dropdown>
+<c-chips.icon-chip><i class="fas fa-credit-card" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip size="sm"><i class="fas fa-key" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip size="lg"><i class="fas fa-cube" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip size="xl"><i class="fas fa-box" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip accent="neutral"><i class="fas fa-plus" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip accent="info"><i class="fas fa-circle-info" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip accent="success"><i class="fas fa-check" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip accent="warning"><i class="fas fa-clock" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip accent="danger" size="xl" circle class="mx-auto" title="Danger medallion"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.icon-chip circle size="sm" style="--chip-accent: var(--color-accent-pink)"><i class="fas fa-inbox" aria-hidden="true"></i></c-chips.icon-chip>
+<c-chips.metric-chip>
+<i class="fas fa-puzzle-piece text-text-muted" aria-hidden="true"></i>
+<c-chips.metric.value>12</c-chips.metric.value>
+<c-chips.metric.label>Components</c-chips.metric.label>
+</c-chips.metric-chip>
+<c-chips.metric-chip accent="info" class="ml-2" @click="filter('sboms')">
+<i class="fas fa-file-code" aria-hidden="true"></i>
+<c-chips.metric.value>9</c-chips.metric.value>
+<c-chips.metric.label>SBOMs</c-chips.metric.label>
+</c-chips.metric-chip>
+<c-chips.metric-chip accent="success">
+<c-chips.metric.value>41</c-chips.metric.value>
+<c-chips.metric.label>Passed</c-chips.metric.label>
+</c-chips.metric-chip>
+<c-chips.metric-chip accent="warning">
+<c-chips.metric.label>Scanned</c-chips.metric.label>
+<c-chips.metric.value>3h ago</c-chips.metric.value>
+</c-chips.metric-chip>
+<c-chips.metric-chip accent="danger">
+<c-chips.metric.value>3</c-chips.metric.value>
+<c-chips.metric.label>Critical</c-chips.metric.label>
+</c-chips.metric-chip>
+<c-chips.assessment status="pass"><i class="fas fa-check"></i><span>NTIA</span></c-chips.assessment>
+<c-chips.assessment status="fail"><span>CRA</span></c-chips.assessment>
+<c-chips.assessment status="pending"><span>PQC</span></c-chips.assessment>
+<c-chips.assessment status="error"><span>SPDX</span></c-chips.assessment>
+<c-chips.assessment status="summary-fail"><span>3 Failed</span></c-chips.assessment>
+<c-chips.assessment class="ml-1" title="2 more assessments">+2</c-chips.assessment>
+<c-chips.assessment ::data-status="plugin.status" x-text="plugin.display_name">Bound</c-chips.assessment>

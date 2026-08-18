@@ -1,0 +1,31 @@
+{% comment %}
+The text input, in plain Tailwind utilities. Email, password, number, url and
+the rest are this component with a type; there is no separate file per type
+because nothing about the recipe changes.
+
+state is one conditional segment holding the resting border colour and the
+focus ring together, so a field can never carry two of either. The focus border
+stays primary in every state, as it always has: the pseudo-class outranks the
+resting colour.
+
+A field whose validity is only known in the browser binds data-state instead:
+the recipes below are keyed on that attribute, so an Alpine editor writes
+``::data-state="formErrors.name ? 'error' : ''"`` and never a class. They are
+the same two recipes the prop renders, and they outrank the resting one by
+specificity, so a field can never carry two border colours.
+
+Wrap it in c-forms.field for a label and a hint. required, disabled and
+readonly are declared props so a falsy value renders no attribute at all;
+everything else (autofocus, x-model, hx-*, aria-*) flows through attrs.
+{% endcomment %}
+<c-vars name id type="text" value placeholder state required disabled readonly class />
+<input type="{{ type }}"
+       {% if id or name %}id="{% firstof id name %}"{% endif %}
+       {% if name %}name="{{ name }}"{% endif %}
+       {% if value %}value="{{ value }}"{% endif %}
+       {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+       class="w-full px-4 py-3 bg-surface border-[1.5px] border-solid rounded-lg text-text text-sm leading-[1.5] transition-all duration-200 placeholder:text-text-muted hover:not-focus:not-disabled:border-border-light focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-background {% if state == 'error' %}border-danger focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)]{% elif state == 'success' %}border-success focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% else %}border-border focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_15%,transparent),var(--shadow-xs)]{% endif %} data-[state=error]:border-danger data-[state=error]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-danger)_15%,transparent)] data-[state=success]:border-success data-[state=success]:focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-success)_15%,transparent)]{% if class %} {{ class }}{% endif %}"
+       {% if required %}required{% endif %}
+       {% if disabled %}disabled{% endif %}
+       {% if readonly %}readonly{% endif %}
+       {{ attrs }}>

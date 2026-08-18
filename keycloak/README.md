@@ -1,175 +1,130 @@
-# SBOMify Keycloak Theme
+# sbomify Keycloak theme
 
-A modern, professional Keycloak authentication theme for SBOMify application.
+The login, registration and account-recovery pages Keycloak serves. Keycloak
+runs on its own origin, so it cannot use the app's stylesheet or component
+library. This theme is a standalone Tailwind build that mirrors the app's design
+tokens instead.
 
-## Features
+## The two rules
 
-- **Modern Two-Column Layout**: Consistent branding left panel with form/info right panel
-- **Responsive Design**: Optimized for desktop, tablet, and mobile devices
-- **Smooth Animations**: Staggered entrance animations, hover effects, and micro-interactions
-- **Professional Styling**: Glassmorphism cards, gradient backgrounds, and polished UI components
-- **Accessibility**: ARIA labels, keyboard navigation, and screen reader support
-- **Brand Consistency**: Matches SBOMify application's color scheme and design language
+**1. Filenames are a contract.** Keycloak resolves each page by a fixed
+filename. A file named anything else is never loaded, and Keycloak silently
+falls back to its own unstyled page. This is not a hypothetical: `forgot-password.ftl`
+and `update-password.ftl` sat in this directory for months and never rendered
+once, because the real names are `login-reset-password.ftl` and
+`login-update-password.ftl`.
 
-## Theme Structure
+Before adding a page, confirm the name against the base theme:
+
+```bash
+docker cp <keycloak-container>:/opt/keycloak/lib/lib/main/org.keycloak.keycloak-themes-*.jar .
+unzip -l org.keycloak.keycloak-themes-*.jar | grep -oE 'theme/base/login/[a-z0-9-]+\.ftl'
+```
+
+Message bundles follow the same rule: Keycloak loads
+`login/messages/messages_<locale>.properties` by convention. A bundle named
+anything else (`Messages.properties`, say) is ignored, and every override in it
+is dead.
+
+**2. Tokens are mirrored, never invented.** The `:root` block in
+`login/resources/css/sbomify.src.css` is a copy of the app's dark-theme tokens
+from `sbomify/assets/css/tailwind.src.css`. When a token changes there, change
+it here. No rule in this file may use a raw hex value.
+
+These pages are dark only. The app defaults a first-time visitor to dark and
+switches on a stored preference that Keycloak cannot read across the origin
+boundary, so dark is the honest match for what the user sees after signing in.
+
+## Structure
 
 ```text
 themes/sbomify/
+├── theme.properties              # Shared: parent, locales, stylesheet
 ├── login/
-│   ├── theme.properties           # Theme configuration
-│   ├── template.ftl              # Base layout template
-│   ├── messages/                 # Message bundles
-│   │   └── Messages.properties   # Custom messages (English)
-│   ├── login.ftl                # Login page
-│   ├── register.ftl              # Registration page
-│   ├── forgot-password.ftl        # Forgot password page
-│   ├── update-password.ftl        # Update password page
-│   ├── login-username.ftl        # Forgot username page
-│   ├── verify-email.ftl          # Email verification page
-│   ├── update-email.ftl          # Email update page
-│   ├── info.ftl                  # Generic info page
-│   ├── login-config.ftl          # Required actions page
-│   ├── terms.ftl                 # Terms of service page
-│   ├── logout-confirm.ftl        # Logout confirmation
-│   └── resources/
-│       ├── css/
-│       │   ├── sbomify.src.css   # Tailwind CSS source
-│       │   └── sbomify.css       # Compiled CSS
-│       └── img/
-│           └── sbomify.svg        # Logo
-└── theme.properties              # Parent theme properties
+│   ├── theme.properties          # Login-type theme config
+│   ├── template.ftl              # Head, fonts, page shell
+│   ├── components.ftl            # Shared macros (see below)
+│   ├── messages/
+│   │   └── messages_en.properties
+│   ├── login.ftl                 # Sign in
+│   ├── login-reset-password.ftl  # Forgot password
+│   ├── login-update-password.ftl # Set a new password
+│   ├── register.ftl              # Create account
+│   ├── login-verify-email.ftl    # Check your inbox
+│   ├── login-username.ftl        # Username step (identity-first flow)
+│   ├── login-update-profile.ftl, update-email.ftl
+│   ├── login-idp-link-confirm.ftl, login-idp-link-email.ftl
+│   ├── info.ftl, error.ftl, terms.ftl
+│   ├── logout-confirm.ftl, login-page-expired.ftl
+│   └── resources/css/
+│       ├── sbomify.src.css       # Source (edit this)
+│       └── sbomify.css           # Compiled (committed, do not edit)
+└── email/                        # Email templates
 ```
 
-## Pages Overview
+## Macros in `components.ftl`
 
-### Authentication Pages
+| Macro | Use for |
+| --- | --- |
+| `brandLogo` | Inline animated wordmark. Inlined rather than `<img>` because Chrome freezes CSS animation inside an external SVG document. |
+| `alertBanner` | The message banner every form page opens with. Renders nothing when there is no message. |
+| `formScripts` | Client-side validation for a form. Takes `formId`, `submittingText`, and optionally `passwordMatch` with `passwordId`/`passwordConfirmId`. |
+| `emailVerificationContent` | Body of the verify-email page. |
 
-1. **Login Page** (`login.ftl`)
-   - Username/email and password fields
-   - Remember me checkbox
-   - Forgot password link
-   - Social login providers (if configured)
-   - Register account link
+`formScripts` is called at the top of a form, before the fields exist in the
+DOM, so it defers everything to `DOMContentLoaded`. Do not remove that guard:
+without it `getElementById` returns null and every field listener silently fails
+to attach, which is how the validation in this theme was broken for its whole
+life before it was noticed.
 
-2. **Register Page** (`register.ftl`)
-   - First name, last name, email fields
-   - Username field (if not using email as username)
-   - Password and confirm password fields
-   - Feature highlights on left panel
+## CSS conventions
 
-3. **Forgot Password** (`forgot-password.ftl`)
-   - Email/username input field
-   - Clear process explanation with steps
-   - Back to login and register links
-   - Multiple email notice (if configured)
+The class vocabulary is this theme's own (`form-card`, `btn-submit`,
+`form-control`) rather than the app's `tw-*` names, because most of it has to
+match class names Keycloak itself emits. The design language is shared, though,
+and comes from the Frontend (UI) section of `AGENTS.md`:
 
-4. **Update Password** (`update-password.ftl`)
-   - New password field
-   - Confirm password field
-   - Real-time validation
-   - Password strength tips
+- Containers sit still. No hover lift, no ambient animation. Entrances are
+  one-shot and motion respects `prefers-reduced-motion`.
+- Filled buttons use the primary recipe: a `135deg` gradient from `--btn-accent`
+  to `--btn-accent-dark`, a `0.5px` self-coloured border and an inset top
+  highlight. A variant sets those custom properties, it does not restate the
+  rules. The same pattern drives `--alert-accent`.
+- Text on a tint mixes toward the theme text colour
+  (`color-mix(in oklab, var(--accent) 60%, var(--color-text))`), never a raw
+  accent on its own tint.
+- State styling hangs off the real control (`:checked`, `:focus-visible`,
+  `[aria-invalid="true"]`, `.input-invalid`), never a decorative sibling.
 
-5. **Forgot Username** (`login-username.ftl`)
-   - Email input field
-   - Username recovery process
-   - Navigation links
+Nothing may go in the Keycloak fallback block at the bottom that also matches
+themed markup. A `.login-pf-page .form-control` rule there once matched every
+themed field at the same specificity while sitting later in the file, which
+silently disabled the error border everywhere.
 
-### Information Pages
+## Copy
 
-1. **Verify Email** (`verify-email.ftl`)
-   - Large email icon
-   - Step-by-step instructions
-   - Expiration warning
-   - Visual tips with icons
+Follows the copy rules in `AGENTS.md`: sentence case, short sentences, plain words,
+no em or en dashes, and a button says the action it performs ("Send reset link",
+not "Submit"). Overrides live in `login/messages/messages_en.properties`.
 
-2. **Update Email** (`update-email.ftl`)
-   - Email update confirmation
-   - Process steps
-   - Clear expectations
-
-3. **Info Page** (`info.ftl`)
-   - Generic information display
-   - Supports messages and alerts
-   - Required actions display
-
-4. **Login Config** (`login-config.ftl`)
-   - Required authentication actions
-   - Checklist style with icons
-   - Multiple action support
-
-5. **Terms Page** (`terms.ftl`)
-   - Document icon
-   - Key points with icons
-   - Accept button
-   - Cancel/back link
-
-6. **Logout Confirm** (`logout-confirm.ftl`)
-   - Auto-submit logout
-   - Fallback for no-JS
-
-## Design System
-
-### Colors
-
-```css
---sbomify-brand: #3b7ddd;          /* Primary blue */
---sbomify-brand-hover: #2f64b1;     /* Darker blue for hover */
---sbomify-success: #1cbb8c;         /* Green */
---sbomify-warning: #fcb92c;         /* Amber */
---sbomify-danger: #dc3545;           /* Red */
---sbomify-surface-dark: #111a2d;     /* Dark background */
---sbomify-surface-card: rgba(14, 22, 38, 0.94);  /* Glass card */
---sbomify-contrast: #f8fafc;        /* White text */
---sbomify-muted: #94a3b8;           /* Gray text */
-```
-
-### Typography
-
-- **Font Family**: Inter, Helvetica Neue, Arial, sans-serif
-- **Heading Sizes**: text-4xl (36px), text-2xl (24px), text-xl (20px)
-- **Body Sizes**: text-base (16px), text-sm (14px), text-xs (12px)
-- **Weights**: Regular (400), Medium (500), Semibold (600), Bold (700)
-
-### Animations
-
-- **fadeInBackground**: 0.8s ease-out (page load)
-- **scaleIn**: 0.5s ease-out (icon appearance)
-- **slideInUp**: 0.5s ease-out (content rise)
-- **slideInLeft**: 0.6s ease-out (left panel)
-- **slideInRight**: 0.6s ease-out (right panel)
-- **shake**: 0.4s ease-in-out (error feedback)
-
-### Component Styles
-
-- **Buttons**: Multi-step gradient, shimmer effect, hover lift
-- **Inputs**: Glow focus, slide animations, error states
-- **Cards**: Glassmorphism with backdrop blur
-- **Alerts**: Color-coded with icons and shadows
-- **Links**: Animated underlines, hover colors
-
-## Building the Theme
-
-### Development Mode
+## Building
 
 ```bash
 cd keycloak
-bun run dev
+bun run build   # compile and minify
+bun run dev     # watch
 ```
 
-This watches for changes and recompiles CSS automatically.
+The compiled `sbomify.css` is committed, so rebuild and commit it with any CSS
+change. Templates need no build step.
 
-### Production Build
+Tailwind has no `theme.extend` here on purpose: colour, radius, shadow and type
+all come from the tokens in the stylesheet. A palette in `tailwind.config.ts`
+would be a second source of truth that drifts from the app.
 
-```bash
-cd keycloak
-bun run build
-```
+## Local development
 
-This compiles and minifies CSS for production.
-
-## Deployment
-
-The theme is automatically deployed in the development environment via Docker Compose:
+The theme is bind-mounted read only:
 
 ```yaml
 keycloak:
@@ -177,61 +132,34 @@ keycloak:
     - ./keycloak/themes:/opt/keycloak/themes:ro
 ```
 
-Keycloak uses the theme specified in `theme.properties`:
+Keycloak runs with `start-dev`, which disables theme caching, so template edits
+show on refresh and CSS edits show after `bun run build`.
 
-- `parent=keycloak` - Inherits base Keycloak styling
-- `loginTheme=sbomify` - Applied via Keycloak bootstrap script
+The realm is configured by `bin/keycloak-bootstrap.sh`, which sets
+`loginTheme`, `emailTheme`, `registrationAllowed` and `resetPasswordAllowed`.
+After changing it, re-run:
 
-## Customization
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up keycloak-bootstrap
+```
 
-### Modifying Styles
+To reach `login-update-password.ftl` without a working mailbox, set a required
+action on a test user and sign in as them:
 
-1. Edit `login/resources/css/sbomify.src.css`
-2. Run `bun run dev` (watch mode) or `bun run build` (production)
-3. Changes automatically compile to `sbomify.css`
+```bash
+docker exec <keycloak-container> /opt/keycloak/bin/kcadm.sh update users/<id> \
+  -r sbomify -s 'requiredActions=["UPDATE_PASSWORD"]'
+```
 
-### Modifying Templates
+## Known gaps
 
-1. Edit any `.ftl` template in `login/` directory
-2. Changes are picked up on container restart
-3. No compilation needed
-
-### Updating Branding
-
-1. Update the inline logo SVG in the `brandLogo` macro in `login/components.ftl`
-2. Update CSS color variables in `.src.css`
-3. Rebuild CSS with `bun run build`
-
-### Custom Messages
-
-Edit `login/messages/Messages.properties` to override default Keycloak messages.
-
-## Browser Support
-
-- Modern browsers (Chrome, Firefox, Safari, Edge)
-- CSS Grid and Flexbox
-- CSS Custom Properties
-- Backdrop Filter (glassmorphism)
-- Reduced motion support
-
-## Accessibility
-
-- WCAG 2.1 AA compliant
-- Semantic HTML structure
-- ARIA labels and live regions
-- Keyboard navigation support
-- Screen reader friendly
-- Focus indicators
-- Sufficient color contrast
-
-## Performance
-
-- GPU-accelerated animations (transform, opacity)
-- Minimal repaints and reflows
-- Optimized CSS selectors
-- Minified production CSS
-- Efficient keyframe animations
-
-## License
-
-This theme follows the SBOMify project license.
+- **No SMTP in dev.** The bootstrap does not configure Keycloak's mail server,
+  so the reset email is never delivered locally and the emailed-link path cannot
+  be exercised end to end. The compose file does define a `mailpit` service.
+- **`login-config.ftl` is dead.** It is a generic required-actions page, but no
+  Keycloak template has that name, so it is never loaded. The nearest real name
+  is `login-config-totp.ftl`, which is specifically the authenticator-setup page
+  and would need different content. Adapt it or delete it.
+- **Copy is only converted on the pages that were restyled** (`login`,
+  `login-reset-password`, `login-update-password`). `register.ftl` and the info
+  pages still carry Title Case headings.

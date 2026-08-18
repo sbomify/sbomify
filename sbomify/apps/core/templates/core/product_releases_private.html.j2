@@ -1,43 +1,27 @@
 {% extends "core/dashboard_base.htmx.j2" %}
 {% load static %}
 {% load django_vite %}
-{% load breadcrumb_tags %}
 {% block title %}sbomify Product: {{ product.name }} - Releases{% endblock %}
 {% block extra_styles %}
     <link rel="stylesheet"
           href="{% static 'css/product-releases-private.css' %}">
 {% endblock %}
-{% block breadcrumb %}
-    {% breadcrumb releases 'releases' %}
-{% endblock %}
 {% block content %}
+    <c-layout.page-header title="Releases" subtitle="Manage releases for {{ product.name }}" icon="fas fa-tag" mark="avatar">
+    {% if product.has_crud_permissions %}
+        <c-buttons.primary @click="$dispatch('open-createReleaseModal')">
+        <i class="fas fa-plus" aria-hidden="true"></i><span>New release</span>
+        </c-buttons.primary>
+    {% endif %}
+    </c-layout.page-header>
     <div class="space-y-6">
-        {# Page Header - matches dashboard pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div class="flex items-center gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas fa-tag"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-text">Releases</h1>
-                    <p class="text-text-muted text-sm">Manage releases for {{ product.name }}</p>
-                </div>
-            </div>
-            {% if product.has_crud_permissions %}
-                <button type="button"
-                        class="tw-btn-primary self-start lg:self-auto"
-                        @click="$dispatch('open-createReleaseModal')">
-                    <i class="fas fa-plus mr-2"></i>New Release
-                </button>
-            {% endif %}
-        </div>
         {# Stats Badge #}
         <div class="flex flex-wrap gap-2">
-            <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                <i class="fas fa-tag text-primary text-xs"></i>
-                <span class="font-semibold text-text">{{ releases|length }}</span>
-                <span class="text-text-muted">Release{{ releases|length|pluralize }}</span>
-            </div>
+            <c-chips.metric-chip>
+            <i class="fas fa-tag text-primary text-xs" aria-hidden="true"></i>
+            <c-chips.metric.value>{{ releases|length }}</c-chips.metric.value>
+            <c-chips.metric.label>Release{{ releases|length|pluralize }}</c-chips.metric.label>
+            </c-chips.metric-chip>
         </div>
         {# Product Releases #}
         <div>
@@ -47,111 +31,47 @@
         {% if product.has_crud_permissions %}
             <div x-data="{ open: false, createdAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}', releasedAt: '{{ default_release_datetime|date:'Y-m-d\\TH:i' }}' }"
                  @open-createReleaseModal.window="open = true">
-                <template x-teleport="body">
-                    <div x-show="open"
-                         x-cloak
-                         class="fixed inset-0 z-[100]"
-                         id="createReleaseModal"
-                         role="dialog"
-                         aria-modal="true"
-                         aria-labelledby="createReleaseModalLabel">
-                        <div x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="tw-modal-overlay"
-                             @click="open = false; $dispatch('close-all-pickers')"></div>
-                        <div class="tw-modal"
-                             x-show="open"
-                             x-transition:enter="transition ease-out duration-200"
-                             x-transition:enter-start="opacity-0 scale-95"
-                             x-transition:enter-end="opacity-100 scale-100"
-                             x-transition:leave="transition ease-in duration-150"
-                             x-transition:leave-start="opacity-100 scale-100"
-                             x-transition:leave-end="opacity-0 scale-95"
-                             @click.stop
-                             x-trap.noscroll="open"
-                             @keydown.escape="if(open) { open = false; $dispatch('close-all-pickers'); }">
-                            <div class="tw-modal-content">
-                                <form id="createReleaseForm"
-                                      method="post"
-                                      action="{% url 'core:product_releases' product.id %}">
-                                    {% csrf_token %}
-                                    <div class="tw-modal-header">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                <i class="fas fa-tag text-primary"></i>
-                                            </div>
-                                            <h4 id="createReleaseModalLabel" class="tw-modal-title">New Release</h4>
-                                        </div>
-                                        <button type="button"
-                                                class="tw-modal-close"
-                                                @click="open = false; $dispatch('close-all-pickers')"
-                                                aria-label="Close">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </div>
-                                    <div class="tw-modal-body space-y-4">
-                                        <div>
-                                            <label for="releaseName" class="tw-form-label">
-                                                Release Name <span class="text-danger">*</span>
-                                            </label>
-                                            <input type="text"
-                                                   class="tw-form-input"
-                                                   id="releaseName"
-                                                   name="name"
-                                                   required
-                                                   placeholder="e.g., v1.0.0, 2024.1, beta-3">
-                                            <p class="text-xs text-text-muted mt-1.5">Enter a unique name for this release</p>
-                                        </div>
-                                        <div>
-                                            <label for="releaseDescription" class="tw-form-label">Description</label>
-                                            <textarea class="tw-form-input"
-                                                      id="releaseDescription"
-                                                      name="description"
-                                                      rows="3"
-                                                      placeholder="Describe what's included in this release..."></textarea>
-                                            <p class="text-xs text-text-muted mt-1.5">Optional. A brief description of this release.</p>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <div>
-                                                <input type="hidden" name="created_at" :value="createdAt">
-                                                {% include 'components/date_picker.html.j2' with value_binding='createdAt' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-                                            </div>
-                                            <div>
-                                                <input type="hidden" name="released_at" :value="releasedAt">
-                                                {% include 'components/date_picker.html.j2' with value_binding='releasedAt' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label class="flex items-center gap-2 cursor-pointer">
-                                                <input type="checkbox"
-                                                       class="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                                                       id="releaseIsPrerelease"
-                                                       name="is_prerelease">
-                                                <span class="text-sm text-text">Mark as pre-release</span>
-                                            </label>
-                                            <p class="text-xs text-text-muted mt-1.5 ml-6">
-                                                Pre-releases are typically alpha, beta, or release candidate versions
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div class="tw-modal-footer">
-                                        <button type="button"
-                                                class="tw-btn-ghost"
-                                                @click="open = false; $dispatch('close-all-pickers')">Cancel</button>
-                                        <button type="submit" class="tw-btn-primary">
-                                            <i class="fas fa-plus mr-2"></i>Create Release
-                                        </button>
-                                    </div>
-                                </form>
+                {% comment %} close carries the picker dismissal, so escape, the backdrop and the
+                X all put away an open calendar the way Cancel does. {% endcomment %}
+                <c-modal id="createReleaseModal" title="New Release" icon="fas fa-tag" close="open = false; $dispatch('close-all-pickers')">
+                <form id="createReleaseForm"
+                      method="post"
+                      action="{% url 'core:product_releases' product.id %}">
+                    {% csrf_token %}
+                    <div class="space-y-4">
+                        <div>
+                            <c-forms.label for="releaseName" required>Release Name</c-forms.label>
+                            <c-forms.input id="releaseName" name="name" required placeholder="e.g., v1.0.0, 2024.1, beta-3" />
+                            <c-forms.hint>Enter a unique name for this release</c-forms.hint>
+                        </div>
+                        <div>
+                            <c-forms.label for="releaseDescription">Description</c-forms.label>
+                            <c-forms.textarea id="releaseDescription" name="description" rows="3" placeholder="Describe what's included in this release..." />
+                            <c-forms.hint>Optional. A brief description of this release.</c-forms.hint>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <input type="hidden" name="created_at" :value="createdAt">
+                                {% include 'components/date_picker.html.j2' with value_binding='createdAt' label='Created Date' include_time='true' placeholder='Select date and time...' compact='true' %}
+                            </div>
+                            <div>
+                                <input type="hidden" name="released_at" :value="releasedAt">
+                                {% include 'components/date_picker.html.j2' with value_binding='releasedAt' label='Release Date' include_time='true' placeholder='Select date and time...' compact='true' %}
                             </div>
                         </div>
+                        <div>
+                            <c-forms.checkbox id="releaseIsPrerelease" name="is_prerelease">Mark as pre-release</c-forms.checkbox>
+                            <c-forms.hint class="ml-6">Pre-releases are typically alpha, beta, or release candidate versions</c-forms.hint>
+                        </div>
                     </div>
-                </template>
+                </form>
+                <c-slot name="footer">
+                <c-buttons.ghost @click="open = false; $dispatch('close-all-pickers')">Cancel</c-buttons.ghost>
+                <c-buttons.primary type="submit" form="createReleaseForm">
+                <i class="fas fa-plus mr-2"></i>Create Release
+                </c-buttons.primary>
+                </c-slot>
+                </c-modal>
             </div>
         {% endif %}
     </div>

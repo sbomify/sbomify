@@ -155,8 +155,10 @@ class TestCreate:
             data={"provider": "github", "repository": "no slash"},
         )
         assert response.status_code == 200
-        # Field-level error class is present in the rendered partial.
-        assert b"tw-form-error" in response.content
+        # The field error is rendered inline. c-forms.error paints it, so the
+        # assertion is on what the user sees rather than on a class name.
+        assert b"text-danger" in response.content
+        assert b"Repository must be in the form" in response.content or b"owner/repo" in response.content
         called.assert_not_called()
 
     @pytest.mark.django_db

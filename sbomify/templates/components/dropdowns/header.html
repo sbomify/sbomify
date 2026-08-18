@@ -1,0 +1,7 @@
+{% comment %}
+The small caps label above a group of items inside a panel.
+{% endcomment %}
+<c-vars class />
+<div class="pt-1.5 px-2.5 pb-1 text-[0.625rem] font-bold uppercase tracking-[0.08em] text-text-muted{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

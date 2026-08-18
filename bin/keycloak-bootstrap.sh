@@ -75,8 +75,11 @@ else
   fi
 fi
 
-# Always enable user registration after all other steps
-/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true
+# Always enable user registration after all other steps.
+# resetPasswordAllowed matches what create_realm sets in core/keycloak_utils.py;
+# without it the "Forgot password?" link never renders and the reset flow is
+# unreachable.
+/opt/keycloak/bin/kcadm.sh update "realms/$REALM" -s registrationAllowed=true -s resetPasswordAllowed=true
 
 # Email action links must survive real-world mailbox delays: verification
 # links live 3 days, credential resets 1 hour (the Keycloak default of

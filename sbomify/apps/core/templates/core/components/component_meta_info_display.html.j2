@@ -20,7 +20,7 @@
                             <span class="font-semibold text-text"
                                   x-text="metadata.contact_profile.name"></span>
                             <template x-if="metadata.contact_profile.is_default">
-                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/20 text-text-muted">Default</span>
+                                <c-badges.secondary size="sm">Default</c-badges.secondary>
                             </template>
                         </div>
                     </div>
@@ -49,28 +49,13 @@
                                         <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                 <template x-if="metadata.release_date">
-                                                    <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
-                                                        <div class="text-xs text-text-muted">Release</div>
-                                                        <div class="text-sm font-medium text-text"
-                                                             x-text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
-                                                        </div>
-                                                    </div>
+                                                    <c-layout.data-box label="Release" value_x_text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })" />
                                                 </template>
                                                 <template x-if="metadata.end_of_support">
-                                                    <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
-                                                        <div class="text-xs text-text-muted">End of Support</div>
-                                                        <div class="text-sm font-medium text-text"
-                                                             x-text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
-                                                        </div>
-                                                    </div>
+                                                    <c-layout.data-box label="End of Support" value_x_text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })" />
                                                 </template>
                                                 <template x-if="metadata.end_of_life">
-                                                    <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
-                                                        <div class="text-xs text-text-muted">End of Life</div>
-                                                        <div class="text-sm font-medium text-text"
-                                                             x-text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
-                                                        </div>
-                                                    </div>
+                                                    <c-layout.data-box label="End of Life" value_x_text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })" />
                                                 </template>
                                             </div>
                                         </template>
@@ -86,9 +71,9 @@
                                     <div class="flex flex-wrap gap-2">
                                         <template x-for="license in metadata.licenses"
                                                   :key="typeof license === 'string' ? license : license.name">
-                                            <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border">
-                                                <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
-                                            </span>
+                                            <c-tags.tag>
+                                            <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
+                                            </c-tags.tag>
                                         </template>
                                     </div>
                                 </template>
@@ -151,15 +136,12 @@
                                 <div class="flex flex-col gap-2">
                                     <template x-for="(contact, index) in metadata.supplier.contacts" :key="index">
                                         <div class="flex items-center flex-wrap gap-1">
-                                            <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border inline-flex items-center">
-                                                <span x-text="contact.name"></span>
-                                                <template x-if="contact.email">
-                                                    <span x-text="' (' + contact.email + ')'"></span>
-                                                </template>
-                                                <i x-show="showEditButton"
-                                                   class="far fa-times-circle ml-2 cursor-pointer text-text-muted hover:text-danger"
-                                                   @click="removeSupplierContact(index)"></i>
-                                            </span>
+                                            <c-tags.tag removable label="contact" remove_click="removeSupplierContact(index)">
+                                            <span x-text="contact.name"></span>
+                                            <template x-if="contact.email">
+                                                <span x-text="' (' + contact.email + ')'"></span>
+                                            </template>
+                                            </c-tags.tag>
                                         </div>
                                     </template>
                                 </div>
@@ -186,28 +168,13 @@
                                 <template x-if="metadata.release_date || metadata.end_of_support || metadata.end_of_life">
                                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                         <template x-if="metadata.release_date">
-                                            <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
-                                                <div class="text-xs text-text-muted">Release</div>
-                                                <div class="text-sm font-medium text-text"
-                                                     x-text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
-                                                </div>
-                                            </div>
+                                            <c-layout.data-box label="Release" value_x_text="new Date(metadata.release_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })" />
                                         </template>
                                         <template x-if="metadata.end_of_support">
-                                            <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
-                                                <div class="text-xs text-text-muted">End of Support</div>
-                                                <div class="text-sm font-medium text-text"
-                                                     x-text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
-                                                </div>
-                                            </div>
+                                            <c-layout.data-box label="End of Support" value_x_text="new Date(metadata.end_of_support).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })" />
                                         </template>
                                         <template x-if="metadata.end_of_life">
-                                            <div class="px-3 py-2 rounded-lg bg-border/10 border border-border/30">
-                                                <div class="text-xs text-text-muted">End of Life</div>
-                                                <div class="text-sm font-medium text-text"
-                                                     x-text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })">
-                                                </div>
-                                            </div>
+                                            <c-layout.data-box label="End of Life" value_x_text="new Date(metadata.end_of_life).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })" />
                                         </template>
                                     </div>
                                 </template>
@@ -223,9 +190,9 @@
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="license in metadata.licenses"
                                           :key="typeof license === 'string' ? license : license.name">
-                                    <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border">
-                                        <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
-                                    </span>
+                                    <c-tags.tag>
+                                    <span x-text="typeof license === 'string' ? license : (license.name + ' (custom)')"></span>
+                                    </c-tags.tag>
                                 </template>
                             </div>
                         </template>
@@ -238,13 +205,10 @@
                         <template x-if="!isEmpty(metadata.authors)">
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="(author, index) in metadata.authors" :key="index">
-                                    <span class="px-2.5 py-1 text-sm rounded-full bg-border/50 text-text border border-border inline-flex items-center">
-                                        <span x-text="author.name"></span>
-                                        <span x-text="' (' + author.email + ')'"></span>
-                                        <i x-show="showEditButton"
-                                           class="far fa-times-circle ml-2 cursor-pointer text-text-muted hover:text-danger"
-                                           @click="removeAuthor(index)"></i>
-                                    </span>
+                                    <c-tags.tag removable label="author" remove_click="removeAuthor(index)">
+                                    <span x-text="author.name"></span>
+                                    <span x-text="' (' + author.email + ')'"></span>
+                                    </c-tags.tag>
                                 </template>
                             </div>
                         </template>
@@ -253,10 +217,10 @@
             </template>
             <template x-if="showEditButton">
                 <div class="flex gap-2 justify-end mt-6 pt-4 border-t border-border">
-                    <button class="tw-btn-secondary text-sm" @click="$dispatch('edit-metadata')">
-                        <i class="fas fa-edit mr-2"></i>
-                        Edit Metadata
-                    </button>
+                    <c-buttons.secondary size="sm" @click="$dispatch('edit-metadata')">
+                    <i class="fas fa-edit mr-2"></i>
+                    Edit Metadata
+                    </c-buttons.secondary>
                 </div>
             </template>
         </div>

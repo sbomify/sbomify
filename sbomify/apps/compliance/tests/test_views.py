@@ -79,7 +79,7 @@ class TestCRAProductListView:
         url = reverse("compliance:cra_product_list")
         response = web_client.get(url)
         assert response.status_code == 200
-        assert b"No CRA Assessments" in response.content
+        assert b"No CRA assessments" in response.content
 
 
 class TestCRAWizardShellView:

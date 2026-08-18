@@ -1,0 +1,8 @@
+{% comment %}
+The count line in the footer: "Showing 1 to 10 of 42 entries". Wrap the numbers
+in strong and they come forward; the sentence around them stays quiet.
+{% endcomment %}
+<c-vars class />
+<div class="text-[0.8125rem] leading-[1.5] text-text-muted [&_strong]:font-semibold [&_strong]:text-text{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

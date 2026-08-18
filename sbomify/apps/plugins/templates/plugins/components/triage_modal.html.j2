@@ -7,111 +7,74 @@ Writes a sbomify-authored VEX through the triage API; requires can_triage
 <div x-data="{ show: false, submitting: false, vulnId: '', purl: '', state: 'not_affected', justification: 'code_not_reachable', detail: '', scope: 'package', error: '', aliases: [], openTriage(payload) { this.vulnId = payload.id || ''; this.purl = payload.purl || ''; this.state = payload.state || 'not_affected'; this.justification = payload.justification || 'code_not_reachable'; this.detail = payload.detail || ''; this.aliases = (payload.aliases || '').split(',').map(s => s.trim()).filter(Boolean); this.scope = this.purl ? 'package' : 'component'; this.error = ''; this.show = true; }, async submit(clear = false) { this.submitting = true; this.error = ''; const csrf = document.querySelector('#triage-csrf input[name=csrfmiddlewaretoken]').value; const decision = { vuln_id: this.vulnId, state: clear ? null : this.state, justification: clear || this.state !== 'not_affected' ? null : this.justification, detail: clear ? null : (this.detail || null), aliases: clear ? [] : this.aliases, anchor_purl: this.purl || null }; let url, body; if (this.scope === 'workspace') { url = '/api/v1/vulnerability-scanning/triage/bulk'; body = { ...decision, team_key: '{{ team_key|escapejs }}' }; } else { url = '/api/v1/vulnerability-scanning/components/{{ component_id|escapejs }}/triage'; body = { decisions: [{ ...decision, purl: this.scope === 'package' ? this.purl : null }] }; } try { const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf }, body: JSON.stringify(body) }); const data = await response.json().catch(() => ({})); if (!response.ok) { this.error = data.detail || `Request failed (${response.status})`; return; } this.show = false; if (window.showToast) { window.showToast({ title: 'Triage saved', type: 'success', message: 'Decision recorded. Findings re-annotate in the background; refresh shortly.' }); } setTimeout(() => window.location.reload(), 1500); } catch (e) { this.error = 'Network error: ' + ((e && e.message) ? e.message : String(e)); } finally { this.submitting = false; } } }"
      @open-triage.window="openTriage($event.detail)">
     <div id="triage-csrf" class="hidden">{% csrf_token %}</div>
-    <template x-teleport="body">
-        <div x-show="show"
-             x-cloak
-             class="fixed inset-0 z-[100]"
-             role="dialog"
-             aria-labelledby="triage-modal-title"
-             aria-modal="true"
-             @keydown.escape="show = false">
-            <div x-show="show" class="tw-modal-overlay" @click="show = false"></div>
-            <div class="tw-modal tw-modal-md"
-                 x-show="show"
-                 x-trap.noscroll="show"
-                 @click.stop>
-                <div class="tw-modal-content tw-modal-md">
-                    <div class="tw-modal-header">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <i class="fas fa-clipboard-check text-primary" aria-hidden="true"></i>
-                            </div>
-                            <h4 id="triage-modal-title" class="tw-modal-title">
-                                Triage <span class="font-mono" x-text="vulnId"></span>
-                            </h4>
-                        </div>
-                        <button type="button"
-                                class="tw-modal-close"
-                                aria-label="Close"
-                                @click="show = false">
-                            <i class="fas fa-times" aria-hidden="true"></i>
-                        </button>
-                    </div>
-                    <div class="tw-modal-body space-y-4">
-                        <div>
-                            <label for="triage-scope" class="block text-sm font-medium text-text mb-1">Applies to</label>
-                            <select id="triage-scope" class="tw-form-select w-full" x-model="scope">
-                                {# A real option element (a template element is invalid inside a select);
-                               hidden AND disabled when there is no package, and openTriage never defaults
-                               scope to 'package' without a purl, so it can neither show nor be selected. #}
-                                <option value="package"
-                                        :hidden="!purl"
-                                        :disabled="!purl"
-                                        x-text="'This package (' + purl + ')'"></option>
-                                <option value="component">This entire component</option>
-                                <option value="workspace">Every component in this workspace</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="triage-state" class="block text-sm font-medium text-text mb-1">State</label>
-                            <select id="triage-state" class="tw-form-select w-full" x-model="state">
-                                <option value="not_affected">Not affected</option>
-                                <option value="false_positive">False positive</option>
-                                <option value="exploitable">Exploitable</option>
-                                <option value="in_triage">In triage</option>
-                                <option value="resolved">Resolved</option>
-                            </select>
-                        </div>
-                        <div x-show="state === 'not_affected'">
-                            <label for="triage-justification"
-                                   class="block text-sm font-medium text-text mb-1">Justification</label>
-                            <select id="triage-justification"
-                                    class="tw-form-select w-full"
-                                    x-model="justification">
-                                <option value="code_not_present">Code not present</option>
-                                <option value="code_not_reachable">Code not reachable</option>
-                                <option value="requires_configuration">Requires configuration</option>
-                                <option value="requires_dependency">Requires dependency</option>
-                                <option value="requires_environment">Requires environment</option>
-                                <option value="protected_by_compiler">Protected by compiler</option>
-                                <option value="protected_at_runtime">Protected at runtime</option>
-                                <option value="protected_at_perimeter">Protected at perimeter</option>
-                                <option value="protected_by_mitigating_control">Protected by mitigating control</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="triage-detail" class="block text-sm font-medium text-text mb-1">
-                                Detail <span class="text-text-muted font-normal">(optional)</span>
-                            </label>
-                            <textarea id="triage-detail"
-                                      class="tw-form-input w-full"
-                                      rows="3"
-                                      x-model="detail"
-                                      placeholder="Why this decision holds for this product"></textarea>
-                        </div>
-                        <p x-show="error" class="text-danger text-sm" x-text="error"></p>
-                    </div>
-                    <div class="tw-modal-footer flex items-center justify-between">
-                        <button type="button"
-                                class="tw-btn-secondary text-danger"
-                                :disabled="submitting"
-                                @click="submit(true)">Clear decision</button>
-                        <div class="flex gap-2">
-                            <button type="button"
-                                    class="tw-btn-secondary"
-                                    :disabled="submitting"
-                                    @click="show = false">Cancel</button>
-                            <button type="button"
-                                    class="tw-btn-primary"
-                                    :disabled="submitting"
-                                    @click="submit()">
-                                <span x-show="!submitting">Save decision</span>
-                                <span x-show="submitting">Saving…</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <c-modal id="triage-modal" show="show" icon="fas fa-clipboard-check">
+    {% comment %}
+        The heading names the vulnerability being triaged, so it is a slot
+        rather than the title prop: the id arrives in the browser.
+    {% endcomment %}
+    <c-slot name="title">Triage <span class="font-mono" x-text="vulnId"></span></c-slot>
+    <div class="space-y-4">
+        <div>
+            <label for="triage-scope" class="block text-sm font-medium text-text mb-1">Applies to</label>
+            <c-forms.select id="triage-scope" x-model="scope">
+            {% comment %}
+                A real option element (a template element is invalid inside a select);
+                hidden AND disabled when there is no package, and openTriage never defaults
+                scope to 'package' without a purl, so it can neither show nor be selected.
+            {% endcomment %}
+            <option value="package"
+                    :hidden="!purl"
+                    :disabled="!purl"
+                    x-text="'This package (' + purl + ')'"></option>
+            <option value="component">This entire component</option>
+            <option value="workspace">Every component in this workspace</option>
+            </c-forms.select>
         </div>
-    </template>
+        <div>
+            <label for="triage-state" class="block text-sm font-medium text-text mb-1">State</label>
+            <c-forms.select id="triage-state" x-model="state">
+            <option value="not_affected">Not affected</option>
+            <option value="false_positive">False positive</option>
+            <option value="exploitable">Exploitable</option>
+            <option value="in_triage">In triage</option>
+            <option value="resolved">Resolved</option>
+            </c-forms.select>
+        </div>
+        <div x-show="state === 'not_affected'">
+            <label for="triage-justification"
+                   class="block text-sm font-medium text-text mb-1">Justification</label>
+            <c-forms.select id="triage-justification" x-model="justification">
+            <option value="code_not_present">Code not present</option>
+            <option value="code_not_reachable">Code not reachable</option>
+            <option value="requires_configuration">Requires configuration</option>
+            <option value="requires_dependency">Requires dependency</option>
+            <option value="requires_environment">Requires environment</option>
+            <option value="protected_by_compiler">Protected by compiler</option>
+            <option value="protected_at_runtime">Protected at runtime</option>
+            <option value="protected_at_perimeter">Protected at perimeter</option>
+            <option value="protected_by_mitigating_control">Protected by mitigating control</option>
+            </c-forms.select>
+        </div>
+        <div>
+            <label for="triage-detail" class="block text-sm font-medium text-text mb-1">
+                Detail <span class="text-text-muted font-normal">(optional)</span>
+            </label>
+            <c-forms.textarea id="triage-detail" rows="3" placeholder="Why this decision holds for this product" x-model="detail" />
+        </div>
+        <p x-show="error" class="text-danger text-sm" x-text="error"></p>
+    </div>
+    <c-slot name="footer">
+    {# Clear sits away from the pair that saves or backs out, so it is not pressed by accident. #}
+    <div class="flex items-center justify-between w-full">
+        <c-buttons.outline-danger ::disabled="submitting" @click="submit(true)">Clear decision</c-buttons.outline-danger>
+        <div class="flex gap-2">
+            <c-buttons.secondary ::disabled="submitting" @click="show = false">Cancel</c-buttons.secondary>
+            <c-buttons.primary ::disabled="submitting" @click="submit()">
+            <span x-show="!submitting">Save decision</span>
+            <span x-show="submitting">Saving…</span>
+            </c-buttons.primary>
+        </div>
+    </div>
+    </c-slot>
+    </c-modal>
 </div>

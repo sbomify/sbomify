@@ -1,0 +1,13 @@
+{% comment %}
+The progress rail a multi-step flow shows above itself. Compose it from
+c-navigation.stepper-step and c-navigation.stepper-connector: the steps are the
+page's own list, in order, with a connector between each pair.
+
+c-navigation.stepper-vertical is the variant file; it stacks the rail and marks
+it with data-stepper-vertical, the attribute the connectors read to stand up,
+the same descendant relationship the .tw-stepper-vertical rules had.
+{% endcomment %}
+<c-vars variant_class class />
+<div class="flex {% if variant_class %}{{ variant_class }}{% else %}items-center{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

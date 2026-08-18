@@ -7,15 +7,15 @@
 /* ===== COMPONENT CSS VARIABLES ===== */
 /* Dark mode (default) */
 :root {
-  --component-surface: rgb(var(--color-surface));
-  --component-surface-hover: rgb(var(--color-surface-hover));
-  --component-bg: rgb(var(--color-background));
-  --component-text: rgb(var(--color-text));
-  --component-text-muted: rgb(var(--color-text-muted));
-  --component-border: rgb(var(--color-border));
-  --component-table-header-bg: rgb(var(--color-surface-elevated));
-  --component-table-row-hover: rgb(var(--color-surface-hover));
-  --component-empty-state-bg: rgb(var(--color-surface));
+  --component-surface: var(--color-surface);
+  --component-surface-hover: var(--color-surface-hover);
+  --component-bg: var(--color-background);
+  --component-text: var(--color-text);
+  --component-text-muted: var(--color-text-muted);
+  --component-border: var(--color-border);
+  --component-table-header-bg: var(--color-surface-elevated);
+  --component-table-row-hover: var(--color-surface-hover);
+  --component-empty-state-bg: var(--color-surface);
 }
 
 /* Light mode: no overrides needed - Tailwind --color-* vars auto-adapt */
@@ -40,7 +40,7 @@
 .form-select:focus {
   border-color: var(--brand-primary);
   outline: none;
-  box-shadow: 0 0 0 3px rgb(var(--color-primary) / 0.15);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 15%, transparent);
   transform: translateY(-1px);
 }
 
@@ -87,7 +87,7 @@
 
 .form-control.is-invalid:focus {
   border-color: var(--brand-danger);
-  box-shadow: 0 0 0 0.25rem rgb(var(--color-danger) / 0.25);
+  box-shadow: 0 0 0 0.25rem color-mix(in oklab, var(--color-danger) 25%, transparent);
 }
 
 /* ===== ENHANCED TABLE SYSTEM ===== */
@@ -238,7 +238,7 @@ button[type="submit"].htmx-request {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgb(var(--color-surface) / 0.8);
+  background: color-mix(in oklab, var(--color-surface) 80%, transparent);
   display: none;
   align-items: center;
   justify-content: center;
@@ -266,7 +266,7 @@ button[type="submit"].htmx-request {
 .empty-state .empty-title {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -317,13 +317,13 @@ button[type="submit"].htmx-request {
 
 /* Category-specific colors matching existing badge styles */
 .compliance-icon--compliance {
-  background: rgb(var(--color-success) / 0.15);
-  color: rgb(var(--color-success));
+  background: color-mix(in oklab, var(--color-success) 15%, transparent);
+  color: var(--color-success);
 }
 
 .compliance-icon--attestation {
-  background: rgb(var(--color-info) / 0.15);
-  color: rgb(var(--color-info));
+  background: color-mix(in oklab, var(--color-info) 15%, transparent);
+  color: var(--color-info);
 }
 
 .compliance-icon--security {

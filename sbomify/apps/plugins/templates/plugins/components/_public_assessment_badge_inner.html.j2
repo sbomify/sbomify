@@ -16,7 +16,7 @@ provenance, no VCS metadata — rather than a failure, which is why the badge is
 still shown. It just does not claim more than happened.
 {% endcomment %}
 <span class="public-badge {{ badge_class }}"
-      title="{% if assessment.standard_name %}{{ assessment.standard_name }}{% if assessment.standard_version %} ({{ assessment.standard_version }}){% endif %}: {% else %}{{ assessment.display_name }}: {% endif %}{% if assessment.warning_count %}No failed checks{% else %}{{ status_phrase }}{% endif %}{% if assessment.pass_count and assessment.total_findings %} — {{ assessment.pass_count }}/{{ assessment.total_findings }} checks passed{% if assessment.warning_count %}, {{ assessment.warning_count }} warned{% endif %}{% endif %}{% if assessment.completed_at %} — verified {{ assessment.completed_at|date:"j M Y" }}{% endif %}">
+      title="{% if assessment.standard_name %}{{ assessment.standard_name }}{% if assessment.standard_version %} ({{ assessment.standard_version }}){% endif %}: {% else %}{{ assessment.display_name }}: {% endif %}{% if assessment.warning_count %}No failed checks{% else %}{{ status_phrase }}{% endif %}{% if assessment.pass_count and assessment.total_findings %}. {{ assessment.pass_count }}/{{ assessment.total_findings }} checks passed{% if assessment.warning_count %}, {{ assessment.warning_count }} warned{% endif %}{% endif %}{% if assessment.completed_at %}. Verified {{ assessment.completed_at|date:"j M Y" }}{% endif %}">
     <i class="fas {{ badge_icon }}"></i>
     {{ assessment.display_name }}
     {% if assessment.pass_count and assessment.total_findings %}

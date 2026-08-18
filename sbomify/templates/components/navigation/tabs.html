@@ -1,0 +1,31 @@
+{% comment %}
+The tab row: a real tablist that owns the arrow, home and end key handling, so
+a tab set is keyboard-navigable wherever it is used.
+
+Give it a tabs list from the view ({id, label, icon, badge}) and it renders the
+row; leave the list off and hand-built c-navigation.tab children go in the slot.
+active is the id of the selected tab, which the loop below turns into the
+selected tab's flag. Each tab is rendered `only`, on its own props, so nothing
+this row holds (its class, above all) can fall through into it.
+
+The pills look is a variant file (c-navigation.tabs-pills): it swaps the recipe
+and marks the row with data-tabs-pills, the attribute each tab reads to drop its
+underline, the same descendant relationship the .tw-tabs-pills rules had.
+{% endcomment %}
+<c-vars variant_class tabs active class />
+<div class="flex {% if variant_class %}{{ variant_class }}{% else %}gap-1 border-b border-solid border-border{% endif %}{% if class %} {{ class }}{% endif %}"
+     role="tablist"
+     @keydown.arrow-right.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx < tabs.length - 1) { tabs[idx + 1].focus(); tabs[idx + 1].click(); }"
+     @keydown.arrow-left.prevent="const tabs = [...$el.querySelectorAll('[role=tab]')]; const idx = tabs.indexOf(document.activeElement); if (idx > 0) { tabs[idx - 1].focus(); tabs[idx - 1].click(); }"
+     @keydown.home.prevent="const tab = $el.querySelector('[role=tab]'); if (tab) { tab.focus(); tab.click(); }"
+     @keydown.end.prevent="const tabs = $el.querySelectorAll('[role=tab]'); const tab = tabs[tabs.length - 1]; if (tab) { tab.focus(); tab.click(); }"
+     {{ attrs }}>
+    {% for tab in tabs %}
+        {% if tab.id == active %}
+            <c-navigation.tab panel="{{ tab.id }}" icon="{{ tab.icon }}" badge="{{ tab.badge }}" active only>{{ tab.label }}</c-navigation.tab>
+        {% else %}
+            <c-navigation.tab panel="{{ tab.id }}" icon="{{ tab.icon }}" badge="{{ tab.badge }}" only>{{ tab.label }}</c-navigation.tab>
+        {% endif %}
+    {% endfor %}
+    {{ slot }}
+</div>

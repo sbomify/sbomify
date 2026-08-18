@@ -1,19 +1,4 @@
-{% if variant == "settings" %}
-    <div class="tw-settings-card{% if class %} {{ class }}{% endif %}"
-         {{ attrs|safe }}>
-        {% if title %}
-            <div class="tw-card-header">
-                {% if icon %}<i class="{{ icon }} text-text-muted" aria-hidden="true"></i>{% endif %}
-                <div>
-                    <h3 class="text-lg font-semibold text-text m-0">{{ title }}</h3>
-                    {% if subtitle %}<p class="text-sm text-text-muted mt-0.5">{{ subtitle }}</p>{% endif %}
-                </div>
-            </div>
-        {% endif %}
-        <div class="tw-card-body{% if body_class %} {{ body_class }}{% endif %}">{{ content|safe }}</div>
-        {% if footer %}<div class="tw-card-footer">{{ footer_content|safe }}</div>{% endif %}
-    </div>
-{% elif variant == "dashboard" %}
+{% if variant == "dashboard" %}
     <div class="tw-dashboard-card{% if class %} {{ class }}{% endif %}"
          {{ attrs|safe }}>
         {% if title %}

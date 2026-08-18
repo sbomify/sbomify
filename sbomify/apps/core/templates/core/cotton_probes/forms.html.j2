@@ -1,0 +1,68 @@
+{% comment %}
+Render probe for the cotton forms set. Unit tests render this file and assert
+on the output; it is not routed anywhere.
+{% endcomment %}
+<c-forms.label for="probe-standalone" required>Standalone label</c-forms.label>
+<c-forms.label class="mb-0">Bare label</c-forms.label>
+<c-forms.hint>Standalone hint</c-forms.hint>
+<c-forms.error><i class="fas fa-circle-exclamation" aria-hidden="true"></i> <span>Standalone error</span></c-forms.error>
+<c-forms.field label="Text" for="probe-text" hint="Shown under the field." class="md:col-span-2" data-probe="field">
+<c-forms.input name="probe-text" placeholder="Acme Gateway" hx-get="/probe" @keydown.enter="go()" class="font-mono" />
+</c-forms.field>
+<c-forms.field label="With error" for="probe-error" error="Enter a valid email address." required>
+<c-forms.input name="probe-error" type="email" value="not-an-email" state="error" required />
+</c-forms.field>
+<c-forms.field label="Checked out" for="probe-ok" hint="Never seen: the error wins." error="Both were given.">
+<c-forms.input name="probe-ok" value="ok" state="success" />
+</c-forms.field>
+<c-forms.input name="probe-locked" value="Read only" disabled readonly />
+<c-forms.field label="Select" for="probe-select" hint="Pick an artifact type.">
+<c-forms.select name="probe-select" :options="probe_options" selected="document" placeholder="Choose one" />
+</c-forms.field>
+<c-forms.select name="probe-select-sm" size="sm" :options="probe_options" selected="sbom" aria-label="Inline select" />
+<c-forms.select name="probe-select-success" accent="success" :options="probe_options" />
+<c-forms.select name="probe-select-warning" accent="warning" :options="probe_options" />
+<c-forms.select name="probe-select-danger" accent="danger" :options="probe_options" />
+<c-forms.select name="probe-select-error" accent="danger" state="error" :options="probe_options" />
+<c-forms.select name="probe-select-slot" x-model="kind">
+<option value="from-slot">From the slot</option>
+</c-forms.select>
+<c-forms.textarea name="probe-textarea" rows="3" value="Existing copy" placeholder="Describe this component…" />
+<c-forms.textarea name="probe-textarea-error" state="error" required />
+<c-forms.checkbox name="probe-check" checked @change="save()">Checkbox on</c-forms.checkbox>
+<c-forms.checkbox name="probe-check-off">Checkbox off</c-forms.checkbox>
+<c-forms.checkbox name="probe-check-disabled" disabled class="w-full">Checkbox disabled</c-forms.checkbox>
+<c-forms.checkbox name="probe-check-bare" aria-label="Select all" x-ref="all" />
+<c-forms.checkbox-input name="probe-check-input" class="pointer-events-none" tabindex="-1" aria-hidden="true" ::checked="isSelected(row.id)" />
+<c-forms.radio name="probe-radio" value="cyclonedx" checked>CycloneDX</c-forms.radio>
+<c-forms.radio name="probe-radio" value="spdx" disabled>SPDX</c-forms.radio>
+<c-forms.radio name="probe-procedure" x_value="proc.value" x-model="procedure" data-probe="radio-bound">Bound value</c-forms.radio>
+<c-forms.field label="Format" hint="A group has no single control to point at.">
+<c-forms.radio name="probe-format" value="cyclonedx">CycloneDX</c-forms.radio>
+<c-forms.radio name="probe-format" value="spdx">SPDX</c-forms.radio>
+</c-forms.field>
+<c-forms.toggle name="probe-toggle" checked @change="publish()">Toggle on</c-forms.toggle>
+<c-forms.toggle name="probe-toggle-disabled" disabled>Toggle disabled</c-forms.toggle>
+<c-forms.search-input model="q" placeholder="Search products, components…" class="max-w-md" aria-label="Search" />
+<c-forms.search-input name="probe-search-hint" icon="fas fa-magnifying-glass" placeholder="Search everything" hint autocomplete="off">
+<kbd class="absolute inset-y-0 right-0">⌘K</kbd>
+</c-forms.search-input>
+<c-forms.file-upload name="probe-upload" accept=".json,.xml" active="over" on_change="pick($event)" hint="CycloneDX or SPDX, JSON or XML" @dragover.prevent="over = true" @dragleave.prevent="over = false" @drop.prevent="over = false">Drop an SBOM here, or click to choose</c-forms.file-upload>
+<c-forms.file-upload name="probe-upload-plain" icon="fas fa-file-arrow-up">Choose a document</c-forms.file-upload>
+<c-forms.file-upload static data-probe="upload-static">
+<c-feedback.spinner size="md" />
+<p class="text-text-muted m-0 mt-3">Uploading and processing document...</p>
+</c-forms.file-upload>
+<c-forms.file-preview data-probe="file-preview">
+<c-slot name="name"><span x-text="picked.name"></span></c-slot>
+<c-slot name="size"><span x-text="formatFileSize(picked.size)"></span></c-slot>
+<c-slot name="action">
+<c-buttons.icon label="Remove selected file" @click="clearSelectedFile()">
+<i class="fas fa-times" aria-hidden="true"></i>
+</c-buttons.icon>
+</c-slot>
+</c-forms.file-preview>
+<c-forms.input name="probe-bound-state" ::data-state="formErrors.name ? 'error' : ''" x-model="name" />
+<c-forms.textarea name="probe-bound-textarea" ::data-state="formErrors.text ? 'error' : ''" />
+<c-forms.color-field name="probe-colour" id="probe-colour" label="Primary brand color" hint="Headers, navigation, primary elements" colour="branding.primary" on_input="branding.primary = $event.target.value" submit_value="branding.primary" />
+<c-forms.color-field id="probe-colour-bare" label="Accent color" colour="branding.accent" on_input="branding.accent = $event.target.value" />

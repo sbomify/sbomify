@@ -3,220 +3,139 @@
 <div x-data="productReleases({ productId: '{{ product_id }}', initialReleases: [], totalCount: 0, isPublicView: {{ is_public_view|yesno:'true,false' }}, canCreate: {{ can_create|yesno:'true,false' }}, canEdit: {{ can_edit|yesno:'true,false' }}, canDelete: {{ can_delete|yesno:'true,false' }} })"
      x-init="loadReleases()"
      @ws:message.window=" if (['release_created', 'release_updated', 'release_deleted'].includes($event.detail.type) && $event.detail.product_id === '{{ product_id }}') { loadReleases(); } ">
-    <div class="tw-card">
-        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
-            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                <i class="fas fa-tag"></i>Releases
-            </h4>
-            {% if can_create %}
-                <button type="button"
-                        class="tw-btn-primary text-sm"
-                        @click="openCreateModal()">
-                    <i class="fas fa-plus mr-1"></i>Create Release
-                </button>
-            {% endif %}
-        </div>
-        <div class="flex flex-col overflow-hidden">
-            {# Toolbar with Search and Page Size #}
-            <div class="tw-data-table-toolbar"
-                 x-show="!isLoading && releases.length > 0">
-                <div class="tw-data-table-toolbar-left">
-                    <div class="tw-data-table-search">
-                        <i class="fas fa-search tw-data-table-search-icon"></i>
-                        <input type="text"
-                               x-model="search"
-                               placeholder="Search releases..."
-                               class="tw-data-table-search-input">
-                    </div>
-                </div>
-                <div class="tw-data-table-toolbar-right">
-                    <div class="tw-data-table-page-size">
-                        <span>Show</span>
-                        <select x-model.number="pageSize" class="tw-data-table-page-size-select">
-                            <template x-for="size in pageSizeOptions" :key="size">
-                                <option :value="size" x-text="size"></option>
-                            </template>
-                        </select>
-                        <span>entries</span>
-                    </div>
-                </div>
-            </div>
-            {# Loading State #}
-            <div x-show="isLoading"
-                 class="flex flex-col items-center justify-center py-12">
-                {% include "core/components/brand/loader.html.j2" with class="tw-loader-lg text-primary" %}
-                <p class="mt-3 text-text-muted">Loading releases...</p>
-            </div>
-            {# Empty State #}
-            <div x-show="!isLoading && releases.length === 0"
-                 class="flex flex-col items-center justify-center py-12 px-6">
-                <div class="w-16 h-16 rounded-full bg-border/30 flex items-center justify-center mb-4">
-                    <i class="fas fa-tag text-2xl text-text-muted"></i>
-                </div>
-                <p class="text-text-muted m-0">No releases yet</p>
-                {% if can_create %}<p class="text-text-muted text-sm mt-1">Create your first release to get started</p>{% endif %}
-            </div>
-            {# Releases Table #}
-            <div x-show="!isLoading && releases.length > 0"
-                 class="tw-data-table-container">
-                <table class="tw-table">
-                    <thead>
-                        <tr>
-                            <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                        @click="sort('name')">
-                                    Name
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            <th :aria-sort="sortColumn === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
-                                        @click="sort('status')">
-                                    Status
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            <th class="text-center">Visibility</th>
-                            <th :aria-sort="sortColumn === 'artifacts' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'artifacts' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'artifacts' && sortDirection === 'desc' }"
-                                        @click="sort('artifacts')">
-                                    Artifacts
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
-                                        @click="sort('created_at')">
-                                    Created
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            {% if can_edit or can_delete %}<th class="text-center">Actions</th>{% endif %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="release in sortedReleases" :key="release.id">
-                            <tr>
-                                <td>
-                                    <div class="flex items-center gap-2">
-                                        <a :href="getReleaseUrl(release)"
-                                           class="text-primary font-medium hover:underline"
-                                           x-text="release.name"></a>
-                                        <span x-show="release.is_latest" class="tw-badge-success">Latest</span>
-                                        <span x-show="release.version"
-                                              class="tw-badge-secondary"
-                                              x-text="release.version"></span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span x-show="release.is_prerelease" class="tw-badge-warning">Pre-release</span>
-                                    <span x-show="!release.is_prerelease" class="tw-badge-info">Stable</span>
-                                </td>
-                                <td class="text-center">
-                                    <span x-show="release.is_public" class="tw-badge-success">Public</span>
-                                    <span x-show="!release.is_public" class="tw-badge-secondary">Private</span>
-                                </td>
-                                <td>
-                                    <span class="text-text-muted"
-                                          x-text="(release.artifacts_count || 0) + ' artifacts'"></span>
-                                </td>
-                                <td>
-                                    <span class="text-text-muted text-sm"
-                                          x-text="formatDate(release.created_at)"></span>
-                                </td>
-                                {% if can_edit or can_delete %}
-                                    <td class="text-center">
-                                        <div class="flex items-center justify-center gap-1">
-                                            {% if can_edit %}
-                                                <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm"
-                                                        title="Edit"
-                                                        @click="openEditModal(release)">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                            {% endif %}
-                                            {% if can_delete %}
-                                                <button type="button"
-                                                        class="tw-icon-btn tw-icon-btn-sm text-danger"
-                                                        title="Delete"
-                                                        @click="openDeleteModal(release)">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                {% endif %}
-                            </tr>
-                        </template>
-                        <template x-if="sortedReleases.length === 0 && search">
-                            <tr>
-                                <td colspan="{% if can_edit or can_delete %}6{% else %}5{% endif %}"
-                                    class="text-center py-8 text-text-muted">
-                                    <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                    <p class="m-0">
-                                        No results found for "<span x-text="search"></span>"
-                                    </p>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-            {# Footer with Info and Pagination #}
-            <div class="tw-data-table-footer"
-                 x-show="!isLoading && releases.length > 0">
-                <div class="tw-data-table-info">
-                    Showing <strong x-text="sortedReleases.length > 0 ? 1 : 0"></strong> to <strong x-text="sortedReleases.length"></strong> of <strong x-text="filteredReleases.length"></strong> entries
-                    <template x-if="search">
-                        <span>(filtered from <strong x-text="releases.length"></strong> total)</span>
-                    </template>
-                </div>
-                <nav class="tw-pagination" x-show="totalPages > 1">
-                    <button class="tw-pagination-btn tw-pagination-btn-nav"
-                            :disabled="currentPage === 1"
-                            @click="goToPage(currentPage - 1)">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <template x-for="page in visiblePages" :key="'page-' + page">
-                        <template x-if="page === '...'">
-                            <span class="tw-pagination-ellipsis">...</span>
-                        </template>
-                        <template x-if="page !== '...'">
-                            <button class="tw-pagination-btn"
-                                    :class="{ 'tw-pagination-btn-active': currentPage === page }"
-                                    @click="goToPage(page)"
-                                    x-text="page"></button>
-                        </template>
-                    </template>
-                    <button class="tw-pagination-btn tw-pagination-btn-nav"
-                            :disabled="currentPage === totalPages"
-                            @click="goToPage(currentPage + 1)">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                </nav>
-            </div>
-        </div>
+    {# The shell draws the frame itself, so the table needs no card around it. #}
+    <c-tables.shell>
+    <c-tables.toolbar>
+    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+        <i class="fas fa-tag"></i>Releases
+    </h4>
+    <c-slot name="right">
+    {% if can_create %}
+        <c-buttons.primary size="sm" @click="openCreateModal()">
+        <i class="fas fa-plus mr-1"></i>Create Release
+        </c-buttons.primary>
+    {% endif %}
+    </c-slot>
+    </c-tables.toolbar>
+    {# Toolbar with Search and Page Size #}
+    <c-tables.toolbar x-show="!isLoading && releases.length > 0">
+    <c-tables.search id="product-releases-search" label="Search releases" placeholder="Search releases..." x-model="search" />
+    <c-slot name="right">
+    <c-tables.page-size id="product-releases-per-page" x-model.number="pageSize">
+    <template x-for="size in pageSizeOptions" :key="size">
+        <option :value="size" x-text="size"></option>
+    </template>
+    </c-tables.page-size>
+    </c-slot>
+    </c-tables.toolbar>
+    {# Loading State #}
+    <c-feedback.loading message="Loading releases..." x-show="isLoading" />
+    {# Empty State #}
+    <div x-show="!isLoading && releases.length === 0">
+        {% if can_create %}
+            <c-feedback.empty-state icon="fas fa-tag" icon_variant="neutral" title="No releases yet" message="Create your first release to get started" />
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-tag" icon_variant="neutral" title="No releases yet" />
+        {% endif %}
     </div>
+    {# Releases Table #}
+    <div x-show="!isLoading && releases.length > 0">
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+        <c-tables.header-cell sort="status">Status</c-tables.header-cell>
+        <c-tables.header-cell class="text-center">Visibility</c-tables.header-cell>
+        <c-tables.header-cell sort="artifacts">Artifacts</c-tables.header-cell>
+        <c-tables.header-cell sort="created_at" date>Created</c-tables.header-cell>
+        {% if can_edit or can_delete %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
+        </c-tables.head>
+        <tbody>
+            <template x-for="release in sortedReleases" :key="release.id">
+                <c-tables.row>
+                <c-tables.cell>
+                <div class="flex items-center gap-2">
+                    <a :href="getReleaseUrl(release)"
+                       class="text-primary font-medium hover:underline"
+                       x-text="release.name"></a>
+                    <c-badges.success x-show="release.is_latest">Latest</c-badges.success>
+                    <c-badges.secondary x-show="release.version" x-text="release.version" />
+                </div>
+                </c-tables.cell>
+                <c-tables.cell>
+                <c-badges.warning x-show="release.is_prerelease">Pre-release</c-badges.warning>
+                <c-badges.info x-show="!release.is_prerelease">Stable</c-badges.info>
+                </c-tables.cell>
+                <c-tables.cell class="text-center">
+                <c-badges.success x-show="release.is_public">Public</c-badges.success>
+                <c-badges.secondary x-show="!release.is_public">Private</c-badges.secondary>
+                </c-tables.cell>
+                <c-tables.cell>
+                <span class="text-text-muted"
+                      x-text="(release.artifacts_count || 0) + ' artifacts'"></span>
+                </c-tables.cell>
+                <c-tables.cell date>
+                <span class="text-text-muted text-sm"
+                      x-text="formatDate(release.created_at)"></span>
+                </c-tables.cell>
+                {% if can_edit or can_delete %}
+                    <c-tables.actions-cell>
+                    <c-actions-menu label="Release actions">
+                    {% if can_edit %}
+                        <c-dropdowns.item icon="fas fa-edit" @click="openEditModal(release)">Edit</c-dropdowns.item>
+                    {% endif %}
+                    {% if can_delete %}
+                        <c-dropdowns.item-danger icon="fas fa-trash" @click="openDeleteModal(release)">
+                        Delete
+                        </c-dropdowns.item-danger>
+                    {% endif %}
+                    </c-actions-menu>
+                    </c-tables.actions-cell>
+                {% endif %}
+                </c-tables.row>
+            </template>
+            <template x-if="sortedReleases.length === 0 && search">
+                <tr>
+                    <td colspan="{% if can_edit or can_delete %}6{% else %}5{% endif %}"
+                        class="text-center py-8 text-text-muted">
+                        <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                        <p class="m-0">
+                            No results found for "<span x-text="search"></span>"
+                        </p>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+        </c-tables.table>
+    </div>
+    {# Footer with Info and Pagination #}
+    <c-tables.footer x-show="!isLoading && releases.length > 0">
+    <c-tables.info>
+    Showing <strong x-text="sortedReleases.length > 0 ? 1 : 0"></strong> to <strong x-text="sortedReleases.length"></strong> of <strong x-text="filteredReleases.length"></strong> entries
+    <template x-if="search">
+        <span>(filtered from <strong x-text="releases.length"></strong> total)</span>
+    </template>
+    </c-tables.info>
+    {# Paging is client state here, so the buttons bind it rather than link to it. #}
+    <nav aria-label="Pagination"
+         class="flex items-center gap-1"
+         x-show="totalPages > 1">
+        <c-navigation.page-button nav label="Previous page" ::disabled="currentPage === 1" @click="goToPage(currentPage - 1)">
+        <i class="fas fa-chevron-left"></i>
+        </c-navigation.page-button>
+        <template x-for="page in visiblePages" :key="'page-' + page">
+            <template x-if="page === '...'">
+                <c-navigation.page-ellipsis />
+            </template>
+            <template x-if="page !== '...'">
+                <c-navigation.page-button ::data-active="currentPage === page" @click="goToPage(page)" x-text="page" />
+            </template>
+        </template>
+        <c-navigation.page-button nav label="Next page" ::disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">
+        <i class="fas fa-chevron-right"></i>
+        </c-navigation.page-button>
+    </nav>
+    </c-tables.footer>
+    </c-tables.shell>
     {% if can_create or can_edit %}
         {% include 'core/components/release_form_modal.html.j2' %}
     {% endif %}

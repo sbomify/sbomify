@@ -1,59 +1,58 @@
-<div class="tw-card">
-    <div class="px-6 py-4 border-b border-border">
-        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-envelope-open-text text-primary"></i>
-            Workspace Invitations
-        </h4>
-    </div>
-    <div class="p-6">
-        {% if pending_invitations %}
-            <div class="space-y-3">
-                {% for inv in pending_invitations %}
-                    <div class="p-4 border border-border rounded-lg bg-background/50">
-                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                            <div>
-                                <h5 class="font-semibold text-text flex items-center gap-2 mb-2">
-                                    <i class="fas fa-building text-primary"></i>
-                                    {{ inv.team_name }}
-                                </h5>
-                                <div class="flex items-center gap-3 text-sm">
-                                    <span class="px-2 py-0.5 rounded text-xs font-medium bg-border/50 text-text">{{ inv.role|title }}</span>
-                                    <span class="text-text-muted flex items-center gap-1">
-                                        <i class="fas fa-clock"></i>
-                                        Expires {{ inv.expires_at|date:"M d, Y" }}
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="flex gap-2">
-                                <form method="post"
-                                      action="{% url 'core:accept_user_invitation' inv.id %}"
-                                      class="inline"
-                                      hx-boost="false">
-                                    {% csrf_token %}
-                                    <button type="submit" class="tw-btn-primary text-sm">
-                                        <i class="fas fa-check mr-1"></i> Accept
-                                    </button>
-                                </form>
-                                <form method="post"
-                                      action="{% url 'core:reject_user_invitation' inv.id %}"
-                                      class="inline"
-                                      hx-boost="false">
-                                    {% csrf_token %}
-                                    <button type="submit"
-                                            class="px-3 py-1.5 text-sm rounded-lg border border-danger text-danger hover:bg-danger/10 transition-colors">
-                                        <i class="fas fa-times mr-1"></i> Decline
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
+<c-cards.card>
+<c-slot name="header">
+<c-cards.header>
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-envelope-open-text text-primary"></i>
+    Workspace Invitations
+</h4>
+</c-cards.header>
+</c-slot>
+{% if pending_invitations %}
+    <div class="space-y-3">
+        {% for inv in pending_invitations %}
+            <c-cards.inset>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h5 class="font-semibold text-text flex items-center gap-2 mb-2">
+                        <i class="fas fa-building text-primary"></i>
+                        {{ inv.team_name }}
+                    </h5>
+                    <div class="flex items-center gap-3 text-sm">
+                        <c-chips.neutral>{{ inv.role|title }}</c-chips.neutral>
+                        <span class="text-text-muted flex items-center gap-1">
+                            <i class="fas fa-clock"></i>
+                            Expires {{ inv.expires_at|date:"j M Y" }}
+                        </span>
                     </div>
-                {% endfor %}
+                </div>
+                <div class="flex gap-2">
+                    <form method="post"
+                          action="{% url 'core:accept_user_invitation' inv.id %}"
+                          class="inline"
+                          hx-boost="false">
+                        {% csrf_token %}
+                        <c-buttons.primary type="submit">
+                        <i class="fas fa-check mr-1"></i> Accept
+                        </c-buttons.primary>
+                    </form>
+                    <form method="post"
+                          action="{% url 'core:reject_user_invitation' inv.id %}"
+                          class="inline"
+                          hx-boost="false">
+                        {% csrf_token %}
+                        <c-buttons.outline-danger type="submit" size="sm">
+                        <i class="fas fa-times mr-1"></i> Decline
+                        </c-buttons.outline-danger>
+                    </form>
+                </div>
             </div>
-        {% else %}
-            <p class="text-text-muted flex items-center gap-2 m-0">
-                <i class="fas fa-inbox"></i>
-                No pending workspace invitations.
-            </p>
-        {% endif %}
+            </c-cards.inset>
+        {% endfor %}
     </div>
-</div>
+{% else %}
+    <p class="text-text-muted flex items-center gap-2 m-0">
+        <i class="fas fa-inbox"></i>
+        No pending workspace invitations.
+    </p>
+{% endif %}
+</c-cards.card>

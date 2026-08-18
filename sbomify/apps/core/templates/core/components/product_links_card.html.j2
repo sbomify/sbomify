@@ -1,358 +1,185 @@
 {% load static utils %}
-<div class="tw-card shadow"
-     id="product-links-card"
-     x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editTitle: '', editUrl: '', editDescription: '', deleteId: '', deleteName: '' }">
-    {% comment %}
-    The header button renders only when the table below gives it something to
-    sit above. Inside the collapsible product page section (.tw-embed hides
-    this header's title), an always-on button floated alone over the empty
-    state — the empty state carries its own Add Link action instead.
-    {% endcomment %}
-    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-link text-primary" aria-hidden="true"></i>Product Links
-        </h4>
-        {% if can_manage_links and links %}
-            <button type="button"
-                    class="tw-btn-primary text-sm"
-                    @click="showAddModal = true">
-                <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add Link
-            </button>
-        {% endif %}
-    </div>
-    <div>
-        {% if links %}
-            <div class="overflow-x-auto">
-                <table class="tw-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 15%">Type</th>
-                            <th style="width: 25%">Title</th>
-                            <th style="width: 45%">URL</th>
-                            {% if can_manage_links %}
-                                <th class="!text-center" style="width: 15%">Actions</th>
-                            {% endif %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for link in links %}
-                            <tr>
-                                <td>
-                                    <span class="tw-badge-secondary">{{ link_types|get_item:link.link_type|default:link.link_type }}</span>
-                                </td>
-                                <td>
-                                    <div class="font-medium text-text">{{ link.title }}</div>
-                                    {% if link.description %}<div class="text-text-muted text-xs mt-1">{{ link.description }}</div>{% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ link.url }}"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="text-primary hover:underline inline-flex items-center gap-1">
-                                        {% if link.url|length > 50 %}
-                                            {{ link.url|truncatechars:50 }}
-                                        {% else %}
-                                            {{ link.url }}
-                                        {% endif %}
-                                        <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
-                                    </a>
-                                </td>
-                                {% if can_manage_links %}
-                                    <td class="text-center">
-                                        <div class="flex items-center justify-center gap-1">
-                                            <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm"
-                                                    title="Edit"
-                                                    aria-label="Edit link"
-                                                    @click="editId = '{{ link.id|escapejs }}'; editType = '{{ link.link_type|escapejs }}'; editTitle = '{{ link.title|escapejs }}'; editUrl = '{{ link.url|escapejs }}'; editDescription = '{{ link.description|default:''|escapejs }}'; showEditModal = true">
-                                                <i class="fas fa-edit" aria-hidden="true"></i>
-                                            </button>
-                                            <button type="button"
-                                                    class="tw-icon-btn tw-icon-btn-sm text-danger"
-                                                    title="Delete"
-                                                    aria-label="Delete link"
-                                                    @click="deleteId = '{{ link.id|escapejs }}'; deleteName = '{{ link.title|escapejs }}'; showDeleteModal = true">
-                                                <i class="fas fa-trash" aria-hidden="true"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                {% endif %}
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            {% comment %}
-            Two branches, not three: build_links_context sets can_manage_links
-            to has_crud_permissions verbatim, so there is no reader who can
-            crud but not manage.
-            {% endcomment %}
+{% comment %}
+    The shell draws the panel's frame itself, so the links table needs no card
+    around it; the title and the add control ride the toolbar band.
+{% endcomment %}
+<c-tables.shell id="product-links-card" x-data="{ showAddModal: false, showEditModal: false, showDeleteModal: false, editId: '', editType: '', editTitle: '', editUrl: '', editDescription: '', deleteId: '', deleteName: '' }">
+<c-tables.toolbar>
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-link text-primary" aria-hidden="true"></i>Product links
+</h4>
+<c-slot name="right">
+{% comment %}
+    Only when the table below gives it something to sit above. In the product
+    page's collapsible section the panel title is suppressed, so an always-on
+    button floated alone over the empty state; the empty state carries its own
+    action instead.
+{% endcomment %}
+{% if can_manage_links and links %}
+    <c-buttons.primary size="sm" @click="showAddModal = true">
+    <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add link
+    </c-buttons.primary>
+{% endif %}
+</c-slot>
+</c-tables.toolbar>
+{% if links %}
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell class="w-[15%]">Type</c-tables.header-cell>
+    <c-tables.header-cell class="w-[25%]">Title</c-tables.header-cell>
+    <c-tables.header-cell class="w-[45%]">URL</c-tables.header-cell>
+    {% if can_manage_links %}<c-tables.actions-cell as="th" label="Actions" />{% endif %}
+    </c-tables.head>
+    <tbody>
+        {% for link in links %}
+            <c-tables.row>
+            <c-tables.cell>
+            <c-badges.secondary>{{ link_types|get_item:link.link_type|default:link.link_type }}</c-badges.secondary>
+            </c-tables.cell>
+            <c-tables.cell>
+            <div class="font-medium text-text">{{ link.title }}</div>
+            {% if link.description %}<div class="text-text-muted text-xs mt-1">{{ link.description }}</div>{% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            <a href="{{ link.url }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="text-primary hover:underline inline-flex items-center gap-1">
+                {% if link.url|length > 50 %}
+                    {{ link.url|truncatechars:50 }}
+                {% else %}
+                    {{ link.url }}
+                {% endif %}
+                <i class="fas fa-external-link-alt text-xs" aria-hidden="true"></i>
+            </a>
+            </c-tables.cell>
             {% if can_manage_links %}
-                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product" action_text="Add Link" action_click="showAddModal = true" %}
-            {% else %}
-                {% include "components/tw/empty_state.html.j2" with icon="fas fa-link" title="No product links available" message="This product does not have any links defined" %}
+                <c-tables.actions-cell>
+                <c-actions-menu label="Link actions">
+                <c-dropdowns.item icon="fas fa-edit" @click="editId = '{{ link.id|escapejs }}'; editType = '{{ link.link_type|escapejs }}'; editTitle = '{{ link.title|escapejs }}'; editUrl = '{{ link.url|escapejs }}'; editDescription = '{{ link.description|default:''|escapejs }}'; showEditModal = true">
+                Edit
+                </c-dropdowns.item>
+                <c-dropdowns.item-danger icon="fas fa-trash" @click="deleteId = '{{ link.id|escapejs }}'; deleteName = '{{ link.title|escapejs }}'; showDeleteModal = true">
+                Delete
+                </c-dropdowns.item-danger>
+                </c-actions-menu>
+                </c-tables.actions-cell>
             {% endif %}
-        {% endif %}
-    </div>
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
+{% else %}
+    {% comment %}
+        Two branches, not three: build_links_context sets can_manage_links to
+        has_crud_permissions verbatim, so there is no reader who can crud but
+        not manage.
+    {% endcomment %}
     {% if can_manage_links %}
-        {# Add Link Modal #}
-        <template x-teleport="body">
-            <div x-show="showAddModal"
-                 x-cloak
-                 class="fixed inset-0 z-[100]"
-                 role="dialog"
-                 aria-modal="true"
-                 aria-labelledby="addLinkModalLabel">
-                <div x-show="showAddModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     class="tw-modal-overlay"
-                     @click="showAddModal = false"></div>
-                <div class="tw-modal"
-                     x-show="showAddModal"
-                     x-trap.noscroll="showAddModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     @click.stop
-                     @keydown.escape="if(showAddModal) showAddModal = false">
-                    <div class="tw-modal-content">
-                        <form id="add-link-form"
-                              @submit.prevent=" fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showAddModal = false; }); ">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="create">
-                            <div class="tw-modal-header">
-                                <h4 id="addLinkModalLabel" class="tw-modal-title">Add Link</h4>
-                                <button type="button"
-                                        class="tw-modal-close"
-                                        @click="showAddModal = false"
-                                        aria-label="Close">
-                                    <i class="fas fa-times" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <div class="tw-modal-body space-y-4">
-                                <div>
-                                    <label for="add-link-type" class="tw-form-label">
-                                        Link Type <span class="text-danger">*</span>
-                                    </label>
-                                    <select id="add-link-type" name="link_type" class="tw-form-select" required>
-                                        <option value="">Select type...</option>
-                                        {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="add-link-title" class="tw-form-label">
-                                        Title <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="text"
-                                           id="add-link-title"
-                                           name="title"
-                                           class="tw-form-input"
-                                           placeholder="Enter link title"
-                                           required>
-                                </div>
-                                <div>
-                                    <label for="add-link-url" class="tw-form-label">
-                                        URL <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="url"
-                                           id="add-link-url"
-                                           name="url"
-                                           class="tw-form-input"
-                                           placeholder="https://example.com"
-                                           required>
-                                </div>
-                                <div>
-                                    <label for="add-link-description" class="tw-form-label">Description</label>
-                                    <textarea id="add-link-description"
-                                              name="description"
-                                              class="tw-form-input"
-                                              rows="3"
-                                              placeholder="Optional description of this link"></textarea>
-                                </div>
-                            </div>
-                            <div class="tw-modal-footer">
-                                <button type="button" class="tw-btn-ghost" @click="showAddModal = false">Cancel</button>
-                                <button type="submit" class="tw-btn-primary">
-                                    <i class="fas fa-plus mr-2"></i>Add
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </template>
-        {# Edit Link Modal #}
-        <template x-teleport="body">
-            <div x-show="showEditModal"
-                 x-cloak
-                 class="fixed inset-0 z-[100]"
-                 role="dialog"
-                 aria-modal="true"
-                 aria-labelledby="editLinkModalLabel">
-                <div x-show="showEditModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     class="tw-modal-overlay"
-                     @click="showEditModal = false"></div>
-                <div class="tw-modal"
-                     x-show="showEditModal"
-                     x-trap.noscroll="showEditModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     @click.stop
-                     @keydown.escape="if(showEditModal) showEditModal = false">
-                    <div class="tw-modal-content">
-                        <form id="edit-link-form"
-                              @submit.prevent=" const formData = new FormData($el); formData.set('link_id', editId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showEditModal = false; }); ">
-                            {% csrf_token %}
-                            <input type="hidden" name="action" value="update">
-                            <input type="hidden" name="link_id" :value="editId">
-                            <div class="tw-modal-header">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                        <i class="fas fa-edit" aria-hidden="true"></i>
-                                    </div>
-                                    <h4 id="editLinkModalLabel" class="tw-modal-title">Edit Link</h4>
-                                </div>
-                                <button type="button"
-                                        class="tw-modal-close"
-                                        @click="showEditModal = false"
-                                        aria-label="Close">
-                                    <i class="fas fa-times" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <div class="tw-modal-body space-y-4">
-                                <div>
-                                    <label for="edit-link-type" class="tw-form-label">
-                                        Link Type <span class="text-danger">*</span>
-                                    </label>
-                                    <select id="edit-link-type"
-                                            name="link_type"
-                                            class="tw-form-select"
-                                            required
-                                            x-model="editType">
-                                        <option value="">Select type...</option>
-                                        {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="edit-link-title" class="tw-form-label">
-                                        Title <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="text"
-                                           id="edit-link-title"
-                                           name="title"
-                                           class="tw-form-input"
-                                           placeholder="Enter link title"
-                                           required
-                                           x-model="editTitle">
-                                </div>
-                                <div>
-                                    <label for="edit-link-url" class="tw-form-label">
-                                        URL <span class="text-danger">*</span>
-                                    </label>
-                                    <input type="url"
-                                           id="edit-link-url"
-                                           name="url"
-                                           class="tw-form-input"
-                                           placeholder="https://example.com"
-                                           required
-                                           x-model="editUrl">
-                                </div>
-                                <div>
-                                    <label for="edit-link-description" class="tw-form-label">Description</label>
-                                    <textarea id="edit-link-description"
-                                              name="description"
-                                              class="tw-form-input"
-                                              rows="3"
-                                              placeholder="Optional description of this link"
-                                              x-model="editDescription"></textarea>
-                                </div>
-                            </div>
-                            <div class="tw-modal-footer">
-                                <button type="button" class="tw-btn-ghost" @click="showEditModal = false">Cancel</button>
-                                <button type="submit" class="tw-btn-primary">
-                                    <i class="fas fa-save mr-2"></i>Update
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </template>
-        {# Delete Link Modal #}
-        <template x-teleport="body">
-            <div x-show="showDeleteModal"
-                 x-cloak
-                 class="fixed inset-0 z-[100]"
-                 role="alertdialog"
-                 aria-modal="true"
-                 aria-labelledby="deleteLinkModalLabel">
-                <div x-show="showDeleteModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0"
-                     x-transition:enter-end="opacity-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100"
-                     x-transition:leave-end="opacity-0"
-                     class="tw-modal-overlay"
-                     @click="showDeleteModal = false"></div>
-                <div class="tw-modal"
-                     x-show="showDeleteModal"
-                     x-trap.noscroll="showDeleteModal"
-                     x-transition:enter="transition ease-out duration-200"
-                     x-transition:enter-start="opacity-0 scale-95"
-                     x-transition:enter-end="opacity-100 scale-100"
-                     x-transition:leave="transition ease-in duration-150"
-                     x-transition:leave-start="opacity-100 scale-100"
-                     x-transition:leave-end="opacity-0 scale-95"
-                     @click.stop
-                     @keydown.escape="if(showDeleteModal) showDeleteModal = false">
-                    <div class="tw-modal-content tw-modal-sm">
-                        <div class="tw-modal-body text-center py-6">
-                            <button type="button"
-                                    class="tw-modal-close absolute top-4 right-4"
-                                    @click="showDeleteModal = false"
-                                    aria-label="Close">
-                                <i class="fas fa-times" aria-hidden="true"></i>
-                            </button>
-                            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
-                                <i class="fas fa-exclamation-triangle text-danger text-xl"></i>
-                            </div>
-                            <h4 id="deleteLinkModalLabel" class="tw-modal-title mb-2">Delete Link</h4>
-                            <p class="text-text mb-2">
-                                Are you sure you want to delete <span class="font-semibold text-danger" x-text="deleteName"></span>?
-                            </p>
-                            <p class="text-text-muted text-sm">This action cannot be undone and will permanently remove this link.</p>
-                        </div>
-                        <div class="tw-modal-footer justify-center">
-                            <button type="button" class="tw-btn-ghost" @click="showDeleteModal = false">Cancel</button>
-                            <button type="button"
-                                    class="tw-btn-danger"
-                                    @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('link_id', deleteId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showDeleteModal = false; }); ">
-                                <i class="fas fa-trash mr-2"></i>Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </template>
+        <c-feedback.empty-state icon="fas fa-link" icon_variant="neutral" title="No product links added" message="Add links like website, support, documentation, etc. to provide additional information about this product">
+        <c-buttons.primary size="sm" @click="showAddModal = true">
+        <i class="fas fa-plus mr-1" aria-hidden="true"></i>Add link
+        </c-buttons.primary>
+        </c-feedback.empty-state>
+    {% else %}
+        <c-feedback.empty-state icon="fas fa-link" icon_variant="neutral" title="No product links available" message="This product does not have any links defined" />
     {% endif %}
-</div>
+{% endif %}
+{% if can_manage_links %}
+    {# Add Link Modal #}
+    <c-modal id="addLinkModal" show="showAddModal" title="Add link">
+    <form id="add-link-form"
+          @submit.prevent=" fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: new FormData($el), }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showAddModal = false; }); ">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        <div class="space-y-4">
+            <div>
+                <c-forms.label for="add-link-type" required>Link Type</c-forms.label>
+                <c-forms.select id="add-link-type" name="link_type" required>
+                <option value="">Select type...</option>
+                {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </c-forms.select>
+            </div>
+            <div>
+                <c-forms.label for="add-link-title" required>Title</c-forms.label>
+                <c-forms.input id="add-link-title" name="title" placeholder="Enter link title" required />
+            </div>
+            <div>
+                <c-forms.label for="add-link-url" required>URL</c-forms.label>
+                <c-forms.input id="add-link-url" name="url" type="url" placeholder="https://example.com" required />
+            </div>
+            <div>
+                <c-forms.label for="add-link-description">Description</c-forms.label>
+                <c-forms.textarea id="add-link-description" name="description" rows="3" placeholder="Optional description of this link" />
+            </div>
+        </div>
+    </form>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="showAddModal = false">Cancel</c-buttons.ghost>
+    <c-buttons.primary type="submit" form="add-link-form">
+    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add
+    </c-buttons.primary>
+    </c-slot>
+    </c-modal>
+    {# Edit Link Modal #}
+    <c-modal id="editLinkModal" show="showEditModal" title="Edit Link" icon="fas fa-edit">
+    <form id="edit-link-form"
+          @submit.prevent=" const formData = new FormData($el); formData.set('link_id', editId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showEditModal = false; }); ">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="update">
+        <input type="hidden" name="link_id" :value="editId">
+        <div class="space-y-4">
+            <div>
+                <c-forms.label for="edit-link-type" required>Link Type</c-forms.label>
+                <c-forms.select id="edit-link-type" name="link_type" required x-model="editType">
+                <option value="">Select type...</option>
+                {% for value, label in link_types.items %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </c-forms.select>
+            </div>
+            <div>
+                <c-forms.label for="edit-link-title" required>Title</c-forms.label>
+                <c-forms.input id="edit-link-title" name="title" placeholder="Enter link title" required x-model="editTitle" />
+            </div>
+            <div>
+                <c-forms.label for="edit-link-url" required>URL</c-forms.label>
+                <c-forms.input id="edit-link-url" name="url" type="url" placeholder="https://example.com" required x-model="editUrl" />
+            </div>
+            <div>
+                <c-forms.label for="edit-link-description">Description</c-forms.label>
+                <c-forms.textarea id="edit-link-description" name="description" rows="3" placeholder="Optional description of this link" x-model="editDescription" />
+            </div>
+        </div>
+    </form>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="showEditModal = false">Cancel</c-buttons.ghost>
+    <c-buttons.primary type="submit" form="edit-link-form">
+    <i class="fas fa-save mr-2" aria-hidden="true"></i>Update
+    </c-buttons.primary>
+    </c-slot>
+    </c-modal>
+    {# Delete Link Modal #}
+    <c-modal show="showDeleteModal" size="sm" role="alertdialog" aria-labelledby="deleteLinkModalLabel">
+    <div class="relative text-center">
+        <c-buttons.icon label="Close" class="absolute -top-2 -right-2" @click="showDeleteModal = false">
+        <i class="fas fa-times" aria-hidden="true"></i>
+        </c-buttons.icon>
+        <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/10 flex items-center justify-center">
+            <i class="fas fa-exclamation-triangle text-danger text-xl"
+               aria-hidden="true"></i>
+        </div>
+        <h4 id="deleteLinkModalLabel"
+            class="text-lg font-semibold text-text tracking-[-0.01em] mb-2">Delete Link</h4>
+        <p class="text-text mb-2">
+            Are you sure you want to delete <span class="font-semibold text-danger" x-text="deleteName"></span>?
+        </p>
+        <p class="text-text-muted text-sm">This action cannot be undone and will permanently remove this link.</p>
+    </div>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="showDeleteModal = false">Cancel</c-buttons.ghost>
+    <c-buttons.danger @click=" const formData = new FormData(); formData.append('csrfmiddlewaretoken', '{{ csrf_token }}'); formData.append('action', 'delete'); formData.append('link_id', deleteId); fetch('{% url 'core:product_links' product.id %}', { method: 'POST', body: formData, }).then(response => response.text()).then(html => { document.getElementById('product-links-card').outerHTML = html; showDeleteModal = false; }); ">
+    <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete
+    </c-buttons.danger>
+    </c-slot>
+    </c-modal>
+{% endif %}
+</c-tables.shell>

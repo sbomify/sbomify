@@ -1,0 +1,40 @@
+{% comment %}
+The shell every tag shares, in plain Tailwind utilities. The bare shell is the
+neutral tag, so the colour variants (c-tags.primary and friends) nest this and
+pass their recipe through variant_class. Content, including any icon, goes in
+the slot; the shell's gap spaces it.
+
+removable renders the close button. label names what is being removed, for the
+accessible name, and remove_click carries the Alpine handler the editors wire up
+(@click.stop, so clicking the cross never fires the tag's own click).
+
+A tag an editor builds from Alpine names itself in the browser, so remove_label
+takes the expression instead of the words and binds the accessible name; the two
+are one branch, so a close button always has exactly one name. remove_title adds
+the pointer tooltip the same buttons carry.
+
+With href the shell renders an anchor, for the tags that are links to the thing
+they name (a component under a product). It arrives without an underline, as
+every tag does. A link tag takes no close button: removing it and following it
+are different gestures.
+{% endcomment %}
+<c-vars variant_class removable label remove_label remove_title remove_click href class />
+{% if href %}
+    <a href="{{ href }}"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs leading-[1.5] font-medium rounded-md no-underline transition-all duration-150 {% if variant_class %}{{ variant_class }}{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+       {{ attrs }}>{{ slot }}</a>
+{% else %}
+    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs leading-[1.5] font-medium rounded-md transition-all duration-150 {% if variant_class %}{{ variant_class }}{% else %}text-text bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+          {{ attrs }}>
+        {{ slot }}
+        {% if removable %}
+            <button type="button"
+                    class="flex items-center justify-center w-[1.125rem] h-[1.125rem] rounded-full ml-0.5 -mr-1 opacity-60 transition-all duration-150 hover:bg-[color-mix(in_oklab,var(--color-danger)_20%,transparent)] hover:text-danger hover:opacity-100 focus-visible:outline-none focus-visible:opacity-100 focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                    {% if remove_label %}:aria-label="{{ remove_label }}"{% else %}aria-label="Remove {{ label }}"{% endif %}
+                    {% if remove_title %}title="{{ remove_title }}"{% endif %}
+                    {% if remove_click %}@click.stop="{{ remove_click }}"{% endif %}>
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        {% endif %}
+    </span>
+{% endif %}

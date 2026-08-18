@@ -1,99 +1,96 @@
 {% load static utils %}
-<div class="tw-card shadow"
-     id="product-lifecycle-card"
-     x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false, saveLifecycle() { this.saving = true; const formData = new FormData(); formData.append('release_date', this.releaseDate || ''); formData.append('end_of_support', this.endOfSupport || ''); formData.append('end_of_life', this.endOfLife || ''); fetch('{% url 'core:product_lifecycle' product.id %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData }) .then(response => response.text()) .then(html => { document.getElementById('product-lifecycle-card').outerHTML = html; }) .catch(err => { console.error('Error saving lifecycle:', err); this.saving = false; }); }, cancelEdit() { this.editing = false; this.releaseDate = '{{ product.release_date|default:'' }}'; this.endOfSupport = '{{ product.end_of_support|default:'' }}'; this.endOfLife = '{{ product.end_of_life|default:'' }}'; }, formatDisplayDate(dateStr) { if (!dateStr) return ''; const date = new Date(dateStr); if (isNaN(date.getTime())) return dateStr; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } }">
-    <div class="px-6 py-4 border-b border-border flex justify-between items-center">
-        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-            <i class="fas fa-clock text-primary"></i>Lifecycle
-            <i class="far fa-question-circle text-text-muted text-sm cursor-help"
-               x-tooltip="'Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)'"></i>
-        </h4>
-        {% comment %}
-        Rendered only when there are dates to edit — same reasoning as the
-        links and identifiers cards: in the product page's collapsible section
-        (.tw-embed hides this header's title), an always-on Edit floated alone
-        over the empty state, which offers Set Dates itself.
-        {% endcomment %}
-        {% if can_edit %}
-            {% if product.release_date or product.end_of_support or product.end_of_life %}
-                <template x-if="!editing">
-                    <button type="button"
-                            class="tw-btn-secondary text-sm"
-                            @click="editing = true">
-                        <i class="fas fa-edit mr-1"></i>Edit
-                    </button>
-                </template>
-            {% endif %}
-        {% endif %}
-    </div>
-    <div class="p-6">
-        {# Display Mode #}
+<c-cards.card id="product-lifecycle-card" class="shadow" x-data="{ editing: false, releaseDate: '{{ product.release_date|default:'' }}', endOfSupport: '{{ product.end_of_support|default:'' }}', endOfLife: '{{ product.end_of_life|default:'' }}', saving: false, saveLifecycle() { this.saving = true; const formData = new FormData(); formData.append('release_date', this.releaseDate || ''); formData.append('end_of_support', this.endOfSupport || ''); formData.append('end_of_life', this.endOfLife || ''); fetch('{% url 'core:product_lifecycle' product.id %}', { method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, body: formData }) .then(response => response.text()) .then(html => { document.getElementById('product-lifecycle-card').outerHTML = html; }) .catch(err => { console.error('Error saving lifecycle:', err); this.saving = false; }); }, cancelEdit() { this.editing = false; this.releaseDate = '{{ product.release_date|default:'' }}'; this.endOfSupport = '{{ product.end_of_support|default:'' }}'; this.endOfLife = '{{ product.end_of_life|default:'' }}'; }, formatDisplayDate(dateStr) { if (!dateStr) return ''; const date = new Date(dateStr); if (isNaN(date.getTime())) return dateStr; return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } }">
+<c-slot name="header">
+<c-cards.header class="flex justify-between items-center gap-3">
+<h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+    <i class="fas fa-clock text-primary"></i>Lifecycle
+    <i class="far fa-question-circle text-text-muted text-sm cursor-help"
+       x-tooltip="'Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)'"></i>
+</h4>
+{% comment %}
+    Only when there are dates to edit. In the product page's collapsible
+    section the panel title is suppressed, so an always-on Edit floated alone
+    over the empty state, which offers Set dates itself.
+{% endcomment %}
+{% if can_edit %}
+    {% if product.release_date or product.end_of_support or product.end_of_life %}
         <template x-if="!editing">
-            <div>
-                {% if product.release_date or product.end_of_support or product.end_of_life %}
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <div class="text-text-muted text-sm mb-1">Release Date</div>
-                            {% if product.release_date %}
-                                <div class="font-medium text-text">{{ product.release_date }}</div>
-                            {% else %}
-                                <div class="text-text-muted italic">Not set</div>
-                            {% endif %}
-                        </div>
-                        <div>
-                            <div class="text-text-muted text-sm mb-1">End of Support</div>
-                            {% if product.end_of_support %}
-                                <div class="font-medium text-text">{{ product.end_of_support }}</div>
-                            {% else %}
-                                <div class="text-text-muted italic">Not set</div>
-                            {% endif %}
-                        </div>
-                        <div>
-                            <div class="text-text-muted text-sm mb-1">End of Life</div>
-                            {% if product.end_of_life %}
-                                <div class="font-medium text-text">{{ product.end_of_life }}</div>
-                            {% else %}
-                                <div class="text-text-muted italic">Not set</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                {% else %}
-                    {% if can_edit %}
-                        {% include "components/tw/empty_state.html.j2" with icon="fas fa-clock" title="No lifecycle dates set" message="Add release date, end of support, and end of life dates to track product lifecycle" action_text="Set Dates" action_click="editing = true" compact=True %}
-                    {% else %}
-                        {% include "components/tw/empty_state.html.j2" with icon="fas fa-clock" title="No lifecycle dates available" message="This product does not have lifecycle dates defined" compact=True %}
-                    {% endif %}
-                {% endif %}
-            </div>
+            <c-buttons.secondary @click="editing = true">
+            <i class="fas fa-edit mr-1"></i>Edit
+            </c-buttons.secondary>
         </template>
-        {# Edit Mode #}
-        {% if can_edit %}
-            <template x-if="editing">
-                <form @submit.prevent="saveLifecycle()">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {% include 'components/date_picker.html.j2' with value_binding='releaseDate' label='Release Date' format_fn='formatDisplayDate' %}
-                        {% include 'components/date_picker.html.j2' with value_binding='endOfSupport' label='End of Support' format_fn='formatDisplayDate' %}
-                        {% include 'components/date_picker.html.j2' with value_binding='endOfLife' label='End of Life' format_fn='formatDisplayDate' %}
-                    </div>
-                    <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
-                    <div class="flex gap-2">
-                        <button type="submit" class="tw-btn-primary text-sm" :disabled="saving">
-                            <template x-if="saving">
-                                <span>
-                                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
-                                Saving...</span>
-                            </template>
-                            <template x-if="!saving">
-                                <span><i class="fas fa-check mr-1"></i>Save</span>
-                            </template>
-                        </button>
-                        <button type="button"
-                                class="tw-btn-secondary text-sm"
-                                @click="cancelEdit()"
-                                :disabled="saving">Cancel</button>
-                    </div>
-                </form>
-            </template>
+    {% endif %}
+{% endif %}
+</c-cards.header>
+</c-slot>
+{# Display Mode #}
+<template x-if="!editing">
+    <div>
+        {% if product.release_date or product.end_of_support or product.end_of_life %}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <div class="text-text-muted text-sm mb-1">Release Date</div>
+                    {% if product.release_date %}
+                        <div class="font-medium text-text">{{ product.release_date }}</div>
+                    {% else %}
+                        <div class="text-text-muted italic">Not set</div>
+                    {% endif %}
+                </div>
+                <div>
+                    <div class="text-text-muted text-sm mb-1">End of Support</div>
+                    {% if product.end_of_support %}
+                        <div class="font-medium text-text">{{ product.end_of_support }}</div>
+                    {% else %}
+                        <div class="text-text-muted italic">Not set</div>
+                    {% endif %}
+                </div>
+                <div>
+                    <div class="text-text-muted text-sm mb-1">End of Life</div>
+                    {% if product.end_of_life %}
+                        <div class="font-medium text-text">{{ product.end_of_life }}</div>
+                    {% else %}
+                        <div class="text-text-muted italic">Not set</div>
+                    {% endif %}
+                </div>
+            </div>
+        {% elif can_edit %}
+            <c-feedback.empty-state icon="fas fa-clock" icon_size="sm" icon_variant="neutral" compact title="No lifecycle dates set" message="Add release date, end of support, and end of life dates to track product lifecycle">
+            <c-buttons.secondary size="sm" @click="editing = true">Set dates</c-buttons.secondary>
+            </c-feedback.empty-state>
+        {% else %}
+            <c-feedback.empty-state icon="fas fa-clock" icon_size="sm" icon_variant="neutral" compact title="No lifecycle dates available" message="This product does not have lifecycle dates defined" />
         {% endif %}
     </div>
-</div>
+</template>
+{# Edit Mode #}
+{% if can_edit %}
+    <template x-if="editing">
+        <form @submit.prevent="saveLifecycle()">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                {% include 'components/date_picker.html.j2' with value_binding='releaseDate' label='Release Date' format_fn='formatDisplayDate' %}
+                {% include 'components/date_picker.html.j2' with value_binding='endOfSupport' label='End of Support' format_fn='formatDisplayDate' %}
+                {% include 'components/date_picker.html.j2' with value_binding='endOfLife' label='End of Life' format_fn='formatDisplayDate' %}
+            </div>
+            <p class="text-text-muted text-sm mb-4">Key lifecycle dates aligned with Common Lifecycle Enumeration (CLE)</p>
+            <div class="flex gap-2">
+                {% comment %}
+                    The mark stays the brand loader include: it takes the
+                    button's own ink, where c-feedback.spinner would tint it
+                    primary on a primary button.
+                {% endcomment %}
+                <c-buttons.primary type="submit" ::disabled="saving">
+                <template x-if="saving">
+                    <span>
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-inline mr-1" %}
+                    Saving...</span>
+                </template>
+                <template x-if="!saving">
+                    <span><i class="fas fa-check mr-1"></i>Save</span>
+                </template>
+                </c-buttons.primary>
+                <c-buttons.secondary @click="cancelEdit()" ::disabled="saving">Cancel</c-buttons.secondary>
+            </div>
+        </form>
+    </template>
+{% endif %}
+</c-cards.card>

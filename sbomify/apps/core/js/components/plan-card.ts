@@ -18,34 +18,34 @@ export function registerPlanCard() {
             const classes: string[] = [];
 
             if (this.isCurrentPlan) {
-                classes.push('btn-outline-secondary');
+                classes.push('tw-btn-outline');
             } else {
                 switch (this.buttonVariant) {
                     case 'primary':
-                        classes.push('btn-primary');
+                        classes.push('tw-btn-primary');
                         break;
                     case 'secondary':
-                        classes.push('btn-secondary');
+                        classes.push('tw-btn-secondary');
                         break;
                     case 'outline-primary':
-                        classes.push('btn-outline-primary');
+                        classes.push('tw-btn-outline-primary');
                         break;
                     case 'outline-secondary':
-                        classes.push('btn-outline-secondary');
+                        classes.push('tw-btn-outline');
                         break;
                     case 'success':
-                        classes.push('btn-success');
+                        classes.push('tw-btn-success');
                         break;
                     case 'danger':
-                        classes.push('btn-danger');
+                        classes.push('tw-btn-danger');
                         break;
                     default:
-                        classes.push('btn-primary');
+                        classes.push('tw-btn-primary');
                 }
             }
 
             if (this.loading) {
-                classes.push('btn-loading');
+                classes.push('tw-btn-loading');
             }
 
             return classes.join(' ');

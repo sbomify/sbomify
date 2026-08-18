@@ -1,0 +1,64 @@
+{% comment %}
+    Actions menu — the "meatball" button and the menu it opens.
+
+    A block component, because real menus mix plain links, HTMX buttons and
+    Alpine dispatches, and a list of item dicts can only express the first.
+    The caller writes the items with `tw-dropdown-item`, `tw-dropdown-header`
+    and `tw-dropdown-divider`; this owns the trigger, the open state, the
+    positioning and the keyboard handling.
+
+        {% actions_menu label="Product actions" %}
+            <a href="{{ url }}" role="menuitem" class="tw-dropdown-item no-underline">…</a>
+        {% endactions_menu %}
+
+    The menu is teleported to the body rather than positioned inside its row.
+    `tw-data-table-container` scrolls horizontally, which makes it clip on both
+    axes, so a menu opened from the last row of a table was cut off at the
+    container's edge. Teleporting means it is positioned against the trigger by
+    the Alpine component, which also closes it on any scroll.
+
+    Params:
+      label         accessible name for the trigger and the menu (default "Actions")
+      icon          trigger icon (default vertical ellipsis)
+      trigger_class trigger classes; override only to match the height of an
+                    adjacent control (default `tw-icon-btn tw-icon-btn-sm`)
+      width         menu width class (default `w-60`)
+      class         extra classes on the wrapper
+{% endcomment %}
+<div class="relative inline-flex shrink-0{% if class %} {{ class }}{% endif %}"
+     x-data="actionsMenu"
+     @keydown.escape.window="closeAndFocus()"
+     {{ attrs|safe }}>
+    {% comment %}
+        The stopped click keeps the press off a clickable table row, and off the
+        teleported menu's own click-outside handler, which would re-open it.
+    {% endcomment %}
+    <button type="button"
+            x-ref="trigger"
+            class="{{ trigger_class|default:'tw-icon-btn tw-icon-btn-sm' }}"
+            @click.stop="toggle()"
+            :aria-expanded="open"
+            aria-haspopup="true"
+            aria-label="{{ label|default:'Actions' }}">
+        <i class="{{ icon|default:'fas fa-ellipsis-vertical' }}"
+           aria-hidden="true"></i>
+    </button>
+    <template x-teleport="body">
+        <div x-ref="menu"
+             x-show="open"
+             x-cloak
+             :style="style"
+             @click="close()"
+             @click.outside="close()"
+             class="tw-dropdown tw-dropdown-floating {{ width|default:'w-60' }}"
+             role="menu"
+             aria-orientation="vertical"
+             aria-label="{{ label|default:'Actions' }}"
+             @keydown.arrow-down.prevent=" const items = [...$el.querySelectorAll('[role=menuitem]:not([aria-disabled=true])')]; const idx = items.indexOf(document.activeElement); items[Math.min(idx + 1, items.length - 1)]?.focus(); "
+             @keydown.arrow-up.prevent=" const items = [...$el.querySelectorAll('[role=menuitem]:not([aria-disabled=true])')]; const idx = items.indexOf(document.activeElement); if (idx > 0) items[idx - 1].focus(); "
+             @keydown.home.prevent="$el.querySelector('[role=menuitem]')?.focus()"
+             @keydown.end.prevent="const items = $el.querySelectorAll('[role=menuitem]'); items[items.length - 1]?.focus()">
+            {{ content|safe }}
+        </div>
+    </template>
+</div>

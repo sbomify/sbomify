@@ -1,0 +1,32 @@
+{% comment %}
+One section of an accordion: a trigger row and the panel it reveals.
+
+label is the trigger text, or pass a label slot for a richer row. state is the
+Alpine expression that reads true while the section is open; it drives
+aria-expanded, turns the chevron over and shows the panel. The caller supplies
+the click handler that flips it, because only the caller knows whether the
+stack allows one open section or many, so attributes land on the trigger, which
+is the element a caller means.
+
+Without a state the section simply stays open, which is what a page with no
+Alpine on it wants.
+
+label_class is layout for the trigger's label, and only for it, the same prop
+c-navigation.stepper-step gives its caption. A row that is a chip, a name and a
+progress bar has to reach the trigger's full width and space its own parts, and
+the label is a flex item of the trigger, so `flex flex-1` there is the only
+place that can say so. The label states no layout of its own, so nothing stacks.
+{% endcomment %}
+<c-vars label label_class state class />
+<div class="border-b border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] last:border-b-0{% if class %} {{ class }}{% endif %}">
+    <button type="button"
+            class="group flex w-full items-center justify-between px-6 py-5 text-left text-[0.9375rem] font-medium text-text bg-transparent transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] [[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:py-3 [[data-accordion-sm]_&]:text-sm"
+            {% if state %}:aria-expanded="{{ state }}"{% endif %}
+            {{ attrs }}>
+        <span {% if label_class %}class="{{ label_class }}"{% endif %}>{{ label }}</span>
+        <i class="fas fa-chevron-down text-text-muted transition-transform duration-300 group-aria-expanded:rotate-180"
+           aria-hidden="true"></i>
+    </button>
+    <div class="px-6 pb-5 text-sm leading-[1.6] text-text-muted [[data-accordion-sm]_&]:px-4 [[data-accordion-sm]_&]:pb-3"
+         {% if state %}x-show="{{ state }}" x-collapse{% endif %}>{{ slot }}</div>
+</div>

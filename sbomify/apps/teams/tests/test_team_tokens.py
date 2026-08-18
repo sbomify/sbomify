@@ -53,8 +53,8 @@ class TestTeamTokensView:
 
         response = client.get(reverse("teams:team_tokens", kwargs={"team_key": team.key}))
         assert response.status_code == 200
-        assert b"Generate New Token" in response.content
-        assert b"Your Tokens" in response.content
+        assert b"Generate new token" in response.content
+        assert b"Your tokens" in response.content
 
     def test_get_shows_existing_tokens(self, client: Client, sample_team_with_owner_member):
         """Test that GET shows existing access tokens scoped to this team."""

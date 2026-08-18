@@ -1,0 +1,28 @@
+{% comment %}
+The label over a control, in plain Tailwind utilities. The text is the slot;
+required is a prop so the asterisk reads the same on every field.
+
+for is a declared prop rather than a passthrough attribute so an unset id
+renders no attribute at all, which is what c-forms.field needs when a group of
+radios has no single control to point at.
+
+as="legend" renders the same text as a fieldset's legend, which is what names a
+group of radios or checkboxes to a screen reader; a label there would name
+nothing. The two branches differ in the element and in for, which a legend
+cannot carry, and must stay in lockstep.
+{% endcomment %}
+<c-vars for required as class />
+{% if as == "legend" %}
+    <legend class="block text-sm leading-[1.5] font-medium text-text mb-2 tracking-[-0.01em]{% if class %} {{ class }}{% endif %}"
+            {{ attrs }}>
+        {{ slot }}
+        {% if required %}<span class="text-danger">*</span>{% endif %}
+    </legend>
+{% else %}
+    <label class="block text-sm leading-[1.5] font-medium text-text mb-2 tracking-[-0.01em]{% if class %} {{ class }}{% endif %}"
+           {% if for %}for="{{ for }}"{% endif %}
+           {{ attrs }}>
+        {{ slot }}
+        {% if required %}<span class="text-danger">*</span>{% endif %}
+    </label>
+{% endif %}

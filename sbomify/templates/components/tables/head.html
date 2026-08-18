@@ -1,0 +1,8 @@
+{% comment %}
+The header row: the thead and its tr in one tag, so a table's head reads as the
+list of header cells it is. The sticky band and the ink live on the cells.
+{% endcomment %}
+<c-vars class />
+<thead {% if class %}class="{{ class }}"{% endif %} {{ attrs }}>
+    <tr>{{ slot }}</tr>
+</thead>

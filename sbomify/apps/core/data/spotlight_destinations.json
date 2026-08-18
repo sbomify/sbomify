@@ -149,11 +149,10 @@
     },
     {
       "title": "New advisory",
-      "url_name": "core:security_advisories_dashboard",
+      "url_name": "core:security_advisory_new",
       "section": "create",
       "icon": "fa-plus",
       "keywords": ["create advisory", "publish advisory", "disclose"],
-      "query": {"new": "1"},
       "roles": ["owner", "admin"]
     },
 
