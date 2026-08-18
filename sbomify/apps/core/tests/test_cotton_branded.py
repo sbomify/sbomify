@@ -296,3 +296,25 @@ def test_no_public_template_uses_a_class_the_legacy_sheets_override() -> None:
             offenders[key] = fresh
 
     assert not offenders, f"classes the legacy !important sheets would override: {offenders}"
+
+
+def test_no_template_has_a_comment_that_renders_as_page_text() -> None:
+    """Django's comment tag is single-line: {# … #} split across lines is not a
+    comment, and the text lands on the page.
+
+    One shipped this way, visible on the component page, so the rule gets a
+    test rather than only a warning in AGENTS.md. Use {% comment %} … {%
+    endcomment %} for anything that does not fit on one line.
+    """
+    offenders: list[str] = []
+    roots = [APP_ROOT.parent / "sbomify"]
+    for root in roots:
+        for template in [*root.rglob("*.j2"), *root.rglob("*.html")]:
+            path = template.as_posix()
+            if "node_modules" in path or "/dist/" in path or "/staticfiles/" in path:
+                continue
+            for number, line in enumerate(template.read_text(errors="ignore").splitlines(), 1):
+                if "{#" in line and "#}" not in line.split("{#", 1)[1]:
+                    offenders.append(f"{template.relative_to(root).as_posix()}:{number}")
+
+    assert not offenders, "multi-line {# #} comments render as page text: " + ", ".join(offenders)
