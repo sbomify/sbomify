@@ -1,10 +1,14 @@
-<label class="tw-radio-label{% if class %} {{ class }}{% endif %}">
+{% comment %}
+    Radios share a name, so the label wraps the input instead of using `for` —
+    there is no unique id to point at.
+{% endcomment %}
+<label class="flex items-center gap-3{% if class %} {{ class }}{% endif %}">
     <input type="radio"
            name="{{ name }}"
            value="{{ value }}"
-           class="tw-form-radio"
+           class="tw-radio"
            {% if checked %}checked{% endif %}
            {% if disabled %}disabled{% endif %}
            {{ attrs|safe }}>
-    <span>{{ label }}</span>
+    <span class="text-sm text-text">{{ label }}</span>
 </label>

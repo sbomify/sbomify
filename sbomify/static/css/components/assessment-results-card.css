@@ -18,8 +18,8 @@
   text-align: center;
   padding: 1rem 0.75rem;
   border-radius: var(--radius-xl, 0.75rem);
-  background: linear-gradient(135deg, rgb(var(--color-surface)), rgb(var(--color-surface-elevated)));
-  border: 1px solid rgb(var(--color-border));
+  background: linear-gradient(135deg, var(--color-surface), var(--color-surface-elevated));
+  border: 1px solid var(--color-border);
   transition: all 0.2s ease;
 }
 
@@ -38,45 +38,45 @@
   font-size: var(--font-size-xs, 0.7rem);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   margin-top: 0.375rem;
   font-weight: 500;
 }
 
 .stat-item.stat-pass {
-  background: linear-gradient(135deg, rgb(var(--color-success) / 0.12), rgb(var(--color-success) / 0.06));
-  border-color: rgb(var(--color-success) / 0.25);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-success) 12%, transparent), color-mix(in oklab, var(--color-success) 6%, transparent));
+  border-color: color-mix(in oklab, var(--color-success) 25%, transparent);
 }
 
 .stat-item.stat-pass .stat-number {
-  color: rgb(var(--color-success));
+  color: var(--color-success);
 }
 
 .stat-item.stat-fail {
-  background: linear-gradient(135deg, rgb(var(--color-warning) / 0.12), rgb(var(--color-warning) / 0.06));
-  border-color: rgb(var(--color-warning) / 0.25);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 12%, transparent), color-mix(in oklab, var(--color-warning) 6%, transparent));
+  border-color: color-mix(in oklab, var(--color-warning) 25%, transparent);
 }
 
 .stat-item.stat-fail .stat-number {
-  color: rgb(var(--color-warning));
+  color: var(--color-warning);
 }
 
 .stat-item.stat-pending {
-  background: linear-gradient(135deg, rgb(var(--color-info) / 0.12), rgb(var(--color-info) / 0.06));
-  border-color: rgb(var(--color-info) / 0.25);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-info) 12%, transparent), color-mix(in oklab, var(--color-info) 6%, transparent));
+  border-color: color-mix(in oklab, var(--color-info) 25%, transparent);
 }
 
 .stat-item.stat-pending .stat-number {
-  color: rgb(var(--color-info));
+  color: var(--color-info);
 }
 
 .stat-item.stat-total {
-  background: linear-gradient(135deg, rgb(var(--color-text) / 0.06), rgb(var(--color-text) / 0.03));
-  border-color: rgb(var(--color-border));
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-text) 6%, transparent), color-mix(in oklab, var(--color-text) 3%, transparent));
+  border-color: var(--color-border);
 }
 
 .stat-item.stat-total .stat-number {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 /* Plugin Results Section */
@@ -87,36 +87,36 @@
 .plugin-results-section .section-title {
   font-size: var(--font-size-sm, 0.8rem);
   font-weight: 600;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid var(--color-border);
 }
 
 /* Accordion Item */
 .plugin-results-section .accordion-item {
-  border: 1px solid rgb(var(--color-border));
+  border: 1px solid var(--color-border);
   margin-bottom: 0.75rem;
   border-radius: 0.75rem;
   overflow: hidden;
-  background: rgb(var(--color-surface));
+  background: var(--color-surface);
   transition: all 0.2s ease;
 }
 
 .plugin-results-section .accordion-item:hover {
-  border-color: rgb(var(--color-text-muted) / 0.3);
+  border-color: color-mix(in oklab, var(--color-text-muted) 30%, transparent);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
 }
 
 .plugin-results-section .accordion-item.has-issues {
-  border-color: rgb(var(--color-warning) / 0.25);
-  background: linear-gradient(135deg, rgb(var(--color-warning) / 0.08), rgb(var(--color-warning) / 0.04));
+  border-color: color-mix(in oklab, var(--color-warning) 25%, transparent);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-warning) 8%, transparent), color-mix(in oklab, var(--color-warning) 4%, transparent));
 }
 
 .plugin-results-section .accordion-item.all-passed {
-  border-color: rgb(var(--color-success) / 0.25);
+  border-color: color-mix(in oklab, var(--color-success) 25%, transparent);
 }
 
 .plugin-results-section .accordion-button {
@@ -146,8 +146,8 @@
 
 .plugin-results-section .accordion-body {
   padding: 1.25rem;
-  background: rgb(var(--color-surface-elevated));
-  border-top: 1px solid rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  border-top: 1px solid var(--color-border);
 }
 
 /* Plugin Header */
@@ -161,7 +161,7 @@
 .plugin-header .plugin-name {
   font-size: var(--font-size-base, 0.95rem);
   font-weight: 600;
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .plugin-header .badge {
@@ -174,7 +174,7 @@
 .plugin-meta {
   flex-shrink: 0;
   font-size: var(--font-size-sm, 0.8rem);
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 /* Run Metadata */
@@ -184,13 +184,13 @@
   gap: 1.5rem;
   padding-bottom: 1rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid rgb(var(--color-border));
+  border-bottom: 1px solid var(--color-border);
   font-size: 0.8rem;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 .run-metadata i {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 /* Findings Summary Grid - Compact */
@@ -226,7 +226,7 @@
 }
 
 .findings-summary .finding-stat.stat-total {
-  background: rgb(var(--color-text) / 0.06);
+  background: color-mix(in oklab, var(--color-text) 6%, transparent);
 }
 
 /* Findings List */
@@ -237,15 +237,15 @@
 .findings-list h6 {
   font-size: 0.75rem;
   font-weight: 600;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.75rem;
 }
 
 .findings-list .finding-item {
-  background: rgb(var(--color-surface));
-  border: 1px solid rgb(var(--color-border));
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   padding: 1rem;
   margin-bottom: 0.5rem;
@@ -258,19 +258,19 @@
 }
 
 .findings-list .finding-item.border-success {
-  border-left-color: rgb(var(--color-success));
+  border-left-color: var(--color-success);
 }
 
 .findings-list .finding-item.border-warning {
-  border-left-color: rgb(var(--color-warning));
+  border-left-color: var(--color-warning);
 }
 
 .findings-list .finding-item.border-danger {
-  border-left-color: rgb(var(--color-danger));
+  border-left-color: var(--color-danger);
 }
 
 .findings-list .finding-item.border-info {
-  border-left-color: rgb(var(--color-info));
+  border-left-color: var(--color-info);
 }
 
 .findings-list .finding-status-icon {
@@ -283,25 +283,25 @@
 .findings-list .finding-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   margin-bottom: 0.25rem;
 }
 
 .findings-list .finding-description {
   font-size: 0.825rem;
   line-height: 1.6;
-  color: rgb(var(--color-text-secondary));
+  color: var(--color-text-secondary);
 }
 
 /* Package list styling for "Missing for:" descriptions */
 /* Custom properties for code-block syntax highlighting colors */
 .findings-list .finding-description .missing-packages {
   --pkg-text-color: #e9d5ff;
-  --pkg-toggle-color: rgb(var(--color-info));
-  --pkg-toggle-hover: rgb(var(--color-info) / 0.8);
-  --pkg-warning-color: rgb(var(--color-warning));
+  --pkg-toggle-color: var(--color-info);
+  --pkg-toggle-hover: color-mix(in oklab, var(--color-info) 80%, transparent);
+  --pkg-warning-color: var(--color-warning);
   --pkg-bg: #1e1e2e;
-  --pkg-border: rgb(var(--color-border));
+  --pkg-border: var(--color-border);
 
   display: block;
   margin-top: 0.5rem;
@@ -343,7 +343,7 @@
   display: block;
   margin-top: 0.375rem;
   padding-top: 0.375rem;
-  border-top: 1px dashed rgb(var(--color-text-muted));
+  border-top: 1px dashed var(--color-text-muted);
   color: var(--pkg-warning-color);
   font-size: 0.7rem;
   font-style: italic;
@@ -356,7 +356,7 @@
   margin-top: 0.5rem;
   padding: 0.375rem 0.5rem;
   background: rgb(255 255 255 / 0.05);
-  border: 1px dashed rgb(var(--color-text-muted));
+  border: 1px dashed var(--color-text-muted);
   border-radius: 0.25rem;
   color: var(--pkg-toggle-color);
   font-family: inherit;
@@ -395,21 +395,21 @@
 .findings-list .finding-remediation {
   margin-top: 0.75rem;
   padding: 0.75rem 1rem;
-  background: rgb(var(--color-info) / 0.08);
-  border: 1px solid rgb(var(--color-info) / 0.2);
+  background: color-mix(in oklab, var(--color-info) 8%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-info) 20%, transparent);
   border-radius: 0.375rem;
   font-size: 0.8rem;
-  color: rgb(var(--color-info));
+  color: var(--color-info);
 }
 
 .findings-list .finding-remediation i {
-  color: rgb(var(--color-info));
+  color: var(--color-info);
 }
 
 /* Standard Info Section */
 .standard-info {
-  background: linear-gradient(135deg, rgb(var(--color-surface-elevated)), rgb(var(--color-surface)));
-  border: 1px solid rgb(var(--color-border));
+  background: linear-gradient(135deg, var(--color-surface-elevated), var(--color-surface));
+  border: 1px solid var(--color-border);
   border-radius: 0.75rem;
   padding: 1rem 1.25rem;
 }
@@ -417,22 +417,22 @@
 .standard-info h6 {
   font-size: 0.8rem;
   font-weight: 600;
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   margin-bottom: 0.75rem;
 }
 
 .standard-info .small {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   line-height: 1.6;
 }
 
 .standard-info a {
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
   font-weight: 500;
 }
 
 .standard-info a:hover {
-  color: rgb(var(--color-primary) / 0.8);
+  color: color-mix(in oklab, var(--color-primary) 80%, transparent);
 }
 
 /* Status Badge in Header */
@@ -451,7 +451,7 @@
   justify-content: center;
   text-align: center;
   padding: 3rem 2rem;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 .assessment-no-results .no-results-icon {
@@ -461,34 +461,34 @@
   width: 4rem;
   height: 4rem;
   margin-bottom: 1.25rem;
-  background: rgb(var(--color-info) / 0.1);
-  border: 1px solid rgb(var(--color-info) / 0.2);
+  background: color-mix(in oklab, var(--color-info) 10%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-info) 20%, transparent);
   border-radius: 50%;
 }
 
 .assessment-no-results .no-results-icon i {
   font-size: 1.5rem;
-  color: rgb(var(--color-info));
+  color: var(--color-info);
   line-height: 1;
 }
 
 .assessment-no-results p {
   margin-bottom: 0.25rem;
   font-size: 0.95rem;
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .assessment-no-results small {
   font-size: 0.8rem;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 /* Consulting CTA Banner */
 .assessment-cta-banner {
   margin-bottom: 1.5rem;
   padding: 1rem 1.25rem;
-  background: linear-gradient(135deg, rgb(var(--color-primary) / 0.08), rgb(var(--color-info) / 0.08));
-  border: 1px solid rgb(var(--color-primary) / 0.2);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-primary) 8%, transparent), color-mix(in oklab, var(--color-info) 8%, transparent));
+  border: 1px solid color-mix(in oklab, var(--color-primary) 20%, transparent);
   border-radius: 0.75rem;
   transition: all 0.2s ease;
 }
@@ -499,11 +499,11 @@
 
 .assessment-cta-banner .cta-message {
   font-size: 0.875rem;
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .assessment-cta-banner .cta-message i {
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
 }
 
 .assessment-cta-banner .btn {
@@ -512,117 +512,117 @@
 
 /* Dark Mode Adjustments */
 .dark .stat-item {
-  background: rgb(var(--color-surface-elevated));
-  border-color: rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
 }
 
 .dark .stat-item.stat-pass {
-  background: rgb(var(--color-success) / 0.1);
-  border-color: rgb(var(--color-success) / 0.25);
+  background: color-mix(in oklab, var(--color-success) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-success) 25%, transparent);
 }
 
 .dark .stat-item.stat-pass .stat-number {
-  color: rgb(var(--color-success));
+  color: var(--color-success);
 }
 
 .dark .stat-item.stat-fail {
-  background: rgb(var(--color-warning) / 0.1);
-  border-color: rgb(var(--color-warning) / 0.25);
+  background: color-mix(in oklab, var(--color-warning) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-warning) 25%, transparent);
 }
 
 .dark .stat-item.stat-fail .stat-number {
-  color: rgb(var(--color-warning));
+  color: var(--color-warning);
 }
 
 .dark .stat-item.stat-pending {
-  background: rgb(var(--color-info) / 0.1);
-  border-color: rgb(var(--color-info) / 0.25);
+  background: color-mix(in oklab, var(--color-info) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-info) 25%, transparent);
 }
 
 .dark .stat-item.stat-pending .stat-number {
-  color: rgb(var(--color-info));
+  color: var(--color-info);
 }
 
 .dark .stat-item.stat-total {
-  background: rgb(var(--color-surface-elevated));
-  border-color: rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
 }
 
 .dark .stat-item.stat-total .stat-number {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .dark .stat-item .stat-label {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 .dark .plugin-results-section .accordion-item {
-  background: rgb(var(--color-surface-elevated));
-  border-color: rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
 }
 
 .dark .plugin-results-section .accordion-body {
-  background: rgb(var(--color-surface));
+  background: var(--color-surface);
 }
 
 .dark .findings-list .finding-item {
-  background: rgb(var(--color-surface-elevated));
-  border-color: rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
 }
 
 .dark .findings-list .finding-title {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .dark .findings-list .finding-description {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 .dark .findings-list .finding-remediation {
-  background: rgb(var(--color-info) / 0.1);
-  border-color: rgb(var(--color-info) / 0.25);
-  color: rgb(var(--color-info));
+  background: color-mix(in oklab, var(--color-info) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-info) 25%, transparent);
+  color: var(--color-info);
 }
 
 .dark .findings-list .finding-remediation i {
-  color: rgb(var(--color-info));
+  color: var(--color-info);
 }
 
 .dark .standard-info {
-  background: rgb(var(--color-surface-elevated));
-  border-color: rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border);
 }
 
 .dark .standard-info h6 {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .dark .standard-info .small {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 .dark .findings-summary .finding-stat.stat-total {
-  background: rgb(var(--color-surface-elevated));
+  background: var(--color-surface-elevated);
 }
 
 .dark .assessment-cta-banner {
-  background: rgb(var(--color-primary) / 0.1);
-  border-color: rgb(var(--color-primary) / 0.25);
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-primary) 25%, transparent);
 }
 
 .dark .assessment-cta-banner .cta-message {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .dark .assessment-no-results .no-results-icon {
-  background: rgb(var(--color-info) / 0.15);
-  border-color: rgb(var(--color-info) / 0.3);
+  background: color-mix(in oklab, var(--color-info) 15%, transparent);
+  border-color: color-mix(in oklab, var(--color-info) 30%, transparent);
 }
 
 .dark .assessment-no-results .no-results-icon i {
-  color: rgb(var(--color-info));
+  color: var(--color-info);
 }
 
 .dark .assessment-no-results p {
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }

@@ -1,12 +1,20 @@
+{% comment %}
+    The bar colour comes from `--progress-accent`, which the base rule already
+    defaults to the primary token — so a modifier is only emitted for the semantic
+    variants that override it.
+{% endcomment %}
+{% if label_text %}
+    <div class="tw-progress-header">
+        <span>{{ label_text }}</span>
+        <span class="tw-progress-value">{{ value }}%</span>
+    </div>
+{% endif %}
 <div class="tw-progress{% if size %} tw-progress-{{ size }}{% endif %}{% if class %} {{ class }}{% endif %}"
      role="progressbar"
      aria-valuenow="{{ value }}"
      aria-valuemin="0"
-     aria-valuemax="100">
-    <div class="tw-progress-bar tw-progress-bar-{{ variant|default:'primary' }}{% if striped %} tw-progress-striped{% endif %}{% if animated %} tw-progress-animated{% endif %}"
-         style="width: {{ value }}%">
-        {% if label %}
-            <span class="tw-progress-label">{{ value }}%</span>
-        {% endif %}
-    </div>
+     aria-valuemax="100"
+     {% if label_text %}aria-label="{{ label_text }}"{% endif %}>
+    <div class="tw-progress-bar{% if variant %} tw-progress-bar-{{ variant }}{% endif %}"
+         style="width: {{ value }}%"></div>
 </div>

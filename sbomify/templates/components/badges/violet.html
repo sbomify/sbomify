@@ -1,0 +1,5 @@
+{% comment %}
+Soft violet, the attestation artifact badge (VEX). Distinct from every severity hue.
+{% endcomment %}
+<c-vars size pill class />
+<c-badges.badge variant_class="text-accent bg-[color-mix(in_oklab,var(--color-accent)_12%,transparent)] border-[color-mix(in_oklab,var(--color-accent)_20%,transparent)]" size="{{ size }}" :pill="pill" class="{{ class }}" :attrs="attrs">{{ slot }}</c-badges.badge>

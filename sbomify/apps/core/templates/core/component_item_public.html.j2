@@ -47,16 +47,14 @@
             </p>
             <div class="tc-detail-meta">
                 {% if component.component_type == 'bom' %}
-                    <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
-                        {% if item.format == 'cyclonedx' %}
-                            CYCLONEDX
-                        {% elif item.format == 'spdx' %}
-                            SPDX
-                        {% else %}
-                            {{ item.format|upper }}
-                        {% endif %}
-                        {{ item.format_version }}
-                    </span>
+                    {# The badge keys its tint off the attribute, so the format has to reach it whole. #}
+                    {% if item.format == 'cyclonedx' %}
+                        <c-badges.format format="cyclonedx">CYCLONEDX {{ item.format_version }}</c-badges.format>
+                    {% elif item.format == 'spdx' %}
+                        <c-badges.format format="spdx">SPDX {{ item.format_version }}</c-badges.format>
+                    {% else %}
+                        <c-badges.format format="spdx">{{ item.format|upper }} {{ item.format_version }}</c-badges.format>
+                    {% endif %}
                 {% elif component.component_type == 'document' %}
                     <span class="tc-detail-meta-item">
                         <i class="fas fa-file" aria-hidden="true"></i>
@@ -80,20 +78,22 @@
         <div class="flex flex-col sm:flex-row sm:items-center gap-4">
             <div class="min-w-0 flex-1">
                 <p class="text-text font-medium m-0">{{ item.name }}</p>
-                <p class="text-text-muted text-sm m-0 mt-1">
-                    The file exactly as it was published — sbomify never modifies artifacts.
-                </p>
+                <p class="text-text-muted text-sm m-0 mt-1">The file exactly as it was published. sbomify never modifies artifacts.</p>
             </div>
-            <a href="{% if component.component_type == 'bom' %}{% url 'sboms:sbom_download' item.id %}{% elif component.component_type == 'document' %}{% url 'documents:document_download' item.id %}{% endif %}"
-               class="tw-btn-primary inline-flex items-center gap-2 no-underline flex-shrink-0">
-                <i class="fas fa-download"></i>
-                Download
-                {% if component.component_type == 'bom' %}
-                    {{ item.bom_type|default:"SBOM"|upper }}
-                {% else %}
-                    Document
-                {% endif %}
-            </a>
+            {% if component.component_type == 'bom' %}
+                {% url 'sboms:sbom_download' item.id as download_url %}
+            {% elif component.component_type == 'document' %}
+                {% url 'documents:document_download' item.id as download_url %}
+            {% endif %}
+            <c-buttons.primary href="{{ download_url }}" class="no-underline">
+            <i class="fas fa-download"></i>
+            Download
+            {% if component.component_type == 'bom' %}
+                {{ item.bom_type|default:"SBOM"|upper }}
+            {% else %}
+                Document
+            {% endif %}
+            </c-buttons.primary>
         </div>
     </div>
     {# Cryptographic Assets (CBOM) — lazy-loaded for SBOM artifacts; collapses when there are none #}
