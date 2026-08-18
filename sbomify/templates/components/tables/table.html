@@ -1,0 +1,28 @@
+{% comment %}
+The table, inside the box a wide table scrolls in: the overflow belongs here,
+never to the page body. Cells own their padding and their rules, so the table
+itself only sets the collapse model.
+
+fixed gives every column an equal share and centres each one between the first
+and the last, which is how a table with a trailing actions column keeps its
+left and right margins symmetric. A cell that states its own alignment (the end
+prop, the actions column) marks itself data-cell-end and is left alone, so a
+column that asked to sit right never drifts to the centre.
+
+sized fixes the layout without touching alignment, for a table whose header
+cells state their own widths and whose values read as prose: fixing the layout
+is what keeps a long package name wrapping inside its column instead of pushing
+the table wider than the panel. The two share the layout and differ in the
+alignment they impose, so they render as one conditional segment and a table
+can never take both recipes.
+
+class is layout for the scroll box; attrs land on the table.
+{% endcomment %}
+<c-vars fixed sized class />
+<div class="overflow-x-auto{% if class %} {{ class }}{% endif %}">
+    {# djlint:off #}
+    {# The child combinator in the fixed recipe reads as a tag close to the formatter. #}
+    <table class="w-full border-separate border-spacing-0{% if fixed %} table-fixed [&_th:not(:first-child):not(:last-child):not([data-cell-end])]:text-center [&_td:not(:first-child):not(:last-child):not([data-cell-end])]:text-center [&_td:not(:first-child):not(:last-child):not([data-cell-end])>.flex]:justify-center{% elif sized %} table-fixed{% endif %}"
+           {{ attrs }}>{{ slot }}</table>
+    {# djlint:on #}
+</div>

@@ -1,0 +1,29 @@
+{% comment %}
+One tab in a tab row, a real button with the tab semantics: only the selected
+tab is in the tab order, and the row's arrow keys move between them.
+
+panel is the id of the panel this tab controls, so the tab is id="tab-<panel>"
+and the panel it points at is id="panel-<panel>". active selects it. icon is a
+Font Awesome class and badge a short count, both of which sit in fixed places
+the slot cannot express; the slot is the label.
+
+Selected colour renders as one conditional segment, and the pills utilities
+hang off the row's data-tabs-pills, so a tab never carries two borders or two
+backgrounds at once.
+{% endcomment %}
+<c-vars panel active icon badge type="button" class />
+<button type="{{ type }}"
+        role="tab"
+        {% if panel %}id="tab-{{ panel }}" aria-controls="panel-{{ panel }}" data-tab="{{ panel }}"{% endif %}
+        aria-selected="{% if active %}true{% else %}false{% endif %}"
+        tabindex="{% if active %}0{% else %}-1{% endif %}"
+        class="relative px-5 py-3.5 text-sm font-medium border-b-2 border-solid -mb-px transition-all duration-200 hover:text-text hover:bg-[color-mix(in_oklab,var(--color-surface)_50%,transparent)] focus-visible:outline-none focus-visible:text-text focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] [[data-tabs-pills]_&]:mb-0 [[data-tabs-pills]_&]:rounded-md [[data-tabs-pills]_&]:border-b-0 {% if active %}text-primary border-b-primary [[data-tabs-pills]_&]:bg-surface [[data-tabs-pills]_&]:shadow-[var(--shadow-xs)]{% else %}text-text-muted border-b-transparent{% endif %}{% if class %} {{ class }}{% endif %}"
+        {{ attrs }}>
+    {% if icon %}
+        <i class="{{ icon }}{% if slot %} mr-2{% endif %}" aria-hidden="true"></i>
+    {% endif %}
+    {{ slot }}
+    {% if badge %}
+        <span class="inline-flex items-center justify-center min-w-5 h-5 ml-2 px-1.5 text-[0.625rem] font-semibold rounded-full {% if active %}bg-[color-mix(in_oklab,var(--color-primary)_15%,transparent)] text-primary{% else %}bg-border text-text-muted{% endif %}">{{ badge }}</span>
+    {% endif %}
+</button>

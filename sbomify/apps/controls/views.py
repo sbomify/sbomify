@@ -16,8 +16,9 @@ from sbomify.apps.controls.services.catalog_service import (
     get_active_catalogs,
 )
 from sbomify.apps.controls.services.status_service import get_controls_detail, upsert_status
+from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.models import User
-from sbomify.apps.teams.models import Team
+from sbomify.apps.teams.models import Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin
 
 BULK_STATUSES = [
@@ -34,10 +35,21 @@ def _check_team_key_matches_session(request: HttpRequest, team_key: str) -> bool
     return current_team_key == team_key
 
 
+def _can_administer(request: HttpRequest, team_key: str) -> bool:
+    """Whether this user may administer the workspace, read from the live Member row.
+
+    Not from ``session["current_team"]["role"]``: that is a cache with a 300s TTL,
+    so a demoted user kept seeing admin-only controls (and a promoted one kept
+    being denied them) until it refreshed. Authorization is enforced from the DB
+    everywhere else; the UI flag has to agree with it.
+    """
+    return Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists()
+
+
 class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """Handle activate/deactivate catalog POST actions."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from sbomify.apps.teams.utils import redirect_to_team_settings
@@ -109,7 +121,7 @@ class ControlsCatalogView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """Handle individual control status update POST (HTMX inline)."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from django.shortcuts import render
@@ -175,7 +187,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "controls_catalog": catalog,
                     "controls_categories": controls_categories,
                     "bulk_statuses": BULK_STATUSES,
-                    "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
+                    "is_admin_or_owner": _can_administer(request, team_key),
                 },
             )
 
@@ -186,7 +198,7 @@ class ControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
 class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """Handle product-level control status update POST (HTMX inline)."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def post(self, request: HttpRequest, team_key: str, product_id: str) -> HttpResponse:
         from sbomify.apps.core.models import Product
@@ -245,7 +257,7 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
                 "controls/components/product_controls_section.html.j2",
                 {
                     "product_controls": product_controls,
-                    "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
+                    "is_admin_or_owner": _can_administer(request, team_key),
                 },
             )
 
@@ -256,7 +268,7 @@ class ProductControlsStatusView(TeamRoleRequiredMixin, LoginRequiredMixin, View)
 class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
     """Bulk update all controls in a category to a single status."""
 
-    allowed_roles = ["owner", "admin"]
+    allowed_roles = list(ADMINISTER)
 
     def post(self, request: HttpRequest, team_key: str) -> HttpResponse:
         from sbomify.apps.controls.services.status_service import bulk_update_statuses
@@ -333,7 +345,7 @@ class BulkCategoryUpdateView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     "controls_catalog": catalog,
                     "controls_categories": controls_categories,
                     "bulk_statuses": BULK_STATUSES,
-                    "is_admin_or_owner": request.session.get("current_team", {}).get("role") in ("owner", "admin"),
+                    "is_admin_or_owner": _can_administer(request, team_key),
                 },
             )
 

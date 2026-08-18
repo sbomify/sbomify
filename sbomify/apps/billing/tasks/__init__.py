@@ -224,7 +224,8 @@ def check_stale_trials_task() -> None:
     This is a defensive measure - normally trial expiration is handled by
     Stripe webhooks, but this catches cases where webhooks were missed.
     """
-    from sbomify.apps.billing.stripe_client import StripeClient, StripeError
+    from sbomify.apps.billing.stripe_client import StripeClient, StripeError, StripeResourceMissingError
+    from sbomify.apps.billing.stripe_sync import reconcile_missing_subscription
     from sbomify.apps.teams.models import Team
 
     record_task_breadcrumb("check_stale_trials_task", "start")
@@ -257,6 +258,7 @@ def check_stale_trials_task() -> None:
 
     synced_count = 0
     error_count = 0
+    missing_count = 0
 
     for team in stale_teams:
         limits = team.billing_plan_limits or {}
@@ -296,6 +298,35 @@ def check_stale_trials_task() -> None:
                 )
                 synced_count += 1
 
+        except StripeResourceMissingError:
+            # The stored id refers to nothing at Stripe, and re-asking gets the
+            # same answer on every sweep — which is what made one broken
+            # reference a permanent daily error line per workspace.
+            #
+            # Settled through the same reconciliation the subscription sync
+            # already uses, rather than a marker that only silences this sweep.
+            # It re-reads the row under select_for_update, so a checkout landing
+            # during the Stripe round trip is not reverted by a stale copy, and
+            # it clears stripe_subscription_id — which both sweeps select on, so
+            # the workspace drops out of them without anything having to
+            # remember why, and re-enters on its own once a new subscription is
+            # stored.
+            #
+            # The id is deliberately not in the message: the workspace key
+            # locates the row, and a billing identifier in log aggregation buys
+            # nothing. CodeQL flags it too.
+            # Reported from what actually happened. Reconciliation no-ops when
+            # the workspace's subscription changed during the Stripe round
+            # trip, and announcing "marked canceled and cleared" for that would
+            # describe a write that did not occur — and count it, so the sweep
+            # summary would overstate how many workspaces it settled.
+            if reconcile_missing_subscription(team, subscription_id):
+                logger.warning(
+                    "Workspace %s referenced a subscription that no longer exists at Stripe; "
+                    "marked canceled and cleared the dangling reference",
+                    team.key,
+                )
+                missing_count += 1
         except StripeError as e:
             logger.error("Failed to sync team %s: %s", team.key, e)
             error_count += 1
@@ -303,4 +334,9 @@ def check_stale_trials_task() -> None:
             logger.exception("Unexpected error syncing team %s: %s", team.key, e)
             error_count += 1
 
-    logger.info("Stale trials check complete: synced=%d, errors=%d", synced_count, error_count)
+    logger.info(
+        "Stale trials check complete: synced=%d, errors=%d, missing_subscriptions=%d",
+        synced_count,
+        error_count,
+        missing_count,
+    )

@@ -65,7 +65,22 @@ interface WsStore {
 const { registerWebSocketStore } = await import('./websocket-store')
 
 /** Timers the store scheduled, so tests can run them without waiting. */
-const pending: { fn: () => void; delay: number }[] = []
+const pending: { id: number; fn: () => void; delay: number }[] = []
+let nextTimerId = 1
+
+/** The stability credit the store arms on open; see CONNECTION_STABLE_AFTER_MS. */
+const STABLE_DELAY_MS = 5000
+
+/** Mirrors RECONNECT_MAX_ATTEMPTS in the store, which is not exported. */
+const RECONNECT_MAX_ATTEMPTS = 10
+
+/** Run the stability credit, if one is armed, so the budget is refunded. */
+function runStableTimer(): void {
+    const at = pending.findIndex((timer) => timer.delay === STABLE_DELAY_MS)
+    if (at === -1) throw new Error('expected a stability credit to be armed, none was')
+    const [timer] = pending.splice(at, 1)
+    timer.fn()
+}
 
 const globals = globalThis as unknown as Record<string, unknown>
 const realGlobals: Record<string, unknown> = {
@@ -94,8 +109,9 @@ function getStore(): WsStore {
 
 /** Run the reconnect timer the store is waiting on, returning its delay. */
 function runPendingTimer(): number {
-    const timer = pending.shift()
-    if (!timer) throw new Error('expected a reconnect to be scheduled, none was')
+    const at = pending.findIndex((timer) => timer.delay !== STABLE_DELAY_MS)
+    if (at === -1) throw new Error('expected a reconnect to be scheduled, none was')
+    const [timer] = pending.splice(at, 1)
     timer.fn()
     return timer.delay
 }
@@ -118,12 +134,18 @@ describe('WebSocket store reconnection', () => {
         }
         // Jitter is proportional, so pinning it keeps the backoff assertions exact.
         Math.random = () => 0
+        // Handle-aware, because the store now runs two timers at once (the
+        // reconnect backoff and the stability credit) and a clearTimeout that
+        // wiped both would hide the very bug these tests exist to catch.
+        nextTimerId = 1
         ;(globalThis as unknown as { setTimeout: unknown }).setTimeout = (fn: () => void, delay: number) => {
-            pending.push({ fn, delay })
-            return pending.length
+            const id = nextTimerId++
+            pending.push({ id, fn, delay })
+            return id
         }
-        ;(globalThis as unknown as { clearTimeout: unknown }).clearTimeout = () => {
-            pending.length = 0
+        ;(globalThis as unknown as { clearTimeout: unknown }).clearTimeout = (id: number) => {
+            const at = pending.findIndex((timer) => timer.id === id)
+            if (at !== -1) pending.splice(at, 1)
         }
 
         registerWebSocketStore()
@@ -187,13 +209,60 @@ describe('WebSocket store reconnection', () => {
     test('a reconnect that succeeds restores the full attempt budget', () => {
         getStore().connect('workspace-key')
         sockets[0].open()
+        runStableTimer()
 
         sockets[0].drop()
         runPendingTimer()
         sockets[1].open()
+        runStableTimer()
         sockets[1].drop()
 
         expect(runPendingTimer()).toBe(1000)
+    })
+
+    test('a socket that closes immediately does not restore the budget', () => {
+        // The server accepts the handshake before applying its verdict, so a
+        // rejected connection still fires onopen. Refunding the budget there
+        // meant a broker outage never backed off: every rejection restarted the
+        // delay at one second and the attempt cap was never reached.
+        getStore().connect('workspace-key')
+
+        sockets[0].open()
+        sockets[0].drop() // closed well inside the stability window
+        expect(runPendingTimer()).toBe(1000)
+
+        sockets[1].open()
+        sockets[1].drop()
+
+        expect(runPendingTimer()).toBe(2000)
+    })
+
+    test('an accept-then-close loop still exhausts the attempt budget', () => {
+        // The consequence that matters: without this, every open tab retries
+        // once per second for the whole outage against an already-degraded
+        // server, and never gives up.
+        getStore().connect('workspace-key')
+
+        for (let attempt = 0; attempt < RECONNECT_MAX_ATTEMPTS; attempt++) {
+            sockets[sockets.length - 1].open()
+            sockets[sockets.length - 1].drop()
+            runPendingTimer()
+        }
+
+        sockets[sockets.length - 1].open()
+        sockets[sockets.length - 1].drop()
+
+        expect(pending.filter((timer) => timer.delay !== STABLE_DELAY_MS)).toHaveLength(0)
+    })
+
+    test('the stability credit is dropped when the socket closes', () => {
+        // Left armed, it would refund the budget after the fact and undo the
+        // backoff a moment later.
+        getStore().connect('workspace-key')
+        sockets[0].open()
+        sockets[0].drop()
+
+        expect(pending.filter((timer) => timer.delay === STABLE_DELAY_MS)).toHaveLength(0)
     })
 
     test('does not retry close codes that can never succeed', () => {

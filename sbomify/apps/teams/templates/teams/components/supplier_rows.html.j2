@@ -1,92 +1,67 @@
 {% if suppliers %}
-    <div class="tw-data-table-container">
-        <table class="tw-table tw-table-fixed">
-            <thead>
-                <tr>
-                    <th scope="col">Supplier</th>
-                    <th scope="col">Contact</th>
-                    <th scope="col">Website</th>
-                    <th scope="col" class="tw-cell-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for supplier in suppliers %}
-                    <tr>
-                        <td>
-                            <span class="text-text font-medium block">{{ supplier.name }}</span>
-                            {% if supplier.notes %}
-                                <span class="text-text-muted text-sm block truncate max-w-xs">{{ supplier.notes }}</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if supplier.contact_email %}
-                                {% if supplier.contact_name %}<span class="text-text block">{{ supplier.contact_name }}</span>{% endif %}
-                                <a href="mailto:{{ supplier.contact_email }}"
-                                   class="text-primary hover:underline text-sm">{{ supplier.contact_email }}</a>
-                            {% else %}
-                                {% comment %}A vendor is often tracked before anyone has found a contact, so this is a normal state rather than an error.{% endcomment %}
-                                <span class="text-text-muted text-sm">No contact yet</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if supplier.website %}
-                                <a href="{{ supplier.website }}"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="text-primary hover:underline text-sm">{{ supplier.website }}</a>
-                            {% else %}
-                                <span class="text-text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="tw-cell-end">
-                            <div class="flex items-center justify-end gap-1">
-                                {% comment %}Values ride on data attributes so Django escapes them; interpolating them into an inline Alpine call would break on any name containing a quote.{% endcomment %}
-                                <button type="button"
-                                        class="tw-btn-secondary tw-btn-sm"
-                                        data-supplier-id="{{ supplier.id }}"
-                                        data-supplier-name="{{ supplier.name }}"
-                                        data-supplier-contact-name="{{ supplier.contact_name }}"
-                                        data-supplier-contact-email="{{ supplier.contact_email }}"
-                                        data-supplier-website="{{ supplier.website }}"
-                                        data-supplier-notes="{{ supplier.notes }}"
-                                        @click="edit($el.dataset)"
-                                        aria-label="Edit {{ supplier.name }}">
-                                    <i class="fas fa-pen" aria-hidden="true"></i>
-                                </button>
-                                <form method="post"
-                                      hx-post="{% url 'teams:suppliers' team.key %}"
-                                      hx-swap="none"
-                                      class="inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="supplier_id" value="{{ supplier.id }}">
-                                    <button type="submit"
-                                            class="tw-btn-danger tw-btn-sm"
-                                            aria-label="Remove {{ supplier.name }}">
-                                        <i class="fas fa-trash" aria-hidden="true"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <c-tables.table fixed>
+    <c-tables.head>
+    <c-tables.header-cell>Supplier</c-tables.header-cell>
+    <c-tables.header-cell>Contact</c-tables.header-cell>
+    <c-tables.header-cell>Website</c-tables.header-cell>
+    <c-tables.actions-cell as="th" />
+    </c-tables.head>
+    <tbody>
+        {% for supplier in suppliers %}
+            <c-tables.row>
+            <c-tables.cell>
+            <span class="text-text font-medium block">{{ supplier.name }}</span>
+            {% if supplier.notes %}
+                <span class="text-text-muted text-sm block truncate max-w-xs">{{ supplier.notes }}</span>
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            {% if supplier.contact_email %}
+                {% if supplier.contact_name %}<span class="text-text block">{{ supplier.contact_name }}</span>{% endif %}
+                <a href="mailto:{{ supplier.contact_email }}"
+                   class="text-primary hover:underline text-sm">{{ supplier.contact_email }}</a>
+            {% else %}
+                {% comment %}A vendor is often tracked before anyone has found a contact, so this is a normal state rather than an error.{% endcomment %}
+                <span class="text-text-muted text-sm">No contact yet</span>
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.cell>
+            {% if supplier.website %}
+                <a href="{{ supplier.website }}"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   class="text-primary hover:underline text-sm">{{ supplier.website }}</a>
+            {% else %}
+                <span class="text-text-muted">—</span>
+            {% endif %}
+            </c-tables.cell>
+            <c-tables.actions-cell>
+            <c-actions-menu label="Supplier actions">
+            {% comment %}Values ride on data attributes so Django escapes them; interpolating them into an inline Alpine call would break on any name containing a quote.{% endcomment %}
+            <c-dropdowns.item icon="fas fa-pen" data-supplier-id="{{ supplier.id }}" data-supplier-name="{{ supplier.name }}" data-supplier-contact-name="{{ supplier.contact_name }}" data-supplier-contact-email="{{ supplier.contact_email }}" data-supplier-website="{{ supplier.website }}" data-supplier-notes="{{ supplier.notes }}" @click="edit($el.dataset)">
+            Edit
+            </c-dropdowns.item>
+            {% comment %}hx-vals replaces the old hidden-input form: a form must not ride along when the menu teleports to the body, and the CSRF header is set globally on every HTMX request.{% endcomment %}
+            <c-dropdowns.item-danger icon="fas fa-trash" hx-post="{% url 'teams:suppliers' team.key %}" hx-vals='{"action": "delete", "supplier_id": "{{ supplier.id }}"}' hx-swap="none">
+            Remove
+            </c-dropdowns.item-danger>
+            </c-actions-menu>
+            </c-tables.actions-cell>
+            </c-tables.row>
+        {% endfor %}
+    </tbody>
+    </c-tables.table>
 {% else %}
-    <div class="py-12 text-center">
-        <div class="w-12 h-12 rounded-xl bg-border/50 flex items-center justify-center mx-auto mb-3">
-            <i class="fas fa-truck-field text-text-muted text-lg" aria-hidden="true"></i>
-        </div>
-        {% if search %}
-            <p class="text-text font-medium m-0">No suppliers match "{{ search }}"</p>
-            <p class="text-text-muted text-sm m-0 mt-1">Try a different name or email.</p>
-        {% else %}
-            <p class="text-text font-medium m-0">No suppliers yet</p>
-            <p class="text-text-muted text-sm m-0 mt-1">Add the vendors you collect SBOMs and documents from.</p>
-            <button type="button" class="tw-btn-primary mt-4" @click="add()">
-                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add your first supplier
-            </button>
-        {% endif %}
-    </div>
+    {% if search %}
+        {# djlint:off H008 #}
+        {# The title quotes the search term, so the attribute itself has to take the single quotes. #}
+        <c-feedback.empty-state icon="fas fa-truck-field" icon_variant="neutral" title='No suppliers match "{{ search }}"' message="Try a different name or email." />
+        {# djlint:on #}
+    {% else %}
+        <c-feedback.empty-state icon="fas fa-truck-field" icon_variant="neutral" title="No suppliers yet" message="Add the vendors you collect SBOMs and documents from.">
+        <c-buttons.primary @click="add()">
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add your first supplier
+        </c-buttons.primary>
+        </c-feedback.empty-state>
+    {% endif %}
 {% endif %}

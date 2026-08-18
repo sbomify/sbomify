@@ -175,14 +175,17 @@ def test_vex_reissues_coexist_latest_by_created_at(
 
 
 @pytest.mark.django_db
-def test_guest_can_upload_sbom_but_not_vex(
+def test_guest_cannot_upload_any_artifact(
     guest_api_client,  # noqa: F811
     sample_component: Component,  # noqa: F811
     mocker: MockerFixture,  # noqa: F811
 ):
-    """A VEX rewrites the workspace's stored vulnerability posture (dashboards read
-    the re-annotated summaries), so the guest role may contribute plain artifacts
-    but not publish a VEX."""
+    """Guests are external trust-center visitors and publish nothing.
+
+    They briefly held the PUBLISH tier (#468) so a low-trust member could
+    contribute artifacts without management rights. That grant is withdrawn: a
+    guest holds no capability at all, so plain SBOMs are refused alongside VEX.
+    Anyone who needs to contribute gets an internal role."""
     from sbomify.apps.teams.models import Member
 
     mocker.patch("boto3.resource")
@@ -216,7 +219,58 @@ def test_guest_can_upload_sbom_but_not_vex(
     assert rv.status_code == 403, rv.content
 
     rs = client.post(base, data=sbom_doc, content_type="application/json", **headers)
+    assert rs.status_code == 403, rs.content
+
+
+@pytest.mark.django_db
+def test_publish_scoped_token_can_upload_sbom_but_not_vex(
+    sample_access_token: AccessToken,  # noqa: F811
+    sample_component: Component,  # noqa: F811
+    mocker: MockerFixture,  # noqa: F811
+):
+    """The artifact:publish / artifact:publish_vex split now lives in token scopes.
+
+    Both actions map to the same role tier, so no *role* distinguishes them any
+    more — but the "publish" scope preset deliberately grants artifact:publish
+    and withholds artifact:publish_vex, because a VEX rewrites the workspace's
+    stored vulnerability posture (dashboards and the public trust center read the
+    re-annotated summaries) and a CI upload token should not be able to do that.
+    Without this test nothing pins the distinction and the separate action could
+    be collapsed away unnoticed.
+    """
+    from sbomify.apps.core.authz import SCOPE_PRESETS
+
+    mocker.patch("boto3.resource")
+    mocker.patch("sbomify.apps.core.object_store.S3Client.upload_data_as_file")
+
+    sample_access_token.scopes = SCOPE_PRESETS["publish"]
+    sample_access_token.save(update_fields=["scopes"])
+    assert "artifact:publish_vex" not in (sample_access_token.scopes or [])
+
+    client = Client()
+    headers = get_api_headers(sample_access_token)
+    base = reverse("api-1:sbom_upload_cyclonedx", kwargs={"component_id": sample_component.id})
+    body = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {"component": {"type": "application", "name": "app", "version": "1.0.0"}},
+    }
+
+    sbom_doc = json.dumps({**body, "components": []})
+    rs = client.post(base, data=sbom_doc, content_type="application/json", **headers)
     assert rs.status_code == 201, rs.content
+
+    vex_doc = json.dumps(
+        {
+            **body,
+            "vulnerabilities": [
+                {"id": "CVE-1", "analysis": {"state": "not_affected", "justification": "code_not_reachable"}}
+            ],
+        }
+    )
+    rv = client.post(base + "?bom_type=vex", data=vex_doc, content_type="application/json", **headers)
+    assert rv.status_code == 403, rv.content
 
 
 @pytest.mark.django_db
@@ -3786,8 +3840,8 @@ def test_download_sbom_with_fallback_filename(
 
 
 @pytest.mark.django_db
-def test_delete_sbom_api_admin_forbidden(sample_sbom: SBOM):  # noqa: F811
-    """Deleting an SBOM is owner-only (#468); an admin gets 403 and the SBOM survives."""
+def test_delete_sbom_api_admin_allowed(sample_sbom: SBOM):  # noqa: F811
+    """Deleting an SBOM is the DELETE tier (owner + admin)."""
     from django.contrib.auth import get_user_model
 
     from sbomify.apps.teams.models import Member
@@ -3800,8 +3854,8 @@ def test_delete_sbom_api_admin_forbidden(sample_sbom: SBOM):  # noqa: F811
     client.force_login(admin)
     response = client.delete(reverse("api-1:delete_sbom", kwargs={"sbom_id": sample_sbom.id}))
 
-    assert response.status_code == 403
-    assert SBOM.objects.filter(id=sample_sbom.id).exists()
+    assert response.status_code == 204
+    assert not SBOM.objects.filter(id=sample_sbom.id).exists()
 
 
 @pytest.mark.django_db

@@ -10,301 +10,262 @@
           href="{% static 'css/components/vulnerability-trends.css' %}">
 {% endblock %}
 {% block content %}
+    {% comment %}The download title names the format and the kind of document. Both are settled here rather than inline in the attribute, which djlint is free to break across lines.{% endcomment %}
+    {% if item.format == 'cyclonedx' %}
+        {% firstof "CycloneDX" as item_format_label %}
+    {% elif item.format == 'spdx' %}
+        {% firstof "SPDX" as item_format_label %}
+    {% else %}
+        {% firstof item.format as item_format_label %}
+    {% endif %}
+    {% if is_vex %}
+        {% firstof "VEX" as item_kind_label %}
+    {% elif is_cbom %}
+        {% firstof "CBOM" as item_kind_label %}
+    {% else %}
+        {% firstof "SBOM" as item_kind_label %}
+    {% endif %}
+    <c-layout.page-header title="{{ item.name }}" icon="{{ header_icon }}" mark="avatar" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items">
+    {% if is_sbom_backed %}
+        <c-buttons.secondary href="{% url 'sboms:sbom_download' item.id %}" title="Download {{ item_format_label }} {{ item_kind_label }}">
+        {% if item.format == 'cyclonedx' %}
+            <img src="{% static 'img/cyclonedx-logo.svg' %}"
+                 alt="CycloneDX"
+                 class="h-4 w-auto dark:brightness-0 dark:invert"
+                 width="16"
+                 height="16">
+        {% elif item.format == 'spdx' %}
+            <img src="{% static 'img/spdx-logo.svg' %}"
+                 alt="SPDX"
+                 class="h-4 w-auto dark:brightness-0 dark:invert"
+                 width="16"
+                 height="16">
+        {% endif %}
+        <i class="fas fa-download"></i>
+        </c-buttons.secondary>
+    {% elif item_type == 'documents' %}
+        <c-buttons.primary href="{% url 'documents:document_download' item.id %}">
+        <i class="fas fa-download"></i>Download
+        </c-buttons.primary>
+    {% endif %}
+    </c-layout.page-header>
     <div class="space-y-6">
-        {# Page Header - matches component page pattern #}
-        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div class="flex items-start gap-4">
-                <div class="tw-avatar tw-avatar-lg">
-                    <i class="fas {% if is_sbom_backed %}fa-file-code{% else %}fa-file-alt{% endif %}"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <h1 class="text-2xl font-bold text-text">{{ item.name }}</h1>
-                        <div class="flex items-center gap-2 text-sm text-text-muted">
-                            {% include 'core/components/copyable_value.html.j2' with value=item.id title="ID: "|add:item.id|add:" (click to copy)" %}
-                        </div>
-                    </div>
-                    {# Breadcrumb #}
-                    <nav aria-label="breadcrumb" class="mt-1">
-                        <ol class="flex items-center gap-2 text-sm text-text-muted">
-                            <li>
-                                <a href="{% url 'core:component_details' item.component_id %}"
-                                   class="text-primary hover:underline no-underline">{{ item.component_name }}</a>
-                            </li>
-                            <li class="text-text-muted">/</li>
-                            <li class="text-text" aria-current="page">
-                                {% if is_vex %}
-                                    VEX Details
-                                {% elif is_cbom %}
-                                    CBOM Details
-                                {% elif is_sbom_backed %}
-                                    SBOM Details
-                                {% else %}
-                                    Document Details
-                                {% endif %}
-                            </li>
-                        </ol>
-                    </nav>
-                </div>
-            </div>
-            {# Action Buttons #}
-            <div class="flex gap-2 flex-shrink-0">
-                {% if is_sbom_backed %}
-                    <a href="{% url 'sboms:sbom_download' item.id %}"
-                       class="tw-btn-secondary inline-flex items-center gap-2"
-                       title="Download {% if item.format == 'cyclonedx' %}CycloneDX{% elif item.format == 'spdx' %}SPDX{% else %}{{ item.format }}{% endif %} {% if is_vex %}VEX{% elif is_cbom %}CBOM{% else %}SBOM{% endif %}">
-                        {% if item.format == 'cyclonedx' %}
-                            <img src="{% static 'img/cyclonedx-logo.svg' %}"
-                                 alt="CycloneDX"
-                                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                                 width="16"
-                                 height="16">
-                        {% elif item.format == 'spdx' %}
-                            <img src="{% static 'img/spdx-logo.svg' %}"
-                                 alt="SPDX"
-                                 class="h-4 w-auto dark:brightness-0 dark:invert"
-                                 width="16"
-                                 height="16">
-                        {% endif %}
-                        <i class="fas fa-download"></i>
-                    </a>
-                {% elif item_type == 'documents' %}
-                    <a href="{% url 'documents:document_download' item.id %}"
-                       class="tw-btn-primary inline-flex items-center gap-2 no-underline">
-                        <i class="fas fa-download"></i>Download
-                    </a>
-                {% endif %}
-            </div>
-        </div>
         {# Stats Badges #}
         <div class="flex flex-wrap gap-2">
             {% if is_sbom_backed %}
-                <span class="tw-sbom-format {% if item.format == 'cyclonedx' %}tw-sbom-format-cyclonedx{% else %}tw-sbom-format-spdx{% endif %}">
-                    {% if item.format == 'cyclonedx' %}
-                        CYCLONEDX
-                    {% elif item.format == 'spdx' %}
-                        SPDX
-                    {% else %}
-                        {{ item.format|upper }}
-                    {% endif %}
-                    {{ item.format_version }}
-                </span>
-                {% if item.version %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-code-branch text-primary text-xs"></i>
-                        <span class="text-text-muted">Version:</span>
-                        <span class="font-semibold text-text" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                    </div>
+                {# A format the app does not know keeps the SPDX tint, as it always did. #}
+                {% if item.format == 'cyclonedx' %}
+                    {% firstof "cyclonedx" as item_format_key %}
+                {% else %}
+                    {% firstof "spdx" as item_format_key %}
                 {% endif %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                    <i class="fas fa-calendar text-primary text-xs"></i>
-                    <span class="text-text-muted">Uploaded:</span>
-                    <span class="font-semibold text-text">
-                        {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
-                    </span>
-                </div>
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-upload text-info text-xs"></i>
-                    <span class="text-info-muted">Source:</span>
-                    <span class="font-semibold text-info">{{ item.source_display }}</span>
-                </div>
+                <c-badges.format format="{{ item_format_key }}">
+                {% if item.format == 'cyclonedx' %}
+                    CYCLONEDX
+                {% elif item.format == 'spdx' %}
+                    SPDX
+                {% else %}
+                    {{ item.format|upper }}
+                {% endif %}
+                {{ item.format_version }}
+                </c-badges.format>
+                {% if item.version %}
+                    <c-chips.metric-chip>
+                    <i class="fas fa-code-branch text-primary text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.label>Version:</c-chips.metric.label>
+                    <c-chips.metric.value title="{{ item.version }}">{{ item.version|truncatechars:30 }}</c-chips.metric.value>
+                    </c-chips.metric-chip>
+                {% endif %}
+                <c-chips.metric-chip>
+                <i class="fas fa-calendar text-primary text-xs" aria-hidden="true"></i>
+                <c-chips.metric.label>Uploaded:</c-chips.metric.label>
+                <c-chips.metric.value>
+                {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+                </c-chips.metric.value>
+                </c-chips.metric-chip>
+                <c-chips.metric-chip accent="info">
+                <i class="fas fa-upload text-xs" aria-hidden="true"></i>
+                <c-chips.metric.label>Source:</c-chips.metric.label>
+                <c-chips.metric.value>{{ item.source_display }}</c-chips.metric.value>
+                </c-chips.metric-chip>
                 {% if item.signature_blob_key %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 border border-success/30 rounded-md text-sm">
-                        <i class="fas fa-lock text-success text-xs"></i>
-                        <span class="font-semibold text-success">Signed</span>
-                    </div>
+                    <c-chips.metric-chip accent="success">
+                    <i class="fas fa-lock text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.value>Signed</c-chips.metric.value>
+                    </c-chips.metric-chip>
                 {% endif %}
                 {% if item.provenance_blob_key %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                        <i class="fas fa-shield-alt text-info text-xs"></i>
-                        <span class="font-semibold text-info">Provenance</span>
-                    </div>
+                    <c-chips.metric-chip accent="info">
+                    <i class="fas fa-shield-alt text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.value>Provenance</c-chips.metric.value>
+                    </c-chips.metric-chip>
                 {% endif %}
             {% elif item_type == 'documents' %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-info/10 border border-info/30 rounded-md text-sm">
-                    <i class="fas fa-file text-info text-xs"></i>
-                    <span class="font-semibold text-info">{{ item.document_type|default:"Document" }}</span>
-                </div>
+                <c-chips.metric-chip accent="info">
+                <i class="fas fa-file text-xs" aria-hidden="true"></i>
+                <c-chips.metric.value>{{ item.document_type|default:"Document" }}</c-chips.metric.value>
+                </c-chips.metric-chip>
                 {% if item.version %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-code-branch text-primary text-xs"></i>
-                        <span class="text-text-muted">Version:</span>
-                        <span class="font-semibold text-text" title="{{ item.version }}">{{ item.version|truncatechars:30 }}</span>
-                    </div>
+                    <c-chips.metric-chip>
+                    <i class="fas fa-code-branch text-primary text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.label>Version:</c-chips.metric.label>
+                    <c-chips.metric.value title="{{ item.version }}">{{ item.version|truncatechars:30 }}</c-chips.metric.value>
+                    </c-chips.metric-chip>
                 {% endif %}
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                    <i class="fas fa-calendar text-primary text-xs"></i>
-                    <span class="text-text-muted">Uploaded:</span>
-                    <span class="font-semibold text-text">
-                        {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
-                    </span>
-                </div>
-                <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                    <i class="fas fa-upload text-primary text-xs"></i>
-                    <span class="text-text-muted">Source:</span>
-                    <span class="font-semibold text-text">{{ item.source_display }}</span>
-                </div>
+                <c-chips.metric-chip>
+                <i class="fas fa-calendar text-primary text-xs" aria-hidden="true"></i>
+                <c-chips.metric.label>Uploaded:</c-chips.metric.label>
+                <c-chips.metric.value>
+                {% include 'core/components/relative_time.html.j2' with timestamp=item.created_at %}
+                </c-chips.metric.value>
+                </c-chips.metric-chip>
+                <c-chips.metric-chip>
+                <i class="fas fa-upload text-primary text-xs" aria-hidden="true"></i>
+                <c-chips.metric.label>Source:</c-chips.metric.label>
+                <c-chips.metric.value>{{ item.source_display }}</c-chips.metric.value>
+                </c-chips.metric-chip>
                 {% if item.content_type %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-file-alt text-primary text-xs"></i>
-                        <span class="text-text-muted">Format:</span>
-                        <span class="font-semibold text-text">{{ item.content_type }}</span>
-                    </div>
+                    <c-chips.metric-chip>
+                    <i class="fas fa-file-alt text-primary text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.label>Format:</c-chips.metric.label>
+                    <c-chips.metric.value>{{ item.content_type }}</c-chips.metric.value>
+                    </c-chips.metric-chip>
                 {% endif %}
                 {% if item.file_size %}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-border rounded-md text-sm">
-                        <i class="fas fa-weight text-primary text-xs"></i>
-                        <span class="text-text-muted">Size:</span>
-                        <span class="font-semibold text-text">{{ item.file_size|filesizeformat }}</span>
-                    </div>
+                    <c-chips.metric-chip>
+                    <i class="fas fa-weight text-primary text-xs" aria-hidden="true"></i>
+                    <c-chips.metric.label>Size:</c-chips.metric.label>
+                    <c-chips.metric.value>{{ item.file_size|filesizeformat }}</c-chips.metric.value>
+                    </c-chips.metric-chip>
                 {% endif %}
             {% endif %}
         </div>
         {% if is_sbom_backed %}
             {# Vulnerability Summary Section #}
             {% if vulnerability_summary %}
-                <div class="tw-card">
-                    <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
-                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                            <i class="fas fa-shield-alt text-primary"></i>
-                            Vulnerability Scan
-                            <span class="text-sm font-normal text-text-muted ml-2">{{ vulnerability_summary.scan_date|date:"M d, Y" }}</span>
-                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ vulnerability_summary.provider|upper }}</span>
-                        </h4>
-                        <a href="{% url 'sboms:sbom_vulnerabilities' item.id %}"
-                           class="tw-btn-secondary text-sm no-underline inline-flex items-center gap-2 flex-shrink-0">
-                            <i class="fas fa-shield-alt"></i>Vulnerabilities
-                            <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
-                        </a>
-                    </div>
-                    <div class="p-6">
-                        <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-3xl font-bold text-text leading-none">{{ vulnerability_summary.total }}</span>
-                                <span class="text-sm text-text-muted">total findings</span>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.critical }}</span> Critical
-                                </span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-severity-high-soft border border-severity-high-soft text-severity-high text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.high }}</span> High
-                                </span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-info/10 border border-info/20 text-info text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.medium }}</span> Medium
-                                </span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-border/40 text-text-muted text-sm font-medium">
-                                    <span class="font-bold">{{ vulnerability_summary.low }}</span> Low
-                                </span>
-                            </div>
+                <c-cards.card flush>
+                <div class="px-6 py-4 border-b border-border flex items-center justify-between gap-3">
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        <i class="fas fa-shield-alt text-primary"></i>
+                        Vulnerability Scan
+                        <span class="text-sm font-normal text-text-muted ml-2">{{ vulnerability_summary.scan_date|date:"j M Y" }}</span>
+                        <c-badges.secondary size="sm">{{ vulnerability_summary.provider|upper }}</c-badges.secondary>
+                    </h4>
+                    <c-buttons.secondary href="{% url 'sboms:sbom_vulnerabilities' item.id %}">
+                    <i class="fas fa-shield-alt"></i>Vulnerabilities
+                    <i class="fas fa-arrow-right text-xs" aria-hidden="true"></i>
+                    </c-buttons.secondary>
+                </div>
+                <div class="p-6">
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-3xl font-bold text-text leading-none">{{ vulnerability_summary.total }}</span>
+                            <span class="text-sm text-text-muted">total findings</span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+                            <c-badges.severity level="critical">{{ vulnerability_summary.critical }} Critical</c-badges.severity>
+                            <c-badges.severity level="high">{{ vulnerability_summary.high }} High</c-badges.severity>
+                            <c-badges.severity level="medium">{{ vulnerability_summary.medium }} Medium</c-badges.severity>
+                            <c-badges.severity level="low">{{ vulnerability_summary.low }} Low</c-badges.severity>
                         </div>
                     </div>
                 </div>
+                </c-cards.card>
             {% endif %}
             {# VEX suppressions — the vulnerabilities this VEX artifact clears #}
             {% if vex_suppressions is not None %}
                 {{ vex_suppression_terms|json_script:"vex-suppression-terms" }}
                 {{ vex_suppression_states|json_script:"vex-suppression-states" }}
                 <div x-data="{ search: '', statusFilter: 'all', currentPage: 1, perPage: 10, terms: (window.parseJsonScript('vex-suppression-terms') || []), states: (window.parseJsonScript('vex-suppression-states') || []), get statusOptions() { return [...new Set(this.states)].filter(Boolean).sort(); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.statusFilter === 'all' || this.states[i] === this.statusFilter)); }, get total() { return this.filteredIdx.length; }, get totalPages() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.currentPage - 1) * this.perPage, this.currentPage * this.perPage)); }, get startIdx() { return this.total ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.currentPage * this.perPage, this.total); } }"
-                     x-init="$watch('search', () => { currentPage = 1 }); $watch('statusFilter', () => { currentPage = 1 })"
-                     class="tw-card">
-                    <div class="px-6 py-4 border-b border-border">
-                        <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                            Suppressed vulnerabilities
-                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-border/50 text-text-muted">{{ vex_suppressions|length }}</span>
-                        </h4>
-                    </div>
+                     x-init="$watch('search', () => { currentPage = 1 }); $watch('statusFilter', () => { currentPage = 1 })">
+                    <c-cards.card flush>
+                    <c-cards.header>
+                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                        Suppressed vulnerabilities
+                        <c-badges.secondary size="sm">{{ vex_suppressions|length }}</c-badges.secondary>
+                    </h4>
+                    </c-cards.header>
                     {% if vex_suppressions %}
-                        <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3">
-                            <div class="tw-data-table-search max-w-xs">
-                                <i class="fas fa-search tw-data-table-search-icon"></i>
-                                <label for="vex-suppression-search" class="sr-only">Search suppressed vulnerabilities</label>
-                                <input type="search"
-                                       id="vex-suppression-search"
-                                       x-model="search"
-                                       placeholder="Search advisories..."
-                                       class="tw-data-table-search-input" />
-                            </div>
-                            <label for="vex-status-filter" class="sr-only">Filter by status</label>
-                            <select id="vex-status-filter"
-                                    x-model="statusFilter"
-                                    class="tw-data-table-page-size-select">
-                                <option value="all">All Statuses</option>
-                                <template x-for="st in statusOptions" :key="st">
-                                    <option :value="st"
-                                            x-text="st.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())">
-                                    </option>
-                                </template>
-                            </select>
-                        </div>
-                        <div class="overflow-x-auto" x-cloak>
-                            <table class="tw-table w-full table-fixed">
-                                <thead>
-                                    <tr>
-                                        <th class="w-1/4">Advisory</th>
-                                        <th class="w-1/4">Package</th>
-                                        <th class="w-1/4">Status</th>
-                                        <th class="w-1/4">Justification</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for s in vex_suppressions %}
-                                        <tr x-show="pageSet.has({{ forloop.counter0 }})">
-                                            <td>
-                                                {% with suppression_url=s.id|advisory_url %}
-                                                    {% if suppression_url %}
-                                                        <a href="{{ suppression_url }}"
-                                                           target="_blank"
-                                                           rel="noopener"
-                                                           class="font-medium text-primary hover:underline inline-flex items-center gap-1">
-                                                            {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
-                                                        </a>
-                                                    {% else %}
-                                                        <span class="font-medium text-text-muted">{{ s.id }}</span>
-                                                    {% endif %}
-                                                {% endwith %}
-                                                {% if s.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ s.aliases|join:", " }}</div>{% endif %}
-                                            </td>
-                                            <td class="text-text">{{ s.package }}</td>
-                                            <td>
-                                                <span class="text-info">
-                                                    {% if s.state == 'not_affected' %}
-                                                        Not affected
-                                                    {% elif s.state == 'false_positive' %}
-                                                        False positive
-                                                    {% else %}
-                                                        {{ s.state|cut:"_"|title }}
-                                                    {% endif %}
-                                                </span>
-                                            </td>
-                                            <td class="text-text-muted">
-                                                {% if s.justification %}
-                                                    <span {% if s.detail %}title="{{ s.detail }}"{% endif %}>{{ s.justification }}</span>
-                                                {% elif s.detail %}
-                                                    <span>{{ s.detail|truncatechars:60 }}</span>
-                                                {% else %}
-                                                    —
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                    <tr x-show="total === 0">
-                                        <td colspan="4" class="px-6 py-8 text-center text-text-muted">No vulnerabilities match your search.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-                            <span class="text-sm text-text-muted">
-                                Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
-                            </span>
-                            {% include "components/tw/table_pager.html.j2" %}
-                        </div>
+                        {# The card already draws the frame, so the shell nests inside it. #}
+                        <c-tables.shell nested>
+                        <c-tables.toolbar>
+                        <c-tables.search id="vex-suppression-search" label="Search suppressed vulnerabilities" placeholder="Search advisories..." class="max-w-xs" x-model="search" />
+                        <c-tables.select id="vex-status-filter" label="Filter by status" x-model="statusFilter">
+                        <option value="all">All Statuses</option>
+                        <template x-for="st in statusOptions" :key="st">
+                            <option :value="st"
+                                    x-text="st.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase())"></option>
+                        </template>
+                        </c-tables.select>
+                        </c-tables.toolbar>
+                        <c-tables.table fixed x-cloak>
+                        <c-tables.head>
+                        <c-tables.header-cell class="w-1/4">Advisory</c-tables.header-cell>
+                        <c-tables.header-cell class="w-1/4">Package</c-tables.header-cell>
+                        <c-tables.header-cell class="w-1/4">Status</c-tables.header-cell>
+                        <c-tables.header-cell class="w-1/4">Justification</c-tables.header-cell>
+                        </c-tables.head>
+                        <tbody>
+                            {% for s in vex_suppressions %}
+                                <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
+                                <c-tables.cell>
+                                {% with suppression_url=s.id|advisory_url %}
+                                    {% if suppression_url %}
+                                        <a href="{{ suppression_url }}"
+                                           target="_blank"
+                                           rel="noopener"
+                                           class="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                                            {{ s.id }}<i class="fas fa-external-link-alt text-[0.65rem]"></i>
+                                        </a>
+                                    {% else %}
+                                        <span class="font-medium text-text-muted">{{ s.id }}</span>
+                                    {% endif %}
+                                {% endwith %}
+                                {% if s.aliases %}<div class="text-xs text-text-muted mt-1">Aliases: {{ s.aliases|join:", " }}</div>{% endif %}
+                                </c-tables.cell>
+                                <c-tables.cell>{{ s.package }}</c-tables.cell>
+                                <c-tables.cell>
+                                <span class="text-info">
+                                    {% if s.state == 'not_affected' %}
+                                        Not affected
+                                    {% elif s.state == 'false_positive' %}
+                                        False positive
+                                    {% else %}
+                                        {{ s.state|cut:"_"|title }}
+                                    {% endif %}
+                                </span>
+                                </c-tables.cell>
+                                {% comment %}The muted ink sits on the value rather than the cell: the cell already states the table's own text colour, and two colour utilities on one element resolve by stylesheet order, not by the order they are written.{% endcomment %}
+                                <c-tables.cell>
+                                {% if s.justification %}
+                                    <span class="text-text-muted"
+                                          {% if s.detail %}title="{{ s.detail }}"{% endif %}>{{ s.justification }}</span>
+                                {% elif s.detail %}
+                                    <span class="text-text-muted">{{ s.detail|truncatechars:60 }}</span>
+                                {% else %}
+                                    <span class="text-text-muted">—</span>
+                                {% endif %}
+                                </c-tables.cell>
+                                </c-tables.row>
+                            {% endfor %}
+                            <tr x-show="total === 0">
+                                <td colspan="4" class="px-6 py-8 text-center text-text-muted">No vulnerabilities match your search.</td>
+                            </tr>
+                        </tbody>
+                        </c-tables.table>
+                        <c-tables.footer>
+                        <c-tables.info>
+                        Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+                        </c-tables.info>
+                        <c-tables.pager />
+                        </c-tables.footer>
+                        </c-tables.shell>
                     {% else %}
                         <div class="p-6 text-sm text-text-muted">
                             This VEX document doesn't suppress any vulnerabilities (no <code>not_affected</code> or <code>false_positive</code> statements).
                         </div>
                     {% endif %}
+                    </c-cards.card>
                 </div>
             {% endif %}
             {# Cryptographic Assets (CBOM) — lazy-loaded; collapses when there are none #}
@@ -326,21 +287,21 @@
             </div>
         {% elif item_type == 'documents' %}
             {# Document Info Card #}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
-                        <i class="fas fa-file-alt text-primary"></i>
-                        Document Information
-                    </h4>
-                </div>
-                <div class="p-6 text-center py-12">
-                    <div class="w-16 h-16 rounded-full bg-info/10 flex items-center justify-center mx-auto mb-4">
-                        <i class="fas fa-file-alt text-3xl text-info"></i>
-                    </div>
-                    <p class="text-text mb-2 font-medium">Document stored successfully</p>
-                    <p class="text-text-muted text-sm mb-0">Use the Download button above to access the file.</p>
-                </div>
+            <c-cards.card flush>
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                    <i class="fas fa-file-alt text-primary"></i>
+                    Document Information
+                </h4>
             </div>
+            <div class="p-6 text-center py-12">
+                <div class="w-16 h-16 rounded-full bg-info/10 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-file-alt text-3xl text-info"></i>
+                </div>
+                <p class="text-text mb-2 font-medium">Document stored successfully</p>
+                <p class="text-text-muted text-sm mb-0">Use the Download button above to access the file.</p>
+            </div>
+            </c-cards.card>
         {% endif %}
     </div>
 {% endblock %}
