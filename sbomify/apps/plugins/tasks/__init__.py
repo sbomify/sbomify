@@ -1425,3 +1425,20 @@ def prune_assessment_runs_task() -> int:
     removed = prune_assessment_runs()
     logger.info(f"[TASK_prune_assessment_runs] removed {removed} runs")
     return removed
+
+
+@cron("45 3 * * *")  # type: ignore[untyped-decorator]  # Daily, after the assessment-run prune
+@dramatiq.actor(queue_name="assessment_retention", max_retries=1, time_limit=1800000)
+def prune_dt_project_versions_task() -> int:
+    """Drop Dependency-Track project versions for SBOMs no longer in a current release.
+
+    DT re-analyses its whole portfolio on its own schedule, so its CPU cost rises
+    with every SBOM ever uploaded and never falls. Our own sweep cadence cannot
+    lower that floor. See plugins/retention.py for the rule and why pruning is
+    invisible to readers.
+    """
+    from sbomify.apps.plugins.retention import prune_dt_project_versions
+
+    removed = prune_dt_project_versions()
+    logger.info(f"[TASK_prune_dt_project_versions] removed {removed} DT project versions")
+    return removed
