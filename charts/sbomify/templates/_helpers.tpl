@@ -124,6 +124,13 @@ space would silently arrive wrong. Re-encode it as %20.
 {{/*
 DATABASE_URL. Django's dj_database_url parses this and it takes precedence over
 the individual DATABASE_* variables, so it is the single source of truth here.
+
+The printf below has five verbs and five arguments. Review tooling has reported
+it as having three more than once, because the credential position `%s:%s@`
+matches a secret pattern and gets redacted before the diff is read, leaving
+something that genuinely looks malformed. The rendered value is asserted in CI
+(see "DATABASE_URL renders as a valid connection string" in helm.yml), so before
+changing this, check that job rather than the review comment.
 */}}
 {{- define "sbomify.databaseUrl" -}}
 {{- $d := .Values.database -}}

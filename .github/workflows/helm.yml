@@ -63,6 +63,48 @@ jobs:
             --set secrets.signedUrlSalt=lint-only-not-a-real-salt \
             --set caddy.acme.email=ops@example.com
 
+      # A malformed DATABASE_URL fails at connect time, long after the render
+      # that produced it, so assert the string. This also settles a review claim
+      # that keeps recurring: the printf building it is reported as malformed
+      # because the credential position matches a secret pattern and is redacted
+      # before the diff is read.
+      - name: DATABASE_URL renders as a valid connection string
+        run: |
+          set -euo pipefail
+
+          render_url() {
+            helm template sbomify "$CHART" --values "$CHART/values-local.yaml" "$@" \
+              | grep -m1 -E '^  DATABASE_URL: ' \
+              | sed -E 's/^  DATABASE_URL: "?//; s/"$//'
+          }
+
+          assert_url() {
+            local label="$1" url="$2"
+            case "$url" in
+              *'%!'*)  echo "::error::$label: Go printf error marker in: $url"; exit 1 ;;
+              *'*'*)   echo "::error::$label: redaction marker in: $url"; exit 1 ;;
+            esac
+            # scheme://user:password@host:port/database
+            case "$url" in
+              postgresql://*:*@*:*/*) echo "ok - $label" ;;
+              *) echo "::error::$label: not a postgresql connection string: $url"; exit 1 ;;
+            esac
+          }
+
+          assert_url "default" "$(render_url)"
+          # A password needing percent-encoding plus sslmode: the shape most
+          # likely to break a hand-built URL.
+          escaped=$(render_url --set database.sslMode=require --set 'database.password=p@ss w/ord:#?')
+          assert_url "escaped password and sslmode" "$escaped"
+          case "$escaped" in
+            *'p%40ss%20w%2Ford%3A%23%3F'*) echo "ok - password percent-encoded" ;;
+            *) echo "::error::password not escaped: $escaped"; exit 1 ;;
+          esac
+          case "$escaped" in
+            *'?sslmode=require') echo "ok - sslmode appended" ;;
+            *) echo "::error::sslmode missing: $escaped"; exit 1 ;;
+          esac
+
       # The chart deliberately refuses combinations that would fail at runtime.
       # If these ever stop failing, the guard has silently regressed.
       - name: Guard rails still reject invalid configurations
