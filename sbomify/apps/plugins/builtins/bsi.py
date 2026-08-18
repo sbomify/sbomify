@@ -58,6 +58,7 @@ from typing import Any
 
 from packaging import version as pkg_version
 
+from sbomify.apps.plugins.builtins._component_scope import is_non_software_component
 from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -543,18 +544,14 @@ class BSICompliancePlugin(AssessmentPlugin):
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
-            # Skip type=file components (e.g., lockfiles, scan inputs) for BSI
-            # per-component checks. BSI TR-03183-2 §5.2.2 fields apply to software
-            # components (type=library/application/framework/container/...), not to
-            # file-type entries that generators like syft emit for their scan input.
-            # Component Name is still validated so misnamed file entries surface.
-            is_file_type = str(component.get("type", "")).lower() == "file"
-
             # 1. Component name (applies to all component types)
             if not component.get("name"):
                 name_failures.append(f"Component at index {i}")
 
-            if is_file_type:
+            # BSI TR-03183-2 §5.2.2 fields apply to software components
+            # (library/application/framework/container/...), not to the
+            # non-software entries exempted in _component_scope.
+            if is_non_software_component(component):
                 continue
 
             # 2. Component version

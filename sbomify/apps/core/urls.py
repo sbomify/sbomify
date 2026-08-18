@@ -207,12 +207,12 @@ urlpatterns = [
     path("support/contact/success/", views.support_contact_success, name="support_contact_success"),
     path("search/", views.SearchView.as_view(), name="search"),
     re_path(
-        r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom)/(?P<item_id>[^/]+)/$",
+        r"^components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom|hbom)/(?P<item_id>[^/]+)/$",
         views.ComponentItemView.as_view(),
         name="component_item",
     ),
     re_path(
-        r"^public/components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom)/(?P<item_id>[^/]+)/$",
+        r"^public/components/(?P<component_id>[^/]+)/(?P<item_type>sboms|documents|vex|cbom|hbom)/(?P<item_id>[^/]+)/$",
         views.ComponentItemPublicView.as_view(),
         name="component_item_public",
     ),

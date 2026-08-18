@@ -9,7 +9,7 @@
     {% endif %}
     <c-layout.page-header title="{{ release.name }}" icon="fas fa-tag" mark="avatar" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" style="{{ header_style }}">
     {# Download Buttons - Desktop; the mobile card below repeats them #}
-    {% if release.has_sboms or release.has_vex or release.has_cbom %}
+    {% if release.has_sboms or release.has_vex or release.has_cbom or release.has_hbom %}
         <div class="hidden lg:flex gap-2">
             {% if release.has_sboms %}
                 <c-buttons.secondary href="{% url 'api-1:download_release' release.id %}" title="Download as CycloneDX">
@@ -38,6 +38,12 @@
             {% if release.has_cbom %}
                 <c-buttons.secondary href="{% url 'api-1:download_release_cbom' release.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)">
                 <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                <i class="fas fa-download" aria-hidden="true"></i>
+                </c-buttons.secondary>
+            {% endif %}
+            {% if release.has_hbom %}
+                <c-buttons.secondary href="{% url 'api-1:download_release_hbom' release.id %}" title="Download HBOM (Hardware BOM, CycloneDX)">
+                <span class="text-sm font-semibold tracking-wide">HBOM</span>
                 <i class="fas fa-download" aria-hidden="true"></i>
                 </c-buttons.secondary>
             {% endif %}
@@ -103,7 +109,7 @@
             </c-chips.metric-chip>
         </div>
         {# Download Release Card - Mobile Only #}
-        {% if release.has_sboms or release.has_vex or release.has_cbom %}
+        {% if release.has_sboms or release.has_vex or release.has_cbom or release.has_hbom %}
             <c-cards.card flush class="lg:hidden">
             <div class="px-6 py-4 border-b border-border">
                 <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
@@ -145,6 +151,12 @@
                     {% if release.has_cbom %}
                         <c-buttons.secondary href="{% url 'api-1:download_release_cbom' release.id %}" title="Download CBOM (Cryptography BOM, CycloneDX)">
                         <span class="text-sm font-semibold tracking-wide">CBOM</span>
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        </c-buttons.secondary>
+                    {% endif %}
+                    {% if release.has_hbom %}
+                        <c-buttons.secondary href="{% url 'api-1:download_release_hbom' release.id %}" title="Download HBOM (Hardware BOM, CycloneDX)">
+                        <span class="text-sm font-semibold tracking-wide">HBOM</span>
                         <i class="fas fa-download" aria-hidden="true"></i>
                         </c-buttons.secondary>
                     {% endif %}

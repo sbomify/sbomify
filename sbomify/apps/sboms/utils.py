@@ -2254,6 +2254,62 @@ def _is_cbom(sbom_data: dict[str, Any]) -> bool:
     return isinstance(components, list) and bool(components) and all(is_crypto_asset(c) for c in components)
 
 
+# device-driver, firmware and platform ride along in a hardware document (cdxgen
+# emits all three beside the devices it enumerates), but none of them is hardware
+# on its own: each describes software that runs on or talks to a device.
+_HARDWARE_TYPES = frozenset({"device", "device-driver", "firmware", "platform"})
+
+
+def _component_type(component: Any) -> str:
+    """A component's type, lowercased, or ``""`` when it has none.
+
+    CycloneDX defines type as a lowercase enum, so a generator emitting
+    ``Device`` is out of spec. The compliance plugins already tolerate that
+    (``_component_scope`` lowercases before comparing), and detection matching
+    exactly while scoring matched loosely was the worst pairing available: a
+    hardware BOM with capitalised types was filed as software *and* exempted
+    from the checks that would have graded it.
+    """
+    return str(component.get("type", "")).lower() if isinstance(component, dict) else ""
+
+
+def _is_device(component: Any) -> bool:
+    return _component_type(component) == "device"
+
+
+def _contains_hardware_components(sbom_data: dict[str, Any]) -> bool:
+    """True when the document names ANY physical device (components or
+    metadata.component), whatever its bom_type. Feeds ``has_hardware_components``
+    so hardware-gated work skips dispatch for the (majority) software-only rows."""
+    components = sbom_data.get("components")
+    if isinstance(components, list) and any(_is_device(c) for c in components):
+        return True
+    metadata = sbom_data.get("metadata")
+    return isinstance(metadata, dict) and _is_device(metadata.get("component"))
+
+
+def _is_hbom(sbom_data: dict[str, Any]) -> bool:
+    """True when a CycloneDX document is a *pure* HBOM: every entry in
+    ``components`` is a hardware or hardware-adjacent type and at least one is a
+    physical ``device``.
+
+    Keyed on the components array alone, unlike ``_is_cbom``: a
+    ``metadata.component`` of type ``device`` names the device the document is
+    *about*, so a device's software SBOM — the case the spec's ``device``
+    description calls out — would otherwise re-tag as hardware. Requiring a
+    ``device`` among the components likewise keeps an all-``platform`` software
+    document out.
+
+    Mixed hardware-plus-software documents deliberately stay ``bom_type=sbom``,
+    for the reason spelled out in ``_is_cbom``; they still get the
+    ``has_hardware_components`` stamp and therefore any hardware pipeline.
+    """
+    components = sbom_data.get("components")
+    if not isinstance(components, list):
+        return False
+    return any(_is_device(c) for c in components) and all(_component_type(c) in _HARDWARE_TYPES for c in components)
+
+
 def _is_duplicate_integrity_error(exc: IntegrityError) -> bool:
     """Check if an IntegrityError is for the SBOM uniqueness constraint.
 
