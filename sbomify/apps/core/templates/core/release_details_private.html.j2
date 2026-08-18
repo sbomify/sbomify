@@ -10,7 +10,7 @@
     <c-layout.page-header title="{{ release.name }}" icon="fas fa-tag" mark="avatar" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" style="{{ header_style }}">
     {# Download Buttons - Desktop; the mobile card below repeats them #}
     {% if sibling_releases %}
-        <div class="hidden lg:flex items-center gap-2"
+        <div class="flex items-center gap-2"
              title="Compare this release with another">
             <i class="fas fa-code-compare text-text-muted text-sm"
                aria-hidden="true"></i>
