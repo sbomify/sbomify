@@ -22,6 +22,7 @@ from .models import AssessmentRun, RegisteredPlugin
 from .sdk.base import AssessmentPlugin, RetryLaterError, SBOMContext
 from .sdk.enums import AssessmentCategory, RunReason, RunStatus, ScanMode
 from .utils import compute_config_hash, compute_content_digest
+from .verdict import compliance_summary_passing
 
 if TYPE_CHECKING:
     from sbomify.apps.access_tokens.models import AccessToken
@@ -737,6 +738,11 @@ class PluginOrchestrator:
         to assert; treating it as passing would let BSI/FDA/etc. dependency
         gates pass on no evidence.
 
+        Warnings alongside a real pass do NOT block the gate — unlike the
+        public badge, which shares this implementation but is strict about
+        them. See ``verdict.compliance_summary_passing`` for why the two
+        consumers differ on exactly that axis.
+
         Args:
             run: The AssessmentRun to check.
 
@@ -761,18 +767,7 @@ class PluginOrchestrator:
             )
             return total_from_severity == 0
 
-        fail_count: int = summary.get("fail_count", 0)
-        error_count: int = summary.get("error_count", 0)
-        # ``pass_count`` was added to summary payloads at the same time as
-        # this stricter check. Older runs predating that may not carry the
-        # key at all — distinguish "key absent" (legacy schema) from "key
-        # present and zero" (modern run with no positive findings) so we
-        # don't retroactively un-pass historical runs that satisfied the
-        # gate under the old contract.
-        pass_count = summary.get("pass_count")
-        if pass_count is None:
-            return fail_count == 0 and error_count == 0
-        return fail_count == 0 and error_count == 0 and pass_count > 0
+        return compliance_summary_passing(summary, warnings_block=False)
 
     def get_plugin_instance(
         self,
