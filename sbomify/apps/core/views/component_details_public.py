@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.views import View
 
 from sbomify.apps.core.apis import get_component
+from sbomify.apps.core.authz import READ_INTERNAL
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
 from sbomify.apps.core.url_utils import (
@@ -130,7 +131,7 @@ class ComponentDetailsPublicView(View):
             is_owner_or_admin = False
             try:
                 member = Member.objects.get(team=team, user=request.user)
-                if member.role in ("owner", "admin"):
+                if member.role in READ_INTERNAL:
                     is_owner_or_admin = True
             except Member.DoesNotExist:
                 # User is not a member, continue with access check

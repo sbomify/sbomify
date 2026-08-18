@@ -23,7 +23,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
-from sbomify.apps.core.authz import READ_INTERNAL, can
+from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
@@ -207,7 +207,10 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
     if not member:
         return False
 
-    return member.role in ["owner", "admin"]
+    # MANAGE, from the tier — not a second hardcoded list. _build_item_base
+    # computes the same flag via can(..., "*:manage"), and the two disagreeing
+    # would render an edit button the API then refuses (or hide one it allows).
+    return member.role in MANAGE
 
 
 def _private_items_allowed(team: Team) -> bool:
@@ -631,8 +634,11 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     try:
         # Check if user has permission to create products in this team
         team = Team.objects.get(id=team_id)
-        if not can(request, "workspace:manage", team):
-            return 403, {"detail": "Only owners and admins can create products", "error_code": ErrorCode.FORBIDDEN}
+        if not can(request, "product:create", team):
+            return 403, {
+                "detail": "You don't have permission to create products in this workspace",
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
         allow_private = _private_items_allowed(team)
 
@@ -826,7 +832,16 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this product", "error_code": ErrorCode.FORBIDDEN}
+
+    # Changing what the world can see is ADMINISTER, not MANAGE — the same
+    # carve-out shape as DELETE. Only checked when the value actually changes, so
+    # a member editing a product's name is not blocked by a field they left alone.
+    if payload.is_public != product.is_public and not can(request, "product:set_visibility", product):
+        return 403, {
+            "detail": "Only owners and admins can change a product's visibility",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         with transaction.atomic():
@@ -872,7 +887,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this product", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -882,6 +897,16 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
             # Validate public/private constraints before making changes
             new_is_public = update_data.get("is_public", product.is_public)
+
+            # Changing what the world can see is ADMINISTER, not MANAGE. Only
+            # checked when the value actually changes, so a member patching an
+            # unrelated field is unaffected. This also covers the cascade below,
+            # which pushes the product's visibility onto its components.
+            if new_is_public != product.is_public and not can(request, "product:set_visibility", product):
+                return 403, {
+                    "detail": "Only owners and admins can change a product's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions when trying to make items private
             if not new_is_public and product.is_public and not _private_items_allowed(product.team):
@@ -986,7 +1011,7 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1103,7 +1128,7 @@ def update_product_identifier(
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1169,7 +1194,7 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1220,7 +1245,7 @@ def bulk_update_product_identifiers(
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1293,7 +1318,10 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         with transaction.atomic():
@@ -1392,7 +1420,10 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         # Import here to avoid issues
@@ -1446,7 +1477,10 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         # Import here to avoid issues
@@ -1480,7 +1514,10 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         with transaction.atomic():
@@ -1554,8 +1591,11 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     try:
         # Check if user has permission to create components in this team
         team = Team.objects.get(id=team_id)
-        if not can(request, "workspace:manage", team):
-            return 403, {"detail": "Only owners and admins can create components", "error_code": ErrorCode.FORBIDDEN}
+        if not can(request, "component:create", team):
+            return 403, {
+                "detail": "You don't have permission to create components in this workspace",
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
         if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
             return 400, {
@@ -1740,7 +1780,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:manage", component):
-        return 403, {"detail": "Only owners and admins can update components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this component", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1760,6 +1800,15 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                 else:
                     # If neither visibility nor is_public is provided, keep current visibility
                     new_visibility = component.visibility  # type: ignore[assignment]
+
+            # Changing what the world can see is ADMINISTER, not MANAGE — the
+            # same carve-out shape as DELETE. Checked only when the value
+            # actually changes, so a member editing metadata is unaffected.
+            if new_visibility != component.visibility and not can(request, "component:set_visibility", component):
+                return 403, {
+                    "detail": "Only owners and admins can change a component's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions
             if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):  # type: ignore[comparison-overlap]
@@ -1844,7 +1893,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:manage", component):
-        return 403, {"detail": "Only owners and admins can update components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this component", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1873,6 +1922,20 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     new_visibility = Component.Visibility.PUBLIC
                 else:
                     new_visibility = Component.Visibility.PRIVATE
+
+            # Changing what the world can see is ADMINISTER, not MANAGE — the
+            # same carve-out shape as DELETE. Checked only when the value
+            # actually changes, so a member patching metadata is unaffected.
+            # This is also the path TogglePublicStatusView delegates to.
+            if (
+                new_visibility is not None
+                and new_visibility != component.visibility
+                and not can(request, "component:set_visibility", component)
+            ):
+                return 403, {
+                    "detail": "Only owners and admins can change a component's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions when trying to make items private or gated
             if new_visibility is not None and new_visibility in (
@@ -3148,7 +3211,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can update releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this release", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent modifying latest releases
     if release.is_latest:
@@ -3222,7 +3285,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can update releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this release", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent modifying latest releases
     if release.is_latest:
@@ -3921,7 +3984,10 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         return 404, {"detail": "Artifact not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can manage release artifacts", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this release's artifacts",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent removing artifacts from latest releases
     if release.is_latest:
@@ -4023,7 +4089,10 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "document:manage", document.component):
-        return 403, {"detail": "Only owners and admins can manage document releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this document's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     from sbomify.apps.core.utils import add_artifact_to_release
 
@@ -4111,7 +4180,10 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "document:manage", document.component):
-        return 403, {"detail": "Only owners and admins can manage document releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this document's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent removing from latest releases
     if release.is_latest:
@@ -4208,7 +4280,10 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "sbom:manage", sbom.component):
-        return 403, {"detail": "Only owners and admins can manage SBOM releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this SBOM's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     from sbomify.apps.core.utils import add_artifact_to_release
 
@@ -4294,7 +4369,10 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "sbom:manage", sbom.component):
-        return 403, {"detail": "Only owners and admins can manage SBOM releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this SBOM's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Verify release belongs to same team as the SBOM's component
     if str(release.product.team_id) != str(sbom.component.team_id):

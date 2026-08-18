@@ -181,18 +181,27 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
     * **Gated grant** — adds products whose components are gated. This is the
       NDA-holding customer, and it is the tier the visibility rule was written
       for.
-    * **Workspace insider** (owner/admin) — every product, including ones the
+    * **Workspace insider** — anyone holding ``product:read``, i.e. every
+      internal role (owner, admin, member): every product, including ones the
       trust center never lists, so an advisory about an unlisted product is
-      readable by the people who wrote it and nobody else.
+      readable internally and nobody else.
+
+      Derived from the capability rather than a hand-picked tier. This is a read
+      gate over product data, so it has to follow ``product:read`` or the same
+      person sees different inventory depending on which page they open. It
+      discloses nothing new: the internal advisory views
+      (``core/views/security_advisories.py``) carry no role tier at all, so an
+      internal member can already read every advisory there — including drafts
+      and PRIVATE ones, which this page never shows anyone.
 
     The gated decision itself is delegated to ``_check_gated_access`` rather than
     re-derived, so an advisory and a component cannot disagree about who is
     inside the NDA.
     """
+    from sbomify.apps.core.authz import can
     from sbomify.apps.core.models import Product
     from sbomify.apps.core.services.access_control import _check_gated_access
     from sbomify.apps.sboms.models import Component
-    from sbomify.apps.teams.models import Member
 
     user = getattr(request, "user", None)
     is_authenticated = user is not None and bool(user.is_authenticated)
@@ -201,7 +210,7 @@ def resolve_viewer_scope(request: Any, team: Any) -> ViewerScope:
     is_insider = False
     if user is not None and is_authenticated:
         has_gated_grant, _needs_nda = _check_gated_access(user, team)
-        is_insider = Member.objects.filter(team=team, user=user, role__in=("owner", "admin")).exists()
+        is_insider = can(user, "product:read", team).allowed
 
     if is_insider:
         products = Product.objects.filter(team=team)

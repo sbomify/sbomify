@@ -413,7 +413,7 @@ def test_update_document_forbidden(
 
     assert response.status_code == 403
     data = json.loads(response.content)
-    assert "Only owners and admins can update documents" in data["detail"]
+    assert "don't have permission to update this document" in data["detail"]
 
 
 @pytest.mark.django_db

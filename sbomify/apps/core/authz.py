@@ -40,6 +40,7 @@ from django.http import HttpRequest
 # Roles — mirror the keys of ``settings.TEAMS_SUPPORTED_ROLES``.
 ROLE_OWNER = "owner"
 ROLE_ADMIN = "admin"
+ROLE_MEMBER = "member"
 ROLE_GUEST = "guest"
 ROLE_BOT = "bot"
 
@@ -48,7 +49,8 @@ ROLE_BOT = "bot"
 # and template capability flags all derive from them, so widening a tier widens
 # every gate that uses it.
 #
-# Invariant: the human roles form a linear ladder, guest ⊂ admin ⊂ owner. No role
+# Invariant: the human roles form a linear ladder, guest ⊂ member ⊂ admin ⊂ owner.
+# No role
 # may hold a capability a more-privileged role lacks. ``bot`` sits outside the
 # ladder — it is a synthetic OIDC publishing identity that can publish releases
 # without being able to read most internal data. ``test_role_ladder_is_upward_closed``
@@ -66,15 +68,18 @@ ADMINISTER: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 billing, member management, integrations, and visibility changes. Admins are
 near-owners; see ``OWNER_ONLY`` for the two things they can't do."""
 
-MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
-"""Create/update products, components, releases, and artifact metadata."""
+MANAGE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
+"""Create/update products, components, releases, and artifact metadata — the
+day-to-day work. Deliberately excludes *making things public*: changing a
+product's or component's visibility is ``ADMINISTER``, because publishing to the
+trust center is an outward-facing decision, not routine maintenance."""
 
 DELETE: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
 """Deletion of a domain resource (product / component / release / SBOM /
 document). Kept as a tier distinct from ``MANAGE`` — deletion policy has moved
 twice already, and a named tier makes moving it again a one-line change."""
 
-PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+PUBLISH: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER, ROLE_BOT)
 """Upload artifacts and cut/tag releases — the CI publish workflow, granted to
 OIDC/CI ``bot`` identities alongside owners and admins.
 
@@ -88,14 +93,14 @@ guests holding nothing, it was identical to this tier and has been removed."""
 # Renamed because the tier means "internal roles only, guests excluded", which
 # "READ_MEMBER" no longer conveys once guests are external — and would be
 # actively misleading next to a role literally named ``member`` (#468).
-READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN)
+READ_INTERNAL: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_MEMBER)
 """Read internal (non-public) workspace data. Internal roles only — a guest is
 an external trust-center visitor and must not be able to enumerate a workspace's
 private inventory. Guests reach restricted content solely through the
 attribute-based ``component:access`` path (visibility + NDA + approved request),
 which this tier does not govern."""
 
-READ_INTERNAL_OR_BOT: tuple[str, ...] = (ROLE_OWNER, ROLE_ADMIN, ROLE_BOT)
+READ_INTERNAL_OR_BOT: tuple[str, ...] = READ_INTERNAL + (ROLE_BOT,)
 """``READ_INTERNAL`` plus the CI/OIDC ``bot``: reading releases is part of the
 publish workflow (the action checks whether a release already exists before
 creating it), so a bot must reach release reads that other internal reads still
@@ -122,6 +127,14 @@ ROLE_DESCRIPTIONS: tuple[tuple[str, str, str], ...] = (
         "components and releases; upload artifacts; manage workspace settings, "
         "the Trust Center, integrations, members and billing. Cannot remove an "
         "owner or delete the workspace.",
+    ),
+    (
+        ROLE_MEMBER,
+        "Member",
+        "Day-to-day work: create and edit products, components and releases, "
+        "upload SBOMs and documents, and triage vulnerabilities. Cannot delete "
+        "anything, change what is public, or reach workspace settings, billing "
+        "or members.",
     ),
     (
         ROLE_GUEST,
@@ -156,8 +169,19 @@ _ROLE_ACTIONS: dict[str, tuple[str, ...]] = {
     "billing:manage": ADMINISTER,
     "member:manage": ADMINISTER,
     "component:administer": ADMINISTER,
+    # Publishing to the trust center is an outward-facing decision, so it is
+    # carved out of MANAGE the way DELETE is: a member maintains a component but
+    # does not decide the world can see it.
+    "product:set_visibility": ADMINISTER,
+    "component:set_visibility": ADMINISTER,
+    # An OIDC trusted-publisher binding is a standing, non-expiring publish grant
+    # to an external repo — unlike a PAT, which is scoped, expiring and tied to
+    # one person. Carved out of component:manage for the same reason.
+    "component:manage_publishers": ADMINISTER,
     # owner + admin management (the dominant capability)
-    "workspace:manage": MANAGE,
+    # Workspace configuration — contact profiles, suppliers. NOT "create a
+    # thing in this workspace": that is product:create / component:create.
+    "workspace:manage": ADMINISTER,
     "product:create": MANAGE,
     "product:manage": MANAGE,
     "component:create": MANAGE,

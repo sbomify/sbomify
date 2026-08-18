@@ -27,7 +27,9 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
             return error_response(request, HttpResponseNotFound("SBOM not found"))
 
         if not can(request, "sbom:manage", sbom):
-            return error_response(request, HttpResponseForbidden("Only owners and admins can access this"))
+            return error_response(
+                request, HttpResponseForbidden("You don't have permission to view this SBOM's vulnerabilities")
+            )
 
         vulnerabilities_data: dict[str, Any] | None = None
         scan_timestamp_str = None
