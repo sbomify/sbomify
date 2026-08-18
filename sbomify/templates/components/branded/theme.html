@@ -1,9 +1,7 @@
 {% load brand_tags %}
 {% comment %}
-The brand scope. Every other c-branded component reads its colour from here, so
-this is the only place a workspace's brand enters the page.
-
-It publishes exactly two custom properties:
+A brand scope. Every c-branded component reads the workspace's colour from the
+two custom properties a scope publishes:
 
   --brand      the workspace's colour, for solid fills and nothing else
   --brand-ink  the text colour that belongs on top of --brand
@@ -19,10 +17,19 @@ relative luminance and returns white or the platform ink, whichever actually
 contrasts, so a pale yellow brand gets dark text and a navy one gets white
 without the caller thinking about it.
 
-Custom properties inherit, so the scope is set once on a wrapper and everything
-below it is branded, at any depth, with no prop passed down. That is what keeps
-the library flexible: the trust centre wraps a page, but an email preview or an
-embedded widget can wrap a single card.
+There are two ways a scope gets published, and the page root is the normal one.
+A whole trust centre page is a single brand, so public_base.htmx.j2 sets --brand
+and --brand-ink at :root, in the same inline block as the rest of the branding.
+Wrapping every public template in this div would say the same thing and cost a
+wrapper each time. Nothing in the app stylesheet defines --brand, so a :root
+declaration is not lost to load order the way --color-primary is.
+
+This component is for the smaller scope: a piece of a page that carries a brand
+the page root does not, such as an email preview, an embedded widget or one card
+among many. It has no caller on the trust centre today, and that is expected.
+
+Custom properties inherit either way, so whichever scope is in play, everything
+below it is branded at any depth with no prop passed down.
 
 brand is optional. Without it the platform accent is used, so a branded
 component is never unstyled and a workspace with branding turned off renders as

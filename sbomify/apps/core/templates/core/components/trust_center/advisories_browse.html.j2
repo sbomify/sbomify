@@ -243,7 +243,22 @@ submit button applies the same filters, and the URL is the same either way.
                                                     </span>
                                                 {% endif %}
                                                 {% if advisory.is_withdrawn %}<span class="tw-badge tw-badge-warning">Withdrawn</span>{% endif %}
-                                                {% if advisory.status_label %}
+                                                {% comment %}
+                                                Resolved is the one status worth
+                                                seeing without reading, so it is
+                                                a badge and the rest stay muted
+                                                text. The CVSS chip beside it
+                                                still says how bad the issue
+                                                was, which is a different
+                                                question from whether it is
+                                                still open, so the two do not
+                                                compete.
+                                                {% endcomment %}
+                                                {% if advisory.status == 'resolved' %}
+                                                    <c-branded.badge tone="success">
+                                                    <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                                                    </c-branded.badge>
+                                                {% elif advisory.status_label %}
                                                     <span class="tc-adv-status">
                                                         <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
                                                     </span>
@@ -286,6 +301,19 @@ submit button applies the same filters, and the URL is the same either way.
                                                 <span class="tc-lock-chip">
                                                     <i class="fas fa-lock" aria-hidden="true"></i>Restricted
                                                 </span>
+                                            {% endif %}
+                                            {% comment %}
+                                            A notice naming no products carries
+                                            no status line, so resolved would be
+                                            the one state with nothing at all to
+                                            show it. The badge is added here for
+                                            that alone; the open states read the
+                                            same as before.
+                                            {% endcomment %}
+                                            {% if advisory.status == 'resolved' %}
+                                                <c-branded.badge tone="success">
+                                                <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+                                                </c-branded.badge>
                                             {% endif %}
                                         </div>
                                     </td>

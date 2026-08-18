@@ -79,14 +79,14 @@
                     </c-slot>
                     <c-tables.table>
                     <c-tables.head>
-                    <c-tables.header-cell>Component</c-tables.header-cell>
+                    <c-tables.header-cell nowrap>Component</c-tables.header-cell>
                     <c-tables.header-cell>SBOM</c-tables.header-cell>
                     <c-tables.header-cell>BSI Status</c-tables.header-cell>
                     </c-tables.head>
                     <tbody>
                         <template x-for="comp in filteredComponents" :key="comp.component_id">
                             <c-tables.row>
-                            <c-tables.cell>
+                            <c-tables.cell nowrap>
                             <a :href="comp.component_url"
                                class="text-primary hover:underline"
                                x-text="comp.component_name"></a>

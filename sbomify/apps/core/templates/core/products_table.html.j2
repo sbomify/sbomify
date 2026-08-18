@@ -31,7 +31,7 @@
         </c-tables.toolbar>
         <c-tables.table fixed>
         <c-tables.head>
-        <c-tables.header-cell sort="name">Product</c-tables.header-cell>
+        <c-tables.header-cell sort="name" nowrap>Product</c-tables.header-cell>
         <c-tables.header-cell sort="components_count" class="hidden md:table-cell">Components</c-tables.header-cell>
         <c-tables.header-cell sort="is_public" end>Visibility</c-tables.header-cell>
         <c-tables.actions-cell as="th" label="Actions" />
@@ -39,7 +39,7 @@
         <tbody>
             <template x-for="product in paginatedData" :key="product.id">
                 <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:product_details' 0 %}'.replace('0', product.id)">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="min-w-0">
                     <span class="text-text font-medium block truncate" x-text="product.name"></span>
                     <template x-if="product.description">

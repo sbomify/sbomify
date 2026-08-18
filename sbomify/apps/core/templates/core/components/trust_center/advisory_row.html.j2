@@ -29,7 +29,18 @@ two cannot drift. Expects `advisory` (a trust_center projection) and
 </c-slot>
 <c-slot name="side">
 <c-branded.badge tone="{{ advisory.severity|default:'none' }}">{{ advisory.severity_label }}</c-branded.badge>
-{% if advisory.status_label %}
+{% comment %}
+Resolved is the one status a reader scanning the list needs to spot without
+reading, so it is a badge and every other status stays a line of muted text.
+Success tone rather than the severity spine, which still says how bad the
+issue was: the badge answers the other question, whether it is still open.
+The tick carries the same meaning as the colour for anyone who cannot see it.
+{% endcomment %}
+{% if advisory.status == 'resolved' %}
+    <c-branded.badge tone="success">
+    <i class="{{ advisory.status_icon }}" aria-hidden="true"></i>{{ advisory.status_label }}
+    </c-branded.badge>
+{% elif advisory.status_label %}
     <span><i class="{{ advisory.status_icon }}" aria-hidden="true"></i> {{ advisory.status_label }}</span>
 {% endif %}
 <span>{{ advisory.published_display|default:advisory.updated_display }}</span>

@@ -108,7 +108,7 @@
                 <c-branded.surface flush>
                 <c-tables.table>
                 <c-tables.head>
-                <c-tables.header-cell scope="col">Product</c-tables.header-cell>
+                <c-tables.header-cell scope="col" nowrap>Product</c-tables.header-cell>
                 <c-tables.header-cell scope="col" class="hidden md:table-cell">Components</c-tables.header-cell>
                 <c-tables.header-cell scope="col" class="hidden md:table-cell">Assurance</c-tables.header-cell>
                 <c-tables.header-cell scope="col">
@@ -118,7 +118,7 @@
                 <tbody>
                     {% for product in products %}
                         <c-tables.row data-search="{{ product.name|lower }} {{ product.description|default:''|lower }}" x-show="show({{ forloop.counter0 }})">
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <a class="font-medium text-text hover:text-text no-underline"
                            href="{% public_url 'core:product_details_public' product_id=product.id product_slug=product.slug %}">{{ product.name }}</a>
                         {% if product.description %}

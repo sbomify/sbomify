@@ -45,7 +45,7 @@
         <c-tables.table x-cloak>
         <c-tables.head>
         <c-tables.header-cell>Severity</c-tables.header-cell>
-        <c-tables.header-cell>Advisory</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Advisory</c-tables.header-cell>
         <c-tables.header-cell>Package</c-tables.header-cell>
         <c-tables.header-cell>Fixed in</c-tables.header-cell>
         <c-tables.header-cell>Status</c-tables.header-cell>
@@ -68,7 +68,7 @@
                     </c-badges.severity>
                 {% endif %}
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% with vuln_url=vuln.id|advisory_url %}
                     {% if vuln_url %}
                         <a href="{{ vuln_url }}"

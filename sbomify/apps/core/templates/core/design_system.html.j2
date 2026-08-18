@@ -866,6 +866,12 @@
         layout and leaves alignment alone, for a table whose header cells state their own widths. The sortable header and the pager read the Alpine state a table page
         already keeps, so the demo below really sorts and pages.
     </p>
+    <p class="text-sm text-text-muted mb-4">
+        Pass <c-code-inline>nowrap</c-code-inline> to the header cell and the body cell of the column that
+        names the row. The name stays on one line and ends in an ellipsis at the column edge, so the
+        column has an edge to scan down instead of a break landing somewhere different on every row.
+        The third row below carries a name long enough to show it.
+    </p>
     <c-tables.shell class="mb-8" x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
     <c-tables.toolbar>
     <c-tables.search id="ds-table-search" label="Search components" placeholder="Search components…" />
@@ -878,7 +884,7 @@
     </c-tables.toolbar>
     <c-tables.table fixed>
     <c-tables.head>
-    <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+    <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell>Format</c-tables.header-cell>
     <c-tables.header-cell sort="updated" date>Updated</c-tables.header-cell>
     <c-tables.header-cell sort="vulnerabilities" end>Vulnerabilities</c-tables.header-cell>
@@ -886,23 +892,30 @@
     </c-tables.head>
     <tbody>
         <c-tables.row>
-        <c-tables.cell class="font-medium">acme-gateway-core</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">acme-gateway-core</c-tables.cell>
         <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
         <c-tables.cell date>10 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.warning>3 high</c-badges.warning></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
-        <c-tables.cell class="font-medium">acme-vault-core</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">acme-vault-core</c-tables.cell>
         <c-tables.cell><span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span></c-tables.cell>
         <c-tables.cell date>2 Aug 2026</c-tables.cell>
+        <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
+        <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
+        </c-tables.row>
+        <c-tables.row>
+        <c-tables.cell nowrap class="font-medium">acme-gateway-edge-proxy-transport-security-module</c-tables.cell>
+        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+        <c-tables.cell date>28 Jul 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
     </tbody>
     </c-tables.table>
     <c-tables.footer>
-    <c-tables.info>Showing <strong>1</strong> to <strong>2</strong> of <strong>6</strong> entries</c-tables.info>
+    <c-tables.info>Showing <strong>1</strong> to <strong>3</strong> of <strong>6</strong> entries</c-tables.info>
     <c-tables.pager />
     </c-tables.footer>
     </c-tables.shell>

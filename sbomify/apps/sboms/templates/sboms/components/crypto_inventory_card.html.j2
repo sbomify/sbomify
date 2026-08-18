@@ -92,7 +92,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
         <c-tables.table x-cloak>
         <c-tables.head>
         <c-tables.header-cell></c-tables.header-cell>
-        <c-tables.header-cell>Asset</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Asset</c-tables.header-cell>
         <c-tables.header-cell>Quantum readiness</c-tables.header-cell>
         <c-tables.header-cell>Type</c-tables.header-cell>
         <c-tables.header-cell>Parameters</c-tables.header-cell>
@@ -105,7 +105,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                 <i class="fas fa-chevron-right text-xs transition-transform"
                    :class="open ? 'rotate-90' : ''"></i>
                 </c-tables.cell>
-                <c-tables.cell class="font-medium">{{ asset.name|default:"-" }}</c-tables.cell>
+                <c-tables.cell nowrap class="font-medium">{{ asset.name|default:"-" }}</c-tables.cell>
                 <c-tables.cell>
                 <c-badges.dynamic data-variant="{{ asset.pqc_status|pqc_variant }}">{{ asset.pqc_status|pqc_label }}</c-badges.dynamic>
                 {% if asset.pqc_data_quality_flag %}
@@ -256,7 +256,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
         <div x-show="tab === 'certificates'" x-cloak>
             <c-tables.table>
             <c-tables.head>
-            <c-tables.header-cell>Subject</c-tables.header-cell>
+            <c-tables.header-cell nowrap>Subject</c-tables.header-cell>
             <c-tables.header-cell>Issuer</c-tables.header-cell>
             <c-tables.header-cell date>Valid until</c-tables.header-cell>
             <c-tables.header-cell date>Expires in</c-tables.header-cell>
@@ -266,7 +266,7 @@ flags plus the PCI DSS 12.3.3 CSV export).
                 {% for cert in certificates %}
                     {% with view=cert.certificate_view %}
                         <c-tables.row>
-                        <c-tables.cell class="font-medium">{{ view.subject|default:cert.name|default:"-" }}</c-tables.cell>
+                        <c-tables.cell nowrap class="font-medium">{{ view.subject|default:cert.name|default:"-" }}</c-tables.cell>
                         <c-tables.cell>{{ view.issuer|default:"-" }}</c-tables.cell>
                         <c-tables.cell date>{{ view.not_after|default:"-" }}</c-tables.cell>
                         <c-tables.cell date>

@@ -294,13 +294,18 @@ A second, smaller library for pages we render **on behalf of a workspace, for
 their customers**: the trust centre first, anything shared outwards later. Same
 cotton conventions as above, plus one rule.
 
-A workspace picks **one colour**. It enters only through `<c-branded.theme>`,
-which publishes two properties and nothing else:
+A workspace picks **one colour**. It reaches the components as two custom
+properties and nothing else:
 
 ```html
 <c-branded.theme brand="{{ brand.accent_color }}">…</c-branded.theme>
 {# --brand: the fill   --brand-ink: the text that goes on it #}
 ```
+
+A whole public page is one brand scope, so the page root is the normal entry
+point: `public_base.htmx.j2` publishes both properties at `:root`, in the same
+inline block as the rest of the branding. `<c-branded.theme>` is for a smaller
+scope, a widget, an email preview or one card on a page the root does not brand.
 
 - **`--brand-ink` is measured, not chosen.** `is_dark_color()` in
   `teams/branding.py` compares WCAG relative luminance against the point where
@@ -312,8 +317,9 @@ which publishes two properties and nothing else:
   read through.
 - **Surfaces, body text, borders, radius, type and the severity colours are not
   brandable.** Red means critical on every trust centre.
-- **Custom properties inherit**, so one wrapper brands everything below it. No
-  prop drilling, and any future surface can reuse the library by wrapping.
+- **Custom properties inherit**, so one scope brands everything below it, page
+  root or wrapper alike. No prop drilling, and any future surface can reuse the
+  library by branding its own root or wrapping.
 
 Class names need more care here than in the main library: these render on public
 pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
@@ -333,30 +339,25 @@ reading it:
 | The nav and its current marker | Tables, pagination, the filter panel |
 | Any surface holding the above | Alerts, empty states, spinners |
 
-Buttons are the app's, not the library's. A trust centre button should look like
-an sbomify button, and every one there today is `c-buttons.secondary`, which is
-neutral and carries no fill to be unreadable on.
+**There is no branded button, and there should not be one.** A trust centre
+button should look like an sbomify button, and every one there today is
+`c-buttons.secondary`, which is neutral and carries no fill to be unreadable on.
 
-That leaves one constraint to respect rather than discover. `c-buttons.primary`
-hardcodes `text-white`, and `.public-page [data-button]` remaps `--color-primary`
-to the workspace accent, so a filled button on a public page is white text on
-whatever colour the workspace picked: fine on navy, unreadable on pale amber. No
-token can fix it, because the ink is not a token. **So do not put a filled
-main-library button on a public page.** There are 8 today, on pages this branch
-has not touched; they need either a neutral variant or an ink measured from
-`ink_on_color`.
-
-`public_base.htmx.j2` tries to remap `--color-primary` to the workspace accent at
+That leaves one constraint to respect rather than discover.
+`public_base.htmx.j2` remaps `--color-primary` to the workspace accent at
 `:root`, but the app stylesheet loads after that inline block and wins, so the
 remap does nothing at page level: a main-library control on a trust centre
-renders in platform colours. Verified, not assumed — on a workspace with accent
+renders in platform colours. Verified, not assumed: on a workspace with accent
 `#C2410C` the computed `--color-primary` is still the platform navy.
 
 What *does* apply is the scoped `.public-page [data-button]` rule, which remaps
-the token on library buttons only. So a filled main-library button there is
-`text-white` over the workspace accent with no ink measurement: fine on navy,
-unreadable on pale amber. There are currently 8 such buttons across 5 public
-pages, all of which should become `c-branded.buttons.primary`.
+the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
+so a filled library button there is white text over whatever colour the
+workspace picked, with no ink measurement: fine on navy, unreadable on pale
+amber. No token can fix it, because the ink is not a token. **So do not put a
+filled main-library button on a public page.** There are 8 today across 5 pages
+this branch has not touched; each needs a neutral button or an ink measured from
+`ink_on_color`.
 
 ### API Layer
 

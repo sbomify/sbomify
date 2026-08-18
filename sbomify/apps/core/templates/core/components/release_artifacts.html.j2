@@ -68,7 +68,7 @@
         <c-tables.table>
         <c-tables.head>
         <c-tables.header-cell sort="type" class="w-10">Type</c-tables.header-cell>
-        <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+        <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
         <c-tables.header-cell sort="component">Component</c-tables.header-cell>
         <c-tables.header-cell sort="format">Format</c-tables.header-cell>
         <c-tables.header-cell sort="version">Version</c-tables.header-cell>
@@ -84,7 +84,7 @@
                     <i :class="getTypeIcon(getArtifactType(artifact))" class="text-sm"></i>
                 </div>
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="flex items-center gap-2">
                     <a :href="getArtifactUrl(artifact)"
                        class="text-primary font-medium hover:underline"
@@ -217,7 +217,7 @@
                 <c-forms.checkbox aria-label="Select all artifacts" ::checked="allFilteredSelected" @change="toggleAllFiltered($event)" />
                 </c-tables.header-cell>
                 <c-tables.header-cell sort="type" class="w-16">Type</c-tables.header-cell>
-                <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+                <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
                 <c-tables.header-cell sort="component">Component</c-tables.header-cell>
                 <c-tables.header-cell sort="format">Format</c-tables.header-cell>
                 <c-tables.header-cell sort="version">Version</c-tables.header-cell>
@@ -235,7 +235,7 @@
                             <i :class="getAvailableTypeIcon(artifact)" class="text-sm"></i>
                         </div>
                         </c-tables.cell>
-                        <c-tables.cell>
+                        <c-tables.cell nowrap>
                         <a :href="getAvailableArtifactUrl(artifact)"
                            class="font-semibold text-primary hover:underline"
                            @click.stop

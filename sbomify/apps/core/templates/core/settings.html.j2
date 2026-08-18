@@ -80,14 +80,14 @@
             <c-tables.shell nested x-show="tokens.length > 0">
             <c-tables.table>
             <c-tables.head>
-            <c-tables.header-cell>Token</c-tables.header-cell>
+            <c-tables.header-cell nowrap>Token</c-tables.header-cell>
             <c-tables.header-cell date>Created</c-tables.header-cell>
             <c-tables.actions-cell as="th" />
             </c-tables.head>
             <tbody>
                 <template x-for="token in tokens" :key="token.id">
                     <c-tables.row>
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <div class="font-medium text-text" x-text="token.description"></div>
                     <div class="text-sm text-text-muted">Personal access token</div>
                     </c-tables.cell>

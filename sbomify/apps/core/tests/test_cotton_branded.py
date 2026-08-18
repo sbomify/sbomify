@@ -3,8 +3,10 @@
 These components are shown to our users' users, so two things are pinned here
 that the main library does not have to worry about.
 
-First, the brand only ever reaches the page through c-branded.theme, as two
-custom properties, and the ink is measured rather than chosen. Buttons are not
+First, the brand reaches the page as two custom properties and the ink is
+measured rather than chosen. A whole trust centre page is one brand, so
+public_base publishes them at :root; c-branded.theme is the same scope for a
+smaller piece, such as the preview on the branding settings tab. Buttons are not
 in this library: the trust centre uses the app's own, so there is no branded
 button to test here. A workspace can
 colour what a reader acts on and nothing they read against.

@@ -16,7 +16,7 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
     {% if vex_documents %}
         <c-tables.table>
         <c-tables.head>
-        <c-tables.header-cell>Name</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Name</c-tables.header-cell>
         <c-tables.header-cell class="hidden md:table-cell">Format</c-tables.header-cell>
         <c-tables.header-cell class="hidden md:table-cell">Source</c-tables.header-cell>
         <c-tables.header-cell>Suppresses</c-tables.header-cell>
@@ -26,7 +26,7 @@ Rendered into #vex-documents-container, which re-fetches on refreshVexDocuments.
         <tbody>
             {% for doc in vex_documents %}
                 <c-tables.row>
-                <c-tables.cell class="break-all">
+                <c-tables.cell nowrap>
                 <span class="font-medium text-text">{{ doc.name }}</span>
                 {% if doc.unreadable %}
                     <c-badges.violet class="ml-1" title="Could not read this document from storage">unreadable</c-badges.violet>
