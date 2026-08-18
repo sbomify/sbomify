@@ -11,13 +11,6 @@ x-keycloak-admin-env: &keycloak-admin-env
   KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
   KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
 
-x-minio-env: &minio-env
-  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-  AWS_ENDPOINT_URL_S3: ${AWS_ENDPOINT_URL_S3:-http://sbomify-minio:9000}
-  AWS_SBOMS_STORAGE_BUCKET_NAME: ${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms}
-  AWS_MEDIA_STORAGE_BUCKET_NAME: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media}
-
 x-dev-env: &dev-env
   BUILD_ENV: ${BUILD_ENV:-development}
   DEBUG: ${DEBUG:-True}
@@ -54,33 +47,38 @@ services:
       KEYCLOAK_DEV_MODE: ${KEYCLOAK_DEV_MODE:-true}
       APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:8000}
 
-  sbomify-minio:
-    image: ${MINIO_IMAGE:-minio/minio}
+  # S3-compatible storage for local development. SeaweedFS `mini` runs the whole
+  # stack in one process and creates the buckets from S3_BUCKET on boot, so no
+  # bootstrap sidecar is needed. Credentials live in bin/seaweedfs-s3.json and
+  # must match the AWS_*_ACCESS_KEY_ID / AWS_*_SECRET_ACCESS_KEY defaults.
+  sbomify-s3:
+    image: ${S3_IMAGE:-chrislusf/seaweedfs:4.42}
     restart: always
+    networks:
+      default:
+        # Legacy alias so existing .env files pointing at the old host still resolve.
+        aliases:
+          - sbomify-minio
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"  # API
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # Console
+      - "${S3_API_PORT:-9000}:9000"  # S3 API
+      - "${S3_ADMIN_PORT:-23646}:23646"  # Admin UI
     environment:
-      <<: *minio-env
+      S3_BUCKET: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media},${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms}
     volumes:
-      - sbomify_minio_data:/data
-    command: server /data --console-address ":9001"
+      - ./bin/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+      - sbomify_s3_data:/data
+    command:
+      - mini
+      - -dir=/data
+      - -s3.port=9000
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -master.telemetry=false
+      - -webdav=false
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  sbomify-createbuckets:
-    image: ${MINIO_MC_IMAGE:-minio/mc}
-    depends_on:
-      sbomify-minio:
-        condition: service_healthy
-    environment:
-      <<: *minio-env
-    volumes:
-      - ./bin/create-minio-buckets.sh:/opt/bin/create-minio-buckets.sh
-    entrypoint: /bin/sh /opt/bin/create-minio-buckets.sh
 
   sbomify-backend:
     pull_policy: never  # Never pull from registry in dev, use local builds
@@ -182,4 +180,4 @@ services:
 
 volumes:
   keycloak_data:
-  sbomify_minio_data:
+  sbomify_s3_data:

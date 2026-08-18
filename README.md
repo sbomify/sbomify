@@ -98,7 +98,7 @@ Then access the admin interface at `http://localhost:8000/admin` to log in.
 
 - Python 3.13+
 - uv (Python package manager)
-- Docker (for running PostgreSQL and Minio)
+- Docker (for running PostgreSQL and SeaweedFS)
 - Bun (for JavaScript development)
 
 #### Installing uv
@@ -222,8 +222,8 @@ Access the application:
 - Start required services in Docker:
 
 ```bash
-# Start both PostgreSQL and MinIO
-docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
+# Start both PostgreSQL and SeaweedFS
+docker compose up sbomify-db sbomify-s3 -d
 ```
 
 - Install dependencies:
@@ -299,15 +299,15 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 Keycloak will be available at <http://keycloak:8080/>.
 
-#### S3/Minio Storage
+#### S3 Storage
 
 The application uses S3-compatible storage for storing files and assets. In
-development, we use Minio as a local S3 replacement.
+development, we use SeaweedFS as a local S3 replacement.
 
 - When running with Docker Compose, everything is configured automatically
 - When running locally (Django outside Docker):
-  - Make sure Minio is running via Docker:
-    `docker compose up sbomify-minio sbomify-createbuckets -d`
+  - Make sure SeaweedFS is running via Docker:
+    `docker compose up sbomify-s3 -d`
   - Set `AWS_ENDPOINT_URL_S3=http://localhost:9000` in your environment variables
   - The required buckets (`sbomify-media`, `sbomify-sboms`, and optionally `sbomify-documents`) will be created
     automatically
@@ -322,10 +322,14 @@ The application uses separate S3 buckets for different types of content:
   - If not configured separately, documents will use the SBOMs bucket automatically
   - For production, it's recommended to use a separate bucket for better organization and access control
 
-You can access the Minio console at:
+You can access the SeaweedFS admin UI at:
 
-- `http://localhost:9001`
-- Default credentials: minioadmin/minioadmin
+- `http://localhost:23646`
+- No login required. Do not expose this port outside your machine.
+
+The S3 credentials for development are `minioadmin`/`minioadmin`, set in
+`bin/seaweedfs-s3.json`. If you change the bucket names, update the anonymous
+read scope in that file to match.
 
 ##### Production Storage Configuration
 
