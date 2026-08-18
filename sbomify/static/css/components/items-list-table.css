@@ -1,7 +1,7 @@
 .dashboard-empty {
   text-align: center;
   padding: 3rem 1rem;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
 }
 
 .dashboard-table {
@@ -11,8 +11,8 @@
 .dashboard-table thead th {
   border-top: none;
   font-weight: 600;
-  color: rgb(var(--color-text-muted));
-  background-color: rgb(var(--color-surface-elevated));
+  color: var(--color-text-muted);
+  background-color: var(--color-surface-elevated);
 }
 
 .dashboard-table tbody td {

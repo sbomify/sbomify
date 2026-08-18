@@ -5,7 +5,7 @@
 
 /* ===== ENTERPRISE CONTACT FORM ===== */
 .enterprise-hero {
-  background: linear-gradient(135deg, rgb(var(--color-gradient-purple-start)) 0%, rgb(var(--color-gradient-purple-end)) 100%);
+  background: linear-gradient(135deg, var(--color-gradient-purple-start) 0%, var(--color-gradient-purple-end) 100%);
 }
 
 .enterprise-hero-text {
@@ -16,7 +16,7 @@
 
 /* ===== TEAM SETTINGS PAGES ===== */
 .page-header {
-  background: linear-gradient(135deg, rgb(var(--color-surface)), rgb(var(--color-background)));
+  background: linear-gradient(135deg, var(--color-surface), var(--color-background));
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: var(--spacing-xl);
@@ -37,7 +37,7 @@
 .item-title {
   font-size: 2.5rem;
   font-weight: var(--font-weight-bold);
-  color: rgb(var(--color-text));
+  color: var(--color-text);
   margin: 0;
   line-height: 1.2;
   display: flex;
@@ -45,7 +45,7 @@
 }
 
 .item-subtitle {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   font-size: 1.1rem;
   margin: 0.5rem 0 0 0;
 }
@@ -75,7 +75,7 @@
 }
 
 .settings-nav {
-  background: rgb(var(--color-surface));
+  background: var(--color-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 0.5rem;
@@ -96,7 +96,7 @@
 
 .settings-tabs .nav-link {
   border-radius: 0;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   font-weight: var(--font-weight-medium);
   padding: 0.875rem 1rem;
   transition: all 0.15s ease;
@@ -130,9 +130,9 @@
 }
 
 .settings-tabs .nav-link:hover {
-  background: rgb(var(--color-surface-elevated));
-  color: rgb(var(--color-text));
-  border-left-color: rgb(var(--color-border));
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  border-left-color: var(--color-border);
 }
 
 .settings-tabs .nav-link:hover i {
@@ -140,7 +140,7 @@
 }
 
 .settings-tabs .nav-link.active {
-  background: rgb(var(--color-primary) / 0.1);
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent);
   color: var(--brand-primary);
   border-left-color: var(--brand-primary);
   font-weight: 600;
@@ -152,7 +152,7 @@
 }
 
 .settings-tabs .nav-link.active:hover {
-  background: rgb(var(--color-primary) / 0.15);
+  background: color-mix(in oklab, var(--color-primary) 15%, transparent);
   color: var(--brand-primary);
 }
 
@@ -167,7 +167,7 @@
 .page-invite .back-btn .feather {
   height: 24px;
   width: 24px;
-  stroke: rgb(var(--color-text-muted));
+  stroke: var(--color-text-muted);
 }
 
 .page-invite .invite-form {
@@ -176,7 +176,7 @@
 }
 
 .page-invite .card {
-  background-color: rgb(var(--color-surface));
+  background-color: var(--color-surface);
 }
 
 .page-invite .invite-notes {
@@ -210,7 +210,7 @@
   content: "•";
   position: absolute;
   left: -1rem;
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   font-weight: bold;
 }
 
@@ -226,19 +226,19 @@
 
 .release-link:hover {
   text-decoration: underline;
-  color: rgb(var(--color-primary-dark));
+  color: var(--color-primary-dark);
 }
 
 .product-name {
   font-weight: var(--font-weight-medium);
-  color: rgb(var(--color-text));
+  color: var(--color-text);
 }
 
 .release-version {
-  color: rgb(var(--color-text-muted));
+  color: var(--color-text-muted);
   font-family: var(--font-family-mono);
   font-size: 0.8125rem;
-  background: rgb(var(--color-surface-elevated));
+  background: var(--color-surface-elevated);
   padding: 0.125rem 0.25rem;
   border-radius: var(--radius-sm);
 }
@@ -307,8 +307,8 @@
 }
 
 .releases-link:hover {
-  color: rgb(var(--color-primary));
-  background-color: rgb(var(--color-primary) / 0.1);
+  color: var(--color-primary);
+  background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
   text-decoration: none;
   transform: translateY(-1px);
 }
@@ -418,20 +418,20 @@
 
 .augmentation-notice {
   font-size: 0.9rem;
-  background: rgb(var(--color-gray-50));
+  background: var(--color-gray-50);
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-md);
-  border-left: 3px solid rgb(var(--color-primary));
+  border-left: 3px solid var(--color-primary);
   margin-bottom: var(--spacing-md);
 }
 
 .augmentation-notice i {
   font-size: var(--font-size-lg);
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
 }
 
 .augmentation-notice a {
-  color: rgb(var(--color-primary)) !important;
+  color: var(--color-primary) !important;
   text-decoration: none;
 }
 
@@ -446,23 +446,23 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgb(var(--color-danger)), color-mix(in srgb, rgb(var(--color-danger)), #000 15%));
+  background: linear-gradient(135deg, var(--color-danger), color-mix(in srgb, var(--color-danger), #000 15%));
   color: #fff;
-  box-shadow: 0 2px 4px rgb(var(--color-danger) / 0.3);
+  box-shadow: 0 2px 4px color-mix(in oklab, var(--color-danger) 30%, transparent);
   font-size: 1.1rem;
 }
 
 .danger-zone {
-  border: 1px solid rgb(var(--color-gradient-red-start));
-  background: linear-gradient(135deg, rgb(var(--color-danger) / 0.05), rgb(var(--color-surface)));
+  border: 1px solid var(--color-gradient-red-start);
+  background: linear-gradient(135deg, color-mix(in oklab, var(--color-danger) 5%, transparent), var(--color-surface));
 }
 
 .danger-zone .section-header {
-  border-bottom-color: rgb(var(--color-gradient-red-start));
+  border-bottom-color: var(--color-gradient-red-start);
 }
 
 .danger-zone .section-title {
-  color: rgb(var(--color-danger));
+  color: var(--color-danger);
 }
 
 /* ===== RESPONSIVE PAGES ===== */

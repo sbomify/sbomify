@@ -1,0 +1,10 @@
+{% comment %}
+The card header band: a hairline rule under it and a faint elevated wash above
+the body. Standalone, for a header that is not a title and a subtitle. A
+variant passes its whole tint through variant_class (the danger zone repaints
+both the rule and the wash), so the band's colour is one segment.
+{% endcomment %}
+<c-vars variant_class class />
+<div class="px-6 py-5 border-b border-solid {% if variant_class %}{{ variant_class }}{% else %}border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

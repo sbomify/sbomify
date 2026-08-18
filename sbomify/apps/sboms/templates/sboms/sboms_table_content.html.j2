@@ -9,279 +9,192 @@
         <p class="text-text-muted text-center">No BOMs found for this component.</p>
     </div>
 {% else %}
-    <div class="tw-data-table">
-        <div class="tw-data-table-toolbar">
-            <div class="tw-data-table-toolbar-left">
-                <div class="tw-data-table-search">
-                    <i class="fas fa-search tw-data-table-search-icon"></i>
-                    <label for="sboms-search" class="sr-only">Search artifacts</label>
-                    <input type="search"
-                           id="sboms-search"
-                           x-model="search"
-                           @input="currentPage = 1"
-                           placeholder="Search artifacts..."
-                           class="tw-data-table-search-input">
-                </div>
-                <label for="sboms-type-filter" class="sr-only">Filter by type</label>
-                <select id="sboms-type-filter"
-                        x-model="typeFilter"
-                        @change="currentPage = 1"
-                        class="tw-data-table-page-size-select">
-                    <option value="all">All Types</option>
-                    <template x-for="t in bomTypes" :key="t">
-                        <option :value="t" x-text="t.toUpperCase()"></option>
-                    </template>
-                </select>
+    {% comment %}
+    Nested either way: the private page wraps this in the shell that carries the
+    card's title band, and the public page renders it inside the trust-centre
+    panel. A second frame here would draw a box inside a box.
+    {% endcomment %}
+    <c-tables.shell nested>
+    <c-tables.toolbar>
+    <c-tables.search id="sboms-search" label="Search artifacts" placeholder="Search artifacts..." x-model="search" @input="currentPage = 1" />
+    <c-tables.select id="sboms-type-filter" label="Filter by type" x-model="typeFilter" @change="currentPage = 1">
+    <option value="all">All Types</option>
+    <template x-for="t in bomTypes" :key="t">
+        <option :value="t" x-text="t.toUpperCase()"></option>
+    </template>
+    </c-tables.select>
+    {% if full_view %}
+        <c-slot name="right">
+        <c-tables.page-size id="sboms-per-page" x-model.number="pageSize" @change="currentPage = 1">
+        <template x-for="size in pageSizeOptions" :key="size">
+            <option :value="size" x-text="size"></option>
+        </template>
+        </c-tables.page-size>
+        </c-slot>
+    {% endif %}
+    </c-tables.toolbar>
+    <c-tables.table>
+    <c-tables.head>
+    <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+    <c-tables.header-cell>Type</c-tables.header-cell>
+    <c-tables.header-cell sort="version" class="hidden md:table-cell">Version</c-tables.header-cell>
+    {% if not is_public_view %}<c-tables.header-cell>Vulnerabilities</c-tables.header-cell>{% endif %}
+    {% if not is_public_view %}
+        <c-tables.header-cell class="hidden lg:table-cell">Assessments</c-tables.header-cell>
+    {% endif %}
+    <c-tables.header-cell sort="created_at" date>Uploaded</c-tables.header-cell>
+    <c-tables.actions-cell as="th" />
+    </c-tables.head>
+    <tbody>
+        <template x-for="item in paginatedData" :key="item.sbom.id">
+            <c-tables.row x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
+            <c-tables.cell class="break-all">
+            <a :href="(item.sbom.bom_type === 'vex' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% endif %}' : item.sbom.bom_type === 'cbom' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% endif %}' : '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}').replace('SBOM_ID', item.sbom.id)"
+               class="text-primary font-medium hover:underline"
+               x-text="item.sbom.name"></a>
+            {% comment %}
+            Mobile fallback for the columns hidden under md: format pill (with format_version)
+            plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
+            is narrow, so the table doesn't horizontally scroll.
+
+            The format is only known in the browser, so the pill binds data-format
+            and the badge holds both recipes.
+            {% endcomment %}
+            <div class="md:hidden mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+                <c-badges.format ::data-format="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'cyclonedx' : 'spdx'" x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version" />
+                <span class="text-text-muted font-mono"
+                      x-text="'v' + (item.sbom.version.length > 16 ? item.sbom.version.slice(0, 16) + '…' : item.sbom.version)"
+                      :title="item.sbom.version"></span>
             </div>
-            {% if full_view %}
-                <div class="tw-data-table-toolbar-right">
-                    <div class="tw-data-table-page-size">
-                        <span>Show</span>
-                        <label for="sboms-per-page" class="sr-only">Entries per page</label>
-                        <select id="sboms-per-page"
-                                x-model.number="pageSize"
-                                @change="currentPage = 1"
-                                class="tw-data-table-page-size-select">
-                            <template x-for="size in pageSizeOptions" :key="size">
-                                <option :value="size" x-text="size"></option>
-                            </template>
-                        </select>
-                        <span>entries</span>
+            </c-tables.cell>
+            <c-tables.cell>
+            {% comment %}
+            The artifact type comes from the row Alpine builds, so the badge binds
+            data-variant rather than picking a variant component.
+            {% endcomment %}
+            <c-badges.dynamic ::data-variant="({ sbom: 'info', vex: 'violet', cbom: 'success' })[bomType] || 'secondary'" x-text="bomType.toUpperCase()" />
+            </c-tables.cell>
+            <c-tables.cell class="hidden md:table-cell">
+            <span class="font-mono text-sm text-text"
+                  x-text="item.sbom.version.length > 20 ? item.sbom.version.slice(0, 20) + '...' : item.sbom.version"
+                  :title="item.sbom.version"></span>
+            </c-tables.cell>
+            {% if not is_public_view %}
+                <c-tables.cell class="whitespace-nowrap">
+                <template x-if="!item.vuln && bomType === 'sbom'">
+                    <span class="text-text-muted text-sm">Not scanned</span>
+                </template>
+                <template x-if="!item.vuln && bomType !== 'sbom'">
+                    <span class="text-text-muted text-sm">—</span>
+                </template>
+                {% comment %}
+                Nothing scanned is not nothing found. A skipped
+                run stores zero findings exactly as a clean scan
+                does, so without this branch an artifact no
+                scanner could read renders as "Clean".
+                {% endcomment %}
+                <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
+                    <c-badges.warning title="A scan ran but matched no packages, so nothing was checked against any advisory source.">
+                    Nothing scanned
+                    </c-badges.warning>
+                </template>
+                <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && !item.vuln.scanned_nothing">
+                    <c-badges.success>Clean</c-badges.success>
+                </template>
+                <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total > 0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <template x-if="item.vuln.critical > 0">
+                            <c-badges.severity level="critical" x-text="item.vuln.critical + ' Critical'" />
+                        </template>
+                        <template x-if="item.vuln.high > 0">
+                            <c-badges.severity level="high" x-text="item.vuln.high + ' High'" />
+                        </template>
+                        <template x-if="item.vuln.medium > 0">
+                            <c-badges.severity level="medium" x-text="item.vuln.medium + ' Medium'" />
+                        </template>
+                        <template x-if="item.vuln.low > 0">
+                            <c-badges.severity level="low" x-text="item.vuln.low + ' Low'" />
+                        </template>
                     </div>
-                </div>
+                </template>
+                </c-tables.cell>
+                <c-tables.cell class="hidden lg:table-cell">
+                <template x-if="bomType === 'sbom' && item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
+                    <div class="flex flex-wrap items-center gap-1">
+                        <!-- Individual plugin badges (show up to 3) -->
+                        <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
+                                  :key="plugin.name">
+                            <c-chips.assessment ::data-status="plugin.status" ::title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
+                            <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
+                            <span class="max-w-20 overflow-hidden text-ellipsis"
+                                  x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
+                            </c-chips.assessment>
+                        </template>
+                        <!-- More indicator with count -->
+                        <template x-if="item.assessments.plugins.length > 3">
+                            <c-chips.assessment ::title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')" x-text="'+' + (item.assessments.plugins.length - 3)" />
+                        </template>
+                        <!-- Failure summary (only if there are hidden failures) -->
+                        <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
+                            <c-chips.assessment status="summary-fail" ::title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
+                            <i class="fas fa-circle-exclamation"></i>
+                            <span x-text="item.assessments.failing_count + ' Failed'"></span>
+                            </c-chips.assessment>
+                        </template>
+                    </div>
+                </template>
+                <template x-if="bomType === 'sbom' && item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
+                    <span class="inline-flex items-center gap-1.5 text-info text-sm">
+                        <i class="fas fa-clock fa-pulse"></i>
+                        <span>Checking...</span>
+                    </span>
+                </template>
+                <template x-if="bomType !== 'sbom' || !item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
+                    <span class="text-text-muted text-sm">—</span>
+                </template>
+                </c-tables.cell>
             {% endif %}
-        </div>
-        <div class="tw-data-table-container">
-            <table class="tw-table w-full">
-                <thead>
-                    <tr>
-                        <th :aria-sort="sortColumn === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                            <button type="button"
-                                    class="tw-table-sortable"
-                                    :class="{ 'sorted-asc': sortColumn === 'name' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'name' && sortDirection === 'desc' }"
-                                    @click="sort('name')">
-                                Name
-                                <span class="tw-table-sort-icon" aria-hidden="true">
-                                    <i class="fas fa-caret-up"></i>
-                                    <i class="fas fa-caret-down"></i>
-                                </span>
-                            </button>
-                        </th>
-                        <th>Type</th>
-                        <th class="hidden md:table-cell"
-                            :aria-sort="sortColumn === 'version' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                            <button type="button"
-                                    class="tw-table-sortable"
-                                    :class="{ 'sorted-asc': sortColumn === 'version' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'version' && sortDirection === 'desc' }"
-                                    @click="sort('version')">
-                                Version
-                                <span class="tw-table-sort-icon" aria-hidden="true">
-                                    <i class="fas fa-caret-up"></i>
-                                    <i class="fas fa-caret-down"></i>
-                                </span>
-                            </button>
-                        </th>
-                        {% if not is_public_view %}<th>Vulnerabilities</th>{% endif %}
-                        {% if not is_public_view %}<th class="hidden lg:table-cell">Assessments</th>{% endif %}
-                        <th :aria-sort="sortColumn === 'created_at' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                            <button type="button"
-                                    class="tw-table-sortable"
-                                    :class="{ 'sorted-asc': sortColumn === 'created_at' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'created_at' && sortDirection === 'desc' }"
-                                    @click="sort('created_at')">
-                                Uploaded
-                                <span class="tw-table-sort-icon" aria-hidden="true">
-                                    <i class="fas fa-caret-up"></i>
-                                    <i class="fas fa-caret-down"></i>
-                                </span>
-                            </button>
-                        </th>
-                        <th class="text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="item in paginatedData" :key="item.sbom.id">
-                        <tr class="hover:bg-background/50 transition-colors"
-                            x-data="{ get bomType() { return item.sbom.bom_type || 'sbom' } }">
-                            <td class="break-all">
-                                <a :href="(item.sbom.bom_type === 'vex' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='vex' item_id='SBOM_ID' %}{% endif %}' : item.sbom.bom_type === 'cbom' ? '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='cbom' item_id='SBOM_ID' %}{% endif %}' : '{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='sboms' item_id='SBOM_ID' %}{% endif %}').replace('SBOM_ID', item.sbom.id)"
-                                   class="text-primary font-medium hover:underline"
-                                   x-text="item.sbom.name"></a>
-                                {% comment %}
-                                Mobile fallback for the columns hidden under md: format pill (with format_version)
-                                plus the SBOM version. flex-wrap lets each pill drop to its own line if the column
-                                is narrow, so the table doesn't horizontally scroll.
-                                {% endcomment %}
-                                <div class="md:hidden mt-1 flex flex-wrap items-center gap-1.5 text-xs">
-                                    <span class="tw-sbom-format"
-                                          :class="item.sbom.format.toLowerCase().includes('cyclonedx') ? 'tw-sbom-format-cyclonedx' : 'tw-sbom-format-spdx'"
-                                          x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version"></span>
-                                    <span class="text-text-muted font-mono"
-                                          x-text="'v' + (item.sbom.version.length > 16 ? item.sbom.version.slice(0, 16) + '…' : item.sbom.version)"
-                                          :title="item.sbom.version"></span>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="tw-badge text-xs"
-                                      :class="{ 'tw-badge-info': bomType === 'sbom', 'tw-badge-violet': bomType === 'vex', 'tw-badge-success': bomType === 'cbom', 'tw-badge-secondary': !['sbom','vex','cbom'].includes(bomType) }"
-                                      x-text="bomType.toUpperCase()"></span>
-                            </td>
-                            <td class="hidden md:table-cell">
-                                <span class="font-mono text-sm text-text"
-                                      x-text="item.sbom.version.length > 20 ? item.sbom.version.slice(0, 20) + '...' : item.sbom.version"
-                                      :title="item.sbom.version"></span>
-                            </td>
-                            {% if not is_public_view %}
-                                {% comment %}
-                                Every branch is gated on bomType, not just on whether a scan record
-                                exists: a record outlives the type it ran against. A hardware BOM
-                                misfiled as sbom gets scanned, matches nothing (hardware carries no
-                                PURLs), and stores a zero-finding run; retagging it to hbom leaves
-                                that run attached, so gating on the record alone would show a green
-                                Clean badge earned by a scan that matched nothing.
-                                {% endcomment %}
-                                <td class="whitespace-nowrap">
-                                    <template x-if="!item.vuln && bomType === 'sbom'">
-                                        <span class="text-text-muted text-sm">Not scanned</span>
-                                    </template>
-                                    <template x-if="bomType !== 'sbom'">
-                                        <span class="text-text-muted text-sm">—</span>
-                                    </template>
-                                    {% comment %}
-                                    Nothing scanned is not nothing found. A skipped
-                                    run stores zero findings exactly as a clean scan
-                                    does, so without this branch an artifact no
-                                    scanner could read renders as "Clean".
-                                    {% endcomment %}
-                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && item.vuln.scanned_nothing">
-                                        <span class="tw-badge-warning text-xs"
-                                              title="A scan ran but matched no packages, so nothing was checked against any advisory source.">
-                                            Nothing scanned
-                                        </span>
-                                    </template>
-                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total === 0 && !item.vuln.scanned_nothing">
-                                        <span class="tw-badge-success text-xs">Clean</span>
-                                    </template>
-                                    <template x-if="bomType === 'sbom' && item.vuln && item.vuln.total > 0">
-                                        <div class="flex items-center gap-1.5 flex-wrap">
-                                            <template x-if="item.vuln.critical > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-danger/10 text-danger"
-                                                      x-text="item.vuln.critical + ' Critical'"></span>
-                                            </template>
-                                            <template x-if="item.vuln.high > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-severity-high-soft text-severity-high"
-                                                      x-text="item.vuln.high + ' High'"></span>
-                                            </template>
-                                            <template x-if="item.vuln.medium > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-info/10 text-info"
-                                                      x-text="item.vuln.medium + ' Medium'"></span>
-                                            </template>
-                                            <template x-if="item.vuln.low > 0">
-                                                <span class="px-2 py-0.5 rounded text-xs font-bold bg-surface text-text-muted border border-border"
-                                                      x-text="item.vuln.low + ' Low'"></span>
-                                            </template>
-                                        </div>
-                                    </template>
-                                </td>
-                                <td class="hidden lg:table-cell">
-                                    <template x-if="bomType === 'sbom' && item.assessments && item.assessments.plugins && item.assessments.plugins.length > 0">
-                                        <div class="flex flex-wrap items-center gap-1">
-                                            <!-- Individual plugin badges (show up to 3) -->
-                                            <template x-for="plugin in item.assessments.plugins.slice(0, 3)"
-                                                      :key="plugin.name">
-                                                <span class="tw-assessment-pill"
-                                                      :class="{ 'tw-assessment-pass': plugin.status === 'pass', 'tw-assessment-fail': plugin.status === 'fail', 'tw-assessment-pending': plugin.status === 'pending', 'tw-assessment-error': plugin.status === 'error' }"
-                                                      :title="plugin.display_name + ' - ' + (plugin.status === 'pass' ? 'Passed' : plugin.status === 'fail' ? 'Failed (' + plugin.fail_count + ')' : plugin.status.charAt(0).toUpperCase() + plugin.status.slice(1))">
-                                                    <i :class="{ 'fas fa-check': plugin.status === 'pass', 'fas fa-xmark': plugin.status === 'fail', 'fas fa-clock': plugin.status === 'pending', 'fas fa-triangle-exclamation': plugin.status === 'error' }"></i>
-                                                    <span class="tw-assessment-pill-text"
-                                                          x-text="plugin.display_name.length > 8 ? plugin.display_name.slice(0, 8) + '...' : plugin.display_name"></span>
-                                                </span>
-                                            </template>
-                                            <!-- More indicator with count -->
-                                            <template x-if="item.assessments.plugins.length > 3">
-                                                <span class="tw-assessment-more"
-                                                      :title="(item.assessments.plugins.length - 3) + ' more assessment' + (item.assessments.plugins.length - 3 > 1 ? 's' : '')"
-                                                      x-text="'+' + (item.assessments.plugins.length - 3)"></span>
-                                            </template>
-                                            <!-- Failure summary (only if there are hidden failures) -->
-                                            <template x-if="item.assessments.failing_count > 0 && item.assessments.plugins.slice(0, 3).filter(p => p.status === 'fail').length < item.assessments.failing_count">
-                                                <span class="tw-assessment-summary-fail"
-                                                      :title="item.assessments.failing_count + ' assessment' + (item.assessments.failing_count > 1 ? 's' : '') + ' failed'">
-                                                    <i class="fas fa-circle-exclamation"></i>
-                                                    <span x-text="item.assessments.failing_count + ' Failed'"></span>
-                                                </span>
-                                            </template>
-                                        </div>
-                                    </template>
-                                    <template x-if="bomType === 'sbom' && item.assessments && (!item.assessments.plugins || item.assessments.plugins.length === 0) && (item.assessments.overall_status === 'pending' || item.assessments.overall_status === 'in_progress')">
-                                        <span class="inline-flex items-center gap-1.5 text-info text-sm">
-                                            <i class="fas fa-clock fa-pulse"></i>
-                                            <span>Checking...</span>
-                                        </span>
-                                    </template>
-                                    <template x-if="bomType !== 'sbom' || !item.assessments || (item.assessments.overall_status === 'no_assessments' && (!item.assessments.plugins || item.assessments.plugins.length === 0))">
-                                        <span class="text-text-muted text-sm">—</span>
-                                    </template>
-                                </td>
-                            {% endif %}
-                            <td class="text-text text-sm whitespace-nowrap">
-                                <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
-                                <div class="text-xs text-text-muted"
-                                     x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version">
-                                </div>
-                            </td>
-                            <td>
-                                <div class="flex items-center justify-center gap-1">
-                                    {% comment %}
-                                    `from_public=true` flag tells SbomDownloadView to render the friendly
-                                    gated-access page instead of a generic 403 when a public visitor hits a
-                                    gated SBOM. Internal downloads omit the flag.
-                                    {% endcomment %}
-                                    <a :href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id){% if is_public_view %} + '?from_public=true'{% endif %}"
-                                       title="Download"
-                                       aria-label="Download SBOM"
-                                       class="p-2 rounded-lg text-primary hover:bg-primary/10 transition-colors">
-                                        <i class="fas fa-download" aria-hidden="true"></i>
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                    <template x-if="paginatedData.length === 0 && search">
-                        <tr>
-                            <td colspan="{% if is_public_view %}5{% else %}7{% endif %}"
-                                class="text-center py-8 text-text-muted">
-                                <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                <p>No BOMs match your search</p>
-                                <button @click="search = ''"
-                                        class="mt-3 text-xs text-primary hover:underline">Clear search</button>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-        <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
-            <span class="text-sm text-text-muted">
-                Showing <span x-text="startItem"></span> to <span x-text="endItem"></span> of <span x-text="filteredData.length"></span>
-                <template x-if="search"><span>(filtered from <span x-text="allSboms.length"></span> total)</span></template>
-            </span>
-            <div class="flex items-center gap-2" x-show="totalPages > 1">
-                <button type="button"
-                        class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        :disabled="currentPage === 1"
-                        @click="goToPage(currentPage - 1)"
-                        aria-label="Previous page">
-                    <i class="fas fa-chevron-left text-xs" aria-hidden="true"></i>
-                </button>
-                <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
-                <button type="button"
-                        class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        :disabled="currentPage === totalPages"
-                        @click="goToPage(currentPage + 1)"
-                        aria-label="Next page">
-                    <i class="fas fa-chevron-right text-xs" aria-hidden="true"></i>
-                </button>
+            <c-tables.cell date>
+            <span x-text="new Date(item.sbom.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })"></span>
+            <div class="text-xs text-text-muted"
+                 x-text="(item.sbom.format_display || item.sbom.format).toUpperCase() + ' ' + item.sbom.format_version">
             </div>
-        </div>
+            </c-tables.cell>
+            {% comment %}
+            `from_public=true` flag tells SbomDownloadView to render the friendly
+            gated-access page instead of a generic 403 when a public visitor hits a
+            gated SBOM. Internal downloads omit the flag.
+            {% endcomment %}
+            <c-tables.actions-cell>
+            <c-buttons.icon href="#" label="Download SBOM" variant="primary" size="sm" title="Download" ::href="'{% url 'sboms:sbom_download' 'SBOM_ID' %}'.replace('SBOM_ID', item.sbom.id)
+            {% if is_public_view %}+ '?from_public=true'{% endif %}
+            ">
+            <i class="fas fa-download" aria-hidden="true"></i>
+            </c-buttons.icon>
+            </c-tables.actions-cell>
+            </c-tables.row>
+        </template>
+        <template x-if="paginatedData.length === 0 && search">
+            <tr>
+                <td colspan="{% if is_public_view %}5{% else %}7{% endif %}"
+                    class="text-center py-8 text-text-muted">
+                    <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
+                    <p>No BOMs match your search</p>
+                    <button @click="search = ''"
+                            class="mt-3 text-xs text-primary hover:underline">Clear search</button>
+                </td>
+            </tr>
+        </template>
+    </tbody>
+    </c-tables.table>
+    <c-tables.footer>
+    <c-tables.info>
+    Showing <strong x-text="startItem"></strong> to <strong x-text="endItem"></strong> of <strong x-text="filteredData.length"></strong>
+    <template x-if="search"><span>(filtered from <strong x-text="allSboms.length"></strong> total)</span></template>
+    </c-tables.info>
+    <div x-show="totalPages > 1">
+        <c-tables.pager />
     </div>
+    </c-tables.footer>
+    </c-tables.shell>
 {% endif %}

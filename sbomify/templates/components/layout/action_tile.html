@@ -1,0 +1,87 @@
+{% comment %}
+A row in a list of things to do: an icon chip, a name with one line under it,
+and a chevron. The dashboard's Quick Actions is a stack of these.
+
+    <c-layout.action-tile href="{% url 'core:components_dashboard' %}" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a new software bill of materials" />
+
+    <c-layout.action-tile accent="info" icon="fas fa-puzzle-piece" title="Add component" description="…" @click="$dispatch('open-component-modal')" />
+
+With href it renders an anchor, without one a button, so an action that opens
+a dialog and one that navigates are the same row. disabled renders a plain
+div: neither element would be right for a thing you cannot do yet, and the
+trailing slot replaces the chevron with whatever says why (a Soon badge).
+
+One accent prop drives all three tinted parts. It sets --tile-accent, which
+the hover fill, the hover border and the hovered title all read, and
+--chip-accent, which the nested icon chip already reads. Adding an accent is
+one branch here, not a new recipe in four places.
+{% endcomment %}
+<c-vars href accent icon title description disabled class />
+{% if disabled %}
+    <div class="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-background/30 opacity-60 cursor-not-allowed{% if class %} {{ class }}{% endif %}"
+         {{ attrs }}>
+        {% with class="" %}
+            <c-chips.icon-chip accent="neutral">
+            <i class="{{ icon }}" aria-hidden="true"></i>
+            </c-chips.icon-chip>
+        {% endwith %}
+        <div class="flex-1">
+            <span class="text-sm font-medium text-text-muted">{{ title }}</span>
+            {% if description %}<p class="text-xs text-text-muted">{{ description }}</p>{% endif %}
+        </div>
+        {{ trailing }}
+    </div>
+{% else %}
+    {% if accent == "success" %}
+        {% firstof "[--tile-accent:var(--color-success)] [--chip-accent:var(--color-success)]" as tile_accent %}
+    {% elif accent == "info" %}
+        {% firstof "[--tile-accent:var(--color-info)] [--chip-accent:var(--color-info)]" as tile_accent %}
+    {% elif accent == "orange" %}
+        {% firstof "[--tile-accent:var(--color-accent-orange)] [--chip-accent:var(--color-accent-orange)]" as tile_accent %}
+    {% elif accent == "violet" %}
+        {% firstof "[--tile-accent:var(--color-accent)] [--chip-accent:var(--color-accent)]" as tile_accent %}
+    {% else %}
+        {% firstof "[--tile-accent:var(--color-primary)] [--chip-accent:var(--color-primary)]" as tile_accent %}
+    {% endif %}
+    {% if href %}
+        <a href="{{ href }}"
+           class="group flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 no-underline transition-all hover:bg-[color-mix(in_oklab,var(--tile-accent)_5%,transparent)] hover:border-[color-mix(in_oklab,var(--tile-accent)_30%,transparent)] {{ tile_accent }}{% if class %} {{ class }}{% endif %}"
+           {{ attrs }}>
+            {% with class="" %}
+                <c-chips.icon-chip>
+                <i class="{{ icon }}" aria-hidden="true"></i>
+                </c-chips.icon-chip>
+            {% endwith %}
+            <div class="flex-1">
+                <span class="text-sm font-medium text-text transition-colors group-hover:text-[color:var(--tile-accent)]">{{ title }}</span>
+                {% if description %}<p class="text-xs text-text-muted">{{ description }}</p>{% endif %}
+            </div>
+            {% if trailing %}
+                {{ trailing }}
+            {% else %}
+                <i class="fas fa-chevron-right text-text-muted transition-colors group-hover:text-[color:var(--tile-accent)]"
+                   aria-hidden="true"></i>
+            {% endif %}
+        </a>
+    {% else %}
+        <button type="button"
+                class="group w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-background/50 text-left transition-all hover:bg-[color-mix(in_oklab,var(--tile-accent)_5%,transparent)] hover:border-[color-mix(in_oklab,var(--tile-accent)_30%,transparent)] {{ tile_accent }}{% if class %} {{ class }}{% endif %}"
+                {{ attrs }}>
+            {% with class="" %}
+                <c-chips.icon-chip>
+                <i class="{{ icon }}" aria-hidden="true"></i>
+                </c-chips.icon-chip>
+            {% endwith %}
+            <div class="flex-1">
+                <span class="text-sm font-medium text-text transition-colors group-hover:text-[color:var(--tile-accent)]">{{ title }}</span>
+                {% if description %}<p class="text-xs text-text-muted">{{ description }}</p>{% endif %}
+            </div>
+            {% if trailing %}
+                {{ trailing }}
+            {% else %}
+                <i class="fas fa-chevron-right text-text-muted transition-colors group-hover:text-[color:var(--tile-accent)]"
+                   aria-hidden="true"></i>
+            {% endif %}
+        </button>
+    {% endif %}
+{% endif %}

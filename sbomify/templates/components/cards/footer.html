@@ -1,0 +1,9 @@
+{% comment %}
+The card footer band: a hairline rule above it and a faint sink below the body,
+for the actions a card ends with. Standalone, or filled through the card's
+named footer slot.
+{% endcomment %}
+<c-vars class />
+<div class="px-6 py-4 border-t border-solid border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] bg-[color-mix(in_oklab,var(--color-background)_30%,transparent)]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>
