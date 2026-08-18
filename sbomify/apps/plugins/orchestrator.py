@@ -137,7 +137,11 @@ class PluginOrchestrator:
                 other orchestration errors occur.
         """
         # Verify SBOM exists and fetch bom_type in a single query (reused later via sbom_id)
-        sbom_instance_check = SBOM.objects.filter(id=sbom_id).only("id", "bom_type", "has_crypto_assets").first()
+        sbom_instance_check = (
+            SBOM.objects.filter(id=sbom_id)
+            .only("id", "bom_type", "has_crypto_assets", "has_hardware_components")
+            .first()
+        )
         if sbom_instance_check is None:
             raise PluginOrchestratorError(f"SBOM '{sbom_id}' not found - it may have been deleted")
 
@@ -161,6 +165,19 @@ class PluginOrchestrator:
             and sbom_instance_check.bom_type != "cbom"
         ):
             logger.info(f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: document has no crypto assets")
+            return None
+        # Same contract as the crypto gate above: skip only on a definite False,
+        # never on None (pre-field rows), and never for an artifact explicitly
+        # tagged hbom — an HBOM reporting zero hardware components is a generator
+        # misfire the plugin must surface as a warning, not silently skip.
+        if (
+            metadata.requires_hardware_components
+            and sbom_instance_check.has_hardware_components is False
+            and sbom_instance_check.bom_type != "hbom"
+        ):
+            logger.info(
+                f"[PLUGIN] Skipping plugin '{metadata.name}' for SBOM {sbom_id}: document has no hardware components"
+            )
             return None
         config_hash = compute_config_hash(plugin.config)
 

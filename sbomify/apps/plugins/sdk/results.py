@@ -38,6 +38,7 @@ class PluginMetadata:
     scan_mode: ScanMode = ScanMode.ONE_SHOT
     supported_bom_types: list[str] | None = None
     requires_crypto_assets: bool = False
+    requires_hardware_components: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert metadata to dictionary for serialization.
@@ -53,6 +54,10 @@ class PluginMetadata:
         }
         if self.supported_bom_types is not None:
             result["supported_bom_types"] = self.supported_bom_types
+        # Emitted only when set, like supported_bom_types: the vast majority of
+        # plugins are not hardware-gated and a False key on every payload is noise.
+        if self.requires_hardware_components:
+            result["requires_hardware_components"] = True
         return result
 
 

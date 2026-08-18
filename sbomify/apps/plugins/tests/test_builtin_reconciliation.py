@@ -79,6 +79,7 @@ class TestBuiltinReconciliation:
             "bsi-tr02102",
             "certificate-lifecycle",
             "cnsa-2.0",
+            "hbom-structure",
         }
         assert set(builtins.values_list("name", flat=True)) == expected_names
 

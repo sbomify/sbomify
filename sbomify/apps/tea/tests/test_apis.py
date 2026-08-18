@@ -311,6 +311,32 @@ class TestTEAProductReleaseEndpoint:
         assert data["product"] == str(tea_enabled_product.uuid)
         assert data["productName"] == tea_enabled_product.name
 
+    def test_hbom_only_component_resolves_release_ref(self, tea_enabled_product, tea_enabled_component):
+        """A component whose only artifact is an HBOM still resolves a ComponentRelease uuid."""
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        hbom = SBOM.objects.create(
+            component=tea_enabled_component,
+            name="Test HBOM",
+            version="1.0.0",
+            format="cyclonedx",
+            format_version="1.6",
+            source="test",
+            bom_type=SBOM.BomType.HBOM,
+        )
+        ReleaseArtifact.objects.create(release=release, sbom=hbom)
+
+        client = Client()
+        url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}?workspace_key={tea_enabled_product.team.key}"
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        refs = {c["uuid"]: c["release"] for c in response.json()["components"]}
+        cr = ComponentRelease.objects.get(component=tea_enabled_component, version=hbom.version)
+        assert refs[str(tea_enabled_component.uuid)] == str(cr.uuid)
+
     def test_get_product_release_not_found(self, tea_enabled_product):
         """Test getting a non-existent release."""
         client = Client()
@@ -2137,7 +2163,7 @@ class TestTEAComponentReleaseCLE:
 
 @pytest.mark.django_db
 class TestCollectionArtifactTypes:
-    """CBOM and VEX artifacts serve over TEA with the right artifact types."""
+    """CBOM, HBOM and VEX artifacts serve over TEA with the right artifact types."""
 
     def test_collection_types_cbom_and_vex_artifacts(self, tea_enabled_component, sample_sbom):
         # The SBOM-save signal links each row into the ComponentRelease junction.
@@ -2172,3 +2198,37 @@ class TestCollectionArtifactTypes:
         assert "CBOM" in by_name["crypto-inventory"]["formats"][0]["description"]
         assert by_name["release-vex"]["type"] == "VULNERABILITIES"
         assert sample_sbom.name in by_name  # the plain SBOM still lists
+
+    def test_collection_types_hbom_artifact(self, tea_enabled_product, tea_enabled_component, sample_sbom):
+        """TEA has no hardware artifact type, so an HBOM serves as a generic BOM
+        with its kind named in the format description — and it has to appear on
+        both collection surfaces, not just the component one."""
+        from sbomify.apps.core.models import ReleaseArtifact
+
+        hbom = SBOM.objects.create(
+            name="board-hbom",
+            version=sample_sbom.version,
+            component=tea_enabled_component,
+            format="cyclonedx",
+            format_version="1.6",
+            sbom_filename="board.hbom.json",
+            bom_type=SBOM.BomType.HBOM,
+        )
+        release = Release.objects.create(product=tea_enabled_product, name="v1.0.0")
+        ReleaseArtifact.objects.create(release=release, sbom=hbom)
+        cr = ComponentRelease.objects.get(component=tea_enabled_component, version=sample_sbom.version)
+
+        client = Client()
+        ws = tea_enabled_product.team.key
+
+        component_url = f"{TEA_URL_PREFIX}/componentRelease/{cr.uuid}/collection/latest?workspace_key={ws}"
+        component_response = client.get(component_url)
+        assert component_response.status_code == 200
+        by_name = {a["name"]: a for a in component_response.json()["artifacts"]}
+        assert by_name["board-hbom"]["type"] == "BOM"
+        assert "HBOM" in by_name["board-hbom"]["formats"][0]["description"]
+
+        product_url = f"{TEA_URL_PREFIX}/productRelease/{release.uuid}/collection/latest?workspace_key={ws}"
+        product_response = client.get(product_url)
+        assert product_response.status_code == 200
+        assert str(hbom.uuid) in {a["uuid"] for a in product_response.json()["artifacts"]}
