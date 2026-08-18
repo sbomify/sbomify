@@ -81,7 +81,9 @@ services:
     # Probes a bucket, not /healthz: the S3 port answers several seconds before
     # the buckets exist, so /healthz alone would report ready too early.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null \"http://127.0.0.1:9000/${AWS_MEDIA_STORAGE_BUCKET_NAME}?max-keys=0\""]
+      # $$ so the container expands it, not Compose: an empty name here would
+      # probe the bucket list, which answers 200 before any bucket exists.
+      test: ["CMD-SHELL", "wget -q -O /dev/null \"http://127.0.0.1:9000/$$AWS_MEDIA_STORAGE_BUCKET_NAME?max-keys=0\""]
       interval: 5s
       timeout: 5s
       retries: 12

@@ -194,7 +194,7 @@ Start the development environment (recommended method):
 
 ```bash
 ./bin/developer_mode.sh build
-./bin/developer_mode.sh up
+./bin/developer_mode.sh start
 ```
 
 Create a local admin account:

@@ -15,7 +15,7 @@ sbomify is a Software Bill of Materials (SBOM) and document management platform.
 ```bash
 # Start development environment with Docker (recommended)
 ./bin/developer_mode.sh build
-./bin/developer_mode.sh up
+./bin/developer_mode.sh start
 
 # Alternative: Run Django locally with Docker services
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-db sbomify-s3 -d
