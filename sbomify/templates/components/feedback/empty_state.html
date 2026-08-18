@@ -1,0 +1,29 @@
+{% comment %}
+The "nothing here yet" panel: a medallion, a title, a line of explanation and
+the action that fixes it. Actions go in the slot, so they are real button
+components; the secondary link stays a prop because its treatment belongs to
+this panel. The medallion's size and tone are props rather than files: each
+renders as one conditional segment, since sm and neutral touch different
+properties of the same circle. The mark's size lives in that segment too, not
+on the icon, so the small medallion carries the smaller mark rather than the
+full-size one shrunk into it.
+
+title is optional: the panel inside a detail view often has only the one line
+of explanation, and an empty heading would still take its own line.
+{% endcomment %}
+<c-vars icon="fas fa-inbox" icon_size icon_variant title message compact secondary_text secondary_url class />
+<div class="flex flex-col items-center justify-center text-center {% if compact %}p-8{% else %}px-8 py-12{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div class="flex items-center justify-center rounded-full {% if icon_size == 'sm' %}w-16 h-16 text-xl mb-4{% else %}w-20 h-20 text-2xl mb-6{% endif %} {% if icon_variant == 'neutral' %}bg-[color-mix(in_oklab,var(--color-border)_30%,transparent)] text-text-muted{% else %}bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-primary)_15%,transparent)_0%,color-mix(in_oklab,var(--color-primary)_5%,transparent)_100%)] text-primary{% endif %}">
+        <i class="{{ icon }}" aria-hidden="true"></i>
+    </div>
+    {% if title %}<h3 class="text-xl leading-normal font-semibold text-text mb-2">{{ title }}</h3>{% endif %}
+    {% if message %}<p class="text-sm leading-[1.6] text-text-muted max-w-96 mb-8">{{ message }}</p>{% endif %}
+    <div class="flex items-center justify-center gap-3 flex-wrap">
+        {{ slot }}
+        {% if secondary_text and secondary_url %}
+            <a href="{{ secondary_url }}"
+               class="text-sm text-text-muted underline underline-offset-4 hover:text-text">{{ secondary_text }}</a>
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,14 @@
+{% comment %}
+The compact pager for a table paginated in the browser. It reads and writes the
+Alpine state those tables already keep, currentPage and totalPages, so a footer
+drops it in and nothing else has to be wired. Each arrow is a real button that
+disables itself at the end of its travel and says which way it moves, so the
+chevron is never the only thing naming it.
+{% endcomment %}
+<c-vars class />
+<div class="flex items-center gap-2{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <c-buttons.secondary size="sm" aria-label="Previous page" ::disabled="currentPage === 1" @click="if (currentPage > 1) currentPage--"><i class="fas fa-chevron-left text-xs" aria-hidden="true"></i></c-buttons.secondary>
+    <span class="text-sm text-text-muted">Page <span x-text="currentPage"></span> / <span x-text="totalPages"></span></span>
+    <c-buttons.secondary size="sm" aria-label="Next page" ::disabled="currentPage === totalPages" @click="if (currentPage < totalPages) currentPage++"><i class="fas fa-chevron-right text-xs" aria-hidden="true"></i></c-buttons.secondary>
+</div>

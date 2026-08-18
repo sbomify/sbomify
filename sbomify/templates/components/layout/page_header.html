@@ -1,0 +1,72 @@
+{% comment %}
+The header every main page opens with: a mark, the page title, one line under
+it, and the page's actions on the right. Actions are the slot, because they are
+real controls (buttons, a filter form, a menu) and a parameter cannot describe
+them; a page with no actions just closes the tag.
+
+Put it above the page's content stack, not inside it. The gap under the title
+belongs here, so every page has the same one; inside a space-y-* stack pass
+flush, which replaces that gap instead of fighting it with a caller class.
+
+mark picks the mark's shape: the icon chip by default, the round avatar with
+mark="avatar". Both read their tint from an inherited custom property, so a
+one-off colour is still style="--chip-accent: var(--color-warning)" (or
+--avatar-accent) on the header itself.
+
+breadcrumbs is a list of {label, url} from the view, and renders where the
+subtitle goes, through c-navigation.breadcrumbs. The avatar mark is c-avatar
+wearing the page's icon, so the round mark has one recipe wherever it appears.
+
+The named meta slot sits on the title's own line, after the copy chips: a
+status the title is qualified by rather than an action, such as the stale badge
+on a component whose SBOM is past its freshness window. Actions belong in the
+default slot, on the right.
+{% endcomment %}
+<c-vars title subtitle icon mark copy_values breadcrumbs editable_item_type editable_item_id flush class />
+<div class="flex flex-wrap items-start justify-between gap-4 {% if flush %}mb-0{% else %}mb-6{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <div class="flex items-center gap-3.5 min-w-0">
+        {% if icon %}
+            {% if mark == "avatar" %}
+                <c-avatar size="lg" aria-hidden="true"><i class="{{ icon }}"></i></c-avatar>
+            {% else %}
+                <c-chips.icon-chip size="lg" aria-hidden="true"><i class="{{ icon }}"></i></c-chips.icon-chip>
+            {% endif %}
+        {% endif %}
+        <div>
+            {% if copy_values or meta %}
+                <div class="flex items-center gap-3 flex-wrap">
+                    <h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
+                        {% if editable_item_type and editable_item_id %}
+                            {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
+                        {% else %}
+                            {{ title }}
+                        {% endif %}
+                    </h1>
+                    {% if copy_values %}
+                        <div class="flex items-center gap-2">
+                            {% for cv in copy_values %}
+                                {% include 'core/components/copyable_value.html.j2' with value=cv.value title=cv.title only %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {{ meta }}
+                </div>
+            {% else %}
+                <h1 class="text-2xl leading-[1.5] font-bold tracking-[-0.02em] text-text m-0">
+                    {% if editable_item_type and editable_item_id %}
+                        {% include 'core/components/editable_single_field.html.j2' with item_type=editable_item_type item_id=editable_item_id item_value=title only %}
+                    {% else %}
+                        {{ title }}
+                    {% endif %}
+                </h1>
+            {% endif %}
+            {% if breadcrumbs %}
+                <c-navigation.breadcrumbs :items="breadcrumbs" class="text-sm text-text-muted mt-1" />
+            {% elif subtitle %}
+                <p class="text-sm leading-[1.5] text-text-muted mt-1">{{ subtitle }}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% if slot.strip %}<div class="flex flex-wrap items-center gap-2">{{ slot }}</div>{% endif %}
+</div>

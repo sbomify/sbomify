@@ -174,6 +174,9 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
             "component": component,
+            # The page header's copy chip is a list, like every other detail
+            # page's, so the header component reads the same shape everywhere.
+            "header_copy_values": [{"value": component_id, "title": f"Component ID: {component_id} (click to copy)"}],
             "current_team": current_team,
             "team_billing_plan": billing_plan,
             "company_nda_id": company_nda_id,

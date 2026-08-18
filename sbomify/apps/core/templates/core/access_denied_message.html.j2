@@ -3,28 +3,28 @@
 {% block title %}Access Denied{% endblock %}
 {% block content %}
     <div class="public-section">
-        <div class="tw-card">
-            <div class="p-6 text-center py-12">
-                <div class="mb-6">
-                    <i class="fas fa-lock text-5xl text-warning mb-4"></i>
-                    <h2 class="text-2xl font-bold text-text mb-3">Access Denied</h2>
-                    <p class="text-text-muted mb-6">{{ error_message }}</p>
-                </div>
-                <div class="flex flex-col sm:flex-row justify-center gap-3">
-                    {% if request_access_url %}
-                        <a href="{{ request_access_url }}" class="tw-btn-primary">
-                            <i class="fas fa-key mr-2"></i>Request Access
-                        </a>
-                    {% endif %}
-                    {% if back_url %}
-                        <a href="{{ back_url }}"
-                           class="tw-btn-secondary"
-                           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
-                            <i class="fas fa-arrow-left mr-2"></i>Go Back
-                        </a>
-                    {% endif %}
-                </div>
+        <c-cards.card>
+        {% comment %} The card body pads by 6; the extra 6 here is the deeper top and bottom
+        the panel has always had. {% endcomment %}
+        <div class="text-center py-6">
+            <div class="mb-6">
+                <i class="fas fa-lock text-5xl text-warning mb-4"></i>
+                <h2 class="text-2xl font-bold text-text mb-3">Access Denied</h2>
+                <p class="text-text-muted mb-6">{{ error_message }}</p>
+            </div>
+            <div class="flex flex-col sm:flex-row justify-center gap-3">
+                {% if request_access_url %}
+                    <c-buttons.primary href="{{ request_access_url }}">
+                    <i class="fas fa-key mr-2"></i>Request Access
+                    </c-buttons.primary>
+                {% endif %}
+                {% if back_url %}
+                    <c-buttons.secondary href="{{ back_url }}" onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+                    <i class="fas fa-arrow-left mr-2"></i>Go Back
+                    </c-buttons.secondary>
+                {% endif %}
             </div>
         </div>
+        </c-cards.card>
     </div>
 {% endblock %}

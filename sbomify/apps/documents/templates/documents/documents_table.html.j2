@@ -1,5 +1,3 @@
-{% load static %}
-{% load json_extras %}
 {# WebSocket listener for real-time updates #}
 <div id="documents-table-container"
      x-data
@@ -10,14 +8,17 @@
     {{ documents|json_script:"documents-data" }}
     <div x-cloak x-data="documentsTable('{{ component_id }}')">
         {% if not is_public_view %}
-            <div class="tw-card">
-                <div class="px-6 py-4 border-b border-border">
-                    <h4 class="text-lg font-semibold text-text m-0">Documents</h4>
-                </div>
-                <div class="p-0">{% include 'documents/documents_table_content.html.j2' %}</div>
+            {# The card draws the frame here, so the table shell nests inside it. #}
+            <c-cards.card flush>
+            <c-slot name="header">
+            <div class="px-6 py-4 border-b border-border">
+                <h4 class="text-lg font-semibold text-text m-0">Documents</h4>
             </div>
+            </c-slot>
+            <div class="p-0">{% include 'documents/documents_table_content.html.j2' with table_nested=True %}</div>
+            </c-cards.card>
         {% else %}
-            <div>{% include 'documents/documents_table_content.html.j2' %}</div>
+            <div>{% include 'documents/documents_table_content.html.j2' with table_nested=False %}</div>
         {% endif %}
         {% if has_crud_permissions %}
             {% include 'documents/components/edit_document_modal.html.j2' with document_type_subcategories=document_type_subcategories document_type_subcategories_json=document_type_subcategories_json %}

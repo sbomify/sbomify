@@ -8,230 +8,164 @@
     {# Serialize advisories data for Alpine.js #}
     {{ advisories|json_script:"advisories-data" }}
     {% if advisories %}
-        <div class="flex flex-col overflow-hidden bg-surface border border-border rounded-xl">
-            <div class="tw-data-table-toolbar">
-                <div class="tw-data-table-toolbar-left">
-                    <div class="tw-data-table-search">
-                        <i class="fas fa-search tw-data-table-search-icon"></i>
-                        <label for="advisories-search" class="sr-only">Search advisories</label>
-                        <input type="search"
-                               id="advisories-search"
-                               x-model="search"
-                               placeholder="Search advisories..."
-                               class="tw-data-table-search-input">
+        {# The shell draws the frame itself, so the table needs no card around it. #}
+        <c-tables.shell>
+        <c-tables.toolbar>
+        <c-tables.search id="advisories-search" label="Search advisories" placeholder="Search advisories..." x-model="search" />
+        {# Status filter #}
+        <c-tables.select id="advisories-status-filter" label="Filter by status" x-model="filter">
+        <option value="all">All statuses</option>
+        <option value="identified">Identified</option>
+        <option value="investigating">Investigating</option>
+        <option value="fix_in_progress">Fix in progress</option>
+        <option value="resolved">Resolved</option>
+        <option value="wont_fix">Won't fix</option>
+        </c-tables.select>
+        <c-slot name="right">
+        <c-tables.page-size id="advisories-per-page" x-model.number="perPage">
+        <option value="5">5</option>
+        <option value="10">10</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        </c-tables.page-size>
+        </c-slot>
+        </c-tables.toolbar>
+        <c-tables.table>
+        <c-tables.head>
+        <c-tables.header-cell sort="severity">Severity</c-tables.header-cell>
+        <c-tables.header-cell sort="title">Advisory</c-tables.header-cell>
+        <c-tables.header-cell class="hidden md:table-cell">Products</c-tables.header-cell>
+        <c-tables.header-cell sort="status">Status</c-tables.header-cell>
+        <c-tables.header-cell sort="updated" date class="hidden sm:table-cell">Updated</c-tables.header-cell>
+        </c-tables.head>
+        <tbody>
+            <template x-for="advisory in paginatedData" :key="advisory.id">
+                <c-tables.row class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset" tabindex="0" @click="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)" @keydown.enter.prevent="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)">
+                {% comment %}
+                    Status and publication take their variant from the row Alpine
+                    builds, so they bind data-variant rather than pick a variant
+                    component. Severity is not a variant: it binds data-level and
+                    c-badges.severity-dynamic owns the five CVSS recipes.
+                {% endcomment %}
+                <c-tables.cell>
+                <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
+                </c-tables.cell>
+                <c-tables.cell>
+                <div class="min-w-0">
+                    <span class="text-text font-medium block truncate" x-text="advisory.title"></span>
+                    <span class="text-xs text-text-muted font-mono"
+                          x-text="advisory.vulnerability_id || advisory.id"></span>
+                    {# Mobile: show the products the hidden column carries #}
+                    <div class="md:hidden mt-1">
+                        <span class="text-xs text-text-muted"
+                              x-text="(advisory.products || []).map(p => p.name).join(', ')"></span>
                     </div>
-                    {# Status Filter #}
-                    <label for="advisories-status-filter" class="sr-only">Filter by status</label>
-                    <select id="advisories-status-filter"
-                            x-model="filter"
-                            class="tw-data-table-page-size-select">
-                        <option value="all">All statuses</option>
-                        <option value="identified">Identified</option>
-                        <option value="investigating">Investigating</option>
-                        <option value="fix_in_progress">Fix in progress</option>
-                        <option value="resolved">Resolved</option>
-                        <option value="wont_fix">Won't fix</option>
-                    </select>
                 </div>
-                <div class="tw-data-table-toolbar-right">
-                    <div class="tw-data-table-page-size">
-                        <span>Show</span>
-                        <label for="advisories-per-page" class="sr-only">Entries per page</label>
-                        <select id="advisories-per-page"
-                                x-model.number="perPage"
-                                class="tw-data-table-page-size-select">
-                            <option value="5">5</option>
-                            <option value="10">10</option>
-                            <option value="25">25</option>
-                            <option value="50">50</option>
-                        </select>
-                        <span>entries</span>
-                    </div>
-                </div>
-            </div>
-            <div class="tw-data-table-container">
-                <table class="tw-table">
-                    <thead>
-                        <tr>
-                            <th :aria-sort="sortColumn === 'severity' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'severity' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'severity' && sortDirection === 'desc' }"
-                                        @click="sort('severity')">
-                                    Severity
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            <th :aria-sort="sortColumn === 'title' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'title' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'title' && sortDirection === 'desc' }"
-                                        @click="sort('title')">
-                                    Advisory
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            <th class="hidden md:table-cell">Products</th>
-                            <th :aria-sort="sortColumn === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'status' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'status' && sortDirection === 'desc' }"
-                                        @click="sort('status')">
-                                    Status
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                            <th class="hidden sm:table-cell"
-                                :aria-sort="sortColumn === 'updated' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
-                                <button type="button"
-                                        class="tw-table-sortable"
-                                        :class="{ 'sorted-asc': sortColumn === 'updated' && sortDirection === 'asc', 'sorted-desc': sortColumn === 'updated' && sortDirection === 'desc' }"
-                                        @click="sort('updated')">
-                                    Updated
-                                    <span class="tw-table-sort-icon" aria-hidden="true">
-                                        <i class="fas fa-caret-up"></i>
-                                        <i class="fas fa-caret-down"></i>
-                                    </span>
-                                </button>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="advisory in paginatedData" :key="advisory.id">
-                            <tr class="cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
-                                tabindex="0"
-                                @click="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)"
-                                @keydown.enter.prevent="window.location.href = '{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)">
-                                <td>
-                                    <span class="tw-badge"
-                                          :class="'tw-badge-' + advisory.severity_variant"
-                                          x-text="titleCase(advisory.severity)"></span>
-                                </td>
-                                <td>
-                                    <div class="min-w-0">
-                                        <span class="text-text font-medium block truncate" x-text="advisory.title"></span>
-                                        <span class="text-xs text-text-muted font-mono"
-                                              x-text="advisory.vulnerability_id || advisory.id"></span>
-                                        {# Mobile: show products inline #}
-                                        <div class="md:hidden mt-1">
-                                            <span class="text-xs text-text-muted"
-                                                  x-text="(advisory.products || []).map(p => p.name).join(', ')"></span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="hidden md:table-cell">
-                                    <div class="flex flex-wrap gap-1.5">
-                                        {% comment %}An advisory can name a product this workspace does not track, and keeps naming it after one is deleted. Those have no id, so they render as plain text rather than a link to nowhere.{% endcomment %}
-                                        <template x-for="product in advisory.products" :key="product.key">
-                                            <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-lg bg-border/20 text-text-muted border border-border/40">
-                                                <i class="fas fa-cube text-[10px] mr-1.5 opacity-70"></i>
-                                                <template x-if="product.id">
-                                                    <a :href="'{% url 'core:product_details' 0 %}'.replace('0', product.id)"
-                                                       @click.stop
-                                                       class="transition-colors hover:opacity-80"
-                                                       x-text="product.name"></a>
-                                                </template>
-                                                <template x-if="!product.id">
-                                                    <span x-text="product.name"></span>
-                                                </template>
-                                            </span>
-                                        </template>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="flex items-center gap-1.5 flex-wrap">
-                                        {% comment %}Two axes: status is where the fix is, publication is who can read it. A resolved advisory can still be unpublished.{% endcomment %}
-                                        <span class="tw-badge whitespace-nowrap"
-                                              :class="'tw-badge-' + advisory.status_variant"
-                                              x-text="advisory.status_label"></span>
-                                        <template x-if="advisory.publication_status !== 'published'">
-                                            <span class="tw-badge whitespace-nowrap"
-                                                  :class="'tw-badge-' + advisory.publication_variant"
-                                                  x-text="advisory.publication_label"></span>
-                                        </template>
-                                    </div>
-                                </td>
-                                <td class="hidden sm:table-cell">
-                                    <div class="flex flex-col">
-                                        <span class="text-sm text-text-muted"
-                                              x-text="window.sbomifyFormatDate(advisory.updated)"></span>
-                                        <span class="text-xs text-text-muted/70"
-                                              x-text="advisory.updates_count + (advisory.updates_count === 1 ? ' update' : ' updates')"></span>
-                                    </div>
-                                </td>
-                            </tr>
+                </c-tables.cell>
+                <c-tables.cell class="hidden md:table-cell">
+                <div class="flex flex-wrap gap-1.5">
+                    {% comment %}
+                        An advisory can name a product this workspace does not
+                        track, and keeps naming it after one is deleted. Those
+                        have no id, so they render as plain text rather than a
+                        link to nowhere.
+                    {% endcomment %}
+                    <template x-for="product in advisory.products" :key="product.key">
+                        <c-chips.neutral>
+                        <i class="fas fa-cube text-[10px] opacity-70" aria-hidden="true"></i>
+                        <template x-if="product.id">
+                            <a :href="'{% url 'core:product_details' 0 %}'.replace('0', product.id)"
+                               @click.stop
+                               class="transition-colors hover:opacity-80"
+                               x-text="product.name"></a>
                         </template>
-                        <template x-if="paginatedData.length === 0">
-                            <tr>
-                                <td colspan="5" class="text-center py-8 text-text-muted">
-                                    <i class="fas fa-search text-2xl mb-2 opacity-50"></i>
-                                    <p>No advisories match your search</p>
-                                    <button @click="search = ''; filter = 'all'"
-                                            class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
-                                </td>
-                            </tr>
+                        <template x-if="!product.id">
+                            <span x-text="product.name"></span>
                         </template>
-                    </tbody>
-                </table>
-            </div>
-            <div class="tw-data-table-footer">
-                <div class="tw-data-table-info">
-                    Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
-                    <template x-if="search || filter !== 'all'">
-                        <span>(filtered from <strong x-text="allAdvisories.length"></strong> total)</span>
+                        </c-chips.neutral>
+                    </template>
+                    {% comment %}
+                        An advisory naming no product leaves the cell blank,
+                        which against ruled rows reads as a rendering failure
+                        rather than "none".
+                    {% endcomment %}
+                    <template x-if="!(advisory.products || []).length">
+                        <span class="text-text-muted text-sm">None</span>
                     </template>
                 </div>
-                <nav class="tw-pagination" x-show="totalPages > 1">
-                    <button class="tw-pagination-btn tw-pagination-btn-nav"
-                            :disabled="currentPage === 1"
-                            @click="goToPage(currentPage - 1)"
-                            aria-label="Previous page">
-                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                    </button>
-                    <template x-for="page in visiblePages" :key="page">
-                        <template x-if="page === '...'">
-                            <span class="tw-pagination-ellipsis">...</span>
-                        </template>
-                        <template x-if="page !== '...'">
-                            <button class="tw-pagination-btn"
-                                    :class="{ 'tw-pagination-btn-active': currentPage === page }"
-                                    @click="goToPage(page)"
-                                    x-text="page"></button>
-                        </template>
+                </c-tables.cell>
+                <c-tables.cell>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    {% comment %}
+                        Two axes: status is where the fix is, publication is who
+                        can read it. A resolved advisory can still be unpublished.
+                    {% endcomment %}
+                    <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.status_variant" x-text="advisory.status_label" />
+                    <template x-if="advisory.publication_status !== 'published'">
+                        <c-badges.dynamic class="whitespace-nowrap" ::data-variant="advisory.publication_variant" x-text="advisory.publication_label" />
                     </template>
-                    <button class="tw-pagination-btn tw-pagination-btn-nav"
-                            :disabled="currentPage === totalPages"
-                            @click="goToPage(currentPage + 1)"
-                            aria-label="Next page">
-                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                    </button>
-                </nav>
-            </div>
-        </div>
+                </div>
+                </c-tables.cell>
+                <c-tables.cell date class="hidden sm:table-cell">
+                <div class="flex flex-col">
+                    <span class="text-sm text-text-muted"
+                          x-text="window.sbomifyFormatDate(advisory.updated)"></span>
+                    <span class="text-xs text-text-muted/70"
+                          x-text="advisory.updates_count + (advisory.updates_count === 1 ? ' update' : ' updates')"></span>
+                </div>
+                </c-tables.cell>
+                </c-tables.row>
+            </template>
+            <template x-if="paginatedData.length === 0">
+                <tr>
+                    <td colspan="5" class="text-center py-8 text-text-muted">
+                        <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
+                        <p>No advisories match your search</p>
+                        <button type="button"
+                                @click="search = ''; filter = 'all'"
+                                class="mt-3 text-xs text-primary hover:underline">Clear filters</button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+        </c-tables.table>
+        <c-tables.footer>
+        <c-tables.info>
+        Showing <strong x-text="startIndex"></strong> to <strong x-text="endIndex"></strong> of <strong x-text="filteredData.length"></strong> entries
+        <template x-if="search || filter !== 'all'">
+            <span>(filtered from <strong x-text="allAdvisories.length"></strong> total)</span>
+        </template>
+        </c-tables.info>
+        {# Paging is client state here, so the buttons bind it rather than link to it. #}
+        <nav class="flex items-center gap-1"
+             aria-label="Pagination"
+             x-show="totalPages > 1">
+            <c-navigation.page-button nav label="Previous page" ::disabled="currentPage === 1" @click="goToPage(currentPage - 1)">
+            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+            </c-navigation.page-button>
+            <template x-for="page in visiblePages" :key="page">
+                <template x-if="page === '...'">
+                    <c-navigation.page-ellipsis />
+                </template>
+                <template x-if="page !== '...'">
+                    <c-navigation.page-button ::data-active="currentPage === page" @click="goToPage(page)" x-text="page" />
+                </template>
+            </template>
+            <c-navigation.page-button nav label="Next page" ::disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">
+            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </c-navigation.page-button>
+        </nav>
+        </c-tables.footer>
+        </c-tables.shell>
     {% else %}
-        {# Empty State #}
-        <div class="flex flex-col items-center justify-center py-16 px-6 bg-surface border border-border rounded-xl">
-            <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center mb-6">
-                <i class="fas fa-shield-halved text-3xl text-primary"></i>
-            </div>
-            <h3 class="text-lg font-semibold text-text mb-2">No advisories yet</h3>
-            <p class="text-text-muted text-sm text-center max-w-sm mb-6">
-                Security advisories track vulnerabilities in your products over time. Create one to open its timeline with a first update.
-            </p>
-            {% if has_crud_permissions %}
-                <button @click="$dispatch('open-add-advisory-modal')" class="tw-btn-primary">
-                    <i class="fas fa-plus mr-2"></i>Create Your First Advisory
-                </button>
-            {% endif %}
-        </div>
+        <c-cards.card>
+        <c-feedback.empty-state icon="fas fa-shield-halved" title="No advisories yet" message="Security advisories track vulnerabilities in your products over time. Create one to open its timeline with a first update.">
+        {% if has_crud_permissions %}
+            <c-buttons.primary href="{% url 'core:security_advisory_new' %}">
+            <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Advisory
+            </c-buttons.primary>
+        {% endif %}
+        </c-feedback.empty-state>
+        </c-cards.card>
     {% endif %}
 </div>

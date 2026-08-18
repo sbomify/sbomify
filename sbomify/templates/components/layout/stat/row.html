@@ -1,0 +1,9 @@
+{% comment %}
+Sits the delta on the number's baseline. Inside it the change drops its top
+margin, through the same custom property the compact card uses to retune its
+parts, so the two never fight over the same utility.
+{% endcomment %}
+<c-vars class />
+<div class="flex items-baseline gap-2.5 [--stat-change-mt:0px]{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>
