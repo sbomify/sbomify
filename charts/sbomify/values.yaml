@@ -173,8 +173,9 @@ web:
   timeout: 120
   # Seconds workers get to drain in-flight requests on SIGTERM.
   gracefulTimeout: 30
-  # Extra seconds the pod stays in Terminating before SIGTERM, so the ingress
-  # has time to drop it from its endpoint list. Must be < terminationGracePeriod.
+  # Extra seconds the pod stays in Terminating before SIGTERM, so kube-proxy
+  # and the Caddy edge have time to drop it from the Service endpoints. Must be
+  # < terminationGracePeriod.
   preStopSleep: 5
   terminationGracePeriodSeconds: 45
 
@@ -369,7 +370,7 @@ migrations:
   affinity: {}
 
 # ---------------------------------------------------------------------------
-# Service / Ingress
+# Service and edge
 # ---------------------------------------------------------------------------
 service:
   type: ClusterIP
@@ -586,9 +587,11 @@ securityContext:
     drop:
       - ALL
 
-# NetworkPolicy: default-deny ingress to the app pods, allowing only the
-# ingress controller and in-cluster peers. Requires a CNI that enforces them
-# (kind's default kindnet does NOT, so the policies are inert there).
+# NetworkPolicy: default-deny ingress to the app pods, allowing only the Caddy
+# edge and in-cluster peers. ("ingress" here is the Kubernetes policy direction,
+# not an Ingress controller; this chart deploys none.) Requires a CNI that
+# enforces them (kind's default kindnet does NOT, so the policies are inert
+# there).
 networkPolicy:
   enabled: false
   # Extra ingress rules appended to the web policy.
