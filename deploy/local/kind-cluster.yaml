@@ -6,7 +6,7 @@
 # cluster. That matters for OIDC: Keycloak's issuer URL has to resolve the same
 # way for the browser and for the application pods.
 #
-# There is no ingress controller here — the chart runs Caddy as the edge, which
+# There is no ingress controller here: the chart runs Caddy as the edge, which
 # is what makes on-demand TLS for workspace custom domains possible.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4

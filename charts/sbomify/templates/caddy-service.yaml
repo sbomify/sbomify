@@ -1,7 +1,7 @@
 {{- $name := printf "%s-caddy" (include "sbomify.fullname" .) -}}
 ---
-# The cluster's edge. This is what public DNS — including every workspace
-# custom domain — should point at.
+# The cluster's edge. This is what public DNS, including every workspace
+# custom domain, should point at.
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,11 +14,14 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.caddy.service.type }}
-  {{- if eq .Values.caddy.service.type "LoadBalancer" }}
+  {{- if has .Values.caddy.service.type (list "LoadBalancer" "NodePort") }}
   # Preserve the client IP so Caddy's client_ip matchers (the internal-API
   # guard) and the application's rate limiting see the real caller rather than
-  # a node address.
+  # a node address. Kubernetes honours this for NodePort as well, and
+  # values-local.yaml sets it there, so it is rendered for both.
   externalTrafficPolicy: {{ .Values.caddy.service.externalTrafficPolicy }}
+  {{- end }}
+  {{- if eq .Values.caddy.service.type "LoadBalancer" }}
   {{- with .Values.caddy.service.loadBalancerIP }}
   loadBalancerIP: {{ . }}
   {{- end }}

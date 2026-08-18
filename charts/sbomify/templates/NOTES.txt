@@ -11,7 +11,7 @@ Verify the deployment end to end:
 
   helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
 
-Point DNS for {{ include "sbomify.appHost" . }} — and every workspace custom domain —
+Point DNS for {{ include "sbomify.appHost" . }}, and every workspace custom domain,
 at the Caddy edge service:
 
   kubectl -n {{ .Release.Namespace }} get svc {{ include "sbomify.fullname" . }}-caddy
@@ -20,18 +20,18 @@ at the Caddy edge service:
 
 On-demand TLS is ON: Caddy issues a certificate for a custom domain on first
 request, after asking the app at {{ .Values.caddy.onDemandTLS.ask }} whether it
-recognises that domain. Adding a custom domain therefore needs no redeploy —
+recognises that domain. Adding a custom domain therefore needs no redeploy,
 just a DNS record.
 {{- end }}
 {{- if .Values.caddy.localCerts }}
 
-NOTE: caddy.localCerts is ON — certificates come from Caddy's internal CA and
+NOTE: caddy.localCerts is ON. Certificates come from Caddy's internal CA and
 browsers will not trust them. Local clusters only.
 {{- end }}
 {{- if and .Values.caddy.persistence.enabled (eq .Values.caddy.storage.module "file") }}
 
 The certificate store is a PVC marked helm.sh/resource-policy: keep, so
-`helm uninstall` leaves it behind on purpose — re-issuing every certificate from
+`helm uninstall` leaves it behind on purpose: re-issuing every certificate from
 scratch is a fast route into Let's Encrypt rate limits.
 {{- end }}
 

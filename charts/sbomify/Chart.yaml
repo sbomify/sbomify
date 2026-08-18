@@ -1,7 +1,7 @@
 ---
 apiVersion: v2
 name: sbomify
-description: sbomify — Your Security Artifact Hub. Generate, manage and share SBOMs and compliance documents.
+description: sbomify, Your Security Artifact Hub. Generate, manage and share SBOMs and compliance documents.
 type: application
 version: 0.1.0
 # The application version this chart packages. Released images are tagged with

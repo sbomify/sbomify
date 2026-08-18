@@ -2,7 +2,7 @@
 
 The lock is what stops two concurrent deploys from applying migrations at the
 same time. Kubernetes Jobs are "at least once", so a node partition really can
-leave two migration pods running — and Django does not serialise `migrate`
+leave two migration pods running, and Django does not serialise `migrate`
 itself. These tests pin the behaviour the chart depends on.
 """
 

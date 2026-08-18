@@ -47,7 +47,7 @@ spec:
 
               Following the HTTPS redirect would send the probe back to Caddy
               over TLS, where it would fail certificate validation against the
-              local CA — testing the wrong thing.
+              local CA, testing the wrong thing.
               """
 
               def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -98,7 +98,7 @@ spec:
           {{- else }}
           # The guard itself lives on the HTTPS listener. Over plain HTTP the
           # only thing to assert is that this path is *not served in the clear*
-          # — it is redirected like everything else. Setting X-Forwarded-Proto
+          # it is redirected like everything else. Setting X-Forwarded-Proto
           # must not change that, which is the point of trustUpstreamTls being
           # off: otherwise any caller could select the terminated path by
           # sending a header.

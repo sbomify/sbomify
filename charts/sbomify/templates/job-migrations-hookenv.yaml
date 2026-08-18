@@ -3,7 +3,7 @@
 Short-lived configuration for the pre-install/pre-upgrade migrations Job.
 
 Helm runs every pre-install hook before it creates any ordinary resource, so the
-Job cannot mount the release's own ConfigMap/Secret — they do not exist yet on a
+Job cannot mount the release's own ConfigMap/Secret, which do not exist yet on a
 fresh install. Annotating those as hooks instead would work, but hook resources
 are not tracked in the release: `helm uninstall` would leave them behind, and
 the next `helm install` would then fail with "invalid ownership metadata".

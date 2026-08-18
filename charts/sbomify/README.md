@@ -142,10 +142,11 @@ rotation stays entirely in your system's hands.
 
 ### Required keys
 
-`SECRET_KEY`, `SIGNED_URL_SALT`, `DATABASE_URL`, `REDIS_URL`,
-`KEYCLOAK_CLIENT_SECRET`, `AWS_MEDIA_ACCESS_KEY_ID`,
-`AWS_MEDIA_SECRET_ACCESS_KEY`, `AWS_SBOMS_ACCESS_KEY_ID`,
-`AWS_SBOMS_SECRET_ACCESS_KEY`.
+`SECRET_KEY`, `SIGNED_URL_SALT`, `DATABASE_URL`, `REDIS_URL` and
+`KEYCLOAK_CLIENT_SECRET`, plus `AWS_MEDIA_ACCESS_KEY_ID`,
+`AWS_MEDIA_SECRET_ACCESS_KEY`, `AWS_SBOMS_ACCESS_KEY_ID` and
+`AWS_SBOMS_SECRET_ACCESS_KEY` unless `objectStorage.useWorkloadIdentity` is
+set, in which case the chart neither reads nor injects them.
 
 External stores rarely let you pick key names freely, so you do not have to
 match these. Remap only what differs:
@@ -234,8 +235,17 @@ a separate, more privileged identity for schema changes.
 
 ### Keyless object storage
 
-Static storage keys can be dropped entirely where the platform can vouch for the
-workload:
+> **Not yet usable.** The chart side is ready, the application is not.
+> `object_store.py` reads `AWS_*_ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` from
+> settings, which default to `""`, and passes them to boto3 explicitly. boto3
+> treats an explicit empty string as a credential rather than as absent, so it
+> never reaches its default chain. Enabling this against a current image breaks
+> object storage and presigned URLs. It works once phase 1 of
+> [ADR-0007](../../docs/ADR/0007-gcs-support-and-cloud-workload-identity.md)
+> ships, which makes those credentials optional.
+
+Static storage keys can then be dropped entirely where the platform can vouch
+for the workload:
 
 ```yaml
 objectStorage:
@@ -246,15 +256,10 @@ serviceAccount:
 ```
 
 The chart then omits every `AWS_*_ACCESS_KEY_ID` / `SECRET_ACCESS_KEY`
-variable so boto3 falls through to its default credential chain. Omitting them
-is the whole point: setting them to empty strings would leave boto3 holding
-blank credentials rather than looking for an identity. Bucket names and the
-endpoint are still configured normally, only the credentials become implicit.
-
-This follows [ADR-0007](../../docs/ADR/0007-gcs-support-and-cloud-workload-identity.md),
-which makes the S3 credentials optional and adds native GCS support. Until that
-lands, `useWorkloadIdentity` is useful on AWS, where boto3 already discovers
-IRSA and Pod Identity credentials on its own.
+variable, which is what lets boto3 reach its default credential chain. Omitting
+them is the whole point: setting them to empty strings leaves boto3 holding
+blank credentials instead. Bucket names and the endpoint are still configured
+normally, only the credentials become implicit.
 
 ### Supplemental variables
 

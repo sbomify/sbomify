@@ -68,7 +68,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           # No HTTP surface to probe. A liveness probe on process existence adds
-          # nothing here — if the dramatiq process dies the container exits and
+          # nothing here: if the dramatiq process dies the container exits and
           # the kubelet restarts it via restartPolicy.
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}

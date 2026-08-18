@@ -67,8 +67,8 @@ spec:
               # unprivileged process to raise it.
               add:
                 - NET_BIND_SERVICE
-          # The upstream image sets no ENTRYPOINT — the binary is the first
-          # element of CMD — so this has to be `command`, not `args`.
+          # The upstream image sets no ENTRYPOINT, the binary is the first
+          # element of CMD, so this has to be `command`, not `args`.
           command:
             - caddy
             - run
@@ -169,7 +169,7 @@ metadata:
   labels:
     {{- include "sbomify.componentLabels" (dict "ctx" . "component" "caddy") | nindent 4 }}
   annotations:
-    # Keep the certificate store when the release goes away — reinstalling and
+    # Keep the certificate store when the release goes away. Reinstalling and
     # re-issuing everything from scratch is a fast route into ACME rate limits.
     helm.sh/resource-policy: keep
 spec:

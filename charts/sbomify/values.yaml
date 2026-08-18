@@ -56,10 +56,10 @@ app:
 # chart create a Secret from the inline values below.
 #
 # When `existingSecret` is set, that Secret must supply these keys:
-#   SECRET_KEY, SIGNED_URL_SALT, DATABASE_URL, REDIS_URL,
+#   SECRET_KEY, SIGNED_URL_SALT, DATABASE_URL, REDIS_URL, KEYCLOAK_CLIENT_SECRET
+# plus, unless objectStorage.useWorkloadIdentity is true:
 #   AWS_MEDIA_ACCESS_KEY_ID, AWS_MEDIA_SECRET_ACCESS_KEY,
-#   AWS_SBOMS_ACCESS_KEY_ID, AWS_SBOMS_SECRET_ACCESS_KEY,
-#   KEYCLOAK_CLIENT_SECRET
+#   AWS_SBOMS_ACCESS_KEY_ID, AWS_SBOMS_SECRET_ACCESS_KEY
 secrets:
   # Name of a Secret you manage. This is the integration point for an external
   # secret manager: have External Secrets Operator, the Vault Agent injector,
@@ -111,17 +111,20 @@ objectStorage:
   endpointUrl: ""
   region: "auto"
 
-  # Authenticate with the workload's own cloud identity instead of static keys:
-  # EKS IRSA or Pod Identity today, GKE Workload Identity once ADR-0007 lands.
+  # Authenticate with the workload's own cloud identity instead of static keys.
   #
-  # When true the chart omits every AWS_*_ACCESS_KEY_ID / SECRET_ACCESS_KEY
-  # variable so boto3 falls through to its default credential chain. Omitting
-  # them is the point: setting them to empty strings would leave boto3 holding
-  # blank credentials rather than looking for an identity.
+  # NOT YET USABLE. The chart side is ready: it omits every
+  # AWS_*_ACCESS_KEY_ID / SECRET_ACCESS_KEY variable so boto3 can fall through
+  # to its default credential chain. The application is not. object_store.py
+  # reads those settings, which default to "", and passes them to boto3
+  # explicitly, and boto3 treats an explicit empty string as a credential rather
+  # than as absent. Enabling this against a current image breaks object storage
+  # and presigned URLs.
   #
-  # Annotate the ServiceAccount with the cloud role and set
-  # serviceAccount.create=false if your platform manages it. See
-  # docs/ADR/0007-gcs-support-and-cloud-workload-identity.md.
+  # It becomes usable once phase 1 of
+  # docs/ADR/0007-gcs-support-and-cloud-workload-identity.md ships, which makes
+  # those credentials optional. Then annotate the ServiceAccount with the cloud
+  # role and set serviceAccount.create=false if your platform manages it.
   useWorkloadIdentity: false
   media:
     bucket: "sbomify-media"
