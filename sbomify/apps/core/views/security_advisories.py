@@ -181,9 +181,13 @@ class SecurityAdvisoryCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
         if team is None:
             raise Http404("Workspace not found")
 
-        current_team = request.session.get("current_team") or {}
-        if current_team.get("role") not in ["owner", "admin"]:
+        # The live Member row, not the session's cached role: same reason the
+        # rest of this module reads it that way, and it keeps the tier in one
+        # place instead of a literal list that widens when a role is added.
+        if not _can_write_advisories(request):
             raise Http404("Workspace not found")
+
+        current_team = request.session.get("current_team") or {}
 
         products = creation_options(team).value or []
         # ``?product=`` lets a product's row menu open this form with that
