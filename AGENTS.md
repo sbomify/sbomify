@@ -15,10 +15,10 @@ sbomify is a Software Bill of Materials (SBOM) and document management platform.
 ```bash
 # Start development environment with Docker (recommended)
 ./bin/developer_mode.sh build
-./bin/developer_mode.sh up
+./bin/developer_mode.sh start
 
 # Alternative: Run Django locally with Docker services
-docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-db sbomify-s3 -d
 uv sync && bun install
 uv run python manage.py migrate
 uv run python manage.py runserver  # Terminal 1
@@ -332,7 +332,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 ### Storage
 
 - **Database**: PostgreSQL 17
-- **Object Storage**: S3-compatible (Minio for development) — separate buckets for media, SBOMs, documents
+- **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
 - **Caching/Broker**: Redis 8
 
 ### Authentication
