@@ -42,11 +42,23 @@ data:
       }
       {{- end }}
 
+      {{- if or .Values.caddy.trustedProxies .Values.caddy.clientIpHeaders }}
       servers {
-        trusted_proxies static {{ join " " .Values.caddy.trustedProxies }}
+        {{- with .Values.caddy.trustedProxies }}
+        {{/*
+          Emitted only when there is something to list. `trusted_proxies static`
+          with no ranges parses, but it is a directive that says nothing, and
+          `client_ip_headers` with no headers is the same. Rendering them empty
+          just leaves a reader wondering what was meant.
+        */}}
+        trusted_proxies static {{ join " " . }}
         trusted_proxies_strict
-        client_ip_headers {{ join " " .Values.caddy.clientIpHeaders }}
+        {{- end }}
+        {{- with .Values.caddy.clientIpHeaders }}
+        client_ip_headers {{ join " " . }}
+        {{- end }}
       }
+      {{- end }}
 
       {{- with .Values.caddy.storage }}
       {{- if ne .module "file" }}

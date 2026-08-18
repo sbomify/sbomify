@@ -208,8 +208,10 @@ spec:
           type: RuntimeDefault
       containers:
         - name: minio
-          # Pinned like every other dependency here: a floating tag makes local
-          # runs and CI non-deterministic and can break without a commit.
+          # Pinned to a release rather than `latest`, which floats across major
+          # versions and can change local and CI behaviour without a commit.
+          # postgres and redis above track a major line (17, 8), which moves
+          # only within a compatible series; MinIO publishes no such tag.
           image: minio/minio:RELEASE.2025-09-07T16-13-09Z
           securityContext:
             allowPrivilegeEscalation: false

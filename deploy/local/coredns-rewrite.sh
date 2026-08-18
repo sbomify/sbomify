@@ -18,9 +18,14 @@ APP_HOST="${APP_HOST:-sbomify.localtest.me}"
 KEYCLOAK_HOST="${KEYCLOAK_HOST:-keycloak.localtest.me}"
 CADDY_SVC="${CADDY_SVC:-sbomify-caddy.sbomify.svc.cluster.local}"
 
-if kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' \
-    | grep -q "rewrite name ${KEYCLOAK_HOST}"; then
-  echo "CoreDNS rewrites already in place"
+# Both lines, including the target Service, and fixed-string matching. Checking
+# only the hostname would skip the update when a cluster is reused with a
+# different release or namespace, leaving the rewrites pointed at a Service that
+# no longer exists. Dots in a hostname are regex wildcards too, so -F matters.
+current=$(kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}')
+if grep -qF "rewrite name ${APP_HOST} ${CADDY_SVC}" <<<"${current}" \
+   && grep -qF "rewrite name ${KEYCLOAK_HOST} ${CADDY_SVC}" <<<"${current}"; then
+  echo "CoreDNS rewrites already point at ${CADDY_SVC}"
   exit 0
 fi
 
