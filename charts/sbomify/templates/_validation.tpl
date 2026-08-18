@@ -65,10 +65,10 @@ identity.
 */}}
 {{- if and (not .Values.secrets.existingSecret) (not .Values.objectStorage.useWorkloadIdentity) }}
 {{- if or (not .Values.objectStorage.sboms.accessKeyId) (not .Values.objectStorage.sboms.secretAccessKey) }}
-{{- fail "sbomify: objectStorage.sboms.accessKeyId and secretAccessKey are required, or supply them via secrets.existingSecret. objectStorage.useWorkloadIdentity skips them, but it is not usable yet: the application still passes these credentials to boto3 explicitly, so an empty value is treated as a credential rather than as absent. It works once ADR-0007 phase 1 ships." }}
+{{- fail "sbomify: objectStorage.sboms.accessKeyId and secretAccessKey are required, or supply them via secrets.existingSecret. Set objectStorage.useWorkloadIdentity=true to skip them and use the workload's own cloud identity instead." }}
 {{- end }}
 {{- if or (not .Values.objectStorage.media.accessKeyId) (not .Values.objectStorage.media.secretAccessKey) }}
-{{- fail "sbomify: objectStorage.media.accessKeyId and secretAccessKey are required, or supply them via secrets.existingSecret. objectStorage.useWorkloadIdentity skips them, but it is not usable yet: the application still passes these credentials to boto3 explicitly, so an empty value is treated as a credential rather than as absent. It works once ADR-0007 phase 1 ships." }}
+{{- fail "sbomify: objectStorage.media.accessKeyId and secretAccessKey are required, or supply them via secrets.existingSecret. Set objectStorage.useWorkloadIdentity=true to skip them and use the workload's own cloud identity instead." }}
 {{- end }}
 {{- end }}
 

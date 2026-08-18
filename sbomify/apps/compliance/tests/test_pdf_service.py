@@ -155,7 +155,7 @@ def assessment_with_docs(sample_team_with_owner_member, sample_user, product):
     )
     result = get_or_create_assessment(product.id, sample_user, team)
     assert result.ok
-    with patch("sbomify.apps.core.object_store.S3Client"):
+    with patch("sbomify.apps.core.object_store.StorageClient"):
         regenerate_all(result.value)
     return result.value
 
@@ -176,7 +176,7 @@ def capturing_s3():
         def get_sbom_data(self, filename):
             return b""
 
-    with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+    with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
         mock_s3_cls.return_value = _Capture()
         yield captured
 
@@ -209,14 +209,14 @@ class TestDownloadDocumentPdfEndpoint:
         )
         product = Product.objects.create(name="Download Test", team=team)
         ares = get_or_create_assessment(product.id, sample_user, team)
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             regenerate_all(ares.value)
 
         client = Client()
         client.force_login(sample_user)
         setup_authenticated_client_session(client, team, sample_user)
 
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             resp = client.get(
                 f"/api/v1/compliance/cra/{ares.value.id}/documents/declaration_of_conformity/download"
             )
@@ -255,7 +255,7 @@ class TestDownloadDocumentPdfEndpoint:
         )
         product = Product.objects.create(name="Download 503", team=team)
         ares = get_or_create_assessment(product.id, sample_user, team)
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             regenerate_all(ares.value)
 
         client = Client()
@@ -263,7 +263,7 @@ class TestDownloadDocumentPdfEndpoint:
         setup_authenticated_client_session(client, team, sample_user)
 
         with patch("sbomify.apps.compliance.services.pdf_service.markdown_to_pdf", return_value=None):
-            with patch("sbomify.apps.core.object_store.S3Client"):
+            with patch("sbomify.apps.core.object_store.StorageClient"):
                 resp = client.get(
                     f"/api/v1/compliance/cra/{ares.value.id}/documents/declaration_of_conformity/download"
                 )

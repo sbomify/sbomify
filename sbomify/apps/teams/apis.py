@@ -20,7 +20,7 @@ from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
 from sbomify.apps.access_tokens.throttling import OnDemandTLSRateThrottle
 from sbomify.apps.core.authz import can
 from sbomify.apps.core.models import User
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.services.validation_response import validation_error_response
@@ -219,7 +219,7 @@ def update_team_branding_field(
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
 
-    s3_client = S3Client("MEDIA")
+    s3_client = StorageClient("MEDIA")
 
     # Handle file deletions
     if field in ["icon", "logo"] and data.value is None and update_data.get(field):
@@ -256,7 +256,7 @@ def upload_to_s3(
     filename: str,
     file: Any,
 ) -> None:
-    s3_client = S3Client("MEDIA")
+    s3_client = StorageClient("MEDIA")
     file.seek(0)
     s3_client.upload_media(filename, file.read())
 
@@ -264,7 +264,7 @@ def upload_to_s3(
 def delete_from_s3(
     filename: str,
 ) -> None:
-    s3_client = S3Client("MEDIA")
+    s3_client = StorageClient("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
 
 
@@ -361,7 +361,7 @@ def upload_branding_file(
     branding_data = _normalize_branding_payload(team.branding_info)
     current_branding = BrandingInfo(**branding_data)
     update_data = current_branding.model_dump()
-    s3_client = S3Client("MEDIA")
+    s3_client = StorageClient("MEDIA")
 
     # Generate new filename first
     uploaded = request.FILES["file"]

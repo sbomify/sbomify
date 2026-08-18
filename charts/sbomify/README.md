@@ -235,17 +235,15 @@ a separate, more privileged identity for schema changes.
 
 ### Keyless object storage
 
-> **Not yet usable.** The chart side is ready, the application is not.
-> `object_store.py` reads `AWS_*_ACCESS_KEY_ID` / `SECRET_ACCESS_KEY` from
-> settings, which default to `""`, and passes them to boto3 explicitly. boto3
-> treats an explicit empty string as a credential rather than as absent, so it
-> never reaches its default chain. Enabling this against a current image breaks
-> object storage and presigned URLs. It works once phase 1 of
-> [ADR-0007](../../docs/ADR/0007-gcs-support-and-cloud-workload-identity.md)
-> ships, which makes those credentials optional.
+> **Requires an image containing [ADR-0007](../../docs/ADR/0007-gcs-support-and-cloud-workload-identity.md)
+> phase 1**, which is in this branch. `object_store.py` now resolves the
+> credentials as `getattr(...) or None`, so an unset key becomes `None` and
+> boto3 reaches its default chain. Against an older image the application
+> passed `""` explicitly and boto3 read that empty string as a credential, so
+> the chain was never consulted.
 
-Static storage keys can then be dropped entirely where the platform can vouch
-for the workload:
+Static storage keys can be dropped entirely where the platform can vouch for
+the workload:
 
 ```yaml
 objectStorage:
@@ -260,6 +258,10 @@ variable, which is what lets boto3 reach its default credential chain. Omitting
 them is the whole point: setting them to empty strings leaves boto3 holding
 blank credentials instead. Bucket names and the endpoint are still configured
 normally, only the credentials become implicit.
+
+This works on AWS today, where boto3 discovers IRSA and Pod Identity
+credentials on its own. GCS support is phase 2 of the ADR and is not in this
+branch.
 
 ### Supplemental variables
 

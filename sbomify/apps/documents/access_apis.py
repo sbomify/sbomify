@@ -17,7 +17,7 @@ from ninja import Router
 from ninja.security import django_auth
 
 from sbomify.apps.access_tokens.auth import PersonalAccessTokenAuth
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.schemas import ErrorCode, ErrorResponse
 from sbomify.apps.core.url_utils import get_base_url
@@ -373,7 +373,7 @@ def get_nda_for_signing(request: HttpRequest, team_key: str, request_id: str) ->
 
         # Return NDA document for download
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
 
             if document_data:
@@ -433,7 +433,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
 
         # Get NDA document content and calculate hash
         try:
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
             if not document_data:
                 return 404, {"detail": "NDA document not found in storage"}

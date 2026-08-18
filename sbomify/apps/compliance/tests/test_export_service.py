@@ -64,11 +64,10 @@ def assessment_with_docs(assessment):
     findings per test). Upgrading to class/module scope would require
     re-working the wizard fixture to cache the OSCAL rows — tracked as
     a follow-up. Today's overhead is ~9 mocked S3 writes per test
-    that uses this fixture; with ``S3Client`` patched at the import
+    that uses this fixture; with ``StorageClient`` patched at the import
     site, each ``generate_document`` short-circuits at the upload and
     the total cost is bounded to ORM work."""
-    with patch("sbomify.apps.core.object_store.S3Client"):
-        regenerate_all(assessment)
+    with patch("sbomify.apps.core.object_store.StorageClient"):        regenerate_all(assessment)
     return assessment
 
 
@@ -80,7 +79,7 @@ def capturing_s3():
     Replaces the 4× inlined ``class _Capture`` dance that preceded
     it — yields ``(captured, s3_cls_mock)`` where ``captured["bytes"]``
     holds the last ZIP uploaded and ``s3_cls_mock`` is the patched
-    ``S3Client`` class (so tests that also need to mock doc fetches
+    ``StorageClient`` class (so tests that also need to mock doc fetches
     can patch on top). Request-scoped to the test, so every use gets
     a fresh captured dict.
     """
@@ -96,14 +95,14 @@ def capturing_s3():
         def get_sbom_data(self, filename):
             return b""
 
-    with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+    with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
         mock_s3_cls.return_value = _Capture()
         yield captured, mock_s3_cls
 
 
 @pytest.mark.django_db
 class TestBuildExportPackage:
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_creates_package_record(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock document content"
@@ -119,7 +118,7 @@ class TestBuildExportPackage:
         assert package.manifest["product"]["name"] == "Export Test Product"
         assert package.manifest["manufacturer"]["name"] == "Acme Corp"
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_contains_file_entries(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock document content"
@@ -137,7 +136,7 @@ class TestBuildExportPackage:
         # inconsistency between the DB manifest and the in-ZIP manifest.
         assert not any("metadata/manifest.json" in p for p in paths)
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_files_have_sha256(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock document content"
@@ -156,7 +155,7 @@ class TestBuildExportPackage:
                 f"sha256 field is not 64-char lowercase hex: {file_entry['sha256']!r}"
             )
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_oscal_catalog_in_package(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         """OSCAL catalog JSON should be included in the package."""
@@ -170,7 +169,7 @@ class TestBuildExportPackage:
         catalog_entries = [f for f in files if "catalog.json" in f["path"]]
         assert len(catalog_entries) == 1
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_product_category_in_manifest(self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user):
         mock_get_content.return_value = b"mock content"
@@ -179,7 +178,7 @@ class TestBuildExportPackage:
         assert result.value.manifest["product_category"] == "default"
         assert result.value.manifest["conformity_procedure"] == "module_a"
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_bundle_contains_harmonised_standards_reference(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -192,7 +191,7 @@ class TestBuildExportPackage:
         paths = [f["path"] for f in result.value.manifest["files"]]
         assert any("metadata/harmonised-standards.json" in p for p in paths)
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_bundle_contains_article_14_reporting_readme(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -205,7 +204,7 @@ class TestBuildExportPackage:
         paths = [f["path"] for f in result.value.manifest["files"]]
         assert any("article-14/README_REPORTING.md" in p for p in paths)
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_declares_integrity_metadata(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -248,7 +247,7 @@ class TestBuildExportPackage:
             expected = hashlib.sha256(zf.read(manifest_name)).hexdigest()
             assert expected in zf.read(sha_name).decode("utf-8")
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_bundle_survives_missing_harmonised_standards_file(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -276,7 +275,7 @@ class TestBuildExportPackage:
         # graceful degradation rather than all-or-nothing export.
         assert any("README_REPORTING.md" in p for p in paths)
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_format_version_bump(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -405,7 +404,7 @@ class TestBuildExportPackage:
             for deadline in ("≤24 hours", "≤72 hours", "≤14 days", "≤1 month"):
                 assert deadline in content
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_bundle_skips_unknown_doc_kind(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -431,7 +430,7 @@ class TestBuildExportPackage:
         paths = [f["path"] for f in result.value.manifest["files"]]
         assert not any("unknown_future_kind" in p for p in paths)
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_get_generated_doc_returning_none_does_not_break_bundle(
         self, mock_get_content, mock_s3_cls, assessment_with_docs, sample_user
@@ -518,7 +517,7 @@ class TestBuildExportPackage:
         with zipfile.ZipFile(io.BytesIO(captured["bytes"])) as zf:
             assert entry["path"] in zf.namelist()
 
-    @patch("sbomify.apps.compliance.services.export_service.S3Client")
+    @patch("sbomify.apps.compliance.services.export_service.StorageClient")
     @patch("sbomify.apps.compliance.services.export_service._get_generated_doc_content")
     def test_manifest_flags_placeholder_manufacturer(
         self, mock_get_content, mock_s3_cls, sample_team_with_owner_member, sample_user
@@ -537,7 +536,7 @@ class TestBuildExportPackage:
         )
         p = Product.objects.create(name="Placeholder Export", team=team)
         ares = get_or_create_assessment(p.id, sample_user, team)
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             regenerate_all(ares.value)
         mock_get_content.return_value = b"mock content"
 
@@ -570,7 +569,7 @@ class TestBuildExportPackageFailurePaths:
             def get_sbom_data(self, filename):
                 return b""
 
-        with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
             mock_s3_cls.return_value = _FailingS3()
             result = build_export_package(assessment_with_docs, sample_user)
 
@@ -597,7 +596,7 @@ class TestBuildExportPackageFailurePaths:
         ares = get_or_create_assessment(p.id, sample_user, team)
         assert ares.ok
 
-        with patch("sbomify.apps.core.object_store.S3Client"):
+        with patch("sbomify.apps.core.object_store.StorageClient"):
             regenerate_all(ares.value)
 
         captured: dict[str, bytes] = {}
@@ -612,7 +611,7 @@ class TestBuildExportPackageFailurePaths:
             def get_sbom_data(self, filename):
                 return b""
 
-        with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
             mock_s3_cls.return_value = _Capture()
             result = build_export_package(ares.value, sample_user)
 
@@ -671,7 +670,6 @@ class TestGetDownloadUrl:
         mock_package.storage_key = "compliance/exports/test/abc.zip"
 
         result = get_download_url(mock_package)
-
         assert result.ok
         assert result.value == "https://s3.example.com/presigned"
 
@@ -720,8 +718,8 @@ class TestGetDownloadUrl:
         mock_package = MagicMock()
         mock_package.storage_key = "bad-key"
 
-        with patch("boto3.client") as mock_client_fn:
-            mock_client_fn.side_effect = Exception("S3 error")
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_cls:
+            mock_cls.side_effect = Exception("Storage error")
 
             result = get_download_url(mock_package)
 
@@ -831,7 +829,7 @@ class TestGetGeneratedDocContent:
         s3 = MagicMock()
         s3.get_file_data.side_effect = Exception("boom")
 
-        assert _get_generated_doc_content(mock_doc, s3_client=s3) is None
+        assert _get_generated_doc_content(mock_doc, storage_client=s3) is None
 
     def test_returns_bytes_on_success(self):
         from sbomify.apps.compliance.models import CRAGeneratedDocument
@@ -841,7 +839,7 @@ class TestGetGeneratedDocContent:
         s3 = MagicMock()
         s3.get_file_data.return_value = b"payload"
 
-        assert _get_generated_doc_content(mock_doc, s3_client=s3) == b"payload"
+        assert _get_generated_doc_content(mock_doc, storage_client=s3) == b"payload"
 
     def test_creates_default_s3_client_when_none_provided(self):
         """When no client is passed, the helper constructs its own."""
@@ -850,7 +848,7 @@ class TestGetGeneratedDocContent:
         mock_doc = MagicMock(spec=CRAGeneratedDocument)
         mock_doc.storage_key = "compliance/ok.md"
 
-        with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
             inst = MagicMock()
             inst.get_file_data.return_value = b"payload"
             mock_s3_cls.return_value = inst
@@ -876,7 +874,7 @@ class TestGetSbomContent:
         s3 = MagicMock()
         s3.get_sbom_data.side_effect = Exception("boom")
 
-        assert _get_sbom_content(sbom, s3_client=s3) is None
+        assert _get_sbom_content(sbom, storage_client=s3) is None
 
     def test_returns_bytes_on_success(self):
         sbom = MagicMock()
@@ -884,13 +882,13 @@ class TestGetSbomContent:
         s3 = MagicMock()
         s3.get_sbom_data.return_value = b"{...}"
 
-        assert _get_sbom_content(sbom, s3_client=s3) == b"{...}"
+        assert _get_sbom_content(sbom, storage_client=s3) == b"{...}"
 
     def test_creates_default_s3_client_when_none_provided(self):
         sbom = MagicMock()
         sbom.sbom_filename = "lithium.cdx.json"
 
-        with patch("sbomify.apps.compliance.services.export_service.S3Client") as mock_s3_cls:
+        with patch("sbomify.apps.compliance.services.export_service.StorageClient") as mock_s3_cls:
             inst = MagicMock()
             inst.get_sbom_data.return_value = b"{...}"
             mock_s3_cls.return_value = inst

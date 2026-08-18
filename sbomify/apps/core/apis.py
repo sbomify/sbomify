@@ -24,7 +24,7 @@ from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
 from sbomify.apps.core.authz import READ_INTERNAL, can
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
     get_team_asset_count,
@@ -1981,7 +1981,7 @@ def delete_component(request: HttpRequest, component_id: str) -> Any:
     try:
         # Delete associated SBOMs from S3 storage
         sboms = component.sbom_set.all()
-        s3 = S3Client("SBOMS") if sboms.exists() else None
+        s3 = StorageClient("SBOMS") if sboms.exists() else None
 
         for sbom in sboms:
             if sbom.sbom_filename and s3:

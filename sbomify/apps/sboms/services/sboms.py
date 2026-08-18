@@ -11,7 +11,7 @@ from django.db import transaction
 from django.http import HttpRequest
 
 from sbomify.apps.core.authz import can
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.services.results import ServiceResult
 from sbomify.apps.core.utils import broadcast_to_workspace
 from sbomify.apps.sboms.crypto_inventory import CryptoAsset, derive_crypto_inventory
@@ -57,7 +57,7 @@ def delete_sbom_record(request: HttpRequest, sbom_id: str) -> ServiceResult[None
     bom_type = sbom.bom_type
     source = sbom.source or ""
 
-    s3 = S3Client("SBOMS")
+    s3 = StorageClient("SBOMS")
     for blob_key in filter(None, [sbom.sbom_filename, sbom.signature_blob_key, sbom.provenance_blob_key]):
         try:
             s3.delete_object(settings.AWS_SBOMS_STORAGE_BUCKET_NAME, blob_key)
@@ -292,7 +292,7 @@ def get_crypto_inventory(request: HttpRequest, sbom_id: str) -> ServiceResult[di
         return ServiceResult.success(cached)
 
     try:
-        raw = S3Client("SBOMS").get_sbom_data(sbom.sbom_filename)
+        raw = StorageClient("SBOMS").get_sbom_data(sbom.sbom_filename)
     except (BotoCoreError, ClientError) as exc:
         # The posture card is best-effort and lazy-loaded after page render
         # (ComponentCryptoPostureView / SbomCryptoInventoryView): ANY storage

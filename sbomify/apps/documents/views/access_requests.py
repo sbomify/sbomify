@@ -23,7 +23,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.core.authz import ADMINISTER
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
-from sbomify.apps.core.object_store import S3Client
+from sbomify.apps.core.object_store import StorageClient
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import get_client_ip
@@ -571,7 +571,7 @@ class NDASigningView(View):
 
         try:
             # Get NDA document content and calculate hash
-            s3 = S3Client("DOCUMENTS")
+            s3 = StorageClient("DOCUMENTS")
             document_data = s3.get_document_data(company_nda.document_filename)
             if not document_data:
                 messages.error(request, "NDA document not found in storage")
