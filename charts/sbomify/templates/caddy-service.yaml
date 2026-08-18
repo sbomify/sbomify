@@ -15,10 +15,15 @@ metadata:
 spec:
   type: {{ .Values.caddy.service.type }}
   {{- if has .Values.caddy.service.type (list "LoadBalancer" "NodePort") }}
-  # Preserve the client IP so Caddy's client_ip matchers (the internal-API
-  # guard) and the application's rate limiting see the real caller rather than
-  # a node address. Kubernetes honours this for NodePort as well, and
-  # values-local.yaml sets it there, so it is rendered for both.
+  # Decides whether the client IP survives, which is what Caddy's client_ip
+  # matchers (the internal-API guard) and the application's rate limiting key
+  # on. `Local` keeps the real caller; `Cluster` replaces it with a node
+  # address, at the cost of only reaching nodes that run a Caddy pod.
+  #
+  # Rendered for NodePort as well as LoadBalancer because Kubernetes honours
+  # the field for both. That is not a claim that NodePort preserves the source
+  # IP here: values-local.yaml deliberately chooses `Cluster`, because on kind
+  # `Local` would black-hole traffic to nodes without a Caddy pod.
   externalTrafficPolicy: {{ .Values.caddy.service.externalTrafficPolicy }}
   {{- end }}
   {{- if eq .Values.caddy.service.type "LoadBalancer" }}
