@@ -456,6 +456,10 @@ caddy:
     preload: false
 
   # Path of the Django health endpoint, exempt from the HTTPS redirect.
+  # Mirrors the application, which registers this path in urls.py and exempts
+  # it in SECURE_REDIRECT_EXEMPT. It is a value because the Caddyfile, the
+  # probes and the edge test all need it, not because it can be changed: the
+  # chart refuses any other value.
   healthPath: "/UuPha8mu/"
 
   # Loopback port Caddy uses to reach the on-demand-TLS ask endpoint with a

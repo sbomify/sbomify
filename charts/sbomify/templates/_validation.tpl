@@ -72,6 +72,16 @@ identity.
 {{- end }}
 {{- end }}
 
+{{/*
+The health path is not ours to choose. Django registers it in urls.py and
+exempts that exact prefix in SECURE_REDIRECT_EXEMPT, so a different value here
+points the kubelet probes and the edge at a 404 while the chart still renders.
+It stays a value because three templates need it, not because it is tunable.
+*/}}
+{{- if ne .Values.caddy.healthPath "/UuPha8mu/" }}
+{{- fail "sbomify: caddy.healthPath must stay /UuPha8mu/. The application hardcodes that path in urls.py and SECURE_REDIRECT_EXEMPT, so changing it here only breaks the probes and the edge health route." }}
+{{- end }}
+
 {{- if and (not .Values.secrets.existingSecret) (not .Values.auth.keycloak.clientSecret) }}
 {{- fail "sbomify: set auth.keycloak.clientSecret (the OIDC client secret), or supply it via secrets.existingSecret" }}
 {{- end }}

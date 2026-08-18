@@ -14,6 +14,15 @@ from django.db import connection, connections
 
 RELEASE_SCRIPT = Path(__file__).resolve().parents[4] / "bin" / "release.py"
 
+# The lock is a PostgreSQL session-level advisory lock and these tests call
+# pg_try_advisory_lock and SHOW lock_timeout directly. test_settings falls back
+# to SQLite in-memory whenever TEST_DATABASE_HOST is unset, so without this a
+# local run reports errors that say nothing about the code under test.
+pytestmark = pytest.mark.skipif(
+    connection.vendor != "postgresql",
+    reason="advisory locks are PostgreSQL-only; run against the Docker test database",
+)
+
 
 def _load_release_module():
     """Import bin/release.py, which lives outside the package tree."""

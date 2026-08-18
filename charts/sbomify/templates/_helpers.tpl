@@ -342,7 +342,7 @@ required: DynamicHostValidationMiddleware rejects requests whose Host is not a
 known hostname, and kubelet probes default to sending the pod IP.
 */}}
 {{- define "sbomify.healthProbeHttpGet" -}}
-path: /UuPha8mu/
+path: {{ .Values.caddy.healthPath }}
 port: http
 httpHeaders:
   - name: Host
