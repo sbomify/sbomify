@@ -42,19 +42,17 @@ data:
       }
       {{- end }}
 
-      {{- if or .Values.caddy.trustedProxies .Values.caddy.clientIpHeaders }}
+      {{- with .Values.caddy.trustedProxies }}
+      {{/*
+        Only when there is a proxy to trust. Caddy consults client_ip_headers
+        exclusively for requests arriving from a trusted proxy, so with none
+        listed the whole block would say nothing, and an argument-less
+        `trusted_proxies static` says even less.
+      */}}
       servers {
-        {{- with .Values.caddy.trustedProxies }}
-        {{/*
-          Emitted only when there is something to list. `trusted_proxies static`
-          with no ranges parses, but it is a directive that says nothing, and
-          `client_ip_headers` with no headers is the same. Rendering them empty
-          just leaves a reader wondering what was meant.
-        */}}
         trusted_proxies static {{ join " " . }}
         trusted_proxies_strict
-        {{- end }}
-        {{- with .Values.caddy.clientIpHeaders }}
+        {{- with $.Values.caddy.clientIpHeaders }}
         client_ip_headers {{ join " " . }}
         {{- end }}
       }
@@ -164,7 +162,14 @@ data:
         X-Content-Type-Options "nosniff"
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "strict-origin-when-cross-origin"
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        {{- if gt (int .Values.caddy.hsts.maxAge) 0 }}
+        # This edge serves workspace custom domains, so the same header lands on
+        # hostnames we do not own. includeSubDomains would then bind subdomains
+        # the customer runs themselves and we never serve, and preload is a
+        # long-lived, awkward-to-reverse submission. Both are off unless the
+        # operator says every served domain is theirs.
+        Strict-Transport-Security "max-age={{ int64 .Values.caddy.hsts.maxAge }}{{ if .Values.caddy.hsts.includeSubDomains }}; includeSubDomains{{ end }}{{ if .Values.caddy.hsts.preload }}; preload{{ end }}"
+        {{- end }}
         -Server
       }
     }

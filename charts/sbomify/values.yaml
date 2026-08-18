@@ -439,6 +439,18 @@ caddy:
     enabled: false
     fromCidrs: []
 
+  # HSTS, applied to every hostname this edge serves.
+  #
+  # includeSubDomains and preload are off by default because on-demand TLS means
+  # some of those hostnames belong to customers. Asserting either on a domain
+  # you do not control reaches beyond what you serve, and preload is difficult
+  # to undo. Turn them on when every domain behind this edge is yours.
+  # maxAge: 0 omits the header entirely.
+  hsts:
+    maxAge: 31536000
+    includeSubDomains: false
+    preload: false
+
   # Path of the Django health endpoint, exempt from the HTTPS redirect.
   healthPath: "/UuPha8mu/"
 
@@ -459,10 +471,18 @@ caddy:
   # Networks Caddy will believe X-Forwarded-* / client-IP headers from. Keep
   # this tight: anything listed here can spoof the client IP, and the
   # internal-API guard is enforced on that IP. Add your cloud LB or CDN ranges.
-  trustedProxies:
-    - 10.0.0.0/8
-    - 172.16.0.0/12
-    - 192.168.0.0/16
+  # Empty means trust nobody: the client IP is the peer Caddy actually sees.
+  # It previously defaulted to the private ranges, which contradicted the advice
+  # directly above it. Every pod in the cluster has a private address, so that
+  # default let any of them set X-Forwarded-For and choose their own client_ip,
+  # which is what the internal-API allow list and the rate limiting are keyed on.
+  #
+  # List the ranges of the proxy in front, and only that. With a LoadBalancer on
+  # externalTrafficPolicy: Local the client IP already arrives intact and this
+  # can stay empty.
+  trustedProxies: []
+  # Only consulted for requests arriving from trustedProxies, so an empty list
+  # above makes these inert.
   clientIpHeaders:
     - Cf-Connecting-Ip
     - X-Forwarded-For
