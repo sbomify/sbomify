@@ -33,7 +33,7 @@
         <c-tables.table>
         <c-tables.head>
         <c-tables.header-cell sort="severity">Severity</c-tables.header-cell>
-        <c-tables.header-cell sort="title">Advisory</c-tables.header-cell>
+        <c-tables.header-cell sort="title" nowrap>Advisory</c-tables.header-cell>
         <c-tables.header-cell class="hidden md:table-cell">Products</c-tables.header-cell>
         <c-tables.header-cell sort="status">Status</c-tables.header-cell>
         <c-tables.header-cell sort="updated" date class="hidden sm:table-cell">Updated</c-tables.header-cell>
@@ -47,10 +47,10 @@
                     component. Severity is not a variant: it binds data-level and
                     c-badges.severity-dynamic owns the five CVSS recipes.
                 {% endcomment %}
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <c-badges.severity-dynamic ::data-level="advisory.severity" x-text="advisory.severity || 'none'" />
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 <div class="min-w-0">
                     <span class="text-text font-medium block truncate" x-text="advisory.title"></span>
                     <span class="text-xs text-text-muted font-mono"

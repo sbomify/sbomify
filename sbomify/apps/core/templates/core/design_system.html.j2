@@ -1,5 +1,5 @@
 {% extends "./dashboard_base.html.j2" %}
-{% load design_system %}
+{% load design_system brand_tags %}
 {% block title %}Design System - sbomify{% endblock %}
 {% comment %}
     The living inventory of the shared component library. Every demo below calls the
@@ -866,6 +866,12 @@
         layout and leaves alignment alone, for a table whose header cells state their own widths. The sortable header and the pager read the Alpine state a table page
         already keeps, so the demo below really sorts and pages.
     </p>
+    <p class="text-sm text-text-muted mb-4">
+        Pass <c-code-inline>nowrap</c-code-inline> to the header cell and the body cell of the column that
+        names the row. The name stays on one line and ends in an ellipsis at the column edge, so the
+        column has an edge to scan down instead of a break landing somewhere different on every row.
+        The third row below carries a name long enough to show it.
+    </p>
     <c-tables.shell class="mb-8" x-data="{ sortColumn: 'name', sortDirection: 'asc', currentPage: 1, totalPages: 3, sort(column) { this.sortDirection = this.sortColumn === column && this.sortDirection === 'asc' ? 'desc' : 'asc'; this.sortColumn = column } }">
     <c-tables.toolbar>
     <c-tables.search id="ds-table-search" label="Search components" placeholder="Search components…" />
@@ -878,7 +884,7 @@
     </c-tables.toolbar>
     <c-tables.table fixed>
     <c-tables.head>
-    <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+    <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell>Format</c-tables.header-cell>
     <c-tables.header-cell sort="updated" date>Updated</c-tables.header-cell>
     <c-tables.header-cell sort="vulnerabilities" end>Vulnerabilities</c-tables.header-cell>
@@ -886,23 +892,30 @@
     </c-tables.head>
     <tbody>
         <c-tables.row>
-        <c-tables.cell class="font-medium">acme-gateway-core</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">acme-gateway-core</c-tables.cell>
         <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
         <c-tables.cell date>10 Aug 2026</c-tables.cell>
         <c-tables.cell end><c-badges.warning>3 high</c-badges.warning></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
         <c-tables.row>
-        <c-tables.cell class="font-medium">acme-vault-core</c-tables.cell>
+        <c-tables.cell nowrap class="font-medium">acme-vault-core</c-tables.cell>
         <c-tables.cell><span class="tw-sbom-format tw-sbom-format-spdx">SPDX</span></c-tables.cell>
         <c-tables.cell date>2 Aug 2026</c-tables.cell>
+        <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
+        <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
+        </c-tables.row>
+        <c-tables.row>
+        <c-tables.cell nowrap class="font-medium">acme-gateway-edge-proxy-transport-security-module</c-tables.cell>
+        <c-tables.cell><span class="tw-sbom-format tw-sbom-format-cyclonedx">CycloneDX</span></c-tables.cell>
+        <c-tables.cell date>28 Jul 2026</c-tables.cell>
         <c-tables.cell end><c-badges.success>Clean</c-badges.success></c-tables.cell>
         <c-tables.actions-cell><c-buttons.icon label="Actions"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></c-buttons.icon></c-tables.actions-cell>
         </c-tables.row>
     </tbody>
     </c-tables.table>
     <c-tables.footer>
-    <c-tables.info>Showing <strong>1</strong> to <strong>2</strong> of <strong>6</strong> entries</c-tables.info>
+    <c-tables.info>Showing <strong>1</strong> to <strong>3</strong> of <strong>6</strong> entries</c-tables.info>
     <c-tables.pager />
     </c-tables.footer>
     </c-tables.shell>
@@ -1533,6 +1546,95 @@
     <div class="flex flex-wrap gap-3">
         <c-buttons.secondary x-tooltip="'Scanned 3 hours ago'">Hover me</c-buttons.secondary>
         <c-buttons.icon label="More information" x-tooltip="'Immutable, sbomify never rewrites an artifact'"><i class="fas fa-circle-info" aria-hidden="true"></i></c-buttons.icon>
+    </div>
+    </c-cards.card>
+    <h2 id="branded" class="text-xl font-semibold text-text mb-4">Branded components</h2>
+    <c-cards.card class="mb-8">
+    <p class="text-sm text-text-muted mb-4">
+        <code class="tw-code-inline">c-branded.*</code> is a second, smaller library for pages we render on
+        behalf of a workspace, for their customers to read: the trust centre first, and anything else
+        shared outwards later. It is the same cotton conventions as everything above, with one rule added.
+        A workspace picks one colour. It reaches the page only through
+        <code class="tw-code-inline">c-branded.theme</code>, which publishes
+        <code class="tw-code-inline">--brand</code> and <code class="tw-code-inline">--brand-ink</code>,
+        and nothing else is brandable. Colour goes on what a reader acts on, never on the ground they read
+        against, so no brand colour can produce a page that is hard to read.
+    </p>
+    <p class="text-sm text-text-muted mb-4">
+        The ink is measured, not chosen: <code class="tw-code-inline">is_dark_color</code> compares the
+        brand's WCAG relative luminance against the point where white and black text contrast equally, so
+        each row below picks its own label colour. The pale amber gets dark text and the navy gets white
+        without either being told to.
+    </p>
+    <div class="flex flex-col gap-4">
+        {% for demo in branded_demos %}
+            <c-branded.theme brand="{{ demo.brand }}">
+            <c-branded.surface>
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="inline-block h-8 w-8 shrink-0 rounded-full border border-solid border-border"
+                      style="background: {{ demo.brand|brand_fill }}"></span>
+                <div class="min-w-0 mr-auto">
+                    <p class="text-sm font-semibold text-text m-0">{{ demo.label }}</p>
+                    <p class="text-xs text-text-muted m-0 font-mono">{{ demo.brand|default:"not set" }}</p>
+                </div>
+                <c-branded.badge brand>Verified</c-branded.badge>
+                <c-branded.badge tone="critical">Critical</c-branded.badge>
+                <c-branded.badge>Draft</c-branded.badge>
+                <c-buttons.secondary size="sm">Download</c-buttons.secondary>
+                <c-buttons.primary size="sm">Request access</c-buttons.primary>
+            </div>
+            <c-branded.page-header title="ACME Widget" lede="ACME publishes every advisory, SBOM and attestation the moment it is signed off." class="mt-5">
+            <c-slot name="eyebrow">
+            <c-branded.badge brand>Trust center</c-branded.badge>
+            </c-slot>
+            <c-slot name="actions">
+            <c-buttons.primary size="sm">Request access</c-buttons.primary>
+            </c-slot>
+            <c-branded.stats>
+            <c-branded.stat label="Advisories">5</c-branded.stat>
+            <c-branded.stat label="Products">6</c-branded.stat>
+            <c-branded.stat label="Compliance artifacts">0</c-branded.stat>
+            <c-branded.stat label="Latest advisory">3 Aug 2026</c-branded.stat>
+            </c-branded.stats>
+            </c-branded.page-header>
+            <c-branded.section-header title="Security advisories" subtitle="Vulnerabilities we have disclosed, what they affect, and where the fix is." class="mt-6">
+            <c-slot name="action">
+            <c-buttons.secondary size="sm" href="#branded">All advisories</c-buttons.secondary>
+            </c-slot>
+            </c-branded.section-header>
+            <c-branded.surface flush class="mt-4">
+            <c-branded.list-row href="#branded" level="critical">
+            <c-slot name="eyebrow">ACMEWIDGETSW-SA-2026-0001</c-slot>
+            <c-slot name="heading">Heap overflow in libfoo</c-slot>
+            <c-slot name="summary">A crafted packet can crash the parser before authentication.</c-slot>
+            <c-slot name="meta"><span>CVE-2026-21004</span><span>Acme Vault</span></c-slot>
+            <c-slot name="side"><c-branded.badge tone="critical">Critical</c-branded.badge>3 Aug 2026</c-slot>
+            </c-branded.list-row>
+            <c-branded.list-row href="#branded" level="medium">
+            <c-slot name="eyebrow">ACMEWIDGETSW-SA-2026-0002</c-slot>
+            <c-slot name="heading">Privilege escalation in the edge agent</c-slot>
+            <c-slot name="side"><c-branded.badge tone="medium">Medium</c-branded.badge>1 Aug 2026</c-slot>
+            </c-branded.list-row>
+            <c-branded.list-row level="none">
+            <c-slot name="heading">Log4Shell impact assessment</c-slot>
+            <c-slot name="summary">Nothing we ship is affected.</c-slot>
+            <c-slot name="side"><c-branded.badge>None</c-branded.badge>28 Jul 2026</c-slot>
+            </c-branded.list-row>
+            </c-branded.surface>
+            <c-branded.nav class="mt-4">
+            <c-branded.nav-item href="#branded" icon="fas fa-house" current>Overview</c-branded.nav-item>
+            <c-branded.nav-item href="#branded" icon="fas fa-shield-halved">Advisories</c-branded.nav-item>
+            <c-branded.nav-item href="#branded" icon="fas fa-file-lines">Documents</c-branded.nav-item>
+            </c-branded.nav>
+            <c-branded.notice title="Sign in to view this document" class="mt-4">
+            This artifact is shared with named recipients.
+            <c-slot name="action">
+            <c-buttons.secondary size="sm" href="#branded">Sign in</c-buttons.secondary>
+            </c-slot>
+            </c-branded.notice>
+            </c-branded.surface>
+            </c-branded.theme>
+        {% endfor %}
     </div>
     </c-cards.card>
 {% endblock %}

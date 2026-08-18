@@ -1,0 +1,57 @@
+{% comment %}
+One record in a list: an advisory, a document, a product. It goes inside
+c-branded.surface flush, which owns the radius and therefore the clipping.
+
+The row takes its content as named slots rather than as text props, and wraps
+each one itself. That is deliberate. The alternative is a general text component
+the page styles through props, and then every page picks its own combination and
+the list stops looking like one thing. Here the page supplies words and the
+component supplies the typography, which is what "pages compose, they do not
+style" means for a record.
+
+The severity spine is a real element rather than a left border, because a border
+would follow the row's box and the first and last rows sit against the panel's
+rounded corners. It is absolutely positioned across the row's full height and
+the panel clips it: a square bar against a round corner, with the clip the only
+thing stopping the colour spilling past. Its colour is the platform severity
+ramp, delivered as --tone so the utilities name it once, and it is never
+brandable.
+
+A linked row wraps only its heading in the anchor and stretches that anchor over
+the row with a pseudo element. The whole row is clickable, the link still has
+the heading as its accessible name, and, crucially, the legacy public stylesheet
+that repaints any anchor it does not recognise gets one element to repaint
+rather than every word in the row. The heading restates its own colour to win
+that fight.
+
+The hover tint is the brand at low alpha behind text that stays neutral, which
+is the one safe way a row may wear a workspace colour.
+{% endcomment %}
+<c-vars href level class />
+<div class="group relative flex items-start gap-4 px-5 py-4 border-b border-solid border-border last:border-b-0 transition-colors duration-150{% if href %} hover:bg-[color-mix(in_oklab,var(--brand)_6%,transparent)]{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    {% if level %}
+        <span class="absolute inset-y-0 left-0 w-[3px] bg-[var(--tone)]"
+              style="--tone: {% if level == 'critical' %}var(--color-severity-critical){% elif level == 'high' %}var(--color-severity-high){% elif level == 'medium' %}var(--color-severity-medium){% elif level == 'low' %}var(--color-severity-low){% else %}var(--color-text-muted){% endif %}"
+              aria-hidden="true"></span>
+    {% endif %}
+    <div class="min-w-0 flex-1 flex flex-col gap-1.5">
+        {% if eyebrow %}<div class="flex items-center gap-2 [flex-wrap:wrap] font-mono text-xs text-text-muted">{{ eyebrow }}</div>{% endif %}
+        {% if heading %}
+            <p class="text-sm font-semibold text-text my-0">
+                {% if href %}
+                    <a href="{{ href }}"
+                       class="text-text hover:text-text no-underline before:absolute before:inset-0 before:content-['']">{{ heading }}</a>
+                {% else %}
+                    {{ heading }}
+                {% endif %}
+            </p>
+        {% endif %}
+        {% if summary %}<p class="text-sm text-text-secondary my-0">{{ summary }}</p>{% endif %}
+        {% if meta %}<div class="flex items-center gap-3 [flex-wrap:wrap] text-xs text-text-muted">{{ meta }}</div>{% endif %}
+        {{ slot }}
+    </div>
+    {% if side %}
+        <div class="relative z-10 shrink-0 flex flex-col items-end gap-1.5 text-xs text-text-muted">{{ side }}</div>
+    {% endif %}
+</div>
