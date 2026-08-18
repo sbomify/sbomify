@@ -15,10 +15,10 @@ sbomify is a Software Bill of Materials (SBOM) and document management platform.
 ```bash
 # Start development environment with Docker (recommended)
 ./bin/developer_mode.sh build
-./bin/developer_mode.sh up
+./bin/developer_mode.sh start
 
 # Alternative: Run Django locally with Docker services
-docker compose up sbomify-db sbomify-minio sbomify-createbuckets -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-db sbomify-s3 -d
 uv sync && bun install
 uv run python manage.py migrate
 uv run python manage.py runserver  # Terminal 1
@@ -332,7 +332,7 @@ Dramatiq with Redis for async processing (vulnerability scanning, assessments). 
 ### Storage
 
 - **Database**: PostgreSQL 17
-- **Object Storage**: S3-compatible (Minio for development) — separate buckets for media, SBOMs, documents
+- **Object Storage**: S3-compatible (SeaweedFS for development) — separate buckets for media, SBOMs, documents
 - **Caching/Broker**: Redis 8
 
 ### Authentication
@@ -341,14 +341,16 @@ Keycloak with django-allauth. Auto-bootstrapped via Docker in development. Requi
 
 ### Team Roles and Permissions
 
-Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. Legacy rows may still carry `"member"`, which is not in the current choices.
+Supported roles (defined in `TEAMS_SUPPORTED_ROLES`): `"owner"`, `"admin"`, `"member"`, `"guest"`, and `"bot"` — the last reserved for OIDC Trusted Publishing synthetic identities and never assignable by a human. A `member_role_is_supported` CheckConstraint on `Member` enforces the set at the database, so a role the code does not know about can no longer be written (which is how `"member"` itself existed for years as a value matching no role check).
 
 **`sbomify/apps/core/authz.py` is the single source of truth.** `can(actor, action, resource)` maps a named action to a capability tier; the tier tuples are the only place roles are enumerated. Two rules keep it simple:
 
-1. **The ladder stays linear** — `guest ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
+1. **The ladder stays linear** — `guest ⊂ member ⊂ admin ⊂ owner`. No role may hold a capability a more-privileged role lacks. `test_role_ladder_is_upward_closed` enforces this.
 2. **Granularity is added as a tier, never as a per-user permission bundle or per-resource ACL.**
 
-Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `MANAGE` = `DELETE` = `READ_INTERNAL` (owner + admin) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
+Tiers: `OWNER_ONLY` (owner) ⊂ `ADMINISTER` = `DELETE` (owner + admin) ⊂ `MANAGE` = `READ_INTERNAL` (+ member) ⊂ `PUBLISH` = `READ_INTERNAL_OR_BOT` (+ bot).
+
+`member` is the day-to-day contributor: create and edit products, components and releases, upload artifacts, cut releases, triage vulnerabilities. Two things are deliberately carved *out* of `MANAGE` and up to `ADMINISTER`, because they are outward-facing rather than routine: `product:set_visibility` / `component:set_visibility` (publishing to the trust center) and `component:manage_publishers` (an OIDC binding is a standing, non-expiring publish grant to an external repo). Admins are near-owners: the only capability they lack is deleting the workspace (`OWNER_ONLY`). The other owner-exclusive rule — *an admin may not remove an owner* — is relational rather than a tier, so it lives in the member-removal guards (`teams/views/__init__.py`, `teams/views/team_settings.py`) and must not be dropped when those gates are edited.
 
 Prefer `can()` over new inline role checks. For views, CBV mixins in `sbomify.apps.teams.permissions`:
 

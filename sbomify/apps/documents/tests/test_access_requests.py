@@ -771,11 +771,11 @@ class TestAccessRequestRevocation:
         assert guest_user.email in call_kwargs["to"]
         mock_email_cls.return_value.send.assert_called()
 
-    def test_revoke_access_request_deletes_nda_signature(
+    def test_revoke_access_request_supersedes_nda_signature(
         self, authenticated_web_client, team_with_business_plan, sample_user, guest_user,
         company_nda_document
     ):
-        """Test that revocation deletes NDA signature."""
+        """Revocation supersedes the NDA signature; the record survives as history."""
         # Create approved request with NDA signature
         approved_request = AccessRequest.objects.create(
             team=team_with_business_plan,
@@ -806,8 +806,10 @@ class TestAccessRequestRevocation:
             },
         )
         
-        # Verify NDA signature was deleted
-        assert not NDASignature.objects.filter(id=nda_signature.id).exists()
+        # The record survives with a supersede stamp; no live signature remains
+        nda_signature.refresh_from_db()
+        assert nda_signature.superseded_at is not None
+        assert not NDASignature.objects.live().filter(id=nda_signature.id).exists()
 
     def test_revoke_access_request_denies_component_access(
         self, authenticated_web_client, team_with_business_plan, sample_user, guest_user,

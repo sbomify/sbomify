@@ -929,6 +929,7 @@ sentry_sdk.init(
 TEAMS_SUPPORTED_ROLES = [
     ("owner", "Owner"),
     ("admin", "Admin"),
+    ("member", "Member"),
     ("guest", "Guest"),
     ("bot", "Bot"),
 ]

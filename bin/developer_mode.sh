@@ -38,7 +38,7 @@ clean() {
     $CONTAINER_RUNTIME compose "${DOCKER_ARGS[@]}" rm "$@"
     $CONTAINER_RUNTIME volume rm -f \
         sbomify_keycloak_data \
-        sbomify_sbomify_minio_data \
+        sbomify_sbomify_s3_data \
         sbomify_sbomify_postgres_data \
         sbomify_sbomify_redis_data
 }

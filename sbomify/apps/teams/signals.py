@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_client import StripeClient
+from sbomify.apps.core.authz import READ_INTERNAL, ROLE_GUEST
 from sbomify.apps.core.url_utils import get_base_url
 from sbomify.apps.core.utils import number_to_random_token
 
@@ -137,7 +138,12 @@ def store_old_member_role(sender, instance, **kwargs):
 
 @receiver(post_save, sender=Member)
 def remove_access_requests_on_guest_upgrade(sender, instance, created, **kwargs):
-    """Remove access requests when a guest user is upgraded to admin/owner."""
+    """Remove access requests when a guest is upgraded to an internal role.
+
+    Any internal role, not just admin/owner: a guest promoted to ``member`` is
+    equally no longer an external visitor, so the AccessRequest and NDA rows that
+    governed their trust-center access have to go with the promotion.
+    """
     if created:
         # New member, nothing to check
         return
@@ -145,11 +151,11 @@ def remove_access_requests_on_guest_upgrade(sender, instance, created, **kwargs)
     # Get the old role from our stored value
     old_role = _old_member_roles.pop(instance.pk, None)
 
-    # If user is now admin/owner, check if they have access requests and remove them
-    # This handles both cases:
+    # If the user now holds an internal role, check for access requests and
+    # remove them. This handles both cases:
     # 1. We know they were a guest (old_role == "guest")
     # 2. We don't know the old role but they have access requests (indicating they were likely a guest)
-    if instance.role in ("admin", "owner"):
+    if instance.role in READ_INTERNAL:
         try:
             from sbomify.apps.documents.access_models import AccessRequest
             from sbomify.apps.documents.views.access_requests import _invalidate_access_requests_cache
@@ -158,7 +164,7 @@ def remove_access_requests_on_guest_upgrade(sender, instance, created, **kwargs)
             has_requests = AccessRequest.objects.filter(team=instance.team, user=instance.user).exists()
 
             # Remove if we know they were a guest, or if they have requests (likely were a guest)
-            if old_role == "guest" or (old_role is None and has_requests):
+            if old_role == ROLE_GUEST or (old_role is None and has_requests):
                 # Delete all access requests for this user in this team
                 deleted_count = AccessRequest.objects.filter(team=instance.team, user=instance.user).delete()[0]
                 if deleted_count > 0:

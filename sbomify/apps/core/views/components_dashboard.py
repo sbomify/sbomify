@@ -9,9 +9,11 @@ from django.shortcuts import redirect, render
 from django.views import View
 
 from sbomify.apps.core.apis import create_component, list_components
+from sbomify.apps.core.authz import MANAGE
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.schemas import ComponentCreateSchema
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.teams.queries import get_member_role_by_key
 
 
 def _get_components_context(request: HttpRequest) -> dict[str, Any] | None:
@@ -21,7 +23,7 @@ def _get_components_context(request: HttpRequest) -> dict[str, Any] | None:
         return None
 
     current_team = request.session.get("current_team") or {}
-    has_crud_permissions = current_team.get("role") in ["owner", "admin"]
+    has_crud_permissions = get_member_role_by_key(request.user, current_team.get("key")) in MANAGE
 
     # Sort components alphabetically by name
     sorted_components = sorted(components.items, key=lambda c: c.name.lower())

@@ -60,6 +60,12 @@
                 {% else %}
                     <c-badges.secondary>No</c-badges.secondary>
                 {% endif %}
+                {% if req.nda_signatures.all|length > 1 %}
+                    <div class="text-xs text-text-muted mt-1"
+                         title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                        {{ req.nda_signatures.all|length }} signatures on record
+                    </div>
+                {% endif %}
                 </c-tables.cell>
                 <c-tables.actions-cell>
                 <form method="post"
@@ -190,6 +196,12 @@
                     {% endif %}
                 {% else %}
                     <span class="text-text-muted">—</span>
+                {% endif %}
+                {% if req.nda_signatures.all|length > 1 %}
+                    <div class="text-xs text-text-muted mt-1"
+                         title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                        {{ req.nda_signatures.all|length }} signatures on record
+                    </div>
                 {% endif %}
                 </c-tables.cell>
                 <c-tables.actions-cell>

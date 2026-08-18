@@ -33,7 +33,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
 from sbomify.apps.access_tokens.models import AccessToken
-from sbomify.apps.core.authz import can
+from sbomify.apps.core.authz import ADMINISTER, can
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.utils import token_to_number
 from sbomify.apps.core.views.component_details_private import ComponentDetailsPrivateView as ComponentDetailsPrivateView
@@ -547,9 +547,14 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     if not can(request, "component:administer", component):
         return error_response(request, HttpResponseForbidden("Only allowed for owners of the component"))
 
-    target_team = request.session.get("user_teams", {}).get(team_key, {})
-    if target_team.get("role", "") not in ("owner", "admin"):
+    # Read the target workspace's role from the live Member row, not the session
+    # cache: that copy has a 300s TTL, so a demotion in the target workspace left
+    # a window in which a component could still be transferred into it.
+    from sbomify.apps.teams.models import Member, Team
+
+    if not Member.objects.filter(user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER).exists():
         return error_response(request, HttpResponseForbidden("Only allowed for admins or owners of the target team"))
+    target_team = Team.objects.filter(key=team_key).first()
 
     with transaction.atomic():
         # SEMANTICALLY REQUIRED clear (NOT the belt-and-suspenders pattern).
@@ -566,7 +571,7 @@ def transfer_component_to_team(request: HttpRequest, component_id: str) -> HttpR
     messages.add_message(
         request,
         messages.INFO,
-        f"Component {component.name} transferred to team {target_team.get('name')}",
+        f"Component {component.name} transferred to team {target_team.name if target_team else team_key}",
     )
 
     return redirect("core:components_dashboard")
