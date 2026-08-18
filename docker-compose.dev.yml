@@ -61,9 +61,13 @@ services:
           - sbomify-minio
     ports:
       - "${S3_API_PORT:-9000}:9000"  # S3 API
-      - "${S3_ADMIN_PORT:-23646}:23646"  # Admin UI
+      # Admin UI has no login, so it stays on loopback.
+      - "127.0.0.1:${S3_ADMIN_PORT:-23646}:23646"
     environment:
-      S3_BUCKET: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media},${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms}
+      # Repeating a name here is harmless, so the documents bucket can default
+      # to the SBOMs bucket exactly as settings.py does.
+      S3_BUCKET: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media},${AWS_SBOMS_STORAGE_BUCKET_NAME:-sbomify-sboms},${AWS_DOCUMENTS_STORAGE_BUCKET_NAME:-sbomify-sboms}
+      AWS_MEDIA_STORAGE_BUCKET_NAME: ${AWS_MEDIA_STORAGE_BUCKET_NAME:-sbomify-media}
     volumes:
       - ./bin/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
       - sbomify_s3_data:/data
@@ -74,11 +78,13 @@ services:
       - -s3.config=/etc/seaweedfs/s3.json
       - -master.telemetry=false
       - -webdav=false
+    # Probes a bucket, not /healthz: the S3 port answers several seconds before
+    # the buckets exist, so /healthz alone would report ready too early.
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/healthz"]
-      interval: 10s
+      test: ["CMD-SHELL", "wget -q -O /dev/null \"http://127.0.0.1:9000/${AWS_MEDIA_STORAGE_BUCKET_NAME}?max-keys=0\""]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 12
 
   sbomify-backend:
     pull_policy: never  # Never pull from registry in dev, use local builds

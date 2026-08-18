@@ -223,7 +223,7 @@ Access the application:
 
 ```bash
 # Start both PostgreSQL and SeaweedFS
-docker compose up sbomify-db sbomify-s3 -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-db sbomify-s3 -d
 ```
 
 - Install dependencies:
@@ -307,10 +307,10 @@ development, we use SeaweedFS as a local S3 replacement.
 - When running with Docker Compose, everything is configured automatically
 - When running locally (Django outside Docker):
   - Make sure SeaweedFS is running via Docker:
-    `docker compose up sbomify-s3 -d`
+    `docker compose -f docker-compose.yml -f docker-compose.dev.yml up sbomify-s3 -d`
   - Set `AWS_ENDPOINT_URL_S3=http://localhost:9000` in your environment variables
-  - The required buckets (`sbomify-media`, `sbomify-sboms`, and optionally `sbomify-documents`) will be created
-    automatically
+  - The buckets are created on startup: `sbomify-media`, `sbomify-sboms`, and
+    `AWS_DOCUMENTS_STORAGE_BUCKET_NAME` if you set one
 
 ##### Storage Buckets
 
