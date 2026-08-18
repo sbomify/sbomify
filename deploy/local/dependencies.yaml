@@ -166,37 +166,75 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources: {requests: {storage: 1Gi}}
 ---
+# S3 config for SeaweedFS. Mirrors bin/seaweedfs-s3.json, which the compose
+# stack mounts: anonymous read on the media bucket only, one admin identity
+# whose credentials match the AWS_*_ACCESS_KEY_ID defaults.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sbomify-dev-s3-config
+  labels:
+    app.kubernetes.io/part-of: sbomify-dev-dependencies
+data:
+  s3.json: |
+    {
+      "identities": [
+        {
+          "name": "anonymous",
+          "actions": [
+            "Read:sbomify-media",
+            "List:sbomify-media"
+          ]
+        },
+        {
+          "name": "admin",
+          "credentials": [
+            {
+              "accessKey": "minioadmin",
+              "secretKey": "minioadmin"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "List",
+            "Tagging",
+            "Write"
+          ]
+        }
+      ]
+    }
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: sbomify-dev-minio
+  name: sbomify-dev-s3
   labels:
-    app.kubernetes.io/name: sbomify-dev-minio
+    app.kubernetes.io/name: sbomify-dev-s3
     app.kubernetes.io/part-of: sbomify-dev-dependencies
 spec:
   ports:
     - {name: api, port: 9000, targetPort: api}
-    - {name: console, port: 9001, targetPort: console}
   selector:
-    app.kubernetes.io/name: sbomify-dev-minio
+    app.kubernetes.io/name: sbomify-dev-s3
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: sbomify-dev-minio
+  name: sbomify-dev-s3
   labels:
-    app.kubernetes.io/name: sbomify-dev-minio
+    app.kubernetes.io/name: sbomify-dev-s3
     app.kubernetes.io/part-of: sbomify-dev-dependencies
 spec:
-  serviceName: sbomify-dev-minio
+  serviceName: sbomify-dev-s3
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: sbomify-dev-minio
+      app.kubernetes.io/name: sbomify-dev-s3
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: sbomify-dev-minio
+        app.kubernetes.io/name: sbomify-dev-s3
         app.kubernetes.io/part-of: sbomify-dev-dependencies
     spec:
       securityContext:
@@ -207,91 +245,54 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: minio
-          # Pinned to a release rather than `latest`, which floats across major
-          # versions and can change local and CI behaviour without a commit.
-          # postgres and redis above track a major line (17, 8), which moves
-          # only within a compatible series; MinIO publishes no such tag.
-          image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+        - name: seaweedfs
+          # `mini` runs master, volume, filer and the S3 gateway in one process
+          # and creates the buckets named in S3_BUCKET on boot, which is what
+          # removes the bucket-bootstrap Job this replaced.
+          image: chrislusf/seaweedfs:4.42
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
-          args: ["server", "/data", "--console-address", ":9001"]
+          args:
+            - mini
+            - -dir=/data
+            - -s3.port=9000
+            - -s3.config=/etc/seaweedfs/s3.json
+            - -master.telemetry=false
+            - -webdav=false
           env:
-            - {name: MINIO_ROOT_USER, value: minioadmin}
-            - {name: MINIO_ROOT_PASSWORD, value: minioadmin}
+            # Repeating a name is harmless, so the documents bucket defaults to
+            # the SBOMs bucket exactly as settings.py does.
+            - {name: S3_BUCKET, value: "sbomify-media,sbomify-sboms,sbomify-sboms"}
           ports:
             - {name: api, containerPort: 9000}
-            - {name: console, containerPort: 9001}
+          # Probes a bucket rather than /healthz: the S3 port answers several
+          # seconds before the buckets exist, so /healthz alone reports ready
+          # too early and the app starts against a bucket that is not there.
           readinessProbe:
-            httpGet: {path: /minio/health/ready, port: api}
+            exec:
+              command:
+                - sh
+                - -c
+                - wget -q -O /dev/null "http://127.0.0.1:9000/sbomify-media?max-keys=0"
             initialDelaySeconds: 5
             periodSeconds: 5
+            failureThreshold: 12
           resources:
             requests: {cpu: 50m, memory: 256Mi}
             limits: {memory: 768Mi}
           volumeMounts:
             - {name: data, mountPath: /data}
+            - {name: config, mountPath: /etc/seaweedfs}
+      volumes:
+        - name: config
+          configMap: {name: sbomify-dev-s3-config}
   volumeClaimTemplates:
     - metadata: {name: data}
       spec:
         accessModes: ["ReadWriteOnce"]
         resources: {requests: {storage: 5Gi}}
----
-# Creates the two buckets the app expects. Idempotent.
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: sbomify-dev-minio-buckets
-  labels:
-    app.kubernetes.io/part-of: sbomify-dev-dependencies
-spec:
-  backoffLimit: 10
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/part-of: sbomify-dev-dependencies
-    spec:
-      restartPolicy: OnFailure
-      securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-        seccompProfile:
-          type: RuntimeDefault
-      containers:
-        - name: mc
-          image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          env:
-            - {name: MC_CONFIG_DIR, value: /tmp/.mc}
-          command:
-            - sh
-            - -c
-            - |
-              set -e
-              until mc alias set dev http://sbomify-dev-minio:9000 minioadmin minioadmin >/dev/null 2>&1; do
-                echo "waiting for minio..."; sleep 3
-              done
-              mc mb --ignore-existing dev/sbomify-media
-              mc mb --ignore-existing dev/sbomify-sboms
-              # Media is served straight from the bucket URL; SBOMs stay
-              # private and are handed out via signed URLs.
-              mc anonymous set public dev/sbomify-media
-              mc anonymous set none dev/sbomify-sboms
-              echo "buckets ready"
-          resources:
-            requests: {cpu: 10m, memory: 64Mi}
-            limits: {memory: 128Mi}
-          volumeMounts:
-            - {name: tmp, mountPath: /tmp}
-      volumes:
-        - {name: tmp, emptyDir: {}}
 ---
 apiVersion: v1
 kind: Service

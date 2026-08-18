@@ -24,7 +24,7 @@ an Ingress*.
 
 That creates a three-node [kind](https://kind.sigs.k8s.io/) cluster, applies
 [`deploy/local/dependencies.yaml`](../../deploy/local/dependencies.yaml),
-throwaway PostgreSQL, Redis, MinIO and Keycloak for the laptop, and then
+throwaway PostgreSQL, Redis, SeaweedFS and Keycloak for the laptop, and then
 installs this chart with `values-local.yaml` pointed at them. Caddy issues its
 own certificates from its internal CA, so there is nothing to pre-generate.
 

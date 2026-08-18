@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 from botocore.exceptions import ClientError
@@ -41,9 +41,30 @@ class TestS3ObjectStoreClient:
             endpoint_url="http://localhost:9000",
             aws_access_key_id="my-key",
             aws_secret_access_key="my-secret",
+            config=ANY,
         )
         # boto3.client is lazy — not called at construction time
         mock_client.assert_not_called()
+
+    def test_signature_version_is_pinned_to_s3v4(self, mocker: MockerFixture):
+        """SigV4 is set explicitly, not left to botocore to resolve.
+
+        Verified against SeaweedFS: a presigned GET carrying response-header
+        overrides (the CRA bundle download forces an attachment disposition) is
+        rejected with SignatureDoesNotMatch under the default configuration and
+        accepted when this is set, even though the default already resolves to
+        s3v4. Addressing style is deliberately not forced: it made no
+        difference, and path-style would break AWS buckets created after
+        Sept 2020.
+        """
+        mock_resource = mocker.patch("boto3.resource")
+        mocker.patch("boto3.client")
+
+        S3ObjectStoreClient(region="us-east-1", access_key="k", secret_key="s")
+
+        config = mock_resource.call_args.kwargs["config"]
+        assert config.signature_version == "s3v4"
+        assert config.s3 is None, "addressing style must stay unforced"
 
     def test_init_without_credentials(self, mocker: MockerFixture):
         mock_resource = mocker.patch("boto3.resource")
@@ -60,6 +81,7 @@ class TestS3ObjectStoreClient:
             endpoint_url="http://localhost:9000",
             aws_access_key_id=None,
             aws_secret_access_key=None,
+            config=ANY,
         )
         mock_client.assert_not_called()
 
@@ -95,6 +117,7 @@ class TestS3ObjectStoreClient:
             endpoint_url="http://localhost:9000",
             aws_access_key_id="",
             aws_secret_access_key="",
+            config=ANY,
         )
 
     @pytest.fixture
@@ -154,6 +177,7 @@ class TestS3ObjectStoreClient:
             endpoint_url="http://localhost:9000",
             aws_access_key_id=None,
             aws_secret_access_key=None,
+            config=ANY,
         )
         mock_client.generate_presigned_url.assert_called_once_with(
             "get_object",
@@ -238,6 +262,7 @@ class TestStorageClient:
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
             aws_access_key_id="test-key",
             aws_secret_access_key="test-secret",
+            config=ANY,
         )
 
     def test_credentials_optional_when_empty(self, mocker: MockerFixture):
@@ -256,6 +281,7 @@ class TestStorageClient:
             endpoint_url=settings.AWS_ENDPOINT_URL_S3,
             aws_access_key_id=None,
             aws_secret_access_key=None,
+            config=ANY,
         )
 
     def test_empty_endpoint_url_normalized_to_none(self, mocker: MockerFixture):
@@ -276,6 +302,7 @@ class TestStorageClient:
             endpoint_url=None,
             aws_access_key_id="test-key",
             aws_secret_access_key="test-secret",
+            config=ANY,
         )
 
     def test_invalid_bucket_type_raises(self, mocker: MockerFixture):

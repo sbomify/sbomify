@@ -257,8 +257,7 @@ jobs:
             ghcr.io/sbomify/sbomify:latest \
             postgres:17-alpine \
             redis:8-alpine \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z \
-            minio/mc:RELEASE.2025-08-13T08-35-41Z \
+            chrislusf/seaweedfs:4.42 \
             caddy:2-alpine \
             quay.io/keycloak/keycloak:26.4.7
           do
@@ -288,7 +287,7 @@ jobs:
           kubectl -n sbomify apply -f deploy/local/dependencies.yaml
           kubectl -n sbomify rollout status statefulset/sbomify-dev-postgresql --timeout=300s
           kubectl -n sbomify rollout status statefulset/sbomify-dev-redis --timeout=300s
-          kubectl -n sbomify rollout status statefulset/sbomify-dev-minio --timeout=300s
+          kubectl -n sbomify rollout status statefulset/sbomify-dev-s3 --timeout=300s
 
       - name: helm install
         run: |

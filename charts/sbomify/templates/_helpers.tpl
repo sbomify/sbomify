@@ -149,7 +149,7 @@ cache, task queue and websocket channels from this base URL.
 {{- end -}}
 {{- end }}
 
-{{/* S3 endpoint the application talks to (in-cluster MinIO or external). */}}
+{{/* S3 endpoint the application talks to (in-cluster dev store or external). */}}
 {{- define "sbomify.s3Endpoint" -}}
 {{- .Values.objectStorage.endpointUrl -}}
 {{- end }}

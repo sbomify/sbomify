@@ -1,7 +1,7 @@
 ---
 # Values for a local kind cluster (see bin/kind-up.sh).
 #
-# The chart itself deploys only sbomify. PostgreSQL, Redis, MinIO and Keycloak
+# The chart itself deploys only sbomify. PostgreSQL, Redis, SeaweedFS and Keycloak
 # are provisioned separately by bin/kind-up.sh from
 # deploy/local/dependencies.yaml, and are referenced here by their in-cluster
 # Service names. The same shape as pointing at managed services in production.
@@ -41,7 +41,7 @@ redis:
   port: 6379
 
 objectStorage:
-  endpointUrl: "http://sbomify-dev-minio:9000"
+  endpointUrl: "http://sbomify-dev-s3:9000"
   region: auto
   media:
     bucket: sbomify-media

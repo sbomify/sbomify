@@ -13,7 +13,7 @@
 # There is no ingress controller: the chart runs Caddy as the cluster edge,
 # which is what lets workspace custom domains get certificates on demand.
 #
-# PostgreSQL, Redis, MinIO and Keycloak are NOT part of the chart. They are
+# PostgreSQL, Redis, SeaweedFS and Keycloak are NOT part of the chart. They are
 # applied separately from deploy/local/dependencies.yaml, mirroring how you
 # would point the chart at managed services in production.
 set -euo pipefail
@@ -101,10 +101,10 @@ kubectl -n "${NAMESPACE}" apply -f "${LOCAL_DIR}/dependencies.yaml"
 
 # The migration hook runs before any ordinary resource, so PostgreSQL and Redis
 # have to be serving before `helm install` starts.
-log "Waiting for PostgreSQL, Redis and MinIO"
+log "Waiting for PostgreSQL, Redis and SeaweedFS"
 kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-postgresql --timeout=300s
 kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-redis --timeout=300s
-kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-minio --timeout=300s
+kubectl -n "${NAMESPACE}" rollout status statefulset/sbomify-dev-s3 --timeout=300s
 
 # ---------------------------------------------------------------------------
 # Deploy

@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
 
@@ -63,6 +64,14 @@ class S3ObjectStoreClient(ObjectStoreClient):
             "endpoint_url": endpoint_url,
             "aws_access_key_id": access_key,
             "aws_secret_access_key": secret_key,
+            # Pin SigV4 rather than leaving it to be resolved. A presigned GET
+            # that carries response-header overrides (the CRA bundle download)
+            # is rejected with SignatureDoesNotMatch by SeaweedFS under the
+            # default configuration and accepted when this is set, even though
+            # the default already resolves to s3v4. Addressing style is left
+            # alone deliberately: it makes no difference here, and forcing
+            # path-style would break AWS buckets created after Sept 2020.
+            "config": Config(signature_version="s3v4"),
         }
         self._resource: Any = boto3.resource("s3", **self._boto3_kwargs)
         self._client_instance: Any | None = None
