@@ -524,6 +524,18 @@ RELEASE_CBOM_DOWNLOADED = _register(
     )
 )
 
+RELEASE_HBOM_DOWNLOADED = _register(
+    EventSpec(
+        name="release_hbom:downloaded",
+        description="The merged release-level HBOM was downloaded (Trust Center or API).",
+        distinct_id_kind="workspace",
+        properties={
+            "release_id": "The release's ID.",
+            "product_id": "Owning product's ID.",
+        },
+    )
+)
+
 DOCUMENT_UPLOADED = _register(
     EventSpec(
         name="document:uploaded",

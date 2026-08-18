@@ -160,9 +160,16 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
         # fail/warning compliance findings (newest CBOM, else the newest mixed
         # SBOM with crypto assets). Pass/info rows are posture, not issues, so
         # they stay on the CBOM detail page.
-        from sbomify.apps.core.services.component_security import CbomIssuesContext, build_latest_cbom_issues
+        from sbomify.apps.core.services.component_security import (
+            CbomIssuesContext,
+            HbomIssuesContext,
+            build_latest_cbom_issues,
+            build_latest_hbom_issues,
+        )
 
         cbom_issues = build_latest_cbom_issues(component_id) if is_bom_component else CbomIssuesContext()
+        # The same drill-down over the newest hardware artifact's structure findings.
+        hbom_issues = build_latest_hbom_issues(component_id) if is_bom_component else HbomIssuesContext()
 
         context = {
             "APP_BASE_URL": settings.APP_BASE_URL,
@@ -190,6 +197,11 @@ class ComponentDetailsPrivateView(GuestAccessBlockedMixin, LoginRequiredMixin, V
             "latest_cbom_version": cbom_issues.artifact_version,
             "latest_cbom_id": cbom_issues.artifact_id,
             "latest_cbom_item_type": cbom_issues.artifact_item_type,
+            "latest_hbom_issues": hbom_issues.issues,
+            "latest_hbom_issue_terms": hbom_issues.terms,
+            "latest_hbom_issue_severities": hbom_issues.severities,
+            "latest_hbom_version": hbom_issues.artifact_version,
+            "latest_hbom_id": hbom_issues.artifact_id,
             "document_type_subcategories": document_type_subcategories,
             "document_type_subcategories_json": json.dumps(document_type_subcategories),
         }

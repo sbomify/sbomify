@@ -99,6 +99,17 @@ class TestPluginMetadata:
             "scan_mode": "one_shot",
         }
 
+    def test_to_dict_serializes_hardware_gate(self) -> None:
+        """Absence for ungated plugins is pinned by ``test_to_dict`` above."""
+        metadata = PluginMetadata(
+            name="hw-plugin",
+            version="1.0.0",
+            category=AssessmentCategory.COMPLIANCE,
+            requires_hardware_components=True,
+        )
+
+        assert metadata.to_dict()["requires_hardware_components"] is True
+
 
 class TestFinding:
     """Tests for Finding dataclass."""

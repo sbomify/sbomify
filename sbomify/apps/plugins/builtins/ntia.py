@@ -31,6 +31,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sbomify.apps.plugins.builtins._component_scope import (
+    element_verdict,
+    get_component_supplier,
+    is_non_software_component,
+    is_supplier_exempt,
+    nothing_to_grade,
+)
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
@@ -171,16 +178,20 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         # Calculate summary
         pass_count = sum(1 for f in findings if f.status == "pass")
         fail_count = sum(1 for f in findings if f.status == "fail")
+        warning_count = sum(1 for f in findings if f.status == "warning")
 
         summary = AssessmentSummary(
             total_findings=len(findings),
             pass_count=pass_count,
             fail_count=fail_count,
-            warning_count=0,
+            warning_count=warning_count,
             error_count=0,
         )
 
-        logger.info(f"[NTIA-2021] Completed compliance check for SBOM {sbom_id}: {pass_count} pass, {fail_count} fail")
+        logger.info(
+            f"[NTIA-2021] Completed compliance check for SBOM {sbom_id}: "
+            f"{pass_count} pass, {fail_count} fail, {warning_count} warning"
+        )
 
         return AssessmentResult(
             plugin_name="ntia-minimum-elements-2021",
@@ -508,47 +519,49 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
         version_failures: list[str] = []
         unique_id_failures: list[str] = []
 
+        # An element every component was exempt from graded nothing, so its
+        # empty failure list is a warning rather than a pass — see
+        # _component_scope. Supplier has its own, narrower exemption.
+        nothing_graded = nothing_to_grade(components)
+        no_supplier_graded = nothing_to_grade(components, is_supplier_exempt)
+
         # Check each component for required elements
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
 
-            # Skip type=file components (e.g., lockfiles) — they're input metadata,
-            # not software packages, so NTIA minimum-element fields (supplier, version,
-            # unique identifiers) don't apply. Component Name is still checked because
-            # even file-type entries should be named.
-            is_file_type = str(component.get("type", "")).lower() == "file"
+            # Non-software entries (files, hardware devices) carry none of the
+            # NTIA minimum-element fields by design — see _component_scope.
+            # Component Name is still checked because every entry should be named.
+            is_exempt = is_non_software_component(component)
 
-            # 1. Supplier name (publisher or supplier.name)
-            if not is_file_type:
-                supplier_field = component.get("supplier")
-                supplier = component.get("publisher") or (
-                    supplier_field.get("name") if isinstance(supplier_field, dict) else None
-                )
-                if not supplier:
-                    supplier_failures.append(component_name)
+            # 1. Supplier name (publisher, supplier.name or manufacturer.name).
+            # A device is graded here: manufacturer is where it names its vendor.
+            if not is_supplier_exempt(component) and not get_component_supplier(component):
+                supplier_failures.append(component_name)
 
             # 2. Component name (applies to all component types)
             if not component.get("name"):
                 component_name_failures.append(f"Component at index {i}")
 
             # 3. Version
-            if not is_file_type and not component.get("version"):
+            if not is_exempt and not component.get("version"):
                 version_failures.append(component_name)
 
             # 4. Unique identifiers (PURL, CPE, SWID)
             # Note: hashes are for "Component Hash" (RECOMMENDED), not "Unique Identifiers" (MINIMUM)
-            if not is_file_type:
+            if not is_exempt:
                 has_unique_id = component.get("purl") or component.get("cpe") or component.get("swid")
                 if not has_unique_id:
                     unique_id_failures.append(component_name)
 
         # Create findings for per-component elements
+        status, details = element_verdict(supplier_failures, no_supplier_graded)
         findings.append(
             self._create_finding(
                 "supplier_name",
-                status="fail" if supplier_failures else "pass",
-                details=f"Missing for: {', '.join(supplier_failures)}" if supplier_failures else None,
-                remediation="Add publisher field or supplier.name to components.",
+                status=status,
+                details=details,
+                remediation="Add publisher, supplier.name or manufacturer.name to components.",
             )
         )
 
@@ -561,20 +574,22 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             )
         )
 
+        status, details = element_verdict(version_failures, nothing_graded)
         findings.append(
             self._create_finding(
                 "version",
-                status="fail" if version_failures else "pass",
-                details=f"Missing for: {', '.join(version_failures)}" if version_failures else None,
+                status=status,
+                details=details,
                 remediation="Add version field to components.",
             )
         )
 
+        status, details = element_verdict(unique_id_failures, nothing_graded)
         findings.append(
             self._create_finding(
                 "unique_identifiers",
-                status="fail" if unique_id_failures else "pass",
-                details=f"Missing for: {', '.join(unique_id_failures)}" if unique_id_failures else None,
+                status=status,
+                details=details,
                 remediation="Add purl, cpe, or swid to components.",
             )
         )
@@ -647,7 +662,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
 
         Args:
             element: Element key (e.g., "supplier_name").
-            status: Status string ("pass" or "fail").
+            status: Status string ("pass", "fail" or "warning").
             details: Additional details about the finding.
             remediation: Suggested fix for failures.
 
@@ -663,7 +678,7 @@ class NTIAMinimumElementsPlugin(AssessmentPlugin):
             title=self.FINDING_TITLES[element],
             description=description,
             status=status,
-            severity="info" if status == "pass" else "medium",
+            severity="info" if status == "pass" else ("low" if status == "warning" else "medium"),
             remediation=remediation if status == "fail" else None,
             metadata={
                 "standard": "NTIA",

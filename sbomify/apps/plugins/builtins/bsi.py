@@ -58,6 +58,12 @@ from typing import Any
 
 from packaging import version as pkg_version
 
+from sbomify.apps.plugins.builtins._component_scope import (
+    element_verdict,
+    is_non_software_component,
+    is_supplier_exempt,
+    nothing_to_grade,
+)
 from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -540,31 +546,33 @@ class BSICompliancePlugin(AssessmentPlugin):
         uri_deployable_form_warnings: list[str] = []
         original_licences_warnings: list[str] = []
 
+        # An element every component was exempt from graded nothing, so its
+        # empty failure list is a warning rather than a pass — see
+        # _component_scope. The creator element has its own, narrower exemption.
+        nothing_graded = nothing_to_grade(components)
+        no_creator_graded = nothing_to_grade(components, is_supplier_exempt)
+
         for i, component in enumerate(components):
             component_name = component.get("name", f"Component {i + 1}")
-
-            # Skip type=file components (e.g., lockfiles, scan inputs) for BSI
-            # per-component checks. BSI TR-03183-2 §5.2.2 fields apply to software
-            # components (type=library/application/framework/container/...), not to
-            # file-type entries that generators like syft emit for their scan input.
-            # Component Name is still validated so misnamed file entries surface.
-            is_file_type = str(component.get("type", "")).lower() == "file"
 
             # 1. Component name (applies to all component types)
             if not component.get("name"):
                 name_failures.append(f"Component at index {i}")
 
-            if is_file_type:
+            # 3. Component creator (email or URL). Read from `manufacturer`, so
+            # a device names its vendor here like any software component does.
+            if not is_supplier_exempt(component) and not self._get_cyclonedx_component_creator(component):
+                creator_failures.append(component_name)
+
+            # The remaining BSI TR-03183-2 §5.2.2 fields apply to software
+            # components (library/application/framework/container/...), not to
+            # the non-software entries exempted in _component_scope.
+            if is_non_software_component(component):
                 continue
 
             # 2. Component version
             if not component.get("version"):
                 version_failures.append(component_name)
-
-            # 3. Component creator (email or URL)
-            creator = self._get_cyclonedx_component_creator(component)
-            if not creator:
-                creator_failures.append(component_name)
 
             # 4. Filename (BSI property)
             filename = self._get_bsi_property(component, "filename")
@@ -623,29 +631,38 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
+        status, details = element_verdict(
+            version_failures, nothing_graded, self._format_failure_details(version_failures)
+        )
         findings.append(
             self._create_finding(
                 "component_version",
-                status="fail" if version_failures else "pass",
-                details=self._format_failure_details(version_failures) if version_failures else None,
+                status=status,
+                details=details,
                 remediation="Add version field to components (or file modification date per RFC 3339).",
             )
         )
 
+        status, details = element_verdict(
+            creator_failures, no_creator_graded, self._format_failure_details(creator_failures)
+        )
         findings.append(
             self._create_finding(
                 "component_creator",
-                status="fail" if creator_failures else "pass",
-                details=self._format_failure_details(creator_failures) if creator_failures else None,
+                status=status,
+                details=details,
                 remediation="Add manufacturer.contact[].email or manufacturer.url to each component.",
             )
         )
 
+        status, details = element_verdict(
+            filename_failures, nothing_graded, self._format_failure_details(filename_failures)
+        )
         findings.append(
             self._create_finding(
                 "filename",
-                status="fail" if filename_failures else "pass",
-                details=self._format_failure_details(filename_failures) if filename_failures else None,
+                status=status,
+                details=details,
                 remediation=(
                     f'Add property with name="{BSI_PROPERTY_PREFIX}filename" and the actual filename '
                     "to each component's properties array."
@@ -653,11 +670,14 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
+        status, details = element_verdict(
+            licence_failures, nothing_graded, self._format_failure_details(licence_failures)
+        )
         findings.append(
             self._create_finding(
                 "distribution_licences",
-                status="fail" if licence_failures else "pass",
-                details=self._format_failure_details(licence_failures) if licence_failures else None,
+                status=status,
+                details=details,
                 remediation=(
                     "Add licenses array with expression field using SPDX identifiers "
                     '(e.g., {"expression": "MIT", "acknowledgement": "concluded"}).'
@@ -666,6 +686,7 @@ class BSICompliancePlugin(AssessmentPlugin):
         )
 
         # Determine hash status: fail if no hash, warning if non-SHA-512, pass if SHA-512
+        hash_details: str | None
         if hash_failures:
             hash_status = "fail"
             hash_details = f"No hash found for: {', '.join(hash_failures)}"
@@ -676,8 +697,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 "BSI TR-03183-2 recommends SHA-512."
             )
         else:
-            hash_status = "pass"
-            hash_details = None
+            hash_status, hash_details = element_verdict([], nothing_graded)
 
         findings.append(
             self._create_finding(
@@ -691,11 +711,14 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
+        status, details = element_verdict(
+            executable_failures, nothing_graded, self._format_failure_details(executable_failures)
+        )
         findings.append(
             self._create_finding(
                 "executable_property",
-                status="fail" if executable_failures else "pass",
-                details=self._format_failure_details(executable_failures) if executable_failures else None,
+                status=status,
+                details=details,
                 remediation=(
                     f'Add property with name="{BSI_PROPERTY_PREFIX}executable" and value '
                     '"executable" or "non-executable" to each component.'
@@ -703,11 +726,14 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
+        status, details = element_verdict(
+            archive_failures, nothing_graded, self._format_failure_details(archive_failures)
+        )
         findings.append(
             self._create_finding(
                 "archive_property",
-                status="fail" if archive_failures else "pass",
-                details=self._format_failure_details(archive_failures) if archive_failures else None,
+                status=status,
+                details=details,
                 remediation=(
                     f'Add property with name="{BSI_PROPERTY_PREFIX}archive" and value '
                     '"archive" or "no archive" to each component.'
@@ -715,11 +741,14 @@ class BSICompliancePlugin(AssessmentPlugin):
             )
         )
 
+        status, details = element_verdict(
+            structured_failures, nothing_graded, self._format_failure_details(structured_failures)
+        )
         findings.append(
             self._create_finding(
                 "structured_property",
-                status="fail" if structured_failures else "pass",
-                details=self._format_failure_details(structured_failures) if structured_failures else None,
+                status=status,
+                details=details,
                 remediation=(
                     f'Add property with name="{BSI_PROPERTY_PREFIX}structured" and value '
                     '"structured" or "unstructured" to each component.'
@@ -749,15 +778,18 @@ class BSICompliancePlugin(AssessmentPlugin):
         )
 
         # Unique identifiers (warning if missing, as it's "MUST if exists")
+        status, details = element_verdict(
+            identifier_warnings,
+            nothing_graded,
+            self._format_failure_details(identifier_warnings),
+            missing_status="warning",
+            clean_detail="All components have unique identifiers",
+        )
         findings.append(
             self._create_finding(
                 "unique_identifiers",
-                status="pass" if not identifier_warnings else "warning",
-                details=(
-                    self._format_failure_details(identifier_warnings)
-                    if identifier_warnings
-                    else "All components have unique identifiers"
-                ),
+                status=status,
+                details=details,
                 remediation=(
                     "Add purl, cpe, or swid identifiers to components. Per BSI TR-03183-2 §5.2.4, "
                     "these MUST be provided if they exist for the component."
@@ -781,15 +813,18 @@ class BSICompliancePlugin(AssessmentPlugin):
         )
 
         # Source code URI (§5.2.4 Table 5) — per-component, warning-level
+        status, details = element_verdict(
+            source_code_uri_warnings,
+            nothing_graded,
+            self._format_failure_details(source_code_uri_warnings),
+            missing_status="warning",
+            clean_detail="All components expose a source-code URI",
+        )
         findings.append(
             self._create_finding(
                 "source_code_uri",
-                status="pass" if not source_code_uri_warnings else "warning",
-                details=(
-                    self._format_failure_details(source_code_uri_warnings)
-                    if source_code_uri_warnings
-                    else "All components expose a source-code URI"
-                ),
+                status=status,
+                details=details,
                 remediation=(
                     'Add externalReferences with type="vcs" or type="source-distribution" (CycloneDX) '
                     "so the upstream source location is available. Per BSI TR-03183-2 §5.2.4, this "
@@ -799,15 +834,18 @@ class BSICompliancePlugin(AssessmentPlugin):
         )
 
         # URI of deployable form (§5.2.4 Table 5) — per-component, warning-level
+        status, details = element_verdict(
+            uri_deployable_form_warnings,
+            nothing_graded,
+            self._format_failure_details(uri_deployable_form_warnings),
+            missing_status="warning",
+            clean_detail="All components expose a deployable-form URI",
+        )
         findings.append(
             self._create_finding(
                 "uri_deployable_form",
-                status="pass" if not uri_deployable_form_warnings else "warning",
-                details=(
-                    self._format_failure_details(uri_deployable_form_warnings)
-                    if uri_deployable_form_warnings
-                    else "All components expose a deployable-form URI"
-                ),
+                status=status,
+                details=details,
                 remediation=(
                     'Add externalReferences with type="distribution" or type="distribution-intake" '
                     "so consumers can fetch the deployable artefact. Per BSI TR-03183-2 §5.2.4, "
@@ -817,15 +855,18 @@ class BSICompliancePlugin(AssessmentPlugin):
         )
 
         # Original licences (§5.2.4 Table 5) — per-component, warning-level
+        status, details = element_verdict(
+            original_licences_warnings,
+            nothing_graded,
+            self._format_failure_details(original_licences_warnings),
+            missing_status="warning",
+            clean_detail="All components expose original licence information",
+        )
         findings.append(
             self._create_finding(
                 "original_licences",
-                status="pass" if not original_licences_warnings else "warning",
-                details=(
-                    self._format_failure_details(original_licences_warnings)
-                    if original_licences_warnings
-                    else "All components expose original licence information"
-                ),
+                status=status,
+                details=details,
                 remediation=(
                     'Mark the component\'s original licence with licenses[].acknowledgement = "declared" '
                     "(CycloneDX 1.5+) or add the bsi:component:associatedLicences / "
@@ -1527,9 +1568,15 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(manufacturer, dict):
             return None
 
-        # Check for URL
+        # Check for URL. organizationalEntity.url is an array in the CycloneDX
+        # schema; the string form is what several generators emit. Both are
+        # read here, as in the sibling helper.
         url = manufacturer.get("url", "")
-        if isinstance(url, str) and _is_valid_url(url):
+        if isinstance(url, list):
+            for candidate in url:
+                if isinstance(candidate, str) and _is_valid_url(candidate):
+                    return candidate
+        elif isinstance(url, str) and _is_valid_url(url):
             return url
 
         # Check for email in contacts

@@ -308,3 +308,50 @@ class TestWorkspaceCryptoSnapshot:
         current = snapshot.take_screenshot(authenticated_page, width=width)
 
         snapshot.assert_screenshot(baseline.as_posix(), current.as_posix())
+
+
+@pytest.mark.django_db
+class TestComponentArtifactsHbomRow:
+    """The artifact table types an HBOM row and blanks its vulnerability cell.
+
+    Both halves are Alpine-rendered from the row's ``bom_type``, so only a real
+    browser proves them. No screenshot: the assertion is on the DOM, which keeps
+    it independent of the visual baselines.
+    """
+
+    def test_hbom_row_shows_badge_and_no_vulnerability_count(
+        self,
+        authenticated_page: Page,
+        sbom_component_details,
+    ) -> None:
+        import hashlib
+
+        from playwright.sync_api import expect
+
+        from sbomify.apps.sboms.models import SBOM
+
+        SBOM.objects.create(
+            id=hashlib.md5(b"e2e-hbom-artifact").hexdigest()[:12],
+            name="pcie-sata-adaptor-board.cdx.json",
+            component=sbom_component_details,
+            format="cyclonedx",
+            format_version="1.6",
+            version="rev-1",
+            sbom_filename="",
+            source="test",
+            bom_type=SBOM.BomType.HBOM,
+        )
+
+        authenticated_page.goto(f"/component/{sbom_component_details.id}/artifacts/")
+        authenticated_page.wait_for_load_state("networkidle")
+
+        hbom_row = authenticated_page.locator("tr").filter(has_text="pcie-sata-adaptor-board.cdx.json")
+        expect(hbom_row.locator("td").nth(1)).to_have_text("HBOM")
+        # Column order: name, type, version, vulnerabilities.
+        expect(hbom_row.locator("td").nth(3)).to_have_text("—")
+
+        # The fixture's plain SBOM carries a scan, so the dash is the HBOM's own
+        # doing and not the whole column rendering empty.
+        sbom_row = authenticated_page.locator("tr").filter(has_text="simple-sbom.json")
+        expect(sbom_row.locator("td").nth(1)).to_have_text("SBOM")
+        expect(sbom_row.locator("td").nth(3)).not_to_have_text("—")
