@@ -4,35 +4,25 @@
      hx-target="#team-tokens-content"
      hx-swap="innerHTML">
     <div id="team-tokens-content">
-        {# Skeleton Loading State #}
-        <c-cards.dashboard class="mb-6">
-        <c-slot name="header">
-        <c-cards.header>
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
-                <div>
-                    <div class="h-5 w-28 bg-border/50 rounded animate-pulse"></div>
-                    <div class="h-4 w-40 bg-border/30 rounded animate-pulse mt-1"></div>
-                </div>
+        {# Skeleton loading state, shaped like the loaded layout. #}
+        <div class="max-w-3xl space-y-6">
+            <div>
+                <div class="h-5 w-28 bg-border/50 rounded animate-pulse"></div>
+                <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-2"></div>
             </div>
-            <div class="h-9 w-32 bg-border/50 rounded-lg animate-pulse"></div>
-        </div>
-        </c-cards.header>
-        </c-slot>
-        <div class="space-y-3">
-            {% for i in "123" %}
-                <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
-                    <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
-                    <div class="flex-1">
-                        <div class="h-4 w-48 bg-border/50 rounded animate-pulse"></div>
-                        <div class="h-3 w-32 bg-border/30 rounded animate-pulse mt-2"></div>
+            <div class="space-y-3">
+                {% for i in "123" %}
+                    <div class="flex items-center gap-4 p-4 bg-background/30 rounded-lg">
+                        <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+                        <div class="flex-1">
+                            <div class="h-4 w-48 bg-border/50 rounded animate-pulse"></div>
+                            <div class="h-3 w-32 bg-border/30 rounded animate-pulse mt-2"></div>
+                        </div>
+                        <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
                     </div>
-                    <div class="h-8 w-8 bg-border/30 rounded-lg animate-pulse"></div>
-                </div>
-            {% endfor %}
+                {% endfor %}
+            </div>
         </div>
         <c-feedback.loading row message="Loading API tokens..." class="mt-4" />
-        </c-cards.dashboard>
     </div>
 </div>

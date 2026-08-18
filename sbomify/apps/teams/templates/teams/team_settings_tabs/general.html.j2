@@ -2,29 +2,20 @@
      hx-get="{% url 'teams:team_general' team.key %}"
      hx-trigger="load, refreshTeamGeneral from:body"
      hx-swap="innerHTML">
-    {# Skeleton Loading State #}
-    <c-cards.dashboard class="mb-6">
-    <c-slot name="header">
-    <c-cards.header>
-    <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-border/50 animate-pulse"></div>
+    {# Skeleton loading state, shaped like the loaded layout. #}
+    <div class="max-w-2xl space-y-6">
         <div>
-            <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
-            <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
-        </div>
-    </div>
-    </c-cards.header>
-    </c-slot>
-    <div class="space-y-4">
-        <div>
-            <div class="h-4 w-24 bg-border/50 rounded animate-pulse mb-2"></div>
-            <div class="h-10 w-full bg-border/30 rounded-lg animate-pulse"></div>
+            <div class="h-5 w-24 bg-border/50 rounded animate-pulse"></div>
+            <div class="h-4 w-52 bg-border/30 rounded animate-pulse mt-2"></div>
         </div>
         <div>
             <div class="h-4 w-32 bg-border/50 rounded animate-pulse mb-2"></div>
             <div class="h-10 w-full bg-border/30 rounded-lg animate-pulse"></div>
         </div>
+        <div>
+            <div class="h-4 w-28 bg-border/50 rounded animate-pulse mb-2"></div>
+            <div class="h-10 w-full bg-border/30 rounded-lg animate-pulse"></div>
+        </div>
     </div>
     <c-feedback.loading row message="Loading general settings..." class="mt-4" />
-    </c-cards.dashboard>
 </div>

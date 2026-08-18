@@ -1,28 +1,21 @@
 {% load humanize %}
 {# Access Requests Section #}
-<c-cards.dashboard body_class="space-y-6" class="mb-6">
-<c-slot name="header">
-<div class="px-6 py-4 border-b border-border">
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <c-chips.icon-chip accent="info">
-            <i class="fas fa-user-clock"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h5 class="text-lg font-semibold text-text m-0">Access Requests</h5>
-                <p class="text-text-muted text-sm m-0">Manage access to gated components</p>
-            </div>
+{# Section shell in the settings-tab style: an h3 heading row with the action beside it, no card chrome. #}
+<div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h3 class="text-sm font-semibold text-text m-0">Access requests</h3>
+            <p class="text-sm text-text-muted mt-1 m-0">Who can reach your gated components.</p>
         </div>
         <c-buttons.primary size="sm" onclick="window.dispatchEvent(new CustomEvent('open-invite-user-modal'))">
         <i class="fas fa-user-plus mr-1"></i>Invite
         </c-buttons.primary>
     </div>
-</div>
-</c-slot>
+    <div class="mt-4 space-y-6">
 {# Pending Requests #}
 <div>
     <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Pending Requests</h6>
+        <h6 class="text-sm font-medium text-text m-0">Pending Requests</h6>
         {% if pending_requests %}<c-badges.warning size="sm">{{ pending_requests|length }}</c-badges.warning>{% endif %}
     </div>
     {% if pending_requests %}
@@ -110,7 +103,7 @@
 {# Pending Invitations #}
 <div class="pt-4 border-t border-border">
     <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Pending invitations</h6>
+        <h6 class="text-sm font-medium text-text m-0">Pending invitations</h6>
         {% if pending_invitations %}<c-badges.info size="sm">{{ pending_invitations|length }}</c-badges.info>{% endif %}
     </div>
     {% if pending_invitations %}
@@ -153,7 +146,7 @@
 {# Approved Requests #}
 <div class="pt-4 border-t border-border">
     <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Approved Requests</h6>
+        <h6 class="text-sm font-medium text-text m-0">Approved Requests</h6>
         {% if approved_requests %}<c-badges.success size="sm">{{ approved_requests|length }}</c-badges.success>{% endif %}
     </div>
     {% if approved_requests %}
@@ -227,7 +220,7 @@
 {# Rejected Requests #}
 <div class="pt-4 border-t border-border">
     <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Rejected Requests</h6>
+        <h6 class="text-sm font-medium text-text m-0">Rejected Requests</h6>
         {% if rejected_requests %}<c-badges.danger size="sm">{{ rejected_requests|length }}</c-badges.danger>{% endif %}
     </div>
     {% if rejected_requests %}
@@ -278,7 +271,8 @@
         <p class="text-text-muted text-sm py-3">No rejected access requests</p>
     {% endif %}
 </div>
-</c-cards.dashboard>
+    </div>
+</div>
 <script>
     // Menu items call these directly, so they survive HTMX swaps and the
     // actions menu teleporting its content to the body.
