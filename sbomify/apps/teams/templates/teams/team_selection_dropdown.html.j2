@@ -15,14 +15,12 @@
         </button>
         {% with current_view_name=request.resolver_match.namespaces.0|add:":"|add:request.resolver_match.url_name %}
             {# Desktop Toggle #}
-            <button class="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg text-text hover:bg-background/50 transition-colors"
-                    type="button"
-                    @click="open = !open"
-                    title="Switch workspace"
-                    aria-label="Select workspace">
-                <div class="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <i class="fas fa-building text-primary text-sm"></i>
-                </div>
+            {% comment %}The responsive split lives on a wrapper: the button owns display, so hidden/md:flex utilities on the button itself would silently lose.{% endcomment %}
+            <div class="hidden md:block">
+                <c-buttons.ghost @click="open = !open" title="Switch workspace" aria-label="Select workspace">
+                <c-chips.icon-chip size="sm">
+                <i class="fas fa-building" aria-hidden="true"></i>
+                </c-chips.icon-chip>
                 <div class="text-left">
                     <span class="text-xs text-text-muted block">Workspace</span>
                     <span class="text-sm font-semibold text-text">
@@ -36,35 +34,25 @@
                 {% if request.session.current_team %}<span class="w-2 h-2 bg-success rounded-full"></span>{% endif %}
                 <i class="fas fa-chevron-down text-text-muted text-xs ml-1 transition-transform"
                    :class="open ? 'rotate-180' : ''"></i>
-            </button>
-            {# Dropdown Menu #}
-            <div x-show="open"
-                 x-transition:enter="transition ease-out duration-100"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-75"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
-                 class="absolute right-0 mt-2 w-64 bg-surface border border-border rounded-xl shadow-lg z-50 overflow-hidden"
-                 @click.away="open = false">
-                <div class="px-4 py-2 border-b border-border">
-                    <h6 class="text-xs uppercase text-text-muted font-semibold tracking-wider">Switch Workspace</h6>
-                </div>
-                <div class="py-1">
-                    {% for t_key, t_info in available_workspaces.items %}
-                        <a class="flex items-center justify-between px-4 py-2 text-sm hover:bg-background/50 transition-colors no-underline {% if current_workspace_key == t_key %}bg-primary/5{% endif %}"
-                           href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}">
-                            <div class="flex items-center gap-2.5">
-                                <span class="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                    <i class="fas fa-building text-primary text-xs"></i>
-                                </span>
-                                <span class="text-text">{{ t_info.name|workspace_display }}</span>
-                            </div>
-                            {% if current_workspace_key == t_key %}<i class="fas fa-check text-success"></i>{% endif %}
-                        </a>
-                    {% endfor %}
-                </div>
+                </c-buttons.ghost>
             </div>
+            {# Dropdown Menu #}
+            <c-dropdowns.dropdown class="right-0 mt-2 w-64" aria-label="Switch workspace" x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" @click.away="open = false">
+            <c-dropdowns.header>Switch Workspace</c-dropdowns.header>
+            {% for t_key, t_info in available_workspaces.items %}
+                <c-dropdowns.item class="justify-between" href="{% url 'teams:switch_team' t_key %}?next={{ current_view_name }}"
+                {% if current_workspace_key == t_key %}aria-current="true"{% endif %}
+                >
+                <div class="flex items-center gap-2.5">
+                    <span class="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-building text-primary text-xs"></i>
+                    </span>
+                    <span>{{ t_info.name|workspace_display }}</span>
+                </div>
+                {% if current_workspace_key == t_key %}<i class="fas fa-check text-success"></i>{% endif %}
+                </c-dropdowns.item>
+            {% endfor %}
+            </c-dropdowns.dropdown>
         {% endwith %}
     </div>
 </div>

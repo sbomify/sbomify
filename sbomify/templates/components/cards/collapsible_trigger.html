@@ -1,0 +1,29 @@
+{% comment %}
+The header row that opens and closes a collapsible card. A real button, so the
+keyboard reaches it and screen readers get aria-expanded.
+
+state is the Alpine expression that reads true while the panel is open; it
+drives aria-expanded and turns the chevron over. The caller supplies the click
+handler that flips it, because only the caller knows whether the stack allows
+one open panel or many. The slot is the title row.
+
+bare puts the slot straight into the row instead of wrapping it in that title.
+A header that is a plugin's name plus its status chips and a muted finding
+count builds its own line, and the bold ink belongs to the name inside it, not
+to everything standing beside it. The two branches differ only in that wrapper
+and must stay in lockstep.
+{% endcomment %}
+<c-vars state bare class />
+<button type="button"
+        class="flex w-full items-center justify-between px-6 py-5 text-left cursor-pointer select-none transition-colors duration-200 hover:bg-[color-mix(in_oklab,var(--color-primary)_3%,transparent)] focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]{% if class %} {{ class }}{% endif %}"
+        {% if state %}:aria-expanded="{{ state }}"{% endif %}
+        {{ attrs }}>
+    {% if bare %}
+        {{ slot }}
+    {% else %}
+        <span class="flex items-center gap-3 font-semibold text-text">{{ slot }}</span>
+    {% endif %}
+    <i class="fas fa-chevron-down text-text-muted transition-transform duration-300"
+       {% if state %}:class="{{ state }} ? 'rotate-180' : ''"{% endif %}
+       aria-hidden="true"></i>
+</button>

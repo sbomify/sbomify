@@ -10,6 +10,10 @@
     so create + delete + form errors all land back into the same shell. The
     modal owns the title and chrome, so this renders bare content.
 
+    The revoke control stays an inline icon button rather than moving into
+    c-actions-menu: the modal around it is z-[100] and a dropdown panel is
+    z-50, so a menu opened here would render under the dialog.
+
     NOTE: this file is rendered by Django's template engine despite the
     ``.html.j2`` extension (sbomify-wide convention — see CLAUDE.md).
     Django's ``{# ... #}`` comments are single-line per the engine's
@@ -26,26 +30,23 @@ component without long-lived secrets. Tokens are issued from the
 workflow's OIDC identity and are valid for 15 minutes.
 </p>
 {% if bindings %}
-<div class="overflow-x-auto">
-<table class="tw-table">
-<thead>
-<tr>
-<th>Provider</th>
-<th>Repository</th>
-<th>Added by</th>
-<th>Last used</th>
-<th class="text-right">Actions</th>
-</tr>
-</thead>
+<c-tables.table>
+<c-tables.head>
+<c-tables.header-cell>Provider</c-tables.header-cell>
+<c-tables.header-cell>Repository</c-tables.header-cell>
+<c-tables.header-cell>Added by</c-tables.header-cell>
+<c-tables.header-cell date>Last used</c-tables.header-cell>
+<c-tables.actions-cell as="th" />
+</c-tables.head>
 <tbody>
 {% for binding in bindings %}
-<tr>
-<td>
-<span class="tw-badge tw-badge-secondary">
+<c-tables.row>
+<c-tables.cell>
+<c-badges.secondary>
 <i class="fab fa-github mr-1"></i>{{ binding.get_provider_display }}
-</span>
-</td>
-<td>
+</c-badges.secondary>
+</c-tables.cell>
+<c-tables.cell>
 <div class="flex items-center gap-2">
 <code class="text-sm font-medium">{{ binding.repository }}</code>
 <a href="https://github.com/{{ binding.repository }}" target="_blank" rel="noopener noreferrer" class="text-text-muted hover:text-primary transition-colors" title="Open on GitHub">
@@ -57,87 +58,86 @@ workflow's OIDC identity and are valid for 15 minutes.
 owner_id={{ binding.repository_owner_id }} ·
 repo_id={{ binding.repository_id }}
 {% else %}
-<span class="italic">awaiting first publish — IDs pin automatically</span>
+<span class="italic">awaiting first publish, IDs pin automatically</span>
 {% endif %}
 </div>
-</td>
-<td class="text-sm text-text-muted">
+</c-tables.cell>
+{% comment %}
+    The muted ink sits on a wrapper rather than on the cell: the cell owns its
+    own colour and its own size, and a second one beside it would be resolved
+    by stylesheet order. text-sm here is the size these two columns always had.
+{% endcomment %}
+<c-tables.cell>
+<div class="text-sm text-text-muted">
 {% if binding.created_by %}
 {{ binding.created_by.get_full_name|default:binding.created_by.username }}
 {% else %}
 —
 {% endif %}
 <div class="text-xs">{{ binding.created_at|date:"Y-m-d" }}</div>
-</td>
-<td class="text-sm text-text-muted">
+</div>
+</c-tables.cell>
+<c-tables.cell date>
+<div class="text-sm text-text-muted">
 {% if binding.last_used_at %}
 {{ binding.last_used_at|date:"Y-m-d H:i" }} UTC
 {% else %}
 <span class="italic">never</span>
 {% endif %}
-</td>
-<td class="text-right">
-<button type="button" class="tw-btn tw-btn-sm tw-btn-ghost text-danger hover:bg-danger/10" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
-<i class="fas fa-trash"></i>
-<span class="sr-only md:not-sr-only md:ml-1">Revoke</span>
-</button>
-</td>
-</tr>
+</div>
+</c-tables.cell>
+<c-tables.actions-cell>
+<c-buttons.icon variant="danger" size="sm" label="Revoke trusted publisher" hx-post="{% url 'oidc:trusted_publisher_delete' component_id=component.id binding_id=binding.id %}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-target="#trusted-publishers-section" hx-swap="outerHTML" hx-confirm="Remove the trusted-publisher binding for '{{ binding.repository }}'? This will immediately revoke every short-lived token it ever issued." title="Revoke this trusted publisher">
+<i class="fas fa-trash" aria-hidden="true"></i>
+</c-buttons.icon>
+</c-tables.actions-cell>
+</c-tables.row>
 {% endfor %}
 </tbody>
-</table>
-</div>
+</c-tables.table>
 {% else %}
-<div class="flex items-center gap-4 p-4 rounded-lg border border-dashed border-border bg-background/40">
-<i class="fas fa-shield-halved text-2xl text-text-muted opacity-50"></i>
-<div>
-<p class="text-sm font-medium text-text m-0">No trusted publishers yet</p>
-<p class="text-xs text-text-muted m-0 mt-0.5">
-Add a repository below — its workflow authenticates with OIDC, no long-lived API tokens required.
-</p>
-</div>
-</div>
+<c-feedback.empty-state icon="fas fa-shield-halved" title="No trusted publishers yet" message="Add a repository below. Its workflow authenticates with OIDC, no long-lived API tokens required." />
 {% endif %}
 <div class="pt-1">
 <form method="post" hx-post="{% url 'oidc:trusted_publishers' component_id=component.id %}" hx-target="#trusted-publishers-section" hx-swap="outerHTML" class="space-y-3">
 {% csrf_token %}
 <div class="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3 items-start">
 <div>
-<label class="tw-form-label" for="id_provider">Provider</label>
+<c-forms.label for="id_provider">Provider</c-forms.label>
 {{ form.provider }}
-{% if form.provider.errors %}<p class="tw-form-error">{{ form.provider.errors.0 }}</p>{% endif %}
+{% if form.provider.errors %}<c-forms.error>{{ form.provider.errors.0 }}</c-forms.error>{% endif %}
 </div>
 <div>
-<label class="tw-form-label" for="id_repository">Repository</label>
+<c-forms.label for="id_repository">Repository</c-forms.label>
 {{ form.repository }}
 {% if form.repository.errors %}
-<p class="tw-form-error">{{ form.repository.errors.0 }}</p>
+<c-forms.error>{{ form.repository.errors.0 }}</c-forms.error>
 {% else %}
-<p class="tw-form-helper">{{ form.repository.help_text }}</p>
+<c-forms.hint>{{ form.repository.help_text }}</c-forms.hint>
 {% endif %}
 </div>
-<button type="submit" class="tw-btn tw-btn-primary md:mt-7">
+<c-buttons.primary type="submit" class="md:mt-7">
 <i class="fas fa-plus"></i>
 Add publisher
-</button>
+</c-buttons.primary>
 </div>
 </form>
 </div>
-<details class="group rounded-lg bg-surface border border-border/60">
-<summary class="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm font-medium text-text hover:bg-background/40 rounded-lg">
-<i class="fas fa-code text-text-muted"></i>
-<span>Configure your GitHub Actions workflow</span>
-<i class="fas fa-chevron-down text-xs text-text-muted ml-auto transition-transform group-open:rotate-180"></i>
-</summary>
-<div class="px-4 pb-4 pt-1 space-y-3 text-sm border-t border-border/40">
+<c-navigation.accordion density="sm">
+<c-navigation.disclosure label_class="flex items-center gap-2">
+<c-slot name="label">
+<i class="fas fa-code text-text-muted" aria-hidden="true"></i>
+Configure your GitHub Actions workflow
+</c-slot>
+<div class="space-y-3">
 <p class="text-text-muted m-0">
 Add this step to the workflow that should be authorised to push to this
-component. The <code class="px-1.5 py-0.5 rounded bg-background border border-border/40 text-text font-mono text-xs">audience</code> value must be exactly
-<code class="px-1.5 py-0.5 rounded bg-background border border-border/40 text-text font-mono text-xs">{{ oidc_github_audience }}</code> — the backend rejects
+component. The <c-code-inline>audience</c-code-inline> value must be exactly
+<c-code-inline>{{ oidc_github_audience }}</c-code-inline>. The backend rejects
 tokens minted for any other audience.
 </p>
 {# djlint:off #}
-                <pre class="bg-background border border-border rounded-md p-3 text-xs overflow-x-auto text-text"><code>{% verbatim %}permissions:
+<c-code-block filename="workflow.yml"><c-slot name="code">{% verbatim %}permissions:
   id-token: write    # required to mint the OIDC token
   contents: read
 
@@ -168,15 +168,14 @@ steps:
         -H "Authorization: Bearer ${{ steps.sbomify.outputs.token }}" \
         -H "Content-Type: application/json" \
         --data-binary @bom.json \
-        {% endverbatim %}{{ api_base_url }}{% verbatim %}/api/v1/sboms/artifact/cyclonedx/{% endverbatim %}{{ component.id }}
-</code></pre>
+        {% endverbatim %}{{ api_base_url }}{% verbatim %}/api/v1/sboms/artifact/cyclonedx/{% endverbatim %}{{ component.id }}</c-slot></c-code-block>
 {# djlint:on #}
 <p class="text-xs text-text-muted m-0 flex items-center gap-1.5">
-<i class="fas fa-clock text-text-muted"></i>
-The sbomify token expires after 15 minutes — request a fresh one for each
-job that needs it.
+<i class="fas fa-clock text-text-muted" aria-hidden="true"></i>
+The sbomify token expires after 15 minutes. Request a fresh one for each run.
 </p>
 </div>
-</details>
+</c-navigation.disclosure>
+</c-navigation.accordion>
 </div>
 </section>

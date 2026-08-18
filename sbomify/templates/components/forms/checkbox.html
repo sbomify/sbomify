@@ -1,0 +1,21 @@
+{% comment %}
+A checkbox and its label, in plain Tailwind utilities. The label wraps the
+input, so the text is part of the hit area and no id is needed to tie them
+together; id is still rendered when name or id is given, for a label elsewhere
+on the page to point at.
+
+The control itself is c-forms.checkbox-input, which every state is drawn on;
+this file adds the label around it and nothing else. A row that is its own
+control reaches for that component directly.
+
+class lands on the wrapping label (layout) and is blanked for the control, which
+would otherwise take the label's layout as its own; everything else, including
+x-model and @change, lands on the input.
+{% endcomment %}
+<c-vars name id value="1" checked disabled class />
+<label class="flex items-center gap-3{% if class %} {{ class }}{% endif %}">
+    {% with class="" %}
+        <c-forms.checkbox-input name="{{ name }}" id="{{ id }}" value="{{ value }}" :checked="checked" :disabled="disabled" :attrs="attrs" />
+    {% endwith %}
+    {% if slot %}<span class="text-sm text-text">{{ slot }}</span>{% endif %}
+</label>

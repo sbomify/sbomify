@@ -1,0 +1,26 @@
+{% comment %}
+Icon-only button in plain utilities. label is the accessible name and is
+required; the slot is the icon element. Colour variants and the stretch shape
+render as single conditional segments so hover utilities never stack.
+
+With an href it renders an anchor, for the icon controls that are links: the
+download beside a row, the view-details arrow. The stylesheet's icon-button
+class was on anchors as often as on buttons, so the twin is real. The two
+branches differ only in the element and in the disabled affordance, which an
+anchor cannot carry, and must stay in lockstep.
+{% endcomment %}
+<c-vars label variant size stretch type="button" href disabled class />
+{% if href %}
+    <a href="{{ href }}"
+       class="inline-flex items-center justify-center border border-solid transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] focus-visible:border-[color-mix(in_oklab,var(--color-primary)_30%,transparent)] focus-visible:text-text {% if size == 'sm' %}w-9 h-9 text-sm rounded-md{% elif size == 'lg' %}w-12 h-12 text-xl rounded-[0.625rem]{% else %}w-11 h-11 rounded-lg{% endif %} {% if stretch %}w-12 h-full min-h-10 text-text-muted bg-background border-border hover:bg-background hover:border-[color-mix(in_oklab,var(--color-primary)_40%,transparent)] hover:text-primary{% elif variant == 'primary' %}bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] text-primary border-transparent hover:bg-primary hover:text-white hover:scale-105 active:scale-95{% elif variant == 'danger' %}text-danger border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)] hover:border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] hover:text-danger hover:scale-105 active:scale-95{% elif variant == 'success' %}text-success border-transparent hover:bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] hover:border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] hover:text-success hover:scale-105 active:scale-95{% else %}text-text-muted border-transparent hover:bg-surface hover:border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-text hover:scale-105 active:scale-95{% endif %}{% if class %} {{ class }}{% endif %}"
+       aria-label="{{ label }}"
+       {{ attrs }}>{{ slot }}
+    </a>
+{% else %}
+    <button type="{{ type }}"
+            class="inline-flex items-center justify-center border border-solid transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)] focus-visible:border-[color-mix(in_oklab,var(--color-primary)_30%,transparent)] focus-visible:text-text disabled:opacity-50 disabled:cursor-not-allowed {% if size == 'sm' %}w-9 h-9 text-sm rounded-md{% elif size == 'lg' %}w-12 h-12 text-xl rounded-[0.625rem]{% else %}w-11 h-11 rounded-lg{% endif %} {% if stretch %}w-12 h-full min-h-10 text-text-muted bg-background border-border hover:bg-background hover:border-[color-mix(in_oklab,var(--color-primary)_40%,transparent)] hover:text-primary{% elif variant == 'primary' %}bg-[color-mix(in_oklab,var(--color-primary)_10%,transparent)] text-primary border-transparent hover:bg-primary hover:text-white hover:scale-105 active:scale-95{% elif variant == 'danger' %}text-danger border-transparent hover:bg-[color-mix(in_oklab,var(--color-danger)_12%,transparent)] hover:border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)] hover:text-danger hover:scale-105 active:scale-95{% elif variant == 'success' %}text-success border-transparent hover:bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] hover:border-[color-mix(in_oklab,var(--color-success)_30%,transparent)] hover:text-success hover:scale-105 active:scale-95{% else %}text-text-muted border-transparent hover:bg-surface hover:border-[color-mix(in_oklab,var(--color-border)_50%,transparent)] hover:text-text hover:scale-105 active:scale-95{% endif %}{% if class %} {{ class }}{% endif %}"
+            aria-label="{{ label }}"
+            {% if disabled %}disabled{% endif %}
+            {{ attrs }}>{{ slot }}
+    </button>
+{% endif %}

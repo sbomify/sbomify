@@ -182,6 +182,7 @@ INSTALLED_APPS = [
     "django_extensions",
     "django_vite",
     "django_htmx",
+    "django_cotton",
     "ninja",
     "widget_tweaks",
     "allauth",
@@ -296,6 +297,17 @@ TEMPLATES = [
         },
     },
 ]
+
+# django-cotton: the component library engine. Components are .html files
+# under sbomify/templates/components/; <c-dir.name> renders them anywhere
+# with no load tag. Isolation keeps components props-only, like a React
+# component: page context does not leak in.
+# The isolation setting is named COTTON_ENABLE_CONTEXT_ISOLATION in 2.7.2.
+# The docs site documents COTTON_ISOLATE_BY_DEFAULT, which this version does
+# not read, so that name silently leaves isolation off. Check the installed
+# package before renaming it.
+COTTON_DIR = "components"
+COTTON_ENABLE_CONTEXT_ISOLATION = True
 
 WSGI_APPLICATION = "sbomify.wsgi.application"
 ASGI_APPLICATION = "sbomify.asgi.application"

@@ -1,0 +1,9 @@
+{% comment %}
+The gap in a pager: the pages between the first and the window around the
+current one. It sizes like a page control so the row does not jump where the
+run is broken, but it is not a control and takes no click.
+{% endcomment %}
+<c-vars class />
+<span class="flex items-center justify-center min-w-8 h-8 text-[0.8125rem] text-text-muted{% if class %} {{ class }}{% endif %}"
+      aria-hidden="true"
+      {{ attrs }}>...</span>

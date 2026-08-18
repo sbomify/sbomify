@@ -16,9 +16,7 @@
                         <span class="text-xs font-medium px-1.5 py-0.5 rounded"
                               :class="index === 0 ? 'bg-success/10 text-success' : 'bg-border/50 text-text-muted'"
                               x-text="index === 0 ? 'latest' : release.name"></span>
-                        <span x-show="release.is_prerelease"
-                              x-cloak
-                              class="text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning">pre</span>
+                        <c-badges.warning size="sm" x-show="release.is_prerelease" x-cloak>pre</c-badges.warning>
                     </span>
                 </a>
             </template>
