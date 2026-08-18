@@ -74,7 +74,7 @@
                             <c-tables.shell nested>
                             <c-tables.table sized>
                             <c-tables.head>
-                            <c-tables.header-cell class="w-1/4">Package</c-tables.header-cell>
+                            <c-tables.header-cell nowrap class="w-1/4">Package</c-tables.header-cell>
                             <c-tables.header-cell class="w-1/4">Version</c-tables.header-cell>
                             <c-tables.header-cell class="w-1/4">Ecosystem</c-tables.header-cell>
                             <c-tables.header-cell class="w-1/4">Vulnerabilities</c-tables.header-cell>
@@ -89,7 +89,7 @@
                                     }">
                                     {# Package row stays compact; its vulnerabilities span the full width in the row below. #}
                                     <c-tables.row class="cursor-pointer" @click="open = !open">
-                                    <c-tables.cell>
+                                    <c-tables.cell nowrap>
                                     <span class="font-semibold text-text">{{ pkg_vuln_info.package.name }}</span>
                                     </c-tables.cell>
                                     <c-tables.cell>
@@ -116,7 +116,7 @@
                                             cell used to carry, so its effective padding
                                             was always the cell's default.
                                         {% endcomment %}
-                                        <c-tables.cell colspan="4">
+                                        <c-tables.cell colspan="4" nowrap>
                                         <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
                                             {% for vuln in pkg_vuln_info.vulnerabilities %}
                                                 <c-cards.card flush class="p-4 min-w-0">

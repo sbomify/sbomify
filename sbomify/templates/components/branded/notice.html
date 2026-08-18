@@ -1,0 +1,28 @@
+{% comment %}
+The callout that explains why something is not visible: an artifact behind an
+access request, a document behind an NDA. It is the one branded component whose
+job is to stop the reader, so it takes the full width and leads with an icon.
+
+The tint is the brand at low alpha rather than a warning colour. Being asked to
+sign in is not an error, and painting it amber makes a normal step look like a
+failure.
+
+The icon sits on a solid brand chip rather than being brand-coloured itself:
+an icon tinted with a pale brand disappears against the panel behind it. The
+panel keeps the low-alpha tint, because the text on it is neutral.
+
+The action slot is where the caller puts the button that resolves it, so the
+notice never has to know what the next step is.
+{% endcomment %}
+<c-vars icon="fas fa-lock" title class />
+<div class="flex items-start gap-3 rounded-xl border border-solid border-[color-mix(in_oklab,var(--brand)_25%,transparent)] bg-[color-mix(in_oklab,var(--brand)_7%,transparent)] px-4 py-3.5{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>
+    <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-[var(--brand-ink)]">
+        <i class="{{ icon }} text-sm" aria-hidden="true"></i>
+    </span>
+    <div class="min-w-0 flex-1">
+        {% if title %}<p class="text-sm font-semibold text-text">{{ title }}</p>{% endif %}
+        <div class="text-sm text-text-secondary">{{ slot }}</div>
+    </div>
+    {% if action %}<div class="shrink-0">{{ action }}</div>{% endif %}
+</div>

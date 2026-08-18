@@ -45,7 +45,7 @@
         <c-tables.table x-cloak>
         <c-tables.head>
         <c-tables.header-cell>Severity</c-tables.header-cell>
-        <c-tables.header-cell>Advisory</c-tables.header-cell>
+        <c-tables.header-cell nowrap>Advisory</c-tables.header-cell>
         <c-tables.header-cell>Package</c-tables.header-cell>
         <c-tables.header-cell>Fixed in</c-tables.header-cell>
         <c-tables.header-cell>Status</c-tables.header-cell>
@@ -53,7 +53,7 @@
         <tbody>
             {% for vuln in latest_vulns %}
                 <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% if vuln.severity == 'critical' or vuln.severity == 'high' or vuln.severity == 'medium' or vuln.severity == 'low' %}
                     <c-badges.severity level="{{ vuln.severity|lower }}" class="
                     {% if vuln.vex_suppressed %}line-through{% endif %}
@@ -68,7 +68,7 @@
                     </c-badges.severity>
                 {% endif %}
                 </c-tables.cell>
-                <c-tables.cell>
+                <c-tables.cell nowrap>
                 {% with vuln_url=vuln.id|advisory_url %}
                     {% if vuln_url %}
                         <a href="{{ vuln_url }}"

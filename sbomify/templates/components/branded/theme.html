@@ -1,0 +1,47 @@
+{% load brand_tags %}
+{% comment %}
+A brand scope. Every c-branded component reads the workspace's colour from the
+two custom properties a scope publishes:
+
+  --brand      the workspace's colour, for solid fills and nothing else
+  --brand-ink  the text colour that belongs on top of --brand
+
+Two, rather than a palette, is the point. These components are shown to our
+users' users, so the workspace picks an accent and the platform keeps
+everything else: surfaces, body text, borders, radius and type all stay on the
+shared tokens. A workspace cannot set a background, so it cannot produce a page
+that is hard to read.
+
+--brand-ink is computed, not chosen. ink_on_color measures the brand's WCAG
+relative luminance and returns white or the platform ink, whichever actually
+contrasts, so a pale yellow brand gets dark text and a navy one gets white
+without the caller thinking about it.
+
+There are two ways a scope gets published, and the page root is the normal one.
+A whole trust centre page is a single brand, so public_base.htmx.j2 sets --brand
+and --brand-ink at :root, in the same inline block as the rest of the branding.
+Wrapping every public template in this div would say the same thing and cost a
+wrapper each time. Nothing in the app stylesheet defines --brand, so a :root
+declaration is not lost to load order the way --color-primary is.
+
+This component is for the smaller scope: a piece of a page that carries a brand
+the page root does not, such as an email preview, an embedded widget or one card
+among many. It has no caller on the trust centre today, and that is expected.
+
+Custom properties inherit either way, so whichever scope is in play, everything
+below it is branded at any depth with no prop passed down.
+
+brand is optional. Without it the platform accent is used, so a branded
+component is never unstyled and a workspace with branding turned off renders as
+plain sbomify.
+
+The colour is user input landing in a style attribute, so both filters resolve
+it through brand_fill's sanitizer: anything that is not #RGB or #RRGGBB is
+replaced, not escaped. They resolve it the same way, so the fill and its ink
+can never end up measuring different colours.
+{% endcomment %}
+<c-vars brand class />
+<div class="{{ class }}"
+     style="--brand: {{ brand|brand_fill }}; --brand-ink: {{ brand|brand_ink }}"
+     {{ attrs }}>{{ slot }}
+</div>

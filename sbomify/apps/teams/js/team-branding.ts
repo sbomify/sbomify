@@ -1,5 +1,6 @@
 import Alpine from 'alpinejs';
 import { showSuccess, showError } from '../../core/js/alerts';
+import { brandFill, inkOnColor } from './brand-ink';
 import { defaultBrandColors } from '../../core/js/constants/colors';
 import { getCsrfToken } from '../../core/js/csrf';
 import { formatLastChecked as sharedFormatLastChecked } from '../../core/js/utils';
@@ -219,6 +220,12 @@ export function registerTeamBranding() {
             updateColor(field: 'brand_color' | 'accent_color', value: string) {
                 this.uiColors[field] = value;
                 this.localBrandingInfo[field] = value;
+            },
+
+            /** The brand scope the trust center preview renders in, live as the accent is edited. */
+            previewBrand() {
+                const fill = brandFill(this.uiColors.accent_color);
+                return { '--brand': fill, '--brand-ink': inkOnColor(fill) };
             },
 
             setDefaultColors() {

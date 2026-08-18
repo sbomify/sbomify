@@ -16,78 +16,125 @@
 </div>
 </c-cards.header>
 </c-slot>
-<form id="team-branding-form"
-      method="post"
-      enctype="multipart/form-data"
-      hx-post="{% url 'teams:team_branding' team.key %}"
-      hx-disabled-elt="#team-branding-save-btn"
-      hx-swap="none">
-    {% csrf_token %}
-    {# Brand Colors Section #}
-    <c-cards.inset class="mb-4">
-    <c-layout.section-header title="Brand colors" subtitle="Define your primary brand colors for consistent visual identity" icon="fas fa-swatchbook" accent="neutral">
-    <c-slot name="actions">
-    <c-buttons.ghost size="sm" @click="setDefaultColors">
-    <i class="fas fa-undo mr-1"></i>Reset
-    </c-buttons.ghost>
-    </c-slot>
-    </c-layout.section-header>
-    <c-layout.section-body>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <c-cards.inset>
-        <c-forms.color-field id="brand-color" name="brand_color" label="Primary brand color" hint="Headers, navigation, primary elements" colour="uiColors.brand_color" on_input="updateColor('brand_color', $event.target.value)" submit_value="localBrandingInfo.brand_color || ''" />
+{% comment %}
+    Settings on the left, the trust center on the right. Both columns are the
+    same width until there is room for the preview beside them, so a narrow
+    screen gets the form first and the preview under it.
+{% endcomment %}
+<div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+    <form id="team-branding-form"
+          method="post"
+          enctype="multipart/form-data"
+          hx-post="{% url 'teams:team_branding' team.key %}"
+          hx-disabled-elt="#team-branding-save-btn"
+          hx-swap="none">
+        {% csrf_token %}
+        {# Brand Colors Section #}
+        <c-cards.inset class="mb-4">
+        <c-layout.section-header title="Brand colors" subtitle="Define your primary brand colors for consistent visual identity" icon="fas fa-swatchbook" accent="neutral">
+        <c-slot name="actions">
+        <c-buttons.ghost size="sm" @click="setDefaultColors">
+        <i class="fas fa-undo mr-1"></i>Reset
+        </c-buttons.ghost>
+        </c-slot>
+        </c-layout.section-header>
+        <c-layout.section-body>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <c-cards.inset>
+            <c-forms.color-field id="brand-color" name="brand_color" label="Primary brand color" hint="Headers, navigation, primary elements" colour="uiColors.brand_color" on_input="updateColor('brand_color', $event.target.value)" submit_value="localBrandingInfo.brand_color || ''" />
+            </c-cards.inset>
+            <c-cards.inset>
+            <c-forms.color-field id="accent-color" name="accent_color" label="Accent color" hint="Buttons, links, highlights" colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" submit_value="localBrandingInfo.accent_color || ''" />
+            </c-cards.inset>
+        </div>
+        </c-layout.section-body>
         </c-cards.inset>
-        <c-cards.inset>
-        <c-forms.color-field id="accent-color" name="accent_color" label="Accent color" hint="Buttons, links, highlights" colour="uiColors.accent_color" on_input="updateColor('accent_color', $event.target.value)" submit_value="localBrandingInfo.accent_color || ''" />
+        {# Visual Assets Section #}
+        <c-cards.inset class="mb-4" @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)" @file-removed.window="removeFile($event.detail.field)" @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
+        <c-layout.section-header title="Visual assets" subtitle="Upload your brand assets for public content" icon="fas fa-images" accent="neutral" />
+        <c-layout.section-body class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+            <c-forms.label>Brand icon</c-forms.label>
+            {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
+            <input type="hidden"
+                   name="icon_pending_deletion"
+                   :value="localBrandingInfo.icon_pending_deletion ? 'true' : 'false'">
+            <c-forms.hint class="mt-2">Recommended: 512x512px PNG or SVG</c-forms.hint>
+        </div>
+        <div>
+            <c-forms.label>Brand logo</c-forms.label>
+            {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
+            <input type="hidden"
+                   name="logo_pending_deletion"
+                   :value="localBrandingInfo.logo_pending_deletion ? 'true' : 'false'">
+            <c-forms.hint class="mt-2">Recommended: 1200x300px PNG or SVG</c-forms.hint>
+        </div>
+        </c-layout.section-body>
         </c-cards.inset>
-    </div>
-    </c-layout.section-body>
-    </c-cards.inset>
-    {# Visual Assets Section #}
-    <c-cards.inset class="mb-4" @file-selected.window="handleFileFromComponent($event.detail.field,$event.detail.file)" @file-removed.window="removeFile($event.detail.field)" @existing-file-removed.window="handleExistingFileRemoval($event.detail.field)">
-    <c-layout.section-header title="Visual assets" subtitle="Upload your brand assets for public content" icon="fas fa-images" accent="neutral" />
-    <c-layout.section-body class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <div>
-        <c-forms.label>Brand icon</c-forms.label>
-        {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.icon_url field_name='icon' %}
+        {# Display preferences section #}
+        <c-cards.inset>
+        <c-layout.section-header title="Display preferences" subtitle="Toggle workspace branding on or off" icon="fas fa-eye" accent="neutral" />
+        <c-layout.section-body>
+        <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">
+        Enable custom workspace branding
+        </c-forms.checkbox>
+        <p class="text-text-muted text-sm mt-2 m-0">
+            Turn off to use the default sbomify visuals while keeping your custom assets saved.
+        </p>
         <input type="hidden"
-               name="icon_pending_deletion"
-               :value="localBrandingInfo.icon_pending_deletion ? 'true' : 'false'">
-        <c-forms.hint class="mt-2">Recommended: 512x512px PNG or SVG</c-forms.hint>
-    </div>
-    <div>
-        <c-forms.label>Brand logo</c-forms.label>
-        {% include 'core/components/file_drag_and_drop.html.j2' with accept='image/*' existing_url=branding_info.logo_url field_name='logo' %}
-        <input type="hidden"
-               name="logo_pending_deletion"
-               :value="localBrandingInfo.logo_pending_deletion ? 'true' : 'false'">
-        <c-forms.hint class="mt-2">Recommended: 1200x300px PNG or SVG</c-forms.hint>
-    </div>
-    </c-layout.section-body>
-    </c-cards.inset>
-    {# Display preferences section #}
-    <c-cards.inset>
-    <c-layout.section-header title="Display preferences" subtitle="Toggle workspace branding on or off" icon="fas fa-eye" accent="neutral" />
-    <c-layout.section-body>
-    <c-forms.checkbox id="branding-enabled-toggle" :checked="branding_info.branding_enabled" x-model="localBrandingInfo.branding_enabled">
-    Enable custom workspace branding
-    </c-forms.checkbox>
-    <p class="text-text-muted text-sm mt-2 m-0">
-        Turn off to use the default sbomify visuals while keeping your custom assets saved.
-    </p>
-    <input type="hidden"
-           name="branding_enabled"
-           :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
-    </c-layout.section-body>
-    </c-cards.inset>
-    {# Cancel/Save at the bottom right, below the fields they apply to. #}
-    <div class="flex items-center justify-end gap-2 mt-6 pt-6 border-t border-border">
-        <c-buttons.secondary size="sm" x-show="hasUnsavedChanges()" @click="$dispatch('refreshTeamBranding')">
-        <i class="fas fa-undo mr-2"></i>Cancel
-        </c-buttons.secondary>
-        <c-buttons.primary type="submit" size="sm" id="team-branding-save-btn" ::disabled="!hasUnsavedChanges()">
-        <i class="fas fa-save mr-2"></i>Save changes
-        </c-buttons.primary>
-    </div>
-</form>
+               name="branding_enabled"
+               :value="localBrandingInfo.branding_enabled ? 'true' : 'false'">
+        </c-layout.section-body>
+        </c-cards.inset>
+        {# Cancel/Save at the bottom right, below the fields they apply to. #}
+        <div class="flex items-center justify-end gap-2 mt-6 pt-6 border-t border-border">
+            <c-buttons.secondary size="sm" x-show="hasUnsavedChanges()" @click="$dispatch('refreshTeamBranding')">
+            <i class="fas fa-undo mr-2"></i>Cancel
+            </c-buttons.secondary>
+            <c-buttons.primary type="submit" size="sm" id="team-branding-save-btn" ::disabled="!hasUnsavedChanges()">
+            <i class="fas fa-save mr-2"></i>Save changes
+            </c-buttons.primary>
+        </div>
+    </form>
+    <aside class="xl:sticky xl:top-6">
+        <c-cards.inset>
+        <c-layout.section-header title="Trust Center preview" subtitle="Sample content in your colors, before you save." icon="fas fa-eye" accent="neutral" />
+        {% comment %}
+            The same c-branded components the trust center is built from, so the
+            preview cannot drift from the page it stands for. The brand arrives
+            server-rendered and Alpine restates it from the accent field on every
+            keystroke, computing the ink the way branding.py does.
+        {% endcomment %}
+        <c-branded.theme brand="{{ branding_info.accent_color }}" class="flex flex-col gap-4" ::style="previewBrand()">
+        <c-branded.surface>
+        <c-branded.page-header title="{{ team.name }}">
+        <c-slot name="eyebrow">
+        <c-branded.badge brand>Trust Center</c-branded.badge>
+        </c-slot>
+        <c-branded.stats>
+        <c-branded.stat label="Advisories">12</c-branded.stat>
+        <c-branded.stat label="Products">4</c-branded.stat>
+        </c-branded.stats>
+        </c-branded.page-header>
+        </c-branded.surface>
+        <c-branded.surface flush>
+        <c-branded.list-row level="high">
+        <c-slot name="eyebrow">ADV-1042</c-slot>
+        <c-slot name="heading">Session token written to debug logs</c-slot>
+        <c-slot name="side">
+        <c-branded.badge tone="high">High</c-branded.badge>
+        </c-slot>
+        </c-branded.list-row>
+        <c-branded.list-row level="low">
+        <c-slot name="eyebrow">ADV-1041</c-slot>
+        <c-slot name="heading">Old TLS ciphers offered by the build image</c-slot>
+        <c-slot name="side">
+        <c-branded.badge tone="low">Low</c-branded.badge>
+        </c-slot>
+        </c-branded.list-row>
+        </c-branded.surface>
+        </c-branded.theme>
+        </c-cards.inset>
+    </aside>
+</div>
 </c-cards.dashboard>

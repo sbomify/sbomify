@@ -147,7 +147,7 @@
             </div>
             <c-tables.table x-cloak>
             <c-tables.head>
-            <c-tables.header-cell>Name</c-tables.header-cell>
+            <c-tables.header-cell nowrap>Name</c-tables.header-cell>
             <c-tables.header-cell>Latest version</c-tables.header-cell>
             <c-tables.header-cell>Vulnerabilities</c-tables.header-cell>
             <c-tables.header-cell date>Last scan</c-tables.header-cell>
@@ -156,7 +156,7 @@
             <tbody>
                 {% for row in component_rows %}
                     <c-tables.row x-show="pageSet.has({{ forloop.counter0 }})">
-                    <c-tables.cell>
+                    <c-tables.cell nowrap>
                     <a href="{% url 'core:component_details' row.id %}"
                        class="text-primary font-medium hover:underline">{{ row.name }}</a>
                     </c-tables.cell>

@@ -288,6 +288,77 @@ in a diff is a review blocker.
 - **`tw-*` classes are the old layer.** Do not add callers and do not delete them;
   unmigrated pages still consume them.
 
+#### Branded components (`components/branded/`, `<c-branded.*>`)
+
+A second, smaller library for pages we render **on behalf of a workspace, for
+their customers**: the trust centre first, anything shared outwards later. Same
+cotton conventions as above, plus one rule.
+
+A workspace picks **one colour**. It reaches the components as two custom
+properties and nothing else:
+
+```html
+<c-branded.theme brand="{{ brand.accent_color }}">…</c-branded.theme>
+{# --brand: the fill   --brand-ink: the text that goes on it #}
+```
+
+A whole public page is one brand scope, so the page root is the normal entry
+point: `public_base.htmx.j2` publishes both properties at `:root`, in the same
+inline block as the rest of the branding. `<c-branded.theme>` is for a smaller
+scope, a widget, an email preview or one card on a page the root does not brand.
+
+- **`--brand-ink` is measured, not chosen.** `is_dark_color()` in
+  `teams/branding.py` compares WCAG relative luminance against the point where
+  white and black contrast equally. Never branch on the brand yourself; use
+  `ink_on_color()`, or the `brand_fill` / `brand_ink` filters in `brand_tags.py`.
+- **The brand is a solid fill under `--brand-ink`, or a low-alpha tint behind
+  neutral text. Never a text or icon colour.** A pale brand on its own tint is
+  invisible. The nav underline is the one exception: 2px of rule, not something
+  read through.
+- **Surfaces, body text, borders, radius, type and the severity colours are not
+  brandable.** Red means critical on every trust centre.
+- **Custom properties inherit**, so one scope brands everything below it, page
+  root or wrapper alike. No prop drilling, and any future surface can reuse the
+  library by branding its own root or wrapping.
+
+Class names need more care here than in the main library: these render on public
+pages, which load seven legacy stylesheets with 140 `!important` rules. `p-4`,
+`rounded-lg`, `shadow-sm`, `w-50` and `text-muted` all lose there. Stay on
+`px-*`, `py-*`, `gap-*`, `rounded-xl`, arbitrary values and the token utilities.
+`test_cotton_branded.py` enforces this and the fill-not-text rule; an anchor also
+needs `data-button` or the legacy sheet repaints it.
+
+**Which library a trust-centre control belongs to.** Not everything on a branded
+page is branded. The brand goes on what the page *is*, not on the machinery for
+reading it:
+
+| Use `<c-branded.*>` | Use the main library |
+| --- | --- |
+| The page and section headings, record rows, figures | **Buttons** |
+| Status the workspace owns, the restricted callout | Date, search, select, checkbox, text fields |
+| The nav and its current marker | Tables, pagination, the filter panel |
+| Any surface holding the above | Alerts, empty states, spinners |
+
+**There is no branded button, and there should not be one.** A trust centre
+button should look like an sbomify button, and every one there today is
+`c-buttons.secondary`, which is neutral and carries no fill to be unreadable on.
+
+That leaves one constraint to respect rather than discover.
+`public_base.htmx.j2` remaps `--color-primary` to the workspace accent at
+`:root`, but the app stylesheet loads after that inline block and wins, so the
+remap does nothing at page level: a main-library control on a trust centre
+renders in platform colours. Verified, not assumed: on a workspace with accent
+`#C2410C` the computed `--color-primary` is still the platform navy.
+
+What *does* apply is the scoped `.public-page [data-button]` rule, which remaps
+the token on library buttons only. `c-buttons.primary` hardcodes `text-white`,
+so a filled library button there is white text over whatever colour the
+workspace picked, with no ink measurement: fine on navy, unreadable on pale
+amber. No token can fix it, because the ink is not a token. **So do not put a
+filled main-library button on a public page.** There are 8 today across 5 pages
+this branch has not touched; each needs a neutral button or an ink measured from
+`ink_on_color`.
+
 ### API Layer
 
 Central router in `sbomify/apis.py` registers per-app routers. Most apps expose a `Router()` in `apis.py` (some use `api.py`, e.g. `licensing`):

@@ -33,7 +33,7 @@
             </c-slot>
             <c-tables.table>
             <c-tables.head>
-            <c-tables.header-cell>Product</c-tables.header-cell>
+            <c-tables.header-cell nowrap>Product</c-tables.header-cell>
             <c-tables.header-cell>Status</c-tables.header-cell>
             <c-tables.header-cell>Progress</c-tables.header-cell>
             <c-tables.header-cell date>Last Updated</c-tables.header-cell>
@@ -44,7 +44,7 @@
             <tbody>
                 {% for a in assessments %}
                     <c-tables.row>
-                    <c-tables.cell class="font-medium">{{ a.product_name }}</c-tables.cell>
+                    <c-tables.cell nowrap class="font-medium">{{ a.product_name }}</c-tables.cell>
                     <c-tables.cell>
                     {% if a.status_value == "complete" %}
                         <c-badges.success>Complete</c-badges.success>
