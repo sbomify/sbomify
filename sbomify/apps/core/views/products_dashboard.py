@@ -4,7 +4,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views import View
 
@@ -59,6 +59,26 @@ def _get_products_context(request: HttpRequest) -> dict[str, Any] | None:
     }
 
 
+def _create_product(request: HttpRequest, *, on_error: str) -> HttpResponse:
+    """Create a product from a posted form, returning to `on_error` if it fails."""
+    name = request.POST.get("name", "").strip()
+    description = request.POST.get("description", "").strip()
+
+    payload = ProductCreateSchema(
+        name=name,
+        description=description,
+    )
+
+    status_code, response_data = create_product(request, payload)
+    if status_code != 201:
+        error_detail = response_data.get("detail", "An error occurred while creating the product")
+        messages.error(request, error_detail)
+        return redirect(on_error)
+
+    messages.success(request, f'Product "{name}" created successfully!')
+    return redirect("core:product_details", product_id=response_data.id)
+
+
 class ProductsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         context = _get_products_context(request)
@@ -68,22 +88,23 @@ class ProductsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         return render(request, "core/products_dashboard.html.j2", context)
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        name = request.POST.get("name", "").strip()
-        description = request.POST.get("description", "").strip()
+        # Kept so anything still posting the create form at the list URL keeps
+        # working; the form itself now lives at product_new.
+        return _create_product(request, on_error="core:products_dashboard")
 
-        payload = ProductCreateSchema(
-            name=name,
-            description=description,
-        )
 
-        status_code, response_data = create_product(request, payload)
-        if status_code == 201:
-            messages.success(request, f'Product "{name}" created successfully!')
-        else:
-            error_detail = response_data.get("detail", "An error occurred while creating the product")
-            messages.error(request, error_detail)
+class ProductCreateView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
+    """The New Product form, as a page, matching the New Advisory flow."""
 
-        return redirect("core:products_dashboard")
+    def get(self, request: HttpRequest) -> HttpResponse:
+        current_team = request.session.get("current_team") or {}
+        if get_member_role_by_key(request.user, current_team.get("key")) not in MANAGE:
+            raise Http404("Workspace not found")
+
+        return render(request, "core/product_new.html.j2", {"current_team": current_team})
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        return _create_product(request, on_error="core:product_new")
 
 
 class ProductsTableView(GuestAccessBlockedMixin, LoginRequiredMixin, View):

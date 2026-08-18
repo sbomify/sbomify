@@ -124,9 +124,14 @@ class TestUIWorkflows:
         assert response.status_code == 200
         content = response.content.decode()
 
-        # Verify the components page and add form exist
+        # Verify the components page links to the create page. The form itself
+        # moved off the dashboard and onto its own page.
         assert "Components" in content
-        assert 'id="addComponentForm"' in content
+        assert reverse("core:component_new") in content
+
+        response = client.get(reverse("core:component_new"))
+        assert response.status_code == 200
+        assert 'name="component_type"' in response.content.decode()
 
         # Test API-based component creation
         import json
