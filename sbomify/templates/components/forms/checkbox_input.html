@@ -1,0 +1,24 @@
+{% comment %}
+The checkbox control on its own, with no label around it: the box a row draws
+itself, where the row already carries the role, the checked state and the
+keyboard handling and a nested label would forward a second click into it. For
+a checkbox with its own text use c-forms.checkbox, which nests this.
+
+Every state is drawn on the real input: checked, indeterminate, focus and
+disabled are pseudo-classes, never a styled sibling. The control is
+appearance-none, so the browser's own tick and dash never render and both are
+drawn here; the indeterminate mark is listed after the tick because Tailwind
+emits it later and an indeterminate box is usually checked too.
+
+The box stays 1.25rem while an invisible ::after stretches the touch target to
+44px.
+{% endcomment %}
+<c-vars name id value="1" checked disabled class />
+<input type="checkbox"
+       {% if id or name %}id="{% firstof id name %}"{% endif %}
+       {% if name %}name="{{ name }}"{% endif %}
+       value="{{ value }}"
+       class="w-5 h-5 shrink-0 relative appearance-none cursor-pointer bg-surface border-[1.5px] border-solid border-border rounded-md transition-all duration-150 after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-11 after:h-11 after:rounded-lg hover:not-checked:not-disabled:border-[color-mix(in_oklab,var(--color-primary)_50%,transparent)] hover:not-checked:not-disabled:bg-[color-mix(in_oklab,var(--color-primary)_5%,transparent)] checked:bg-primary checked:border-primary checked:bg-[length:100%_100%] checked:bg-[url('data:image/svg+xml,%3csvg%20viewBox=%220%200%2016%2016%22%20fill=%22white%22%20xmlns=%22http://www.w3.org/2000/svg%22%3e%3cpath%20d=%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22/%3e%3c/svg%3e')] indeterminate:bg-primary indeterminate:border-primary indeterminate:bg-[length:100%_100%] indeterminate:bg-[url('data:image/svg+xml,%3csvg%20viewBox=%220%200%2016%2016%22%20fill=%22none%22%20xmlns=%22http://www.w3.org/2000/svg%22%3e%3cpath%20d=%22M4.5%208h7%22%20stroke=%22white%22%20stroke-width=%222%22%20stroke-linecap=%22round%22/%3e%3c/svg%3e')] focus:outline-none focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_25%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed{% if class %} {{ class }}{% endif %}"
+       {% if checked %}checked{% endif %}
+       {% if disabled %}disabled{% endif %}
+       {{ attrs }}>

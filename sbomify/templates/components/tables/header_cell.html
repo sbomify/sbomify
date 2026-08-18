@@ -1,0 +1,42 @@
+{% comment %}
+A header cell: the sticky, upper-case band over a column. end and date behave
+exactly as they do on a body cell, and variant_class replaces the gutter recipe
+the same way.
+
+sort turns the label into a sort control. It keeps the Alpine state a table
+already has, sortColumn, sortDirection and sort(column), so a page passes the
+column key and nothing else. The button marks itself data-sort and the caret
+pair reads that marker, which means the sorted look and the hover look are
+mutually exclusive and can never both apply.
+
+The size is the bare font-size, as on a body cell: `.tw-table th` set one and
+inherited its line-height, which is 1.5 in the app and 1.6 on a public page.
+{% endcomment %}
+<c-vars sort end date variant_class class />
+<th class="px-5 py-4 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-text-muted bg-background border-b border-solid border-border sticky top-0 z-[1] first:rounded-tl-lg last:rounded-tr-lg {% if variant_class %}{{ variant_class }}{% else %}first:pl-4 last:pr-4 max-sm:px-2{% endif %} {% if end %}text-right{% else %}text-left{% endif %}{% if date %} whitespace-nowrap{% endif %}{% if class %} {{ class }}{% endif %}"
+    {% if end %}data-cell-end{% endif %}
+    {% if sort %}:aria-sort="sortColumn === '{{ sort }}' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"{% endif %}
+    {{ attrs }}>
+    {% if sort %}
+        {% comment %}
+            uppercase is restated here, not inherited: the th sets it, but a
+            button is a form control and the UA stylesheet gives it
+            text-transform: none, so a sortable label silently dropped out of
+            the header's case and tables read "Name / STATUS / Last Modified".
+        {% endcomment %}
+        <button type="button"
+                class="inline-flex items-center gap-2 uppercase cursor-pointer select-none hover:text-primary focus-visible:outline-none focus-visible:rounded-sm focus-visible:text-primary focus-visible:shadow-[0_0_0_2px_color-mix(in_oklab,var(--color-primary)_50%,transparent)]"
+                data-sort="none"
+                :data-sort="sortColumn === '{{ sort }}' ? sortDirection : 'none'"
+                @click="sort('{{ sort }}')">
+            {{ slot }}
+            <span class="flex flex-col gap-px opacity-30 transition-all duration-150 [[data-sort=none]:hover_&]:opacity-60 [[data-sort=asc]_&]:opacity-100 [[data-sort=asc]_&]:text-primary [[data-sort=desc]_&]:opacity-100 [[data-sort=desc]_&]:text-primary"
+                  aria-hidden="true">
+                <i class="fas fa-caret-up text-[0.5rem] leading-none [[data-sort=desc]_&]:opacity-25"></i>
+                <i class="fas fa-caret-down text-[0.5rem] leading-none [[data-sort=asc]_&]:opacity-25"></i>
+            </span>
+        </button>
+    {% else %}
+        {{ slot }}
+    {% endif %}
+</th>

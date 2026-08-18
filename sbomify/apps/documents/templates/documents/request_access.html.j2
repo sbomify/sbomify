@@ -49,18 +49,7 @@
                                    style="color: var(--text-primary)">
                                 Email Address <span style="color: var(--accent-color);">*</span>
                             </label>
-                            <input type="email"
-                                   class="w-full px-4 py-3 rounded-xl transition-all duration-200"
-                                   style="background: var(--bg-secondary);
-                                          border: 1px solid var(--border-color);
-                                          color: var(--text-primary)"
-                                   id="email"
-                                   name="email"
-                                   required
-                                   autocomplete="email"
-                                   placeholder="your.email@example.com"
-                                   onfocus="this.style.borderColor='var(--accent-color)'; this.style.boxShadow='0 0 0 3px rgba(var(--accent-color-rgb), 0.15)';"
-                                   onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+                            <c-forms.input id="email" name="email" type="email" required placeholder="your.email@example.com" style="background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary)" autocomplete="email" onfocus="this.style.borderColor='var(--accent-color)'; this.style.boxShadow='0 0 0 3px rgba(var(--accent-color-rgb), 0.15)';" onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';" />
                         </div>
                         <div class="mb-5">
                             <label for="name"
@@ -68,17 +57,7 @@
                                    style="color: var(--text-primary)">
                                 Name <span style="color: var(--text-muted);">(Optional)</span>
                             </label>
-                            <input type="text"
-                                   class="w-full px-4 py-3 rounded-xl transition-all duration-200"
-                                   style="background: var(--bg-secondary);
-                                          border: 1px solid var(--border-color);
-                                          color: var(--text-primary)"
-                                   id="name"
-                                   name="name"
-                                   autocomplete="name"
-                                   placeholder="Your Name"
-                                   onfocus="this.style.borderColor='var(--accent-color)'; this.style.boxShadow='0 0 0 3px rgba(var(--accent-color-rgb), 0.15)';"
-                                   onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';">
+                            <c-forms.input id="name" name="name" placeholder="Your Name" style="background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary)" autocomplete="name" onfocus="this.style.borderColor='var(--accent-color)'; this.style.boxShadow='0 0 0 3px rgba(var(--accent-color-rgb), 0.15)';" onblur="this.style.borderColor='var(--border-color)'; this.style.boxShadow='none';" />
                         </div>
                     {% else %}
                         <div class="rounded-xl p-4 mb-5"
@@ -98,16 +77,17 @@
                     {% endif %}
                     {% if requires_nda %}
                         <div class="rounded-xl p-4 mb-6"
-                             style="background: rgba(245, 158, 11, 0.1);
-                                    border: 1px solid rgba(245, 158, 11, 0.25)">
+                             style="background: color-mix(in oklab, var(--color-warning) 10%, transparent);
+                                    border: 1px solid color-mix(in oklab, var(--color-warning) 25%, transparent)">
                             <div class="flex items-start gap-3">
-                                <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                                     style="background: rgba(245, 158, 11, 0.15)">
-                                    <i class="fas fa-file-signature" style="color: #f59e0b;"></i>
-                                </div>
+                                <c-chips.icon-chip accent="warning">
+                                <i class="fas fa-file-signature" aria-hidden="true"></i>
+                                </c-chips.icon-chip>
                                 <div>
-                                    <strong class="block mb-1 text-sm" style="color: #b45309;">NDA Required</strong>
-                                    <p class="text-sm m-0" style="color: #92400e;">
+                                    <strong class="block mb-1 text-sm"
+                                            style="color: color-mix(in oklab, var(--color-warning) 70%, var(--text-primary))">NDA Required</strong>
+                                    <p class="text-sm m-0"
+                                       style="color: color-mix(in oklab, var(--color-warning) 60%, var(--text-primary))">
                                         You will be asked to sign a Non-Disclosure Agreement after submitting this request.
                                     </p>
                                 </div>
@@ -115,18 +95,11 @@
                         </div>
                     {% endif %}
                     <div class="flex flex-col sm:flex-row gap-3">
-                        <button type="submit"
-                                class="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3.5 text-white font-semibold rounded-xl transition-all duration-200 hover:-translate-y-0.5"
-                                style="background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-dark) 100%);
-                                       box-shadow: 0 4px 14px -2px rgba(var(--accent-color-rgb), 0.4)">
-                            <i class="fas fa-paper-plane"></i>
-                            Submit Request
-                        </button>
-                        <a href="{% url 'core:workspace_public' workspace_key=team.key %}"
-                           class="flex-1 inline-flex items-center justify-center px-6 py-3.5 font-medium rounded-xl transition-all duration-200 text-center no-underline hover:no-underline"
-                           style="background: var(--bg-tertiary);
-                                  color: var(--text-secondary);
-                                  border: 1px solid var(--border-color)">Cancel</a>
+                        <c-buttons.primary type="submit" size="lg" class="flex-1">
+                        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                        Submit Request
+                        </c-buttons.primary>
+                        <c-buttons.secondary href="{% url 'core:workspace_public' workspace_key=team.key %}" size="lg" class="flex-1">Cancel</c-buttons.secondary>
                     </div>
                 </form>
             </div>
