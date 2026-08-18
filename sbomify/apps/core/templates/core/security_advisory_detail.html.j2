@@ -1,5 +1,5 @@
 {% extends "core/dashboard_base.htmx.j2" %}
-{% load static %}
+{% load static public_url_tags %}
 {% block title %}{{ advisory.title }} · sbomify{% endblock %}
 {% block dashboard_content %}
     <div class="space-y-6">
@@ -56,10 +56,22 @@
             </div>
             {# Header actions #}
             <div class="flex items-center gap-2 shrink-0 flex-wrap">
-                <c-buttons.secondary size="sm" href="{% url 'core:workspace_public_current' %}" target="_blank" rel="noopener">
-                <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
-                <span class="hidden sm:inline">View in Trust Center</span>
-                </c-buttons.secondary>
+                {% comment %}
+                    Straight to this advisory on the trust centre, not the trust
+                    centre's front page. A draft is not published there at all,
+                    so the link is only offered once it is, and the same URL is
+                    what the copy action puts on the clipboard.
+
+                    advisory.pk, not advisory.id: id is the display identifier
+                    and the view accepts both, but the trust centre's own list
+                    links by pk, and one page should have one URL.
+                {% endcomment %}
+                {% if advisory.publication_status != 'draft' %}
+                    <c-buttons.secondary size="sm" href="{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.pk %}" target="_blank" rel="noopener">
+                    <i class="fas fa-arrow-up-right-from-square text-xs" aria-hidden="true"></i>
+                    <span class="hidden sm:inline">View in Trust Center</span>
+                    </c-buttons.secondary>
+                {% endif %}
                 {% if has_crud_permissions %}
                     <c-actions-menu label="Advisory actions">
                     {% if advisory.publication_status == 'draft' %}
@@ -72,9 +84,19 @@
                     <c-dropdowns.item icon="fas fa-pen" @click="$dispatch('open-edit-advisory-modal')">
                     Edit advisory
                     </c-dropdowns.item>
-                    <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(window.location.href)">
-                    Copy link
-                    </c-dropdowns.item>
+                    {% if advisory.publication_status != 'draft' %}
+                        {% comment %}
+                            The public URL, not this page's. Someone copying a
+                            link from an advisory means to send it to a customer,
+                            and this page needs a login. new URL resolves the
+                            path against the origin, so it works whether the tag
+                            returns a path on the app domain or an absolute URL
+                            on a custom one.
+                        {% endcomment %}
+                        <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id=advisory.pk %}', window.location.origin).href)">
+                        Copy public link
+                        </c-dropdowns.item>
+                    {% endif %}
                     <c-dropdowns.item icon="fas fa-file-shield" @click="$dispatch('open-link-vex-modal')">
                     Link a VEX
                     </c-dropdowns.item>
