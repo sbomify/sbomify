@@ -376,7 +376,8 @@ jobs:
       - name: Build context excludes non-application files
         run: |
           set -e
-          printf 'FROM busybox:latest\nWORKDIR /code\nCOPY . .\n' > /tmp/context-probe.Dockerfile
+          # Pinned: a floating tag would let the probe change under CI without a commit.
+          printf 'FROM busybox:1.37.0\nWORKDIR /code\nCOPY . .\n' > /tmp/context-probe.Dockerfile
           docker build -q -f /tmp/context-probe.Dockerfile -t sbomify-context-probe:ci . >/dev/null
           # `ls -1A`, not `find -printf`: the probe is busybox, whose find has
           # no -printf. -1 forces one entry per line so the `grep -qx` checks

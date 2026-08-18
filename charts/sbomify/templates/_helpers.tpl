@@ -238,17 +238,15 @@ Secret, so a rotation of either rolls the pods via the checksum annotations.
     secretKeyRef:
       name: {{ $secretName }}
       key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "REDIS_URL") }}
+{{/*
+No generic AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, deliberately. Nothing
+reads them: settings.py never defines them, and both boto3 call sites pass the
+bucket-specific credentials explicitly. They would also undermine the option
+directly above, because the generic names are part of boto3's default credential
+chain and outrank IRSA, so once ADR-0007 makes credentials optional a stray pair
+here would quietly beat the workload's own identity.
+*/}}
 {{- if not $ctx.Values.objectStorage.useWorkloadIdentity }}
-- name: AWS_ACCESS_KEY_ID
-  valueFrom:
-    secretKeyRef:
-      name: {{ $secretName }}
-      key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "AWS_SBOMS_ACCESS_KEY_ID") }}
-- name: AWS_SECRET_ACCESS_KEY
-  valueFrom:
-    secretKeyRef:
-      name: {{ $secretName }}
-      key: {{ include "sbomify.secretKey" (dict "ctx" $ctx "key" "AWS_SBOMS_SECRET_ACCESS_KEY") }}
 - name: AWS_MEDIA_ACCESS_KEY_ID
   valueFrom:
     secretKeyRef:
