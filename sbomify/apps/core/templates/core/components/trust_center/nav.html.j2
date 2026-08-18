@@ -18,10 +18,18 @@ without needing to know about this file.
     {% comment %}
         The sticky band and the width-limited track are layout, which a page
         owns; the row of destinations and the current marker are the component's.
+
+        The band draws the rule so it spans the viewport rather than stopping
+        at the track, which is why the nav is flush. px-4 matches the page
+        header's track, so the first destination lines up with the title.
+
+        The track scrolls on a narrow screen, with the scrollbar hidden: it
+        would otherwise sit under the destinations on every page, and there is
+        nothing below the nav to scroll it away.
     {% endcomment %}
-    <div class="sticky top-0 z-50 bg-[color-mix(in_oklab,var(--color-background)_92%,transparent)] backdrop-blur-[10px]">
-        <div class="mx-auto max-w-[1200px] px-6 overflow-x-auto">
-            <c-branded.nav aria-label="Trust center">
+    <div class="sticky top-0 z-[60] border-b border-solid border-border bg-[color-mix(in_oklab,var(--color-background)_92%,transparent)] backdrop-blur-[10px]">
+        <div class="mx-auto max-w-[1200px] px-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <c-branded.nav flush aria-label="Trust center">
             {% comment %}
                 The current flag is written as two whole tags rather than
                 :current="request.path == tc_home_url". Cotton's colon prefix

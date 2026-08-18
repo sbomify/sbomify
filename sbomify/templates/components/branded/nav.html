@@ -6,8 +6,13 @@ never has to know them.
 The bottom border is the platform's, not the brand's: the rule under a nav is
 structure, and a workspace tinting it makes the header read as a coloured band
 on some brands and as nothing at all on others.
+
+flush drops that rule, for a nav inside a full-bleed band that draws its own.
+Without it the two stack: the band's line sits a pixel below the nav's, so the
+rule doubles in thickness across the width of the track and thins again either
+side of it.
 {% endcomment %}
-<c-vars class />
-<nav class="flex items-center gap-1 border-b border-solid border-border{% if class %} {{ class }}{% endif %}"
+<c-vars flush class />
+<nav class="flex items-center gap-1{% if not flush %} border-b border-solid border-border{% endif %}{% if class %} {{ class }}{% endif %}"
      {{ attrs }}>{{ slot }}
 </nav>
