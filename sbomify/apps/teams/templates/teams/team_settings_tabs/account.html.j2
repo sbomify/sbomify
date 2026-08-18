@@ -1,37 +1,11 @@
-<div x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
-    {# Account Settings Card #}
-    <c-cards.dashboard class="mb-6">
-    <c-slot name="header">
-    <c-cards.header>
-    <div class="flex items-center gap-3">
-        <c-chips.icon-chip>
-        <i class="fas fa-user-cog" aria-hidden="true"></i>
-        </c-chips.icon-chip>
-        <div>
-            <h5 class="text-lg font-semibold text-text m-0">Account</h5>
-            <p class="text-text-muted text-sm m-0">Manage your personal account settings</p>
-        </div>
+<div class="max-w-2xl"
+     x-data="accountDangerZone({ csrfToken: '{{ csrf_token }}', tokenCount: {{ access_token_count }} })">
+    {# Account, in the settings-tab style the branding tab set: no card chrome. #}
+    <div class="mb-8">
+        <h2 class="text-lg font-semibold text-text m-0">Account</h2>
+        <p class="text-sm text-text-muted mt-1 m-0">Your personal account.</p>
     </div>
-    </c-cards.header>
-    </c-slot>
-    {% comment %}
-        The same dangerzone card the product, component, release and SBOM pages
-        use. It was a collapsible at level="danger", which paints the border red
-        but leaves the title and chevron in the neutral ink, so this Danger Zone
-        read as a milder thing than the identical control everywhere else.
-    {% endcomment %}
-    <c-cards.dangerzone flush>
-    <c-slot name="header">
-    <c-cards.dangerzone-header class="cursor-pointer select-none justify-between" role="button" tabindex="0" ::aria-expanded="isExpanded" @click="toggle()" @keydown.enter.prevent="toggle()" @keydown.space.prevent="toggle()">
-    <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>Danger Zone
-    </h4>
-    <i class="fas fa-chevron-down text-danger transition-transform duration-200"
-       :class="isExpanded ? 'rotate-180' : ''"
-       aria-hidden="true"></i>
-    </c-cards.dangerzone-header>
-    </c-slot>
-    <c-cards.dangerzone-body x-show="isExpanded" x-collapse>
+    <c-cards.dangerzone-collapsible>
     <div class="flex items-center gap-4">
         <div class="flex-1">
             <h6 class="text-sm font-semibold text-text m-0">Delete account</h6>
@@ -44,9 +18,7 @@
         Delete account
         </c-buttons.danger>
     </div>
-    </c-cards.dangerzone-body>
-    </c-cards.dangerzone>
-    </c-cards.dashboard>
+    </c-cards.dangerzone-collapsible>
     {# Delete Account Modal #}
     <c-modal id="deleteAccountModal" show="showDeleteModal" title="Delete your account" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteAccountModalDesc">
     <p id="deleteAccountModalDesc" class="text-text-muted mb-4">

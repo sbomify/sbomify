@@ -222,6 +222,35 @@ def test_flush_dangerzone_emits_no_padded_body_of_its_own(rendered: str) -> None
     assert card.count("p-6 bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)]") == 1
 
 
+def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
+    """The composite owns the band, the chevron and the collapse, so a page
+    never assembles a Danger Zone from the parts again."""
+    zone = _card_holding(rendered, "Assembled danger rows")
+    # The band is the control, with the toggle derived from the state name.
+    assert 'role="button"' in zone
+    assert 'tabindex="0"' in zone
+    assert ':aria-expanded="isExpanded"' in zone
+    assert '@click="isExpanded = !isExpanded"' in zone
+    assert '@keydown.enter.prevent="isExpanded = !isExpanded"' in zone
+    assert '@keydown.space.prevent="isExpanded = !isExpanded"' in zone
+    # The chevron turns over like every other collapsible in the library.
+    assert "isExpanded ? 'rotate-180' : ''" in zone
+    assert "-rotate-90" not in zone
+    # The collapse lands on the padded body element, and the title is supplied.
+    assert 'x-show="isExpanded"' in zone
+    assert "x-collapse" in zone
+    assert "Danger Zone" in zone
+
+
+def test_dangerzone_collapsible_state_prop_renames_every_hook(rendered: str) -> None:
+    zone = _card_holding(rendered, "Custom state danger rows")
+    assert "isExpanded" not in zone
+    assert ':aria-expanded="zoneOpen"' in zone
+    assert '@click="zoneOpen = !zoneOpen"' in zone
+    assert 'x-show="zoneOpen"' in zone
+    assert "Purge queue" in zone
+
+
 def test_inset_is_sunken_not_raised(rendered: str) -> None:
     inset = _open_tag(rendered, "Outer inset")
     assert "rounded-xl border border-solid border-border p-4" in inset
