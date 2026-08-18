@@ -61,7 +61,7 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
     requires_nda = company_nda is not None
 
     if requires_nda:
-        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         pending_count = AccessRequest.objects.filter(
             team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
         ).count()
@@ -96,7 +96,7 @@ def _notify_admins_of_access_request(access_request: AccessRequest, team: Team, 
         review_link = f"{get_base_url()}{review_url}"
 
         # Check if NDA has actually been signed
-        nda_signed = NDASignature.objects.filter(access_request=access_request).exists()
+        nda_signed = NDASignature.objects.live().filter(access_request=access_request).exists()
 
         # Send email to each admin/owner
         for admin_member in admin_members:
@@ -212,7 +212,7 @@ def create_access_request(
         if pending_request:
             # Check if NDA is required and not signed yet
             if requires_nda:
-                has_signed = NDASignature.objects.filter(access_request=pending_request).exists()
+                has_signed = NDASignature.objects.live().filter(access_request=pending_request).exists()
                 if not has_signed:
                     # Request exists but NDA not signed - return info that NDA signing is needed
                     return 200, {
@@ -474,7 +474,7 @@ def sign_nda(request: HttpRequest, team_key: str, request_id: str, payload: NDAS
             )
 
             # Reload access request with NDA signature relationship
-            access_request = AccessRequest.objects.prefetch_related("nda_signature").get(pk=access_request.id)
+            access_request = AccessRequest.objects.prefetch_related("nda_signatures").get(pk=access_request.id)
 
             # Now that NDA is signed, send notification to admins (request is now complete)
             # Invalidate cache after transaction commits
@@ -552,7 +552,7 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     if teams_requiring_nda:
         # Requests from teams requiring NDA must have NDA signature
         # Requests from teams not requiring NDA don't need signature
-        signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+        signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
         nda_required_filter = Q(team_id__in=teams_requiring_nda, id__in=signed_request_ids)
         teams_not_requiring_nda = set(member_teams) - set(teams_requiring_nda)
         nda_not_required_filter = Q(team_id__in=teams_not_requiring_nda)
@@ -561,7 +561,7 @@ def list_pending_access_requests(request: HttpRequest) -> Any:
     pending_requests = (
         AccessRequest.objects.filter(base_query)
         .select_related("team", "user", "decided_by")
-        .prefetch_related("nda_signature__nda_document")
+        .prefetch_related("nda_signatures__nda_document")
         .order_by("-requested_at")
     )
 
@@ -738,9 +738,10 @@ def reject_access_request(request: HttpRequest, request_id: str) -> Any:
         if access_request.status != AccessRequest.Status.PENDING:
             return 400, {"detail": "Access request is not pending"}
 
-        # Delete NDA signature so user must sign again when requesting access
-        if hasattr(access_request, "nda_signature"):
-            access_request.nda_signature.delete()
+        # Supersede the live signature so a re-request must sign again. The row
+        # stays: it is the legal record of what was accepted, and rejection
+        # does not un-happen that.
+        access_request.nda_signatures.live().update(superseded_at=timezone.now())
 
         access_request.status = AccessRequest.Status.REJECTED
         access_request.decided_by = request.user
@@ -829,9 +830,9 @@ def revoke_access_request(request: HttpRequest, request_id: str) -> Any:
         if access_request.status != AccessRequest.Status.APPROVED:
             return 400, {"detail": "Access request is not approved"}
 
-        # Delete NDA signature so user must sign again when requesting access
-        if hasattr(access_request, "nda_signature"):
-            access_request.nda_signature.delete()
+        # Supersede the live signature so a re-request must sign again; the row
+        # itself is history and survives the revocation.
+        access_request.nda_signatures.live().update(superseded_at=timezone.now())
 
         # Update access request
         access_request.status = AccessRequest.Status.REVOKED

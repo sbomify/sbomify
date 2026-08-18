@@ -141,7 +141,7 @@ def pending_access_requests_context(request: Any) -> Any:
             # If NDA is not required, count all pending requests
             if requires_nda:
                 # Only count requests that have NDA signature (request is complete)
-                signed_request_ids = NDASignature.objects.values_list("access_request_id", flat=True)
+                signed_request_ids = NDASignature.objects.live().values_list("access_request_id", flat=True).distinct()
                 count = AccessRequest.objects.filter(
                     team=team, status=AccessRequest.Status.PENDING, id__in=signed_request_ids
                 ).count()
