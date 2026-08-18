@@ -144,35 +144,41 @@ def test_variant_forwards_a_named_slot_to_the_card(rendered: str) -> None:
 @pytest.mark.parametrize(
     "recipe_bit",
     [
-        "border-2 border-solid border-[color-mix(in_oklab,var(--color-danger)_50%,transparent)]",
-        "bg-[color-mix(in_oklab,var(--color-danger)_4%,transparent)]",
-        "hover:border-[color-mix(in_oklab,var(--color-danger)_70%,transparent)]",
-        "hover:bg-[color-mix(in_oklab,var(--color-danger)_6%,transparent)]",
-        "hover:shadow-[0_4px_12px_-1px_rgb(239_68_68/0.25),0_2px_6px_-2px_rgb(239_68_68/0.15)]",
+        # The calm surface with a danger hairline: red identifies the zone,
+        # it never becomes the ground the reader reads against.
+        "bg-surface border border-solid border-[color-mix(in_oklab,var(--color-danger)_35%,transparent)]",
+        "shadow-[var(--shadow-card)]",
     ],
 )
 def test_dangerzone_surface_recipe(rendered: str, recipe_bit: str) -> None:
     assert recipe_bit in _card_holding(rendered, "Danger body")
 
 
-def test_dangerzone_surface_never_stacks_with_the_default(rendered: str) -> None:
+def test_dangerzone_surface_sits_still_and_never_stacks_with_the_default(rendered: str) -> None:
     shell = _card_holding(rendered, "Danger body").split(">")[0]
-    assert "bg-surface" not in shell
     assert "border-border" not in shell
+    assert shell.count("bg-surface") == 1
+    # A container answers no pointer: the danger has to read at rest.
+    assert "hover:" not in shell
 
 
 def test_dangerzone_repaints_its_header_and_body(rendered: str) -> None:
     header = _open_tag(rendered, "Danger zone", depth=1)
     assert "flex items-center gap-3" in header
-    assert "border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)]" in header
+    # The ordinary header wash under a danger hairline: the rule warns, the
+    # band stays legible.
+    assert "border-[color-mix(in_oklab,var(--color-danger)_25%,transparent)]" in header
     assert (
-        "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-danger)_8%,transparent)_0%,"
-        "color-mix(in_oklab,var(--color-danger)_12%,transparent)_100%)]" in header
+        "bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)]"
+        in header
     )
     assert "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-danger)_50%,transparent)]" in header
     assert HAIRLINE not in header
     body = _open_tag(rendered, "Danger body")
-    assert "p-6 bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)]" in body
+    assert "p-6" in body
+    # The body is unwashed: the reader weighs destructive actions on the same
+    # surface as every other card.
+    assert "color-mix(in_oklab,var(--color-danger)" not in body
 
 
 def test_dangerzone_header_ink_is_danger(rendered: str) -> None:
@@ -192,9 +198,8 @@ def test_dangerzone_header_part_paints_the_same_band_as_the_title_header(rendere
     title_band = _open_tag(rendered, "Danger zone", depth=1)
     for bit in (
         "flex items-center gap-3",
-        "border-[color-mix(in_oklab,var(--color-danger)_30%,transparent)]",
-        "bg-[linear-gradient(135deg,color-mix(in_oklab,var(--color-danger)_8%,transparent)_0%,"
-        "color-mix(in_oklab,var(--color-danger)_12%,transparent)_100%)]",
+        "border-[color-mix(in_oklab,var(--color-danger)_25%,transparent)]",
+        "bg-[linear-gradient(to_bottom,color-mix(in_oklab,var(--color-surface-elevated)_50%,transparent),transparent)]",
         "focus-visible:shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--color-danger)_50%,transparent)]",
     ):
         assert bit in trigger
@@ -212,14 +217,14 @@ def test_dangerzone_header_part_carries_the_control_attributes(rendered: str) ->
 
 def test_dangerzone_body_part_takes_the_collapse_on_the_padded_element(rendered: str) -> None:
     body = _open_tag(rendered, "Collapsible danger body")
-    assert "p-6 bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)]" in body
+    assert "p-6" in body
     assert 'x-show="isExpanded"' in body
     assert "x-collapse" in body
 
 
 def test_flush_dangerzone_emits_no_padded_body_of_its_own(rendered: str) -> None:
     card = _card_holding(rendered, "Collapsible danger body")
-    assert card.count("p-6 bg-[color-mix(in_oklab,var(--color-danger)_2%,transparent)]") == 1
+    assert card.count('class="p-6"') == 1
 
 
 def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
@@ -233,13 +238,18 @@ def test_dangerzone_collapsible_assembles_the_whole_zone(rendered: str) -> None:
     assert '@click="isExpanded = !isExpanded"' in zone
     assert '@keydown.enter.prevent="isExpanded = !isExpanded"' in zone
     assert '@keydown.space.prevent="isExpanded = !isExpanded"' in zone
-    # The chevron turns over like every other collapsible in the library.
+    # The chevron turns over like every other collapsible in the library, in
+    # the muted ink they all wear.
     assert "isExpanded ? 'rotate-180' : ''" in zone
     assert "-rotate-90" not in zone
-    # The collapse lands on the padded body element, and the title is supplied.
+    assert "fa-chevron-down shrink-0 text-text-muted" in zone
+    # The band reads before it warns: danger ink on the title, a quiet default
+    # explainer under it, and the ground left alone.
+    assert "Danger Zone" in zone
+    assert "Actions here cannot be undone." in zone
+    # The collapse lands on the padded body element.
     assert 'x-show="isExpanded"' in zone
     assert "x-collapse" in zone
-    assert "Danger Zone" in zone
 
 
 def test_dangerzone_collapsible_state_prop_renames_every_hook(rendered: str) -> None:
@@ -249,6 +259,8 @@ def test_dangerzone_collapsible_state_prop_renames_every_hook(rendered: str) -> 
     assert '@click="zoneOpen = !zoneOpen"' in zone
     assert 'x-show="zoneOpen"' in zone
     assert "Purge queue" in zone
+    assert "Emptying it drops every queued job." in zone
+    assert "Actions here cannot be undone." not in zone
 
 
 def test_inset_is_sunken_not_raised(rendered: str) -> None:

@@ -1,11 +1,14 @@
 {% comment %}
-The Danger Zone, assembled: the red band that is also the control that opens
-it, and the collapsing body the destructive rows go in. Every page's danger
-zone composes this one component, so the band, the chevron and the keyboard
-behaviour cannot drift apart per page. They did once, three ways: the team
-zone sat on c-cards.collapsible level="danger", which leaves the title and
-chevron in neutral ink, and the pages that did use the dangerzone parts had
-hand-copied two different header arrangements.
+The Danger Zone, assembled: the band that is also the control that opens it,
+and the collapsing body the destructive rows go in. Every page's danger zone
+composes this one component, so the band, the chevron and the keyboard
+behaviour cannot drift apart per page. They did once, three ways.
+
+The band reads before it warns: a danger icon chip, the title in danger ink,
+and a quiet line saying what the zone is, all on the ordinary header wash. The
+subtitle is a prop with a default so every zone explains itself the same way;
+pass subtitle to say something more specific. The hover tint is here rather
+than on the parts because only this band is a control.
 
 state names the caller's boolean that is true while the zone is open. It
 defaults to isExpanded, which is what dangerZone() in alpine-components.ts
@@ -13,22 +16,28 @@ provides, so most callers pass nothing. The trigger flips it by assignment,
 the way c-modal derives its dismiss from show, so a caller supplies state and
 never a handler.
 
-The chevron matches c-cards.collapsible-trigger: down while shut, turned over
-while open, on the right edge of the band. One collapsing motion across the
-app, danger or not.
+The chevron matches c-cards.collapsible-trigger: muted ink on the right edge,
+down while shut, turned over while open. One collapsing motion across the app,
+danger or not.
 
 The rows are the slot, landing on c-cards.dangerzone-body so the collapse
 sits on the padded element itself; the confirm modal a row opens belongs to
 the caller, next to this tag, because only the caller knows what it deletes.
 {% endcomment %}
-<c-vars state="isExpanded" title="Danger Zone" class />
+<c-vars state="isExpanded" title="Danger Zone" subtitle="Actions here cannot be undone." class />
 <c-cards.dangerzone flush class="{{ class }}" :attrs="attrs">
 <c-slot name="header">
-<c-cards.dangerzone-header class="cursor-pointer select-none justify-between" role="button" tabindex="0" ::aria-expanded="{{ state }}" @click="{{ state }} = !{{ state }}" @keydown.enter.prevent="{{ state }} = !{{ state }}" @keydown.space.prevent="{{ state }} = !{{ state }}">
-<h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>{{ title }}
-</h4>
-<i class="fas fa-chevron-down text-danger transition-transform duration-200"
+<c-cards.dangerzone-header class="cursor-pointer select-none justify-between gap-4 transition-colors duration-150 hover:bg-[color-mix(in_oklab,var(--color-danger)_4%,transparent)]" role="button" tabindex="0" ::aria-expanded="{{ state }}" @click="{{ state }} = !{{ state }}" @keydown.enter.prevent="{{ state }} = !{{ state }}" @keydown.space.prevent="{{ state }} = !{{ state }}">
+<div class="flex items-center gap-3 min-w-0">
+    <c-chips.icon-chip accent="danger" aria-hidden="true">
+    <i class="fas fa-exclamation-triangle"></i>
+    </c-chips.icon-chip>
+    <div class="min-w-0">
+        <h4 class="text-base font-semibold text-danger m-0">{{ title }}</h4>
+        <p class="text-sm text-text-muted m-0">{{ subtitle }}</p>
+    </div>
+</div>
+<i class="fas fa-chevron-down shrink-0 text-text-muted transition-transform duration-200"
    :class="{{ state }} ? 'rotate-180' : ''"
    aria-hidden="true"></i>
 </c-cards.dangerzone-header>
