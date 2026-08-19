@@ -80,7 +80,9 @@ def _create_component(request: HttpRequest, *, on_error: str) -> HttpResponse:
         return redirect(on_error)
 
     messages.success(request, f'Component "{name}" created successfully!')
-    return redirect("core:component_details", component_id=response.id)
+    # `create_component` returns the API response dict (see `_build_item_response`),
+    # not a model instance, so read the id by key.
+    return redirect("core:component_details", component_id=response["id"])
 
 
 class ComponentsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):

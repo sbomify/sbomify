@@ -76,7 +76,9 @@ def _create_product(request: HttpRequest, *, on_error: str) -> HttpResponse:
         return redirect(on_error)
 
     messages.success(request, f'Product "{name}" created successfully!')
-    return redirect("core:product_details", product_id=response_data.id)
+    # `create_product` returns the API response dict (see `_build_item_response`),
+    # not a model instance, so read the id by key.
+    return redirect("core:product_details", product_id=response_data["id"])
 
 
 class ProductsDashboardView(GuestAccessBlockedMixin, LoginRequiredMixin, View):

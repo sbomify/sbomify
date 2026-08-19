@@ -164,3 +164,119 @@ class TestUIWorkflows:
         components_data = response.json()
         component_names = [c["name"] for c in components_data["items"]]
         assert component_name in component_names
+
+    def test_product_create_page_post_redirects_to_the_product(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ):
+        """Posting the New Product form lands on the created product's page.
+
+        Pins the success path of `_create_product`: the API helper hands back
+        a response *dict*, so the redirect must read the id by key.
+        """
+        client.login(username=sample_user.username, password="test")  # nosec B106
+        team = sample_team_with_owner_member.team
+
+        BillingPlan.objects.create(
+            key="product_create_plan", name="Product Create Plan", max_components=10, max_products=10
+        )
+        team.billing_plan = "product_create_plan"
+        team.save()
+
+        session = client.session
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session.save()
+
+        response = client.post(
+            reverse("core:product_new"),
+            data={"name": "Page Created Product", "description": "From the create page"},
+        )
+
+        from sbomify.apps.core.models import Product
+
+        product = Product.objects.get(name="Page Created Product", team=team)
+        assert response.status_code == 302
+        assert response.url == reverse("core:product_details", kwargs={"product_id": product.id})
+
+    def test_products_dashboard_post_shim_redirects_to_the_product(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ):
+        """The compatibility POST shim on the list URL takes the same success path."""
+        client.login(username=sample_user.username, password="test")  # nosec B106
+        team = sample_team_with_owner_member.team
+
+        BillingPlan.objects.create(
+            key="product_shim_plan", name="Product Shim Plan", max_components=10, max_products=10
+        )
+        team.billing_plan = "product_shim_plan"
+        team.save()
+
+        session = client.session
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session.save()
+
+        response = client.post(
+            reverse("core:products_dashboard"),
+            data={"name": "Shim Created Product", "description": ""},
+        )
+
+        from sbomify.apps.core.models import Product
+
+        product = Product.objects.get(name="Shim Created Product", team=team)
+        assert response.status_code == 302
+        assert response.url == reverse("core:product_details", kwargs={"product_id": product.id})
+
+    def test_component_create_page_post_redirects_to_the_component(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ):
+        """Posting the New Component form lands on the created component's page."""
+        client.login(username=sample_user.username, password="test")  # nosec B106
+        team = sample_team_with_owner_member.team
+
+        BillingPlan.objects.create(
+            key="component_create_plan", name="Component Create Plan", max_components=10, max_products=10
+        )
+        team.billing_plan = "component_create_plan"
+        team.save()
+
+        session = client.session
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session.save()
+
+        response = client.post(
+            reverse("core:component_new"),
+            data={"name": "Page Created Component", "component_type": "bom"},
+        )
+
+        from sbomify.apps.sboms.models import Component
+
+        component = Component.objects.get(name="Page Created Component", team=team)
+        assert response.status_code == 302
+        assert response.url == reverse("core:component_details", kwargs={"component_id": component.id})
+
+    def test_components_dashboard_post_shim_redirects_to_the_component(
+        self, client: Client, sample_user, sample_team_with_owner_member
+    ):
+        """The compatibility POST shim on the list URL takes the same success path."""
+        client.login(username=sample_user.username, password="test")  # nosec B106
+        team = sample_team_with_owner_member.team
+
+        BillingPlan.objects.create(
+            key="component_shim_plan", name="Component Shim Plan", max_components=10, max_products=10
+        )
+        team.billing_plan = "component_shim_plan"
+        team.save()
+
+        session = client.session
+        session["current_team"] = {"id": team.id, "key": team.key, "role": "owner"}
+        session.save()
+
+        response = client.post(
+            reverse("core:components_dashboard"),
+            data={"name": "Shim Created Component", "component_type": "bom"},
+        )
+
+        from sbomify.apps.sboms.models import Component
+
+        component = Component.objects.get(name="Shim Created Component", team=team)
+        assert response.status_code == 302
+        assert response.url == reverse("core:component_details", kwargs={"component_id": component.id})
