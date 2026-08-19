@@ -92,14 +92,12 @@
                 body.ready { opacity: 1; }
             </style>
             <script>
-                // Show body once DOM is ready
+                // Show body once DOM is ready. This block is parsed inside <head>,
+                // so readyState is always "loading" and document.body is always
+                // null here: the listener is the only path that can fire.
                 document.addEventListener('DOMContentLoaded', function() {
                     document.body.classList.add('ready');
                 });
-                // Fallback: show body after short delay if DOMContentLoaded already fired
-                if (document.readyState !== 'loading') {
-                    document.body?.classList.add('ready');
-                }
             </script>
             <noscript>
                 <style>body { opacity: 1 !important; }</style>
