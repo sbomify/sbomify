@@ -58,6 +58,12 @@ from typing import Any
 
 from packaging import version as pkg_version
 
+from sbomify.apps.plugins.builtins._spdx3_helpers import (
+    extract_spdx3_elements,
+    get_spdx3_package_fields,
+    iter_spdx3_external_identifiers,
+    resolve_spdx3_agent,
+)
 from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -880,32 +886,20 @@ class BSICompliancePlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
 
-        # SPDX 3.x has an "elements" array with different types
+        # SPDX 3.x has an "elements" array with different types. The nested
+        # spdxDocument.elements shape predates the shared helper and is kept.
         elements = data.get("@graph", data.get("spdxDocument", {}).get("elements", []))
         if not elements:
             elements = data.get("elements", [])
 
-        # Extract elements by type
-        creation_info = None
-        packages: list[dict[str, Any]] = []
-        files: list[dict[str, Any]] = []
-        relationships: list[dict[str, Any]] = []
-        persons_orgs: dict[str, dict[str, Any]] = {}
-
-        for element in elements:
-            elem_type = element.get("type", element.get("@type", ""))
-            if "CreationInfo" in elem_type:
-                creation_info = element
-            elif "software_Package" in elem_type or "Package" in elem_type:
-                packages.append(element)
-            elif "software_File" in elem_type or "File" in elem_type:
-                files.append(element)
-            elif "Relationship" in elem_type:
-                relationships.append(element)
-            elif "Person" in elem_type or "Organization" in elem_type:
-                spdx_id = element.get("spdxId", element.get("@id", ""))
-                if spdx_id:
-                    persons_orgs[spdx_id] = element
+        # One extraction, shared with the other plugins — a private routing
+        # copy here is how SoftwareAgent suppliers scored two findings worse
+        # in BSI than everywhere else. Files are BSI-specific, so that pass
+        # stays local.
+        creation_info, packages, relationships, persons_orgs, _ = extract_spdx3_elements({"@graph": elements})
+        files: list[dict[str, Any]] = [
+            e for e in elements if isinstance(e, dict) and "File" in str(e.get("type", e.get("@type", "")))
+        ]
 
         # === SBOM-level required fields ===
 
@@ -1703,15 +1697,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(created_by, list):
             return None
         for ref in created_by:
-            entity = persons_orgs.get(ref, {})
-            if not isinstance(entity, dict):
-                continue
-            ext_ids = entity.get("externalIdentifiers")
-            if not isinstance(ext_ids, list):
-                continue
-            for ext_id in ext_ids:
-                if not isinstance(ext_id, dict):
-                    continue
+            entity = resolve_spdx3_agent(ref, persons_orgs)
+            for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
                 identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
@@ -1728,15 +1715,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(originated_by, list):
             return None
         for ref in originated_by:
-            entity = persons_orgs.get(ref, {})
-            if not isinstance(entity, dict):
-                continue
-            ext_ids = entity.get("externalIdentifiers")
-            if not isinstance(ext_ids, list):
-                continue
-            for ext_id in ext_ids:
-                if not isinstance(ext_id, dict):
-                    continue
+            entity = resolve_spdx3_agent(ref, persons_orgs)
+            for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
                 identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
@@ -1789,16 +1769,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
     def _has_spdx3_identifier(self, package: dict[str, Any]) -> bool:
         """Check if SPDX 3.x package has unique identifier."""
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
-            id_type = ext_id.get("externalIdentifierType", "")
-            if id_type in ("cpe22", "cpe23", "swid", "packageURL"):
-                return True
-        return False
+        return bool(get_spdx3_package_fields(package)["has_unique_id"])
 
     def _spdx3_has_sbom_uri(self, data: dict[str, Any]) -> bool:
         """Per BSI §5.2.3, the SBOM itself MUST expose a URI when the format
@@ -1811,18 +1782,34 @@ class BSICompliancePlugin(AssessmentPlugin):
         return bool(doc_ids)
 
     def _spdx3_has_source_code_uri(self, package: dict[str, Any]) -> bool:
-        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo or an
-        externalIdentifier referencing a VCS / repository URL.
+        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo, or an
+        externalRef pointing at the source — ``vcs`` and ``sourceArtifact``
+        live in the ExternalRefType vocabulary, not ExternalIdentifierType,
+        so this is the shape a conformant document actually carries.
         """
         source_info = package.get("software_sourceInfo")
         if isinstance(source_info, str) and source_info.strip():
             return True
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
+
+        external_refs = package.get("externalRef")
+        if isinstance(external_refs, list):
+            for ref in external_refs:
+                if not isinstance(ref, dict):
+                    continue
+                ref_type = str(ref.get("externalRefType") or "").strip()
+                if ref_type not in ("vcs", "sourceArtifact"):
+                    continue
+                locators = ref.get("locator") or []
+                # JSON-LD compact form: a one-element set may serialise as a
+                # bare string.
+                if isinstance(locators, str):
+                    locators = [locators]
+                if any(isinstance(loc, str) and loc.strip() for loc in locators):
+                    return True
+
+        # Documents stored before this fix carry a not-in-vocabulary
+        # externalIdentifier of type vcs/url; keep reading it.
+        for ext_id in iter_spdx3_external_identifiers(package):
             id_type = str(ext_id.get("externalIdentifierType") or "").strip().lower()
             ident = ext_id.get("identifier") or ""
             if id_type in ("vcs", "url") and isinstance(ident, str) and ident.strip():
