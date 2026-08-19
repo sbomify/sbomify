@@ -88,8 +88,14 @@
                 html.dark { background-color: #151724; color: #fff; }
                 html.light { background-color: #ffffff; color: #25293F; }
                 html { min-height: 100%; }
-                body { min-height: 100vh; opacity: 0; transition: opacity 0.1s ease-in; }
-                body.ready { opacity: 1; }
+                body { min-height: 100vh; }
+                /* Gated on html.js, which the script below adds only after it has
+                   registered the listener that removes the gate. If that script
+                   never runs, whether JavaScript is off, an extension blocked it
+                   or CSP rejected it, the class is absent and the body is visible.
+                   Only the script that can undo the gate is allowed to apply it. */
+                html.js body { opacity: 0; pointer-events: none; transition: opacity 0.1s ease-in; }
+                html.js body.ready { opacity: 1; pointer-events: auto; }
             </style>
             <script>
                 // Show body once DOM is ready. This block is parsed inside the
@@ -99,10 +105,9 @@
                 document.addEventListener('DOMContentLoaded', function() {
                     document.body.classList.add('ready');
                 });
+                // Only now, with the listener guaranteed registered, arm the gate.
+                document.documentElement.classList.add('js');
             </script>
-            <noscript>
-                <style>body { opacity: 1 !important; }</style>
-            </noscript>
             {% block styles %}{% endblock %}
             <link rel="stylesheet"
                   href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}">
