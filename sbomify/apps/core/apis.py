@@ -5102,3 +5102,52 @@ def export_vulnerabilities(
     if not result.ok:
         return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     return _csv_response(result.value or "", "vulnerabilities.csv")
+
+
+@router.get(
+    "/exports/notice",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export a third-party NOTICE document",
+    tags=["Exports"],
+)
+def export_notice(
+    request: HttpRequest,
+    product_id: str | None = None,
+    release_id: str | None = None,
+    format: str = "text",
+) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Attribution document derived from stored artifacts — name, version,
+    licenses and copyright, with license-less components in their own section.
+    `format` is "text" or "html"."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    product = None
+    release = None
+    if release_id:
+        release = Release.objects.filter(id=release_id, product__team=team).select_related("product").first()
+        if release is None:
+            return 404, ErrorResponse(detail="Release not found")
+    elif product_id:
+        product = Product.objects.filter(id=product_id, team=team).first()
+        if product is None:
+            return 404, ErrorResponse(detail="Product not found")
+
+    if format == "html":
+        result = csv_exports.export_notice_html(team, product=product, release=release)
+        content_type, filename = "text/html; charset=utf-8", "NOTICE.html"
+    elif format == "text":
+        result = csv_exports.export_notice_text(team, product=product, release=release)
+        content_type, filename = "text/plain; charset=utf-8", "NOTICE.txt"
+    else:
+        # A typo must not silently produce the default format — automation
+        # would never notice it asked for something else.
+        return 400, ErrorResponse(detail='Unknown format; expected "text" or "html".')
+    if not result.ok:
+        return 403, ErrorResponse(detail=result.error or "Export failed")
+    response = HttpResponse(result.value, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
