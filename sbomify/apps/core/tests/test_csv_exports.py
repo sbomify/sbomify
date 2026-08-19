@@ -244,6 +244,7 @@ class TestEndpoints:
         assert response.status_code == 200
         assert response["Content-Type"].startswith("text/csv")
         assert "attachment" in response["Content-Disposition"]
+        assert response["Cache-Control"] == "private, no-store"
 
     def test_another_user_sees_none_of_this_workspaces_data(self, inventory, stub_sbom_bytes, guest_user, client):
         """Signup gives every user their own workspace, so the export succeeds —
