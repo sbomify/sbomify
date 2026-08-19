@@ -1,0 +1,43 @@
+# Narration for screencasts/document_upload.py
+#
+# Thesis: compliance paperwork is an artifact like any other. Storing it beside
+# the SBOMs means one place to point a customer at, and one place to keep
+# current.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      Your customers rarely ask only for an SBOM. They ask for the audit report
+      too, and usually by email, months after they needed it.
+
+  component:
+    text: >-
+      So documents live in sbomify as well, in a component of their own. A
+      global one, because a SOC 2 report covers the company rather than any
+      single product.
+
+  version:
+    text: >-
+      Version it by the period it covers. Next year's report becomes a new
+      version rather than quietly overwriting this one.
+
+  classify:
+    text: >-
+      Then classify it. Type and subcategory are what let the trust center show
+      the right document to the right person, instead of a folder of PDFs.
+
+  describe:
+    text: >-
+      The description is what a reviewer reads before deciding whether to open
+      it, so say what it actually covers.
+
+  upload:
+    text: >-
+      Attach the file itself, and save.
+
+  outro:
+    text: >-
+      Now it sits alongside the SBOMs, versioned, classified, and ready to
+      share. [pause] One link answers the question instead of an email thread.

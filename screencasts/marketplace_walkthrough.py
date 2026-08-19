@@ -39,7 +39,9 @@ from conftest import (
     OUTPUT_DIR,
     auto_dismiss_toasts,
     dismiss_toasts,
+    narrate,
     pace,
+    settle,
     title_card,
 )
 
@@ -77,12 +79,14 @@ def marketplace_walkthrough(recording_page: Page) -> None:
 
     # The splash screen is already on-screen from the recording_page fixture,
     # so the opening card lands on brand background rather than a white flash.
+    narrate(page, "tour_intro")
     title_card(
         page,
         "sbomify",
         "Supply chain transparency, without the spreadsheet",
         hold_ms=3000,
     )
+    settle(page)
 
     for _slug, eyebrow, title, step in CHAPTERS:
         # Marked at the title card rather than after it, so a viewer who jumps
@@ -95,11 +99,14 @@ def marketplace_walkthrough(recording_page: Page) -> None:
 
     markers.append((time.monotonic() - started, "Get started"))
 
+    narrate(page, "tour_outro")
     title_card(
         page,
         "sbomify",
         "Start free at sbomify.com",
-        hold_ms=3600,
+        hold_ms=600,
+        linger=True,
     )
+    settle(page)
 
     _write_chapter_markers(markers)

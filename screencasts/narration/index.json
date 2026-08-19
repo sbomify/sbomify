@@ -1,0 +1,1381 @@
+{
+  "0267d3b0914e7053bdf9b5169c5adbf6d47b65ccfb6502a4d7caeed342369cb2": {
+    "file": "0267d3b0914e7053bdf9b5169c5adbf6d47b65ccfb6502a4d7caeed342369cb2.opus",
+    "duration": 15.67,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That's sbomify. Know what you ship, keep every artifact exactly as it was produced, tell the truth about what's actually exploitable, and hand your customers a link instead of an apology. [pause] Start free, at sbomify dot com."
+  },
+  "02f313e518664334374a5eda9e0fdb5df5ba8c7989022ece8c1d181adc020b1e": {
+    "file": "02f313e518664334374a5eda9e0fdb5df5ba8c7989022ece8c1d181adc020b1e.opus",
+    "duration": 5.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The scan flagged three problems on this component. A critical, a high, and a medium."
+  },
+  "031297c808bb003143af39932fb10042c4820a5b7f9083253a836b109f5eea11": {
+    "file": "031297c808bb003143af39932fb10042c4820a5b7f9083253a836b109f5eea11.opus",
+    "duration": 11.66,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "and create the profile. [pause] From here every SBOM you upload carries this provenance automatically, which is one of the NTIA minimum elements you no longer have to think about."
+  },
+  "05235e0e11f6c4d3660f51d66e3ad011f6d1a6e7182d02b26448817eb9936f66": {
+    "file": "05235e0e11f6c4d3660f51d66e3ad011f6d1a6e7182d02b26448817eb9936f66.opus",
+    "duration": 6.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Type delete to confirm. This is the point of no return, and support cannot reverse it afterwards."
+  },
+  "055240b68a9f8dbb2d9e19ec64180225bdcfd9e075b7393475d6e40568fff574": {
+    "file": "055240b68a9f8dbb2d9e19ec64180225bdcfd9e075b7393475d6e40568fff574.opus",
+    "duration": 10.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "BSI TR-03183 is the German technical guideline for SBOM quality, and it asks for rather more than the NTIA baseline does."
+  },
+  "060a5a4d98338bbd21f98ebdc7e82a102e02b3130d68aba583224cfb861f3a9e": {
+    "file": "060a5a4d98338bbd21f98ebdc7e82a102e02b3130d68aba583224cfb861f3a9e.opus",
+    "duration": 7.99,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That token goes to sbomify, which checks the claims against the binding you just made and hands back a short-lived credential."
+  },
+  "08bc012cf27dec8273e762923661dba44efd6b4ee3ae3d8b7252b8deeb03de25": {
+    "file": "08bc012cf27dec8273e762923661dba44efd6b4ee3ae3d8b7252b8deeb03de25.opus",
+    "duration": 8.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "What it actually asks for is evidence. That you knew what was in your product, that you handled vulnerabilities, and that you told your users what they needed to know."
+  },
+  "0a8dc885f0527ff07e1f7bdb44cd7c9b65db024c8044a7a5b19dd38d4ebae202": {
+    "file": "0a8dc885f0527ff07e1f7bdb44cd7c9b65db024c8044a7a5b19dd38d4ebae202.opus",
+    "duration": 13.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And incident reporting, under Article 14. [pause] An actively exploited vulnerability has to be reported within twenty four hours, so knowing that in advance matters rather more than reading it afterwards."
+  },
+  "0adde268279af3557fcb0e5d1d7d271808e995aeaad2bb35ae688ce265c64f8d": {
+    "file": "0adde268279af3557fcb0e5d1d7d271808e995aeaad2bb35ae688ce265c64f8d.opus",
+    "duration": 12.8,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Five questions drawn from Articles 2 and 3. [pause] They establish whether this is a product with digital elements, whether you place it on the European market, and whether you're the manufacturer rather than a distributor."
+  },
+  "0c344139e18e40a54beb79917c4f9e0074d6c9d331958cdf75bd6c6eda9e73d1": {
+    "file": "0c344139e18e40a54beb79917c4f9e0074d6c9d331958cdf75bd6c6eda9e73d1.opus",
+    "duration": 7.51,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That's handy day to day, but it moves. When you actually ship something, you want it frozen, and that's a named release."
+  },
+  "0e84dc4fa365bd4911afb3c53b45c2ad6b0955afb32a4f81d92e1639c4dd48e2": {
+    "file": "0e84dc4fa365bd4911afb3c53b45c2ad6b0955afb32a4f81d92e1639c4dd48e2.opus",
+    "duration": 5.67,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A VEX document uploads like any other artifact, from the same menu you'd use for an SBOM."
+  },
+  "0f5ae0152bb1709a47497dd2c975fd0e5e94eed5860afe7e6809566396c55afd": {
+    "file": "0f5ae0152bb1709a47497dd2c975fd0e5e94eed5860afe7e6809566396c55afd.opus",
+    "duration": 9.12,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Now it sits alongside the SBOMs, versioned, classified, and ready to share. [pause] One link answers the question instead of an email thread."
+  },
+  "0fb98fd37aa1e512c2670a074802d4eb6fd568b832c83fc2b46189ac546981c0": {
+    "file": "0fb98fd37aa1e512c2670a074802d4eb6fd568b832c83fc2b46189ac546981c0.opus",
+    "duration": 6.55,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This is version two of the same document. It still clears the critical, and it now clears the high as well."
+  },
+  "102e397bfe494dfe3a1c2aaa972b5e205094b32d2ff6811f51c2d7c817b84ebb": {
+    "file": "102e397bfe494dfe3a1c2aaa972b5e205094b32d2ff6811f51c2d7c817b84ebb.opus",
+    "duration": 11.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Both are cleared now, and both are still on the list with their reasoning. [pause] The medium is untouched, because you never claimed anything about it \u2014 VEX only ever says what you actually asserted."
+  },
+  "103d2424f892df56a603e12d85cafe859d5de229b801b11f0b17b94e620ce439": {
+    "file": "103d2424f892df56a603e12d85cafe859d5de229b801b11f0b17b94e620ce439.opus",
+    "duration": 6.46,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Now the part people get wrong. VEX is not a one-off. [pause] As you learn more, you re-issue it."
+  },
+  "109b13762444f609edd0ec91f80cca7aca9df5bce67fb3f3d69576d3d19374e4": {
+    "file": "109b13762444f609edd0ec91f80cca7aca9df5bce67fb3f3d69576d3d19374e4.opus",
+    "duration": 14.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That's the difference between sending someone a file and giving them something they can verify. [pause] And because the compliance plugins consume the same result, it's what satisfies the attestation requirement in the BSI and FDA checks too."
+  },
+  "1338d5dec0f65cbd5081b923168082176cd4a4993d041939cc2f3303d157e428": {
+    "file": "1338d5dec0f65cbd5081b923168082176cd4a4993d041939cc2f3303d157e428.opus",
+    "duration": 5.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "If you already run Dependency-Track, sbomify does not ask you to abandon it."
+  },
+  "13bafc4a21468ca14f730a5717e2b2a8cc67da15059718ec5da648b7f3fce58f": {
+    "file": "13bafc4a21468ca14f730a5717e2b2a8cc67da15059718ec5da648b7f3fce58f.opus",
+    "duration": 7.12,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A custom domain puts the page on your own name rather than ours, which matters when the link goes into a procurement document."
+  },
+  "16cff4fc94264c8494044a2b6c5d786e91e7e76d82c768f9947aa8adf6e0bd77": {
+    "file": "16cff4fc94264c8494044a2b6c5d786e91e7e76d82c768f9947aa8adf6e0bd77.opus",
+    "duration": 4.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The website is what somebody checks when they want to know the company is who it claims to be."
+  },
+  "172aa90a547e3560a4226d1e69be76cd0bad678691e7f39159206a3437ed1c1a": {
+    "file": "172aa90a547e3560a4226d1e69be76cd0bad678691e7f39159206a3437ed1c1a.opus",
+    "duration": 3.91,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This build ships all four components, so take all four."
+  },
+  "18da9477c67a4958defdc103d50ec8cc38d1d39f150ffbe676b413c869d0fdef": {
+    "file": "18da9477c67a4958defdc103d50ec8cc38d1d39f150ffbe676b413c869d0fdef.opus",
+    "duration": 11.99,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "sbomify applies the newest VEX for a component, so version two supersedes version one outright. There's no merging of two documents, and no ambiguity about which statement is current."
+  },
+  "19151ae720e60ab60f0abdf29d457da0b3a4b7772ec5f6e9ff83479d73431ae2": {
+    "file": "19151ae720e60ab60f0abdf29d457da0b3a4b7772ec5f6e9ff83479d73431ae2.opus",
+    "duration": 8.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And this is the half that matters commercially. On the public trust center, a customer sees one finding suppressed, with your reasoning attached."
+  },
+  "1a7cd63b957568e5b420a05d25d27db3e592fef6d67d2abfa000daaf471365bf": {
+    "file": "1a7cd63b957568e5b420a05d25d27db3e592fef6d67d2abfa000daaf471365bf.opus",
+    "duration": 5.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Turning it on early is a great deal cheaper than discovering the gap halfway through a procurement review."
+  },
+  "1a897eac3d941c86d3199bdc77c689df8becb227a676a6a9263ab502badfc5bd": {
+    "file": "1a897eac3d941c86d3199bdc77c689df8becb227a676a6a9263ab502badfc5bd.opus",
+    "duration": 5.92,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "From here it's a wizard, in five steps, and most of the answers are already in your workspace."
+  },
+  "1ac391c11f61478a1d472e7e7a65cdcb4b6170b9ccec39f7af98a973ec8729da": {
+    "file": "1ac391c11f61478a1d472e7e7a65cdcb4b6170b9ccec39f7af98a973ec8729da.opus",
+    "duration": 10.55,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That's the technical documentation the regulation expects you to keep. [pause] Not assembled the week before an audit, but generated from the artifacts you were maintaining all along."
+  },
+  "1af07767220f78cd29038052f6c931b949c29e377a4726df6098eedef62e7e40": {
+    "file": "1af07767220f78cd29038052f6c931b949c29e377a4726df6098eedef62e7e40.opus",
+    "duration": 21.26,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This is Pied Piper's compression engine. Four components under one product. [pause] When somebody asks whether you're affected by something, this structure is what makes the answer take seconds rather than a week. You aren't searching build logs or asking around the team \u2014 you're reading a list you already maintain, that already knows which repository each piece came from."
+  },
+  "1b8b3a540418524c5b41972ae3841cf77880fd67bd9ab96cc67ac9f3e25e59da": {
+    "file": "1b8b3a540418524c5b41972ae3841cf77880fd67bd9ab96cc67ac9f3e25e59da.opus",
+    "duration": 7.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "An SBOM on its own is just an inventory. It tells you what you ship, not whether any of it is a problem."
+  },
+  "1c883678efe0b5cae538d7dfb754cd0651c05c1e73f1bf1fa9d76c7c58b8e160": {
+    "file": "1c883678efe0b5cae538d7dfb754cd0651c05c1e73f1bf1fa9d76c7c58b8e160.opus",
+    "duration": 9.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Provenance goes further. It ties the file back to the build that produced it, which is what tells a consumer it came out of your pipeline and not somebody's laptop."
+  },
+  "1cbe8eddc0e2db575d2a0800b448b130db01ed6623295fb4468bf8ca0b5a5f55": {
+    "file": "1cbe8eddc0e2db575d2a0800b448b130db01ed6623295fb4468bf8ca0b5a5f55.opus",
+    "duration": 1.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Finish the entity,"
+  },
+  "1d4554f76c7432ee8a8f39b971542f2ad65a9dbc5f351830aad688c6e3263a55": {
+    "file": "1d4554f76c7432ee8a8f39b971542f2ad65a9dbc5f351830aad688c6e3263a55.opus",
+    "duration": 14.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And the API documentation. These are all the places a customer or an auditor ends up asking for, usually by email, and usually twice. Putting them here means the answer travels with the product instead of living in somebody's sent folder."
+  },
+  "1f23468c3749efd8a37bf8e0d45c558d5bff21554148b0c9a4cf33ab9a4cec50": {
+    "file": "1f23468c3749efd8a37bf8e0d45c558d5bff21554148b0c9a4cf33ab9a4cec50.opus",
+    "duration": 13.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This plugin checks your SBOMs against those expectations, including the support and end of life information the agency wants to see alongside the component list. [pause] That last part is where most submissions come up short."
+  },
+  "21f8f66e33a0bf3eebc874995306e309d854ad4064975656323caae42ae1b94b": {
+    "file": "21f8f66e33a0bf3eebc874995306e309d854ad4064975656323caae42ae1b94b.opus",
+    "duration": 5.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Expanding it spells out what goes, so you can read the consequence before you commit to it."
+  },
+  "2265ce6bf595fc49dbd47dac4b7d377e5f782fb55601d03c3432db05d443ae66": {
+    "file": "2265ce6bf595fc49dbd47dac4b7d377e5f782fb55601d03c3432db05d443ae66.opus",
+    "duration": 10.07,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then it exports a compliance bundle. The declaration of conformity, the SBOMs, the vulnerability disclosure policy, and the risk assessment, as one file."
+  },
+  "235c31c85bf55292d159e1db76b66220710598cce7bc1e828c78e18120b8e9c9": {
+    "file": "235c31c85bf55292d159e1db76b66220710598cce7bc1e828c78e18120b8e9c9.opus",
+    "duration": 13.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This plugin forwards your SBOMs to your own Dependency-Track instance and pulls the findings back, so the analysis keeps happening where your team already tuned it. [pause] You point it at your server and give it an API key."
+  },
+  "23d6786be5236c391f3a0bbc7dc2f79332b8cd38577f8abfb13cd49abcbfa679": {
+    "file": "23d6786be5236c391f3a0bbc7dc2f79332b8cd38577f8abfb13cd49abcbfa679.opus",
+    "duration": 12.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Severity and status at the top, then the products it actually affects. [pause] That link matters, because it's drawn from the releases you published rather than typed in by hand, so it stays honest."
+  },
+  "2669937ceca7a0b1d730ad485f52158dab117c1ee94e9fcbb53318e9ce13bf81": {
+    "file": "2669937ceca7a0b1d730ad485f52158dab117c1ee94e9fcbb53318e9ce13bf81.opus",
+    "duration": 5.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It builds on the trust center, so that comes first, along with a domain of your own."
+  },
+  "271c4def5232eb5d20a6e7be04c3918f03d026e9ee76c788a2d2c5dc530115d9": {
+    "file": "271c4def5232eb5d20a6e7be04c3918f03d026e9ee76c788a2d2c5dc530115d9.opus",
+    "duration": 2.46,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Underneath the entity go the people."
+  },
+  "27a931f53976357bac6f4f4d4ba9517b53f0f52499400b989278885d516b654c": {
+    "file": "27a931f53976357bac6f4f4d4ba9517b53f0f52499400b989278885d516b654c.opus",
+    "duration": 5.91,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Compliance is assessed per product, which is why the wizard starts here rather than at the workspace."
+  },
+  "2946e9fd18b77be43fb490f9e42d1782e873201460fce8e9a2ba05b8b292f69d": {
+    "file": "2946e9fd18b77be43fb490f9e42d1782e873201460fce8e9a2ba05b8b292f69d.opus",
+    "duration": 5.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Scanning tells you what's wrong with your software. An advisory is how you tell everyone else."
+  },
+  "2a2db1cd210f72ec3314e2bbfd540f4d5e34346058947d350ebae0cdfe9f269e": {
+    "file": "2a2db1cd210f72ec3314e2bbfd540f4d5e34346058947d350ebae0cdfe9f269e.opus",
+    "duration": 5.02,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Step two is the SBOM itself, and this is where the earlier work pays off."
+  },
+  "2c2bf7a9206261cedd89734d9b6b4f5c1894f5cbe787f3d350dba546ad206512": {
+    "file": "2c2bf7a9206261cedd89734d9b6b4f5c1894f5cbe787f3d350dba546ad206512.opus",
+    "duration": 12.15,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Trusted publishing removes the secret altogether. Your pipeline proves who it is using an identity token GitHub already issues, and sbomify trades that for credentials good for a few minutes."
+  },
+  "2d4d8322c216412d7df3210d76b536245b89a119d630517d22eb0e23e360d3a9": {
+    "file": "2d4d8322c216412d7df3210d76b536245b89a119d630517d22eb0e23e360d3a9.opus",
+    "duration": 10.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Create it, and the release exists. [pause] But it's empty. Nothing is pinned to it yet, which is worth knowing, because an empty release still looks perfectly valid from the outside."
+  },
+  "2d5f6776e710c87d8bc0c351d70b0879cfbdf2b110c03828645ab669264fb883": {
+    "file": "2d5f6776e710c87d8bc0c351d70b0879cfbdf2b110c03828645ab669264fb883.opus",
+    "duration": 3.35,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So it begins with scope screening rather than paperwork."
+  },
+  "2e78768362116bef61f72e24c9b1efcdf383bb29e3d8c1cad4c36f8b83657535": {
+    "file": "2e78768362116bef61f72e24c9b1efcdf383bb29e3d8c1cad4c36f8b83657535.opus",
+    "duration": 9.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "When a regulator or a customer asks how you handled something, this is the answer. [pause] Not a recollection, but a record you were keeping anyway."
+  },
+  "2f40b04e3486927b74aa715c0f4440f9a300f797f15336de132d6d4947afb5b5": {
+    "file": "2f40b04e3486927b74aa715c0f4440f9a300f797f15336de132d6d4947afb5b5.opus",
+    "duration": 5.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The API service that sits behind it, carrying a completely different dependency tree."
+  },
+  "2f6955aab4b4740243025f15fa554da621b0154aae80ad1f2e992516aa5b89a0": {
+    "file": "2f6955aab4b4740243025f15fa554da621b0154aae80ad1f2e992516aa5b89a0.opus",
+    "duration": 8.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And it lands on the component. [pause] No secret was stored, nothing to rotate, and nothing left behind that would still work tomorrow if it leaked today."
+  },
+  "31754f6d613a800b09f489f7831ef9ef9e09a2046fb1496d37d86f8b75ceacb0": {
+    "file": "31754f6d613a800b09f489f7831ef9ef9e09a2046fb1496d37d86f8b75ceacb0.opus",
+    "duration": 6.3,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Everything hangs off a product. This one has four components, and each of them carries its own SBOM."
+  },
+  "31fb657cea613fd39f331165c53a0635462ce567d4f4bfc9197d34b4bb98d942": {
+    "file": "31fb657cea613fd39f331165c53a0635462ce567d4f4bfc9197d34b4bb98d942.opus",
+    "duration": 4.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Inside a profile is the entity. That's the organisation itself."
+  },
+  "3246679bf7280702a39ef56ef081e0047a9f0f916b05616da5a4b6969f7914f5": {
+    "file": "3246679bf7280702a39ef56ef081e0047a9f0f916b05616da5a4b6969f7914f5.opus",
+    "duration": 8.86,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Hand that one address to a customer and their tooling takes it from there. No portal logins, no spreadsheets, and nothing to rebuild the next time you ship."
+  },
+  "344505b58b5590fcfe2cd036deea3b8ffe4a3e50ed0ed572652ac527a658bc03": {
+    "file": "344505b58b5590fcfe2cd036deea3b8ffe4a3e50ed0ed572652ac527a658bc03.opus",
+    "duration": 7.67,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Everything in the workspace shows up here. Every component SBOM, and any compliance documents you've uploaded alongside them."
+  },
+  "34f3f0a022680b604f295d0e4a574e095024a7862ee299024d59be17621ab13d": {
+    "file": "34f3f0a022680b604f295d0e4a574e095024a7862ee299024d59be17621ab13d.opus",
+    "duration": 6.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The NTIA minimum elements are the closest thing there is to an agreed definition of an acceptable SBOM."
+  },
+  "37082ef8d4eaeac61a6edfca686947f4d529edd1991b7f5f34eb179981d122ff": {
+    "file": "37082ef8d4eaeac61a6edfca686947f4d529edd1991b7f5f34eb179981d122ff.opus",
+    "duration": 8.07,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This one is the security contact, which is the address a researcher uses when they have found something and want a human, not a support form."
+  },
+  "378346b70196f20945757fca63368c6edd8cb670b37864b0005bfab7c5eec96d": {
+    "file": "378346b70196f20945757fca63368c6edd8cb670b37864b0005bfab7c5eec96d.opus",
+    "duration": 8.07,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A security checklist first. Secure by default configuration, protection of stored data, and reducing the attack surface."
+  },
+  "3799d437197209fd0d3605726c73b820c2f285ef7a571fb13dcafc6006d68cc8": {
+    "file": "3799d437197209fd0d3605726c73b820c2f285ef7a571fb13dcafc6006d68cc8.opus",
+    "duration": 24.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The VEX sits beside the SBOM as its own artifact, and the original SBOM is untouched. [pause] sbomify never edits what you uploaded, so the assessment lives next to the evidence rather than inside it. An auditor sees both the claim and the reasoning behind it, and your customer's tooling can consume the VEX directly instead of asking you to explain the finding by email."
+  },
+  "37a96f4236c2f235de2609a8ad1b081c0cd84a7370d18117242495ee65358f5b": {
+    "file": "37a96f4236c2f235de2609a8ad1b081c0cd84a7370d18117242495ee65358f5b.opus",
+    "duration": 11.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "But tell sbomify it's a VEX rather than an SBOM, because the two are treated very differently from here. An SBOM is stored; a VEX changes how existing findings are counted."
+  },
+  "37aa3d3c53d09ae9ee0c4e28dcd7d8cc2b6354235fdc059bdef70e1b118d09bf": {
+    "file": "37aa3d3c53d09ae9ee0c4e28dcd7d8cc2b6354235fdc059bdef70e1b118d09bf.opus",
+    "duration": 7.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Every SBOM has to say who produced it. Supplier, author, and someone a person can actually contact."
+  },
+  "3883046974752b999745ced828988f848ddf3ba07f70b7a1d23fcd9e26b60bff": {
+    "file": "3883046974752b999745ced828988f848ddf3ba07f70b7a1d23fcd9e26b60bff.opus",
+    "duration": 15.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Seven data fields, including supplier, component name, version, and the dependency relationships between them. [pause] This plugin checks every SBOM against them and reports what's missing, rather than leaving you to find out when a customer rejects the file."
+  },
+  "40532bd983fefe2606ffec52c76c864988343aab5c91c565a296d3e3ac29fb57": {
+    "file": "40532bd983fefe2606ffec52c76c864988343aab5c91c565a296d3e3ac29fb57.opus",
+    "duration": 1.99,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Upload it against the component,"
+  },
+  "42081af9563e260c6dfc966444fc3e19ff430415daa9d9d2809bde3cbbec0b9c": {
+    "file": "42081af9563e260c6dfc966444fc3e19ff430415daa9d9d2809bde3cbbec0b9c.opus",
+    "duration": 8.07,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Software supply chain transparency usually arrives as a spreadsheet, a deadline, and somebody's weekend. [pause] It doesn't have to."
+  },
+  "423c05f7079996ef33a155130889e6a5422cded5b149546f34ae4e895e908e66": {
+    "file": "423c05f7079996ef33a155130889e6a5422cded5b149546f34ae4e895e908e66.opus",
+    "duration": 8.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Save, and scanning runs from here on. New findings land against the component that introduced them, so you know which SBOM to go and fix."
+  },
+  "43ad77f31cccffc266857b621ec09c1b37e3c9e14517104ee4f76158109a50f9": {
+    "file": "43ad77f31cccffc266857b621ec09c1b37e3c9e14517104ee4f76158109a50f9.opus",
+    "duration": 9.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The result is one place to look. Dependency-Track carries on doing the scanning, and sbomify carries on being the thing you hand to a customer."
+  },
+  "46e19cacaf3c46b98dda7f8aeba6645a04153f34aa49d2105125360bb4b01090": {
+    "file": "46e19cacaf3c46b98dda7f8aeba6645a04153f34aa49d2105125360bb4b01090.opus",
+    "duration": 6.15,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then the rest of the stack. A web dashboard, which is where most of the third party JavaScript will turn up."
+  },
+  "478ce9db3e16ed5b56e384dedd391cc1351a44ddac50d33b5d30afb2a0e6eb38": {
+    "file": "478ce9db3e16ed5b56e384dedd391cc1351a44ddac50d33b5d30afb2a0e6eb38.opus",
+    "duration": 18.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A release date, the day support stops, and the day it's end of life. [pause] These are the dates everyone forgets to publish, and they're exactly what a customer needs in order to plan around you. Under the Cyber Resilience Act, stating a support period stops being a courtesy and starts being an expectation."
+  },
+  "47da67f6cdf37dfb4d51638e6535c918270b54e4f2d770e00d21c0c58ea1d4e5": {
+    "file": "47da67f6cdf37dfb4d51638e6535c918270b54e4f2d770e00d21c0c58ea1d4e5.opus",
+    "duration": 10.87,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So documents live in sbomify as well, in a component of their own. A global one, because a SOC 2 report covers the company rather than any single product."
+  },
+  "481bf4a0a234c7e10d1d66afb54f635406262a5a46ea171da087517ef5caea7f": {
+    "file": "481bf4a0a234c7e10d1d66afb54f635406262a5a46ea171da087517ef5caea7f.opus",
+    "duration": 9.67,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That's the whole trade. [pause] One link you can put in a sales conversation, and per component control over exactly how much of it a stranger gets to read."
+  },
+  "48a82c4c6dbfc1cf1edbe58b9816c88981e43bb1498283fa2398f5dcf1f1bc0e": {
+    "file": "48a82c4c6dbfc1cf1edbe58b9816c88981e43bb1498283fa2398f5dcf1f1bc0e.opus",
+    "duration": 5.34,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "From now on, only a workflow running in that repository can upload to this component."
+  },
+  "48fe08d8d43cd8fe072766fdb1507bcb2184b5aad9a1e5cb94b7887a5e127e10": {
+    "file": "48fe08d8d43cd8fe072766fdb1507bcb2184b5aad9a1e5cb94b7887a5e127e10.opus",
+    "duration": 8.78,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Apply it, and the finding changes state rather than vanishing. It reads not affected now, and it carries the reason you gave for saying so."
+  },
+  "496fb44f37cdc44662c12c7b9337e18db6fafbdb24f26b84872322f94e467228": {
+    "file": "496fb44f37cdc44662c12c7b9337e18db6fafbdb24f26b84872322f94e467228.opus",
+    "duration": 14.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That distinction matters more than it sounds. The same component can belong to several products at once without duplicating a single SBOM, so when you upload a new version of that library, every product that ships it is current immediately."
+  },
+  "4b321480d858f48d6934bff68d4069b4b79c75acca4927f768ebd7f71434bcde": {
+    "file": "4b321480d858f48d6934bff68d4069b4b79c75acca4927f768ebd7f71434bcde.opus",
+    "duration": 6.87,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It's the outbound half of vulnerability handling, and under the Cyber Resilience Act it stops being optional."
+  },
+  "4b37613bb574990f0d21480e088e7dd8f3f913176bad3dc5e1de35d82c2d182d": {
+    "file": "4b37613bb574990f0d21480e088e7dd8f3f913176bad3dc5e1de35d82c2d182d.opus",
+    "duration": 9.83,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The version is the part that matters later. It's what you'll quote when somebody asks what was actually in this build, so it should match whatever you tag in your own release process."
+  },
+  "4bcb73bd8bb9d530167a1469b39812761ca1844016c222de39896aba217c1884": {
+    "file": "4bcb73bd8bb9d530167a1469b39812761ca1844016c222de39896aba217c1884.opus",
+    "duration": 7.42,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A scanner tells you a vulnerable package is present. It cannot tell you whether the vulnerable code is ever actually reached."
+  },
+  "4bd3b26805a7b645f00afdf8867a9bc6200cf59a847c6fdd590b87fd0fa2bda0": {
+    "file": "4bd3b26805a7b645f00afdf8867a9bc6200cf59a847c6fdd590b87fd0fa2bda0.opus",
+    "duration": 8.55,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Turning it on publishes the page. [pause] Nothing becomes visible yet, though. Every component is still private until you say otherwise."
+  },
+  "4c6bde0931bf09b8313d0fe41a91401929fe1de4e36b2cc50f30c9187c3f9ed6": {
+    "file": "4c6bde0931bf09b8313d0fe41a91401929fe1de4e36b2cc50f30c9187c3f9ed6.opus",
+    "duration": 9.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Most of the time it isn't, and answering that question by email, once per customer, does not scale. VEX is the machine-readable version of that answer."
+  },
+  "4d7508e873ea0cd300944fc0120da05081a2e7733407c0b954e66cec06eeae34": {
+    "file": "4d7508e873ea0cd300944fc0120da05081a2e7733407c0b954e66cec06eeae34.opus",
+    "duration": 13.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then you turn on a public trust center. [pause] There's no separate site to build and nothing to keep in sync, because it's backed by the same artifacts already sitting in the workspace \u2014 the ones your pipeline has been feeding all along."
+  },
+  "53c60d5762055a89e585cc451cb74ed40865b914bff9b899829e5ff4c4dffa5a": {
+    "file": "53c60d5762055a89e585cc451cb74ed40865b914bff9b899829e5ff4c4dffa5a.opus",
+    "duration": 11.83,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Two here, and they show the shape of the whole process. One published and resolved, which is the finished story a customer reads, and one still in progress, which is the page a team actually works in."
+  },
+  "53f3166fcefb4bc191863978fa6eab5e8cde4083ac785a839019027b36c60a0a": {
+    "file": "53f3166fcefb4bc191863978fa6eab5e8cde4083ac785a839019027b36c60a0a.opus",
+    "duration": 8.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Everything starts in one workspace. Every product you ship, in one place, rather than scattered across build systems and spreadsheets."
+  },
+  "56e995414cd9e844bb2dcf9686c2395ad8ffb24708e9410c2d240f48f24e11ad": {
+    "file": "56e995414cd9e844bb2dcf9686c2395ad8ffb24708e9410c2d240f48f24e11ad.opus",
+    "duration": 9.92,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Which means years later it still resolves. [pause] Not the latest of everything, but precisely what went out of the door in that build, which is the question you'll be asked."
+  },
+  "5a63e1d7e6a8780dbb6b690f7c5e0f1f1ca4d46856415f9ab74bbdcd30c968e5": {
+    "file": "5a63e1d7e6a8780dbb6b690f7c5e0f1f1ca4d46856415f9ab74bbdcd30c968e5.opus",
+    "duration": 8.72,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So let's cut one for the middle out rewrite. It takes a name, and the name is for humans, so make it the one your team already says out loud."
+  },
+  "5b907b6fcc23a7c42638734509de4e1f81fe23db26c6a935825cd4b4677aef6e": {
+    "file": "5b907b6fcc23a7c42638734509de4e1f81fe23db26c6a935825cd4b4677aef6e.opus",
+    "duration": 7.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Once the domain is verified, sbomify can serve the discovery endpoint from your own name rather than ours."
+  },
+  "5ef5c2a1a78bdce636ef12e1d9f8504f4d59d70a209ce7f1ac0b9005d47309c3": {
+    "file": "5ef5c2a1a78bdce636ef12e1d9f8504f4d59d70a209ce7f1ac0b9005d47309c3.opus",
+    "duration": 11.35,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then vulnerability handling, which the Act treats as an ongoing obligation rather than a one-off audit. You need a coordinated disclosure policy and a way for a researcher to reach you."
+  },
+  "600d21d3aa66282e38973302730bedadf5e93b2531b003011dd0f020f96b3ac8": {
+    "file": "600d21d3aa66282e38973302730bedadf5e93b2531b003011dd0f020f96b3ac8.opus",
+    "duration": 8.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A CPE is what most vulnerability databases still key on. It's an awkward format, but it's the one the ecosystem agreed on."
+  },
+  "622c03db49aeb6b631ed92da09777af617a88da71970eaf217cd7c3ba0a77305": {
+    "file": "622c03db49aeb6b631ed92da09777af617a88da71970eaf217cd7c3ba0a77305.opus",
+    "duration": 20.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "and the critical is answered rather than hidden. It reads not affected now, struck through, carrying the justification you gave. [pause] Nothing was deleted and nothing is tucked away \u2014 the finding and your answer to it sit side by side, and the toggle clears the settled ones out of the way when you want only what still needs doing."
+  },
+  "6242f6576dbc4bbb1b296870f3c63e4e992945c709aaab641107ef24c18b7541": {
+    "file": "6242f6576dbc4bbb1b296870f3c63e4e992945c709aaab641107ef24c18b7541.opus",
+    "duration": 8.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Deleting your account is not the same as deleting a workspace. This removes you, the person, rather than the data your team relies on."
+  },
+  "62d6f799ab890c482c0cbda4c65b42c238c23d28d8516a71dc2caa3248543d7b": {
+    "file": "62d6f799ab890c482c0cbda4c65b42c238c23d28d8516a71dc2caa3248543d7b.opus",
+    "duration": 12.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Signed means a detached signature is stored alongside the SBOM, and that sbomify recomputed the digest and it still matches. [pause] If a single byte had changed, this badge would not be here."
+  },
+  "656070a21eb444da01b96de7c145d617208730d55f6d3be90f2cc7853b7ce042": {
+    "file": "656070a21eb444da01b96de7c145d617208730d55f6d3be90f2cc7853b7ce042.opus",
+    "duration": 2.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Attach the file itself, and save."
+  },
+  "660c491d35557e1b0b3852b61da8f71ac206ec196e5c1b9c2e32ea5ac949b1e5": {
+    "file": "660c491d35557e1b0b3852b61da8f71ac206ec196e5c1b9c2e32ea5ac949b1e5.opus",
+    "duration": 9.89,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So let's play the part of the runner. [pause] First it asks GitHub for an OIDC token that says which repository, branch and workflow it is."
+  },
+  "668fb56bf33342901d8c1b62b91e916631eb9dc62050a1a63885f0ce8ea1b2e6": {
+    "file": "668fb56bf33342901d8c1b62b91e916631eb9dc62050a1a63885f0ce8ea1b2e6.opus",
+    "duration": 7.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Version it by the period it covers. Next year's report becomes a new version rather than quietly overwriting this one."
+  },
+  "69ab76e1e428ebd2e9482a6f1f4be2e669167eb06237513e7fee770a939251a0": {
+    "file": "69ab76e1e428ebd2e9482a6f1f4be2e669167eb06237513e7fee770a939251a0.opus",
+    "duration": 14.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It's the standard the Cyber Resilience Act leans on in practice, so if you sell into the European market, this is the bar your SBOMs will eventually be measured against. [pause] The plugin checks conformance and tells you which requirements a file misses."
+  },
+  "6b93beddf750e7f725ae35eb100a43db0f1b7853a760f755361325701e3d752d": {
+    "file": "6b93beddf750e7f725ae35eb100a43db0f1b7853a760f755361325701e3d752d.opus",
+    "duration": 5.67,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The first question is the one people skip, and it's whether the regulation applies to you at all."
+  },
+  "6e3b8424e5008ba176cb15d4812f815962818929a16732a477a9a2866db493a5": {
+    "file": "6e3b8424e5008ba176cb15d4812f815962818929a16732a477a9a2866db493a5.opus",
+    "duration": 9.83,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Confirm, and you're signed out for good. [pause] Your artifacts stay with any workspace that still has another owner, because they belong to the workspace and not to you."
+  },
+  "6ee765f7adc8c478f174ad1aac507afe640f22679d70dae5503cd30b06909e8b": {
+    "file": "6ee765f7adc8c478f174ad1aac507afe640f22679d70dae5503cd30b06909e8b.opus",
+    "duration": 7.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Underneath is the timeline, and it's the part worth caring about. Every update, dated, in the order it happened."
+  },
+  "6f77a13e84a3348e22f4a12c9cf76a7014e089b6b5249561d33456ef7bcb1316": {
+    "file": "6f77a13e84a3348e22f4a12c9cf76a7014e089b6b5249561d33456ef7bcb1316.opus",
+    "duration": 11.75,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This is what your customers see. Always current, because it's the same data your pipeline has been feeding all along. [pause] No email thread, no spreadsheet, and no scramble the week a questionnaire lands."
+  },
+  "700055013e183145db1d184a924e8ca6d4537559237781c0767ea52974b11336": {
+    "file": "700055013e183145db1d184a924e8ca6d4537559237781c0767ea52974b11336.opus",
+    "duration": 8.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Now the useful part. [pause] Before anything is stored, sbomify dry runs the document and shows exactly what it would change."
+  },
+  "7039e41f3560cc314788fcdeca20c8b008027c8ec85c2a78c135ad99eb1e7f89": {
+    "file": "7039e41f3560cc314788fcdeca20c8b008027c8ec85c2a78c135ad99eb1e7f89.opus",
+    "duration": 11.83,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Severity trends across every product, over time. This is the view that tells you whether you're getting better or just busier \u2014 and it's the one slide that answers the question a board actually asks."
+  },
+  "72adaf85036ef9a46ec5c5b77629928d4633fb182762beb630eb1a40c0487e57": {
+    "file": "72adaf85036ef9a46ec5c5b77629928d4633fb182762beb630eb1a40c0487e57.opus",
+    "duration": 8.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The homepage first, then the source code, so anyone reading an SBOM can get back to where it came from without guessing at a repository name."
+  },
+  "74dcfd464e3ea67bb388ae335e642fcb11ba3cfed8d1fbe5958256a865b56f1f": {
+    "file": "74dcfd464e3ea67bb388ae335e642fcb11ba3cfed8d1fbe5958256a865b56f1f.opus",
+    "duration": 18.55,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Not every component is code. A SOC 2 report is something your customers will ask for just as often, so it gets a component of its own. [pause] Marking it global means every product in the workspace can point at this same document, instead of each one carrying its own copy that quietly goes out of date."
+  },
+  "77224c48693e33ba5ad22fceb66ac12c26e22318e1005a776dedfc961b710c42": {
+    "file": "77224c48693e33ba5ad22fceb66ac12c26e22318e1005a776dedfc961b710c42.opus",
+    "duration": 6.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The description is what a reviewer reads before deciding whether to open it, so say what it actually covers."
+  },
+  "7777a231b8e579daf1fcc45ecde7e25afe4c3b667381e62babff4d5bc04912f8": {
+    "file": "7777a231b8e579daf1fcc45ecde7e25afe4c3b667381e62babff4d5bc04912f8.opus",
+    "duration": 7.34,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And there's the discovery URL. [pause] A well-known path on your domain that lists what you publish and where to fetch it."
+  },
+  "7870eb93a8588f6209aab782958c62de2ca4b2f32e77a0bc07311bc5ddf5f2c3": {
+    "file": "7870eb93a8588f6209aab782958c62de2ca4b2f32e77a0bc07311bc5ddf5f2c3.opus",
+    "duration": 9.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And here's the other half of the contract, the workflow snippet. Note it asks GitHub for an id-token and never references a secret."
+  },
+  "797381d8aefbb4731dd83fb9188c38fbd1d553a107a61e1b85e9f1879633d6b2": {
+    "file": "797381d8aefbb4731dd83fb9188c38fbd1d553a107a61e1b85e9f1879633d6b2.opus",
+    "duration": 6.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "When you ship a version of your software, you need a record of exactly what went into it. That's what a release is."
+  },
+  "7a983c77b4a177944e06e4ab4d301b958fdd7eded0fdd1cee480418b66f74273": {
+    "file": "7a983c77b4a177944e06e4ab4d301b958fdd7eded0fdd1cee480418b66f74273.opus",
+    "duration": 6.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So here's the first VEX. CycloneDX, version one, and it marks the critical as not affected."
+  },
+  "7b3f077f8fc1f6a18e689e48f22e7689bcd7659ed4081d6f098c11236afb7d9b": {
+    "file": "7b3f077f8fc1f6a18e689e48f22e7689bcd7659ed4081d6f098c11236afb7d9b.opus",
+    "duration": 6.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Step one is the product profile. Who makes it, what it is, and how long you intend to support it."
+  },
+  "7b48ede0d2e6afb12b93fa612d0d2b7a294f3f42ddbd2643eeb50e293693d25e": {
+    "file": "7b48ede0d2e6afb12b93fa612d0d2b7a294f3f42ddbd2643eeb50e293693d25e.opus",
+    "duration": 8.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And that's the snapshot. The components will keep moving and their versions will keep changing, but this release will always say exactly what shipped."
+  },
+  "7e5d5e546e91985cb6a351336e96f9c300ffaff376f59ad5df34e88edab79bf4": {
+    "file": "7e5d5e546e91985cb6a351336e96f9c300ffaff376f59ad5df34e88edab79bf4.opus",
+    "duration": 8.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Gated is the middle ground. The component is listed, but a visitor has to request access and sign your NDA before the artifacts open up."
+  },
+  "7f2f9759500e5a53ea577f45d5fabd34c5ef01da50bd7e9580a304adc00925ee": {
+    "file": "7f2f9759500e5a53ea577f45d5fabd34c5ef01da50bd7e9580a304adc00925ee.opus",
+    "duration": 10.06,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Digest integrity, signature present, signature valid, provenance present, and the digest in the attestation matching the file. [pause] All passed."
+  },
+  "806077b0a7b989cadfd70b339dedd3e395593e94ba2b52488fe784d3421e293d": {
+    "file": "806077b0a7b989cadfd70b339dedd3e395593e94ba2b52488fe784d3421e293d.opus",
+    "duration": 8.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The data connection question is the one that catches people out. If it connects to anything, directly or indirectly, it's almost certainly in scope."
+  },
+  "80f4d662b4ed00aaba81dc3b3dfbfa16f030995a09d53cc55019129792fcd394": {
+    "file": "80f4d662b4ed00aaba81dc3b3dfbfa16f030995a09d53cc55019129792fcd394.opus",
+    "duration": 8.32,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Naming it is most of the work. This one is the compression library at the heart of the product, and it's the piece everything else depends on."
+  },
+  "82f7d01f38ca0dc5b35467adf027527df29c0a0901486b10adf8d4c67359b35d": {
+    "file": "82f7d01f38ca0dc5b35467adf027527df29c0a0901486b10adf8d4c67359b35d.opus",
+    "duration": 10.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A product is the thing you actually sell. It gathers up the components that make it real, which is how sbomify keeps track of where any given piece of software actually lives."
+  },
+  "84cc47b5a36e31b19ac582dd484a167e139fae6e455b8c472d1f20ad4ec5927f": {
+    "file": "84cc47b5a36e31b19ac582dd484a167e139fae6e455b8c472d1f20ad4ec5927f.opus",
+    "duration": 1.66,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Upload it the same way."
+  },
+  "87184db2437b2288798ce86ce70bf469b9caea921c97fef90a2c223b044f8888": {
+    "file": "87184db2437b2288798ce86ce70bf469b9caea921c97fef90a2c223b044f8888.opus",
+    "duration": 7.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Deleting a workspace removes everything inside it. Components, SBOMs, releases, and the trust center that points at them."
+  },
+  "89ba957615257334132b55331f02826de10b5883e3a3b02595a103dbedf94275": {
+    "file": "89ba957615257334132b55331f02826de10b5883e3a3b02595a103dbedf94275.opus",
+    "duration": 10.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Serve it from your own domain, so the link you put in a procurement document carries your name rather than ours. It's a small thing that makes a large difference to how the page is received."
+  },
+  "8a4a3e997840754a4bfbf8c26a97d32667cf57ee7ad231c5179007a63dfa46ca": {
+    "file": "8a4a3e997840754a4bfbf8c26a97d32667cf57ee7ad231c5179007a63dfa46ca.opus",
+    "duration": 2.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This one is the Pied Piper compression engine."
+  },
+  "8b4e7ed6145f0a441fb4627a4f5afaf70e0fbd0b1a0762b7086cab859124032b": {
+    "file": "8b4e7ed6145f0a441fb4627a4f5afaf70e0fbd0b1a0762b7086cab859124032b.opus",
+    "duration": 2.72,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then TEA is a single switch."
+  },
+  "8b9053523184b7381811fca9d9163cf7405ca67076dd1cf70d6b22ac4ce7daa1": {
+    "file": "8b9053523184b7381811fca9d9163cf7405ca67076dd1cf70d6b22ac4ce7daa1.opus",
+    "duration": 4.87,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Save it, and sbomify gives you the DNS record to point at us."
+  },
+  "8c499daf057a2bf54073919c81711112cf034cfb8de0040c123c4bc48fb74173": {
+    "file": "8c499daf057a2bf54073919c81711112cf034cfb8de0040c123c4bc48fb74173.opus",
+    "duration": 19.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And before anything is stored, sbomify shows you what it would change. [pause] One finding would be suppressed. Nothing has been written yet. That matters, because a VEX applied by mistake quietly hides something real, and you want to see the effect before you commit to it rather than discover it in an audit."
+  },
+  "8c5af71caebcd9e198662e59041b755fa66fefd1218b6c797a2c471a34248db4": {
+    "file": "8c5af71caebcd9e198662e59041b755fa66fefd1218b6c797a2c471a34248db4.opus",
+    "duration": 3.35,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It attaches to the component the finding was raised against."
+  },
+  "8cc003c6c34bff5c59409cd4ff606fccb1b90dd32c98377b73f878633aad76b8": {
+    "file": "8cc003c6c34bff5c59409cd4ff606fccb1b90dd32c98377b73f878633aad76b8.opus",
+    "duration": 1.75,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This is the one being worked."
+  },
+  "8cf8c765625d01ee2a4fdac079f894b2f814d73799d5b7791b697ef79e06bc8b": {
+    "file": "8cf8c765625d01ee2a4fdac079f894b2f814d73799d5b7791b697ef79e06bc8b.opus",
+    "duration": 5.91,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The description is often the first thing a customer reads on the trust center, so it's worth more than a placeholder."
+  },
+  "8e7ad579bf4d50bdce4b2ba90998974f878b00cb64dfcc108ed8e445a49cc1e7": {
+    "file": "8e7ad579bf4d50bdce4b2ba90998974f878b00cb64dfcc108ed8e445a49cc1e7.opus",
+    "duration": 8.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "An SBOM is a claim about your software. A signature is what makes that claim checkable by somebody who has no reason to trust you yet."
+  },
+  "8fb809de8447c18516f39eb0e03c0e60c52d693295a2b860d78481b11c7be7be": {
+    "file": "8fb809de8447c18516f39eb0e03c0e60c52d693295a2b860d78481b11c7be7be.opus",
+    "duration": 14.3,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And they're stored exactly as received. sbomify never rewrites what you uploaded. [pause] Analysis lands beside the artifact, never inside it, so the file you can hand to an auditor is the file your build produced."
+  },
+  "8ff52dac542178b9771d123fd4eecf7fc2b8109a6a1cdaf053c005204b28706f": {
+    "file": "8ff52dac542178b9771d123fd4eecf7fc2b8109a6a1cdaf053c005204b28706f.opus",
+    "duration": 7.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And you have to type the word delete by hand. There is no undo behind this, and no support ticket that brings it back."
+  },
+  "90a4a36c514fe8d494da984d8a3bc8fce7fb2019571049b14702c8aa32e942da": {
+    "file": "90a4a36c514fe8d494da984d8a3bc8fce7fb2019571049b14702c8aa32e942da.opus",
+    "duration": 7.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A trust center is for people. TEA, the Transparency Exchange API, is the same thing for their tooling."
+  },
+  "91cdd050b10d728f2e1c6c2b520ab3a9526680e2e2ab408744c413e5e17a092b": {
+    "file": "91cdd050b10d728f2e1c6c2b520ab3a9526680e2e2ab408744c413e5e17a092b.opus",
+    "duration": 4.55,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Step three is the biggest, because it covers everything you do after shipping."
+  },
+  "91e2d14f91cdea08fe9861a8af075b360954a7c2cd257c9436772b2bb933e502": {
+    "file": "91e2d14f91cdea08fe9861a8af075b360954a7c2cd257c9436772b2bb933e502.opus",
+    "duration": 11.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Identifiers are how the rest of the world names this product. Without them, a vulnerability feed has no way to tell that an advisory is about you, and you find out from a customer instead."
+  },
+  "92da274038a80a955291a03f34041efa06d1e2917e724c8a3562856efa748c4c": {
+    "file": "92da274038a80a955291a03f34041efa06d1e2917e724c8a3562856efa748c4c.opus",
+    "duration": 5.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "An SBOM is only as trustworthy as your confidence that it came from who it claims to."
+  },
+  "9401e218d37cc3b88f192d5dbe6760d9092558f48b067ee699f37f2de85a3071": {
+    "file": "9401e218d37cc3b88f192d5dbe6760d9092558f48b067ee699f37f2de85a3071.opus",
+    "duration": 5.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Now attach the components. Each one you add here is a link, not a copy."
+  },
+  "946af9cb133d061e212aa480d9865b4e7504518b59654053ee1aca80773f9f08": {
+    "file": "946af9cb133d061e212aa480d9865b4e7504518b59654053ee1aca80773f9f08.opus",
+    "duration": 5.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "That's the difference between a file somebody emailed you and something you can put in front of an auditor."
+  },
+  "96fea71f2f4f9371abbf06c8e6af4c501fbb4566a6121896c63cc09b7577b5b9": {
+    "file": "96fea71f2f4f9371abbf06c8e6af4c501fbb4566a6121896c63cc09b7577b5b9.opus",
+    "duration": 5.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Signatures attach to the artifact itself, so you find them where the artifact lives."
+  },
+  "99ca4d5371a654734b24dc07139615e107b8a83f33ee6ac6ff9291d7a475f2a6": {
+    "file": "99ca4d5371a654734b24dc07139615e107b8a83f33ee6ac6ff9291d7a475f2a6.opus",
+    "duration": 6.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It sits under the Account tab in settings, which is about you rather than the workspace you happen to be looking at."
+  },
+  "9df451d8124afdaae32b4efc1496bf8a33bc71c561675c9d6149b4f83600de4f": {
+    "file": "9df451d8124afdaae32b4efc1496bf8a33bc71c561675c9d6149b4f83600de4f.opus",
+    "duration": 14.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This plugin verifies signatures and attestations, covering both signatures stored in sbomify and Sigstore attestations published straight from GitHub. [pause] It confirms the artifact in front of you is the one that was actually signed."
+  },
+  "9e2367fa3e3e9f37949b278e64dab095f03d7de7e568078668fbd1ea9f497846": {
+    "file": "9e2367fa3e3e9f37949b278e64dab095f03d7de7e568078668fbd1ea9f497846.opus",
+    "duration": 11.91,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The regulation requires a bill of materials for the top level dependencies at minimum. [pause] sbomify already has yours, so this step reports what you have rather than asking you to produce it."
+  },
+  "9f567b5942cc7a1b8ad364751e472d0478aaa45b73ff998437281bc247db7309": {
+    "file": "9f567b5942cc7a1b8ad364751e472d0478aaa45b73ff998437281bc247db7309.opus",
+    "duration": 12.79,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And the trust center follows. [pause] Two findings suppressed, the reasoning published, and the VEX itself downloadable, so a customer's own tooling can consume your assessment instead of emailing you about it."
+  },
+  "a7d798223cc9c91152584b5c47d2b6cec893ec46c41e447f17531195f61a39f6": {
+    "file": "a7d798223cc9c91152584b5c47d2b6cec893ec46c41e447f17531195f61a39f6.opus",
+    "duration": 16.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And that's the structure. Components underneath, a product on top, and the metadata that lets the outside world make sense of both. [pause] Everything after this \u2014 uploading SBOMs, cutting releases, publishing a trust center \u2014 hangs off the shape you just built."
+  },
+  "ac5bb61ca26036c6c4ba9a6582d774d32c070322b1674dc0def9b2d623eff0eb": {
+    "file": "ac5bb61ca26036c6c4ba9a6582d774d32c070322b1674dc0def9b2d623eff0eb.opus",
+    "duration": 8.79,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then classify it. Type and subcategory are what let the trust center show the right document to the right person, instead of a folder of PDFs."
+  },
+  "ad916ea908bf7221e06c0fcd36e93fe34aeb4ffbb5ba3088f1902ddb97bd1cb4": {
+    "file": "ad916ea908bf7221e06c0fcd36e93fe34aeb4ffbb5ba3088f1902ddb97bd1cb4.opus",
+    "duration": 5.42,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then the SBOM uploads with that credential, exactly as a real pipeline would."
+  },
+  "adedc33f1f1896b7e5c0c0df392e870ba7a7e54e17e070b7fb25189bc9c19c9b": {
+    "file": "adedc33f1f1896b7e5c0c0df392e870ba7a7e54e17e070b7fb25189bc9c19c9b.opus",
+    "duration": 8.55,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Your customers rarely ask only for an SBOM. They ask for the audit report too, and usually by email, months after they needed it."
+  },
+  "adf793a5303e2e51134cacc80c95b5167fb2599daf15b3133bc5cc9a65cc943b": {
+    "file": "adf793a5303e2e51134cacc80c95b5167fb2599daf15b3133bc5cc9a65cc943b.opus",
+    "duration": 12.0,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Nothing was deleted, and nothing is hidden away. [pause] The finding sits right next to your answer to it, which is exactly what an auditor wants to see \u2014 not a shorter list, but a justified one."
+  },
+  "aeb57b1336840fd1bf1aeeeaff7fdcfd28f97f6176d32c6fd1db61f06bfd000d": {
+    "file": "aeb57b1336840fd1bf1aeeeaff7fdcfd28f97f6176d32c6fd1db61f06bfd000d.opus",
+    "duration": 7.75,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This is the full journey of a VEX document. From a scanner finding, to your assessment of it, to what a customer actually sees."
+  },
+  "aed3462c9572a98ead654074d0f427e25babab7cd442e62e0cb5718d8b7971d2": {
+    "file": "aed3462c9572a98ead654074d0f427e25babab7cd442e62e0cb5718d8b7971d2.opus",
+    "duration": 5.83,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Underneath, the verification plugin reports the individual checks rather than a single opaque verdict."
+  },
+  "af9ad6d23e1861f112dc89cd1d08773946ca87c134620f0c1e244e9de597cc0f": {
+    "file": "af9ad6d23e1861f112dc89cd1d08773946ca87c134620f0c1e244e9de597cc0f.opus",
+    "duration": 15.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And the worker that moves data through the pipeline. [pause] Four repositories, four components. The mapping stays that boring on purpose, because the moment it stops matching your repositories, nobody can tell where a vulnerable package actually lives."
+  },
+  "b1bb8c8c44936593314ba5e0309441e5c2442c57100bd840627f87447be62af6": {
+    "file": "b1bb8c8c44936593314ba5e0309441e5c2442c57100bd840627f87447be62af6.opus",
+    "duration": 12.07,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And there's the verdict, with the reasoning attached rather than a bare yes. [pause] If the answer had been no, you would have that recorded too, which is worth having when somebody asks why you didn't comply."
+  },
+  "b1cbf436b1a21859ee0230ef2892b90473f04b49cd2951d43f04d4951bbe2f33": {
+    "file": "b1cbf436b1a21859ee0230ef2892b90473f04b49cd2951d43f04d4951bbe2f33.opus",
+    "duration": 9.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Drill into a component and you get the specifics. The advisory, the package that introduced it, the version that fixes it, and where it stands right now."
+  },
+  "b33d22d7e8bbbebbf7b70f3f1474ced960953087c1553ec91ee4f5a08563401d": {
+    "file": "b33d22d7e8bbbebbf7b70f3f1474ced960953087c1553ec91ee4f5a08563401d.opus",
+    "duration": 7.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "If you ship software inside a medical device, the FDA expects an SBOM as part of your premarket submission."
+  },
+  "b3a594106a885fa6d8cfdd9c899a251ec749987fd6b87d8382a639aa3b848a75": {
+    "file": "b3a594106a885fa6d8cfdd9c899a251ec749987fd6b87d8382a639aa3b848a75.opus",
+    "duration": 9.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Sooner or later a customer asks for your SBOMs, your audit report, and your security contact. Usually as a spreadsheet, usually on a deadline."
+  },
+  "b465e6ff740e21e51a8ad5043237c596bfbd36bcc6d0b22368fa76a469d5bc8d": {
+    "file": "b465e6ff740e21e51a8ad5043237c596bfbd36bcc6d0b22368fa76a469d5bc8d.opus",
+    "duration": 6.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The dashboard leads with what actually needs attention, rather than a count of everything that has ever been found."
+  },
+  "b5a7f2db2b20e976e1a92795cdd70b98466bd98bbeb31b00e494a7973f282702": {
+    "file": "b5a7f2db2b20e976e1a92795cdd70b98466bd98bbeb31b00e494a7973f282702.opus",
+    "duration": 10.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Read what it tells you here. [pause] If you're the last owner of a workspace, that workspace goes with you, so hand ownership over first if anyone else still needs it."
+  },
+  "b6f4abd78b95ad86eed38c595acd1961e0b5d785ed2cc2c04c26cadf6a6c6d75": {
+    "file": "b6f4abd78b95ad86eed38c595acd1961e0b5d785ed2cc2c04c26cadf6a6c6d75.opus",
+    "duration": 6.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It's the cheapest quality gate available. An SBOM that fails here will fail everywhere else too."
+  },
+  "b71662c01614a84361c3edf0e331ad03fd21d991aa213724faeadd5303c69b41": {
+    "file": "b71662c01614a84361c3edf0e331ad03fd21d991aa213724faeadd5303c69b41.opus",
+    "duration": 3.75,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Step five reviews the whole thing and shows you where the gaps are."
+  },
+  "b73d11c68a3dfc8d6a4fda8528a234b726467389c5031ce560d9ed32e8e56b67": {
+    "file": "b73d11c68a3dfc8d6a4fda8528a234b726467389c5031ce560d9ed32e8e56b67.opus",
+    "duration": 8.32,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Then the details a downstream consumer would need. A name, an address that identifies a real legal entity, and a way to reach you."
+  },
+  "b8b8c77431c1be920f485c5fa47172fb8c63ed33438ec8692088c45498b10b2f": {
+    "file": "b8b8c77431c1be920f485c5fa47172fb8c63ed33438ec8692088c45498b10b2f.opus",
+    "duration": 7.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A second contact covers the technical questions, so a scanner integration question does not land in the security inbox."
+  },
+  "ba6fb65641844feb4a21ab2723aa35260146b23f522b54dc93e8baa5b18b17fe": {
+    "file": "ba6fb65641844feb4a21ab2723aa35260146b23f522b54dc93e8baa5b18b17fe.opus",
+    "duration": 8.0,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The description is worth writing properly. A year from now this release is evidence, and this is the only context anyone gets."
+  },
+  "bcff31ee83b038aeabaabff6c732faf83c4cafcea005fb72f44851919f8cb1bd": {
+    "file": "bcff31ee83b038aeabaabff6c732faf83c4cafcea005fb72f44851919f8cb1bd.opus",
+    "duration": 11.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Components come first. A component is usually one repository, and it's where the SBOMs themselves end up living. If you have a monorepo, it's whatever you build and version independently."
+  },
+  "bd14f2e73a5bdfc9adcd1e66c703c928eb718757b2865a66f9d546652a85bc14": {
+    "file": "bd14f2e73a5bdfc9adcd1e66c703c928eb718757b2865a66f9d546652a85bc14.opus",
+    "duration": 12.47,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "But not every finding is exploitable. Most aren't. [pause] The vulnerable code often isn't reachable in the way you actually use the dependency, and VEX is how you say that in a form a machine can read."
+  },
+  "bf39a774f2244e72d6c5929b63c8874cb5aeb4905453e420349992b1c0787b94": {
+    "file": "bf39a774f2244e72d6c5929b63c8874cb5aeb4905453e420349992b1c0787b94.opus",
+    "duration": 5.76,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Links are simpler. They're where somebody goes when they want the real thing rather than a description of it."
+  },
+  "c185ed785eaee56627ce5f35360f22075128121f746d712be01b79f0d2075d12": {
+    "file": "c185ed785eaee56627ce5f35360f22075128121f746d712be01b79f0d2075d12.opus",
+    "duration": 8.07,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Step four is what you tell your users. Installation, secure configuration, and how you'll notify them when something changes."
+  },
+  "c19d36a053b4849b0be0ea5190550c8fe38ad115365cffd8f29e7d0b3971c14f": {
+    "file": "c19d36a053b4849b0be0ea5190550c8fe38ad115365cffd8f29e7d0b3971c14f.opus",
+    "duration": 3.35,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Profiles live under Contacts in workspace settings."
+  },
+  "c326249c09f389c0939133d887a92252ba9da18afbb03fa9023505c4397b930a": {
+    "file": "c326249c09f389c0939133d887a92252ba9da18afbb03fa9023505c4397b930a.opus",
+    "duration": 8.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The support period is the part with teeth. Under the CRA you're expected to state it, and to actually honour it for the lifetime you claimed."
+  },
+  "c3e69dac2cab0a10613bbffcba582feffc90f3d055c6ee1ea31e3382a39decd6": {
+    "file": "c3e69dac2cab0a10613bbffcba582feffc90f3d055c6ee1ea31e3382a39decd6.opus",
+    "duration": 7.75,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Now the part that decides what a visitor actually sees. Visibility is set per component, not once for the whole workspace."
+  },
+  "c48dda45a4dfb1a4a659491ce45f4ace812474a83eff8c843d30e4010c504339": {
+    "file": "c48dda45a4dfb1a4a659491ce45f4ace812474a83eff8c843d30e4010c504339.opus",
+    "duration": 9.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Two of them turn out not to apply, but a scanner has no way of knowing that. [pause] Only you can say whether the vulnerable code is reachable in the way you use it."
+  },
+  "c63299cc9d7016f3981c17bf70cfa31b5db861b9a5c3b0debb5c2536179052e2": {
+    "file": "c63299cc9d7016f3981c17bf70cfa31b5db861b9a5c3b0debb5c2536179052e2.opus",
+    "duration": 10.15,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And you decide what goes public. Per product, per component. [pause] Public, private, or gated behind an NDA a visitor signs before the detail opens up."
+  },
+  "c73019e3d8c4182f1025f9638641035f93ae1ef26e7d9deda202d1b345436851": {
+    "file": "c73019e3d8c4182f1025f9638641035f93ae1ef26e7d9deda202d1b345436851.opus",
+    "duration": 7.99,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "You can also attach a company NDA. That's what makes gated access possible later, where somebody signs before they see the detail."
+  },
+  "c8beff976e21bb208a720d493f1e46c361f96816d67c3bc7423df1c9923d62a4": {
+    "file": "c8beff976e21bb208a720d493f1e46c361f96816d67c3bc7423df1c9923d62a4.opus",
+    "duration": 11.75,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "security dot txt is worth enabling while you're here. It's the standard file a researcher looks for when they need to report something, and sbomify keeps it in sync with your contact profile."
+  },
+  "caddfaa7a1a2746d1303fada7482e6836b8c756a620b5c92c36b884f7959f6aa": {
+    "file": "caddfaa7a1a2746d1303fada7482e6836b8c756a620b5c92c36b884f7959f6aa.opus",
+    "duration": 10.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "OSV is the open source vulnerability database, and it's free on every plan. [pause] Flip it on and sbomify starts matching your components against it."
+  },
+  "cb03a342d4e7e7d52e446ed1e14c99f3ec1d2d6717a7c1d65b882ec68fc86c0d": {
+    "file": "cb03a342d4e7e7d52e446ed1e14c99f3ec1d2d6717a7c1d65b882ec68fc86c0d.opus",
+    "duration": 7.51,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Same collapsed danger zone as everywhere else, and the same reason for it. Nothing destructive is one stray click away."
+  },
+  "cbbe172dcde12f9d1ca47374b233d0787129d6f1294fb8c680fc2393fa6ea83b": {
+    "file": "cbbe172dcde12f9d1ca47374b233d0787129d6f1294fb8c680fc2393fa6ea83b.opus",
+    "duration": 10.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The roles matter more than they look. [pause] Manufacturer, supplier and author are distinct ideas in the SBOM formats, and here the same company is all three."
+  },
+  "cc7b6d4df7b792c1aae2680abab5c6baff0d603983a74f8077c3552d6b8a4952": {
+    "file": "cc7b6d4df7b792c1aae2680abab5c6baff0d603983a74f8077c3552d6b8a4952.opus",
+    "duration": 3.67,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Last is the lifecycle, and it's the section people skip."
+  },
+  "d0bc1353a289cf31349d5d6bb21dab3922cb97a1204838c8aeb3c55e6208a779": {
+    "file": "d0bc1353a289cf31349d5d6bb21dab3922cb97a1204838c8aeb3c55e6208a779.opus",
+    "duration": 10.23,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Scroll down and there's already a release here, called Latest. sbomify maintains that one for you, and it always points at the newest SBOM for every component."
+  },
+  "d0cf74a3c85963daa732df7b550efe5e1a47677c9f40ad22983431101229b65b": {
+    "file": "d0cf74a3c85963daa732df7b550efe5e1a47677c9f40ad22983431101229b65b.opus",
+    "duration": 13.91,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Switching it on tells sbomify to match every SBOM you've uploaded against OSV's data. [pause] It runs against what is already stored, so nothing needs re-uploading, and it keeps running as new SBOMs arrive."
+  },
+  "d0efe721c2067796e31ef64fc01c252bf34ef170c28c4117ae58215c9b7b6887": {
+    "file": "d0efe721c2067796e31ef64fc01c252bf34ef170c28c4117ae58215c9b7b6887.opus",
+    "duration": 3.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And private keeps it out of the trust center entirely."
+  },
+  "d1b2513f97081f10c991d4ffc85121f41079348560281117acb61ef10447910f": {
+    "file": "d1b2513f97081f10c991d4ffc85121f41079348560281117acb61ef10447910f.opus",
+    "duration": 10.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The usual way to upload an SBOM from CI is to mint an API token and paste it into your repository secrets. It works, and it's also the thing that leaks."
+  },
+  "d3606f56dd66bf25bcd74909bc5f82d34fdf9eb805e0cbcaaa6562977706cdab": {
+    "file": "d3606f56dd66bf25bcd74909bc5f82d34fdf9eb805e0cbcaaa6562977706cdab.opus",
+    "duration": 8.79,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "You name the repository allowed to publish here. That's the entire configuration. [pause] No token is created, because there's nothing to create."
+  },
+  "d43120f8b917e7881af749d77d4507c7ba512d356a2183a028525a26e8378184": {
+    "file": "d43120f8b917e7881af749d77d4507c7ba512d356a2183a028525a26e8378184.opus",
+    "duration": 11.11,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So drop in a CycloneDX VEX document. It's a standard format, which means the statement you're about to make travels to anyone downstream without them having to trust a bespoke report."
+  },
+  "d49d029e099ef7afd8d585127235a04d9dd72dfe4fca50589b86d42115143795": {
+    "file": "d49d029e099ef7afd8d585127235a04d9dd72dfe4fca50589b86d42115143795.opus",
+    "duration": 10.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Before sbomify can tell you anything useful, it has to know how your software is actually put together. So let's build that up from nothing, the way you would on your first day."
+  },
+  "d58847c87e46c7f20433b5d75f702169f68867bad60e7ef3fe054790d2afae73": {
+    "file": "d58847c87e46c7f20433b5d75f702169f68867bad60e7ef3fe054790d2afae73.opus",
+    "duration": 13.35,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A product is the thing you actually sell. It holds no files itself. It gathers up the components that make it real, which is why you can ship the same library in three products without maintaining three copies of anything."
+  },
+  "dc2b28d8a0c5e3e223d6f344138c366a3ad2a14832d4afe7e2257f519e285fba": {
+    "file": "dc2b28d8a0c5e3e223d6f344138c366a3ad2a14832d4afe7e2257f519e285fba.opus",
+    "duration": 8.86,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The badges sit on the SBOM's own page rather than the component summary, because they describe this exact file and this exact version of it."
+  },
+  "dce3cc1f3d3e1aaecd0b7efec722d55dd65725e1f821072aee6c5015bdc19442": {
+    "file": "dce3cc1f3d3e1aaecd0b7efec722d55dd65725e1f821072aee6c5015bdc19442.opus",
+    "duration": 10.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Confirm, and the workspace is gone. [pause] If you only wanted to hand it to someone else, transfer ownership instead. That keeps the artifacts and the history intact."
+  },
+  "e21060aaf3cc17eca2cbabda2b7a334fb623fb101dd95c73ba8516058426ac36": {
+    "file": "e21060aaf3cc17eca2cbabda2b7a334fb623fb101dd95c73ba8516058426ac36.opus",
+    "duration": 9.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Instead of a customer downloading your SBOMs by hand every quarter, their systems discover and pull them automatically, using a standard neither of you had to invent."
+  },
+  "e45756647f4ddbaeafb0226e2829ff83a32b6a7ad11afd557abb9e44d615161e": {
+    "file": "e45756647f4ddbaeafb0226e2829ff83a32b6a7ad11afd557abb9e44d615161e.opus",
+    "duration": 3.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Apply it, and only now is anything written."
+  },
+  "e4df763d8e142db34c523186384324919fd6b0af85310ca5c80fd992a8508010": {
+    "file": "e4df763d8e142db34c523186384324919fd6b0af85310ca5c80fd992a8508010.opus",
+    "duration": 5.84,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It won't file the submission for you, but it does mean the SBOM half of it stops being a surprise."
+  },
+  "e7d8f94052f32b97d23c3969a1e6edd287e7e95fcc00263b300bb98fab9c1b73": {
+    "file": "e7d8f94052f32b97d23c3969a1e6edd287e7e95fcc00263b300bb98fab9c1b73.opus",
+    "duration": 3.19,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "So open it up and start attaching artifacts to it."
+  },
+  "e860420022efc479a1cd4f77008b9d4a1983ae73d74eb454f0e3a50d0068666f": {
+    "file": "e860420022efc479a1cd4f77008b9d4a1983ae73d74eb454f0e3a50d0068666f.opus",
+    "duration": 8.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Give the profile a name you'll recognise later. Most teams need only one, so marking it the default means it applies without anyone choosing it."
+  },
+  "e87e9ffc7fd2ebd4f1e5d909fc06c4cd42d4a2426446579db3b1616b9dc21c18": {
+    "file": "e87e9ffc7fd2ebd4f1e5d909fc06c4cd42d4a2426446579db3b1616b9dc21c18.opus",
+    "duration": 6.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Public means anyone with the link can see it, and it's the right setting for the SBOM of something you already ship openly."
+  },
+  "e90ce12756851ec0e480cbd0f56fc8f6ebdcf91d2712e08e8cd9bf7aaba6eb1d": {
+    "file": "e90ce12756851ec0e480cbd0f56fc8f6ebdcf91d2712e08e8cd9bf7aaba6eb1d.opus",
+    "duration": 9.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Findings land against the component that introduced them, so you're told which repository to go and fix, rather than handed a flat list of package names with no owner."
+  },
+  "ea5f24dea5c88caebcf08133f2efde63da4cae841b1756b35c25003774216f46": {
+    "file": "ea5f24dea5c88caebcf08133f2efde63da4cae841b1756b35c25003774216f46.opus",
+    "duration": 9.59,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "This one marks a high severity finding as not affected, because the vulnerable code path is never reachable. You can see the counts move before you commit to it."
+  },
+  "eef16e5e884695f29c81c779d28ae5d2c8612df6adfcf4fcf9b3f7bbc7febc23": {
+    "file": "eef16e5e884695f29c81c779d28ae5d2c8612df6adfcf4fcf9b3f7bbc7febc23.opus",
+    "duration": 6.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A contact can hold more than one role, and here the same person is the author and the technical contact as well."
+  },
+  "f01037d8a3ffeeb8bd465b124fb359a6877b7fed1311f962df4743c190dfdbb8": {
+    "file": "f01037d8a3ffeeb8bd465b124fb359a6877b7fed1311f962df4743c190dfdbb8.opus",
+    "duration": 13.03,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "And a package URL points at where the thing actually comes from. Between the two, an automated scanner has a fighting chance of matching an advisory to this exact product rather than something with a similar name."
+  },
+  "f04f75f5b6204ee75b8151f1a0530408ab804b1df926c59def70e478ba9c5ec6": {
+    "file": "f04f75f5b6204ee75b8151f1a0530408ab804b1df926c59def70e478ba9c5ec6.opus",
+    "duration": 7.68,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "OSV is the open source vulnerability database, and it's the one to start with, because it costs nothing on any plan."
+  },
+  "f25967f17b9dec93a9dad56aad00a9e71769cba5f47a0149abc63cb5b1017f04": {
+    "file": "f25967f17b9dec93a9dad56aad00a9e71769cba5f47a0149abc63cb5b1017f04.opus",
+    "duration": 7.43,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Each component carries its own artifacts. SBOMs, VEX documents, and the compliance paperwork that goes with them."
+  },
+  "f299fc9c6d027c0239a57f3e884813d07201bc624f0b1815e75ade9fb2d48beb": {
+    "file": "f299fc9c6d027c0239a57f3e884813d07201bc624f0b1815e75ade9fb2d48beb.opus",
+    "duration": 4.71,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A release pins an exact set of those artifacts to a version you actually shipped."
+  },
+  "f46c5656b62143d95ef1a7ed7aa9c1ec59add48a6deb132acdc3ee096504a27d": {
+    "file": "f46c5656b62143d95ef1a7ed7aa9c1ec59add48a6deb132acdc3ee096504a27d.opus",
+    "duration": 9.51,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Rather than retyping that on every upload, you describe it once as a contact profile, and sbomify stamps it onto the SBOMs as they arrive."
+  },
+  "f4a84a1d8c09f712034d9b333a69da5851ee5e79fbd5d98493bceb4560d5bb81": {
+    "file": "f4a84a1d8c09f712034d9b333a69da5851ee5e79fbd5d98493bceb4560d5bb81.opus",
+    "duration": 10.63,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The important part is the justification. Not just a claim, but a stated reason a reviewer can argue with. This one says the vulnerable code path is never reached."
+  },
+  "f4dac9bdbd88ab25b165751e7cc8930643e2c556c10c2331c68ed14f5cef6ad2": {
+    "file": "f4dac9bdbd88ab25b165751e7cc8930643e2c556c10c2331c68ed14f5cef6ad2.opus",
+    "duration": 8.88,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "A trust center answers that in advance. It's a public page backed by the artifacts already in your workspace, so nothing has to be assembled by hand."
+  },
+  "fb16831a6c65063f8832995959e76caaa07d54d12279c17f31f55485aa3e85c1": {
+    "file": "fb16831a6c65063f8832995959e76caaa07d54d12279c17f31f55485aa3e85c1.opus",
+    "duration": 8.15,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "It lives in workspace settings, at the bottom, behind a collapsed danger zone. That's deliberate. Nobody reaches it by accident."
+  },
+  "fca0643e8dcf6d6b29d9a47e92bc118d0bf578ca3f8e1f404ff12b9eb0a1f723": {
+    "file": "fca0643e8dcf6d6b29d9a47e92bc118d0bf578ca3f8e1f404ff12b9eb0a1f723.opus",
+    "duration": 7.5,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The trust is bound to a single component, so a compromised workflow can only ever write to the one thing it was authorised for."
+  },
+  "ff828eea3b65210810c1e5398aa47775d51de231dc02de4021983d3440f46476": {
+    "file": "ff828eea3b65210810c1e5398aa47775d51de231dc02de4021983d3440f46476.opus",
+    "duration": 7.35,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Scanners are plugins, and they run against the SBOMs you've already uploaded. Nothing needs re-uploading to turn one on."
+  },
+  "ff874da96394e090de8c69e7903064143bfbb42612acbfd87d5cc6702486e4c7": {
+    "file": "ff874da96394e090de8c69e7903064143bfbb42612acbfd87d5cc6702486e4c7.opus",
+    "duration": 8.39,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "The Cyber Resilience Act applies to almost anything with digital elements sold into the European Union, and it arrives with real deadlines."
+  },
+  "fffcd8b9d8b3d8e4742d2018a86e4140c107f2f3d0139ecc23ae005a0c2ca324": {
+    "file": "fffcd8b9d8b3d8e4742d2018a86e4140c107f2f3d0139ecc23ae005a0c2ca324.opus",
+    "duration": 2.95,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Trusted publishers live behind the component's menu."
+  }
+}

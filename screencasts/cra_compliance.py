@@ -41,18 +41,23 @@ from conftest import (
     PIED_PIPER_PRODUCT_NAME,
     auto_dismiss_toasts,
     hover_and_click,
+    narrate,
     navigate_to_products,
     pace,
+    settle,
     start_on_dashboard,
 )
 from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument, OSCALFinding
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, Team
 
 
 def _seed_export_ready_state(assessment: CRAAssessment) -> None:
     """Drive ``export_available`` to ``True`` so Step 5's CTA enables.
 
     ``wizard_service._compute_compliance_summary`` gates the Export
-    Compliance Bundle button behind three conjuncts:
+    Compliance Bundle button behind four conditions, all seeded here
+    (the manufacturer is the fifth, and is seeded earlier — see
+    :func:`_seed_manufacturer`):
 
     1. Steps 1-4 in ``completed_steps`` (the recording mutates this
        directly between page loads, so already covered).
@@ -80,6 +85,16 @@ def _seed_export_ready_state(assessment: CRAAssessment) -> None:
         assessment_result=assessment.oscal_assessment_result,
     ).update(status=OSCALFinding.FindingStatus.SATISFIED)
 
+    # 4. An answered EU-establishment determination. Left unanswered,
+    #    ``eu_representation_problems`` reports one blocker, ``overall_ready``
+    #    goes false, and Step 5 closes the recording on "Not ready to export"
+    #    with the CTA greyed out — directly contradicting the narration, which
+    #    says the wizard exports a bundle. Established in the EU needs no
+    #    Authorized Representative, so this one answer clears the block.
+    if assessment.is_eu_established is None:
+        assessment.is_eu_established = True
+        assessment.save(update_fields=["is_eu_established"])
+
     DocumentKind = CRAGeneratedDocument.DocumentKind  # noqa: N806
     for kind in DocumentKind.values:
         CRAGeneratedDocument.objects.update_or_create(
@@ -94,6 +109,34 @@ def _seed_export_ready_state(assessment: CRAAssessment) -> None:
         )
 
 
+def _seed_manufacturer(team: Team) -> None:
+    """Give the workspace a real manufacturer entity.
+
+    Without one the name is empty, which the manufacturer policy treats as a
+    placeholder: Step 1 renders "Manufacturer — Not configured" next to a red
+    "Annex V item 2 requires a legal manufacturer name" banner, and both sit on
+    camera for the whole step.
+
+    This is workspace data rather than assessment data, so it has to be seeded
+    *before* the wizard is opened — seeding it alongside the export state runs
+    after Step 1 has already rendered, and the banner stays on the filmed DOM.
+    """
+    profile, _ = ContactProfile.objects.get_or_create(
+        team=team,
+        name="Pied Piper",
+        defaults={"is_default": True},
+    )
+    ContactEntity.objects.update_or_create(
+        profile=profile,
+        name="Pied Piper Inc.",
+        defaults={
+            "email": "compliance@piedpiper.com",
+            "address": "1 Middle-Out Way, Palo Alto, CA 94301, USA",
+            "is_manufacturer": True,
+        },
+    )
+
+
 @pytest.mark.django_db(transaction=True)
 def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
@@ -106,12 +149,21 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # that drains those toasts the moment they are appended; the
     # observer runs only on real DOM mutations rather than a 100 ms
     # ``setInterval`` loop, so it adds zero polling overhead.
-    auto_dismiss_toasts(page)
-    start_on_dashboard(page)
 
+    # Seeded before anything renders: the manufacturer is workspace data the
+    # wizard reads on every step, and Step 1 is filmed from an already-loaded
+    # DOM, so seeding it later leaves the banner on the frames.
+    _seed_manufacturer(pied_piper_with_sboms["product"].team)
+
+    auto_dismiss_toasts(page)
+    narrate(page, "intro")
+    start_on_dashboard(page, pause_ms=400)
+
+    narrate(page, "what_it_asks")
     # ── 1. Navigate to Products ──────────────────────────────────────────
     navigate_to_products(page)
 
+    narrate(page, "product")
     # ── 2. Click into Pied Piper ─────────────────────────────────────────
     product_link = page.locator(f"span.text-text:text-is('{PIED_PIPER_PRODUCT_NAME}')")
     product_link.wait_for(state="visible", timeout=15_000)
@@ -124,6 +176,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # The product page keeps its compliance cards in collapsed accordions,
     # so the card's CTA does not exist on screen until the header is
     # clicked. Unfolding on camera also shows viewers where the card lives.
+    narrate(page, "card")
     cra_accordion = page.locator("button:has-text('CRA Compliance')").first
     cra_accordion.wait_for(state="visible", timeout=15_000)
     cra_accordion.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
@@ -138,11 +191,13 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     start_screening_btn.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
 
+    narrate(page, "start_screening")
     # ── 4. Open the scope-screening page ────────────────────────────────
     hover_and_click(page, start_screening_btn)
     page.wait_for_load_state("networkidle")
     pace(page, 2000)
 
+    narrate(page, "scope_questions")
     # ── 5. Scope screening: walk the five Article 2/3 questions ─────────
     # FAQ §1 enumerates these explicitly. Each ``tw-card`` carries a
     # checkbox plus a one-line legal-basis link. Pace values here are
@@ -165,6 +220,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         )
         pace(page, 700)
 
+    narrate(page, "data_connection")
     # ── 6. Tick the data-connection inclusion gate ──────────────────────
     # The data-connection question is the inclusion gate — checking
     # it flips the verdict card from "CRA does not apply" to "CRA
@@ -182,11 +238,13 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # The card is gated by ``x-show="craApplies"`` so we wait for it
     # to become visible (Alpine evaluates the predicate after the
     # input change above).
+    narrate(page, "verdict")
     verdict_heading = page.locator("h3:has-text('CRA applies to this product')").first
     verdict_heading.wait_for(state="visible", timeout=10_000)
     verdict_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1500)
 
+    narrate(page, "wizard_start")
     # ── 7. Save & Continue ──────────────────────────────────────────────
     # Backend creates the OSCAL catalog (via ``ensure_cra_catalog``,
     # so re-running the screencast after another test seeded the
@@ -212,6 +270,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     assessment = CRAAssessment.objects.get(product=product)
     _seed_export_ready_state(assessment)
 
+    narrate(page, "step_one")
     # ── 8. Step 1: Product Profile ──────────────────────────────────────
     # Walk every named section so the recording captures the full shape
     # of the first step. The wizard is sticky-headed; scrolling each h2
@@ -234,10 +293,12 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
         )
         pace(page, 2000)
 
+    narrate(page, "step_one_detail")
     # ── 9. Scroll back up so the stepper is fully visible ───────────────
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
+    narrate(page, "step_two")
     # ── 10. Advance to Step 2 (SBOM Compliance) ─────────────────────────
     # Mark Step 1 complete and advance current_step before navigating —
     # the stepper then renders Step 1 with a green check and Step 2 as
@@ -250,6 +311,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 2000)
 
+    narrate(page, "step_two_detail")
     # ── 11. Step 2: SBOM Compliance ─────────────────────────────────────
     # "SBOM Compliance Summary" is the rolled-up BSI TR-03183 status
     # across the product; "Components" lists each component with its
@@ -264,6 +326,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
+    narrate(page, "step_three")
     # ── 12. Advance to Step 3 (Security & Vulnerability) ────────────────
     # Step 3 has three tabs (Annex I checklist, vulnerability disclosure,
     # incident reporting) all driven from one Alpine ``activeTab``
@@ -294,6 +357,11 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     vuln_tab.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, vuln_tab)
     pace(page, 2500)
+
+    narrate(page, "step_three_checklist")
+    settle(page)
+
+    narrate(page, "step_three_vuln")
     page.locator("h2:has-text('Vulnerability Disclosure')").first.evaluate(
         "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
     )
@@ -303,6 +371,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     incident_tab.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, incident_tab)
     pace(page, 2500)
+    narrate(page, "step_three_incident")
     page.locator("h2:has-text('Incident Reporting (Article 14)')").first.evaluate(
         "el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })"
     )
@@ -311,6 +380,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
+    narrate(page, "step_four")
     # ── 13. Advance to Step 4 (User Information) ────────────────────────
     # Annex II inputs that drive the "User Instructions" generated
     # document. Walk every named section so the FAQ can call out what
@@ -340,6 +410,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
     pace(page, 1500)
 
+    narrate(page, "step_five")
     # ── 14. Advance to Step 5 (Review & Export) ─────────────────────────
     # Step 5 is what the FAQ leads with as the deliverable. Walk every
     # panel: Compliance Summary (rolled-up posture), Export (the
@@ -364,6 +435,7 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # we seeded earlier flip ``exportAvailable`` to true so the CTA
     # renders enabled — without that the closing frame would show a
     # greyed-out button which is the wrong message for the FAQ.
+    narrate(page, "export")
     export_heading = page.locator("h2:has-text('Export')").first
     export_heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2000)
@@ -395,3 +467,6 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # frame, mirroring how a user would end the wizard pass.
     page.evaluate("window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })")
     pace(page, 2500)
+
+    narrate(page, "outro")
+    settle(page)

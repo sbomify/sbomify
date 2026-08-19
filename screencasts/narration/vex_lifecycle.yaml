@@ -1,0 +1,85 @@
+# Narration for screencasts/vex_lifecycle.py
+#
+# Thesis: VEX is a living statement, not a one-off. A re-issued VEX supersedes
+# the previous one, and the effect is visible all the way through to what a
+# customer sees on the public trust center.
+voice: ara
+speed: 1.0
+
+beats:
+  intro:
+    text: >-
+      This is the full journey of a VEX document. From a scanner finding, to
+      your assessment of it, to what a customer actually sees.
+
+  the_findings:
+    text: >-
+      The scan flagged three problems on this component. A critical, a high,
+      and a medium.
+
+  triage:
+    text: >-
+      Two of them turn out not to apply, but a scanner has no way of knowing
+      that. [pause] Only you can say whether the vulnerable code is reachable
+      in the way you use it.
+
+  vex_v1_file:
+    text: >-
+      So here's the first VEX. CycloneDX, version one, and it marks the
+      critical as not affected.
+
+  vex_v1_detail:
+    text: >-
+      The important part is the justification. Not just a claim, but a stated
+      reason a reviewer can argue with. This one says the vulnerable code path
+      is never reached.
+
+  upload_v1:
+    text: >-
+      Upload it against the component,
+
+  posture_v1:
+    text: >-
+      and the critical is answered rather than hidden. It reads not affected
+      now, struck through, carrying the justification you gave. [pause] Nothing
+      was deleted and nothing is tucked away — the finding and your answer to
+      it sit side by side, and the toggle clears the settled ones out of the
+      way when you want only what still needs doing.
+
+  trust_center_v1:
+    text: >-
+      And this is the half that matters commercially. On the public trust
+      center, a customer sees one finding suppressed, with your reasoning
+      attached.
+
+  vex_v2_file:
+    text: >-
+      Now the part people get wrong. VEX is not a one-off. [pause] As you learn
+      more, you re-issue it.
+
+  vex_v2_detail:
+    text: >-
+      This is version two of the same document. It still clears the critical,
+      and it now clears the high as well.
+
+  upload_v2:
+    text: >-
+      Upload it the same way.
+
+  supersede:
+    text: >-
+      sbomify applies the newest VEX for a component, so version two supersedes
+      version one outright. There's no merging of two documents, and no
+      ambiguity about which statement is current.
+
+  posture_v2:
+    text: >-
+      Both are cleared now, and both are still on the list with their
+      reasoning. [pause] The medium is untouched, because you never claimed
+      anything about it — VEX only ever says what you actually asserted.
+
+  outro:
+    text: >-
+      And the trust center follows. [pause] Two findings suppressed, the
+      reasoning published, and the VEX itself downloadable, so a customer's own
+      tooling can consume your assessment instead of emailing you about it.
