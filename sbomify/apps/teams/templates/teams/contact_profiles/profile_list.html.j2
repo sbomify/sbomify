@@ -15,7 +15,7 @@
 {% else %}
     <c-tables.table>
     <c-tables.head>
-    <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+    <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell class="w-[120px]">Status</c-tables.header-cell>
     <c-tables.header-cell sort="updated_at" date class="w-[150px]">Last Modified</c-tables.header-cell>
     <c-tables.actions-cell as="th" />
@@ -23,7 +23,7 @@
     <tbody>
         <template x-for="profile in filteredProfiles" :key="profile.id">
             <c-tables.row x-show="!profile.hidden" x-transition>
-            <c-tables.cell>
+            <c-tables.cell nowrap>
             <div class="flex items-center gap-3">
                 <c-avatar size="sm" />
                 <span class="font-medium text-text" x-text="profile.name"></span>

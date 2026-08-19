@@ -149,7 +149,7 @@ def mock_github_jwks(mocker, rsa_keypair: dict[str, Any]) -> Any:
 def mock_sbom_s3(mocker) -> Any:
     """Stub the S3 client used by the CycloneDX upload endpoint.
 
-    The test container has no MinIO reachable on ``test-s3.localhost``,
+    The test container has no object store reachable on ``test-s3.localhost``,
     so a real upload would 400 with a connection error. The screencast
     just needs the SBOM row to land so it appears in the SBOMs table —
     return a deterministic filename without making any network call.

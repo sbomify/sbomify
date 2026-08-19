@@ -16,7 +16,7 @@
     </c-tables.toolbar>
     <c-tables.table>
     <c-tables.head>
-    <c-tables.header-cell sort="name">Name</c-tables.header-cell>
+    <c-tables.header-cell sort="name" nowrap>Name</c-tables.header-cell>
     <c-tables.header-cell sort="document_type" class="hidden md:table-cell">Type</c-tables.header-cell>
     <c-tables.header-cell sort="version" class="hidden md:table-cell">Version</c-tables.header-cell>
     <c-tables.header-cell sort="created_at" date>Created</c-tables.header-cell>
@@ -26,7 +26,7 @@
     <tbody>
         <template x-for="item in paginatedData" :key="item.document.id">
             <c-tables.row>
-            <c-tables.cell class="break-all">
+            <c-tables.cell nowrap>
             <a :href="'{% if is_public_view %}{% url 'core:component_item_public' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% else %}{% url 'core:component_item' component_id=component_id item_type='documents' item_id='DOC_ID' %}{% endif %}'.replace('DOC_ID', item.document.id)"
                class="text-primary font-medium hover:underline"
                x-text="item.document.name"></a>
