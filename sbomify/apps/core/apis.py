@@ -4979,6 +4979,10 @@ def _export_team(request: HttpRequest) -> tuple[Any, tuple[int, ErrorResponse] |
 def _csv_response(csv_text: str, filename: str) -> HttpResponse:
     response = HttpResponse(csv_text, content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Workspace-scoped data behind session/token auth. Without an explicit
+    # Cache-Control, CDNs cache .csv by extension and ignore Vary: Cookie, so
+    # one user's export could be served stale — or to another user.
+    response["Cache-Control"] = "private, no-store"
     return response
 
 
