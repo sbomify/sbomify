@@ -48,13 +48,16 @@ from conftest import (
     start_on_dashboard,
 )
 from sbomify.apps.compliance.models import CRAAssessment, CRAGeneratedDocument, OSCALFinding
+from sbomify.apps.teams.models import ContactEntity, ContactProfile, Team
 
 
 def _seed_export_ready_state(assessment: CRAAssessment) -> None:
     """Drive ``export_available`` to ``True`` so Step 5's CTA enables.
 
     ``wizard_service._compute_compliance_summary`` gates the Export
-    Compliance Bundle button behind three conjuncts:
+    Compliance Bundle button behind four conditions, all seeded here
+    (the manufacturer is the fifth, and is seeded earlier — see
+    :func:`_seed_manufacturer`):
 
     1. Steps 1-4 in ``completed_steps`` (the recording mutates this
        directly between page loads, so already covered).
@@ -82,6 +85,16 @@ def _seed_export_ready_state(assessment: CRAAssessment) -> None:
         assessment_result=assessment.oscal_assessment_result,
     ).update(status=OSCALFinding.FindingStatus.SATISFIED)
 
+    # 4. An answered EU-establishment determination. Left unanswered,
+    #    ``eu_representation_problems`` reports one blocker, ``overall_ready``
+    #    goes false, and Step 5 closes the recording on "Not ready to export"
+    #    with the CTA greyed out — directly contradicting the narration, which
+    #    says the wizard exports a bundle. Established in the EU needs no
+    #    Authorized Representative, so this one answer clears the block.
+    if assessment.is_eu_established is None:
+        assessment.is_eu_established = True
+        assessment.save(update_fields=["is_eu_established"])
+
     DocumentKind = CRAGeneratedDocument.DocumentKind  # noqa: N806
     for kind in DocumentKind.values:
         CRAGeneratedDocument.objects.update_or_create(
@@ -96,6 +109,34 @@ def _seed_export_ready_state(assessment: CRAAssessment) -> None:
         )
 
 
+def _seed_manufacturer(team: Team) -> None:
+    """Give the workspace a real manufacturer entity.
+
+    Without one the name is empty, which the manufacturer policy treats as a
+    placeholder: Step 1 renders "Manufacturer — Not configured" next to a red
+    "Annex V item 2 requires a legal manufacturer name" banner, and both sit on
+    camera for the whole step.
+
+    This is workspace data rather than assessment data, so it has to be seeded
+    *before* the wizard is opened — seeding it alongside the export state runs
+    after Step 1 has already rendered, and the banner stays on the filmed DOM.
+    """
+    profile, _ = ContactProfile.objects.get_or_create(
+        team=team,
+        name="Pied Piper",
+        defaults={"is_default": True},
+    )
+    ContactEntity.objects.update_or_create(
+        profile=profile,
+        name="Pied Piper Inc.",
+        defaults={
+            "email": "compliance@piedpiper.com",
+            "address": "1 Middle-Out Way, Palo Alto, CA 94301, USA",
+            "is_manufacturer": True,
+        },
+    )
+
+
 @pytest.mark.django_db(transaction=True)
 def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     page = recording_page
@@ -108,6 +149,12 @@ def cra_compliance(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # that drains those toasts the moment they are appended; the
     # observer runs only on real DOM mutations rather than a 100 ms
     # ``setInterval`` loop, so it adds zero polling overhead.
+
+    # Seeded before anything renders: the manufacturer is workspace data the
+    # wizard reads on every step, and Step 1 is filmed from an already-loaded
+    # DOM, so seeding it later leaves the banner on the frames.
+    _seed_manufacturer(pied_piper_with_sboms["product"].team)
+
     auto_dismiss_toasts(page)
     narrate(page, "intro")
     start_on_dashboard(page, pause_ms=400)

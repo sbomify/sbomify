@@ -46,12 +46,11 @@ beats:
 
   vuln_applied:
     text: >-
-      Apply it, and that finding drops straight out of your working list. The
-      count moves with it, so the number your team looks at every morning is
-      the number of things that actually need doing.
+      Apply it, and the finding changes state rather than vanishing. It reads
+      not affected now, and it carries the reason you gave for saying so.
 
   vuln_nothing_deleted:
     text: >-
-      But nothing was deleted. [pause] The finding is still there, with your
-      reasoning attached to it, which is exactly what an auditor wants to see —
-      not a shorter list, but a justified one.
+      Nothing was deleted, and nothing is hidden away. [pause] The finding sits
+      right next to your answer to it, which is exactly what an auditor wants
+      to see — not a shorter list, but a justified one.

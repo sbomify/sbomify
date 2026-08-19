@@ -104,7 +104,8 @@ def marketplace_walkthrough(recording_page: Page) -> None:
         page,
         "sbomify",
         "Start free at sbomify.com",
-        hold_ms=3600,
+        hold_ms=600,
+        linger=True,
     )
     settle(page)
 
