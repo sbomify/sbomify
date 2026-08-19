@@ -1019,6 +1019,12 @@ AWS_DOCUMENTS_SECRET_ACCESS_KEY = os.environ.get("AWS_DOCUMENTS_SECRET_ACCESS_KE
 AWS_DOCUMENTS_STORAGE_BUCKET_NAME = os.environ.get("AWS_DOCUMENTS_STORAGE_BUCKET_NAME", AWS_SBOMS_STORAGE_BUCKET_NAME)
 AWS_DOCUMENTS_STORAGE_BUCKET_URL = os.environ.get("AWS_DOCUMENTS_STORAGE_BUCKET_URL", AWS_SBOMS_STORAGE_BUCKET_URL)
 
+# A stale token (a form rendered before the login redirect chain rotated the
+# CSRF secret) should send the user back to retry, not dead-end on the stock
+# 403 page. First observed on the onboarding wizard's first submit after
+# signup.
+CSRF_FAILURE_VIEW = "sbomify.apps.core.views.csrf_failure.csrf_failure"
+
 if DEBUG:
     # CSRF settings for development
     CSRF_TRUSTED_ORIGINS = [

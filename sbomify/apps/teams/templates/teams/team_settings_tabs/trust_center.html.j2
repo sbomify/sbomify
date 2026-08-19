@@ -252,7 +252,7 @@
                                 <button type="button"
                                         @click="urls.push('')"
                                         class="text-xs text-primary hover:underline"
-                                        disabled="{{ can_administer|yesno:',1' }}">
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <i class="fas fa-plus mr-1"></i>Add encryption key URL
                                 </button>
                                 <input type="hidden"
@@ -285,7 +285,7 @@
                                 <button type="button"
                                         @click="open = !open"
                                         class="w-full px-4 py-3 bg-surface border-[1.5px] border-solid border-border rounded-lg text-sm text-left flex items-center justify-between focus:outline-none focus:border-primary"
-                                        disabled="{{ can_administer|yesno:',1' }}">
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <span x-text="selected.length ? selected.join(', ') : 'Select languages'"
                                           class="truncate"
                                           :class="{ 'text-text-muted': !selected.length }"></span>
@@ -479,7 +479,7 @@
                            name="company_nda_file"
                            class="sr-only"
                            accept=".pdf"
-                           disabled="{{ can_administer|yesno:',1' }}"
+                           {% if not can_administer %}disabled{% endif %}
                            required
                            @change="fileName = $event.target.files[0] ? $event.target.files[0].name : ''">
                     <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
