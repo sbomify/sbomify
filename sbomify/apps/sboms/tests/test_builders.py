@@ -651,3 +651,55 @@ class TestSPDX30OutputIntegration:
             # Even without artifacts, verify the structure is correct
             # ExternalRef fields will be tested via integration when artifacts exist
             assert "@graph" in sbom
+
+
+@pytest.mark.django_db
+class TestReleaseAggregateMembership:
+    """A public product's aggregate hides non-public members from the public
+    view, and includes them for a requester the view layer already authorized
+    (who then bypasses the public cache)."""
+
+    def _release_with_gated_member(self, sample_product, sample_component, sample_sbom):
+        from sbomify.apps.core.models import Component, Release, ReleaseArtifact
+
+        sample_product.is_public = True
+        sample_product.save()
+        Component.objects.filter(id=sample_component.id).update(visibility=Component.Visibility.GATED)
+        release = Release.objects.create(product=sample_product, name="v9.9.9")
+        ReleaseArtifact.objects.create(release=release, sbom=sample_sbom)
+        return release
+
+    def test_public_view_excludes_gated_members(self, sample_product, sample_component, sample_sbom, mocker):
+        release = self._release_with_gated_member(sample_product, sample_component, sample_sbom)
+        builder = ReleaseCycloneDX16Builder(entity=release, user=None)
+        prefetch = mocker.patch.object(builder, "_prefetch_member_files", return_value={})
+
+        members, _ = builder._members_with_files(release)
+
+        assert members == []
+        prefetch.assert_called_once_with([])
+
+    def test_authorized_view_includes_gated_members(self, sample_product, sample_component, sample_sbom, mocker):
+        release = self._release_with_gated_member(sample_product, sample_component, sample_sbom)
+        builder = ReleaseCycloneDX16Builder(entity=release, user=None, include_non_public=True)
+        mocker.patch.object(builder, "_prefetch_member_files", return_value={})
+
+        members, _ = builder._members_with_files(release)
+
+        assert [artifact.sbom_id for artifact in members] == [sample_sbom.id]
+
+    def test_authorized_build_bypasses_the_public_cache(self, sample_product, sample_component, sample_sbom, mocker, tmp_path):
+        from sbomify.apps.sboms.utils import get_release_sbom_package
+
+        release = self._release_with_gated_member(sample_product, sample_component, sample_sbom)
+        s3 = mocker.patch("sbomify.apps.core.object_store.S3Client")
+        builder = mocker.MagicMock()
+        builder.return_value = mocker.MagicMock(model_dump_json=lambda **kw: "{}")
+        builder.had_member_fetch_error = False
+        factory = mocker.patch("sbomify.apps.sboms.builders.get_sbom_builder", return_value=builder)
+
+        get_release_sbom_package(release, tmp_path, include_non_public=True)
+
+        s3.return_value.get_cached_aggregate.assert_not_called()
+        s3.return_value.put_cached_aggregate.assert_not_called()
+        assert factory.call_args.kwargs["include_non_public"] is True

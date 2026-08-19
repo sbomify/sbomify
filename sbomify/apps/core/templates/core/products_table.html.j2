@@ -135,7 +135,7 @@
         <c-cards.card>
         <c-feedback.empty-state icon="fas fa-cube" title="No products yet" message="Products help you organize your software releases and their associated components, SBOMs, and documentation.">
         {% if has_crud_permissions %}
-            <c-buttons.primary @click="$dispatch('open-add-product-modal')">
+            <c-buttons.primary href="{% url 'core:product_new' %}">
             <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Product
             </c-buttons.primary>
         {% endif %}

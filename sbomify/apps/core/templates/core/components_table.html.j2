@@ -126,7 +126,7 @@
         <c-cards.card>
         <c-feedback.empty-state icon="fas fa-puzzle-piece" title="No components yet" message="Components are containers for your SBOMs and documents. Create one to start uploading content.">
         {% if has_crud_permissions %}
-            <c-buttons.primary @click="$dispatch('open-add-component-modal')">
+            <c-buttons.primary href="{% url 'core:component_new' %}">
             <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create Your First Component
             </c-buttons.primary>
         {% endif %}

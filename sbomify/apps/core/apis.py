@@ -3470,12 +3470,26 @@ def download_release(
     # Normalize format early
     format_lower = output_format.lower()
 
+    # A workspace member downloading a public product's release gets the full
+    # aggregate, gated and private members included; everyone else gets the
+    # public view. The authorized build bypasses the public aggregate cache.
+    include_non_public = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:read", release.product)
+    )
+
     try:
         # Use the SBOM package generator with user for signed URLs
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             sbom_file_path = get_release_sbom_package(
-                release, temp_path, user=request.user, output_format=format_lower, version=version
+                release,
+                temp_path,
+                user=request.user,
+                output_format=format_lower,
+                version=version,
+                include_non_public=include_non_public,
             )
 
             # Read the generated SBOM file

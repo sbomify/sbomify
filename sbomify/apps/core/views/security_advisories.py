@@ -37,6 +37,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     advisory_counts,
     create_advisory,
     creation_options,
+    delete_advisory,
     get_advisory,
     list_advisories,
     post_update,
@@ -247,6 +248,8 @@ def _create_advisory(request: HttpRequest, *, on_error: str) -> HttpResponse:
         description=form.cleaned_data.get("description") or "",
         identifier=form.cleaned_data.get("vulnerability_id") or "",
         remediation_status=form.cleaned_data.get("remediation_status") or "",
+        cvss_score=form.cleaned_data.get("cvss_score"),
+        cvss_vector=form.cleaned_data.get("cvss_vector") or "",
         products=list(form.cleaned_data.get("products") or []),
         affected_releases=list(form.cleaned_data.get("affected_releases") or []),
     )
@@ -324,8 +327,11 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
                 title=request.POST.get("title", ""),
                 # None when the form did not carry the field at all, so a
                 # partial edit cannot silently set a severity nobody chose.
+                # The same rule guards the CVSS pair.
                 severity=request.POST.get("severity"),
                 description=request.POST.get("description", ""),
+                cvss_score=request.POST.get("cvss_score"),
+                cvss_vector=request.POST.get("cvss_vector"),
             )
             if result.ok:
                 messages.success(request, "Advisory updated.")
@@ -334,6 +340,16 @@ class SecurityAdvisoryDetailView(GuestAccessBlockedMixin, LoginRequiredMixin, Vi
             else:
                 messages.error(request, result.error or "Advisory not updated.")
             return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+
+        if intent == "delete":
+            result = delete_advisory(team, advisory_id)
+            if not result.ok:
+                if result.status_code == 404:
+                    raise Http404("Advisory not found")
+                messages.error(request, result.error or "Advisory not deleted.")
+                return redirect("core:security_advisory_detail", advisory_id=advisory_id)
+            messages.success(request, "Advisory deleted.")
+            return redirect("core:security_advisories_dashboard")
 
         if intent in ("edit_update", "link_vex"):
             # Only the stubs pay for the full projection lookup; the real

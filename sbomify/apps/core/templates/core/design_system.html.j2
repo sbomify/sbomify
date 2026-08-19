@@ -505,24 +505,13 @@
         </c-cards.dangerzone>
     </div>
     <p class="text-sm text-text-muted mb-4">
-        A danger zone that opens and closes takes its band and its panel as parts: the band is the control, so it
-        carries the click and the expanded state, and the panel carries the collapse, because the padding has to
-        sit on the element that animates.
+        The Danger Zone every page ends with is one component: c-cards.dangerzone-collapsible owns the band, the
+        chevron and the collapse, and the caller supplies only the state name (isExpanded by default) and the
+        rows. Never assemble it from the dangerzone parts on a page: that is how the app ended up with three
+        different Danger Zones.
     </p>
-    <div class="mb-8" x-data="{ zoneOpen: false }">
-        <c-cards.dangerzone flush>
-        <c-slot name="header">
-        <c-cards.dangerzone-header class="cursor-pointer select-none" role="button" tabindex="0" ::aria-expanded="zoneOpen" @click="zoneOpen = !zoneOpen" @keydown.enter.prevent="zoneOpen = !zoneOpen">
-        <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
-        <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-            Danger Zone
-            <i class="fas fa-chevron-down ml-auto text-sm transition-transform duration-200"
-               :class="zoneOpen ? '' : '-rotate-90'"
-               aria-hidden="true"></i>
-        </h4>
-        </c-cards.dangerzone-header>
-        </c-slot>
-        <c-cards.dangerzone-body x-show="zoneOpen" x-collapse>
+    <div class="mb-8" x-data="{ isExpanded: false }">
+        <c-cards.dangerzone-collapsible>
         <div class="flex items-center justify-between gap-4">
             <div class="flex items-start gap-3">
                 <c-chips.icon-chip accent="danger">
@@ -537,8 +526,7 @@
             <i class="fas fa-trash-alt" aria-hidden="true"></i> <span>Delete product</span>
             </c-buttons.danger>
         </div>
-        </c-cards.dangerzone-body>
-        </c-cards.dangerzone>
+        </c-cards.dangerzone-collapsible>
     </div>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <c-cards.card title="Footer band" subtitle="A named slot for the actions a card ends with">

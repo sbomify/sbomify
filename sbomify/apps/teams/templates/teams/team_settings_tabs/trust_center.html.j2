@@ -1,23 +1,24 @@
 {% load public_url_tags %}
-{# Trust Center Availability Section #}
-<div class="tw-dashboard-card mb-6">
-    <div class="px-6 py-4 border-b border-border">
-        <div class="flex items-center gap-3">
-            <span class="tw-icon-chip {% if team.is_public %}tw-icon-chip-success{% else %}tw-icon-chip-neutral{% endif %}">
-                <i class="fas {% if team.is_public %}fa-globe{% else %}fa-lock{% endif %}"
-                   aria-hidden="true"></i>
-            </span>
-            <div>
-                <h5 class="text-lg font-semibold text-text m-0">Trust Center availability</h5>
-                <p class="text-text-muted text-sm m-0">Control public access to your Trust Center</p>
-            </div>
+{% comment %}
+    Trust Center, in the settings-tab style the branding tab set: no card
+    chrome, an h2 and one explainer line up top with the availability toggle
+    beside them, then plain h3 sections separated by hairlines. This rewrite
+    also retires the tab's tw-* legacy classes in favour of the component
+    library.
+{% endcomment %}
+<div>
+    {# Availability: the tab's master switch sits in the heading row. #}
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="text-lg font-semibold text-text m-0">Trust Center</h2>
+            <p class="text-sm text-text-muted mt-1 m-0">The public page where customers read your security posture.</p>
         </div>
-    </div>
-    <div class="p-6">
-        <div class="flex items-center justify-between gap-4 mb-4">
-            <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team.is_public %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
-                {{ team.is_public|yesno:'Enabled,Disabled' }}
-            </span>
+        <div class="flex items-center gap-3">
+            {% if team.is_public %}
+                <c-badges.success>Enabled</c-badges.success>
+            {% else %}
+                <c-badges.secondary>Disabled</c-badges.secondary>
+            {% endif %}
             <form method="post"
                   action="{% url 'teams:team_settings' team.key %}"
                   class="flex-shrink-0">
@@ -29,243 +30,163 @@
                 <button type="submit" class="sr-only">Save visibility</button>
             </form>
         </div>
-        <p class="text-text-muted mb-4">
-            {% if team.is_public %}
-                Your Trust Center is publicly accessible. Visitors can view your public products and security artifacts.
-            {% else %}
-                Your Trust Center is currently disabled. Enable it to share your security posture with customers and partners.
-            {% endif %}
-        </p>
-        {% if team.is_public %}
-            {% trust_center_absolute_url team as public_url %}
-            <div class="p-4 bg-background/50 rounded-lg border border-border"
-                 x-data="{ copied: false }">
-                <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">Public URL</label>
-                <div class="flex items-center gap-2">
-                    <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
-                    <button type="button"
-                            class="tw-copy-btn flex-shrink-0"
-                            :class="{ copied: copied }"
-                            title="Copy public URL"
-                            aria-label="Copy public URL"
-                            @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
-                        <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
-                        <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
-                        <span x-text="copied ? 'Copied!' : 'Copy'"></span>
-                    </button>
-                    <a href="{{ public_url }}"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       class="tw-btn-ghost tw-btn-sm flex-shrink-0"
-                       title="Open Trust Center"
-                       aria-label="Open Trust Center (opens in new tab)">
-                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
-                    </a>
-                </div>
-            </div>
-        {% endif %}
-        {% if not can_administer %}
-            <div class="tw-alert tw-alert-info mt-4">
-                <i class="fas fa-info-circle tw-alert-icon"></i>
-                <div class="tw-alert-content">
-                    <p class="text-sm m-0">Only workspace owners and admins can change Trust Center visibility.</p>
-                </div>
-            </div>
-        {% elif not can_set_private %}
-            <div class="tw-alert tw-alert-info mt-4">
-                <i class="fas fa-crown tw-alert-icon"></i>
-                <div class="tw-alert-content">
-                    <p class="text-sm m-0">Disabling the Trust Center is available on Business or Enterprise plans.</p>
-                </div>
-            </div>
-        {% endif %}
     </div>
-</div>
-{# Trust Center Slug Section #}
-{% if team.is_public and trust_center_domain %}
-    <div class="tw-dashboard-card mb-6">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip">
-                    <i class="fas fa-link" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Trust Center Slug</h5>
-                    <p class="text-text-muted text-sm m-0">Customize your Trust Center subdomain</p>
-                </div>
+    <p class="text-sm text-text-muted mt-4 m-0">
+        {% if team.is_public %}
+            Your Trust Center is publicly accessible. Visitors can view your public products and security artifacts.
+        {% else %}
+            Your Trust Center is currently disabled. Enable it to share your security posture with customers and partners.
+        {% endif %}
+    </p>
+    {% if team.is_public %}
+        {% trust_center_absolute_url team as public_url %}
+        <div class="mt-4 p-4 bg-background/50 rounded-xl border border-border"
+             x-data="{ copied: false }">
+            <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">Public URL</label>
+            <div class="flex items-center gap-2">
+                <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">{{ public_url }}</code>
+                <c-buttons.secondary size="sm" class="flex-shrink-0" title="Copy public URL" aria-label="Copy public URL" @click="navigator.clipboard.writeText('{{ public_url }}'); copied = true; setTimeout(() => copied = false, 2000)">
+                <i x-show="!copied" class="fas fa-copy" aria-hidden="true"></i>
+                <i x-show="copied" x-cloak class="fas fa-check" aria-hidden="true"></i>
+                <span x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+                </c-buttons.secondary>
+                <c-buttons.ghost size="sm" class="flex-shrink-0" href="{{ public_url }}" target="_blank" rel="noopener noreferrer" title="Open Trust Center" aria-label="Open Trust Center (opens in new tab)">
+                <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                </c-buttons.ghost>
             </div>
         </div>
-        <div class="p-6">
+    {% endif %}
+    {% if not can_administer %}
+        <c-feedback.alert variant="info" class="mt-4">
+        Only workspace owners and admins can change Trust Center visibility.
+        </c-feedback.alert>
+    {% elif not can_set_private %}
+        <c-feedback.alert variant="info" icon="fas fa-crown" class="mt-4">
+        Disabling the Trust Center is available on Business or Enterprise plans.
+        </c-feedback.alert>
+    {% endif %}
+    {# Trust Center address #}
+    {% if team.is_public and trust_center_domain %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <h3 class="text-sm font-semibold text-text m-0">Address</h3>
+            <p class="text-sm text-text-muted mt-1 m-0">The subdomain your Trust Center lives at.</p>
             <form method="post"
                   action="{% url 'teams:team_settings' team.key %}"
-                  class="w-full"
+                  class="mt-4"
                   x-data="{ slug: '{{ team_obj.slug|default:'' }}' }">
                 {% csrf_token %}
                 <input type="hidden" name="slug_action" value="update">
                 <input type="hidden" name="active_tab" value="trust-center">
-                <div class="mb-4">
-                    <label for="slug" class="tw-form-label">Subdomain Slug</label>
-                    <div class="flex items-center gap-2">
-                        <input id="slug"
-                               type="text"
-                               name="slug"
-                               class="tw-form-input flex-1"
-                               x-model="slug"
-                               value="{{ team_obj.slug|default:'' }}"
-                               maxlength="63"
-                               minlength="3"
-                               pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?"
-                               placeholder="my-company"
-                               disabled="{{ can_administer|yesno:',1' }}">
-                    </div>
-                    <p class="tw-form-hint mt-2">
-                        Your Trust Center will be available at:
-                        <code class="text-primary"
-                              x-text="slug ? (slug + '.{{ trust_center_domain }}') : '...'"></code>
-                    </p>
-                    <p class="tw-form-hint">
-                        Lowercase letters, numbers, and hyphens only. Must not start or end with a hyphen. 3–63 characters.
-                    </p>
+                <div>
+                    <c-forms.label for="slug">Subdomain slug</c-forms.label>
+                    <c-forms.input id="slug" name="slug" value="{{ team_obj.slug|default:'' }}" maxlength="63" minlength="3" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" placeholder="my-company" disabled="{{ can_administer|yesno:',1' }}" x-model="slug" />
+                    <c-forms.hint class="mt-2">
+                    Your Trust Center will be available at:
+                    <code class="text-primary"
+                          x-text="slug ? (slug + '.{{ trust_center_domain }}') : '...'"></code>
+                    </c-forms.hint>
+                    <c-forms.hint>Lowercase letters, numbers, and hyphens only. Must not start or end with a hyphen. 3 to 63 characters.</c-forms.hint>
                 </div>
-                <div class="flex justify-end">
-                    <button type="submit"
-                            class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
-                        <i class="fas fa-save mr-2"></i>Save Slug
-                    </button>
+                <div class="flex justify-end mt-4">
+                    <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
+                    <i class="fas fa-save mr-2"></i>Save slug
+                    </c-buttons.primary>
                 </div>
             </form>
-        </div>
-    </div>
-{% endif %}
-{# TEA Section - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
-{% if team.is_public %}
-    <div class="tw-dashboard-card mb-6">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip {% if team_obj.tea_enabled %}tw-icon-chip-success{% else %}tw-icon-chip-neutral{% endif %}">
-                    <i class="fas fa-exchange-alt" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">
-                        Transparency Exchange API (TEA)
-                        <span class="tw-badge-info text-xs align-middle ml-2">
-                            <i class="fas fa-flask mr-1"></i>Beta
-                        </span>
-                    </h5>
-                    <p class="text-text-muted text-sm m-0">Standardized access to software transparency information</p>
+        </section>
+    {% endif %}
+    {# TEA - uses team_obj (Django model) for tea_enabled since team is a Pydantic schema #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-text m-0 flex items-center gap-2">
+                    Transparency Exchange API (TEA)
+                    <c-badges.info size="sm">
+                    <i class="fas fa-flask mr-1"></i>Beta
+                    </c-badges.info>
+                </h3>
+                <div class="flex items-center gap-3">
+                    {% if team_obj.tea_enabled %}
+                        <c-badges.success>Enabled</c-badges.success>
+                    {% else %}
+                        <c-badges.secondary>Disabled</c-badges.secondary>
+                    {% endif %}
+                    <form method="post"
+                          action="{% url 'teams:team_settings' team.key %}"
+                          class="flex-shrink-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="tea_action" value="update">
+                        <input type="hidden" name="tea_enabled" value="false">
+                        <input type="hidden" name="active_tab" value="trust-center">
+                        <c-forms.toggle id="tea-toggle" name="tea_enabled" value="true" aria-label="Enable Transparency Exchange API" checked="{{ team_obj.tea_enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
+                        <button type="submit" class="sr-only">Save TEA setting</button>
+                    </form>
                 </div>
             </div>
-        </div>
-        <div class="p-6">
-            <div class="flex items-center justify-between gap-4 mb-4">
-                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium {% if team_obj.tea_enabled %}bg-success/10 text-success{% else %}bg-border/50 text-text-muted{% endif %}">
-                    {{ team_obj.tea_enabled|yesno:'Enabled,Disabled' }}
-                </span>
-                <form method="post"
-                      action="{% url 'teams:team_settings' team.key %}"
-                      class="flex-shrink-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="tea_action" value="update">
-                    <input type="hidden" name="tea_enabled" value="false">
-                    <input type="hidden" name="active_tab" value="trust-center">
-                    <c-forms.toggle id="tea-toggle" name="tea_enabled" value="true" aria-label="Enable Transparency Exchange API" checked="{{ team_obj.tea_enabled|yesno:'1,' }}" disabled="{{ can_administer|yesno:',1' }}" onchange="this.form.submit()" />
-                    <button type="submit" class="sr-only">Save TEA setting</button>
-                </form>
-            </div>
-            <p class="text-text-muted mb-4">
-                The Transparency Exchange API (TEA) provides standardized access to your software transparency
-                information via a well-known discovery endpoint and REST API.
+            <p class="text-sm text-text-muted mt-2 m-0">
+                Standardized access to your software transparency information via a well-known discovery endpoint and REST API.
                 <a href="https://github.com/CycloneDX/transparency-exchange-api"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="text-primary hover:underline">Learn more</a>
             </p>
             {% if team_obj.tea_enabled and team_obj.custom_domain and team_obj.custom_domain_validated %}
-                <div class="p-4 bg-background/50 rounded-lg border border-border"
+                <div class="mt-4 p-4 bg-background/50 rounded-xl border border-border"
                      x-data="{ copied: false }">
                     <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">TEA Discovery Endpoint</label>
                     <div class="flex items-center gap-2">
                         <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.custom_domain }}/.well-known/tea</code>
-                        <button type="button"
-                                class="tw-copy-btn flex-shrink-0"
-                                :class="{ copied: copied }"
-                                title="Copy TEA discovery URL"
-                                aria-label="Copy TEA discovery URL"
-                                @click="navigator.clipboard.writeText('https://{{ team_obj.custom_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                            <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
-                            <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
-                            <span x-text="copied ? 'Copied!' : 'Copy'"></span>
-                        </button>
+                        <c-buttons.secondary size="sm" class="flex-shrink-0" title="Copy TEA discovery URL" aria-label="Copy TEA discovery URL" @click="navigator.clipboard.writeText('https://{{ team_obj.custom_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
+                        <i x-show="!copied" class="fas fa-copy" aria-hidden="true"></i>
+                        <i x-show="copied" x-cloak class="fas fa-check" aria-hidden="true"></i>
+                        <span x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+                        </c-buttons.secondary>
                     </div>
                 </div>
             {% elif team_obj.tea_enabled and trust_center_domain and team_obj.slug %}
-                <div class="p-4 bg-background/50 rounded-lg border border-border"
+                <div class="mt-4 p-4 bg-background/50 rounded-xl border border-border"
                      x-data="{ copied: false }">
                     <label class="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2 block">TEA Discovery Endpoint</label>
                     <div class="flex items-center gap-2">
                         <code class="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm text-text font-mono truncate">https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea</code>
-                        <button type="button"
-                                class="tw-copy-btn flex-shrink-0"
-                                :class="{ copied: copied }"
-                                title="Copy TEA discovery URL"
-                                aria-label="Copy TEA discovery URL"
-                                @click="navigator.clipboard.writeText('https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
-                            <i x-show="!copied" class="fas fa-copy tw-copy-btn-icon"></i>
-                            <i x-show="copied" x-cloak class="fas fa-check tw-copy-btn-icon"></i>
-                            <span x-text="copied ? 'Copied!' : 'Copy'"></span>
-                        </button>
+                        <c-buttons.secondary size="sm" class="flex-shrink-0" title="Copy TEA discovery URL" aria-label="Copy TEA discovery URL" @click="navigator.clipboard.writeText('https://{{ team_obj.slug }}.{{ trust_center_domain }}/.well-known/tea'); copied = true; setTimeout(() => copied = false, 2000)">
+                        <i x-show="!copied" class="fas fa-copy" aria-hidden="true"></i>
+                        <i x-show="copied" x-cloak class="fas fa-check" aria-hidden="true"></i>
+                        <span x-text="copied ? 'Copied!' : 'Copy'">Copy</span>
+                        </c-buttons.secondary>
                     </div>
                 </div>
             {% elif team_obj.tea_enabled %}
-                <div class="tw-alert tw-alert-info mt-4">
-                    <i class="fas fa-info-circle tw-alert-icon"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">
-                            Configure a custom domain or Trust Center slug to enable TEA discovery via <code>.well-known/tea</code>.
-                        </p>
-                    </div>
-                </div>
+                <c-feedback.alert variant="info" class="mt-4">
+                Configure a custom domain or Trust Center slug to enable TEA discovery via <code>.well-known/tea</code>.
+                </c-feedback.alert>
             {% endif %}
             {% if not can_administer %}
-                <div class="tw-alert tw-alert-info mt-4">
-                    <i class="fas fa-info-circle tw-alert-icon"></i>
-                    <div class="tw-alert-content">
-                        <p class="text-sm m-0">Only workspace owners and admins can change TEA settings.</p>
-                    </div>
-                </div>
+                <c-feedback.alert variant="info" class="mt-4">
+                Only workspace owners and admins can change TEA settings.
+                </c-feedback.alert>
             {% endif %}
-        </div>
-    </div>
-{% endif %}
-{# Security.txt (RFC 9116) Section #}
-{% if team.is_public %}
-    <div class="tw-dashboard-card mb-6"
-         x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip"
-                      :class="securityTxtEnabled ? 'tw-icon-chip-success' : 'tw-icon-chip-neutral'">
-                    <i class="fas fa-shield-alt" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">
-                        Security.txt
-                        <span class="text-text-muted font-normal text-sm ml-1">(RFC 9116)</span>
-                    </h5>
-                    <p class="text-text-muted text-sm m-0">Help security researchers report vulnerabilities via a standard contact file</p>
-                </div>
-                <div class="ml-auto">
-                    <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium"
-                          :class="securityTxtEnabled ? 'bg-success/10 text-success' : 'bg-border/50 text-text-muted'"
-                          x-text="securityTxtEnabled ? 'Enabled' : 'Disabled'"></span>
-                </div>
+        </section>
+    {% endif %}
+    {# Security.txt (RFC 9116) #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border"
+                 x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-text m-0">
+                    Security.txt
+                    <span class="text-text-muted font-normal">(RFC 9116)</span>
+                </h3>
+                <span class="text-xs font-medium"
+                      :class="securityTxtEnabled ? 'text-success' : 'text-text-muted'"
+                      x-text="securityTxtEnabled ? 'Enabled' : 'Disabled'"></span>
             </div>
-        </div>
-        <div class="p-6">
+            <p class="text-sm text-text-muted mt-1 m-0">
+                Help security researchers report vulnerabilities via a standard contact file.
+            </p>
             <form method="post"
                   action="{% url 'teams:team_settings' team.key %}"
-                  class="w-full">
+                  class="mt-4">
                 {% csrf_token %}
                 <input type="hidden" name="security_txt_action" value="update">
                 <input type="hidden" name="active_tab" value="trust-center">
@@ -284,116 +205,87 @@
                 <div x-show="securityTxtEnabled" x-cloak>
                     {# Required: Contact #}
                     <div class="mb-6 pb-6 border-b border-border/50">
-                        <h6 class="text-sm font-semibold text-text uppercase tracking-wider mb-3">
+                        <h4 class="text-xs font-semibold text-text uppercase tracking-wider mb-3">
                             <i class="fas fa-envelope text-primary mr-2"></i>Contact (required)
-                        </h6>
+                        </h4>
                         <div>
-                            <label for="security_txt_contact_id" class="tw-form-label">Contact for vulnerability reports</label>
-                            <select id="security_txt_contact_id"
-                                    name="security_txt_contact_id"
-                                    class="tw-form-select"
-                                    disabled="{{ can_administer|yesno:',1' }}">
-                                <option value="">Auto-detect (security contact from default profile)</option>
-                                {% for contact in security_txt_contacts %}
-                                    <option value="{{ contact.id }}"
-                                            {% if security_txt_config.contact_id == contact.id %}selected{% endif %}>
-                                        {{ contact.name }} ({{ contact.email }})
-                                        — {{ contact.entity__profile__name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                            <p class="tw-form-hint mt-1">
-                                Choose who receives vulnerability reports.
-                                Manage contacts in
-                                <a href="{% url 'teams:team_settings' team.key %}#contact-profiles"
-                                   class="text-primary hover:underline">Contact Profiles</a>.
-                            </p>
+                            <c-forms.label for="security_txt_contact_id">Contact for vulnerability reports</c-forms.label>
+                            <c-forms.select id="security_txt_contact_id" name="security_txt_contact_id" disabled="{{ can_administer|yesno:',1' }}">
+                            <option value="">Auto-detect (security contact from default profile)</option>
+                            {% for contact in security_txt_contacts %}
+                                <option value="{{ contact.id }}"
+                                        {% if security_txt_config.contact_id == contact.id %}selected{% endif %}>
+                                    {{ contact.name }} ({{ contact.email }}), {{ contact.entity__profile__name }}
+                                </option>
+                            {% endfor %}
+                            </c-forms.select>
+                            <c-forms.hint class="mt-1">
+                            Choose who receives vulnerability reports.
+                            Manage contacts in
+                            <a href="{% url 'teams:team_settings' team.key %}#contact-profiles"
+                               class="text-primary hover:underline">Contact Profiles</a>.
+                            </c-forms.hint>
                         </div>
                     </div>
                     {# Optional: Links #}
                     <div class="mb-6 pb-6 border-b border-border/50">
-                        <h6 class="text-sm font-semibold text-text uppercase tracking-wider mb-3">
+                        <h4 class="text-xs font-semibold text-text uppercase tracking-wider mb-3">
                             <i class="fas fa-link text-primary mr-2"></i>Links (optional)
-                        </h6>
+                        </h4>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label for="security_txt_policy_url" class="tw-form-label">Policy URL</label>
-                                <input id="security_txt_policy_url"
-                                       type="url"
-                                       name="security_txt_policy_url"
-                                       class="tw-form-input"
-                                       value="{{ security_txt_config.policy_url|default:'' }}"
-                                       placeholder="https://example.com/security-policy"
-                                       disabled="{{ can_administer|yesno:',1' }}">
-                                <p class="tw-form-hint mt-1">Vulnerability disclosure policy</p>
+                                <c-forms.label for="security_txt_policy_url">Policy URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_policy_url" name="security_txt_policy_url" value="{{ security_txt_config.policy_url|default:'' }}" placeholder="https://example.com/security-policy" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Vulnerability disclosure policy</c-forms.hint>
                             </div>
                             {{ security_txt_config.encryption_urls|json_script:"encryption-urls-data" }}
                             <div x-data="{ urls: (() => { let d = JSON.parse(document.getElementById('encryption-urls-data')?.textContent || '[]'); return Array.isArray(d) ? d : []; })() }">
-                                <label class="tw-form-label">Encryption Key URLs</label>
+                                <c-forms.label>Encryption Key URLs</c-forms.label>
                                 <template x-for="(url, index) in urls" :key="index">
                                     <div class="flex gap-2 mb-2">
-                                        <input type="url"
-                                               :name="'security_txt_encryption_url_' + index"
-                                               class="tw-form-input flex-1"
-                                               x-model="urls[index]"
-                                               placeholder="https://example.com/pgp-key.txt"
-                                               disabled="{{ can_administer|yesno:',1' }}">
-                                        <button type="button"
-                                                @click="urls.splice(index, 1)"
-                                                class="tw-btn-outline-primary tw-btn-sm text-danger"
-                                                disabled="{{ can_administer|yesno:',1' }}">
-                                            <i class="fas fa-times"></i>
-                                        </button>
+                                        <c-forms.input type="url" class="flex-1" ::name="'security_txt_encryption_url_' + index" x-model="urls[index]" placeholder="https://example.com/pgp-key.txt" disabled="{{ can_administer|yesno:',1' }}" />
+                                        <c-buttons.ghost-danger size="sm" @click="urls.splice(index, 1)" disabled="{{ can_administer|yesno:',1' }}" aria-label="Remove encryption key URL">
+                                        <i class="fas fa-times"></i>
+                                        </c-buttons.ghost-danger>
                                     </div>
                                 </template>
                                 <button type="button"
                                         @click="urls.push('')"
                                         class="text-xs text-primary hover:underline"
-                                        disabled="{{ can_administer|yesno:',1' }}">
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <i class="fas fa-plus mr-1"></i>Add encryption key URL
                                 </button>
                                 <input type="hidden"
                                        name="security_txt_encryption_urls"
                                        :value="JSON.stringify(urls)">
-                                <p class="tw-form-hint mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</p>
+                                <c-forms.hint class="mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</c-forms.hint>
                             </div>
                             <div>
-                                <label for="security_txt_acknowledgments_url" class="tw-form-label">Acknowledgments URL</label>
-                                <input id="security_txt_acknowledgments_url"
-                                       type="url"
-                                       name="security_txt_acknowledgments_url"
-                                       class="tw-form-input"
-                                       value="{{ security_txt_config.acknowledgments_url|default:'' }}"
-                                       placeholder="https://example.com/hall-of-fame"
-                                       disabled="{{ can_administer|yesno:',1' }}">
-                                <p class="tw-form-hint mt-1">Security researcher acknowledgments</p>
+                                <c-forms.label for="security_txt_acknowledgments_url">Acknowledgments URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_acknowledgments_url" name="security_txt_acknowledgments_url" value="{{ security_txt_config.acknowledgments_url|default:'' }}" placeholder="https://example.com/hall-of-fame" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Security researcher acknowledgments</c-forms.hint>
                             </div>
                             <div>
-                                <label for="security_txt_hiring_url" class="tw-form-label">Hiring URL</label>
-                                <input id="security_txt_hiring_url"
-                                       type="url"
-                                       name="security_txt_hiring_url"
-                                       class="tw-form-input"
-                                       value="{{ security_txt_config.hiring_url|default:'' }}"
-                                       placeholder="https://example.com/security-jobs"
-                                       disabled="{{ can_administer|yesno:',1' }}">
-                                <p class="tw-form-hint mt-1">Security-related job openings</p>
+                                <c-forms.label for="security_txt_hiring_url">Hiring URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_hiring_url" name="security_txt_hiring_url" value="{{ security_txt_config.hiring_url|default:'' }}" placeholder="https://example.com/security-jobs" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Security-related job openings</c-forms.hint>
                             </div>
                         </div>
                     </div>
                     {# Optional: Additional settings #}
                     <div class="mb-6">
-                        <h6 class="text-sm font-semibold text-text uppercase tracking-wider mb-3">
+                        <h4 class="text-xs font-semibold text-text uppercase tracking-wider mb-3">
                             <i class="fas fa-cog text-primary mr-2"></i>Additional settings
-                        </h6>
+                        </h4>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div x-data="{ open: false, selected: '{{ security_txt_config.preferred_languages|default:'en' }}'.split(',').map(s => s.trim()).filter(Boolean), languages: [ {code: 'en', name: 'English'}, {code: 'de', name: 'German'}, {code: 'fr', name: 'French'}, {code: 'es', name: 'Spanish'}, {code: 'pt', name: 'Portuguese'}, {code: 'it', name: 'Italian'}, {code: 'nl', name: 'Dutch'}, {code: 'ja', name: 'Japanese'}, {code: 'ko', name: 'Korean'}, {code: 'zh', name: 'Chinese'}, {code: 'ar', name: 'Arabic'}, {code: 'ru', name: 'Russian'}, {code: 'pl', name: 'Polish'}, {code: 'sv', name: 'Swedish'}, {code: 'da', name: 'Danish'}, {code: 'no', name: 'Norwegian'}, {code: 'fi', name: 'Finnish'}, {code: 'tr', name: 'Turkish'}, {code: 'hi', name: 'Hindi'}, {code: 'he', name: 'Hebrew'}, ], toggle(code) { this.selected.includes(code) ? this.selected = this.selected.filter(c => c !== code) : this.selected.push(code); } }"
+                            <div class="relative"
+                                 x-data="{ open: false, selected: '{{ security_txt_config.preferred_languages|default:'en' }}'.split(',').map(s => s.trim()).filter(Boolean), languages: [ {code: 'en', name: 'English'}, {code: 'de', name: 'German'}, {code: 'fr', name: 'French'}, {code: 'es', name: 'Spanish'}, {code: 'pt', name: 'Portuguese'}, {code: 'it', name: 'Italian'}, {code: 'nl', name: 'Dutch'}, {code: 'ja', name: 'Japanese'}, {code: 'ko', name: 'Korean'}, {code: 'zh', name: 'Chinese'}, {code: 'ar', name: 'Arabic'}, {code: 'ru', name: 'Russian'}, {code: 'pl', name: 'Polish'}, {code: 'sv', name: 'Swedish'}, {code: 'da', name: 'Danish'}, {code: 'no', name: 'Norwegian'}, {code: 'fi', name: 'Finnish'}, {code: 'tr', name: 'Turkish'}, {code: 'hi', name: 'Hindi'}, {code: 'he', name: 'Hebrew'}, ], toggle(code) { this.selected.includes(code) ? this.selected = this.selected.filter(c => c !== code) : this.selected.push(code); } }"
                                  @click.outside="open = false">
-                                <label class="tw-form-label">Preferred Languages</label>
+                                <c-forms.label>Preferred Languages</c-forms.label>
                                 <button type="button"
                                         @click="open = !open"
-                                        class="tw-form-input w-full text-left flex items-center justify-between"
-                                        disabled="{{ can_administer|yesno:',1' }}">
+                                        class="w-full px-4 py-3 bg-surface border-[1.5px] border-solid border-border rounded-lg text-sm text-left flex items-center justify-between focus:outline-none focus:border-primary"
+                                        {% if not can_administer %}disabled{% endif %}>
                                     <span x-text="selected.length ? selected.join(', ') : 'Select languages'"
                                           class="truncate"
                                           :class="{ 'text-text-muted': !selected.length }"></span>
@@ -403,7 +295,7 @@
                                 <div x-show="open"
                                      x-cloak
                                      x-transition
-                                     class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-card shadow-lg p-1">
+                                     class="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg p-1">
                                     <template x-for="lang in languages" :key="lang.code">
                                         <label class="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-primary/5 cursor-pointer text-sm">
                                             <input type="checkbox"
@@ -418,11 +310,11 @@
                                 <input type="hidden"
                                        name="security_txt_preferred_languages"
                                        :value="selected.join(', ')">
-                                <p class="tw-form-hint mt-1">English is selected by default</p>
+                                <c-forms.hint class="mt-1">English is selected by default</c-forms.hint>
                             </div>
                             <div>
-                                <label class="tw-form-label">Canonical URL</label>
-                                <div class="tw-form-input bg-border/20 text-text-muted text-sm">
+                                <c-forms.label>Canonical URL</c-forms.label>
+                                <div class="px-4 py-3 bg-background border-[1.5px] border-solid border-border rounded-lg text-sm text-text-muted truncate">
                                     {% if trust_center_url %}
                                         {{ trust_center_url }}/.well-known/security.txt
                                     {% else %}
@@ -432,20 +324,14 @@
                                 <input type="hidden"
                                        name="security_txt_canonical_url"
                                        value="{% if trust_center_url %}{{ trust_center_url }}/.well-known/security.txt{% endif %}">
-                                <p class="tw-form-hint mt-1">Automatically set to your Trust Center's security.txt URL</p>
+                                <c-forms.hint class="mt-1">Automatically set to your Trust Center's security.txt URL</c-forms.hint>
                             </div>
                         </div>
                     </div>
                     {# Info about Expires #}
-                    <div class="tw-alert tw-alert-info mb-4">
-                        <i class="fas fa-info-circle tw-alert-icon"></i>
-                        <div class="tw-alert-content">
-                            <p class="text-sm m-0">
-                                The <strong>Expires</strong> field is automatically set to one year from now
-                                and refreshed each time you save.
-                            </p>
-                        </div>
-                    </div>
+                    <c-feedback.alert variant="info" class="mb-4">
+                    The <strong>Expires</strong> field is automatically set to one year from now and refreshed each time you save.
+                    </c-feedback.alert>
                 </div>
                 {# Save button + owner gate #}
                 <div class="flex items-center justify-end mt-4 gap-4">
@@ -454,76 +340,44 @@
                             <i class="fas fa-lock mr-1"></i>Only workspace owners and admins can change these settings.
                         </p>
                     {% endif %}
-                    <button type="submit"
-                            class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
-                        <i class="fas fa-save mr-2"></i>Save
-                    </button>
+                    <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
+                    <i class="fas fa-save mr-2"></i>Save
+                    </c-buttons.primary>
                 </div>
             </form>
-        </div>
-    </div>
-{% endif %}
-{# Trust Center Description Section #}
-{% if team.is_public %}
-    <div class="tw-dashboard-card mb-6">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip">
-                    <i class="fas fa-align-left" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Trust Center Description</h5>
-                    <p class="text-text-muted text-sm m-0">Customize your landing page messaging</p>
-                </div>
-            </div>
-        </div>
-        <div class="p-6">
+        </section>
+    {% endif %}
+    {# Trust Center description #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <h3 class="text-sm font-semibold text-text m-0">Description</h3>
+            <p class="text-sm text-text-muted mt-1 m-0">The message at the top of your Trust Center landing page.</p>
             <form method="post"
                   action="{% url 'teams:team_settings' team.key %}"
-                  class="w-full">
+                  class="mt-4">
                 {% csrf_token %}
                 <input type="hidden" name="trust_center_description_action" value="update">
                 <input type="hidden" name="active_tab" value="trust-center">
-                <div class="mb-4">
-                    <label for="trust_center_description" class="tw-form-label">Description</label>
-                    <textarea id="trust_center_description"
-                              class="tw-form-textarea"
-                              name="trust_center_description"
-                              rows="4"
-                              maxlength="500"
-                              placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts."
-                              disabled="{{ can_administer|yesno:',1' }}">{{ branding_info.trust_center_description|default:'' }}</textarea>
-                    <span class="tw-form-hint">Max 500 characters. Leave empty to use the default description.</span>
+                <div>
+                    <c-forms.label for="trust_center_description">Description</c-forms.label>
+                    <c-forms.textarea id="trust_center_description" name="trust_center_description" rows="4" maxlength="500" placeholder="Your centralized hub for transparency and compliance. Browse our public products, releases, and organization-wide security artifacts." disabled="{{ can_administer|yesno:',1' }}" value="{{ branding_info.trust_center_description|default:'' }}" />
+                    <c-forms.hint>Max 500 characters. Leave empty to use the default description.</c-forms.hint>
                 </div>
-                <div class="flex justify-end">
-                    <button type="submit"
-                            class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
-                        <i class="fas fa-save mr-2"></i>Save Description
-                    </button>
+                <div class="flex justify-end mt-4">
+                    <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
+                    <i class="fas fa-save mr-2"></i>Save description
+                    </c-buttons.primary>
                 </div>
             </form>
-        </div>
-    </div>
-{% endif %}
-{# Company NDA Section #}
-{% if team.is_public %}
-    <div class="tw-dashboard-card mb-6">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip tw-icon-chip-warning">
-                    <i class="fas fa-file-contract" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Company NDA</h5>
-                    <p class="text-text-muted text-sm m-0">Non-disclosure agreement for gated content</p>
-                </div>
-            </div>
-        </div>
-        <div class="p-6">
+        </section>
+    {% endif %}
+    {# Company NDA #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <h3 class="text-sm font-semibold text-text m-0">Company NDA</h3>
+            <p class="text-sm text-text-muted mt-1 m-0">The non-disclosure agreement gating restricted content.</p>
             {# Preparation guidance — the signing flow is click-wrap, and a document drafted for wet signatures reads broken inside it #}
-            <div class="mb-6 border border-border rounded-xl"
+            <div class="mt-4 border border-border rounded-xl"
                  x-data="{ guideOpen: false }">
                 <button type="button"
                         class="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm text-text-muted hover:text-text transition-colors"
@@ -543,7 +397,7 @@
                      class="px-4 pb-4 text-sm text-text-muted space-y-3">
                     <p class="m-0">
                         Nobody signs the PDF itself. A requester reads it in the browser, types their
-                        full name, and confirms acceptance — sbomify then records their name, the time,
+                        full name, and confirms acceptance. sbomify then records their name, the time,
                         their IP address, and a cryptographic fingerprint of the exact document version
                         they accepted. Draft the document for that process:
                     </p>
@@ -563,7 +417,7 @@
                         requesting access.
                     </blockquote>
                     <ul class="m-0 pl-5 space-y-1.5 list-disc">
-                        <li>Leave no blank name, date, or signature lines — they stay empty forever.</li>
+                        <li>Leave no blank name, date, or signature lines: they stay empty forever.</li>
                         <li>
                             If your company should appear as a signatory, put its name, title, and date
                             (or a scanned signature) in the PDF before uploading, so every acceptance is
@@ -578,16 +432,16 @@
             </div>
             {% if company_nda_document %}
                 {# Current NDA Display #}
-                <div class="mb-6 p-4 bg-success/5 border border-success/20 rounded-xl">
+                <div class="mt-4 p-4 bg-success/5 border border-success/20 rounded-xl">
                     <div class="flex items-start gap-4">
-                        <span class="tw-icon-chip tw-icon-chip-lg tw-icon-chip-success">
-                            <i class="fas fa-file-pdf text-xl" aria-hidden="true"></i>
-                        </span>
+                        <c-chips.icon-chip size="lg" accent="success">
+                        <i class="fas fa-file-pdf text-xl" aria-hidden="true"></i>
+                        </c-chips.icon-chip>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2 mb-1">
                                 <h6 class="font-medium text-text m-0 truncate">{{ company_nda_document.name }}</h6>
                                 {% if company_nda_document.version %}
-                                    <span class="tw-badge-success">v{{ company_nda_document.version }}</span>
+                                    <c-badges.success size="sm">v{{ company_nda_document.version }}</c-badges.success>
                                 {% endif %}
                             </div>
                             <div class="flex items-center gap-3 text-sm text-text-muted">
@@ -603,12 +457,9 @@
                                 {% endif %}
                             </div>
                         </div>
-                        <a href="{% url 'documents:document_download' company_nda_document.id %}"
-                           class="tw-btn-secondary tw-btn-sm"
-                           target="_blank"
-                           rel="noopener noreferrer">
-                            <i class="fas fa-eye mr-1"></i>View
-                        </a>
+                        <c-buttons.secondary size="sm" href="{% url 'documents:document_download' company_nda_document.id %}" target="_blank" rel="noopener noreferrer">
+                        <i class="fas fa-eye mr-1"></i>View
+                        </c-buttons.secondary>
                     </div>
                 </div>
             {% endif %}
@@ -616,25 +467,25 @@
             <form method="post"
                   action="{% url 'teams:team_settings' team.key %}"
                   enctype="multipart/form-data"
-                  class="w-full"
+                  class="mt-4"
                   x-data="{ fileName: '' }">
                 {% csrf_token %}
                 <input type="hidden" name="company_nda_action" value="upload">
                 <input type="hidden" name="active_tab" value="trust-center">
                 <label for="company_nda_file"
-                       class="tw-file-upload relative block mb-4 {% if not can_administer %}opacity-50 pointer-events-none{% endif %}">
+                       class="relative block mb-4 border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer transition-colors hover:border-primary/50 {% if not can_administer %}opacity-50 pointer-events-none{% endif %}">
                     <input type="file"
                            id="company_nda_file"
                            name="company_nda_file"
                            class="sr-only"
                            accept=".pdf"
-                           disabled="{{ can_administer|yesno:',1' }}"
+                           {% if not can_administer %}disabled{% endif %}
                            required
                            @change="fileName = $event.target.files[0] ? $event.target.files[0].name : ''">
-                    <div class="tw-file-upload-icon">
-                        <i class="fas fa-cloud-upload-alt text-xl"></i>
+                    <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-primary/10 flex items-center justify-center">
+                        <i class="fas fa-cloud-upload-alt text-xl text-primary"></i>
                     </div>
-                    <p class="tw-file-upload-text">
+                    <p class="text-sm text-text m-0">
                         <template x-if="fileName">
                             <span class="text-success font-medium" x-text="fileName"></span>
                         </template>
@@ -642,100 +493,65 @@
                             <span><span class="text-primary font-medium">Click to upload</span> or drag and drop</span>
                         </template>
                     </p>
-                    <p class="tw-file-upload-hint">PDF files only. Max 50MB.</p>
+                    <p class="text-xs text-text-muted mt-1 m-0">PDF files only. Max 50MB.</p>
                 </label>
                 <div class="flex justify-end">
-                    <button type="submit"
-                            class="tw-btn-primary"
-                            disabled="{{ can_administer|yesno:',1' }}">
-                        <i class="fas fa-upload mr-2"></i>
-                        {% if company_nda_document %}
-                            Upload New Version
-                        {% else %}
-                            Upload NDA
-                        {% endif %}
-                    </button>
+                    <c-buttons.primary type="submit" size="sm" disabled="{{ can_administer|yesno:',1' }}">
+                    <i class="fas fa-upload mr-2"></i>
+                    {% if company_nda_document %}
+                        Upload new version
+                    {% else %}
+                        Upload NDA
+                    {% endif %}
+                    </c-buttons.primary>
                 </div>
             </form>
-        </div>
-    </div>
-{% endif %}
-{# Access Requests Section #}
-{% if team.is_public %}
-    <div id="access-requests-wrapper"
-         x-data
-         hx-get="{% url 'documents:access_request_queue' team.key %}?partial=true"
-         hx-trigger="load, refreshAccessRequests from:body"
-         hx-swap="innerHTML"
-         @ws:message.window="if ($event.detail.type === 'access_request_updated') { document.body.dispatchEvent(new CustomEvent('refreshAccessRequests')); }">
-        <div class="tw-dashboard-card mb-6">
-            <div class="px-6 py-4 border-b border-border">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
-                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
-                    </div>
-                    <div>
-                        <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
-                        <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
+        </section>
+    {% endif %}
+    {# Access requests #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <div id="access-requests-wrapper"
+                 x-data
+                 hx-get="{% url 'documents:access_request_queue' team.key %}?partial=true"
+                 hx-trigger="load, refreshAccessRequests from:body"
+                 hx-swap="innerHTML"
+                 @ws:message.window="if ($event.detail.type === 'access_request_updated') { document.body.dispatchEvent(new CustomEvent('refreshAccessRequests')); }">
+                <div class="space-y-3">
+                    <div class="h-5 w-40 bg-border/50 rounded animate-pulse"></div>
+                    <div class="h-4 w-56 bg-border/30 rounded animate-pulse"></div>
+                    <div class="flex items-center justify-center py-8">
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
+                        <span class="ml-3 text-text-muted">Loading access requests...</span>
                     </div>
                 </div>
             </div>
-            <div class="p-6">
-                <div class="flex items-center justify-center py-8">
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
-                    <span class="ml-3 text-text-muted">Loading access requests...</span>
-                </div>
-            </div>
-        </div>
-    </div>
-{% endif %}
-{# Custom Domain Section #}
-{% if team.is_public %}
-    <div id="team-custom-domain-wrapper"
-         hx-get="{% url 'teams:team_custom_domain' team.key %}"
-         hx-trigger="load, refreshTeamCustomDomain from:body"
-         hx-swap="innerHTML">
-        <div class="tw-dashboard-card mb-6">
-            <div class="px-6 py-4 border-b border-border">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-lg bg-background flex items-center justify-center">
-                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-sm mx-auto text-primary" %}
-                    </div>
-                    <div>
-                        <div class="h-5 w-32 bg-border/50 rounded animate-pulse"></div>
-                        <div class="h-4 w-48 bg-border/30 rounded animate-pulse mt-1"></div>
+        </section>
+    {% endif %}
+    {# Custom domain #}
+    {% if team.is_public %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <div id="team-custom-domain-wrapper"
+                 hx-get="{% url 'teams:team_custom_domain' team.key %}"
+                 hx-trigger="load, refreshTeamCustomDomain from:body"
+                 hx-swap="innerHTML">
+                <div class="space-y-3">
+                    <div class="h-5 w-36 bg-border/50 rounded animate-pulse"></div>
+                    <div class="h-4 w-52 bg-border/30 rounded animate-pulse"></div>
+                    <div class="flex items-center justify-center py-8">
+                        {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
+                        <span class="ml-3 text-text-muted">Loading custom domain settings...</span>
                     </div>
                 </div>
             </div>
-            <div class="p-6">
-                <div class="flex items-center justify-center py-8">
-                    {% include "core/components/brand/loader.html.j2" with class="tw-loader-md mx-auto text-primary" %}
-                    <span class="ml-3 text-text-muted">Loading custom domain settings...</span>
-                </div>
+        </section>
+    {% else %}
+        <section class="mt-8 pt-8 border-t border-border">
+            <h3 class="text-sm font-semibold text-text m-0">Custom domain</h3>
+            <p class="text-sm text-text-muted mt-1 m-0">Use your own domain for the Trust Center.</p>
+            <div class="mt-4">
+                <c-feedback.empty-state icon="fas fa-lock" icon_variant="neutral" title="Trust Center required" message="Enable your Trust Center above to configure a custom domain." />
             </div>
-        </div>
-    </div>
-{% else %}
-    <div class="tw-dashboard-card mb-6">
-        <div class="px-6 py-4 border-b border-border">
-            <div class="flex items-center gap-3">
-                <span class="tw-icon-chip tw-icon-chip-neutral">
-                    <i class="fas fa-globe" aria-hidden="true"></i>
-                </span>
-                <div>
-                    <h5 class="text-lg font-semibold text-text m-0">Custom Domain</h5>
-                    <p class="text-text-muted text-sm m-0">Use your own domain for the Trust Center</p>
-                </div>
-            </div>
-        </div>
-        <div class="p-6">
-            <div class="tw-empty-state py-8">
-                <div class="tw-empty-state-icon bg-border/30">
-                    <i class="fas fa-lock text-2xl text-text-muted"></i>
-                </div>
-                <h4 class="tw-empty-state-title">Trust Center Required</h4>
-                <p class="tw-empty-state-description">Enable your Trust Center above to configure a custom domain.</p>
-            </div>
-        </div>
-    </div>
-{% endif %}
+        </section>
+    {% endif %}
+</div>

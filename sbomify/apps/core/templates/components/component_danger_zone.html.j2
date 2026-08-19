@@ -2,18 +2,7 @@
 <div x-cloak
      x-data="dangerZone()"
      @delete-component.window="showDeleteModal = true">
-    <c-cards.dangerzone flush>
-    <c-slot name="header">
-    <c-cards.dangerzone-header class="cursor-pointer select-none justify-between" role="button" tabindex="0" ::aria-expanded="isExpanded" @click="toggle()" @keydown.enter.prevent="toggle()" @keydown.space.prevent="toggle()">
-    <h4 class="text-lg font-semibold text-danger flex items-center gap-2 m-0">
-        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>Danger Zone
-    </h4>
-    <i class="fas fa-chevron-down text-danger transition-transform duration-200"
-       :class="isExpanded ? 'rotate-180' : ''"
-       aria-hidden="true"></i>
-    </c-cards.dangerzone-header>
-    </c-slot>
-    <c-cards.dangerzone-body x-show="isExpanded" x-collapse>
+    <c-cards.dangerzone-collapsible>
     {% if can_delete %}
         {# Transfer Component Section #}
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border">
@@ -62,7 +51,6 @@
         Delete Component
         </c-buttons.danger>
     </div>
-    </c-cards.dangerzone-body>
-    </c-cards.dangerzone>
+    </c-cards.dangerzone-collapsible>
     {% include 'components/delete_confirmation_modal.html.j2' with modal_id='showDeleteModal' title='Delete Component' message='Are you sure you want to delete the component' item_name=component_name warning_message='This action cannot be undone and will permanently remove the component from the system.' confirm_text='Delete Component' hx_url='/api/v1/components/'|add:component_id hx_method='delete' success_message='Component deleted successfully!' redirect_url='/components/' %}
 </div>
