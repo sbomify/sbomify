@@ -38,6 +38,14 @@
                 <c-forms.field label="CVE or reference" for="vulnerability_id">
                 <c-forms.input name="vulnerability_id" placeholder="CVE-2026-0000" />
                 </c-forms.field>
+                <div class="grid gap-5 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)]">
+                    <c-forms.field label="CVSS score" for="cvss_score">
+                    <c-forms.input name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" />
+                    </c-forms.field>
+                    <c-forms.field label="CVSS vector" for="cvss_vector">
+                    <c-forms.input name="cvss_vector" placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" />
+                    </c-forms.field>
+                </div>
                 <c-forms.field label="Description" for="description">
                 <c-forms.textarea name="description" rows="4" placeholder="What is the problem, and who does it affect?" />
                 </c-forms.field>

@@ -1,4 +1,5 @@
 {# Security Advisories table. Rows come from the advisories projection via json_script; writes are still preview-only. #}
+{% load public_url_tags %}
 <div id="advisories-table-container"
      x-data="{ search: '', filter: 'all', sortColumn: 'updated', sortDirection: 'desc', currentPage: 1, perPage: 10, allAdvisories: [], init() { this.allAdvisories = window.parseJsonScript('advisories-data') || []; this.$el.addEventListener('htmx:afterSettle', () => { this.allAdvisories = window.parseJsonScript('advisories-data') || []; if (this.currentPage > this.totalPages && this.totalPages > 0) { this.currentPage = this.totalPages; } }); }, get filteredData() { let data = [...this.allAdvisories]; if (this.search) { const s = this.search.toLowerCase(); data = data.filter(item => item.title.toLowerCase().includes(s) || item.id.toLowerCase().includes(s) || (item.vulnerability_id || '').toLowerCase().includes(s) || (item.products || []).map(p => p.name).join(' ').toLowerCase().includes(s) ); } if (this.filter !== 'all') { data = data.filter(item => item.status === this.filter); } return data; }, get sortedData() { return [...this.filteredData].sort((a, b) => { let aVal, bVal; if (this.sortColumn === 'severity') { aVal = a.severity_rank; bVal = b.severity_rank; } else if (this.sortColumn === 'status') { aVal = a.status_rank; bVal = b.status_rank; } else { aVal = a[this.sortColumn]; bVal = b[this.sortColumn]; if (typeof aVal === 'string') { aVal = aVal.toLowerCase(); bVal = bVal.toLowerCase(); } } if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1; if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1; return 0; }); }, get paginatedData() { const start = (this.currentPage - 1) * this.perPage; return this.sortedData.slice(start, start + this.perPage); }, get totalPages() { return Math.ceil(this.filteredData.length / this.perPage); }, get startIndex() { return this.filteredData.length > 0 ? (this.currentPage - 1) * this.perPage + 1 : 0; }, get endIndex() { return Math.min(this.currentPage * this.perPage, this.filteredData.length); }, sort(column) { if (this.sortColumn === column) { this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc'; } else { this.sortColumn = column; this.sortDirection = 'asc'; } }, goToPage(page) { if (page >= 1 && page <= this.totalPages) { this.currentPage = page; } }, get visiblePages() { const pages = []; const total = this.totalPages; const current = this.currentPage; if (total <= 7) { for (let i = 1; i <= total; i++) pages.push(i); } else { pages.push(1); if (current > 3) pages.push('...'); for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) { pages.push(i); } if (current < total - 2) pages.push('...'); pages.push(total); } return pages; }, titleCase(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; } }"
      x-init="init(); $watch('search', () => currentPage = 1); $watch('filter', () => currentPage = 1); $watch('perPage', () => currentPage = 1)"
@@ -37,6 +38,7 @@
         <c-tables.header-cell class="hidden md:table-cell">Products</c-tables.header-cell>
         <c-tables.header-cell sort="status">Status</c-tables.header-cell>
         <c-tables.header-cell sort="updated" date class="hidden sm:table-cell">Updated</c-tables.header-cell>
+        <c-tables.actions-cell as="th" label="Actions" />
         </c-tables.head>
         <tbody>
             <template x-for="advisory in paginatedData" :key="advisory.id">
@@ -114,11 +116,33 @@
                           x-text="advisory.updates_count + (advisory.updates_count === 1 ? ' update' : ' updates')"></span>
                 </div>
                 </c-tables.cell>
+                {% comment %}
+                    Row actions. The cell swallows its own clicks so reaching
+                    for the menu never navigates to the advisory.
+                {% endcomment %}
+                <c-tables.actions-cell @click.stop>
+                <c-actions-menu label="Advisory actions" width="w-56">
+                <c-dropdowns.item icon="fas fa-arrow-right" href="#" ::href="'{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)">
+                View advisory
+                </c-dropdowns.item>
+                <template x-if="advisory.publication_status !== 'draft'">
+                    <c-dropdowns.item icon="fas fa-link" @click="navigator.clipboard && navigator.clipboard.writeText(new URL('{% public_url 'core:advisory_details_public' workspace_key=current_team.key advisory_id='__PK__' %}'.replace('__PK__', advisory.pk), window.location.origin).href)">
+                    Copy public link
+                    </c-dropdowns.item>
+                </template>
+                {% if has_crud_permissions %}
+                    <c-dropdowns.divider />
+                    <c-dropdowns.item-danger icon="fas fa-trash" @click="$dispatch('open-delete-advisory-modal', { id: advisory.id, title: advisory.title })">
+                    Delete advisory
+                    </c-dropdowns.item-danger>
+                {% endif %}
+                </c-actions-menu>
+                </c-tables.actions-cell>
                 </c-tables.row>
             </template>
             <template x-if="paginatedData.length === 0">
                 <tr>
-                    <td colspan="5" class="text-center py-8 text-text-muted">
+                    <td colspan="6" class="text-center py-8 text-text-muted">
                         <i class="fas fa-search text-2xl mb-2 opacity-50" aria-hidden="true"></i>
                         <p>No advisories match your search</p>
                         <button type="button"

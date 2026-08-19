@@ -1,0 +1,35 @@
+{% comment %}
+    Delete-advisory confirmation, shared by the detail page's actions menu and
+    the advisories table's row menus. One dialog per page, opened by
+    ``open-delete-advisory-modal`` with ``{ id, title }`` in the event detail,
+    so a page with fifty rows does not render fifty dialogs. The form's action
+    is bound from the event because only the opener knows which advisory it
+    means; the placeholder id keeps ``{% url %}`` resolving at render time.
+
+    Include it at page level, outside any HTMX-swapped region: a swap while
+    the dialog is open would tear it out from under the reader.
+{% endcomment %}
+<div x-data="{ open: false, advisory: { id: '', title: '' } }"
+     @open-delete-advisory-modal.window="open = true; advisory = $event.detail">
+    <c-modal id="deleteAdvisoryModal" title="Delete advisory" icon="fas fa-trash" size="sm" role="alertdialog" style="--chip-accent: var(--color-danger)">
+    <form id="deleteAdvisoryForm"
+          method="post"
+          :action="'{% url 'core:security_advisory_detail' '__ID__' %}'.replace('__ID__', advisory.id)">
+        {% csrf_token %}
+        <input type="hidden" name="intent" value="delete" />
+        <p class="text-text mb-2">
+            Are you sure you want to delete
+            <strong class="text-text break-words" x-text="advisory.title"></strong>?
+        </p>
+        <p class="text-text-muted text-sm m-0">
+            This deletes the advisory and its whole timeline. A published advisory disappears from your Trust Center.
+        </p>
+    </form>
+    <c-slot name="footer">
+    <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
+    <c-buttons.danger type="submit" form="deleteAdvisoryForm">
+    <i class="fas fa-trash mr-2" aria-hidden="true"></i>Delete advisory
+    </c-buttons.danger>
+    </c-slot>
+    </c-modal>
+</div>
