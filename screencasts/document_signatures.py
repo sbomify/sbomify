@@ -231,12 +231,14 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     pace(page, 1500)
 
     # ── 4. Linger on the badges ────────────────────────────────────────
-    # The "Signed" (green padlock) + "Provenance" (blue shield) badges
+    # The "Signed" (green padlock) + "Provenance" (blue shield) markers
     # render inline next to the SBOM metadata block. They show the
     # moment the page loads — no interaction needed — so we just
     # scroll the badge row into view and pause for the FAQ tie-in.
+    # They are metric chips now, and the accent is a colour-mix on the chip
+    # rather than a text-success/text-info class, so match on the text.
     narrate(page, "signed_badge")
-    sbom_signed_badge = page.locator("span.text-success:has-text('Signed')").first
+    sbom_signed_badge = page.get_by_text("Signed", exact=True).first
     sbom_signed_badge.wait_for(state="visible", timeout=15_000)
     sbom_signed_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)
@@ -244,7 +246,7 @@ def document_signatures(recording_page: Page, pied_piper_with_signed_sbom: dict)
     settle(page)
 
     narrate(page, "provenance_badge")
-    provenance_badge = page.locator("span.text-info:has-text('Provenance')").first
+    provenance_badge = page.get_by_text("Provenance", exact=True).first
     provenance_badge.wait_for(state="visible", timeout=10_000)
     provenance_badge.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 2500)

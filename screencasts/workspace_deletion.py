@@ -4,6 +4,8 @@ Drives: Dashboard → sidebar Settings → General tab → Danger Zone →
 Delete Workspace modal → type 'delete' → confirm → redirect back to dashboard.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import Page
 
@@ -38,20 +40,23 @@ def workspace_deletion(recording_page: Page) -> None:
     navigate_to_settings(page)
 
     # Wait for the HTMX-loaded General tab content (danger zone lives here).
-    # Target the workspace danger zone specifically (not the account one).
-    danger_card = page.locator(".tw-dangerzone-card", has_text="Delete Workspace")
-    danger_card.wait_for(state="visible", timeout=15_000)
+    # Every danger zone is one c-cards.dangerzone-collapsible now: the band that
+    # opens it is a role="button" carrying the title, and the account zone lives
+    # on its own settings URL, so nothing else on this page answers to it.
+    danger_band = page.get_by_role("button", name=re.compile(r"Danger Zone"))
+    danger_band.wait_for(state="visible", timeout=15_000)
 
     # Scroll to the danger zone and expand it
     narrate(page, "expand")
-    danger_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    danger_band.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
-    danger_header = danger_card.locator(".tw-card-header")
-    hover_and_click(page, danger_header)
+    hover_and_click(page, danger_band)
     pace(page, 800)
 
-    # Click "Delete Workspace" to open the modal
-    delete_btn = page.locator("button:has-text('Delete Workspace')").first
+    # Click "Delete Workspace" to open the modal.  The row's button carries
+    # id="del_<team key>", which the modal's own confirm does not.
+    delete_btn = page.locator("button[id^='del_']")
+    delete_btn.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, delete_btn)
     pace(page, 600)
 

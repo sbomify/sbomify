@@ -50,9 +50,11 @@ def profile_editing(recording_page: Page) -> None:
     hover_and_click(page, contacts_tab)
     pace(page, 800)
 
-    # Wait for HTMX-loaded profile list content
+    # Wait for HTMX-loaded profile list content.  The empty state is a
+    # c-feedback.empty-state now and carries no class to match on, so wait on
+    # its heading — either the table or that heading means the panel landed.
     content = page.locator("#contact-profiles-content")
-    content.locator(".tw-empty-state, table").first.wait_for(state="visible", timeout=15_000)
+    content.locator("table, h3:has-text('No contact profiles')").first.wait_for(state="visible", timeout=15_000)
     pace(page, 800)
 
     # Click "Add Profile" — in the card header (always present)
@@ -217,5 +219,5 @@ def profile_editing(recording_page: Page) -> None:
     hover_and_click(page, create_btn)
 
     # Wait for the profile list to reappear (HTMX swap after successful creation)
-    content.locator("table, .tw-empty-state").first.wait_for(state="visible", timeout=15_000)
+    content.locator("table, h3:has-text('No contact profiles')").first.wait_for(state="visible", timeout=15_000)
     settle(page)

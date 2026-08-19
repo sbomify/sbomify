@@ -291,7 +291,7 @@ def _upload_vex(page: Page, document: dict) -> None:
     dry-run preview before anything is stored, and applying it is what
     persists — both worth having on camera.
     """
-    more_actions = page.get_by_role("button", name="More actions")
+    more_actions = page.get_by_role("button", name="Component actions")
     more_actions.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, more_actions)
     pace(page, 600)
@@ -308,7 +308,7 @@ def _upload_vex(page: Page, document: dict) -> None:
         file_input.set_input_files(
             files=[{"name": VEX_FILENAME, "mimeType": "application/json", "buffer": _vex_bytes(document)}]
         )
-    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
+    page.locator("text=nothing stored yet").first.wait_for(state="visible", timeout=10_000)
     pace(page, 2500)
 
     apply_btn = page.locator("button:has-text('Apply this VEX')")

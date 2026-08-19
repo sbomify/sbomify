@@ -70,7 +70,7 @@ def release_creation(recording_page: Page, pied_piper_with_sboms: dict) -> None:
     # ── 3. Create a new release from the header's ⋮ menu ─────────────────
     # The page-level Create Release button moved into the meatball menu.
     narrate(page, "why_named")
-    more_actions = page.get_by_role("button", name="More actions")
+    more_actions = page.get_by_role("button", name="Product actions")
     more_actions.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, more_actions)
     pace(page, 600)

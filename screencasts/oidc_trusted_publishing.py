@@ -254,7 +254,7 @@ def oidc_trusted_publishing(
     # The component page keeps its secondary surfaces behind the meatball
     # menu now, so the section lives in a modal rather than on the page.
     narrate(page, "open_publishers")
-    more_actions = page.get_by_role("button", name="More actions")
+    more_actions = page.get_by_role("button", name="Component actions")
     more_actions.wait_for(state="visible", timeout=15_000)
     hover_and_click(page, more_actions)
     pace(page, 600)

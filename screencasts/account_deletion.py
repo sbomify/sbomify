@@ -7,6 +7,8 @@ The account danger zone now lives in the team settings page under the
 "Account" tab, available to workspace owners.
 """
 
+import re
+
 import playwright.sync_api
 import pytest
 from playwright.sync_api import Page
@@ -42,21 +44,24 @@ def account_deletion(recording_page: Page) -> None:
     hover_and_click(page, account_tab)
     pace(page, 800)
 
-    # Scroll to the Account Danger Zone section and expand it.
-    # There are two danger zone cards (workspace + account); target the account one.
+    # Scroll to the Account Danger Zone section and expand it.  Every danger
+    # zone is one c-cards.dangerzone-collapsible now, so the band that opens it
+    # is a role="button" carrying the title rather than a .tw-dangerzone-card
+    # header, and the account tab is its own URL so only this zone is on it.
     narrate(page, "danger_zone")
-    danger_card = page.locator(".tw-dangerzone-card", has_text="Delete Account")
-    danger_card.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
+    danger_band = page.get_by_role("button", name=re.compile(r"Danger Zone"))
+    danger_band.wait_for(state="visible", timeout=15_000)
+    danger_band.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 600)
 
-    # Click the header to toggle the collapsible section open
-    danger_header = danger_card.locator(".tw-card-header")
-    hover_and_click(page, danger_header)
+    # Click the band to toggle the collapsing body open (it starts shut).
+    hover_and_click(page, danger_band)
     pace(page, 600)
 
-    # Click "Delete Account" to open the modal
+    # Click "Delete account" to open the modal.  Its aria-label is what names
+    # it, and it differs from the modal's own "Delete my account" confirm.
     narrate(page, "consequences")
-    delete_btn = danger_card.locator(".tw-btn-danger")
+    delete_btn = page.get_by_role("button", name="Delete your account")
     delete_btn.wait_for(state="visible", timeout=5_000)
     hover_and_click(page, delete_btn)
     pace(page, 800)

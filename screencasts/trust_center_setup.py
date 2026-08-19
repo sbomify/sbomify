@@ -19,6 +19,7 @@ from conftest import (
     narrate,
     navigate_to_components,
     navigate_to_trust_center_tab,
+    open_new_from_navbar,
     pace,
     rewrite_localhost_urls,
     settle,
@@ -129,30 +130,19 @@ def trust_center_setup(recording_page: Page) -> None:
     narrate(page, "component")
     navigate_to_components(page)
 
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
-    pace(page, 600)
+    # Creation is a page now rather than a modal, and submitting lands on the
+    # new component's own page — so there is no row to click into afterwards.
+    open_new_from_navbar(page, "Component")
 
-    modal_form = page.locator("#addComponentForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
-    pace(page, 500)
-
-    name_input = page.locator("#componentName")
+    name_input = page.locator("input#name")
+    name_input.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, name_input)
     pace(page, 300)
     type_text(name_input, COMPONENT_NAME)
     pace(page, 600)
 
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
+    hover_and_click(page, page.get_by_role("button", name="Create component"))
 
-    page.wait_for_load_state("networkidle")
-    pace(page, 1000)
-
-    # Click into the component
-    row = page.locator("tr", has=page.locator(f"span:text-is('{COMPONENT_NAME}')"))
-    row.first.wait_for(state="visible", timeout=10_000)
-    pace(page, 600)
-    hover_and_click(page, row.first)
     page.wait_for_load_state("networkidle")
     pace(page, 1500)
 

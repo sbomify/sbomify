@@ -13,7 +13,6 @@ from playwright.sync_api import Page
 
 from conftest import (
     MINIMAL_PDF,
-    click_into_row,
     create_global_document_component,
     hover_and_click,
     narrate,
@@ -99,8 +98,9 @@ def document_upload(recording_page: Page) -> None:
     narrate(page, "component")
     create_global_document_component(page, COMPONENT_NAME)
 
-    # ── 3. Click into the component ─────────────────────────────────────
-    click_into_row(page, COMPONENT_NAME)
+    # ── 3. The new component's own page is where creating it lands ──────
+    # Creation is a page now and submits through to the created component,
+    # so there is no list to come back to and no row to click.
 
     # ── 4. Upload SOC 2 compliance document ─────────────────────────────
     pdf_path = Path(tempfile.gettempdir()) / "SOC2_Type_II_Audit_Report_2024.pdf"

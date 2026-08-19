@@ -651,8 +651,10 @@ def chapter_vulnerabilities(page: Page) -> None:
     clear_caption(page)
 
     # Role-based lookups, matching the convention the other recordings settled
-    # on: the meatball's contents move around, but its accessible names don't.
-    menu_btn = page.get_by_role("button", name="More actions")
+    # on. The meatball is one c-actions-menu now and its label names the thing
+    # it acts on, so a component page answers to "Component actions" and a
+    # product page to "Product actions" — the old shared "More actions" is gone.
+    menu_btn = page.get_by_role("button", name="Component actions")
     menu_btn.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, menu_btn, 700)
     hover_and_click(page, menu_btn)
