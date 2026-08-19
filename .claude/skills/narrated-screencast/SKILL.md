@@ -228,7 +228,38 @@ locator and check the template. A template existing does not mean it is used;
 several orphaned templates sit in the tree, so confirm something includes or
 serves it.
 
-Four real examples of this rot, all found by recording:
+The design-system conversion is the sharpest lesson so far: it broke 9 of 17
+recordings at once, and **not one of them broke on a class the design system
+renamed — they broke on hooks that stopped existing at all.** A component
+library replaces `.tw-badge-violet` with a `data-variant` a parent binds, and
+`.tw-dangerzone-card` with a shape that carries no class. So prefer, in order:
+a stable `id`, an ARIA role plus accessible name, then visible text. Reach for a
+CSS class only when nothing else identifies the thing, and expect it to rot.
+
+Two traps specific to that style of markup:
+
+- **An accessible name can be scoped rather than shared.** One `c-actions-menu`
+  serves every page but labels itself after what it acts on, so the single
+  `"More actions"` became `"Component actions"` and `"Product actions"`. A name
+  that reads like a global is worth grepping for before you trust it — and
+  `aria-label` beats slot text, so a button reading "Delete account" answers to
+  "Delete your account".
+- **A modal's confirm may not be inside its form.** The identifier and link
+  dialogs put the submit in the modal footer, bound back by `form="…-form"`, so
+  `modal.locator("button[type='submit']")` matches nothing. Match on
+  `button[form='…']`. Note this flipped direction once already — a previous fix
+  removed a `form` attribute the plugin Save button should not have had.
+
+Six real examples of this rot, all found by recording:
+
+- **A create flow can stop being a modal.** Products and components moved onto
+  `/products/new/` and `/components/new/`; `open-add-*-modal` now dispatches
+  into nothing and fails silently, so the failure surfaces later as a missing
+  field. Drive creation from the navbar **New** menu (`open_new_from_navbar`),
+  not the empty state's "Create Your First …" — that button only exists while
+  the workspace is empty, and empty-vs-populated has broken an opener before.
+  Submitting also lands on the *created item's page*, so a `click_into_row`
+  that followed a creation now has no row to find.
 
 - **Settings tabs are real links now** (`a.settings-tab[href$='/account']`), not
   the old in-page `data-tab` switcher. `conftest.navigate_to_trust_center_tab`
@@ -248,9 +279,18 @@ Four real examples of this rot, all found by recording:
   toggle so the open counts match the working list). Read the template before
   raising a timeout; when a behaviour has genuinely changed, the narration
   usually has to change with it, because the copy was describing the old one.
+- **Punctuation counts as a selector.** `text=Preview — nothing stored yet`
+  broke when the em-dash became a colon. Match the words, not the typography.
 
 The recording environment serves no websockets, so any flow that waits on a
 broadcast needs a reload fallback with a short timeout.
+
+A UI that gains steps costs you silence. Creation moving from a modal to a page
+added a menu click and a full page load per component, which pushed
+`product_creation` from comfortable to 10% silence with four gaps over 2s. The
+copy did not change, so nothing sounds wrong — the video just got slower
+underneath it. Re-measure after any flow change, and remember that closing those
+gaps means new copy, which means synthesis, which means the API key.
 
 ## Gotchas already paid for
 

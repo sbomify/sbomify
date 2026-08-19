@@ -631,36 +631,62 @@ def click_into_row(page: Page, name: str) -> None:
     pace(page, 1000)
 
 
-def create_global_document_component(page: Page, name: str) -> None:
-    """Open the Add Component modal, set type to Document + global, and submit."""
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
-    pace(page, 600)
+def open_new_from_navbar(page: Page, item: str) -> None:
+    """Open a create page from the navbar's New menu.
 
-    modal_form = page.locator("#addComponentForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
+    Product and component creation are pages now (``/products/new/``,
+    ``/components/new/``) rather than modals, so there is no
+    ``open-add-*-modal`` event to dispatch.  The navbar menu is the entry
+    point that looks the same whether the table behind it is empty or full —
+    the empty state's "Create Your First …" button only exists while the
+    workspace has nothing in it, and it was that empty-vs-populated split
+    that broke the assignment opener before.
+    """
+    new_btn = page.get_by_role("button", name="Create new item")
+    new_btn.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, new_btn)
     pace(page, 400)
 
-    name_input = page.locator("#componentName")
+    menu_item = page.get_by_role("menuitem", name=item, exact=True)
+    menu_item.wait_for(state="visible", timeout=10_000)
+    hover_and_click(page, menu_item)
+    page.wait_for_load_state("networkidle")
+    pace(page, 600)
+
+
+def choose_component_type(page: Page, value: str) -> None:
+    """Pick a component type on the New Component page.
+
+    The type is choice tiles rather than a select, and each tile's radio is
+    visually hidden, so the click has to land on the label that wraps it.
+    """
+    tile = page.locator("label").filter(has=page.locator(f"input[name='component_type'][value='{value}']"))
+    tile.wait_for(state="visible", timeout=10_000)
+    hover_and_click(page, tile)
+    pace(page, 500)
+
+
+def create_global_document_component(page: Page, name: str) -> None:
+    """Create a workspace-wide Document component from the New Component page."""
+    open_new_from_navbar(page, "Component")
+
+    name_input = page.locator("input#name")
+    name_input.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, name_input)
     pace(page, 200)
     type_text(name_input, name)
     pace(page, 500)
 
-    # Select Document type
-    type_select = page.locator("#componentType")
-    hover_and_click(page, type_select)
-    pace(page, 200)
-    type_select.select_option("document")
-    pace(page, 600)
+    # Document type first: the workspace-wide step only renders while it is
+    # picked, and its checkbox stays disabled under any other type.
+    choose_component_type(page, "document")
 
-    # Check "Workspace-wide component"
-    global_checkbox = page.locator("#componentIsGlobal")
+    global_checkbox = page.locator("#is_global")
+    global_checkbox.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, global_checkbox)
     pace(page, 600)
 
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
-
+    hover_and_click(page, page.get_by_role("button", name="Create component"))
     page.wait_for_load_state("networkidle")
     pace(page, 800)
 

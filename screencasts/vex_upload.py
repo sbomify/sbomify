@@ -128,7 +128,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     # header's meatball menu, so the dropzone does not exist on screen
     # until "Upload artifact…" is picked.
     narrate(page, "upload_menu")
-    more_actions = page.get_by_role("button", name="More actions")
+    more_actions = page.get_by_role("button", name="Component actions")
     more_actions.wait_for(state="visible", timeout=15_000)
     pace(page, 800)
     hover_and_click(page, more_actions)
@@ -161,7 +161,7 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
                 }
             ]
         )
-    page.locator("text=Preview — nothing stored yet").first.wait_for(state="visible", timeout=10_000)
+    page.locator("text=nothing stored yet").first.wait_for(state="visible", timeout=10_000)
     narrate(page, "preview_detail")
     settle(page)
 
@@ -190,14 +190,17 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     heading.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 1500)
 
-    vex_badge = page.locator("span.tw-badge-violet:text-is('VEX')").first
+    # The type badge is one c-badges.dynamic whose colour comes from a
+    # data-variant the row's Alpine binds, so there is no per-colour class to
+    # match on any more.
+    vex_badge = page.locator("span[data-variant='violet']:text-is('VEX')").first
     vex_badge.wait_for(state="visible", timeout=15_000)
     vex_badge.hover()
     pace(page, 2000)
 
     # ── 8. Click through to the VEX artifact page ────────────────────────
     narrate(page, "outro")
-    vex_row_link = page.locator("tr:has(span.tw-badge-violet) a").first
+    vex_row_link = page.locator("tr:has(span[data-variant='violet']) a").first
     hover_and_click(page, vex_row_link)
     page.wait_for_load_state("networkidle")
     settle(page)

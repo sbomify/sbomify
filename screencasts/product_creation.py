@@ -11,12 +11,12 @@ import pytest
 from playwright.sync_api import Page
 
 from conftest import (
-    click_into_row,
     create_global_document_component,
     hover_and_click,
     narrate,
     navigate_to_components,
     navigate_to_products,
+    open_new_from_navbar,
     pace,
     settle,
     start_on_dashboard,
@@ -63,22 +63,23 @@ LIFECYCLE_DATES = {
 
 
 def _create_component(page: Page, name: str) -> None:
-    """Open the Add Component modal, fill the name, and submit."""
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-component-modal'))")
-    pace(page, 600)
+    """Create a BOM component from the New Component page.
 
-    modal_form = page.locator("#addComponentForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
-    pace(page, 400)
+    A submit lands on the new component's own page rather than back on the
+    list, so each pass through here starts from wherever the last one ended.
+    The navbar menu is reachable from all of them.
+    """
+    open_new_from_navbar(page, "Component")
 
-    name_input = page.locator("#componentName")
+    name_input = page.locator("input#name")
+    name_input.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, name_input)
     pace(page, 200)
     type_text(name_input, name)
     pace(page, 500)
 
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
+    # BOM is the default tile; naming it is genuinely all this form needs.
+    hover_and_click(page, page.get_by_role("button", name="Create component"))
 
     page.wait_for_load_state("networkidle")
     pace(page, 800)
@@ -155,7 +156,9 @@ def _add_identifier(page: Page, identifier_type: str, value: str) -> None:
     type_text(value_input, value, delay=25)
     pace(page, 300)
 
-    submit_btn = modal.locator("button[type='submit']")
+    # The confirm sits in the modal footer, outside the <form>, tied to it by
+    # a form attribute — so it is not under the form element to be found.
+    submit_btn = page.locator("button[form='add-identifier-form']")
     hover_and_click(page, submit_btn)
 
     page.locator("#product-identifiers-card").wait_for(state="visible", timeout=10_000)
@@ -188,7 +191,7 @@ def _add_link(page: Page, link_type: str, title: str, url: str) -> None:
     type_text(url_input, url, delay=25)
     pace(page, 300)
 
-    submit_btn = modal.locator("button[type='submit']")
+    submit_btn = page.locator("button[form='add-link-form']")
     hover_and_click(page, submit_btn)
 
     page.locator("#product-links-card").wait_for(state="visible", timeout=10_000)
@@ -285,30 +288,27 @@ def product_creation(recording_page: Page) -> None:
     narrate(page, "product_intro")
     navigate_to_products(page)
 
-    page.evaluate("window.dispatchEvent(new CustomEvent('open-add-product-modal'))")
-    pace(page, 600)
-
-    modal_form = page.locator("#addProductForm")
-    modal_form.wait_for(state="visible", timeout=5_000)
+    open_new_from_navbar(page, "Product")
 
     narrate(page, "product_name")
-    name_input = page.locator("#productName")
+    name_input = page.locator("input#name")
+    name_input.wait_for(state="visible", timeout=10_000)
     hover_and_click(page, name_input)
     type_text(name_input, PRODUCT_NAME)
 
     narrate(page, "product_description")
-    desc_input = page.locator("#productDescription")
+    desc_input = page.locator("textarea#description")
     hover_and_click(page, desc_input)
     type_text(desc_input, PRODUCT_DESCRIPTION, delay=45)
 
-    submit_btn = modal_form.locator("button[type='submit']")
-    hover_and_click(page, submit_btn)
+    hover_and_click(page, page.get_by_role("button", name="Create product"))
 
     page.wait_for_load_state("networkidle")
 
-    # ── 4. Click into the product and assign components ──────────────────
+    # ── 4. Assign components ─────────────────────────────────────────────
+    # Creating a product lands on the product's own page now, so there is no
+    # list to click back into.
     narrate(page, "assign_intro")
-    click_into_row(page, PRODUCT_NAME)
 
     _assign_items(page, COMPONENTS[:2])
     narrate(page, "assign_linkage")
