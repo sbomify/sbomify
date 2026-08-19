@@ -16,6 +16,7 @@ from conftest import (
     MINIMAL_PDF,
     dismiss_toasts,
     hover_and_click,
+    install_dict_backed_s3,
     narrate,
     navigate_to_components,
     navigate_to_trust_center_tab,
@@ -28,6 +29,20 @@ from conftest import (
 )
 
 COMPONENT_NAME = "Compression Core Library"
+NDA_FILENAME = "Pied_Piper_Mutual_NDA_2025.pdf"
+
+
+@pytest.fixture
+def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Back S3 with a dict so the company NDA upload can succeed end-to-end.
+
+    The screencast compose stack runs no object store, so the upload failed
+    with "Could not connect to the endpoint URL" against ``test-s3.localhost``,
+    the view logged an error, and ``dismiss_toasts`` swallowed the toast that
+    said so — leaving the recording to film an NDA that was never attached
+    while the narration said one had been.
+    """
+    install_dict_backed_s3(monkeypatch)
 
 
 # ---------------------------------------------------------------------------
@@ -36,7 +51,7 @@ COMPONENT_NAME = "Compression Core Library"
 
 
 @pytest.mark.django_db(transaction=True)
-def trust_center_setup(recording_page: Page) -> None:
+def trust_center_setup(recording_page: Page, s3_short_circuit: None) -> None:
     page = recording_page
 
     narrate(page, "intro")
@@ -83,7 +98,7 @@ def trust_center_setup(recording_page: Page) -> None:
     nda_label.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, 800)
 
-    pdf_path = Path(tempfile.gettempdir()) / "Pied_Piper_Mutual_NDA_2025.pdf"
+    pdf_path = Path(tempfile.gettempdir()) / NDA_FILENAME
     pdf_path.write_bytes(MINIMAL_PDF)
 
     file_input = page.locator("#company_nda_file")
@@ -98,6 +113,11 @@ def trust_center_setup(recording_page: Page) -> None:
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
     rewrite_localhost_urls(page)
+
+    # Assert the NDA is actually attached. dismiss_toasts() eats the error
+    # toast, so a failed upload otherwise leaves no trace on camera and the
+    # recording passes having filmed nothing happening.
+    page.locator(f"text={NDA_FILENAME}").first.wait_for(state="visible", timeout=15_000)
     pace(page, 2000)
 
     pdf_path.unlink(missing_ok=True)

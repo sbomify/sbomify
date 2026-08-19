@@ -44,6 +44,7 @@ from conftest import (
     dismiss_toasts,
     enable_and_configure_trust_center,
     hover_and_click,
+    install_dict_backed_s3,
     narrate,
     navigate_to_components,
     navigate_to_products,
@@ -54,7 +55,6 @@ from conftest import (
     smooth_scroll,
     start_on_dashboard,
 )
-from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.plugins.models import AssessmentRun, TeamPluginSettings
 from sbomify.apps.plugins.sdk.enums import RunReason
 from sbomify.apps.sboms.models import Component, ProductIdentifier, ProductLink
@@ -282,17 +282,7 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
     for real. What you see suppressed on screen was genuinely suppressed by the
     matcher, not staged.
     """
-    store: dict[tuple[str, str], bytes] = {}
-
-    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
-        store[(bucket_name, object_name)] = data
-
-    def _get(self: S3Client, bucket_name: str, object_name: str) -> bytes | None:
-        return store.get((bucket_name, object_name))
-
-    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
-    monkeypatch.setattr(S3Client, "get_file_data", _get)
-    return store
+    return install_dict_backed_s3(monkeypatch)
 
 
 def _seed_published_advisory(team: Any) -> None:
@@ -722,34 +712,27 @@ def chapter_vulnerabilities(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     pace(page, 1800)
 
-    # Land back on the vulnerabilities table. The suppressed row is now gone
-    # from the default view — the working list matches the open counts — and
-    # the footer accounts for it rather than silently dropping it.
+    # Land back on the vulnerabilities table. The finding stays on the list and
+    # changes state rather than disappearing: upstream reverted the hide-by-
+    # default, because hiding cleared findings made an applied VEX look like it
+    # had done nothing. So there is no "N suppressed hidden" footer to wait for
+    # any more — the row itself, now reading Not affected, is the evidence.
     vulns_card = page.locator("text=Vulnerabilities").first
     vulns_card.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, vulns_card, 1200)
 
-    hidden_note = page.locator("text=suppressed hidden").first
-    hidden_note.wait_for(state="visible", timeout=15_000)
-    smooth_scroll(page, hidden_note, 800)
-
-    narrate(page, "vuln_applied")
-    caption(page, "It drops straight out of your working list — and the count says so.")
-    pace(page, 3000)
-    shot(page, "14-vex-suppressed-hidden")
-    clear_caption(page)
-
-    # Reveal it again: nothing was deleted, and the decision is auditable.
-    show_suppressed = page.get_by_text("Show suppressed").first
-    show_suppressed.wait_for(state="visible", timeout=10_000)
-    smooth_scroll(page, show_suppressed, 700)
-    hover_and_click(page, show_suppressed)
-    pace(page, 1400)
-
     suppressed = page.locator("td:has-text('Not affected')").first
     suppressed.wait_for(state="visible", timeout=15_000)
     smooth_scroll(page, suppressed, 800)
+
+    narrate(page, "vuln_applied")
+    caption(page, "The finding changes state rather than vanishing — now not affected.")
+    pace(page, 3000)
+    shot(page, "14-vex-applied")
+    clear_caption(page)
+
     suppressed.hover()
+    pace(page, 1400)
 
     narrate(page, "vuln_nothing_deleted")
     caption(page, "Nothing is deleted — the finding is still there, with the reason attached.")

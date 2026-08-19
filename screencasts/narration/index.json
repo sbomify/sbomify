@@ -20,13 +20,6 @@
     "speed": 1.0,
     "text": "and create the profile. [pause] From here every SBOM you upload carries this provenance automatically, which is one of the NTIA minimum elements you no longer have to think about."
   },
-  "03f1b702b2487a81116accdd55c86db9d437595bedb363dace49c56a26f6d044": {
-    "file": "03f1b702b2487a81116accdd55c86db9d437595bedb363dace49c56a26f6d044.opus",
-    "duration": 11.03,
-    "voice": "ara",
-    "speed": 1.0,
-    "text": "But nothing was deleted. [pause] The finding is still there, with your reasoning attached to it, which is exactly what an auditor wants to see \u2014 not a shorter list, but a justified one."
-  },
   "05235e0e11f6c4d3660f51d66e3ad011f6d1a6e7182d02b26448817eb9936f66": {
     "file": "05235e0e11f6c4d3660f51d66e3ad011f6d1a6e7182d02b26448817eb9936f66.opus",
     "duration": 6.47,
@@ -96,6 +89,13 @@
     "voice": "ara",
     "speed": 1.0,
     "text": "This is version two of the same document. It still clears the critical, and it now clears the high as well."
+  },
+  "102e397bfe494dfe3a1c2aaa972b5e205094b32d2ff6811f51c2d7c817b84ebb": {
+    "file": "102e397bfe494dfe3a1c2aaa972b5e205094b32d2ff6811f51c2d7c817b84ebb.opus",
+    "duration": 11.27,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Both are cleared now, and both are still on the list with their reasoning. [pause] The medium is untouched, because you never claimed anything about it \u2014 VEX only ever says what you actually asserted."
   },
   "103d2424f892df56a603e12d85cafe859d5de229b801b11f0b17b94e620ce439": {
     "file": "103d2424f892df56a603e12d85cafe859d5de229b801b11f0b17b94e620ce439.opus",
@@ -461,6 +461,13 @@
     "speed": 1.0,
     "text": "From now on, only a workflow running in that repository can upload to this component."
   },
+  "48fe08d8d43cd8fe072766fdb1507bcb2184b5aad9a1e5cb94b7887a5e127e10": {
+    "file": "48fe08d8d43cd8fe072766fdb1507bcb2184b5aad9a1e5cb94b7887a5e127e10.opus",
+    "duration": 8.78,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Apply it, and the finding changes state rather than vanishing. It reads not affected now, and it carries the reason you gave for saying so."
+  },
   "496fb44f37cdc44662c12c7b9337e18db6fafbdb24f26b84872322f94e467228": {
     "file": "496fb44f37cdc44662c12c7b9337e18db6fafbdb24f26b84872322f94e467228.opus",
     "duration": 14.63,
@@ -524,13 +531,6 @@
     "speed": 1.0,
     "text": "Everything starts in one workspace. Every product you ship, in one place, rather than scattered across build systems and spreadsheets."
   },
-  "5588c0b99004d08a8bc8b6de8894f037f6ebd32e0ab939ba44218ceb6212f3bd": {
-    "file": "5588c0b99004d08a8bc8b6de8894f037f6ebd32e0ab939ba44218ceb6212f3bd.opus",
-    "duration": 12.47,
-    "voice": "ara",
-    "speed": 1.0,
-    "text": "Both are suppressed now, and both are still there behind the toggle with their reasoning. [pause] The medium is untouched, because you never claimed anything about it \u2014 VEX only ever says what you actually asserted."
-  },
   "56e995414cd9e844bb2dcf9686c2395ad8ffb24708e9410c2d240f48f24e11ad": {
     "file": "56e995414cd9e844bb2dcf9686c2395ad8ffb24708e9410c2d240f48f24e11ad.opus",
     "duration": 9.92,
@@ -565,6 +565,13 @@
     "voice": "ara",
     "speed": 1.0,
     "text": "A CPE is what most vulnerability databases still key on. It's an awkward format, but it's the one the ecosystem agreed on."
+  },
+  "622c03db49aeb6b631ed92da09777af617a88da71970eaf217cd7c3ba0a77305": {
+    "file": "622c03db49aeb6b631ed92da09777af617a88da71970eaf217cd7c3ba0a77305.opus",
+    "duration": 20.31,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "and the critical is answered rather than hidden. It reads not affected now, struck through, carrying the justification you gave. [pause] Nothing was deleted and nothing is tucked away \u2014 the finding and your answer to it sit side by side, and the toggle clears the settled ones out of the way when you want only what still needs doing."
   },
   "6242f6576dbc4bbb1b296870f3c63e4e992945c709aaab641107ef24c18b7541": {
     "file": "6242f6576dbc4bbb1b296870f3c63e4e992945c709aaab641107ef24c18b7541.opus",
@@ -755,13 +762,6 @@
     "speed": 1.0,
     "text": "Upload it the same way."
   },
-  "869a6238225a916e0ba37220dac52d97b8de236e2ae15aae1eda9f33e47659bc": {
-    "file": "869a6238225a916e0ba37220dac52d97b8de236e2ae15aae1eda9f33e47659bc.opus",
-    "duration": 10.15,
-    "voice": "ara",
-    "speed": 1.0,
-    "text": "Apply it, and that finding drops straight out of your working list. The count moves with it, so the number your team looks at every morning is the number of things that actually need doing."
-  },
   "87184db2437b2288798ce86ce70bf469b9caea921c97fef90a2c223b044f8888": {
     "file": "87184db2437b2288798ce86ce70bf469b9caea921c97fef90a2c223b044f8888.opus",
     "duration": 7.43,
@@ -950,6 +950,13 @@
     "voice": "ara",
     "speed": 1.0,
     "text": "Your customers rarely ask only for an SBOM. They ask for the audit report too, and usually by email, months after they needed it."
+  },
+  "adf793a5303e2e51134cacc80c95b5167fb2599daf15b3133bc5cc9a65cc943b": {
+    "file": "adf793a5303e2e51134cacc80c95b5167fb2599daf15b3133bc5cc9a65cc943b.opus",
+    "duration": 12.0,
+    "voice": "ara",
+    "speed": 1.0,
+    "text": "Nothing was deleted, and nothing is hidden away. [pause] The finding sits right next to your answer to it, which is exactly what an auditor wants to see \u2014 not a shorter list, but a justified one."
   },
   "aeb57b1336840fd1bf1aeeeaff7fdcfd28f97f6176d32c6fd1db61f06bfd000d": {
     "file": "aeb57b1336840fd1bf1aeeeaff7fdcfd28f97f6176d32c6fd1db61f06bfd000d.opus",
@@ -1279,13 +1286,6 @@
     "voice": "ara",
     "speed": 1.0,
     "text": "This one marks a high severity finding as not affected, because the vulnerable code path is never reachable. You can see the counts move before you commit to it."
-  },
-  "ec096437eb3ed39249bb8fd7f958e5ea93447831c46abcf39a1ba434d854dff9": {
-    "file": "ec096437eb3ed39249bb8fd7f958e5ea93447831c46abcf39a1ba434d854dff9.opus",
-    "duration": 20.3,
-    "voice": "ara",
-    "speed": 1.0,
-    "text": "and the critical drops straight out of the working list, so the count your team looks at is the count that still needs doing. [pause] It hasn't been deleted, though. Turn on \"show suppressed\" and there it is, struck through, with the VEX state and your justification attached to it. The finding and your answer to it sit side by side."
   },
   "eef16e5e884695f29c81c779d28ae5d2c8612df6adfcf4fcf9b3f7bbc7febc23": {
     "file": "eef16e5e884695f29c81c779d28ae5d2c8612df6adfcf4fcf9b3f7bbc7febc23.opus",

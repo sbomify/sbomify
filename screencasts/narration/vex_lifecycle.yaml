@@ -40,11 +40,11 @@ beats:
 
   posture_v1:
     text: >-
-      and the critical drops straight out of the working list, so the count
-      your team looks at is the count that still needs doing. [pause] It hasn't
-      been deleted, though. Turn on "show suppressed" and there it is, struck
-      through, with the VEX state and your justification attached to it. The
-      finding and your answer to it sit side by side.
+      and the critical is answered rather than hidden. It reads not affected
+      now, struck through, carrying the justification you gave. [pause] Nothing
+      was deleted and nothing is tucked away — the finding and your answer to
+      it sit side by side, and the toggle clears the settled ones out of the
+      way when you want only what still needs doing.
 
   trust_center_v1:
     text: >-
@@ -74,10 +74,9 @@ beats:
 
   posture_v2:
     text: >-
-      Both are suppressed now, and both are still there behind the toggle with
-      their reasoning. [pause] The medium is untouched, because you never
-      claimed anything about it — VEX only ever says what you actually
-      asserted.
+      Both are cleared now, and both are still on the list with their
+      reasoning. [pause] The medium is untouched, because you never claimed
+      anything about it — VEX only ever says what you actually asserted.
 
   outro:
     text: >-

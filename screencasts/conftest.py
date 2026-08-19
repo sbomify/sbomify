@@ -19,6 +19,7 @@ from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
     setup_authenticated_client_session,
     team_with_business_plan,  # noqa: F401
 )
+from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Member, Team
 
@@ -332,8 +333,16 @@ def hover_and_click(page: Page, locator: Locator, pause_ms: int = 250) -> None:
     locator.click()
 
 
-def type_text(locator: Locator, text: str, delay: int = 80) -> None:
-    """Type text character-by-character for a human-like feel."""
+def type_text(locator: Locator, text: str, delay: int = 80, clear: bool = False) -> None:
+    """Type text character-by-character for a human-like feel.
+
+    ``clear`` empties the field first. Pass it for any input that arrives with
+    a value already in it: typing appends, so the document upload's version box
+    (Alpine defaults it to ``1.0``) filmed itself becoming ``1.02024``, which is
+    then what the row in the Documents table read.
+    """
+    if clear:
+        locator.fill("")
     locator.press_sequentially(text, delay=delay)
 
 
@@ -436,12 +445,19 @@ TITLE_CARD_ID = "__walkthrough-title-card"
 CAPTION_ID = "__walkthrough-caption"
 
 
-def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600) -> None:
+def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600, linger: bool = False) -> None:
     """Cover the viewport with a branded chapter card, hold, then fade out.
 
     Used between chapters of the long tour so the viewer gets a beat to
     reset before the next surface appears. ``eyebrow`` is the small label
     above the title (e.g. ``"Chapter 2"``).
+
+    ``linger`` leaves the card up instead of fading it, for the closing card:
+    its line is the longest in the tour, so a fixed hold dropped the card —
+    and the sbomify.com the voice is reading out — twelve seconds before the
+    recording ended, leaving the call to action spoken over a product page.
+    The caller finishes with :func:`settle`, which waits for the voice, so the
+    video ends on the card.
     """
     page.evaluate(
         """(payload) => {
@@ -484,6 +500,8 @@ def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600) -> Non
         {"id": TITLE_CARD_ID, "eyebrow": eyebrow, "title": title, "bg": APP_BG_COLOR},
     )
     page.wait_for_timeout(hold_ms)
+    if linger:
+        return
     page.evaluate(
         """(id) => {
             const card = document.getElementById(id);
@@ -631,6 +649,38 @@ def click_into_row(page: Page, name: str) -> None:
     pace(page, 1000)
 
 
+def install_dict_backed_s3(monkeypatch: pytest.MonkeyPatch) -> dict[tuple[str, str], bytes]:
+    """Back :class:`S3Client` with an in-process dict instead of a bucket.
+
+    The screencast compose stack runs no object store, so any recording that
+    uploads has to stand in for one. **Always store the bytes rather than
+    no-op'ing the write.** Discarding them makes the upload return 201 and the
+    recording pass, then anything that reads the file back reports the truth:
+    ``vex_upload`` closed on "This VEX document doesn't suppress any
+    vulnerabilities" about a document whose whole point is a ``not_affected``
+    statement, because the detail page could not read what was never kept.
+
+    Every read path funnels through ``get_file_data`` and every write through
+    ``upload_data_as_file``, so patching that pair covers SBOMs, VEX and
+    documents. Everything above the object store — the upload endpoints,
+    ``derive_vex_suppressions``, ``find_matching_statement`` — keeps running for
+    real, so what a viewer sees suppressed was genuinely suppressed.
+
+    Returns the store, for the callers that assert against it.
+    """
+    store: dict[tuple[str, str], bytes] = {}
+
+    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
+        store[(bucket_name, object_name)] = data
+
+    def _get(self: S3Client, bucket_name: str, object_name: str) -> bytes | None:
+        return store.get((bucket_name, object_name))
+
+    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
+    monkeypatch.setattr(S3Client, "get_file_data", _get)
+    return store
+
+
 def open_new_from_navbar(page: Page, item: str) -> None:
     """Open a create page from the navbar's New menu.
 
@@ -716,6 +766,21 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
 
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
+
+    # Saving reloads the page, which resets the scroll to the top — so the
+    # recording would otherwise close on a list of plugins that are all still
+    # off, with the one just enabled somewhere below the fold. Bring it back
+    # into view and confirm it really came back on.
+    #
+    # ``scroll_into_view_if_needed`` rather than a smooth-scroll evaluate():
+    # the latter starts an animation that the post-save load then cancels, so
+    # the frames showed the top of the list however long we paused afterwards.
+    pace(page, 800)
+    toggle = page.locator(f"[id='plugin-{plugin_slug}']")
+    toggle.wait_for(state="visible", timeout=10_000)
+    toggle.scroll_into_view_if_needed(timeout=10_000)
+    if not toggle.is_checked():
+        raise AssertionError(f"plugin {plugin_slug} did not stay enabled after save")
     pace(page, 2000)
 
 

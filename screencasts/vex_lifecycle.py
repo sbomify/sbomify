@@ -39,6 +39,7 @@ from playwright.sync_api import Page
 from conftest import (
     click_into_row,
     hover_and_click,
+    install_dict_backed_s3,
     narrate,
     navigate_to_components,
     pace,
@@ -47,7 +48,6 @@ from conftest import (
     start_on_dashboard,
 )
 from sbomify.apps.core.models import Release, ReleaseArtifact
-from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.plugins.models import AssessmentRun
 from sbomify.apps.sboms.models import SBOM, Component, Product
 from sbomify.apps.teams.models import Team
@@ -193,16 +193,7 @@ def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
     funnels through ``get_file_data``, so patching that one method alongside the
     put covers SBOMs, VEX and documents.
     """
-    store: dict[tuple[str, str], bytes] = {}
-
-    def _put(self: S3Client, bucket_name: str, object_name: str, data: bytes) -> None:
-        store[(bucket_name, object_name)] = data
-
-    def _get(self: S3Client, bucket_name: str, file_path: str) -> bytes | None:
-        return store.get((bucket_name, file_path))
-
-    monkeypatch.setattr(S3Client, "upload_data_as_file", _put)
-    monkeypatch.setattr(S3Client, "get_file_data", _get)
+    install_dict_backed_s3(monkeypatch)
 
 
 def _apply_vex(component: Component, release: Release, run: AssessmentRun, document: dict) -> None:
@@ -329,16 +320,18 @@ def _show_component_posture(page: Page, component_url: str, struck_cves: list[st
     page.goto(component_url)
     page.wait_for_load_state("networkidle")
 
-    # Suppressed rows are hidden by default now, so the open counts match the
-    # working list — the "Show suppressed" toggle is what brings them back,
-    # struck through and annotated with their VEX state. Without this the
-    # cleared CVE simply is not in the table.
+    # Suppressed rows must be on screen for the struck-through state to film.
+    # Do not assume which way the toggle starts: it defaulted to hidden, and
+    # upstream has since flipped it back to shown, because hiding them made an
+    # applied VEX look like it had done nothing. Read it and only click if it
+    # is not already showing them.
     show_suppressed = page.locator("label:has-text('Show suppressed') input[type='checkbox']").first
     show_suppressed.wait_for(state="visible", timeout=30_000)
     show_suppressed.scroll_into_view_if_needed()
     pace(page, 600)
-    hover_and_click(page, show_suppressed)
-    pace(page, 800)
+    if not show_suppressed.is_checked():
+        hover_and_click(page, show_suppressed)
+        pace(page, 800)
 
     anchor = page.locator(f"tr:has-text('{CRITICAL_CVE}')").first
     anchor.wait_for(state="visible", timeout=30_000)

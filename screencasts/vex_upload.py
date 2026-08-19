@@ -7,11 +7,11 @@ dry-run preview → apply it → reload → see the row land in the
 component's VEX Documents card.
 
 Infrastructure note: the screencast compose stack does not run an S3
-service, so a real upload would fail at the ``put_object`` call. We
-monkeypatch ``S3Client.upload_data_as_file`` to a no-op for the
-duration of the recording so the upload-file endpoint succeeds
-end-to-end and writes the SBOM record; the recording then reloads
-explicitly to land on the post-upload state.
+service, so a real upload would fail at the ``put_object`` call. We back
+the object store with a dict (``install_dict_backed_s3``) for the duration
+of the recording, so the upload-file endpoint succeeds end-to-end *and* the
+VEX detail page can read the document back to report what it suppresses.
+The recording then reloads explicitly to land on the post-upload state.
 """
 
 import json
@@ -22,13 +22,13 @@ from playwright.sync_api import Page
 from conftest import (
     click_into_row,
     hover_and_click,
+    install_dict_backed_s3,
     narrate,
     navigate_to_components,
     pace,
     settle,
     start_on_dashboard,
 )
-from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.sboms.models import SBOM, Component
 from sbomify.apps.teams.models import Team
 
@@ -97,15 +97,14 @@ def component_with_sbom(deletable_team: Team) -> dict:
 
 @pytest.fixture
 def s3_short_circuit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No-op the S3 put so the upload-file endpoint can succeed end-to-end.
+    """Back S3 with a dict so the upload round-trips.
 
-    The test compose stack does not run an S3 service. Real uploads
-    fail at the boto put_object call, the endpoint returns 400, and
-    the page never reloads. Patching the upload sink lets the SBOM
-    record write succeed and the front-end ``sbom-uploaded`` event
-    fire, which is what the screencast needs to show.
+    This used to no-op the put alone, which was enough for the endpoint to
+    return 201 — and left the recording closing on a VEX detail page that
+    said the document suppressed nothing, because the page re-reads the file
+    to answer that and the bytes had been thrown away.
     """
-    monkeypatch.setattr(S3Client, "upload_data_as_file", lambda *args, **kwargs: None)
+    install_dict_backed_s3(monkeypatch)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -203,4 +202,11 @@ def vex_upload(recording_page: Page, component_with_sbom: dict, s3_short_circuit
     vex_row_link = page.locator("tr:has(span[data-variant='violet']) a").first
     hover_and_click(page, vex_row_link)
     page.wait_for_load_state("networkidle")
+
+    # The closing frame is the Suppressed vulnerabilities card, which the page
+    # answers by re-reading the stored document. Assert the CVE this VEX clears
+    # is named there: with the bytes discarded the card instead read "This VEX
+    # document doesn't suppress any vulnerabilities", and the recording still
+    # passed while closing on a statement that was the opposite of the point.
+    page.locator("text=CVE-2024-12345").first.wait_for(state="visible", timeout=15_000)
     settle(page)
