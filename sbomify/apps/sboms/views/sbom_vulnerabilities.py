@@ -68,6 +68,7 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                 }
 
                 from sbomify.apps.vulnerability_scanning.utils import SEVERITY_RANK as severity_rank
+                from sbomify.apps.vulnerability_scanning.utils import is_vulnerability
 
                 def package_identity(component: dict[str, Any]) -> tuple[str, str, str, str, str]:
                     """(tail_key, purl_base, name, version, ecosystem) for a finding's component."""
@@ -116,6 +117,12 @@ class SbomVulnerabilitiesView(GuestAccessBlockedMixin, LoginRequiredMixin, View)
                         continue
                     for vuln in findings:
                         if not isinstance(vuln, dict):
+                            continue
+                        # Scanner status markers (dependency-track:no-product,
+                        # osv:error) ride the findings array but are not
+                        # vulnerabilities; without this they render as a bogus
+                        # "Unknown" package with one finding.
+                        if not is_vulnerability(vuln):
                             continue
                         identity = package_identity(vuln.get("component", {}) or {})
                         identified.append((vuln, identity))

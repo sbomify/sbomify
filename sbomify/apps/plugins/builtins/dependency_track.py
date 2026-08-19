@@ -865,8 +865,11 @@ class DependencyTrackPlugin(AssessmentPlugin):
             status=status,
             severity=severity,
         )
+        # The status marker rides the findings array so the run panel can show
+        # why nothing was scanned, but it is not a vulnerability: the summary
+        # must not count it, or a skipped run reads as "1 finding".
         summary = AssessmentSummary(
-            total_findings=1,
+            total_findings=0,
             pass_count=pass_count,
             fail_count=fail_count,
             warning_count=warning_count,
