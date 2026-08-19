@@ -6,7 +6,7 @@
     also retires the tab's tw-* legacy classes in favour of the component
     library.
 {% endcomment %}
-<div class="max-w-3xl">
+<div>
     {# Availability: the tab's master switch sits in the heading row. #}
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -77,7 +77,7 @@
                 {% csrf_token %}
                 <input type="hidden" name="slug_action" value="update">
                 <input type="hidden" name="active_tab" value="trust-center">
-                <div class="max-w-md">
+                <div>
                     <c-forms.label for="slug">Subdomain slug</c-forms.label>
                     <c-forms.input id="slug" name="slug" value="{{ team_obj.slug|default:'' }}" maxlength="63" minlength="3" pattern="[a-z0-9]([a-z0-9-]*[a-z0-9])?" placeholder="my-company" disabled="{{ can_administer|yesno:',1' }}" x-model="slug" />
                     <c-forms.hint class="mt-2">

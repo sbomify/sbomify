@@ -7,7 +7,6 @@
     initialization.
 {% endcomment %}
 <div id="team-general-content"
-     class="max-w-2xl"
      data-team-name="{{ team.name }}"
      data-freshness-days="{{ team.sbom_freshness_days|default_if_none:'' }}"
      x-cloak
@@ -25,7 +24,7 @@
         {# Workspace name #}
         <section class="mt-8">
             <h3 class="text-sm font-semibold text-text m-0">Workspace name</h3>
-            <div class="mt-4 max-w-md">
+            <div class="mt-4">
                 <c-forms.label for="workspace-name">Name</c-forms.label>
                 <c-forms.input id="workspace-name" name="name" placeholder="Enter workspace name" maxlength="255" required x-model="localName" />
                 <c-forms.hint>Shown across the platform. Maximum 255 characters.</c-forms.hint>
@@ -35,7 +34,7 @@
         <section class="mt-8 pt-8 border-t border-border">
             <h3 class="text-sm font-semibold text-text m-0">SBOM freshness</h3>
             <p class="text-sm text-text-muted mt-1 m-0">How long an SBOM stays current before its component is flagged stale.</p>
-            <div class="mt-4 max-w-md">
+            <div class="mt-4">
                 <c-forms.label for="sbom-freshness-days">Freshness window</c-forms.label>
                 <div class="flex items-center gap-2">
                     <c-forms.input type="number" id="sbom-freshness-days" name="sbom_freshness_days" placeholder="No freshness policy" min="0" max="3650" step="1" x-model="localFreshness" />
