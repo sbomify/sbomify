@@ -55,6 +55,7 @@ from sbomify.apps.security_advisories.services.advisories import (
     SEVERITY_RANK,
     display_date,
     display_id,
+    worst_cvss,
     worst_severity,
 )
 
@@ -289,6 +290,25 @@ def _visible_products(advisory: SecurityAdvisory, scope: ViewerScope) -> tuple[l
     return chips, withheld
 
 
+def _cvss_chips(entries: Any) -> list[dict[str, Any]]:
+    """A vulnerability's scores as the detail chips render them.
+
+    A hand-entered row can be malformed or carry no version; the label absorbs
+    both ("CVSS 3.1" or plain "CVSS") so the template stays a flat loop.
+    """
+    chips: list[dict[str, Any]] = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            score = float(entry["base_score"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        version = str(entry.get("version") or "").strip()
+        chips.append({"label": f"CVSS {version}" if version else "CVSS", "base_score": score})
+    return chips
+
+
 def _public_vulnerability(vulnerability: AdvisoryVulnerability) -> dict[str, Any]:
     return {
         "id": vulnerability.id,
@@ -297,7 +317,7 @@ def _public_vulnerability(vulnerability: AdvisoryVulnerability) -> dict[str, Any
         "description": vulnerability.description,
         "severity": vulnerability.severity,
         "cwe_ids": vulnerability.cwe_ids or [],
-        "cvss_scores": vulnerability.cvss_scores or [],
+        "cvss_scores": _cvss_chips(vulnerability.cvss_scores),
         "exploitation_status": vulnerability.exploitation_status,
         "recommendation": vulnerability.recommendation,
     }
@@ -461,18 +481,8 @@ def _cvss_score(advisory: SecurityAdvisory) -> float | None:
     read as the mildest of them. Returns None when nobody scored it, which the
     template renders as a dash rather than a misleading 0.0.
     """
-    scores: list[float] = []
-    for vulnerability in advisory.vulnerabilities.all():
-        for entry in vulnerability.cvss_scores or []:
-            if not isinstance(entry, dict):
-                continue
-            try:
-                scores.append(float(entry["base_score"]))
-            except (KeyError, TypeError, ValueError):
-                # A hand-entered score can be absent or non-numeric; one bad row
-                # must not take the whole page down.
-                continue
-    return max(scores) if scores else None
+    entry = worst_cvss(advisory)
+    return float(entry["base_score"]) if entry else None
 
 
 def _public_projection(advisory: SecurityAdvisory, scope: ViewerScope, *, detail: bool = False) -> dict[str, Any]:

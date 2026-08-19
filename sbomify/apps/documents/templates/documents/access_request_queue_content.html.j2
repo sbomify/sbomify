@@ -1,284 +1,278 @@
 {% load humanize %}
 {# Access Requests Section #}
-<c-cards.dashboard body_class="space-y-6" class="mb-6">
-<c-slot name="header">
-<div class="px-6 py-4 border-b border-border">
-    <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <c-chips.icon-chip accent="info">
-            <i class="fas fa-user-clock"></i>
-            </c-chips.icon-chip>
-            <div>
-                <h5 class="text-lg font-semibold text-text m-0">Access Requests</h5>
-                <p class="text-text-muted text-sm m-0">Manage access to gated components</p>
-            </div>
+{# Section shell in the settings-tab style: an h3 heading row with the action beside it, no card chrome. #}
+<div>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h3 class="text-sm font-semibold text-text m-0">Access requests</h3>
+            <p class="text-sm text-text-muted mt-1 m-0">Who can reach your gated components.</p>
         </div>
         <c-buttons.primary size="sm" onclick="window.dispatchEvent(new CustomEvent('open-invite-user-modal'))">
         <i class="fas fa-user-plus mr-1"></i>Invite
         </c-buttons.primary>
     </div>
-</div>
-</c-slot>
-{# Pending Requests #}
-<div>
-    <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Pending Requests</h6>
-        {% if pending_requests %}<c-badges.warning size="sm">{{ pending_requests|length }}</c-badges.warning>{% endif %}
-    </div>
-    {% if pending_requests %}
-        <c-tables.table>
-        <c-tables.head>
-        <c-tables.header-cell nowrap>User</c-tables.header-cell>
-        <c-tables.header-cell>Email</c-tables.header-cell>
-        <c-tables.header-cell>Requested</c-tables.header-cell>
-        <c-tables.header-cell>NDA Signed</c-tables.header-cell>
-        <c-tables.actions-cell as="th" label="Actions" />
-        </c-tables.head>
-        <tbody>
-            {% for req in pending_requests %}
-                <c-tables.row>
-                <c-tables.cell nowrap class="font-medium">
-                {% if req.user.first_name or req.user.last_name %}
-                    {{ req.user.first_name }} {{ req.user.last_name }}
-                {% else %}
-                    {{ req.user.username }}
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell muted>{{ req.user.email }}</c-tables.cell>
-                <c-tables.cell muted date>{{ req.requested_at|naturaltime }}</c-tables.cell>
-                <c-tables.cell>
-                {% if req.nda_signature %}
-                    {% if req.has_current_nda_signature %}
-                        {% if req.nda_signature.is_document_modified %}
-                            <c-badges.secondary title="NDA document has been modified after signing">Modified</c-badges.secondary>
+    <div class="mt-4 space-y-6">
+        {# Pending Requests #}
+        <div>
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-sm font-medium text-text m-0">Pending Requests</h6>
+                {% if pending_requests %}<c-badges.warning size="sm">{{ pending_requests|length }}</c-badges.warning>{% endif %}
+            </div>
+            {% if pending_requests %}
+                <c-tables.table>
+                <c-tables.head>
+                <c-tables.header-cell nowrap>User</c-tables.header-cell>
+                <c-tables.header-cell>Email</c-tables.header-cell>
+                <c-tables.header-cell>Requested</c-tables.header-cell>
+                <c-tables.header-cell>NDA Signed</c-tables.header-cell>
+                <c-tables.actions-cell as="th" label="Actions" />
+                </c-tables.head>
+                <tbody>
+                    {% for req in pending_requests %}
+                        <c-tables.row>
+                        <c-tables.cell nowrap class="font-medium">
+                        {% if req.user.first_name or req.user.last_name %}
+                            {{ req.user.first_name }} {{ req.user.last_name }}
                         {% else %}
-                            <c-badges.secondary>Yes</c-badges.secondary>
+                            {{ req.user.username }}
                         {% endif %}
-                    {% else %}
-                        <c-badges.secondary title="NDA version has been updated. User needs to sign the new version.">Invalid</c-badges.secondary>
-                    {% endif %}
-                {% else %}
-                    <c-badges.secondary>No</c-badges.secondary>
-                {% endif %}
-                {% if req.nda_signatures.all|length > 1 %}
-                    <div class="text-xs text-text-muted mt-1"
-                         title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
-                        {{ req.nda_signatures.all|length }} signatures on record
-                    </div>
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.actions-cell>
-                <form method="post"
-                      action="{% url 'documents:access_request_queue' team.key %}"
-                      hx-post="{% url 'documents:access_request_queue' team.key %}"
-                      hx-target="#access-requests-wrapper"
-                      hx-swap="innerHTML"
-                      hx-trigger="submit"
-                      class="hidden"
-                      id="access-request-form-{{ req.id }}">
-                    {% csrf_token %}
-                    <input type="hidden" name="request_id" value="{{ req.id }}">
-                    <input type="hidden" name="active_tab" value="trust-center">
-                </form>
-                <c-actions-menu label="Request actions">
-                {% comment %}
+                        </c-tables.cell>
+                        <c-tables.cell muted>{{ req.user.email }}</c-tables.cell>
+                        <c-tables.cell muted date>{{ req.requested_at|naturaltime }}</c-tables.cell>
+                        <c-tables.cell>
+                        {% if req.nda_signature %}
+                            {% if req.has_current_nda_signature %}
+                                {% if req.nda_signature.is_document_modified %}
+                                    <c-badges.secondary title="NDA document has been modified after signing">Modified</c-badges.secondary>
+                                {% else %}
+                                    <c-badges.secondary>Yes</c-badges.secondary>
+                                {% endif %}
+                            {% else %}
+                                <c-badges.secondary title="NDA version has been updated. User needs to sign the new version.">Invalid</c-badges.secondary>
+                            {% endif %}
+                        {% else %}
+                            <c-badges.secondary>No</c-badges.secondary>
+                        {% endif %}
+                        {% if req.nda_signatures.all|length > 1 %}
+                            <div class="text-xs text-text-muted mt-1"
+                                 title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                                {{ req.nda_signatures.all|length }} signatures on record
+                            </div>
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.actions-cell>
+                        <form method="post"
+                              action="{% url 'documents:access_request_queue' team.key %}"
+                              hx-post="{% url 'documents:access_request_queue' team.key %}"
+                              hx-target="#access-requests-wrapper"
+                              hx-swap="innerHTML"
+                              hx-trigger="submit"
+                              class="hidden"
+                              id="access-request-form-{{ req.id }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="request_id" value="{{ req.id }}">
+                            <input type="hidden" name="active_tab" value="trust-center">
+                        </form>
+                        <c-actions-menu label="Request actions">
+                        {% comment %}
                     The data-info-* attributes are read back by
                     openAccessRequestInfo, the plain listener at the foot of this
                     file, so they stay exactly where they were.
-                {% endcomment %}
-                {# djlint:off #}
+                        {% endcomment %}
+                        {# djlint:off #}
                 <c-dropdowns.item icon="fas fa-info-circle" data-info-request-id="{{ req.id }}" data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}" data-info-user-email="{{ req.user.email|escapejs }}" data-info-status="{{ req.status|escapejs }}" data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}" data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}" data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}" data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}" data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}" data-info-notes="{{ req.notes|default:''|escapejs }}" data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}" data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}" data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}" data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}" data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}" data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}" data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}" data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}" onclick="openAccessRequestInfo(this)">
-                {# djlint:on #}
-                View details
-                </c-dropdowns.item>
-                <c-dropdowns.item icon="fas fa-check" onclick="submitAccessRequestAction('{{ req.id }}', 'approve')">
-                Approve
-                </c-dropdowns.item>
-                <c-dropdowns.item-danger icon="fas fa-times" onclick="confirmRejectAccessRequest('{{ req.id }}', '{{ req.user.email|escapejs }}')">
-                Reject
-                </c-dropdowns.item-danger>
-                </c-actions-menu>
-                </c-tables.actions-cell>
-                </c-tables.row>
-            {% endfor %}
-        </tbody>
-        </c-tables.table>
-    {% else %}
-        <p class="text-text-muted text-sm py-3">No pending access requests</p>
-    {% endif %}
-</div>
-{# Pending Invitations #}
-<div class="pt-4 border-t border-border">
-    <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Pending invitations</h6>
-        {% if pending_invitations %}<c-badges.info size="sm">{{ pending_invitations|length }}</c-badges.info>{% endif %}
-    </div>
-    {% if pending_invitations %}
-        <c-tables.table>
-        <c-tables.head>
-        <c-tables.header-cell nowrap>Email</c-tables.header-cell>
-        <c-tables.header-cell>Invited By</c-tables.header-cell>
-        <c-tables.header-cell>Invited</c-tables.header-cell>
-        <c-tables.actions-cell as="th" label="Actions" />
-        </c-tables.head>
-        <tbody>
-            {% for item in pending_invitations %}
-                {% with invitation=item.invitation inviter_email=item.inviter_email %}
-                    <c-tables.row>
-                    <c-tables.cell nowrap class="font-medium">{{ invitation.email }}</c-tables.cell>
-                    <c-tables.cell muted>
-                    {% if inviter_email %}
-                        {{ inviter_email }}
-                    {% else %}
-                        <span class="text-text-muted">—</span>
-                    {% endif %}
-                    </c-tables.cell>
-                    <c-tables.cell muted date>{{ invitation.created_at|naturaltime }}</c-tables.cell>
-                    <c-tables.actions-cell>
-                    <c-actions-menu label="Invitation actions">
-                    <c-dropdowns.item-danger icon="fas fa-times" onclick="window.dispatchEvent(new CustomEvent('open-cancel-invitation-modal', { detail: { invitationId: '{{ invitation.id }}', invitationEmail: '{{ invitation.email|escapejs }}' } }))">
-                    Cancel invitation
-                    </c-dropdowns.item-danger>
-                    </c-actions-menu>
-                    </c-tables.actions-cell>
-                    </c-tables.row>
-                {% endwith %}
-            {% endfor %}
-        </tbody>
-        </c-tables.table>
-    {% else %}
-        <p class="text-text-muted text-sm py-3">No pending invitations</p>
-    {% endif %}
-</div>
-{# Approved Requests #}
-<div class="pt-4 border-t border-border">
-    <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Approved Requests</h6>
-        {% if approved_requests %}<c-badges.success size="sm">{{ approved_requests|length }}</c-badges.success>{% endif %}
-    </div>
-    {% if approved_requests %}
-        <c-tables.table>
-        <c-tables.head>
-        <c-tables.header-cell nowrap>User</c-tables.header-cell>
-        <c-tables.header-cell>Email</c-tables.header-cell>
-        <c-tables.header-cell>Approved By</c-tables.header-cell>
-        <c-tables.header-cell>NDA Status</c-tables.header-cell>
-        <c-tables.actions-cell as="th" label="Actions" />
-        </c-tables.head>
-        <tbody>
-            {% for req in approved_requests %}
-                <c-tables.row>
-                <c-tables.cell nowrap class="font-medium">
-                {% if req.user.first_name or req.user.last_name %}
-                    {{ req.user.first_name }} {{ req.user.last_name }}
-                {% else %}
-                    {{ req.user.username }}
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell muted>{{ req.user.email }}</c-tables.cell>
-                <c-tables.cell muted>
-                {% if req.decided_by %}
-                    {{ req.decided_by.email }}
-                {% else %}
-                    <span class="text-text-muted">—</span>
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell>
-                {% if req.nda_signature %}
-                    {% if req.has_current_nda_signature %}
-                        {% if req.nda_signature.is_document_modified %}
-                            <c-badges.secondary title="NDA document has been modified after signing">Modified</c-badges.secondary>
+                        {# djlint:on #}
+                        View details
+                        </c-dropdowns.item>
+                        <c-dropdowns.item icon="fas fa-check" onclick="submitAccessRequestAction('{{ req.id }}', 'approve')">
+                        Approve
+                        </c-dropdowns.item>
+                        <c-dropdowns.item-danger icon="fas fa-times" onclick="confirmRejectAccessRequest('{{ req.id }}', '{{ req.user.email|escapejs }}')">
+                        Reject
+                        </c-dropdowns.item-danger>
+                        </c-actions-menu>
+                        </c-tables.actions-cell>
+                        </c-tables.row>
+                    {% endfor %}
+                </tbody>
+                </c-tables.table>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No pending access requests</p>
+            {% endif %}
+        </div>
+        {# Pending Invitations #}
+        <div class="pt-4 border-t border-border">
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-sm font-medium text-text m-0">Pending invitations</h6>
+                {% if pending_invitations %}<c-badges.info size="sm">{{ pending_invitations|length }}</c-badges.info>{% endif %}
+            </div>
+            {% if pending_invitations %}
+                <c-tables.table>
+                <c-tables.head>
+                <c-tables.header-cell nowrap>Email</c-tables.header-cell>
+                <c-tables.header-cell>Invited By</c-tables.header-cell>
+                <c-tables.header-cell>Invited</c-tables.header-cell>
+                <c-tables.actions-cell as="th" label="Actions" />
+                </c-tables.head>
+                <tbody>
+                    {% for item in pending_invitations %}
+                        {% with invitation=item.invitation inviter_email=item.inviter_email %}
+                            <c-tables.row>
+                            <c-tables.cell nowrap class="font-medium">{{ invitation.email }}</c-tables.cell>
+                            <c-tables.cell muted>
+                            {% if inviter_email %}
+                                {{ inviter_email }}
+                            {% else %}
+                                <span class="text-text-muted">—</span>
+                            {% endif %}
+                            </c-tables.cell>
+                            <c-tables.cell muted date>{{ invitation.created_at|naturaltime }}</c-tables.cell>
+                            <c-tables.actions-cell>
+                            <c-actions-menu label="Invitation actions">
+                            <c-dropdowns.item-danger icon="fas fa-times" onclick="window.dispatchEvent(new CustomEvent('open-cancel-invitation-modal', { detail: { invitationId: '{{ invitation.id }}', invitationEmail: '{{ invitation.email|escapejs }}' } }))">
+                            Cancel invitation
+                            </c-dropdowns.item-danger>
+                            </c-actions-menu>
+                            </c-tables.actions-cell>
+                            </c-tables.row>
+                        {% endwith %}
+                    {% endfor %}
+                </tbody>
+                </c-tables.table>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No pending invitations</p>
+            {% endif %}
+        </div>
+        {# Approved Requests #}
+        <div class="pt-4 border-t border-border">
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-sm font-medium text-text m-0">Approved Requests</h6>
+                {% if approved_requests %}<c-badges.success size="sm">{{ approved_requests|length }}</c-badges.success>{% endif %}
+            </div>
+            {% if approved_requests %}
+                <c-tables.table>
+                <c-tables.head>
+                <c-tables.header-cell nowrap>User</c-tables.header-cell>
+                <c-tables.header-cell>Email</c-tables.header-cell>
+                <c-tables.header-cell>Approved By</c-tables.header-cell>
+                <c-tables.header-cell>NDA Status</c-tables.header-cell>
+                <c-tables.actions-cell as="th" label="Actions" />
+                </c-tables.head>
+                <tbody>
+                    {% for req in approved_requests %}
+                        <c-tables.row>
+                        <c-tables.cell nowrap class="font-medium">
+                        {% if req.user.first_name or req.user.last_name %}
+                            {{ req.user.first_name }} {{ req.user.last_name }}
                         {% else %}
-                            <c-badges.secondary>Valid</c-badges.secondary>
+                            {{ req.user.username }}
                         {% endif %}
-                    {% else %}
-                        <c-badges.secondary title="NDA version has been updated. User needs to sign the new version.">Invalid</c-badges.secondary>
-                    {% endif %}
-                {% else %}
-                    <span class="text-text-muted">—</span>
-                {% endif %}
-                {% if req.nda_signatures.all|length > 1 %}
-                    <div class="text-xs text-text-muted mt-1"
-                         title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
-                        {{ req.nda_signatures.all|length }} signatures on record
-                    </div>
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.actions-cell>
-                <c-actions-menu label="Request actions">
-                {# djlint:off #}
+                        </c-tables.cell>
+                        <c-tables.cell muted>{{ req.user.email }}</c-tables.cell>
+                        <c-tables.cell muted>
+                        {% if req.decided_by %}
+                            {{ req.decided_by.email }}
+                        {% else %}
+                            <span class="text-text-muted">—</span>
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.cell>
+                        {% if req.nda_signature %}
+                            {% if req.has_current_nda_signature %}
+                                {% if req.nda_signature.is_document_modified %}
+                                    <c-badges.secondary title="NDA document has been modified after signing">Modified</c-badges.secondary>
+                                {% else %}
+                                    <c-badges.secondary>Valid</c-badges.secondary>
+                                {% endif %}
+                            {% else %}
+                                <c-badges.secondary title="NDA version has been updated. User needs to sign the new version.">Invalid</c-badges.secondary>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-text-muted">—</span>
+                        {% endif %}
+                        {% if req.nda_signatures.all|length > 1 %}
+                            <div class="text-xs text-text-muted mt-1"
+                                 title="{% for sig in req.nda_signatures.all %}v{{ sig.nda_document.version }} — {{ sig.signed_name }} — {{ sig.signed_at|date:'M j, Y g:i A' }}{% if sig.superseded_at %} (superseded){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                                {{ req.nda_signatures.all|length }} signatures on record
+                            </div>
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.actions-cell>
+                        <c-actions-menu label="Request actions">
+                        {# djlint:off #}
                 <c-dropdowns.item icon="fas fa-info-circle" data-info-request-id="{{ req.id }}" data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}" data-info-user-email="{{ req.user.email|escapejs }}" data-info-status="{{ req.status|escapejs }}" data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}" data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}" data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}" data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}" data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}" data-info-notes="{{ req.notes|default:''|escapejs }}" data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}" data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}" data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}" data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}" data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}" data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}" data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}" data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}" onclick="openAccessRequestInfo(this)">
-                {# djlint:on #}
-                View details
-                </c-dropdowns.item>
-                <c-dropdowns.item-danger icon="fas fa-ban" onclick="window.dispatchEvent(new CustomEvent('open-revoke-access-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
-                Revoke access
-                </c-dropdowns.item-danger>
-                </c-actions-menu>
-                </c-tables.actions-cell>
-                </c-tables.row>
-            {% endfor %}
-        </tbody>
-        </c-tables.table>
-    {% else %}
-        <p class="text-text-muted text-sm py-3">No approved access requests</p>
-    {% endif %}
-</div>
-{# Rejected Requests #}
-<div class="pt-4 border-t border-border">
-    <div class="flex items-center gap-2 mb-3">
-        <h6 class="text-base font-semibold text-text m-0">Rejected Requests</h6>
-        {% if rejected_requests %}<c-badges.danger size="sm">{{ rejected_requests|length }}</c-badges.danger>{% endif %}
+                        {# djlint:on #}
+                        View details
+                        </c-dropdowns.item>
+                        <c-dropdowns.item-danger icon="fas fa-ban" onclick="window.dispatchEvent(new CustomEvent('open-revoke-access-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
+                        Revoke access
+                        </c-dropdowns.item-danger>
+                        </c-actions-menu>
+                        </c-tables.actions-cell>
+                        </c-tables.row>
+                    {% endfor %}
+                </tbody>
+                </c-tables.table>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No approved access requests</p>
+            {% endif %}
+        </div>
+        {# Rejected Requests #}
+        <div class="pt-4 border-t border-border">
+            <div class="flex items-center gap-2 mb-3">
+                <h6 class="text-sm font-medium text-text m-0">Rejected Requests</h6>
+                {% if rejected_requests %}<c-badges.danger size="sm">{{ rejected_requests|length }}</c-badges.danger>{% endif %}
+            </div>
+            {% if rejected_requests %}
+                <c-tables.table>
+                <c-tables.head>
+                <c-tables.header-cell nowrap>User</c-tables.header-cell>
+                <c-tables.header-cell>Email</c-tables.header-cell>
+                <c-tables.header-cell>Rejected By</c-tables.header-cell>
+                <c-tables.header-cell>Rejected</c-tables.header-cell>
+                <c-tables.actions-cell as="th" label="Actions" />
+                </c-tables.head>
+                <tbody>
+                    {% for req in rejected_requests %}
+                        <c-tables.row>
+                        <c-tables.cell nowrap class="font-medium">
+                        {% if req.user.first_name or req.user.last_name %}
+                            {{ req.user.first_name }} {{ req.user.last_name }}
+                        {% else %}
+                            {{ req.user.username }}
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.cell muted>{{ req.user.email }}</c-tables.cell>
+                        <c-tables.cell muted>
+                        {% if req.decided_by %}
+                            {{ req.decided_by.email }}
+                        {% else %}
+                            <span class="text-text-muted">—</span>
+                        {% endif %}
+                        </c-tables.cell>
+                        <c-tables.cell muted date>{{ req.decided_at|naturaltime }}</c-tables.cell>
+                        <c-tables.actions-cell>
+                        <c-actions-menu label="Request actions">
+                        {# djlint:off #}
+                <c-dropdowns.item icon="fas fa-info-circle" data-info-request-id="{{ req.id }}" data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}" data-info-user-email="{{ req.user.email|escapejs }}" data-info-status="{{ req.status|escapejs }}" data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}" data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}" data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}" data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}" data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}" data-info-notes="{{ req.notes|default:''|escapejs }}" data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}" data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}" data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}" data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}" data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}" data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}" data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}" data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}" onclick="openAccessRequestInfo(this)">
+                        {# djlint:on #}
+                        View details
+                        </c-dropdowns.item>
+                        <c-dropdowns.item-danger icon="fas fa-trash" onclick="window.dispatchEvent(new CustomEvent('open-clear-rejection-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
+                        Remove from rejected list
+                        </c-dropdowns.item-danger>
+                        </c-actions-menu>
+                        </c-tables.actions-cell>
+                        </c-tables.row>
+                    {% endfor %}
+                </tbody>
+                </c-tables.table>
+            {% else %}
+                <p class="text-text-muted text-sm py-3">No rejected access requests</p>
+            {% endif %}
+        </div>
     </div>
-    {% if rejected_requests %}
-        <c-tables.table>
-        <c-tables.head>
-        <c-tables.header-cell nowrap>User</c-tables.header-cell>
-        <c-tables.header-cell>Email</c-tables.header-cell>
-        <c-tables.header-cell>Rejected By</c-tables.header-cell>
-        <c-tables.header-cell>Rejected</c-tables.header-cell>
-        <c-tables.actions-cell as="th" label="Actions" />
-        </c-tables.head>
-        <tbody>
-            {% for req in rejected_requests %}
-                <c-tables.row>
-                <c-tables.cell nowrap class="font-medium">
-                {% if req.user.first_name or req.user.last_name %}
-                    {{ req.user.first_name }} {{ req.user.last_name }}
-                {% else %}
-                    {{ req.user.username }}
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell muted>{{ req.user.email }}</c-tables.cell>
-                <c-tables.cell muted>
-                {% if req.decided_by %}
-                    {{ req.decided_by.email }}
-                {% else %}
-                    <span class="text-text-muted">—</span>
-                {% endif %}
-                </c-tables.cell>
-                <c-tables.cell muted date>{{ req.decided_at|naturaltime }}</c-tables.cell>
-                <c-tables.actions-cell>
-                <c-actions-menu label="Request actions">
-                {# djlint:off #}
-                <c-dropdowns.item icon="fas fa-info-circle" data-info-request-id="{{ req.id }}" data-info-user-name="{% if req.user.first_name or req.user.last_name %}{{ req.user.first_name|escapejs }} {{ req.user.last_name|escapejs }}{% else %}{{ req.user.username|escapejs }}{% endif %}" data-info-user-email="{{ req.user.email|escapejs }}" data-info-status="{{ req.status|escapejs }}" data-info-requested-at="{{ req.requested_at|date:'F d, Y g:i A' }}" data-info-decided-at="{% if req.decided_at %}{{ req.decided_at|date:'F d, Y g:i A' }}{% endif %}" data-info-decided-by="{% if req.decided_by %}{{ req.decided_by.email|escapejs }}{% endif %}" data-info-revoked-at="{% if req.revoked_at %}{{ req.revoked_at|date:'F d, Y g:i A' }}{% endif %}" data-info-revoked-by="{% if req.revoked_by %}{{ req.revoked_by.email|escapejs }}{% endif %}" data-info-notes="{{ req.notes|default:''|escapejs }}" data-info-nda-signed="{% if req.nda_signature %}true{% else %}false{% endif %}" data-info-nda-signed-name="{% if req.nda_signature %}{{ req.nda_signature.signed_name|escapejs }}{% endif %}" data-info-nda-signed-at="{% if req.nda_signature %}{{ req.nda_signature.signed_at|date:'F d, Y g:i A' }}{% endif %}" data-info-nda-ip="{% if req.nda_signature %}{{ req.nda_signature.ip_address|default:''|escapejs }}{% endif %}" data-info-nda-user-agent="{% if req.nda_signature %}{{ req.nda_signature.user_agent|default:''|escapejs }}{% endif %}" data-info-nda-modified="{% if req.nda_signature and req.nda_signature.is_document_modified %}true{% else %}false{% endif %}" data-info-nda-current="{% if req.has_current_nda_signature %}true{% else %}false{% endif %}" data-info-nda-url="{% if req.nda_signature %}{% url 'documents:document_download' req.nda_signature.nda_document.id %}?view=inline{% endif %}" onclick="openAccessRequestInfo(this)">
-                {# djlint:on #}
-                View details
-                </c-dropdowns.item>
-                <c-dropdowns.item-danger icon="fas fa-trash" onclick="window.dispatchEvent(new CustomEvent('open-clear-rejection-modal', { detail: { requestId: '{{ req.id }}', userEmail: '{{ req.user.email|escapejs }}' } }))">
-                Remove from rejected list
-                </c-dropdowns.item-danger>
-                </c-actions-menu>
-                </c-tables.actions-cell>
-                </c-tables.row>
-            {% endfor %}
-        </tbody>
-        </c-tables.table>
-    {% else %}
-        <p class="text-text-muted text-sm py-3">No rejected access requests</p>
-    {% endif %}
 </div>
-</c-cards.dashboard>
 <script>
     // Menu items call these directly, so they survive HTMX swaps and the
     // actions menu teleporting its content to the body.

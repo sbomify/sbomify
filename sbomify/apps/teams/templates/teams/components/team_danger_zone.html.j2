@@ -1,24 +1,15 @@
 {% load static %}
 <div x-cloak
      x-data="{ showDeleteModal: false, confirmText: '', isExpanded: false, get canConfirm() { return this.confirmText.toLowerCase() === 'delete'; } }">
-    {# Danger Zone Section - Collapsible. The trigger is the library's real button, so Enter and Space reach it natively. #}
-    <c-cards.collapsible level="danger">
-    <c-cards.collapsible-trigger state="isExpanded" @click="isExpanded = !isExpanded">
-    <i class="fas fa-exclamation-triangle text-danger" aria-hidden="true"></i>
-    <span class="flex flex-col">
-        <span class="text-base font-semibold text-danger">Danger Zone</span>
-        <span class="text-text-muted text-sm font-normal">Irreversible and destructive actions</span>
-    </span>
-    </c-cards.collapsible-trigger>
-    <c-cards.collapsible-body state="isExpanded">
+    <c-cards.dangerzone-collapsible>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div class="flex items-start gap-3">
             <c-chips.icon-chip accent="danger">
             <i class="fas fa-trash-alt" aria-hidden="true"></i>
             </c-chips.icon-chip>
             <div>
-                <h6 class="font-medium text-text mb-1">Delete Workspace</h6>
-                <p class="text-sm text-text-muted m-0">Permanently remove this workspace and all its associated data.</p>
+                <h6 class="font-semibold text-text m-0">Delete Workspace</h6>
+                <p class="text-sm text-text-muted m-0 mt-1">Permanently remove this workspace and all its associated data.</p>
                 {% if is_default_team %}
                     <p class="text-sm text-warning m-0 mt-2">
                         <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
@@ -32,8 +23,7 @@
         Delete Workspace
         </c-buttons.danger>
     </div>
-    </c-cards.collapsible-body>
-    </c-cards.collapsible>
+    </c-cards.dangerzone-collapsible>
     {# Custom Delete Modal for Workspace #}
     <c-modal id="deleteWorkspaceModal" show="showDeleteModal" title="Delete Workspace" icon="fas fa-exclamation-triangle" role="alertdialog" aria-describedby="deleteWorkspaceModalDesc">
     <p class="text-text mb-2">

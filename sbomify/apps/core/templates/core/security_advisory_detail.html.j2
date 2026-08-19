@@ -101,7 +101,9 @@
                     Link a VEX
                     </c-dropdowns.item>
                     <c-dropdowns.divider />
-                    <c-dropdowns.item-danger icon="fas fa-trash">Delete advisory</c-dropdowns.item-danger>
+                    <c-dropdowns.item-danger icon="fas fa-trash" @click="$dispatch('open-delete-advisory-modal', { id: '{{ advisory.id|escapejs }}', title: '{{ advisory.title|escapejs }}' })">
+                    Delete advisory
+                    </c-dropdowns.item-danger>
                     </c-actions-menu>
                 {% endif %}
             </div>
@@ -228,6 +230,19 @@
                             <dd>
                                 <c-badges.severity level="{{ advisory.severity }}">{{ advisory.severity|default:"none" }}</c-badges.severity>
                             </dd>
+                        </div>
+                        <div class="flex items-center justify-between gap-3">
+                            <dt class="text-text-muted">CVSS</dt>
+                            {% if advisory.cvss_score %}
+                                <dd class="text-text"
+                                    {% if advisory.cvss_vector %}title="{{ advisory.cvss_vector }}"{% endif %}>
+                                    {{ advisory.cvss_score }}
+                                </dd>
+                            {% else %}
+                                <dd class="text-text-muted">
+                                    Not set
+                                </dd>
+                            {% endif %}
                         </div>
                         <div class="flex items-center justify-between gap-3">
                             <dt class="text-text-muted">Type</dt>
@@ -392,6 +407,16 @@
                             <option value="low" {% if advisory.severity == 'low' %}selected{% endif %}>Low</option>
                             </c-forms.select>
                         </div>
+                        <div class="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3">
+                            <div>
+                                <c-forms.label for="editCvssScore">CVSS score</c-forms.label>
+                                <c-forms.input id="editCvssScore" name="cvss_score" type="number" min="0" max="10" step="0.1" inputmode="decimal" placeholder="9.8" value="{{ advisory.cvss_score|default_if_none:'' }}" />
+                            </div>
+                            <div>
+                                <c-forms.label for="editCvssVector">CVSS vector</c-forms.label>
+                                <c-forms.input id="editCvssVector" name="cvss_vector" type="text" placeholder="CVSS:3.1/AV:N/…" value="{{ advisory.cvss_vector }}" />
+                            </div>
+                        </div>
                         {# CVE / reference is optional — hidden until the user chooses to add it. #}
                         <div>
                             <button type="button"
@@ -490,6 +515,9 @@
                 </c-slot>
                 </c-modal>
             </div>
+        {% endif %}
+        {% if has_crud_permissions %}
+            {% include 'core/components/advisory_delete_modal.html.j2' %}
         {% endif %}
     </div>
 {% endblock %}
