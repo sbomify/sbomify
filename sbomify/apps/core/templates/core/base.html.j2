@@ -81,29 +81,28 @@
                   rel="stylesheet">
             <!-- Icons -->
             <link href="{% static 'css/fontawesome.min.css' %}" rel="stylesheet">
-            {# Critical: Prevent flash of unstyled content #}
+            {% comment %}
+                Critical: paint the root in the theme's colour before any
+                stylesheet resolves, so a navigation never flashes the
+                browser's default canvas.
+
+                Do NOT gate the body on opacity here. Hiding it until
+                DOMContentLoaded pushes first contentful paint behind the
+                fonts, the icon sheet and the app bundle. Chromium and WebKit
+                hide that by holding the previous page's pixels until the new
+                one paints something; Firefox only suppresses painting for a
+                fixed 250ms and then paints what exists, which is the dark
+                root and an invisible body. That is the black flash between
+                every page. The stylesheets below are render blocking and
+                [x-cloak] covers Alpine, so nothing needs the gate.
+            {% endcomment %}
             <style>
                 [x-cloak] { display: none !important; }
-                /* Critical inline styles to prevent layout flash */
                 html.dark { background-color: #151724; color: #fff; }
                 html.light { background-color: #ffffff; color: #25293F; }
                 html { min-height: 100%; }
-                body { min-height: 100vh; opacity: 0; transition: opacity 0.1s ease-in; }
-                body.ready { opacity: 1; }
+                body { min-height: 100vh; }
             </style>
-            <script>
-                // Show body once DOM is ready
-                document.addEventListener('DOMContentLoaded', function() {
-                    document.body.classList.add('ready');
-                });
-                // Fallback: show body after short delay if DOMContentLoaded already fired
-                if (document.readyState !== 'loading') {
-                    document.body?.classList.add('ready');
-                }
-            </script>
-            <noscript>
-                <style>body { opacity: 1 !important; }</style>
-            </noscript>
             {% block styles %}{% endblock %}
             <link rel="stylesheet"
                   href="{% vite_asset_url 'sbomify/assets/css/tailwind.src.css' %}">
