@@ -23,11 +23,22 @@ class TestCsrfFailureRecovery:
         assert response.status_code == 302
         assert response["Location"] == "http://testserver/workspaces/onboarding/?step=setup"
 
-    def test_htmx_request_gets_an_htmx_error(self, sample_user):
+    def test_htmx_request_is_redirected_to_a_fresh_render(self, sample_user):
+        client = self._client(sample_user)
+        response = client.post(
+            "/workspaces/onboarding/",
+            {},
+            HTTP_HX_REQUEST="true",
+            HTTP_REFERER="http://testserver/workspaces/onboarding/?step=setup",
+        )
+        assert response.status_code == 204
+        assert response.headers["HX-Redirect"] == "http://testserver/workspaces/onboarding/?step=setup"
+
+    def test_htmx_request_without_referer_redirects_to_the_same_path(self, sample_user):
         client = self._client(sample_user)
         response = client.post("/workspaces/onboarding/", {}, HTTP_HX_REQUEST="true")
-        assert response.status_code == 200
-        assert response.headers.get("HX-Reswap") == "none"
+        assert response.status_code == 204
+        assert response.headers["HX-Redirect"] == "/workspaces/onboarding/"
 
     def test_no_referer_falls_back_to_the_error_page(self, sample_user):
         client = self._client(sample_user)

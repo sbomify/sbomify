@@ -24,15 +24,21 @@ RETRY_MESSAGE = "Your session was refreshed. Please submit the form again."
 def csrf_failure(request: HttpRequest, reason: str = "") -> HttpResponse:
     logger.warning("CSRF failure on %s (%s)", request.path, reason)
 
-    if request.headers.get("HX-Request"):
-        from sbomify.apps.core.htmx import htmx_error_response
-
-        return htmx_error_response(RETRY_MESSAGE)
-
     referer = request.headers.get("Referer", "")
-    if referer and url_has_allowed_host_and_scheme(
+    safe_referer = referer and url_has_allowed_host_and_scheme(
         referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
+    )
+
+    if request.headers.get("HX-Request"):
+        # A toast alone would leave the stale token in the DOM and the retry
+        # would fail the same way; HX-Redirect makes HTMX re-render the page,
+        # which carries a fresh token. The message survives the navigation.
+        messages.error(request, RETRY_MESSAGE)
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = referer if safe_referer else request.path
+        return response
+
+    if safe_referer:
         messages.error(request, RETRY_MESSAGE)
         return redirect(referer)
 
