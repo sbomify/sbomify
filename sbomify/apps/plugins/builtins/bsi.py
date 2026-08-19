@@ -58,6 +58,11 @@ from typing import Any
 
 from packaging import version as pkg_version
 
+from sbomify.apps.plugins.builtins._spdx3_helpers import (
+    get_spdx3_package_fields,
+    iter_spdx3_external_identifiers,
+    resolve_spdx3_agent,
+)
 from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -1703,15 +1708,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(created_by, list):
             return None
         for ref in created_by:
-            entity = persons_orgs.get(ref, {})
-            if not isinstance(entity, dict):
-                continue
-            ext_ids = entity.get("externalIdentifiers")
-            if not isinstance(ext_ids, list):
-                continue
-            for ext_id in ext_ids:
-                if not isinstance(ext_id, dict):
-                    continue
+            entity = resolve_spdx3_agent(ref, persons_orgs)
+            for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
                 identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
@@ -1728,15 +1726,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(originated_by, list):
             return None
         for ref in originated_by:
-            entity = persons_orgs.get(ref, {})
-            if not isinstance(entity, dict):
-                continue
-            ext_ids = entity.get("externalIdentifiers")
-            if not isinstance(ext_ids, list):
-                continue
-            for ext_id in ext_ids:
-                if not isinstance(ext_id, dict):
-                    continue
+            entity = resolve_spdx3_agent(ref, persons_orgs)
+            for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
                 identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
@@ -1789,16 +1780,7 @@ class BSICompliancePlugin(AssessmentPlugin):
 
     def _has_spdx3_identifier(self, package: dict[str, Any]) -> bool:
         """Check if SPDX 3.x package has unique identifier."""
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
-            id_type = ext_id.get("externalIdentifierType", "")
-            if id_type in ("cpe22", "cpe23", "swid", "packageURL"):
-                return True
-        return False
+        return bool(get_spdx3_package_fields(package)["has_unique_id"])
 
     def _spdx3_has_sbom_uri(self, data: dict[str, Any]) -> bool:
         """Per BSI §5.2.3, the SBOM itself MUST expose a URI when the format
