@@ -1268,15 +1268,17 @@ def _fill_security_txt_from_assessment(assessment: CRAAssessment) -> None:
     (TR-03183-3 4.2.3/4.2.7); syncing on save spares the operator entering
     them twice. Slots the operator already set are never overwritten.
     """
+    from sbomify.apps.teams.services.security_txt import validate_security_email, validate_security_txt_url
+
     team = assessment.team
     config = dict(team.security_txt_config or {})
     filled = False
-    for config_key, value in (
-        ("csirt_email", assessment.csirt_contact_email),
-        ("policy_url", assessment.vdp_url),
-        ("report_url", assessment.security_contact_url),
+    for config_key, value, validate in (
+        ("csirt_email", assessment.csirt_contact_email, validate_security_email),
+        ("policy_url", assessment.vdp_url, validate_security_txt_url),
+        ("report_url", assessment.security_contact_url, validate_security_txt_url),
     ):
-        if value and not str(config.get(config_key, "")).strip():
+        if value and not str(config.get(config_key, "")).strip() and validate(value) is None:
             config[config_key] = value
             filled = True
     if filled:

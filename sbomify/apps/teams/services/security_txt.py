@@ -45,13 +45,18 @@ def _sanitize_value(value: str) -> str:
 
 def validate_security_email(value: str) -> str | None:
     """Validate an email for a Contact: mailto line. Returns error message or None if valid."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
     if not value:
         return None
     if len(value) > MAX_FIELD_LENGTH:
         return f"Email exceeds maximum length of {MAX_FIELD_LENGTH} characters"
     if re.search(r"[\x00-\x1f\x7f\s]", value):
         return "Email contains invalid characters (whitespace or control characters)"
-    if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", value):
+    try:
+        validate_email(value)
+    except ValidationError:
         return "Enter a valid email address"
     return None
 

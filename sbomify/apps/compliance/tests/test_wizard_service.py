@@ -653,6 +653,23 @@ class TestSaveStepData:
         # An explicit setting is never overwritten
         assert config["policy_url"] == "https://example.com/existing-policy"
 
+    def test_step_3_sync_skips_values_the_settings_view_would_reject(self, assessment, sample_user):
+        """The sync path validates like the settings form, so a value the
+        Trust Center would refuse never lands in the config sideways."""
+        data = {
+            "vulnerability_handling": {
+                "csirt_contact_email": "not-an-email",
+                "security_contact_url": "ftp://example.com/report",
+            },
+        }
+        result = save_step_data(assessment, 3, data, sample_user)
+
+        assert result.ok
+        assessment.team.refresh_from_db()
+        config = assessment.team.security_txt_config or {}
+        assert "csirt_email" not in config
+        assert "report_url" not in config
+
     def test_step_3_updates_article_14(self, assessment, sample_user):
         data = {
             "article_14": {
