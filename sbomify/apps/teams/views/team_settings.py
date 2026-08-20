@@ -753,6 +753,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                 return self._redirect_with_tab(request, team_key)
         config["contact_id"] = contact_id
 
+        # CSIRT mailbox — the second contact line TR-03183-3 4.2.3 expects
+        from sbomify.apps.teams.services.security_txt import validate_security_email
+
+        csirt_email = request.POST.get("security_txt_csirt_email", "").strip()
+        if csirt_email:
+            email_error = validate_security_email(csirt_email)
+            if email_error:
+                messages.error(request, f"Invalid CSIRT email: {email_error}")
+                return self._redirect_with_tab(request, team_key)
+        config["csirt_email"] = csirt_email
+
         # Validate and store URL fields
         # Note: validation is intentionally duplicated here and in the service layer
         # (generate_security_txt) for defense-in-depth — the view rejects bad input early,
@@ -762,6 +773,8 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             "acknowledgments_url": "security_txt_acknowledgments_url",
             "hiring_url": "security_txt_hiring_url",
             "canonical_url": "security_txt_canonical_url",
+            "report_url": "security_txt_report_url",
+            "csaf_url": "security_txt_csaf_url",
         }
         for config_key, post_key in url_fields.items():
             value = request.POST.get(post_key, "").strip()
@@ -803,8 +816,11 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
             return self._redirect_with_tab(request, team_key)
         config["preferred_languages"] = preferred_languages
 
-        # Refresh Expires on every save per RFC 9116 semantics
-        config["expires"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+        # Refresh Expires on every save per RFC 9116 semantics; clean_expires
+        # keeps it at most a year out and drops sub-second precision.
+        from sbomify.apps.teams.services.security_txt import clean_expires
+
+        config["expires"] = clean_expires((datetime.now(timezone.utc) + timedelta(days=365)).isoformat())
 
         team.security_txt_config = config
         team.save(update_fields=["security_txt_config"])

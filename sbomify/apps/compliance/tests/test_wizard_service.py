@@ -570,11 +570,7 @@ class TestSaveStepData:
         Attempting to waive an operator_action finding (e.g. missing
         SBOM creator) returns 400 — the gap would represent a genuine
         Annex I Part II(1) deficiency that must be fixed."""
-        data = {
-            "waivers": {
-                "bsi-tr03183:sbom-creator": {"justification": "we don't feel like it"}
-            }
-        }
+        data = {"waivers": {"bsi-tr03183:sbom-creator": {"justification": "we don't feel like it"}}}
         result = save_step_data(assessment, 2, data, sample_user)
         assert not result.ok
         assert result.status_code == 400
@@ -633,6 +629,30 @@ class TestSaveStepData:
         assert a.vdp_url == "https://example.com/vdp"
         assert a.acknowledgment_timeline_days == 5
 
+    def test_step_3_fills_empty_security_txt_slots(self, assessment, sample_user):
+        """The wizard answers and the trust center security.txt are the same
+        three values; saving step 3 fills the slots the operator left empty."""
+        team = assessment.team
+        team.security_txt_config = {"enabled": True, "policy_url": "https://example.com/existing-policy"}
+        team.save(update_fields=["security_txt_config"])
+
+        data = {
+            "vulnerability_handling": {
+                "vdp_url": "https://example.com/vdp",
+                "csirt_contact_email": "csirt@example.com",
+                "security_contact_url": "https://example.com/report",
+            },
+        }
+        result = save_step_data(assessment, 3, data, sample_user)
+
+        assert result.ok
+        team.refresh_from_db()
+        config = team.security_txt_config
+        assert config["csirt_email"] == "csirt@example.com"
+        assert config["report_url"] == "https://example.com/report"
+        # An explicit setting is never overwritten
+        assert config["policy_url"] == "https://example.com/existing-policy"
+
     def test_step_3_updates_article_14(self, assessment, sample_user):
         data = {
             "article_14": {
@@ -673,15 +693,11 @@ class TestSaveStepData:
         or wrong-type inner value previously skipped the write without
         any signal. An SDK/curl client would see a 200 while the DB
         retained the old value. Return 400 to match Step 1's strictness."""
-        result = save_step_data(
-            assessment, 3, {"vulnerability_handling": "not-a-dict"}, sample_user
-        )
+        result = save_step_data(assessment, 3, {"vulnerability_handling": "not-a-dict"}, sample_user)
         assert not result.ok and result.status_code == 400
 
     def test_step_3_article_14_not_dict_rejected(self, assessment, sample_user):
-        result = save_step_data(
-            assessment, 3, {"article_14": ["not-a-dict"]}, sample_user
-        )
+        result = save_step_data(assessment, 3, {"article_14": ["not-a-dict"]}, sample_user)
         assert not result.ok and result.status_code == 400
 
     def test_step_3_vh_wrong_type_rejected(self, assessment, sample_user):
