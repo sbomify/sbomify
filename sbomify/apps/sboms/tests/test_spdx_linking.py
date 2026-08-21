@@ -213,12 +213,12 @@ class TestSPDX30Linking:
         contains = [r for r in out["relationships"] if r["relationshipType"] == "CONTAINS"]
         assert any(r["relatedSpdxElement"] == "DocumentRef-1:SPDXRef-DOCUMENT" for r in contains)
 
-    def test_import_entry_validates_as_typed_external_map(
+    def test_import_entry_carries_the_external_map_shape(
         self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
-        """The emitted import-map entry round-trips through the typed ExternalMap model."""
-        from sbomify.apps.sboms.sbom_format_schemas.spdx_3_0 import ExternalMap
-
+        """The emitted import-map entry carries the ExternalMap fields the
+        spec defines (the typed model it used to round-trip through is gone
+        with the dead model module)."""
         team = team_with_business_plan
         product = Product.objects.create(name="P", team=team, is_public=True)
         release = Release.objects.create(product=product, name="v1.0.0")
@@ -227,11 +227,12 @@ class TestSPDX30Linking:
 
         out = json.loads(get_release_sbom_package(release, tmp_path, output_format="spdx", version="3.0").read_bytes())
         doc = next(e for e in out["@graph"] if e["type"] == "SpdxDocument")
-        entry = ExternalMap.model_validate(doc["import"][0])
-        assert entry.externalSpdxId == "https://member.example/d#root"
-        assert entry.locationHint
-        assert entry.verifiedUsing[0].algorithm == "sha256"
-        assert entry.verifiedUsing[0].hashValue == "f" * 64
+        entry = doc["import"][0]
+        assert entry["type"] == "ExternalMap"
+        assert entry["externalSpdxId"] == "https://member.example/d#root"
+        assert entry["locationHint"]
+        assert entry["verifiedUsing"][0]["algorithm"] == "sha256"
+        assert entry["verifiedUsing"][0]["hashValue"] == "f" * 64
 
 
 def _spdx2_member_referencing(team, s3_mock, name, *, target_digest, algorithm, sha):
@@ -387,7 +388,7 @@ class TestAggregateSchemaValidity:
     def test_spdx3_aggregate_validates_against_model(
         self, tmp_path, team_with_business_plan, s3_sboms_mock  # noqa: F811
     ):
-        from sbomify.apps.sboms.sbom_format_schemas.spdx_3_0 import SPDX3Document
+        from sbomify.apps.sboms.schemas import SPDX3Schema as SPDX3Document
 
         team = team_with_business_plan
         product = Product.objects.create(name="P", team=team, is_public=True)

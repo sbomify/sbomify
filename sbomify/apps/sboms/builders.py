@@ -75,6 +75,14 @@ class SBOMVersion(str, Enum):
     SPDX_3_0 = "3.0"
 
 
+def _is_spdx3(sbom_data: dict[str, Any]) -> bool:
+    """The shared SPDX 3 detector, lazily imported to keep this module free
+    of an import-time edge into the plugins app."""
+    from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
+
+    return is_spdx3(sbom_data)
+
+
 class SBOMBuilderProtocol(Protocol):
     """Protocol defining the interface for SBOM builders."""
 
@@ -715,9 +723,7 @@ class ReleaseSPDXBuilder(BaseSPDXBuilder):
                 return name, str(version) if version else None, supplier
 
         # Try SPDX 3.0 format (spec-compliant @graph or legacy elements)
-        elif "@graph" in sbom_data or (
-            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
-        ):
+        elif _is_spdx3(sbom_data):
             elements = sbom_data.get("@graph", sbom_data.get("elements", []))
             packages = [e for e in elements if e.get("type") == "software_Package"]
             if packages:
@@ -1050,9 +1056,7 @@ class ReleaseSPDX3Builder(BaseSPDXBuilder):
                 return name, str(version) if version else None, supplier
 
         # SPDX 3.0 format (spec-compliant @graph or legacy elements)
-        elif "@graph" in sbom_data or (
-            sbom_data.get("spdxVersion", "").startswith("SPDX-3.") and "elements" in sbom_data
-        ):
+        elif _is_spdx3(sbom_data):
             elements = sbom_data.get("@graph", sbom_data.get("elements", []))
             packages = [e for e in elements if e.get("type") == "software_Package"]
             if packages:
