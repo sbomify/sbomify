@@ -264,7 +264,12 @@ def _build_product_release_response(
         artifact_sboms = [
             artifact.sbom
             for artifact in release.artifacts.filter(
-                sbom__bom_type__in=(SBOM.BomType.SBOM, SBOM.BomType.CBOM, SBOM.BomType.VEX)
+                sbom__bom_type__in=(
+                    SBOM.BomType.SBOM,
+                    SBOM.BomType.CBOM,
+                    SBOM.BomType.HBOM,
+                    SBOM.BomType.VEX,
+                )
             ).select_related("sbom__component")
             if artifact.sbom
             and artifact.sbom.component_id
