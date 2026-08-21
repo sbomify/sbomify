@@ -70,7 +70,11 @@ a {
   transition: color var(--transition-normal);
 }
 
-a:hover {
+/* Not buttons. A library button is an anchor when it has an href, and this
+   rule is unlayered while Tailwind's utilities sit in @layer utilities, so
+   unlayered wins the cascade whatever the specificity says. Excluding the
+   marker here is the only way a button keeps its own hover. */
+a:hover:not([data-button]) {
   color: var(--color-primary-dark);
   text-decoration: underline;
 }

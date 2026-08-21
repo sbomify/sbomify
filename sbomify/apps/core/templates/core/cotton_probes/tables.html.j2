@@ -14,6 +14,7 @@ on the output; it is not routed anywhere.
 <c-tables.table fixed data-probe="table">
 <c-tables.head>
 <c-tables.header-cell sort="name">Name column</c-tables.header-cell>
+<c-tables.header-cell nowrap>Nowrap column</c-tables.header-cell>
 <c-tables.header-cell date class="hidden md:table-cell">Created column</c-tables.header-cell>
 <c-tables.header-cell sort="is_public" end>Visibility column</c-tables.header-cell>
 <c-tables.actions-cell as="th" label="Row actions" />
@@ -21,6 +22,7 @@ on the output; it is not routed anywhere.
 <tbody>
     <c-tables.row tabindex="0" @click="open()">
     <c-tables.cell class="font-medium">Plain body cell</c-tables.cell>
+    <c-tables.cell nowrap>Nowrap body cell</c-tables.cell>
     <c-tables.cell date>10 Aug 2026</c-tables.cell>
     <c-tables.cell end hx-get="/probe">Right cell</c-tables.cell>
     <c-tables.cell muted>Muted cell</c-tables.cell>

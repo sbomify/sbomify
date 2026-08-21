@@ -296,6 +296,37 @@ def test_owner_scope_includes_unlisted_products(team, unlisted_product, sample_u
     assert str(unlisted_product.id) in scope.product_ids
 
 
+def test_member_scope_matches_owner_scope(team, unlisted_product, django_user_model):
+    """Insider status follows ``product:read``, which every internal role holds.
+
+    A member can already read every advisory internally — the views in
+    core/views/security_advisories.py carry no role tier at all — so gating this
+    page above that only meant the same person saw different inventory depending
+    on which page they opened.
+    """
+    contributor = django_user_model.objects.create_user(
+        username="scope-member", email="scope-member@test.com", password="password"
+    )
+    Member.objects.create(team=team, user=contributor, role="member")
+
+    scope = resolve_viewer_scope(make_request(contributor), team)
+
+    assert scope.is_insider
+    assert str(unlisted_product.id) in scope.product_ids
+
+
+def test_a_non_member_is_not_an_insider(team, unlisted_product, django_user_model):
+    """Authenticated is not the same as internal — the widening stops at the workspace."""
+    outsider = django_user_model.objects.create_user(
+        username="scope-outsider", email="scope-outsider@test.com", password="password"
+    )
+
+    scope = resolve_viewer_scope(make_request(outsider), team)
+
+    assert not scope.is_insider
+    assert str(unlisted_product.id) not in scope.product_ids
+
+
 def test_anonymous_scope_excludes_gated_products(team, public_product, gated_product):
     scope = resolve_viewer_scope(make_request(), team)
     assert str(public_product.id) in scope.product_ids
@@ -399,6 +430,29 @@ def test_a_malformed_cvss_entry_does_not_break_the_page(team, public_product):
     publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
 
     assert (list_public_advisories(make_request(), team).value or {})["advisories"][0]["cvss_score"] is None
+
+
+def test_detail_cvss_chips_label_their_version_or_fall_back_to_plain_cvss(team, public_product):
+    """A hand-entered score may carry no version, and "CVSS : 9.8" would read
+    as a broken label; the projection builds the label so the template cannot."""
+    advisory = SecurityAdvisory.objects.create(team=team, title="Labelled")
+    AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-30006",
+        cvss_scores=[
+            {"version": "3.1", "vector": "CVSS:3.1/AV:N", "base_score": 9.8},
+            {"version": "", "vector": "", "base_score": 7.5},
+            "nonsense",
+        ],
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    assert detail["vulnerabilities"][0]["cvss_scores"] == [
+        {"label": "CVSS 3.1", "base_score": 9.8},
+        {"label": "CVSS", "base_score": 7.5},
+    ]
 
 
 def test_severity_filter_narrows_the_list(team, public_product):

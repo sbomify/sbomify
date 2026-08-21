@@ -6,9 +6,6 @@ Parameters:
 - has_crud_permissions: Boolean - whether user can create/edit items
 - upload_sbom_url: URL to upload SBOM page
 - vulnerability_scans_url: URL to vulnerability scans page
-
-Note: Product/Component creation uses Alpine.js events that are handled
-by create_modals.html.j2 which should be included in the base template.
 {% endcomment %}
 {# djlint:off H037 #}
 {# body_class is a cotton prop, not a second class attribute. #}
@@ -26,10 +23,9 @@ by create_modals.html.j2 which should be included in the base template.
     {# The URL is settled before the tag: an inline {% if %} inside an attribute is one djlint reformat away from arriving with newlines in it. #}
     {% url 'core:components_dashboard' as components_url %}
     <c-layout.action-tile href="{{ upload_sbom_url|default:components_url }}" accent="success" icon="fas fa-cloud-upload-alt" title="Upload SBOM" description="Add a new software bill of materials" />
-    {# Create Product and Add Component open a dialog, so they are buttons. #}
     {% if has_crud_permissions %}
-        <c-layout.action-tile icon="fas fa-cube" title="Create product" description="Add a new product to your workspace" @click="$dispatch('open-product-modal')" />
-        <c-layout.action-tile accent="info" icon="fas fa-puzzle-piece" title="Add Component" description="Create a new SBOM or document component" @click="$dispatch('open-component-modal')" />
+        <c-layout.action-tile href="{% url 'core:product_new' %}" icon="fas fa-cube" title="Create product" description="Add a new product to your workspace" />
+        <c-layout.action-tile href="{% url 'core:component_new' %}" accent="info" icon="fas fa-puzzle-piece" title="Add Component" description="Create a new SBOM or document component" />
     {% endif %}
     {% url 'vulnerability_scanning:vulnerability_scans' current_team.key as scans_url %}
     <c-layout.action-tile href="{{ vulnerability_scans_url|default:scans_url }}" accent="orange" icon="fas fa-shield-alt" title="Run Vulnerability Scan" description="Scan your SBOMs for vulnerabilities" />

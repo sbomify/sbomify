@@ -284,8 +284,13 @@ class OnboardingEmailService:
                 if created:
                     joined = getattr(member.user, "date_joined", None)
                     if joined:
-                        OnboardingStatus.objects.filter(pk=status.pk).update(created_at=joined)
-                        status.refresh_from_db(fields=["created_at"])
+                        # Assigned and saved rather than update()+refresh: that
+                        # was two round trips per backfilled row for a value
+                        # already in hand. auto_now_add only fills the field on
+                        # insert, so an explicit save on an existing row keeps
+                        # what is assigned here.
+                        status.created_at = joined
+                        status.save(update_fields=["created_at"])
                     backfilled_status += 1
 
                 user_id = member.user.id

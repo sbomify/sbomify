@@ -4,7 +4,7 @@ Tests for NDA re-signing scenarios when NDA document is updated.
 Tests cover:
 - User with old NDA signature needs to re-sign when NDA is updated
 - Access is denied until new NDA is signed
-- Old signatures are replaced (not archived) due to OneToOneField
+- Old signatures are archived, never deleted: an NDA signature is a legal record
 """
 
 import hashlib
@@ -163,40 +163,78 @@ class TestNDAReSigning:
         assert result.has_access is True
         assert result.reason == "gated_access_granted"
 
-    def test_old_signature_replaced_not_archived(
-        self, guest_with_old_nda_signature, updated_nda_document, team_with_business_plan, guest_user
+    def test_signing_a_new_version_archives_the_old_signature(
+        self,
+        guest_with_old_nda_signature,
+        updated_nda_document,
+        team_with_business_plan,
+        guest_user,
+        client,
+        mocker,
     ):
-        """Test that old signature is replaced (not archived) when new one is signed."""
-        access_request = AccessRequest.objects.get(team=team_with_business_plan, user=guest_user)
+        """An NDA signature is a legal record: re-signing must add, never delete.
 
-        # Verify old signature exists
-        old_signature = NDASignature.objects.filter(access_request=access_request).first()
-        assert old_signature is not None
+        Drives the real signing view. The v1 row — name, hash, timestamp — has
+        to survive the v2 signature, and the display accessor has to hand back
+        the newest one so every existing consumer keeps working.
+        """
+        access_request = guest_with_old_nda_signature
+        old_signature = NDASignature.objects.get(access_request=access_request)
         assert old_signature.nda_document.version == "1.0"
+        old_hash = old_signature.nda_content_hash
 
-        # Sign new NDA (should replace old due to OneToOneField)
-        old_signature_id = old_signature.id
-        NDASignature.objects.filter(access_request=access_request).delete()
-        new_signature = NDASignature.objects.create(
-            access_request=access_request,
-            nda_document=updated_nda_document,
-            nda_content_hash=updated_nda_document.content_hash,
-            signed_name="Test User",
+        mocker.patch(
+            "sbomify.apps.core.object_store.S3Client.get_document_data",
+            return_value=b"Updated NDA Content v2.0",
         )
+        client.force_login(guest_user)
+        response = client.post(
+            f"/workspace/{team_with_business_plan.key}/access-request/{access_request.id}/sign-nda",
+            {"signed_name": "Test User", "consent": "on"},
+        )
+        assert response.status_code == 302
 
-        # Verify old signature is gone (not archived)
-        assert not NDASignature.objects.filter(id=old_signature_id).exists()
+        signatures = NDASignature.objects.filter(access_request=access_request).order_by("signed_at")
+        assert signatures.count() == 2
+        assert signatures.first().nda_content_hash == old_hash
+        assert signatures.first().nda_document.version == "1.0"
+        assert signatures.last().nda_document.version == "2.0"
 
-        # Verify new signature exists
-        assert new_signature.nda_document.version == "2.0"
+        access_request.refresh_from_db()
+        assert access_request.nda_signature.nda_document.version == "2.0"
 
-    def test_owner_admin_no_nda_required_after_update(
-        self, sample_user, team_with_business_plan, updated_nda_document
+    def test_revocation_supersedes_but_preserves_the_signature(
+        self, guest_with_old_nda_signature, team_with_business_plan, guest_user
     ):
+        """Revoking access must invalidate the signature for flow purposes
+        without destroying the record of what was agreed to."""
+        from django.utils import timezone
+
+        access_request = guest_with_old_nda_signature
+        live = access_request.nda_signatures.filter(superseded_at__isnull=True)
+        assert live.count() == 1
+
+        access_request.nda_signatures.filter(superseded_at__isnull=True).update(superseded_at=timezone.now())
+
+        # The record survives with its hash, but no longer reads as a live signature
+        assert NDASignature.objects.filter(access_request=access_request).count() == 1
+        assert access_request.nda_signatures.filter(superseded_at__isnull=True).count() == 0
+        access_request.refresh_from_db()
+        assert access_request.nda_signature is None
+
+    def test_superseded_signature_does_not_grant_gated_access(
+        self, guest_with_old_nda_signature, team_with_business_plan, guest_user, original_nda_document
+    ):
+        """A superseded signature must not satisfy the current-NDA access check."""
+        from django.utils import timezone
+
+        assert _user_has_signed_current_nda(guest_user, team_with_business_plan) is True
+        guest_with_old_nda_signature.nda_signatures.update(superseded_at=timezone.now())
+        assert _user_has_signed_current_nda(guest_user, team_with_business_plan) is False
+
+    def test_owner_admin_no_nda_required_after_update(self, sample_user, team_with_business_plan, updated_nda_document):
         """Test that owners/admins don't need to sign NDA even after update."""
-        Member.objects.get_or_create(
-            user=sample_user, team=team_with_business_plan, defaults={"role": "owner"}
-        )
+        Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
 
         gated_component = Component.objects.create(
             name="Gated Component",
@@ -216,9 +254,7 @@ class TestNDAReSigning:
         assert result.has_access is True
         assert result.reason == "gated_access_granted"
 
-    def test_guest_without_old_signature_needs_to_sign(
-        self, team_with_business_plan, guest_user, updated_nda_document
-    ):
+    def test_guest_without_old_signature_needs_to_sign(self, team_with_business_plan, guest_user, updated_nda_document):
         """Test that guest without any signature needs to sign current NDA."""
         Member.objects.create(team=team_with_business_plan, user=guest_user, role="guest")
         AccessRequest.objects.create(
@@ -298,3 +334,31 @@ class TestNDAReSigning:
 
         # Should need to sign v3.0
         assert _user_has_signed_current_nda(guest_user, team_with_business_plan) is False
+
+
+@pytest.mark.django_db
+def test_two_live_signatures_for_one_document_are_impossible(
+    guest_with_old_nda_signature, original_nda_document, team_with_business_plan, guest_user
+):
+    """The database refuses a second live signature per (request, document);
+    a superseded row for the same document remains legal history."""
+    from django.db import IntegrityError, transaction
+    from django.utils import timezone
+
+    access_request = guest_with_old_nda_signature
+    with pytest.raises(IntegrityError), transaction.atomic():
+        NDASignature.objects.create(
+            access_request=access_request,
+            nda_document=original_nda_document,
+            nda_content_hash=original_nda_document.content_hash,
+            signed_name="Duplicate",
+        )
+
+    access_request.nda_signatures.live().update(superseded_at=timezone.now())
+    NDASignature.objects.create(
+        access_request=access_request,
+        nda_document=original_nda_document,
+        nda_content_hash=original_nda_document.content_hash,
+        signed_name="Re-signed after revocation",
+    )
+    assert NDASignature.objects.filter(access_request=access_request).count() == 2

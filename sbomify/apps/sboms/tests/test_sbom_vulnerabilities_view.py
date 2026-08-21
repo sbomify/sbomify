@@ -103,3 +103,34 @@ def test_purl_less_row_stays_separate_when_namespaces_are_ambiguous(sample_sbom:
 
     # Two namespaces plus one unattributable purl-less row: never guess.
     assert len(_packages(response)) == 3
+
+
+@pytest.mark.django_db
+def test_scanner_status_markers_are_not_vulnerability_rows(sample_sbom: SBOM):  # noqa: F811
+    """A skipped Dependency Track run reports its state through the findings
+    array (dependency-track:no-product). That marker is for the error panel,
+    not the package table — it must not surface as an "Unknown" package with
+    one vulnerability."""
+    _run(
+        sample_sbom,
+        "dependency-track",
+        [
+            {
+                "id": "dependency-track:no-product",
+                "severity": "info",
+                "status": "info",
+                "component": {},
+            }
+        ],
+    )
+    _run(sample_sbom, "osv", [_finding("CVE-2025-1111", "django", purl="pkg:pypi/django@5.2.3")])
+
+    client = Client()
+    setup_test_session(client, sample_sbom.component.team, sample_sbom.component.team.members.first())
+    response = client.get(reverse("sboms:sbom_vulnerabilities", kwargs={"sbom_id": sample_sbom.id}))
+    assert response.status_code == 200
+
+    packages = _packages(response)
+    names = [p["package"]["name"] for p in packages]
+    assert "django" in names
+    assert len(packages) == 1

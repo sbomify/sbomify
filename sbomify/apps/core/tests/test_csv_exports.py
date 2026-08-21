@@ -245,6 +245,26 @@ class TestEndpoints:
         assert response["Content-Type"].startswith("text/csv")
         assert "attachment" in response["Content-Disposition"]
 
+    def test_every_export_is_private_and_uncacheable(self, authenticated_api_client, inventory, stub_sbom_bytes):
+        """CDNs cache .csv by extension and ignore Vary: Cookie, so any export
+        endpoint that drops the header leaks a workspace-scoped response into
+        a shared cache. Asserted per endpoint so one switching off
+        _csv_response() fails here, not in production."""
+        client, token = authenticated_api_client
+        from sbomify.apps.core.tests.shared_fixtures import get_api_headers
+
+        _, _, docs = inventory
+        sbom_id = next(iter(docs))
+        for url in (
+            "/api/v1/exports/inventory.csv",
+            "/api/v1/exports/licenses.csv",
+            f"/api/v1/exports/findings.csv?sbom_id={sbom_id}",
+            "/api/v1/exports/vulnerabilities.csv",
+        ):
+            response = client.get(url, **get_api_headers(token))
+            assert response.status_code == 200, url
+            assert response["Cache-Control"] == "private, no-store", url
+
     def test_another_user_sees_none_of_this_workspaces_data(self, inventory, stub_sbom_bytes, guest_user, client):
         """Signup gives every user their own workspace, so the export succeeds —
         against their workspace, never this one."""

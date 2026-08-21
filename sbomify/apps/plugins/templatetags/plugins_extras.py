@@ -305,3 +305,19 @@ def has_compliance_failures(assessment_runs: dict[str, Any]) -> bool:
             if summary.get("fail_count", 0) > 0 or summary.get("error_count", 0) > 0:
                 return True
     return False
+
+
+@register.filter
+def vulnerability_findings(findings: Any) -> list[Any]:
+    """Only the findings that describe vulnerabilities.
+
+    Scanner status markers (dependency-track:no-product, osv:error) ride the
+    same findings array so the run panel can explain itself, but they are not
+    vulnerabilities: they must not appear in the vulnerabilities list, count
+    toward its totals, or grow a Triage button.
+    """
+    from sbomify.apps.vulnerability_scanning.utils import is_vulnerability
+
+    if not isinstance(findings, (list, tuple)):
+        return []
+    return [f for f in findings if isinstance(f, dict) and is_vulnerability(f)]

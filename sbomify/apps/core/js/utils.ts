@@ -1,8 +1,12 @@
 import axios, { AxiosHeaders, AxiosInstance } from "axios";
 import { getCsrfToken } from './csrf';
 
+// No baseURL on purpose: the app is server-driven and same-origin (ADR-001),
+// so every call resolves against the page's own origin. A build-time absolute
+// base (the old VITE_API_BASE_URL) baked the builder's host into the bundle,
+// which sent every API call in the e2e environment to the chromium
+// container's own loopback and made pages "fail to load" locally only.
 const $axios = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

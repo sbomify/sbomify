@@ -8,6 +8,14 @@
         {% firstof "--avatar-accent: var(--color-success)" as header_style %}
     {% endif %}
     <c-layout.page-header title="{{ release.name }}" icon="fas fa-tag" mark="avatar" editable_item_type="{{ header_editable_type }}" editable_item_id="{{ release.id }}" :copy_values="header_copy_values" :breadcrumbs="breadcrumb_items" style="{{ header_style }}">
+    {# The latest flag qualifies the title, so it sits in the meta slot, not among the metrics. #}
+    {% if release.is_latest %}
+        <c-slot name="meta">
+        <c-badges.success>
+        <i class="fas fa-check-circle mr-1" aria-hidden="true"></i>Latest release
+        </c-badges.success>
+        </c-slot>
+    {% endif %}
     {# Download Buttons - Desktop; the mobile card below repeats them #}
     {% if sibling_releases %}
         <div class="flex items-center gap-2"
@@ -60,28 +68,26 @@
     {% endif %}
     </c-layout.page-header>
     <div class="space-y-6">
-        {# Description #}
+        {# Description. The wrapper takes the stack's rhythm; the paragraph's own m-0 would cancel it. #}
         {% if release.description %}
-            <p class="text-text-muted text-sm m-0">
-                {% if release.has_crud_permissions and not release.is_latest %}
-                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
-                {% else %}
-                    {{ release.description }}
-                {% endif %}
-            </p>
+            <div>
+                <p class="text-text-muted text-sm m-0">
+                    {% if release.has_crud_permissions and not release.is_latest %}
+                        {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value=release.description field_name='description' %}
+                    {% else %}
+                        {{ release.description }}
+                    {% endif %}
+                </p>
+            </div>
         {% elif release.has_crud_permissions and not release.is_latest %}
-            <p class="text-text-muted text-sm m-0">
-                {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
-            </p>
+            <div>
+                <p class="text-text-muted text-sm m-0">
+                    {% include 'core/components/editable_single_field.html.j2' with item_type='release' item_id=release.id item_value='' field_name='description' placeholder='Click to add description...' %}
+                </p>
+            </div>
         {% endif %}
-        {# Stats Badges #}
-        <div class="flex flex-wrap gap-2">
-            {% if release.is_latest %}
-                <c-chips.metric-chip accent="success">
-                <i class="fas fa-check-circle text-xs" aria-hidden="true"></i>
-                <c-chips.metric.value>Latest Release</c-chips.metric.value>
-                </c-chips.metric-chip>
-            {% endif %}
+        {# Stats chips, all neutral, matching the product page strip. The latest flag lives in the header. #}
+        <div class="flex flex-wrap gap-2 items-center">
             {% if release.version %}
                 <c-chips.metric-chip>
                 <i class="fas fa-code-branch text-primary text-xs" aria-hidden="true"></i>
@@ -111,10 +117,10 @@
             {% endif %}
             </c-chips.metric.value>
             </c-chips.metric-chip>
-            <c-chips.metric-chip accent="info">
-            <i class="fas fa-puzzle-piece text-xs" aria-hidden="true"></i>
-            <c-chips.metric.value>{{ release.artifacts.count }}</c-chips.metric.value>
-            <c-chips.metric.label>Artifact{{ release.artifacts.count|pluralize }}</c-chips.metric.label>
+            <c-chips.metric-chip>
+            <i class="fas fa-puzzle-piece text-primary text-xs" aria-hidden="true"></i>
+            <c-chips.metric.value>{{ release.artifacts_count|default:0 }}</c-chips.metric.value>
+            <c-chips.metric.label>Artifact{{ release.artifacts_count|default:0|pluralize }}</c-chips.metric.label>
             </c-chips.metric-chip>
         </div>
         {# Download Release Card - Mobile Only #}

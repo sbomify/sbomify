@@ -1,0 +1,27 @@
+{
+  "identities": [
+    {
+      "name": "anonymous",
+      "actions": [
+        "Read:sbomify-media",
+        "List:sbomify-media"
+      ]
+    },
+    {
+      "name": "admin",
+      "credentials": [
+        {
+          "accessKey": "minioadmin",
+          "secretKey": "minioadmin"
+        }
+      ],
+      "actions": [
+        "Admin",
+        "Read",
+        "List",
+        "Tagging",
+        "Write"
+      ]
+    }
+  ]
+}

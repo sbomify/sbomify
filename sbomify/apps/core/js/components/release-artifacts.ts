@@ -359,9 +359,11 @@ export function registerReleaseArtifacts() {
             // Artifact data extraction methods
             getArtifactType(artifact: Artifact): string {
                 if (artifact.sbom || artifact.artifact_type === 'sbom') {
-                    // A VEX is stored as an SBOM row with bom_type='vex'; badge it
-                    // as VEX so it doesn't read as a duplicate SBOM of the component.
-                    return artifact.bom_type === 'vex' ? 'vex' : 'sbom';
+                    // VEX, CBOM and HBOM are stored as SBOM rows with a bom_type;
+                    // badge them as themselves so they don't read as duplicate
+                    // SBOMs of the component.
+                    const bomType = artifact.bom_type || 'sbom';
+                    return bomType === 'sbom' ? 'sbom' : bomType;
                 }
                 if (artifact.document || artifact.artifact_type === 'document') return 'document';
                 return artifact.type || 'unknown';
@@ -473,6 +475,10 @@ export function registerReleaseArtifacts() {
                         return 'fas fa-file-code';
                     case 'vex':
                         return 'fas fa-file-contract';
+                    case 'cbom':
+                        return 'fas fa-key';
+                    case 'hbom':
+                        return 'fas fa-microchip';
                     case 'document':
                         return 'fas fa-file-alt';
                     default:
@@ -484,6 +490,7 @@ export function registerReleaseArtifacts() {
                 const type = this.getArtifactType(artifact);
                 if (type === 'sbom') return 'bg-success/10 text-success';
                 if (type === 'vex') return 'bg-info/10 text-info';
+                if (type === 'cbom' || type === 'hbom') return 'bg-primary/10 text-primary';
                 if (type === 'document') return 'bg-warning/10 text-warning';
                 return 'bg-surface text-text-muted';
             },
@@ -492,6 +499,7 @@ export function registerReleaseArtifacts() {
                 const type = this.getArtifactType(artifact);
                 if (type === 'sbom') return 'bg-success/10 text-success border border-success/30';
                 if (type === 'vex') return 'bg-info/10 text-info border border-info/30';
+                if (type === 'cbom' || type === 'hbom') return 'bg-primary/10 text-primary border border-primary/30';
                 if (type === 'document') return 'bg-warning/10 text-warning border border-warning/30';
                 return 'bg-surface text-text-muted border border-border';
             },

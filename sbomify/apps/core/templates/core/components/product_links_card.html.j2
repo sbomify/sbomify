@@ -33,7 +33,7 @@
     <tbody>
         {% for link in links %}
             <c-tables.row>
-            <c-tables.cell>
+            <c-tables.cell nowrap>
             <c-badges.secondary>{{ link_types|get_item:link.link_type|default:link.link_type }}</c-badges.secondary>
             </c-tables.cell>
             <c-tables.cell>

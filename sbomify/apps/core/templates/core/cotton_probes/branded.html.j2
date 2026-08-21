@@ -1,0 +1,61 @@
+{% comment %}
+Probe template for the branded component set. Every component appears once,
+with the props the render tests read back. It is not a gallery: the gallery
+lives in core/design_system.html.j2 and is for looking at.
+{% endcomment %}
+<c-branded.theme brand="#25293F" data-probe="theme-dark">
+<c-branded.surface data-probe="surface">
+<c-buttons.primary>Primary action</c-buttons.primary>
+<c-buttons.secondary>Secondary action</c-buttons.secondary>
+<c-buttons.primary href="/somewhere">Link action</c-buttons.primary>
+<c-branded.badge tone="critical" data-probe="badge-critical">Critical</c-branded.badge>
+<c-branded.badge brand data-probe="badge-brand">Verified</c-branded.badge>
+<c-branded.badge data-probe="badge-neutral">Draft</c-branded.badge>
+<c-branded.nav>
+<c-branded.nav-item href="/a" icon="fas fa-house" current data-probe="nav-current">Overview</c-branded.nav-item>
+<c-branded.nav-item href="/b" icon="fas fa-shield-halved" data-probe="nav-other">Advisories</c-branded.nav-item>
+</c-branded.nav>
+<c-branded.notice title="Sign in to view this document" data-probe="notice">
+This artifact is shared with named recipients.
+<c-slot name="action">
+<c-buttons.secondary size="sm" href="/login">Sign in</c-buttons.secondary>
+</c-slot>
+</c-branded.notice>
+</c-branded.surface>
+<c-branded.page-header title="ACME Widget" lede="What we publish." data-probe="page-header">
+<c-slot name="eyebrow"><c-branded.badge brand>Trust center</c-branded.badge></c-slot>
+<c-branded.stats data-probe="stats">
+<c-branded.stat label="Advisories" data-probe="stat">5</c-branded.stat>
+</c-branded.stats>
+</c-branded.page-header>
+<c-branded.section-header title="Security advisories" subtitle="What we disclosed." data-probe="section-header" />
+<c-branded.badge tone="high" data-probe="badge-high">High</c-branded.badge>
+<c-branded.badge tone="medium" data-probe="badge-medium">Medium</c-branded.badge>
+<c-branded.badge tone="low" data-probe="badge-low">Low</c-branded.badge>
+<c-branded.surface flush data-probe="list">
+<c-branded.list-row href="/a/1" level="critical" data-probe="row-critical">
+<c-slot name="eyebrow">ACMEWIDGETSW-SA-2026-0001</c-slot>
+<c-slot name="heading">Heap overflow in libfoo</c-slot>
+<c-slot name="summary">A crafted packet can crash the parser.</c-slot>
+<c-slot name="meta"><span>CVE-2026-21004</span></c-slot>
+<c-slot name="side"><c-branded.badge tone="critical">Critical</c-branded.badge>3 Aug 2026</c-slot>
+</c-branded.list-row>
+<c-branded.list-row href="/a/2" level="medium" data-probe="row-medium">
+<c-slot name="heading">Privilege escalation in the edge agent</c-slot>
+<c-slot name="side"><c-branded.badge tone="medium">Medium</c-branded.badge></c-slot>
+</c-branded.list-row>
+<c-branded.list-row level="low" data-probe="row-plain">
+<c-slot name="heading">Log4Shell impact assessment</c-slot>
+<c-slot name="side"><c-branded.badge tone="low">Low</c-branded.badge></c-slot>
+</c-branded.list-row>
+</c-branded.surface>
+</c-branded.theme>
+<c-branded.theme brand="#FDE68A" data-probe="theme-light">
+<c-buttons.primary>Pale brand</c-buttons.primary>
+</c-branded.theme>
+<c-branded.theme data-probe="theme-none">
+<c-buttons.primary>Unbranded</c-buttons.primary>
+</c-branded.theme>
+<c-branded.theme brand="#000; }</style><script>alert(1)</script>" data-probe="theme-evil">
+<c-buttons.primary>Hostile brand</c-buttons.primary>
+</c-branded.theme>

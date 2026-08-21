@@ -334,7 +334,7 @@ class TestSBOMTaggingAPI(AuthenticationTestMixin):
 
         assert response.status_code == 403
         data = json.loads(response.content)
-        assert "Only owners and admins" in data["detail"]
+        assert "don't have permission" in data["detail"]
 
     def test_remove_sbom_from_release(self, authenticated_api_client):
         """Test removing an SBOM from a release."""
