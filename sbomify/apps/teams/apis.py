@@ -55,7 +55,7 @@ from sbomify.apps.teams.services.suppliers import (
     list_suppliers,
     update_supplier,
 )
-from sbomify.apps.teams.utils import on_demand_tls_cache_key
+from sbomify.apps.teams.utils import on_demand_tls_cache_key, refresh_current_team_session
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -1041,6 +1041,10 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
                 team.is_public = payload.is_public
             team.save()
 
+        # The navbar reads the session's current_team; without this the old
+        # name survives every reload until the session cache expires.
+        refresh_current_team_session(request, team)
+
         return 200, _build_team_response(request, team)
 
     except IntegrityError:
@@ -1085,6 +1089,8 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
             for field, value in update_data.items():
                 setattr(team, field, value)
             team.save()
+
+        refresh_current_team_session(request, team)
 
         return 200, _build_team_response(request, team)
 
