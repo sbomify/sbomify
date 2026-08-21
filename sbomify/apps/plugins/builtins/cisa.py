@@ -63,8 +63,11 @@ from typing import Any
 
 from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
+    extract_spdx3_licenses,
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
+    get_spdx3_package_license,
+    has_spdx3_supplier,
     is_spdx3,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
@@ -583,6 +586,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
         creation_info, packages, relationships, persons_orgs, tools = extract_spdx3_elements(data)
+        licenses = extract_spdx3_licenses(data)
         ci_fields = get_spdx3_creation_info_fields(creation_info, persons_orgs, tools)
 
         # Track element-level failures across all packages
@@ -598,12 +602,7 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             pkg_name = pkg_fields["name"] or f"Package {i + 1}"
 
             # 2. Software Producer (originatedBy → Person/Org)
-            has_supplier = False
-            for ref in pkg_fields["supplier_refs"]:
-                if isinstance(ref, str) and ref in persons_orgs:
-                    has_supplier = True
-                    break
-            if not has_supplier:
+            if not has_spdx3_supplier(pkg_fields["supplier_refs"], persons_orgs):
                 producer_failures.append(pkg_name)
 
             # 3. Component name
@@ -622,13 +621,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             if not pkg_fields["has_hash"]:
                 hash_failures.append(pkg_name)
 
-            # 7. License (hasConcludedLicense relationship)
-            pkg_id = package.get("spdxId", package.get("@id", ""))
-            has_license = any(
-                rel.get("from") == pkg_id and rel.get("relationshipType") == "hasConcludedLicense"
-                for rel in relationships
-            )
-            if not has_license:
+            # 7. License — the relationship must resolve to a licensing
+            # element; a dangling hasConcludedLicense carries no licence.
+            if get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is None:
                 license_failures.append(pkg_name)
 
         # 2. Software Producer
@@ -760,6 +755,9 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
         """Check if SPDX 3.0 document has generation context information.
 
         Checks:
+        - software_Sbom.software_sbomType — the first-class lifecycle field
+          ("build", "source", "deployed", ...), which is how Yocto declares
+          it, with no accompanying comment
         - SpdxDocument comment field
         - CreationInfo comment field
         - Annotation elements whose subject is the SpdxDocument or one of
@@ -782,6 +780,15 @@ class CISAMinimumElementsPlugin(AssessmentPlugin):
             elem_type = element.get("type", element.get("@type", ""))
             if not isinstance(elem_type, str):
                 continue
+
+            # The first-class lifecycle declaration: a software_Sbom element
+            # carrying a non-empty sbomType.
+            if "software_Sbom" in elem_type:
+                sbom_type = element.get("software_sbomType")
+                if isinstance(sbom_type, str) and sbom_type.strip():
+                    return True
+                if isinstance(sbom_type, list) and any(isinstance(v, str) and v.strip() for v in sbom_type):
+                    return True
 
             # Check SpdxDocument comment
             if "SpdxDocument" in elem_type:

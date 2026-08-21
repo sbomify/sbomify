@@ -49,8 +49,9 @@ CLE Format Support:
           target, per SPDX 2.3 §12). Document-level annotations are only
           applied to the BOM root subject — dependencies must carry their
           own annotations.
-    - SPDX 3.0.1: Native software_validUntilDate field + Annotation elements
-        - Per-package software_validUntilDate for end-of-support.
+    - SPDX 3.0.1: Native validUntilTime field + Annotation elements
+        - Per-package validUntilTime for end-of-support (the legacy
+          software_validUntilDate spelling stays readable).
         - Annotation elements whose statement contains
           cle:supportStatus=<status> / cle:endOfSupport=<date>, scoped
           by the annotation's subject: a non-empty subject matches the
@@ -77,6 +78,7 @@ from sbomify.apps.plugins.builtins._spdx3_helpers import (
     extract_spdx3_elements,
     get_spdx3_creation_info_fields,
     get_spdx3_package_fields,
+    has_spdx3_supplier,
     is_spdx3,
 )
 from sbomify.apps.plugins.builtins._spdx_shared import (
@@ -630,12 +632,7 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             # === NTIA Elements ===
 
             # 1. Supplier name (originatedBy → Person/Org)
-            has_supplier = False
-            for ref in pkg_fields["supplier_refs"]:
-                if isinstance(ref, str) and ref in persons_orgs:
-                    has_supplier = True
-                    break
-            if not has_supplier:
+            if not has_spdx3_supplier(pkg_fields["supplier_refs"], persons_orgs):
                 supplier_failures.append(pkg_name)
 
             # 2. Component name
@@ -664,8 +661,14 @@ class FDAMedicalDevicePlugin(AssessmentPlugin):
             if not has_support_status:
                 support_status_failures.append(pkg_name)
 
-            # 9. End of support date (software_validUntilDate + root-only doc fallback)
-            has_end_of_support = bool(package.get("software_validUntilDate")) or (is_root and doc_has_end_of_support)
+            # 9. End of support date. The spec property is validUntilTime on
+            # Artifact; software_validUntilDate exists in no 3.0.1 properties
+            # block but is kept readable for documents stored before the fix.
+            has_end_of_support = (
+                bool(package.get("validUntilTime"))
+                or bool(package.get("software_validUntilDate"))
+                or (is_root and doc_has_end_of_support)
+            )
             if not has_end_of_support:
                 end_of_support_failures.append(pkg_name)
 

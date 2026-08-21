@@ -312,24 +312,14 @@ class OSVPlugin(AssessmentPlugin):
 
     @staticmethod
     def _is_spdx3(sbom_data: bytes) -> bool:
-        """Check if raw SBOM data is SPDX 3.x format.
+        """Whether raw SBOM bytes hold an SPDX 3.x document — parsing here,
+        detection delegated to the one shared detector."""
+        from sbomify.apps.plugins.builtins._spdx3_helpers import is_spdx3
 
-        Detection criteria:
-            - @context contains "spdx.org/rdf/3.0" (string, list, or dict), or
-            - root-level spdxVersion starts with "SPDX-3.".
-        """
         try:
-            content = json.loads(sbom_data.decode("utf-8"))
-            context = content.get("@context")
-            if context is not None and "spdx.org/rdf/3.0" in str(context):
-                return True
-
-            spdx_version = content.get("spdxVersion")
-            if isinstance(spdx_version, str) and spdx_version.startswith("SPDX-3."):
-                return True
+            return is_spdx3(json.loads(sbom_data.decode("utf-8")))
         except (json.JSONDecodeError, UnicodeDecodeError):
-            pass
-        return False
+            return False
 
     def _create_unsupported_format_result(self) -> AssessmentResult:
         """Create a result indicating SPDX 3.0 is not yet supported by osv-scanner."""
@@ -339,6 +329,9 @@ class OSVPlugin(AssessmentPlugin):
             description=(
                 "osv-scanner does not yet support SPDX 3.0 format. "
                 "Vulnerability scanning requires SPDX 2.x or CycloneDX format. "
+                "To scan this content anyway, convert it yourself first — "
+                "`syft convert` (v1.46.0+) emits SPDX 2.3 or CycloneDX from "
+                "SPDX 3 input, lossily — and upload the result. "
                 "See https://github.com/google/osv-scanner for format support updates."
             ),
             status="warning",

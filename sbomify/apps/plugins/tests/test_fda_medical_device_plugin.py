@@ -1698,13 +1698,13 @@ def _create_base_spdx3_sbom() -> dict:
                 "type": "Organization",
                 "spdxId": "SPDXRef-Creator",
                 "name": "SBOM Creator Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "creator@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "creator@example.com"}],
             },
             {
                 "type": "Organization",
                 "spdxId": "SPDXRef-Supplier",
                 "name": "Supplier Corp",
-                "externalIdentifiers": [{"externalIdentifierType": "email", "identifier": "supplier@example.com"}],
+                "externalIdentifier": [{"externalIdentifierType": "email", "identifier": "supplier@example.com"}],
             },
             {
                 "type": "software_Package",
@@ -1713,8 +1713,8 @@ def _create_base_spdx3_sbom() -> dict:
                 "software_packageVersion": "1.0.0",
                 "originatedBy": ["SPDXRef-Supplier"],
                 "software_validUntilDate": "2025-12-31T00:00:00Z",
-                "externalIdentifiers": [
-                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/example@1.0.0"}
+                "externalIdentifier": [
+                    {"externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/example@1.0.0"}
                 ],
             },
             {
@@ -1859,8 +1859,8 @@ class TestSPDX3Validation:
                 "name": "dep-package",
                 "software_packageVersion": "2.0.0",
                 "originatedBy": ["SPDXRef-Supplier"],
-                "externalIdentifiers": [
-                    {"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/dep@2.0.0"}
+                "externalIdentifier": [
+                    {"externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/dep@2.0.0"}
                 ],
             }
         )
@@ -1973,7 +1973,7 @@ class TestSPDX3Validation:
                 "name": "other-package",
                 "software_packageVersion": "2.0.0",
                 "originatedBy": ["SPDXRef-Supplier"],
-                "externalIdentifiers": [{"externalIdentifierType": "packageURL", "identifier": "pkg:pypi/other@2.0.0"}],
+                "externalIdentifier": [{"externalIdentifierType": "packageUrl", "identifier": "pkg:pypi/other@2.0.0"}],
             }
         )
         # Declare the document with Package-1 as the only root; an annotation

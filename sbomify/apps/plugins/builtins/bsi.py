@@ -58,6 +58,14 @@ from typing import Any
 
 from packaging import version as pkg_version
 
+from sbomify.apps.plugins.builtins._spdx3_helpers import (
+    extract_spdx3_elements,
+    extract_spdx3_licenses,
+    get_spdx3_package_fields,
+    get_spdx3_package_license,
+    iter_spdx3_external_identifiers,
+    resolve_spdx3_agent,
+)
 from sbomify.apps.plugins.builtins._spdx_shared import spdx3_document_subjects
 from sbomify.apps.plugins.sdk.base import AssessmentPlugin, SBOMContext
 from sbomify.apps.plugins.sdk.enums import AssessmentCategory
@@ -457,14 +465,26 @@ class BSICompliancePlugin(AssessmentPlugin):
                 details=f"{format_name} {version} meets minimum requirement of {min_version}",
             )
         else:
+            if sbom_format == self.FORMAT_SPDX and version in ("3.0", "3.0.0"):
+                # The one-patch-short case: syft, Microsoft sbom-tool, JFrog
+                # Xray and Zephyr 4.5 emit 3.0, and the sender has no way to
+                # know the floor sits a patch digit higher.
+                remediation = (
+                    "BSI TR-03183-2 v2.1.0 §4 requires SPDX version 3.0.1 or higher; "
+                    "SPDX 3.0 falls one patch release short. Producers that emit 3.0.1: "
+                    "cdxgen 12.3.0+, and Yocto 5.2 onward (upgrade if this SBOM came "
+                    "from an older Yocto). CycloneDX 1.6+ also satisfies the floor."
+                )
+            else:
+                remediation = (
+                    f"BSI TR-03183-2 §4 requires {format_name} version {min_version} or higher. "
+                    f"Please regenerate your SBOM using a compliant format version."
+                )
             return self._create_finding(
                 "sbom_format",
                 status="fail",
                 details=f"{format_name} {version} does not meet minimum requirement of {min_version}",
-                remediation=(
-                    f"BSI TR-03183-2 §4 requires {format_name} version {min_version} or higher. "
-                    f"Please regenerate your SBOM using a compliant format version."
-                ),
+                remediation=remediation,
             )
 
     def _validate_cyclonedx(self, data: dict[str, Any], format_version: str) -> list[Finding]:
@@ -880,32 +900,21 @@ class BSICompliancePlugin(AssessmentPlugin):
         """
         findings: list[Finding] = []
 
-        # SPDX 3.x has an "elements" array with different types
+        # SPDX 3.x has an "elements" array with different types. The nested
+        # spdxDocument.elements shape predates the shared helper and is kept.
         elements = data.get("@graph", data.get("spdxDocument", {}).get("elements", []))
         if not elements:
             elements = data.get("elements", [])
 
-        # Extract elements by type
-        creation_info = None
-        packages: list[dict[str, Any]] = []
-        files: list[dict[str, Any]] = []
-        relationships: list[dict[str, Any]] = []
-        persons_orgs: dict[str, dict[str, Any]] = {}
-
-        for element in elements:
-            elem_type = element.get("type", element.get("@type", ""))
-            if "CreationInfo" in elem_type:
-                creation_info = element
-            elif "software_Package" in elem_type or "Package" in elem_type:
-                packages.append(element)
-            elif "software_File" in elem_type or "File" in elem_type:
-                files.append(element)
-            elif "Relationship" in elem_type:
-                relationships.append(element)
-            elif "Person" in elem_type or "Organization" in elem_type:
-                spdx_id = element.get("spdxId", element.get("@id", ""))
-                if spdx_id:
-                    persons_orgs[spdx_id] = element
+        # One extraction, shared with the other plugins — a private routing
+        # copy here is how SoftwareAgent suppliers scored two findings worse
+        # in BSI than everywhere else. Files are BSI-specific, so that pass
+        # stays local.
+        creation_info, packages, relationships, persons_orgs, _ = extract_spdx3_elements({"@graph": elements})
+        licenses = extract_spdx3_licenses({"@graph": elements})
+        files: list[dict[str, Any]] = [
+            e for e in elements if isinstance(e, dict) and "File" in str(e.get("type", e.get("@type", "")))
+        ]
 
         # === SBOM-level required fields ===
 
@@ -1006,7 +1015,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                         structured_failures.append(pkg_name)
 
             # Licence
-            has_licence = self._has_spdx3_licence(package, relationships)
+            has_licence = self._has_spdx3_licence(package, relationships, licenses)
             if not has_licence:
                 licence_failures.append(pkg_name)
 
@@ -1020,7 +1029,7 @@ class BSICompliancePlugin(AssessmentPlugin):
                 source_code_uri_warnings.append(pkg_name)
             if not self._spdx3_has_deployable_uri(package):
                 uri_deployable_form_warnings.append(pkg_name)
-            if not self._spdx3_has_original_licence(package, relationships):
+            if not self._spdx3_has_original_licence(package, relationships, licenses):
                 original_licences_warnings.append(pkg_name)
 
         # Create findings (same pattern as CycloneDX)
@@ -1703,15 +1712,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(created_by, list):
             return None
         for ref in created_by:
-            entity = persons_orgs.get(ref, {})
-            if not isinstance(entity, dict):
-                continue
-            ext_ids = entity.get("externalIdentifiers")
-            if not isinstance(ext_ids, list):
-                continue
-            for ext_id in ext_ids:
-                if not isinstance(ext_id, dict):
-                    continue
+            entity = resolve_spdx3_agent(ref, persons_orgs)
+            for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
                 identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
@@ -1728,15 +1730,8 @@ class BSICompliancePlugin(AssessmentPlugin):
         if not isinstance(originated_by, list):
             return None
         for ref in originated_by:
-            entity = persons_orgs.get(ref, {})
-            if not isinstance(entity, dict):
-                continue
-            ext_ids = entity.get("externalIdentifiers")
-            if not isinstance(ext_ids, list):
-                continue
-            for ext_id in ext_ids:
-                if not isinstance(ext_id, dict):
-                    continue
+            entity = resolve_spdx3_agent(ref, persons_orgs)
+            for ext_id in iter_spdx3_external_identifiers(entity):
                 id_type: str = ext_id.get("externalIdentifierType", "")
                 identifier: str = ext_id.get("identifier", "")
                 if id_type == "email" and _is_valid_email(identifier):
@@ -1779,26 +1774,24 @@ class BSICompliancePlugin(AssessmentPlugin):
 
         return "other" if has_other_hash else "none"
 
-    def _has_spdx3_licence(self, package: dict[str, Any], relationships: list[dict[str, Any]]) -> bool:
-        """Check if SPDX 3.x package has concluded licence via relationship."""
-        pkg_id = package.get("spdxId", package.get("@id"))
-        for rel in relationships:
-            if rel.get("from") == pkg_id and rel.get("relationshipType") == "hasConcludedLicense":
-                return True
-        return False
+    def _has_spdx3_licence(
+        self,
+        package: dict[str, Any],
+        relationships: list[dict[str, Any]],
+        licenses: dict[str, dict[str, Any]],
+    ) -> bool:
+        """A concluded licence the document can actually resolve.
+
+        Existence of the relationship alone is not enough: a
+        hasConcludedLicense pointing at nothing resolvable carries no licence
+        information, and scoring it as one would grade a dangling reference
+        the same as a real expression.
+        """
+        return get_spdx3_package_license(package, relationships, licenses, "hasConcludedLicense") is not None
 
     def _has_spdx3_identifier(self, package: dict[str, Any]) -> bool:
         """Check if SPDX 3.x package has unique identifier."""
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
-            id_type = ext_id.get("externalIdentifierType", "")
-            if id_type in ("cpe22", "cpe23", "swid", "packageURL"):
-                return True
-        return False
+        return bool(get_spdx3_package_fields(package)["has_unique_id"])
 
     def _spdx3_has_sbom_uri(self, data: dict[str, Any]) -> bool:
         """Per BSI §5.2.3, the SBOM itself MUST expose a URI when the format
@@ -1811,18 +1804,34 @@ class BSICompliancePlugin(AssessmentPlugin):
         return bool(doc_ids)
 
     def _spdx3_has_source_code_uri(self, package: dict[str, Any]) -> bool:
-        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo or an
-        externalIdentifier referencing a VCS / repository URL.
+        """Per BSI §5.2.4. Accept any non-empty software_sourceInfo, or an
+        externalRef pointing at the source — ``vcs`` and ``sourceArtifact``
+        live in the ExternalRefType vocabulary, not ExternalIdentifierType,
+        so this is the shape a conformant document actually carries.
         """
         source_info = package.get("software_sourceInfo")
         if isinstance(source_info, str) and source_info.strip():
             return True
-        ext_ids = package.get("externalIdentifiers")
-        if not isinstance(ext_ids, list):
-            return False
-        for ext_id in ext_ids:
-            if not isinstance(ext_id, dict):
-                continue
+
+        external_refs = package.get("externalRef")
+        if isinstance(external_refs, list):
+            for ref in external_refs:
+                if not isinstance(ref, dict):
+                    continue
+                ref_type = str(ref.get("externalRefType") or "").strip()
+                if ref_type not in ("vcs", "sourceArtifact"):
+                    continue
+                locators = ref.get("locator") or []
+                # JSON-LD compact form: a one-element set may serialise as a
+                # bare string.
+                if isinstance(locators, str):
+                    locators = [locators]
+                if any(isinstance(loc, str) and loc.strip() for loc in locators):
+                    return True
+
+        # Documents stored before this fix carry a not-in-vocabulary
+        # externalIdentifier of type vcs/url; keep reading it.
+        for ext_id in iter_spdx3_external_identifiers(package):
             id_type = str(ext_id.get("externalIdentifierType") or "").strip().lower()
             ident = ext_id.get("identifier") or ""
             if id_type in ("vcs", "url") and isinstance(ident, str) and ident.strip():
@@ -1834,17 +1843,17 @@ class BSICompliancePlugin(AssessmentPlugin):
         value = package.get("software_downloadLocation")
         return isinstance(value, str) and bool(value.strip())
 
-    def _spdx3_has_original_licence(self, package: dict[str, Any], relationships: list[dict[str, Any]]) -> bool:
+    def _spdx3_has_original_licence(
+        self,
+        package: dict[str, Any],
+        relationships: list[dict[str, Any]],
+        licenses: dict[str, dict[str, Any]],
+    ) -> bool:
         """Per BSI §5.2.4, recognise an original/declared licence via the
-        hasDeclaredLicense relationship on the package.
+        hasDeclaredLicense relationship — resolved to an actual licensing
+        element, for the same reason as the concluded check.
         """
-        pkg_id = package.get("spdxId", package.get("@id"))
-        for rel in relationships:
-            if not isinstance(rel, dict):
-                continue
-            if rel.get("from") == pkg_id and rel.get("relationshipType") == "hasDeclaredLicense":
-                return True
-        return False
+        return get_spdx3_package_license(package, relationships, licenses, "hasDeclaredLicense") is not None
 
     def _check_spdx3_dependencies(self, relationships: list[dict[str, Any]]) -> tuple[bool, bool]:
         """Check SPDX 3.x dependencies and completeness indicator.
