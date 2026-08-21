@@ -276,6 +276,12 @@ class AccessRequestView(View):
                 messages.info(request, "Your access request is pending approval.")
                 return redirect("core:workspace_public", workspace_key=team_key)
 
+        # A requester whose last request was rejected otherwise lands on a blank
+        # form with no sign anything happened; say so, and let them re-request.
+        was_rejected = AccessRequest.objects.filter(
+            team=team, user=request.user, status=AccessRequest.Status.REJECTED
+        ).exists()
+
         # Always check for company-wide NDA - if it exists, always require signing
         company_nda = team.get_company_nda_document()
         requires_nda = company_nda is not None
@@ -291,6 +297,7 @@ class AccessRequestView(View):
                 "brand": brand,
                 "company_nda": company_nda,
                 "requires_nda": requires_nda,
+                "was_rejected": was_rejected,
                 "user": request.user if request.user.is_authenticated else None,
             },
         )

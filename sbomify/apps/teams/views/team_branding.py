@@ -67,4 +67,12 @@ class TeamBrandingView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # rollback would otherwise produce a ghost event.
         transaction.on_commit(lambda: capture_for_request(request, "team:branding_updated", team_key=team_key))
 
+        # A color saved while custom branding is off changes nothing anyone can
+        # see; without the hint the toast reads as "done" and the trust center
+        # quietly keeps the platform look.
+        if not form.cleaned_data.get("branding_enabled"):
+            return htmx_success_response(
+                "Branding saved. Turn on custom branding to show it on your public pages.",
+                triggers={"refreshTeamBranding": True},
+            )
         return htmx_success_response("Branding updated successfully", triggers={"refreshTeamBranding": True})
