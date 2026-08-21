@@ -111,7 +111,7 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             await self._reject(WS_CLOSE_POLICY_VIOLATION)
             return
 
-        # Verify user is a member of this workspace
+        # Verify the user may read this workspace's internal activity
         is_member = await self._check_workspace_membership(user, self.workspace_key)
         if not is_member:
             user_id = user.id  # type: ignore[attr-defined]
@@ -142,10 +142,23 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _check_workspace_membership(self, user: Any, workspace_key: str) -> bool:
-        """Check if the user is a member of the workspace."""
+        """May this user read the workspace's internal activity?
+
+        Authorized on ``workspace:read`` — the capability this socket streams —
+        rather than on the existence of a Member row. Any row used to be enough,
+        and a ``guest`` has one: an external trust-center visitor who signed an
+        NDA could open this socket and receive the workspace's internal event
+        feed, which is exactly what guest-as-external-only was meant to stop.
+        A role check alone would have been the same trap one tier up, so it is
+        the action that decides.
+        """
+        from sbomify.apps.core.authz import can
         from sbomify.apps.teams.models import Team
 
-        return Team.objects.filter(key=workspace_key, members=user).exists()
+        team = Team.objects.filter(key=workspace_key).first()
+        if team is None:
+            return False
+        return can(user, "workspace:read", team).allowed
 
     async def disconnect(self, close_code: Any):  # type: ignore[no-untyped-def]
         """Handle WebSocket disconnection."""

@@ -13,6 +13,7 @@ from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.spotlight import ASSET_BASE_SCORE, SECTION_LABELS, search_destinations
 from sbomify.apps.core.utils import get_team_id_from_session
 from sbomify.apps.teams.permissions import GuestAccessBlockedMixin
+from sbomify.apps.teams.queries import get_member_role_by_key
 
 
 class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
@@ -68,10 +69,11 @@ class SearchView(GuestAccessBlockedMixin, LoginRequiredMixin, View):
         current_team = request.session.get("current_team") or {}
         destinations = search_destinations(
             query,
-            # ``or ""`` rather than a get() default: the session stores role=None for a
-            # workspace whose membership carries none, and a default only fires on a
-            # missing key. search_destinations is typed str.
-            role=current_team.get("role") or "",
+            # Live Member row, not the session cache: this picks which
+            # destinations are offered, so a stale role suggests links the user
+            # cannot open. ``or ""`` because a membership may carry no role and
+            # search_destinations is typed str.
+            role=get_member_role_by_key(request.user, current_team.get("key")) or "",
             team_key=current_team.get("key", ""),
         )
 

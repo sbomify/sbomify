@@ -6,6 +6,11 @@ variant works as a link. Size renders as one conditional segment so utilities
 never stack against each other. The two branches below differ only in element
 and must stay in lockstep.
 
+A button is never underlined, at rest or on hover. The public pages load a
+legacy `a:hover { text-decoration: underline }`, and a bare element-plus-pseudo
+selector outranks a plain `no-underline` class, so the hover state has to be
+stated too. Tailwind loads after those sheets, so the tie goes to the utility.
+
 Every button marks itself data-button. The public base still carries the
 pre-Tailwind link rules that repaint any anchor on the page, and their
 exclusion list was a list of tw-* class names; the marker is what a library
@@ -18,12 +23,12 @@ computes the same: the public base also loads static/css/utilities.css, whose
 <c-vars variant_class size type="button" href loading disabled class />
 {% if href %}
     <a href="{{ href }}"
-       class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer relative overflow-hidden transition-all duration-200 {% if size == 'sm' %}px-3.5 py-2 min-h-9 text-xs rounded-md{% elif size == 'lg' %}px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]{% else %}px-5 py-2.5 min-h-11 text-sm rounded-[0.5rem]{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+       class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer no-underline hover:no-underline relative overflow-hidden transition-all duration-200 {% if size == 'sm' %}px-3.5 py-2 min-h-9 text-xs rounded-md{% elif size == 'lg' %}px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]{% else %}px-5 py-2.5 min-h-11 text-sm rounded-[0.5rem]{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] {{ variant_class }}{% if class %} {{ class }}{% endif %}"
        data-button
        {{ attrs }}>{{ slot }}</a>
 {% else %}
     <button type="{{ type }}"
-            class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer relative overflow-hidden transition-all duration-200 {% if size == 'sm' %}px-3.5 py-2 min-h-9 text-xs rounded-md{% elif size == 'lg' %}px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]{% else %}px-5 py-2.5 min-h-11 text-sm rounded-[0.5rem]{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none{% if loading %} pointer-events-none opacity-80{% endif %} {{ variant_class }}{% if class %} {{ class }}{% endif %}"
+            class="inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap shrink-0 select-none cursor-pointer no-underline hover:no-underline relative overflow-hidden transition-all duration-200 {% if size == 'sm' %}px-3.5 py-2 min-h-9 text-xs rounded-md{% elif size == 'lg' %}px-7 py-3.5 min-h-12 text-base rounded-[0.625rem]{% else %}px-5 py-2.5 min-h-11 text-sm rounded-[0.5rem]{% endif %} focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_40%,transparent)] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none{% if loading %} pointer-events-none opacity-80{% endif %} {{ variant_class }}{% if class %} {{ class }}{% endif %}"
             data-button
             {% if disabled or loading %}disabled{% endif %}
             {{ attrs }}>

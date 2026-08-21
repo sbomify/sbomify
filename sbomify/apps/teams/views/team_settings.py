@@ -14,7 +14,7 @@ from django.views.decorators.cache import never_cache
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_sync import sync_subscription_from_stripe
 from sbomify.apps.billing.team_pricing_service import TeamPricingService
-from sbomify.apps.core.authz import ADMINISTER, ROLE_DESCRIPTIONS
+from sbomify.apps.core.authz import ADMINISTER, MANAGE, ROLE_DESCRIPTIONS
 from sbomify.apps.core.domain.exceptions import PermissionDeniedError
 from sbomify.apps.core.errors import error_response
 from sbomify.apps.core.models import User
@@ -23,7 +23,7 @@ from sbomify.apps.teams.apis import get_team, list_contact_profiles
 from sbomify.apps.teams.forms import DeleteInvitationForm, DeleteMemberForm
 from sbomify.apps.teams.models import ContactProfileContact, Invitation, Member, Team
 from sbomify.apps.teams.permissions import TeamRoleRequiredMixin, check_member_removal
-from sbomify.apps.teams.queries import get_pending_invitations_for_user
+from sbomify.apps.teams.queries import get_member_role_by_key, get_pending_invitations_for_user
 from sbomify.apps.teams.utils import refresh_current_team_session
 from sbomify.logging import getLogger
 
@@ -98,7 +98,10 @@ PLAN_LIMITS = {
 
 @method_decorator(never_cache, name="dispatch")
 class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
-    allowed_roles = list(ADMINISTER)
+    # MANAGE so members can reach the tabs they are allowed (API tokens, Account).
+    # Which sections they actually see is decided per-tab by visible_tabs(), and
+    # every POST sub-action re-checks ADMINISTER for itself.
+    allowed_roles = list(MANAGE)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Take ``tab`` off the URL and hold it, rather than pass it to a handler.
@@ -255,13 +258,24 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         # open is neither linked nor rendered.
         from sbomify.apps.teams.settings_tabs import resolve_tab, visible_tabs
 
-        role = request.session.get("current_team", {}).get("role")
+        # Live Member row, not the session cache. This decides which settings
+        # sections are linked AND rendered, so a demoted user reading a stale
+        # cached role would be shown sections they can no longer act on — and
+        # this view was just widened to MANAGE so members can reach their own
+        # tabs, which makes an accurate role here load-bearing rather than
+        # cosmetic.
+        role = get_member_role_by_key(request.user, team_key)
         billing_enabled_flag = is_billing_enabled()
         active_tab = resolve_tab(tab, role, billing_enabled=billing_enabled_flag)
         if active_tab is None:
-            # The typed domain error rather than a hand-built HttpResponse:
-            # error_response understands it, it carries its own 403, and it keeps
-            # this on the same path as every other permission failure.
+            # Defence in depth: get_team() above already refuses non-members and
+            # guests, so nobody who reaches here should have an empty tab list.
+            # Kept because the two gates answer different questions — that one is
+            # about the workspace, this one about what the role opens — and a
+            # future tier that opens no section should be denied, not shown a
+            # blank page. The typed domain error rather than a hand-built
+            # HttpResponse: error_response understands it, it carries its own 403,
+            # and it keeps this on the same path as every other permission failure.
             return error_response(request, PermissionDeniedError("No settings available for this role"))
         # A stale or renamed slug resolves to the first section instead of 404ing;
         # send the browser to the URL that actually rendered so the address bar,
@@ -336,9 +350,10 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
                     ("pci-dss-v4", "PCI DSS", "PCI DSS", "fa-credit-card"),
                     ("nist-800-53-r5", "NIST SP 800-53", "NIST 800-53", "fa-building-columns"),
                 ],
-                "is_admin_or_owner": Member.objects.filter(
-                    user=cast(User, request.user), team__key=team_key, role__in=ADMINISTER
-                ).exists(),
+                # ``role`` above is the same live lookup against the same row;
+                # re-querying only asked the database a question it had already
+                # answered.
+                "is_admin_or_owner": role in ADMINISTER,
             },
         )
 
@@ -406,6 +421,17 @@ class TeamSettingsView(TeamRoleRequiredMixin, LoginRequiredMixin, View):
         return remove_member_safely(request, membership, active_tab=active_tab if active_tab else None)
 
     def _delete_invitation(self, request: HttpRequest, team_key: str) -> HttpResponse:
+        # Managing invitations is ADMINISTER, but the class gate is MANAGE so
+        # members can reach their own tabs — so this has to re-check for itself,
+        # as its siblings do. Without it a member could cancel any invitation in
+        # the workspace, including an owner-level one. A 403 rather than a
+        # message: this is an authorization failure, matching _delete_member.
+        membership = Member.objects.filter(user=cast(User, request.user), team__key=team_key).first()
+        if not membership or membership.role not in ADMINISTER:
+            return error_response(
+                request, HttpResponseForbidden("You don't have permission to manage this workspace's invitations")
+            )
+
         form = DeleteInvitationForm(request.POST)
         if not form.is_valid():
             messages.error(request, form.errors.as_text())

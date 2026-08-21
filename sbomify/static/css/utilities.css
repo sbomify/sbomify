@@ -234,35 +234,35 @@
 }
 
 .text-primary {
-  color: var(--brand-primary) !important;
+  color: var(--brand-primary);
 }
 
 .text-secondary {
-  color: var(--text-secondary) !important;
+  color: var(--text-secondary);
 }
 
 .text-success {
-  color: var(--brand-success) !important;
+  color: var(--brand-success);
 }
 
 .text-danger {
-  color: var(--brand-danger) !important;
+  color: var(--brand-danger);
 }
 
 .text-warning {
-  color: var(--brand-warning) !important;
+  color: var(--brand-warning);
 }
 
 .text-info {
-  color: var(--brand-info) !important;
+  color: var(--brand-info);
 }
 
 .text-muted {
-  color: var(--text-muted) !important;
+  color: var(--text-muted);
 }
 
 .text-white {
-  color: #fff !important;
+  color: #fff;
 }
 
 /* ===== SPACING UTILITIES ===== */

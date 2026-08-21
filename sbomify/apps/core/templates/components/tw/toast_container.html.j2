@@ -1,5 +1,6 @@
 {# Toast Container - dispatch 'toast' event with {type, title, message, duration} #}
 <div id="toast-container"
+     hx-preserve="true"
      x-data="{ toasts: [], counter: 0, addToast(toast) { const id = `toast-${Date.now()}-${this.counter++}`; this.toasts.push({ id, ...toast }); setTimeout(() => this.removeToast(id), toast.duration || 3000); }, removeToast(id) { this.toasts = this.toasts.filter(t => t.id !== id); } }"
      @toast.window="addToast($event.detail)"
      aria-live="polite"

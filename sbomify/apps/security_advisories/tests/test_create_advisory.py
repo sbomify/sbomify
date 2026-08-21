@@ -124,11 +124,31 @@ class TestCreateAdvisory:
             create_advisory(team, user, title="x", products=[foreign])
         assert SecurityAdvisory.objects.count() == 0
 
+    def test_cvss_lands_on_the_vulnerability(self, team, user):
+        vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        result = create_advisory(team, user, title="Scored", cvss_score=9.8, cvss_vector=vector)
+
+        vulnerability = SecurityAdvisory.objects.get(pk=result.value).vulnerabilities.get()
+        assert vulnerability.cvss_scores == [{"version": "3.1", "vector": vector, "base_score": 9.8}]
+
+    def test_a_bare_cvss_score_stores_no_version(self, team, user):
+        result = create_advisory(team, user, title="Scored", cvss_score=7.5)
+
+        vulnerability = SecurityAdvisory.objects.get(pk=result.value).vulnerabilities.get()
+        assert vulnerability.cvss_scores == [{"version": "", "vector": "", "base_score": 7.5}]
+
+    def test_no_cvss_stores_no_entry(self, team, user):
+        result = create_advisory(team, user, title="Unscored")
+
+        vulnerability = SecurityAdvisory.objects.get(pk=result.value).vulnerabilities.get()
+        assert vulnerability.cvss_scores == []
+
     def test_release_with_no_version_string_falls_back_to_its_name(self, team, user, product):
         legacy = Release.objects.create(product=product, name="spring-drop", version="")
         result = create_advisory(team, user, title="Legacy", products=[product], affected_releases=[legacy])
 
-        version_range = SecurityAdvisory.objects.get(pk=result.value).vulnerabilities.get().product_statuses.get().version_ranges.get()
+        advisory = SecurityAdvisory.objects.get(pk=result.value)
+        version_range = advisory.vulnerabilities.get().product_statuses.get().version_ranges.get()
         assert version_range.introduced == "spring-drop"
 
 
@@ -152,6 +172,24 @@ class TestAdvisoryCreateForm:
 
         assert form.is_valid()
         assert form.cleaned_data["vulnerability_id"] == "CVE-2026-0001"
+
+    def test_a_cvss_vector_without_a_score_is_refused(self, team):
+        form = AdvisoryCreateForm(team, {"title": "x", "cvss_vector": "CVSS:3.1/AV:N"})
+
+        assert not form.is_valid()
+        assert form.errors["cvss_score"] == ["Enter the CVSS score for the vector."]
+
+    def test_an_out_of_range_cvss_score_is_refused(self, team):
+        form = AdvisoryCreateForm(team, {"title": "x", "cvss_score": "10.1"})
+
+        assert not form.is_valid()
+        assert form.errors["cvss_score"] == ["CVSS score must be a number from 0 to 10."]
+
+    def test_a_cvss_score_alone_is_valid(self, team):
+        form = AdvisoryCreateForm(team, {"title": "x", "cvss_score": "9.8"})
+
+        assert form.is_valid()
+        assert form.cleaned_data["cvss_score"] == 9.8
 
     def test_latest_release_is_not_offered_or_accepted(self, team, product):
         floating = Release.objects.create(product=product, name="latest", is_latest=True)
@@ -184,6 +222,21 @@ class TestDashboardCreatePost:
         assert response.url == reverse("core:security_advisory_detail", args=[advisory.id])
         assert advisory.products.get().product == product
 
+    def test_posted_cvss_reaches_the_vulnerability(self, sample_team_with_owner_member, client):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        member = sample_team_with_owner_member
+        setup_authenticated_client_session(client, member.team, member.user)
+
+        vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        client.post(
+            reverse("core:security_advisories_dashboard"),
+            {"title": "Scored", "cvss_score": "9.8", "cvss_vector": vector},
+        )
+
+        vulnerability = SecurityAdvisory.objects.get().vulnerabilities.get()
+        assert vulnerability.cvss_scores == [{"version": "3.1", "vector": vector, "base_score": 9.8}]
+
     def test_invalid_post_creates_nothing(self, sample_team_with_owner_member, client):
         from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
 
@@ -203,3 +256,33 @@ class TestDashboardCreatePost:
         detail = get_advisory(team, result.value).value
 
         assert detail["products"][0]["affected_ranges"] == ["1.2.0"]
+
+
+class TestDetailPageCvss:
+    """The edit modal prefills from the projection, and a missing score must
+    render as an empty input rather than the string "None"."""
+
+    def _get_detail(self, client, member, advisory_id):
+        from sbomify.apps.core.tests.shared_fixtures import setup_authenticated_client_session
+
+        setup_authenticated_client_session(client, member.team, member.user)
+        return client.get(reverse("core:security_advisory_detail", args=[advisory_id]))
+
+    def test_the_modal_prefills_score_and_vector(self, sample_team_with_owner_member, team, user, client):
+        vector = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+        result = create_advisory(team, user, title="Scored", cvss_score=8.6, cvss_vector=vector)
+
+        response = self._get_detail(client, sample_team_with_owner_member, result.value)
+
+        content = response.content.decode()
+        assert 'value="8.6"' in content
+        assert vector in content
+
+    def test_an_unscored_advisory_renders_an_empty_input(self, sample_team_with_owner_member, team, user, client):
+        result = create_advisory(team, user, title="Unscored")
+
+        response = self._get_detail(client, sample_team_with_owner_member, result.value)
+
+        content = response.content.decode()
+        assert "Not set" in content
+        assert 'value="None"' not in content

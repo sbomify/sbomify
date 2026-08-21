@@ -1,0 +1,28 @@
+{% comment %}
+The panel branded content sits on. It is deliberately not brandable: surface,
+border and radius come from the platform tokens, so however a workspace colours
+its accents, the ground the reader reads against stays legible and every trust
+centre keeps the same shape.
+
+That is the whole rule of this library in one component. Colour goes on the
+things a reader acts on, never on the ground they read against.
+
+flush drops the inset padding, for a panel whose rows own their own, and is
+written as the inverted flag rather than padded="True" because an omitted
+cotton prop is undefined, not False, so a positive default cannot be tested.
+
+A flush panel also clips. Its children run to the edge, and a child that paints
+there is square while this corner is not, so without the clip a severity spine
+or a row highlight draws over the radius and the colour spills past the corner.
+The panel owns the radius, so the panel owns the clipping: a caller cannot be
+relied on to remember. overflow-clip rather than overflow-hidden because
+.overflow-hidden is one of the legacy !important names, and clip is the right
+one anyway since nothing in a panel scrolls.
+
+Padded panels are not clipped, so a focus ring on a control inside one is still
+allowed to overhang.
+{% endcomment %}
+<c-vars flush class />
+<div class="rounded-xl border border-solid border-border bg-surface{% if flush %} overflow-clip{% else %} px-5 py-4{% endif %}{% if class %} {{ class }}{% endif %}"
+     {{ attrs }}>{{ slot }}
+</div>

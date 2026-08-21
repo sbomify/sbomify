@@ -23,7 +23,7 @@ from sbomify.apps.billing.config import is_billing_enabled
 from sbomify.apps.billing.models import BillingPlan
 from sbomify.apps.billing.stripe_cache import get_subscription_cancel_at_period_end, invalidate_subscription_cache
 from sbomify.apps.core.analytics import events
-from sbomify.apps.core.authz import READ_INTERNAL, can
+from sbomify.apps.core.authz import MANAGE, READ_INTERNAL, can
 from sbomify.apps.core.object_store import S3Client
 from sbomify.apps.core.posthog_service import capture_for_request
 from sbomify.apps.core.queries import (
@@ -207,7 +207,10 @@ def _get_team_crud_permission(request: HttpRequest, team_id: str) -> bool:
     if not member:
         return False
 
-    return member.role in ["owner", "admin"]
+    # MANAGE, from the tier — not a second hardcoded list. _build_item_base
+    # computes the same flag via can(..., "*:manage"), and the two disagreeing
+    # would render an edit button the API then refuses (or hide one it allows).
+    return member.role in MANAGE
 
 
 def _private_items_allowed(team: Team) -> bool:
@@ -631,8 +634,11 @@ def create_product(request: HttpRequest, payload: ProductCreateSchema) -> Any:
     try:
         # Check if user has permission to create products in this team
         team = Team.objects.get(id=team_id)
-        if not can(request, "workspace:manage", team):
-            return 403, {"detail": "Only owners and admins can create products", "error_code": ErrorCode.FORBIDDEN}
+        if not can(request, "product:create", team):
+            return 403, {
+                "detail": "You don't have permission to create products in this workspace",
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
         allow_private = _private_items_allowed(team)
 
@@ -826,7 +832,16 @@ def update_product(request: HttpRequest, product_id: str, payload: ProductUpdate
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this product", "error_code": ErrorCode.FORBIDDEN}
+
+    # Changing what the world can see is ADMINISTER, not MANAGE — the same
+    # carve-out shape as DELETE. Only checked when the value actually changes, so
+    # a member editing a product's name is not blocked by a field they left alone.
+    if payload.is_public != product.is_public and not can(request, "product:set_visibility", product):
+        return 403, {
+            "detail": "Only owners and admins can change a product's visibility",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         with transaction.atomic():
@@ -872,7 +887,7 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can update products", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this product", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -882,6 +897,16 @@ def patch_product(request: HttpRequest, product_id: str, payload: ProductPatchSc
 
             # Validate public/private constraints before making changes
             new_is_public = update_data.get("is_public", product.is_public)
+
+            # Changing what the world can see is ADMINISTER, not MANAGE. Only
+            # checked when the value actually changes, so a member patching an
+            # unrelated field is unaffected. This also covers the cascade below,
+            # which pushes the product's visibility onto its components.
+            if new_is_public != product.is_public and not can(request, "product:set_visibility", product):
+                return 403, {
+                    "detail": "Only owners and admins can change a product's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions when trying to make items private
             if not new_is_public and product.is_public and not _private_items_allowed(product.team):
@@ -986,7 +1011,7 @@ def create_product_identifier(request: HttpRequest, product_id: str, payload: Pr
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1103,7 +1128,7 @@ def update_product_identifier(
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1169,7 +1194,7 @@ def delete_product_identifier(request: HttpRequest, product_id: str, identifier_
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1220,7 +1245,7 @@ def bulk_update_product_identifiers(
 
     if not can(request, "product:manage", product):
         return 403, {
-            "detail": "Only owners and admins can manage product identifiers",
+            "detail": "You don't have permission to manage this product's identifiers",
             "error_code": ErrorCode.FORBIDDEN,
         }
 
@@ -1293,7 +1318,10 @@ def create_product_link(request: HttpRequest, product_id: str, payload: ProductL
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         with transaction.atomic():
@@ -1392,7 +1420,10 @@ def update_product_link(request: HttpRequest, product_id: str, link_id: str, pay
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         # Import here to avoid issues
@@ -1446,7 +1477,10 @@ def delete_product_link(request: HttpRequest, product_id: str, link_id: str) -> 
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         # Import here to avoid issues
@@ -1480,7 +1514,10 @@ def bulk_update_product_links(request: HttpRequest, product_id: str, payload: Pr
         return 404, {"detail": "Product not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "product:manage", product):
-        return 403, {"detail": "Only owners and admins can manage product links", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this product's links",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     try:
         with transaction.atomic():
@@ -1554,8 +1591,11 @@ def create_component(request: HttpRequest, payload: ComponentCreateSchema) -> An
     try:
         # Check if user has permission to create components in this team
         team = Team.objects.get(id=team_id)
-        if not can(request, "workspace:manage", team):
-            return 403, {"detail": "Only owners and admins can create components", "error_code": ErrorCode.FORBIDDEN}
+        if not can(request, "component:create", team):
+            return 403, {
+                "detail": "You don't have permission to create components in this workspace",
+                "error_code": ErrorCode.FORBIDDEN,
+            }
 
         if payload.is_global and payload.component_type != Component.ComponentType.DOCUMENT:  # type: ignore[comparison-overlap]
             return 400, {
@@ -1740,7 +1780,7 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:manage", component):
-        return 403, {"detail": "Only owners and admins can update components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this component", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1760,6 +1800,15 @@ def update_component(request: HttpRequest, component_id: str, payload: Component
                 else:
                     # If neither visibility nor is_public is provided, keep current visibility
                     new_visibility = component.visibility  # type: ignore[assignment]
+
+            # Changing what the world can see is ADMINISTER, not MANAGE — the
+            # same carve-out shape as DELETE. Checked only when the value
+            # actually changes, so a member editing metadata is unaffected.
+            if new_visibility != component.visibility and not can(request, "component:set_visibility", component):
+                return 403, {
+                    "detail": "Only owners and admins can change a component's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions
             if new_visibility in (Component.Visibility.PRIVATE, Component.Visibility.GATED):  # type: ignore[comparison-overlap]
@@ -1844,7 +1893,7 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
         return 404, {"detail": "Component not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "component:manage", component):
-        return 403, {"detail": "Only owners and admins can update components", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this component", "error_code": ErrorCode.FORBIDDEN}
 
     try:
         with transaction.atomic():
@@ -1873,6 +1922,20 @@ def patch_component(request: HttpRequest, component_id: str, payload: ComponentP
                     new_visibility = Component.Visibility.PUBLIC
                 else:
                     new_visibility = Component.Visibility.PRIVATE
+
+            # Changing what the world can see is ADMINISTER, not MANAGE — the
+            # same carve-out shape as DELETE. Checked only when the value
+            # actually changes, so a member patching metadata is unaffected.
+            # This is also the path TogglePublicStatusView delegates to.
+            if (
+                new_visibility is not None
+                and new_visibility != component.visibility
+                and not can(request, "component:set_visibility", component)
+            ):
+                return 403, {
+                    "detail": "Only owners and admins can change a component's visibility",
+                    "error_code": ErrorCode.FORBIDDEN,
+                }
 
             # Check billing plan restrictions when trying to make items private or gated
             if new_visibility is not None and new_visibility in (
@@ -3153,7 +3216,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can update releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this release", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent modifying latest releases
     if release.is_latest:
@@ -3227,7 +3290,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can update releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {"detail": "You don't have permission to update this release", "error_code": ErrorCode.FORBIDDEN}
 
     # Prevent modifying latest releases
     if release.is_latest:
@@ -3412,12 +3475,26 @@ def download_release(
     # Normalize format early
     format_lower = output_format.lower()
 
+    # A workspace member downloading a public product's release gets the full
+    # aggregate, gated and private members included; everyone else gets the
+    # public view. The authorized build bypasses the public aggregate cache.
+    include_non_public = bool(
+        getattr(request, "user", None)
+        and request.user.is_authenticated
+        and can(request, "release:read", release.product)
+    )
+
     try:
         # Use the SBOM package generator with user for signed URLs
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             sbom_file_path = get_release_sbom_package(
-                release, temp_path, user=request.user, output_format=format_lower, version=version
+                release,
+                temp_path,
+                user=request.user,
+                output_format=format_lower,
+                version=version,
+                include_non_public=include_non_public,
             )
 
             # Read the generated SBOM file
@@ -3998,7 +4075,10 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         return 404, {"detail": "Artifact not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "release:manage", release.product):
-        return 403, {"detail": "Only owners and admins can manage release artifacts", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this release's artifacts",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent removing artifacts from latest releases
     if release.is_latest:
@@ -4100,7 +4180,10 @@ def add_document_to_releases(request: HttpRequest, document_id: str, payload: Do
         return 404, {"detail": "Document not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "document:manage", document.component):
-        return 403, {"detail": "Only owners and admins can manage document releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this document's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     from sbomify.apps.core.utils import add_artifact_to_release
 
@@ -4188,7 +4271,10 @@ def remove_document_from_release(request: HttpRequest, document_id: str, release
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "document:manage", document.component):
-        return 403, {"detail": "Only owners and admins can manage document releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this document's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Prevent removing from latest releases
     if release.is_latest:
@@ -4285,7 +4371,10 @@ def add_sbom_to_releases(request: HttpRequest, sbom_id: str, payload: SBOMReleas
         return 404, {"detail": "SBOM not found", "error_code": ErrorCode.NOT_FOUND}
 
     if not can(request, "sbom:manage", sbom.component):
-        return 403, {"detail": "Only owners and admins can manage SBOM releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this SBOM's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     from sbomify.apps.core.utils import add_artifact_to_release
 
@@ -4371,7 +4460,10 @@ def remove_sbom_from_release(request: HttpRequest, sbom_id: str, release_id: str
         return 404, {"detail": "Release not found", "error_code": ErrorCode.RELEASE_NOT_FOUND}
 
     if not can(request, "sbom:manage", sbom.component):
-        return 403, {"detail": "Only owners and admins can manage SBOM releases", "error_code": ErrorCode.FORBIDDEN}
+        return 403, {
+            "detail": "You don't have permission to manage this SBOM's releases",
+            "error_code": ErrorCode.FORBIDDEN,
+        }
 
     # Verify release belongs to same team as the SBOM's component
     if str(release.product.team_id) != str(sbom.component.team_id):
@@ -4939,3 +5031,155 @@ def export_user_data_endpoint(request: HttpRequest) -> Any:
             "detail": "Failed to export user data. Please try again later.",
             "error_code": ErrorCode.INTERNAL_ERROR,
         }
+
+
+# ---------------------------------------------------------------------------
+# CSV exports — auditor-facing tabular downloads
+# ---------------------------------------------------------------------------
+
+
+def _export_team(request: HttpRequest) -> tuple[Any, tuple[int, ErrorResponse] | None]:
+    """The caller's workspace for an export, or an error pair."""
+    from sbomify.apps.teams.models import Team
+
+    team_id = _get_user_team_id(request)
+    if not team_id:
+        return None, (403, ErrorResponse(detail="No workspace context"))
+    team = Team.objects.filter(id=team_id).first()
+    if team is None:
+        return None, (403, ErrorResponse(detail="No workspace context"))
+    if not can(request, "workspace:read", team):
+        return None, (403, ErrorResponse(detail="Forbidden"))
+    return team, None
+
+
+def _csv_response(csv_text: str, filename: str) -> HttpResponse:
+    response = HttpResponse(csv_text, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    # Workspace-scoped data behind session/token auth. Without an explicit
+    # Cache-Control, CDNs cache .csv by extension and ignore Vary: Cookie, so
+    # one user's export could be served stale — or to another user.
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@router.get(
+    "/exports/inventory.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export the package inventory as CSV",
+    tags=["Exports"],
+)
+def export_inventory(request: HttpRequest, product_id: str | None = None) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Package inventory across the newest SBOM per component: name, version,
+    supplier, licenses and PURL — workspace-wide, or one product."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    product = None
+    if product_id:
+        product = Product.objects.filter(id=product_id, team=team).first()
+        if product is None:
+            return 404, ErrorResponse(detail="Product not found")
+
+    result = csv_exports.export_inventory_csv(team, product=product)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    scope = product.name if product else team.name
+    safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-")
+    return _csv_response(result.value or "", f"{safe}-inventory.csv")
+
+
+@router.get(
+    "/exports/licenses.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export the license list as CSV",
+    tags=["Exports"],
+)
+def export_licenses(
+    request: HttpRequest, product_id: str | None = None, release_id: str | None = None
+) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Distinct licenses in scope with package and component counts —
+    workspace-wide, one product, or one release."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    product = None
+    release = None
+    if release_id:
+        release = Release.objects.filter(id=release_id, product__team=team).first()
+        if release is None:
+            return 404, ErrorResponse(detail="Release not found")
+    elif product_id:
+        product = Product.objects.filter(id=product_id, team=team).first()
+        if product is None:
+            return 404, ErrorResponse(detail="Product not found")
+
+    result = csv_exports.export_licenses_csv(team, product=product, release=release)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    return _csv_response(result.value or "", "licenses.csv")
+
+
+@router.get(
+    "/exports/findings.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export assessment findings as CSV",
+    tags=["Exports"],
+)
+def export_findings(request: HttpRequest, sbom_id: str) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Latest compliance findings per plugin for one SBOM (NTIA, BSI, FDA...)."""
+    from sbomify.apps.core.services import csv_exports
+    from sbomify.apps.sboms.models import SBOM as SBOMModel
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    sbom = SBOMModel.objects.filter(id=sbom_id, component__team=team).select_related("component").first()
+    if sbom is None:
+        return 404, ErrorResponse(detail="SBOM not found")
+
+    result = csv_exports.export_findings_csv(sbom)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    return _csv_response(result.value or "", f"{sbom_id}-findings.csv")
+
+
+@router.get(
+    "/exports/vulnerabilities.csv",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export vulnerability findings as CSV",
+    tags=["Exports"],
+)
+def export_vulnerabilities(
+    request: HttpRequest, component_id: str | None = None, release_id: str | None = None
+) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Vulnerability findings with the post-VEX analysis state — the same
+    alias-merged numbers the dashboards show."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    component = None
+    release = None
+    if release_id:
+        release = Release.objects.filter(id=release_id, product__team=team).first()
+        if release is None:
+            return 404, ErrorResponse(detail="Release not found")
+    elif component_id:
+        component = Component.objects.filter(id=component_id, team=team).first()
+        if component is None:
+            return 404, ErrorResponse(detail="Component not found")
+
+    result = csv_exports.export_vulnerabilities_csv(team, component=component, release=release)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
+    return _csv_response(result.value or "", "vulnerabilities.csv")
