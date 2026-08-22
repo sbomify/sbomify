@@ -5011,7 +5011,7 @@ def export_inventory(request: HttpRequest, product_id: str | None = None) -> Htt
     if not result.ok:
         return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     scope = product.name if product else team.name
-    safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-")
+    safe = re.sub(r"[^a-zA-Z0-9\-]+", "-", scope.lower()).strip("-") or "workspace"
     return _csv_response(result.value or "", f"{safe}-inventory.csv")
 
 
@@ -5106,3 +5106,86 @@ def export_vulnerabilities(
     if not result.ok:
         return result.status_code or 400, ErrorResponse(detail=result.error or "Export failed")
     return _csv_response(result.value or "", "vulnerabilities.csv")
+
+
+@router.get(
+    "/exports/notice",
+    response={400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Export a third-party NOTICE document",
+    tags=["Exports"],
+)
+def export_notice(
+    request: HttpRequest,
+    product_id: str | None = None,
+    release_id: str | None = None,
+    format: str = "text",
+) -> HttpResponse | tuple[int, ErrorResponse]:
+    """Attribution document derived from stored artifacts — name, version,
+    licenses and copyright, with license-less components in their own section.
+    `format` is "text" or "html"."""
+    from sbomify.apps.core.services import csv_exports
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    product = None
+    release = None
+    if release_id:
+        release = Release.objects.filter(id=release_id, product__team=team).select_related("product").first()
+        if release is None:
+            return 404, ErrorResponse(detail="Release not found")
+    elif product_id:
+        product = Product.objects.filter(id=product_id, team=team).first()
+        if product is None:
+            return 404, ErrorResponse(detail="Product not found")
+
+    if format == "html":
+        result = csv_exports.export_notice_html(team, product=product, release=release)
+        content_type, filename = "text/html; charset=utf-8", "NOTICE.html"
+    elif format == "text":
+        result = csv_exports.export_notice_text(team, product=product, release=release)
+        content_type, filename = "text/plain; charset=utf-8", "NOTICE.txt"
+    else:
+        # A typo must not silently produce the default format — automation
+        # would never notice it asked for something else.
+        return 400, ErrorResponse(detail='Unknown format; expected "text" or "html".')
+    if not result.ok:
+        return 403, ErrorResponse(detail=result.error or "Export failed")
+    response = HttpResponse(result.value, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@router.get(
+    "/release-diff",
+    response={200: dict[str, Any], 400: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse},
+    summary="Diff two releases of a product",
+    tags=["Releases"],
+)
+def get_release_diff(
+    request: HttpRequest, from_release_id: str, to_release_id: str
+) -> dict[str, Any] | tuple[int, ErrorResponse]:
+    """Components added, removed and version-changed plus vulnerabilities
+    introduced and resolved between two releases of one product."""
+    from sbomify.apps.core.services import release_diff
+
+    team, err = _export_team(request)
+    if err:
+        return err
+
+    releases = {
+        release.id: release
+        for release in Release.objects.filter(
+            id__in=[from_release_id, to_release_id], product__team=team
+        ).select_related("product")
+    }
+    from_release = releases.get(from_release_id)
+    to_release = releases.get(to_release_id)
+    if from_release is None or to_release is None:
+        return 404, ErrorResponse(detail="Release not found")
+
+    result = release_diff.diff_releases(team, from_release, to_release)
+    if not result.ok:
+        return result.status_code or 400, ErrorResponse(detail=result.error or "Diff failed")
+    return result.value or {}
