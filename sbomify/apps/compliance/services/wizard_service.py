@@ -132,6 +132,16 @@ def _auto_fill_from_contacts(assessment: CRAAssessment) -> None:
     """Populate security contact and CSIRT email from existing contact profiles."""
     team = assessment.team
 
+    # The trust center's security.txt collects the same three answers
+    # (TR-03183-3 4.2.3/4.2.7); whichever side was filled first wins.
+    security_txt_config = team.security_txt_config or {}
+    if not assessment.csirt_contact_email and security_txt_config.get("csirt_email"):
+        assessment.csirt_contact_email = security_txt_config["csirt_email"]
+    if not assessment.vdp_url and security_txt_config.get("policy_url"):
+        assessment.vdp_url = security_txt_config["policy_url"]
+    if not assessment.security_contact_url and security_txt_config.get("report_url"):
+        assessment.security_contact_url = security_txt_config["report_url"]
+
     security_contact = get_security_contact(team)
     if security_contact:
         if not assessment.csirt_contact_email:
@@ -1246,8 +1256,34 @@ def _save_step_3(
                 "updated_at",
             ]
         )
+        _fill_security_txt_from_assessment(assessment)
 
     return ServiceResult.success(assessment)
+
+
+def _fill_security_txt_from_assessment(assessment: CRAAssessment) -> None:
+    """Fill empty security.txt slots from the vulnerability-handling answers.
+
+    The trust center file and the wizard collect the same three values
+    (TR-03183-3 4.2.3/4.2.7); syncing on save spares the operator entering
+    them twice. Slots the operator already set are never overwritten.
+    """
+    from sbomify.apps.teams.services.security_txt import validate_security_email, validate_security_txt_url
+
+    team = assessment.team
+    config = dict(team.security_txt_config or {})
+    filled = False
+    for config_key, value, validate in (
+        ("csirt_email", assessment.csirt_contact_email, validate_security_email),
+        ("policy_url", assessment.vdp_url, validate_security_txt_url),
+        ("report_url", assessment.security_contact_url, validate_security_txt_url),
+    ):
+        if value and not str(config.get(config_key, "")).strip() and validate(value) is None:
+            config[config_key] = value
+            filled = True
+    if filled:
+        team.security_txt_config = config
+        team.save(update_fields=["security_txt_config"])
 
 
 def _save_step_4(
