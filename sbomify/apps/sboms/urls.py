@@ -12,6 +12,9 @@ from sbomify.apps.sboms.views import (
     SbomVulnerabilitiesView,
     WorkspaceCryptoView,
 )
+from sbomify.apps.sboms.views.component_hardware import ComponentHardwareView
+from sbomify.apps.sboms.views.sbom_hardware_inventory import SbomHardwareInventoryView
+from sbomify.apps.sboms.views.workspace_hardware import WorkspaceHardwareView
 
 app_name = "sboms"
 urlpatterns: list[URLPattern] = [
@@ -92,13 +95,28 @@ urlpatterns: list[URLPattern] = [
         name="sbom_crypto_inventory",
     ),
     path(
+        "sbom/<str:sbom_id>/hardware-inventory",
+        SbomHardwareInventoryView.as_view(),
+        name="sbom_hardware_inventory",
+    ),
+    path(
         "workspaces/<str:team_key>/crypto/",
         WorkspaceCryptoView.as_view(),
         name="workspace_crypto",
     ),
     path(
+        "workspaces/<str:team_key>/hardware/",
+        WorkspaceHardwareView.as_view(),
+        name="workspace_hardware",
+    ),
+    path(
         "component/<str:component_id>/crypto-posture",
         ComponentCryptoPostureView.as_view(),
         name="component_crypto_posture",
+    ),
+    path(
+        "components/<str:component_id>/hardware/",
+        ComponentHardwareView.as_view(),
+        name="component_hardware",
     ),
 ]

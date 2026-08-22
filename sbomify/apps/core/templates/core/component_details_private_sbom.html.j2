@@ -13,6 +13,8 @@
     {% include "core/components/component_vulnerabilities.html.j2" %}
     {# CBOM issues drill-down for the latest CBOM — hidden when crypto assessments are clean #}
     {% include "core/components/component_cbom_issues.html.j2" %}
+    {# HBOM issues drill-down for the latest hardware artifact — hidden when there is none #}
+    {% include "core/components/component_hbom_issues.html.j2" %}
 {% endblock %}
 {% block upload_section %}
     {% if component.has_crud_permissions %}

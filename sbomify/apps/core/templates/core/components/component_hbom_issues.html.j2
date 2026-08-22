@@ -1,0 +1,118 @@
+{# HBOM issues drill-down for the newest hardware artifact. Rendered only when the hardware assessment reported gaps. #}
+{% if latest_hbom_issues %}
+    {{ latest_hbom_issue_terms|json_script:"latest-hbom-issue-terms" }}
+    {{ latest_hbom_issue_severities|json_script:"latest-hbom-issue-severities" }}
+    <div x-data="{ open: true, search: '', sevFilter: 'all', page: 1, perPage: 5, terms: (window.parseJsonScript('latest-hbom-issue-terms') || []), severities: (window.parseJsonScript('latest-hbom-issue-severities') || []), get sevOptions() { const order = ['critical', 'high', 'medium', 'low', 'info']; const present = new Set(this.severities); return order.filter(v => present.has(v)).concat([...present].filter(v => !order.includes(v)).sort()); }, get filteredIdx() { const q = this.search.trim().toLowerCase(); return this.terms.map((t, i) => i).filter(i => (!q || this.terms[i].includes(q)) && (this.sevFilter === 'all' || this.severities[i] === this.sevFilter)); }, get total() { return this.filteredIdx.length; }, get pageCount() { return Math.max(1, Math.ceil(this.total / this.perPage)); }, get pageSet() { return new Set(this.filteredIdx.slice((this.page - 1) * this.perPage, this.page * this.perPage)); }, get startIdx() { return this.total ? (this.page - 1) * this.perPage + 1 : 0; }, get endIdx() { return Math.min(this.page * this.perPage, this.total); }, }"
+         x-init="$watch('search', () => { page = 1 }); $watch('sevFilter', () => { page = 1 })"
+         class="tw-card">
+        <div class="px-6 py-4 border-b border-border cursor-pointer flex items-center justify-between gap-3"
+             @click="open = !open">
+            <h4 class="text-lg font-semibold text-text flex items-center gap-2 m-0">
+                HBOM issues
+                {% if latest_hbom_version %}
+                    <span class="font-normal text-text-muted text-sm">· {{ latest_hbom_version|truncatechars:24 }} (latest)</span>
+                {% endif %}
+            </h4>
+            <i class="fas fa-chevron-down text-text-muted transition-transform"
+               :class="open ? 'rotate-180' : ''"></i>
+        </div>
+        <div x-show="open" x-collapse>
+            {# Recommendations from a voluntary framework carry one severity today, so the filter appears only once a second one does. #}
+            <div class="px-6 py-4 border-b border-border flex flex-wrap items-center gap-3">
+                <div class="tw-data-table-search max-w-xs">
+                    <i class="fas fa-search tw-data-table-search-icon"></i>
+                    <label for="hbom-issue-search" class="sr-only">Search HBOM issues</label>
+                    <input type="search"
+                           id="hbom-issue-search"
+                           x-model="search"
+                           placeholder="Search HBOM issues..."
+                           class="tw-data-table-search-input" />
+                </div>
+                <label for="hbom-issue-sev-filter" class="sr-only">Filter by severity</label>
+                <select id="hbom-issue-sev-filter"
+                        x-model="sevFilter"
+                        x-show="sevOptions.length > 1"
+                        class="tw-data-table-page-size-select">
+                    <option value="all">All Severities</option>
+                    <template x-for="v in sevOptions" :key="v">
+                        <option :value="v" x-text="v.charAt(0).toUpperCase() + v.slice(1)"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="overflow-x-auto" x-cloak>
+                <table class="tw-table w-full">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Severity</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Issue</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for issue in latest_hbom_issues %}
+                            <tr x-show="pageSet.has({{ forloop.counter0 }})">
+                                <td class="px-6 py-4">
+                                    {% if issue.status == 'fail' %}
+                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-danger/10 text-danger border border-danger/30">{{ issue.severity|title }}</span>
+                                    {% elif issue.severity == 'high' %}
+                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-severity-high-soft text-severity-high border border-severity-high-soft">High</span>
+                                    {% elif issue.severity == 'medium' %}
+                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-warning/10 text-warning border border-warning/30">Medium</span>
+                                    {% elif issue.severity == 'low' %}
+                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-success/10 text-success border border-success/30">Low</span>
+                                    {% else %}
+                                        <span class="px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded bg-surface text-text-muted border border-border">{{ issue.severity|title }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4">
+                                    {% if latest_hbom_id %}
+                                        <a href="{% url 'core:component_item' component_id=component.id item_type='hbom' item_id=latest_hbom_id %}"
+                                           class="font-medium text-text hover:text-primary no-underline">{{ issue.title }}</a>
+                                    {% else %}
+                                        <span class="font-medium text-text">{{ issue.title }}</span>
+                                    {% endif %}
+                                    {% if issue.description %}
+                                        <div class="text-xs text-text-muted mt-1 max-w-xl">{{ issue.description|truncatechars:180 }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class="text-sm text-text-muted">{{ issue.remediation|truncatechars:120 }}</span>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <tr x-show="total === 0">
+                            <td colspan="3" class="px-6 py-8 text-center text-text-muted">No HBOM issues match your search.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {# Footer: row count on the left, parts list and pagination on the right #}
+            <div class="px-6 py-3 border-t border-border flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-4">
+                    <span class="text-sm text-text-muted">
+                        Showing <span x-text="startIdx"></span> to <span x-text="endIdx"></span> of <span x-text="total"></span>
+                    </span>
+                    <a href="{% url 'sboms:component_hardware' component_id=component.id %}"
+                       class="text-sm text-primary hover:underline no-underline inline-flex items-center gap-1">
+                        View parts list<i class="fas fa-arrow-right text-xs"></i>
+                    </a>
+                </div>
+                <div class="flex items-center gap-2" x-show="pageCount > 1">
+                    <button type="button"
+                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            :disabled="page === 1"
+                            @click="if (page > 1) page--">
+                        <i class="fas fa-chevron-left text-xs"></i>
+                    </button>
+                    <span class="text-sm text-text-muted">Page <span x-text="page"></span> / <span x-text="pageCount"></span></span>
+                    <button type="button"
+                            class="tw-btn-secondary text-sm px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                            :disabled="page === pageCount"
+                            @click="if (page < pageCount) page++">
+                        <i class="fas fa-chevron-right text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}

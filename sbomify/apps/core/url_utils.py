@@ -743,3 +743,36 @@ def resolve_document_identifier(
             return Document.objects.get(pk=identifier)
         except Document.DoesNotExist:
             return None
+
+
+# Schemes safe to put in an href we render. Anything else — javascript:, data:,
+# vbscript: — executes in the reader's browser when clicked, and Django's
+# autoescaping does not stop it: escaping protects the attribute's quoting, not
+# its scheme.
+_SAFE_LINK_SCHEMES = frozenset(("http", "https", "mailto"))
+
+
+def safe_external_url(url: Any) -> str:
+    """A URL safe to render as a link, or ``""`` when it is not one.
+
+    For values that came from an uploaded artifact or any other party we do not
+    control. sbomify stores artifacts exactly as received (ADR-004), so a
+    document can carry ``javascript:...`` in an externalReference and the
+    renderer is the only thing between that and a reader — on a public product,
+    an anonymous one.
+
+    Relative URLs are rejected too: a link out to a supplier datasheet is
+    absolute by definition, and a bare path would resolve against sbomify's own
+    origin, which is never what the document meant.
+    """
+    if not isinstance(url, str):
+        return ""
+    candidate = url.strip()
+    if not candidate:
+        return ""
+    try:
+        scheme = urlparse(candidate).scheme
+    except ValueError:
+        # urlparse raises on a malformed IPv6 literal; treat it as unusable.
+        return ""
+    return candidate if scheme.lower() in _SAFE_LINK_SCHEMES else ""

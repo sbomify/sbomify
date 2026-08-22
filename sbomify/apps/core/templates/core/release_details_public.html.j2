@@ -51,7 +51,7 @@
     </header>
 {% endblock %}
 {% block content %}
-    {% if release.has_sboms or release.has_vex or release.has_cbom %}
+    {% if release.has_sboms or release.has_vex or release.has_cbom or release.has_hbom %}
         <div class="tc-panel">
             <h2 class="tc-panel-title">Download this release</h2>
             <p class="tc-prose mb-4">Combined artifacts covering everything in this release.</p>
@@ -92,6 +92,15 @@
                     <span>CBOM</span>
                     <i class="fas fa-download text-xs" aria-hidden="true"></i>
                     </c-buttons.secondary>
+                {% endif %}
+                {% if release.has_hbom %}
+                    <a class="inline-flex items-center gap-2 min-h-10 px-4 py-2 border border-border rounded-lg text-text hover:bg-border/30 transition-colors no-underline"
+                       href="{% url 'api-1:download_release_hbom' release.id %}"
+                       title="Download HBOM (Hardware BOM, CycloneDX)">
+                        <i class="fas fa-microchip text-success" aria-hidden="true"></i>
+                        <span class="text-sm font-semibold tracking-wide">HBOM</span>
+                        <i class="fas fa-download text-primary text-xs ml-1" aria-hidden="true"></i>
+                    </a>
                 {% endif %}
             </div>
         </div>

@@ -22,6 +22,8 @@
         {% firstof "VEX" as item_kind_label %}
     {% elif is_cbom %}
         {% firstof "CBOM" as item_kind_label %}
+    {% elif is_hbom %}
+        {% firstof "HBOM" as item_kind_label %}
     {% else %}
         {% firstof "SBOM" as item_kind_label %}
     {% endif %}
@@ -270,6 +272,10 @@
             {% endif %}
             {# Cryptographic Assets (CBOM) — lazy-loaded; collapses when there are none #}
             <div hx-get="{% url 'sboms:sbom_crypto_inventory' sbom_id=item.id %}"
+                 hx-trigger="load"
+                 hx-swap="outerHTML"></div>
+            {# Hardware parts (HBOM) — same lazy load; the card collapses when the document has none #}
+            <div hx-get="{% url 'sboms:sbom_hardware_inventory' sbom_id=item.id %}"
                  hx-trigger="load"
                  hx-swap="outerHTML"></div>
             {# Assessment Results Section — not shown for VEX (a VEX isn't an SBOM to verify) #}
