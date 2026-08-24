@@ -168,18 +168,19 @@
             {% endif %}
         </section>
     {% endif %}
-    {# Security.txt (RFC 9116) #}
+    {# security.txt (RFC 9116) #}
     {% if team.is_public %}
         <section class="mt-8 pt-8 border-t border-border"
                  x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
             <div class="flex flex-wrap items-center justify-between gap-3">
+                {# The filename is the name: RFC 9116 writes security.txt lowercase everywhere. #}
                 <h3 class="text-sm font-semibold text-text m-0">
-                    Security.txt
+                    security.txt
                     <span class="text-text-muted font-normal">(RFC 9116)</span>
                 </h3>
-                <span class="text-xs font-medium"
-                      :class="securityTxtEnabled ? 'text-success' : 'text-text-muted'"
-                      x-text="securityTxtEnabled ? 'Enabled' : 'Disabled'"></span>
+                {# TEA-style status badges; x-show keeps them live since this toggle saves via the form's Save. #}
+                <c-badges.success x-show="securityTxtEnabled" x-cloak>Enabled</c-badges.success>
+                <c-badges.secondary x-show="!securityTxtEnabled">Disabled</c-badges.secondary>
             </div>
             <p class="text-sm text-text-muted mt-1 m-0">
                 Help security researchers report vulnerabilities via a standard contact file.
