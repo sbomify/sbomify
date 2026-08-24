@@ -226,6 +226,18 @@
                                class="text-primary hover:underline">Contact Profiles</a>.
                             </c-forms.hint>
                         </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <c-forms.label for="security_txt_csirt_email">CSIRT email</c-forms.label>
+                                <c-forms.input type="email" id="security_txt_csirt_email" name="security_txt_csirt_email" value="{{ security_txt_config.csirt_email|default:'' }}" placeholder="csirt@example.com" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Second contact line. BSI TR-03183-3 lists the CSIRT mailbox after the security contact.</c-forms.hint>
+                            </div>
+                            <div>
+                                <c-forms.label for="security_txt_report_url">Report page URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_report_url" name="security_txt_report_url" value="{{ security_txt_config.report_url|default:'' }}" placeholder="https://example.com/report-vulnerability" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Where researchers submit reports. Third contact line.</c-forms.hint>
+                            </div>
+                        </div>
                     </div>
                     {# Optional: Links #}
                     <div class="mb-6 pb-6 border-b border-border/50">
@@ -259,6 +271,11 @@
                                        name="security_txt_encryption_urls"
                                        :value="JSON.stringify(urls)">
                                 <c-forms.hint class="mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</c-forms.hint>
+                            </div>
+                            <div>
+                                <c-forms.label for="security_txt_csaf_url">CSAF provider metadata URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_csaf_url" name="security_txt_csaf_url" value="{{ security_txt_config.csaf_url|default:'' }}" placeholder="https://example.com/.well-known/csaf/provider-metadata.json" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Link to your provider-metadata.json if you publish CSAF advisories.</c-forms.hint>
                             </div>
                             <div>
                                 <c-forms.label for="security_txt_acknowledgments_url">Acknowledgments URL</c-forms.label>
