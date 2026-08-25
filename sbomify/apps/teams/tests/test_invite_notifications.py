@@ -77,7 +77,7 @@ def test_the_notification_links_to_where_invitations_are_accepted(invited_user: 
 
 
 @pytest.mark.django_db
-def test_an_auto_accepted_invitation_tells_the_user(invited_user: User, inviting_team: Team, client: Client) -> None:
+def test_an_auto_accepted_invitation_tells_the_user(invited_user: User, inviting_team: Team) -> None:
     """A new user is put in the workspace and the invitation is deleted, so
     nothing downstream can announce it. The acceptance has to say so itself."""
     _invite(inviting_team, invited_user.email, role="admin")
@@ -92,7 +92,8 @@ def test_an_auto_accepted_invitation_tells_the_user(invited_user: User, inviting
     assert len(accepted) == 1
     assert Member.objects.filter(user=invited_user, team=inviting_team).exists()
     assert not Invitation.objects.filter(email=invited_user.email).exists()
-    assert [str(m) for m in request._messages.stored] == ["You have joined Lithium Labs as admin."]
+    assert accepted[0]["announced"] is True
+    assert [str(m) for m in request._messages.stored] == ["You have joined Lithium Labs as admin"]
 
 
 class FallbackStorageStub:
@@ -133,3 +134,18 @@ def test_a_login_without_message_storage_still_completes(
 
     assert response.status_code == 200
     assert Member.objects.filter(user=invited_user, team=inviting_team).exists()
+
+
+@pytest.mark.django_db
+def test_a_login_with_no_message_storage_records_that_it_said_nothing(invited_user: User, inviting_team: Team) -> None:
+    """The accept-invite view reads this flag to decide whether it still has to
+    announce the join, so a silent acceptance must not claim otherwise."""
+    _invite(inviting_team, invited_user.email)
+
+    request = RequestFactory().get("/")
+    request.user = invited_user
+    request.session = SessionStore()
+
+    accepted = _accept_pending_invitations(invited_user, request)
+
+    assert accepted[0]["announced"] is False

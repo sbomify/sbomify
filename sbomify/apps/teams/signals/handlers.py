@@ -72,19 +72,27 @@ def _accept_pending_invitations(user: User, request: HttpRequest | None = None) 
             is_default_team=not has_default,
         )
         has_default = has_default or membership.is_default_team
-        accepted.append(
-            {"team_key": invitation.team.key, "invitation_id": invitation.id, "invitation_token": str(invitation.token)}
-        )
+        # Accepting deletes the invitation, so the pending-invitation
+        # notification has nothing left to show and the user is put in a
+        # workspace without being told. The accept-invite view announces it
+        # only for someone who arrives through the emailed link.
+        #
+        # Whether it lands is recorded rather than assumed: a login can reach
+        # here with no message storage, and the accept-invite view reads this
+        # flag to decide whether it still has to say so itself.
+        announced = False
+        if request is not None and hasattr(request, "_messages"):
+            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}")
+            announced = True
 
-        if request is not None:
-            # Accepting deletes the invitation, so the pending-invitation
-            # notification has nothing left to show and the user is put in a
-            # workspace without being told. The only other place that says so
-            # is the accept-invite view, which a user who signed up directly
-            # never reaches.
-            # fail_silently: a login that reaches here without the message
-            # middleware (a programmatic force_login, say) must still complete.
-            messages.info(request, f"You have joined {invitation.team.name} as {invitation.role}.", fail_silently=True)
+        accepted.append(
+            {
+                "team_key": invitation.team.key,
+                "invitation_id": invitation.id,
+                "invitation_token": str(invitation.token),
+                "announced": announced,
+            }
+        )
 
         if request is not None:
             # Capture into locals BEFORE invitation.delete() below; the
