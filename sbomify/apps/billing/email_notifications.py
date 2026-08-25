@@ -125,10 +125,31 @@ def notify_payment_succeeded(team: Team, member: Member) -> None:
     send_billing_email(team, member, subject, "payment_succeeded", {})
 
 
+def trial_ends_phrase(days_remaining: int) -> str:
+    """How long is left, in words, for both the subject and the body.
+
+    The caller computes ``days_remaining`` as ``(trial_end - now).days``, which
+    floors, so the last hours of a trial arrive as 0 and a lapsed one as a
+    negative. "ends in 0 days" and "ends in -1 days" are not sentences.
+    """
+    if days_remaining <= 0:
+        return "today"
+    return f"in {days_remaining} day{pluralize(days_remaining)}"
+
+
 def notify_trial_ending(team: Team, member: Member, days_remaining: int) -> None:
     """Notify team owner that trial period is ending soon."""
-    subject = f"Your sbomify trial ends in {days_remaining} day{pluralize(days_remaining)}"
-    send_billing_email(team, member, subject, "trial_ending", {"days_remaining": days_remaining})
+    phrase = trial_ends_phrase(days_remaining)
+    subject = f"Your sbomify trial ends {phrase}"
+    send_billing_email(
+        team,
+        member,
+        subject,
+        "trial_ending",
+        # The phrase, not the number: subject, title and body all read it, so
+        # there is one wording rather than three that can disagree.
+        {"days_remaining": days_remaining, "trial_ends_phrase": phrase},
+    )
 
 
 def notify_trial_expired(team: Team, member: Member) -> None:

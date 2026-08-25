@@ -1,6 +1,6 @@
 Hi {{ user_name }},
 
-Your trial for {{ team_name }} ends in {{ days_remaining }} day{{ days_remaining|pluralize }}. Upgrade to a paid plan to keep access to all features.
+Your trial for {{ team_name }} ends {{ trial_ends_phrase }}. Upgrade to a paid plan to keep access to all features.
 
 Upgrade now: {{ upgrade_url }}
 

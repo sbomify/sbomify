@@ -36,8 +36,17 @@ def test_notify_trial_ending(team):
             member,
             f"Your sbomify trial ends in {days_remaining} days",
             "trial_ending",
-            {"days_remaining": days_remaining},
+            {"days_remaining": days_remaining, "trial_ends_phrase": f"in {days_remaining} days"},
         )
+
+
+@pytest.mark.parametrize(
+    ("days_remaining", "expected"),
+    [(3, "in 3 days"), (1, "in 1 day"), (0, "today"), (-1, "today")],
+)
+def test_trial_ends_phrase_reads_as_a_sentence(days_remaining, expected):
+    """days_remaining floors, so the sender reaches 0 and negatives in normal use."""
+    assert email_notifications.trial_ends_phrase(days_remaining) == expected
 
 
 def test_notify_payment_failed(team):

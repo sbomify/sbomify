@@ -165,6 +165,7 @@ class Command(BaseCommand):
                     "action_url": f"{base_url}/billing/portal/acme-corp/",
                     "upgrade_url": f"{base_url}/billing/select-plan/acme-corp/",
                     "days_remaining": 3,
+                    "trial_ends_phrase": "in 3 days",
                 },
             },
             {
