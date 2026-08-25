@@ -229,6 +229,7 @@ extend-select = ["TID251"]
 "screencasts/audit_timing.py" = ["T201"]
 "screencasts/score.py" = ["T201"]
 "screencasts/transcode.py" = ["T201"]
+"screencasts/wayland_capture.py" = ["T201"]
 "screencasts/backfill_timings.py" = ["T201"]
 
 [tool.ruff.format]
