@@ -77,7 +77,14 @@ def test_every_email_title_matches_its_subject(sent_test_emails: list[EmailMessa
 
 def test_every_email_template_is_previewable(sent_test_emails: list[EmailMessage]) -> None:
     """A template the command does not list is a template no test can reach."""
-    on_disk = {path.name for path in APPS_DIR.glob("*/templates/*/emails/*.html.j2") if path.name not in NOT_AN_EMAIL}
+    # The template path as Django resolves it, not the bare filename: two apps
+    # are free to name a template the same thing, and a set of filenames would
+    # collapse them and let one go unlisted unnoticed.
+    on_disk = {
+        "/".join(path.parts[-3:])
+        for path in APPS_DIR.glob("*/templates/*/emails/*.html.j2")
+        if path.name not in NOT_AN_EMAIL
+    }
     source = (APPS_DIR / "core/management/commands/send_test_emails.py").read_text()
     unlisted = sorted(name for name in on_disk if name not in source)
     assert not unlisted, f"email templates send_test_emails never renders: {unlisted}"
