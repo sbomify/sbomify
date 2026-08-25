@@ -94,6 +94,13 @@ jobs:
           docker compose -f docker-compose.tests.yml exec -T tests \
             uv run playwright install ffmpeg
 
+      # This runner has no GPU, so Chromium rasterises in software and the CDP
+      # screencast tops out around 12-16 unique frames a second. The recording
+      # is correct but the motion stutters. For anything being published,
+      # record on a machine with a real GPU instead — see
+      # .claude/skills/narrated-screencast/SKILL.md ("Smoothness: record where
+      # there is a GPU"), which is why SCREENCAST_LOCAL_BROWSER exists.
+
       - name: Record screencasts
         run: |
           INPUT="${{ github.event.inputs.screencast }}"

@@ -209,12 +209,11 @@ keycloak-postgres-data/
 # Screencast recordings.  Note screencasts/narration/audio/ is deliberately
 # NOT ignored — the synthesized narration is committed so recordings are
 # reproducible without an API key.
-screencasts/output/*.webm
-screencasts/output/*.txt
-screencasts/output/*.md
-screencasts/output/*.vtt
-screencasts/output/*.narration.json
-screencasts/output/screenshots/
+#
+# The whole output tree, rather than a list of extensions: that list had to be
+# extended for every new artifact the pipeline learned to write, and a stale
+# `.retimed.json` marker from a since-deleted script got staged because of it.
+screencasts/output/
 screencasts/narration/audition/
 
 # VSCode settings

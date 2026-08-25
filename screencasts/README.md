@@ -37,6 +37,37 @@ output/
 CI (`.github/workflows/screencasts.yml`, manual dispatch) records the same
 targets and syncs `*.webm` and the screenshot tree to Cloudflare R2.
 
+### Record on a machine with a GPU
+
+**Anything being published should be recorded on macOS**, not in Docker.
+
+The container has no GPU — `/dev/dri` is not exposed, it runs in a VM, and
+Chromium starts with `--disable-gpu` — so rasterisation is software and the
+CDP screencast delivers 12-16 unique frames a second whatever you do. The
+recording is *correct*, but a page pan lands in five to eight frames and reads
+as a stutter.
+
+On a Mac, Chromium composites through Metal. Point Playwright at a locally
+launched browser instead of the container's CDP endpoint:
+
+```bash
+docker compose -f docker-compose.tests.yml up -d db redis sbomify-s3
+SCREENCAST_LOCAL_BROWSER=1 uv run pytest screencasts/marketplace_walkthrough.py \
+    --override-ini="python_files=*.py" \
+    --override-ini="python_functions=marketplace_walkthrough" -s
+uv run python screencasts/transcode.py marketplace_walkthrough
+uv run python screencasts/mux_narration.py marketplace_walkthrough
+```
+
+The services still run in Docker; only the browser and the test process move to
+the host. `SCREENCAST_LOCAL_BROWSER=1` launches Chromium **headed** on purpose:
+headless still composites through SwiftShader on several platforms, which is
+the thing being avoided.
+
+`transcode.py` re-encodes Playwright's VP8 output to VP9 (it bands on the app's
+flat gradients) and must run before `mux_narration.py`, which lays the audio on
+from the timing manifest.
+
 ## The marketplace walkthrough
 
 `walkthrough_chapters.py` is the source of truth: it holds the Pied Piper seed,

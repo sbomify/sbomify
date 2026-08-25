@@ -23,10 +23,13 @@ beats:
       that. [pause] Only you can say whether the vulnerable code is reachable
       in the way you use it.
 
+  # The file on screen is CycloneDX, so name it — but sbomify also reads
+  # OpenVEX and CSAF 2.0 (vulnerability_scanning/vex_formats.py), and this line
+  # bare read as CycloneDX being the only option.
   vex_v1_file:
     text: >-
-      So here's the first VEX. CycloneDX, version one, and it marks the
-      critical as not affected.
+      So here's the first VEX. This one is CycloneDX — OpenVEX and CSAF work
+      too — version one, and it marks the critical as not affected.
 
   vex_v1_detail:
     text: >-

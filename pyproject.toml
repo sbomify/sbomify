@@ -226,6 +226,10 @@ extend-select = ["TID251"]
 # programs, not application code — printing to the terminal is their output.
 "screencasts/narrator.py" = ["T201"]
 "screencasts/mux_narration.py" = ["T201"]
+"screencasts/audit_timing.py" = ["T201"]
+"screencasts/score.py" = ["T201"]
+"screencasts/transcode.py" = ["T201"]
+"screencasts/backfill_timings.py" = ["T201"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

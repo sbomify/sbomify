@@ -1,7 +1,9 @@
 import json
+import os
 import re
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Generator
 from urllib.parse import urlparse
@@ -46,22 +48,28 @@ MINIMAL_PDF = (
     b"startxref\n190\n%%EOF\n"
 )
 CLICK_INDICATOR_JS = Path(__file__).parent / "click_indicator.js"
-LOGO_SVG = Path(__file__).parent.parent / "sbomify" / "static" / "img" / "logo-circle.svg"
+SMOOTH_SCROLL_JS = Path(__file__).parent / "smooth_scroll.js"
+
+# The current brand mark: the bar emblem plus wordmark, same artwork the app
+# renders inline from core/components/brand/logo.html.j2 (identical viewBox,
+# 571.45x107). The white variant is the one for a dark ground.
+#
+# NOT logo-circle.svg. That is the retired mark — nothing in the app references
+# it any more, and the splash was still opening every recording on it.
+LOGO_SVG = Path(__file__).parent.parent / "sbomify" / "static" / "img" / "sbomify-white.svg"
 
 # Match the app's dark-mode background so the recording never flashes white.
 APP_BG_COLOR = "#0A0A23"
 
-# Splash screen shown while the first real page loads.  The logo SVG is read
-# once at import time and embedded directly in the HTML.  Force the SVG to
-# scale within its container by replacing the hardcoded dimensions.
-_logo_svg_content = (
-    LOGO_SVG.read_text().replace('width="257" height="257"', 'width="100%" height="100%"') if LOGO_SVG.exists() else ""
-)
+# Splash screen shown while the first real page loads. The logo SVG is read
+# once at import time and embedded directly in the HTML. It carries a viewBox
+# and no width/height, so it scales to whatever box it is given.
+_logo_svg_content = LOGO_SVG.read_text() if LOGO_SVG.exists() else ""
 SPLASH_HTML = f"""\
 <html style="background:{APP_BG_COLOR}">
 <body style="margin:0;display:flex;justify-content:center;align-items:center;
              min-height:100vh;background:{APP_BG_COLOR}">
-  <div style="opacity:0.35;width:120px;height:120px">
+  <div style="opacity:0.35;width:340px">
     {_logo_svg_content}
   </div>
 </body>
@@ -211,13 +219,14 @@ def pace(page: Page, ms: int = 600) -> None:
     least 3s have passed since the last frame. Screenshot time is counted
     against the requested pause so the overall delay stays about the same.
     """
-    remaining_ms = ms
+    _log_scene(page)
+    wall_ms = ms
     if ms >= _SCREENSHOT_MIN_PACE_MS:
         started = time.monotonic()
         _maybe_capture_screenshot(page)
         elapsed_ms = int((time.monotonic() - started) * 1000)
-        remaining_ms = max(0, ms - elapsed_ms)
-    page.wait_for_timeout(remaining_ms)
+        wall_ms = max(0, wall_ms - elapsed_ms)
+    page.wait_for_timeout(wall_ms)
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +248,34 @@ _narration_state: dict[str, Any] = {
     "t0": 0.0,
     "beats": [],
     "busy_until": 0.0,
+    # The beat currently speaking, so the *next* narrate() can close it out and
+    # record how long its visual work really took.  Audio duration is known up
+    # front; visual duration is not, and nothing compared the two.
+    "open_beat": None,
+    # Every surface the recording landed on, as (offset_ms, url).  The manifest
+    # used to describe only the audio timeline, so a line that started on the
+    # right page and finished three pages later measured as perfectly paced.
+    # `audit_timing.py` joins the two.
+    "scenes": [],
 }
+
+
+def _short_url(url: str) -> str:
+    """Path only, with ids collapsed, so scenes compare across runs."""
+    path = urlparse(url).path.rstrip("/") or "/"
+    return re.sub(r"/[A-Za-z0-9]{10,}(?=/|$)", "/<id>", path)
+
+
+def _log_scene(page: Page) -> None:
+    """Note the current surface, if it changed since the last note."""
+    if _narration_state["narrator"] is None:
+        return
+    url = _short_url(page.url)
+    scenes = _narration_state["scenes"]
+    if scenes and scenes[-1]["url"] == url:
+        return
+    offset_ms = (time.monotonic() - _narration_state["t0"]) * 1000
+    scenes.append({"offset_ms": round(offset_ms, 1), "url": url})
 
 
 def narrate(page: Page, key: str) -> None:
@@ -278,9 +314,42 @@ def narrate(page: Page, key: str) -> None:
             "duration": clip.duration,
             "sha": clip.sha,
             "caption": clip.caption,
+            # Per-character speech timing, so mux_narration can cut subtitle
+            # cues at the moment each word is actually spoken.
+            "char_times": [[c, a, b] for c, a, b in clip.char_times] if clip.char_times else None,
+            # What was on screen when the line started. Compared against the
+            # scene log by `audit_timing.py` to find lines that begin on one
+            # surface and end on another — the failure the manifest alone
+            # cannot show, because it records only the audio timeline.
+            "url": _short_url(page.url),
         }
     )
+    # The line occupies clip.duration of *finished* video, so the recording
+    # has to sit on it for that much wall clock times the slowdown.
     _narration_state["busy_until"] = time.monotonic() + clip.duration + _INTER_BEAT_GAP_MS / 1000
+    _narration_state["open_beat"] = {"entry": _narration_state["beats"][-1], "started": time.monotonic()}
+
+
+def _close_open_beat() -> None:
+    """Record how long the open beat's visual work took, before it is held out.
+
+    Called at the top of :func:`settle`, which is the moment the script has
+    finished acting and is about to wait for the voice.  The gap between this
+    and the clip duration is the whole timing problem in one number:
+
+        slack > 0   the line outruns the picture; it freezes for that long
+        slack < 0   the picture outruns the line; that much silence
+
+    Both were previously invisible and had to be found by watching.
+    """
+    open_beat = _narration_state.get("open_beat")
+    if not open_beat:
+        return
+    visual_ms = (time.monotonic() - open_beat["started"]) * 1000
+    entry = open_beat["entry"]
+    entry["visual_ms"] = round(visual_ms, 1)
+    entry["slack_ms"] = round(entry["duration"] * 1000 - visual_ms, 1)
+    _narration_state["open_beat"] = None
 
 
 def settle(page: Page) -> None:
@@ -290,8 +359,11 @@ def settle(page: Page) -> None:
     sentence describing it does — the script is free to keep acting under the
     voice the rest of the time.
     """
+    _close_open_beat()
     remaining_ms = int((_narration_state["busy_until"] - time.monotonic()) * 1000)
     if remaining_ms > 0:
+        # busy_until is already wall clock; pace() scales what it is given, so
+        # hand it the finished-timeline figure or the wait is squared.
         pace(page, remaining_ms)
 
 
@@ -304,6 +376,64 @@ def smooth_scroll(page: Page, locator: Locator, pause_ms: int = 1200) -> None:
     """
     locator.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
     pace(page, pause_ms)
+
+    # Then make sure it actually arrived.
+    #
+    # The pan is a *preference*, not a promise. It runs inside the page and has
+    # been measured not arriving, and when that happens the thing the line is
+    # describing sits off-screen with nothing to say so. Verify, and correct.
+    _hold_in_frame(page, locator)
+
+
+def _hold_in_frame(page: Page, locator: Locator, attempts: int = 5) -> None:
+    """Scroll ``locator`` into view and keep it there.
+
+    Two things make this harder than one assignment.
+
+    The in-page pan has been measured not arriving, while a plain ``scrollTop``
+    assignment in the same document worked and requestAnimationFrame ticked 62
+    times a second.
+
+    And after an HTMX save the panel re-renders *asynchronously*, putting the
+    document back at the top a moment after the scroll succeeded — so a check
+    taken immediately after scrolling passes and the recording still shows the
+    top of the page. Every earlier attempt at this verified green that way.
+
+    So: assign directly, wait, and re-check from Python. Repeat until it holds.
+    """
+    for _ in range(attempts):
+        locator.evaluate(
+            """el => {
+                const r = el.getBoundingClientRect();
+                // Something taller than the viewport can never sit wholly
+                // inside it; for those, having the top in view is the goal.
+                const fits = r.height <= window.innerHeight;
+                const ok = fits ? (r.top >= 0 && r.bottom <= window.innerHeight)
+                                : (r.top >= 0 && r.top <= window.innerHeight * 0.4);
+                if (ok) return;
+                // Stop the eased pan first: it reassigns scrollTop from its own
+                // progress on every frame and would undo this immediately.
+                if (window.__sbomifyCancelScroll) window.__sbomifyCancelScroll();
+                const s = document.scrollingElement || document.documentElement;
+                const max = s.scrollHeight - window.innerHeight;
+                const want = s.scrollTop + r.top - (window.innerHeight - r.height) / 2;
+                s.scrollTop = Math.max(0, Math.min(max, want));
+            }"""
+        )
+        page.wait_for_timeout(350)
+        # Ask the page, not Playwright. `bounding_box()` and
+        # `getBoundingClientRect()` disagreed here, and the page's own view of
+        # its layout is the one that decides what the camera sees.
+        if locator.evaluate(
+            """el => {
+                const r = el.getBoundingClientRect();
+                const fits = r.height <= window.innerHeight;
+                return fits ? (r.top >= 0 && r.bottom <= window.innerHeight)
+                            : (r.top >= 0 && r.top <= window.innerHeight * 0.4);
+            }"""
+        ):
+            return
+    raise AssertionError(f"could not hold {locator} in frame after {attempts} attempts")
 
 
 def hover_and_click(page: Page, locator: Locator, pause_ms: int = 250) -> None:
@@ -325,7 +455,10 @@ def hover_and_click(page: Page, locator: Locator, pause_ms: int = 250) -> None:
         }"""
     )
     if scrolled:
-        page.wait_for_timeout(700)
+        # Wait out the whole pan, not half of it. `smooth_scroll.js` runs the
+        # pan for `__sbomifyScrollDuration`; a flat 700ms let the cursor land
+        # while the page was still moving under it.
+        page.wait_for_timeout(1400 + 120)
     box = locator.bounding_box()
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
@@ -408,23 +541,48 @@ def auto_dismiss_toasts(page: Page) -> None:
     )
 
 
-def rewrite_localhost_urls(page: Page) -> None:
-    """Replace localhost URLs in the visible DOM with app.sbomify.com.
+# Where the platform itself lives: what a CNAME points *at*, and the right
+# host for anything rendered on an admin screen.
+PLATFORM_DOMAIN = "app.sbomify.com"
+
+# The workspace's own trust-center hostname, the one the tour configures on
+# camera in chapter 4.
+CUSTOM_TRUST_DOMAIN = "trust.piedpiper.com"
+
+
+def rewrite_localhost_urls(page: Page, domain: str = PLATFORM_DOMAIN) -> None:
+    """Replace localhost URLs in the visible DOM with a real-looking host.
 
     Used in screencasts where the trust center public URL or CNAME target
     would otherwise show the test server address.
+
+    ``domain`` matters, and the default is not always right.  Two different
+    hosts are correct in two different places:
+
+    * the **CNAME target** on the settings page is genuinely ours, so those
+      pages keep ``app.sbomify.com``;
+    * the **public trust centre** is served from the workspace's own domain
+      once configured, so it must read ``trust.piedpiper.com``.
+
+    Rewriting everything to ours meant the tour typed ``trust.piedpiper.com``
+    into the custom-domain field, saved it, and then showed the finished page
+    on ``app.sbomify.com`` — contradicting the line it had just spoken about
+    the link carrying your name rather than ours.
     """
-    page.evaluate("""() => {
+    page.evaluate(
+        """(domain) => {
         const walk = (node) => {
             if (node.nodeType === Node.TEXT_NODE) {
                 node.textContent = node.textContent
-                    .replace(/http:\\/\\/localhost:\\d+/g, 'https://app.sbomify.com')
-                    .replace(/\\blocalhost\\b/g, 'app.sbomify.com');
+                    .replace(/http:\\/\\/localhost:\\d+/g, 'https://' + domain)
+                    .replace(/\\blocalhost\\b/g, domain);
             }
             for (const child of node.childNodes) walk(child);
         };
         walk(document.body);
-    }""")
+    }""",
+        domain,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +603,7 @@ TITLE_CARD_ID = "__walkthrough-title-card"
 CAPTION_ID = "__walkthrough-caption"
 
 
-def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600, linger: bool = False) -> None:
+def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 3200, linger: bool = False) -> None:
     """Cover the viewport with a branded chapter card, hold, then fade out.
 
     Used between chapters of the long tour so the viewer gets a beat to
@@ -475,11 +633,20 @@ def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600, linger
                 opacity: 0; transition: opacity 420ms ease;
             `;
 
-            const eyebrow = document.createElement('div');
-            eyebrow.style.cssText = 'font-size:15px; font-weight:600;' +
-                ' letter-spacing:0.22em; text-transform:uppercase;' +
-                ' color:#818cf8;';
-            eyebrow.textContent = payload.eyebrow;
+            // The brand-fronted cards (the opener and the closing CTA) carry
+            // the real wordmark; chapter cards keep the lettered eyebrow.
+            let eyebrow;
+            if (payload.logo) {
+                eyebrow = document.createElement('div');
+                eyebrow.style.cssText = 'width:300px; margin-bottom:10px;';
+                eyebrow.innerHTML = payload.logo;
+            } else {
+                eyebrow = document.createElement('div');
+                eyebrow.style.cssText = 'font-size:15px; font-weight:600;' +
+                    ' letter-spacing:0.22em; text-transform:uppercase;' +
+                    ' color:#818cf8;';
+                eyebrow.textContent = payload.eyebrow;
+            }
 
             const title = document.createElement('div');
             title.style.cssText = 'font-size:52px; font-weight:700;' +
@@ -495,21 +662,70 @@ def title_card(page: Page, eyebrow: str, title: str, hold_ms: int = 2600, linger
             card.appendChild(title);
             card.appendChild(rule);
             document.body.appendChild(card);
+            // The card is `position: fixed; inset: 0`, which covers the layout
+            // viewport but *not* the scrollbar beside it. Over a long page the
+            // strip stays lit down the right edge and, because it takes width,
+            // shoves the card's centred content left of frame. The chapter
+            // cards sit over app screens that manage their own scrolling and
+            // never showed it; the closing card sits over the public trust
+            // centre, which does scroll, and showed both.
+            document.documentElement.dataset.sbomifyPrevOverflow =
+                document.documentElement.style.overflow || '';
+            document.documentElement.style.overflow = 'hidden';
             requestAnimationFrame(() => { card.style.opacity = '1'; });
         }""",
-        {"id": TITLE_CARD_ID, "eyebrow": eyebrow, "title": title, "bg": APP_BG_COLOR},
+        {
+            "id": TITLE_CARD_ID,
+            "eyebrow": eyebrow,
+            "title": title,
+            "bg": APP_BG_COLOR,
+            "logo": _logo_svg_content if eyebrow.strip().lower() == "sbomify" else "",
+        },
     )
     page.wait_for_timeout(hold_ms)
     if linger:
         return
     page.evaluate(
-        """(id) => {
-            const card = document.getElementById(id);
+        """(payload) => {
+            const card = document.getElementById(payload.id);
             if (!card) return;
             card.style.opacity = '0';
-            setTimeout(() => card.remove(), 460);
+            setTimeout(() => {
+                card.remove();
+                // Restore whatever the page had, so hiding the scrollbar for
+                // the card cannot change how the surface behind it behaves.
+                const root = document.documentElement;
+                root.style.overflow = root.dataset.sbomifyPrevOverflow || '';
+                delete root.dataset.sbomifyPrevOverflow;
+            }, payload.removeAfterMs);
         }""",
-        TITLE_CARD_ID,
+        {"id": TITLE_CARD_ID, "removeAfterMs": 460},
+    )
+    page.wait_for_timeout(500)
+
+
+def clear_title_card(page: Page) -> None:
+    """Fade out and remove a card left up by ``title_card(linger=True)``.
+
+    Lets a caller hold a card for exactly as long as something else takes —
+    a narration line, a page load — instead of guessing a duration. The
+    opening card was sized with ``hold_ms`` and measured leaving the screen at
+    4.75s against a 13s hold, so the tour opened on eleven seconds of dim
+    splash logo. Holding until the line is done removes the guess.
+    """
+    page.evaluate(
+        """(payload) => {
+            const card = document.getElementById(payload.id);
+            if (!card) return;
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.remove();
+                const root = document.documentElement;
+                root.style.overflow = root.dataset.sbomifyPrevOverflow || '';
+                delete root.dataset.sbomifyPrevOverflow;
+            }, payload.removeAfterMs);
+        }""",
+        {"id": TITLE_CARD_ID, "removeAfterMs": 460},
     )
     page.wait_for_timeout(500)
 
@@ -556,6 +772,8 @@ def caption(page: Page, text: str) -> None:
         }""",
         {"id": CAPTION_ID, "text": text},
     )
+    # The caption's own fade is a CSS transition, and CDP slows those, so the
+    # wait has to be scaled to match or the next action starts mid-fade.
     page.wait_for_timeout(260)
 
 
@@ -612,6 +830,15 @@ def navigate_to_releases(page: Page) -> None:
     """Click the sidebar Releases link and wait for the page to load."""
     releases_link = page.get_by_role("link", name="Releases")
     hover_and_click(page, releases_link)
+    page.wait_for_load_state("networkidle")
+    pace(page, 1200)
+
+
+def navigate_to_advisories(page: Page) -> None:
+    """Click the sidebar Security Advisories link and wait for the page."""
+    link = page.get_by_role("link", name="Security Advisories")
+    link.wait_for(state="visible", timeout=15_000)
+    hover_and_click(page, link)
     page.wait_for_load_state("networkidle")
     pace(page, 1200)
 
@@ -784,11 +1011,8 @@ def enable_and_save_plugin(page: Page, plugin_slug: str) -> None:
     pace(page, 2000)
 
 
-def enable_and_configure_trust_center(page: Page) -> None:
-    """Enable the trust center and configure a custom domain.
-
-    Shared between trust_center_setup and tea_enabling screencasts.
-    """
+def enable_trust_center(page: Page) -> None:
+    """Flip the workspace-visibility toggle that turns the trust centre on."""
     toggle = page.locator("#workspace-visibility-toggle")
     toggle.wait_for(state="visible", timeout=10_000)
     pace(page, 600)
@@ -798,15 +1022,36 @@ def enable_and_configure_trust_center(page: Page) -> None:
     rewrite_localhost_urls(page)
     pace(page, 2000)
 
+
+def configure_custom_domain(page: Page, domain: str = CUSTOM_TRUST_DOMAIN) -> None:
+    """Type and save the workspace's own trust-centre hostname.
+
+    Split out from :func:`enable_trust_center` so a narrated tour can put the
+    line about serving from your own domain *over* this, rather than after it.
+
+    **The dwell happens before the save, deliberately.** Saving the domain
+    scrolls this page back to the top: measured, ``scrollTop = 1200`` reads
+    back as 1200 and is 0 again within 600ms, and only after the save — before
+    it, a scroll holds indefinitely. So no amount of scrolling afterwards keeps
+    the field in frame, which is why three earlier attempts at this shipped
+    looking identical to the bug. Playwright's own auto-scroll for the click is
+    reverted the same way, so the typing was happening off-screen too.
+
+    Working with that instead of against it: pan to the field, type, and hold
+    on the filled-in form while the line plays. The save lands at the end of
+    the beat, and the page is free to jump wherever it likes afterwards.
+    """
     domain_input = page.locator("#custom-domain-input")
     domain_input.wait_for(state="visible", timeout=15_000)
-    domain_input.evaluate("el => el.scrollIntoView({ behavior: 'smooth', block: 'center' })")
-    pace(page, 800)
+    smooth_scroll(page, domain_input, 900)
 
     hover_and_click(page, domain_input)
     pace(page, 400)
-    type_text(domain_input, "trust.piedpiper.com")
-    pace(page, 800)
+    type_text(domain_input, domain)
+
+    # Hold on the completed field: this is the only stretch where the hostname,
+    # the CNAME instructions beneath it and a stable scroll position coexist.
+    pace(page, 2600)
 
     save_btn = page.locator("button:has-text('Save Domain')")
     save_btn.wait_for(state="visible", timeout=5_000)
@@ -815,7 +1060,16 @@ def enable_and_configure_trust_center(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     dismiss_toasts(page)
     rewrite_localhost_urls(page)
-    pace(page, 1500)
+    pace(page, 800)
+
+
+def enable_and_configure_trust_center(page: Page) -> None:
+    """Both halves, for the recordings that narrate them as one step.
+
+    Shared between trust_center_setup and tea_enabling screencasts.
+    """
+    enable_trust_center(page)
+    configure_custom_domain(page)
 
 
 # ---------------------------------------------------------------------------
@@ -938,9 +1192,29 @@ def playwright() -> Generator[Playwright, Any, None]:
         yield pw
 
 
+# Where the browser comes from.
+#
+# In Docker there is a separate Chromium container and we attach to its CDP
+# endpoint. That box has no GPU (`--disable-gpu`, no /dev/dri, inside a VM), so
+# Chromium rasterises in software and the CDP screencast delivers 12-16 unique
+# frames a second no matter what — measured, and unchanged by halving the
+# rendered pixel count, so it is a capture ceiling rather than a drawing one.
+#
+# On a machine with a real GPU — a Mac, where Chromium uses Metal — launching
+# the browser locally avoids both the container and the attachment, and the
+# recording is captured at the frame rate Playwright asks for. Set
+# ``SCREENCAST_LOCAL_BROWSER=1`` there.
+LOCAL_BROWSER = os.environ.get("SCREENCAST_LOCAL_BROWSER", "") not in ("", "0", "false")
+
+
 @pytest.fixture(scope="session")
 def browser(playwright: Playwright) -> Generator[Browser, Any, None]:
-    browser_instance = playwright.chromium.connect_over_cdp(settings.PLAYWRIGHT_CDP_ENDPOINT)
+    if LOCAL_BROWSER:
+        # Headed on purpose: headless Chromium still composites through SwiftShader
+        # on several platforms, which is the thing we are trying to get away from.
+        browser_instance = playwright.chromium.launch(headless=False)
+    else:
+        browser_instance = playwright.chromium.connect_over_cdp(settings.PLAYWRIGHT_CDP_ENDPOINT)
     yield browser_instance
     browser_instance.close()
 
@@ -978,6 +1252,66 @@ PIED_PIPER_COMPONENTS = [
 
 PIED_PIPER_PRODUCT_NAME = "Pied Piper Compression Engine"
 
+# Version history per component, oldest first: (version, CycloneDX spec, age in
+# days). Every component carried exactly one SBOM before this, which made the
+# artifacts table a single row — and the walkthrough chapter that shows it is
+# called "Every artifact, versioned". One row is not a version history, and it
+# argues against the feature the chapter is selling.
+#
+# The spec version climbs 1.5 -> 1.6 across the history because a real pipeline
+# picks up a newer generator over a year, and the table has a Format column
+# that shows it. The newest entry is the version the tagged release pins and
+# the one the product identifiers carry, so the whole frame agrees.
+# Version history per component, oldest first: (version, CycloneDX spec, age in
+# days).
+#
+# Two things this has to get right, because both were wrong and both are
+# visible in frame:
+#
+# 1. **Contiguous within a component.** These rows are *all* the SBOMs the
+#    component has, so a gap reads as a missing upload rather than a release
+#    that was never cut. The first version of this jumped 1.0.0 -> 1.2.0 ->
+#    2.1.0 -> 2.4.0, four holes to anyone who reads SemVer.
+#
+# 2. **Independent between components.** Every component previously shared one
+#    series, so the product page listed "2.4.0" four times and the tagged
+#    release pinned 2.4.0 of everything — a library, a web dashboard, an API
+#    service and a batch worker all in lockstep, which does not happen. Each
+#    now runs its own major and its own cadence: the dashboard is on 3.x and
+#    ships fastest, the worker is still pre-1.0.
+#
+# The core library tracks the product version deliberately: it is the component
+# the product is named after, and its newest is what PRODUCT_VERSION pins.
+#
+# The spec version climbs 1.5 -> 1.6 partway through each history because a real
+# pipeline picks up a newer generator over time, and the table shows it.
+PIED_PIPER_SBOM_VERSIONS: dict[str, list[tuple[str, str, int]]] = {
+    "Compression Core Library": [
+        ("2.1.0", "1.5", 194),
+        ("2.2.0", "1.5", 96),
+        ("2.3.0", "1.6", 38),
+        ("2.4.0", "1.6", 9),
+    ],
+    "Web Dashboard": [
+        ("3.7.0", "1.5", 171),
+        ("3.8.0", "1.6", 84),
+        ("3.9.0", "1.6", 31),
+        ("3.10.0", "1.6", 5),
+    ],
+    "REST API Service": [
+        ("1.4.0", "1.5", 209),
+        ("1.5.0", "1.5", 112),
+        ("1.6.0", "1.6", 45),
+        ("1.7.0", "1.6", 12),
+    ],
+    "Data Pipeline Worker": [
+        ("0.9.0", "1.5", 156),
+        ("0.10.0", "1.5", 73),
+        ("0.11.0", "1.6", 26),
+        ("0.12.0", "1.6", 7),
+    ],
+}
+
 
 @pytest.fixture
 def pied_piper_product(deletable_team: Team) -> dict:
@@ -1007,19 +1341,36 @@ def pied_piper_with_sboms(pied_piper_product: dict) -> dict:
     Note: creating SBOMs triggers a signal that auto-creates a 'latest' Release.
     """
     sboms = {}
-    for name, component in pied_piper_product["components"].items():
-        sbom = SBOM.objects.create(
-            name=f"com.piedpiper/{component.name.lower().replace(' ', '-')}",
-            version="1.0.0",
-            format="cyclonedx",
-            format_version="1.5",
-            sbom_filename=f"{component.name.lower().replace(' ', '-')}.json",
-            source="api",
-            component=component,
-        )
-        sboms[name] = sbom
+    history: dict[str, list[SBOM]] = {}
+    now = datetime.now(timezone.utc)
 
-    return {**pied_piper_product, "sboms": sboms}
+    for name, component in pied_piper_product["components"].items():
+        slug = component.name.lower().replace(" ", "-")
+        versions = []
+        for version, spec, days_ago in PIED_PIPER_SBOM_VERSIONS[name]:
+            sbom = SBOM.objects.create(
+                name=f"com.piedpiper/{slug}",
+                version=version,
+                format="cyclonedx",
+                format_version=spec,
+                sbom_filename=f"{slug}-{version}.json",
+                source="api",
+                component=component,
+            )
+            # created_at is auto_now_add, so every row would otherwise read as
+            # "now" — and `Component.latest_sbom` orders by it, which would
+            # make "latest" arbitrary among the four.
+            stamped = now - timedelta(days=days_ago)
+            SBOM.objects.filter(pk=sbom.pk).update(created_at=stamped)
+            sbom.created_at = stamped
+            versions.append(sbom)
+
+        history[name] = versions
+        # The newest, so the existing consumers of ``sboms`` — which each want
+        # "the component's SBOM" — keep getting one object and the right one.
+        sboms[name] = versions[-1]
+
+    return {**pied_piper_product, "sboms": sboms, "sbom_history": history}
 
 
 def setup_browser_session(
@@ -1034,6 +1385,18 @@ def setup_browser_session(
     if not team.has_selected_billing_plan:
         team.has_selected_billing_plan = True
         team.save(update_fields=["has_selected_billing_plan"])
+
+    # Same reasoning, and it has to be on the *model*, not just the session
+    # copy below.  ``request.session["current_team"]`` is a cache with a 300s
+    # TTL: patching it only holds for the first five minutes of a recording,
+    # after which it is rebuilt from the database.  The long tour runs longer
+    # than that, so the refresh landed mid-recording and every authenticated page from that point on
+    # redirected into the onboarding wizard — a page with no sidebar, which is
+    # how this surfaced: chapter 5 timing out on a nav link that had been
+    # there all tour.
+    if not team.has_completed_wizard:
+        team.has_completed_wizard = True
+        team.save(update_fields=["has_completed_wizard"])
 
     django_client = Client()
     setup_authenticated_client_session(django_client, team, sample_user)
@@ -1078,6 +1441,12 @@ def recording_context(
     # Read the file content explicitly (path= can fail with remote CDP).
     click_js = CLICK_INDICATOR_JS.read_text()
     context.add_init_script(click_js)
+
+    # Pan slowly enough for the recorder to catch the motion. See
+    # smooth_scroll.js: the screencast captures 12-16 unique frames a
+    # second, and Chromium's native smooth scroll finishes inside five of
+    # them.
+    context.add_init_script(SMOOTH_SCROLL_JS.read_text())
 
     session_cookie = setup_browser_session(browser_base_url, sample_user, deletable_team)
     context.add_cookies([session_cookie])
@@ -1179,6 +1548,7 @@ def _write_narration_manifest(
                 "recording": recording_name,
                 "wall_duration_ms": round(wall_duration_ms, 1),
                 "beats": _narration_state["beats"],
+                "scenes": _narration_state["scenes"],
             },
             indent=2,
         )

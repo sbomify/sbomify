@@ -69,6 +69,14 @@ run_screencast() {
         -s
 }
 
+transcode() {
+    # VP8 -> VP9. Playwright writes VP8, which bands on the app's flat
+    # gradients. Timestamps pass through untouched, so this must run *before*
+    # mux_narration lays the audio on.
+    echo "Transcoding to VP9..."
+    compose exec tests uv run python screencasts/transcode.py "$@"
+}
+
 mux_narration() {
     # Lays the narration clips back onto the recordings at the offsets the run
     # captured, and cuts the matching .vtt subtitles from the same timings.
@@ -144,6 +152,7 @@ case "${1:-}" in
             run_screencast "$file"
         done
         clean_temp_videos
+        transcode
         mux_narration
         echo "Done. Recordings in $OUTPUT_DIR/"
         ls -lh "$OUTPUT_DIR"/*.webm 2>/dev/null
@@ -175,6 +184,7 @@ case "${1:-}" in
         ensure_ffmpeg
         run_screencast "$file"
         clean_temp_videos
+        transcode "${1%.py}"
         mux_narration "${1%.py}"
         echo "Done. Recording at $OUTPUT_DIR/${1%.py}.webm"
         ;;
