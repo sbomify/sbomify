@@ -31,13 +31,37 @@ class TestS3Client:
 
         # Verify initialization parameters
         assert client.bucket_type == bucket_type
-        mock_resource.assert_called_once_with(
-            "s3",
-            region_name=settings.AWS_REGION,
-            endpoint_url=settings.AWS_ENDPOINT_URL_S3,
-            aws_access_key_id="test-key",
-            aws_secret_access_key="test-secret"
-        )
+        mock_resource.assert_called_once()
+        args, kwargs = mock_resource.call_args
+        assert args == ("s3",)
+        assert kwargs["region_name"] == settings.AWS_REGION
+        assert kwargs["endpoint_url"] == settings.AWS_ENDPOINT_URL_S3
+        assert kwargs["aws_access_key_id"] == "test-key"
+        assert kwargs["aws_secret_access_key"] == "test-secret"
+
+    @pytest.mark.parametrize("bucket_type", ["MEDIA", "SBOMS", "DOCUMENTS"])
+    def test_transfers_have_bounded_timeouts_and_retries(self, bucket_type: str, mocker: MockerFixture):
+        """Every bucket's client, not just the one a caller happened to check.
+
+        Botocore's defaults are a 60 second connect and a 60 second read, and
+        these clients are used from background tasks with shorter limits of
+        their own — the VEX re-apply allows two minutes for all its work, so one
+        unresponsive read took half of it and the task died mid-socket-read with
+        ``TimeLimitExceeded`` instead of failing the read and retrying it.
+        """
+        mocker.patch.object(settings, f"AWS_{bucket_type}_ACCESS_KEY_ID", "test-key")
+        mocker.patch.object(settings, f"AWS_{bucket_type}_SECRET_ACCESS_KEY", "test-secret")
+        mock_resource = mocker.patch("boto3.resource")
+
+        S3Client(bucket_type)
+
+        config = mock_resource.call_args.kwargs["config"]
+        assert 0 < config.connect_timeout < 60
+        assert 0 < config.read_timeout < 60
+        # ``standard`` backs off between attempts and covers connection errors;
+        # botocore's ``legacy`` default is narrower.
+        assert config.retries["mode"] == "standard"
+        assert config.retries["max_attempts"] > 1
 
     def test_upload_media_success(self, mock_s3):
         """Test media upload to correct bucket"""

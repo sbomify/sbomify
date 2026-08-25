@@ -38,10 +38,18 @@
                 Saving while the toggle is off changes nothing publicly, which
                 reads as a broken save. Say so next to the fields, not only
                 beside the toggle.
+
+                Server-rendered, not x-show: branding_info is Django context and
+                never reaches the Alpine scope, so binding to it there threw
+                "branding_info is not defined" and the notice never appeared.
+                The saved state only changes on save, and the save triggers
+                refreshTeamBranding, which re-fetches this partial.
             {% endcomment %}
-            <c-feedback.alert variant="warning" icon="fas fa-triangle-exclamation" class="mt-6" x-show="!branding_info.branding_enabled">
-            Custom branding is off, so public pages show the default sbomify look. Your colors and logo are saved. Turn it on under Display to use them.
-            </c-feedback.alert>
+            {% if not branding_info.branding_enabled %}
+                <c-feedback.alert variant="warning" icon="fas fa-triangle-exclamation" class="mt-6">
+                Your colors and logo are saved, but customers still see the default sbomify look. Turn on custom branding below to use them.
+                </c-feedback.alert>
+            {% endif %}
             {# Colors #}
             <section class="mt-8">
                 <div class="flex items-center justify-between">
