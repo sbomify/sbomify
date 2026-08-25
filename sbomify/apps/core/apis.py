@@ -115,12 +115,12 @@ def schedule_broadcast(workspace_key: str, message_type: str, data: dict[str, An
     )
 
 
-def _broadcast_release_artifacts_changed(release: Release) -> None:
-    """Tell the workspace a release's artifact set moved.
+def _broadcast_release_updated(release: Release) -> None:
+    """Tell the workspace a release moved: its fields or its artifact set.
 
-    Reuses the ``release_updated`` message the release tables already listen
-    for, so a pin or an unpin repaints every open view instead of waiting for
-    someone to reload.
+    Sends the ``release_updated`` message the release tables already listen
+    for, so an edit, a pin or an unpin repaints every open view instead of
+    waiting for someone to reload.
     """
     workspace_key = release.product.team.key
     if not workspace_key:
@@ -3261,7 +3261,7 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
 
         # Broadcast to workspace for real-time UI updates (after transaction commits)
         if release.product.team.key:
-            _broadcast_release_artifacts_changed(release)
+            _broadcast_release_updated(release)
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
@@ -3339,7 +3339,7 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
 
         # Broadcast to workspace for real-time UI updates (only if something changed, after transaction commits)
         if changed and release.product.team.key:
-            _broadcast_release_artifacts_changed(release)
+            _broadcast_release_updated(release)
 
         return 200, _build_release_response(request, release, include_artifacts=True)
 
@@ -3958,7 +3958,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
         # Outside the try on purpose: the row is committed by here, and letting a
         # broadcast failure fall into the handler above would report a successful
         # pin as a 400.
-        _broadcast_release_artifacts_changed(release)
+        _broadcast_release_updated(release)
         return 201, created
 
     # Handle Document
@@ -4005,7 +4005,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
         # Outside the try on purpose: the row is committed by here, and letting a
         # broadcast failure fall into the handler above would report a successful
         # pin as a 400.
-        _broadcast_release_artifacts_changed(release)
+        _broadcast_release_updated(release)
         return 201, created
 
     return 400, {"detail": "Either sbom_id or document_id must be provided", "error_code": ErrorCode.BAD_REQUEST}
@@ -4044,7 +4044,7 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         }
 
     artifact.delete()
-    _broadcast_release_artifacts_changed(release)
+    _broadcast_release_updated(release)
     return 204, None
 
 
