@@ -98,34 +98,31 @@ alongside them are incidental — a frame every 3s, wherever the cadence lands.
 Captions are burned into the video but hidden for the stills, on the assumption
 that the video plays muted and the listing writes its own captions.
 
-### The music pass, and which file to ship
+### The music pass
 
-The long cut carries a bed; the FAQ clips do not. That split is deliberate:
-Moreno and Mayer (2000) tested background music against instructional material
-directly and found it depressed both retention and transfer, so music only goes
-on the piece that is persuading a cold audience rather than teaching a warm one.
+Every recording carries a bed:
 
 ```bash
-uv run python screencasts/score.py marketplace_walkthrough ~/ledger_trace.m4a --loop
+uv run python screencasts/score.py <recording> ~/ledger_trace.m4a --loop
 ```
 
-`--loop` is needed whenever the track is shorter than the cut. It does not
-restart from the top, which lands a cold open in the middle of a paragraph; it
-searches for a passage whose texture matches the outgoing bar and crossfades
-back to that instead.
+`--loop` covers a cut longer than the track, and does nothing when the track is
+already long enough, so it can be passed across a batch of mixed lengths. The
+repeat is not a restart from the top, which lands a cold open in the middle of
+a paragraph; `choose_loop` searches for a passage whose texture matches the
+outgoing bar and crossfades back to that.
 
-**The scored mix is written alongside the mux, not over it**, because score
-reads the mux as its input and running it twice in place would stack a second
-bed. So the directory ends up holding both:
+Scoring cannot read its own output, or a rerun would stack a second bed, so the
+mux is kept as `<name>.dry.webm` and **the scored mix takes the plain
+`<name>.webm`**. The file you play is the finished one; the sidecar is
+scratch. `mux_narration` deletes the sidecar whenever it rewrites a recording,
+so a sidecar on disk always matches the recording beside it.
 
-| File | What it is |
-| --- | --- |
-| `marketplace_walkthrough.webm` | narration only, the input to the music pass |
-| `marketplace_walkthrough.scored.webm` | **the finished cut** |
-
-The dry one has the more obvious name, and a mix missing its bed still plays
-perfectly, so shipping the wrong file fails silently. Check what you are about
-to hand over.
+One caveat worth keeping in view. Moreno and Mayer (2000) tested background
+music against instructional material directly and found it depressed both
+retention and transfer. That result is about teaching, and these are mostly
+short task clips rather than lectures, but if a clip ever feels cluttered the
+bed is the first thing to pull.
 
 ### Adding a chapter
 

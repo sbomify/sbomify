@@ -31,6 +31,10 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 # Playwright names a recording in progress with a 32-char hex string.
 _PLAYWRIGHT_TEMP = re.compile(r"[0-9a-f]{32}")
 
+# Intermediates the other steps leave beside a recording. They are already VP9,
+# and the dry mux in particular would be re-encoded on every run.
+_SIDECARS = (".dry", ".scored", ".scoring", ".narrated")
+
 CRF = 24
 # Idempotence marker, so a re-run after a partial failure does not re-encode
 # something already converted (which would compound generation loss).
@@ -83,11 +87,18 @@ def transcode(name: str) -> None:
 
 def main() -> None:
     # Playwright writes its in-progress recordings as 32-character hex names
-    # and only renames them at save time. Those leftovers have no dot in their
-    # stem either, so the previous filter took them too — a full run spent its
+    # and only renames them at save time, so a run that skipped them spent its
     # first minutes re-encoding files nothing would ever play.
+    #
+    # Sidecars are matched by name rather than by "has a dot in the stem",
+    # which is what this did first: a recording is free to have a dot of its
+    # own, and `plugin_enablement_bsi-tr03183-v2.1-compliance` does. It was the
+    # one clip that shipped as raw VP8, silently, because the filter read the
+    # version number as a sidecar suffix.
     names = sys.argv[1:] or sorted(
-        p.stem for p in OUTPUT_DIR.glob("*.webm") if "." not in p.stem and not _PLAYWRIGHT_TEMP.fullmatch(p.stem)
+        p.stem
+        for p in OUTPUT_DIR.glob("*.webm")
+        if not _PLAYWRIGHT_TEMP.fullmatch(p.stem) and not p.stem.endswith(_SIDECARS)
     )
     for name in names:
         transcode(name)
