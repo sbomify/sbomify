@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -15,6 +16,7 @@ from django.test import Client
 from playwright.sync_api import Browser, BrowserContext, Locator, Page, Playwright, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
 
+import wayland_capture
 from narrator import Narrator
 from sbomify.apps.core.tests.fixtures import sample_user  # noqa: F401
 from sbomify.apps.core.tests.shared_fixtures import (  # noqa: F401
@@ -1195,24 +1197,82 @@ def playwright() -> Generator[Playwright, Any, None]:
 # Where the browser comes from.
 #
 # In Docker there is a separate Chromium container and we attach to its CDP
-# endpoint. That box has no GPU (`--disable-gpu`, no /dev/dri, inside a VM), so
-# Chromium rasterises in software and the CDP screencast delivers 12-16 unique
-# frames a second no matter what — measured, and unchanged by halving the
+# endpoint. That container has no GPU (`--disable-gpu`, no /dev/dri, inside a
+# VM), so Chromium rasterises in software and the CDP screencast delivers 12-16
+# unique frames a second no matter what — measured, and unchanged by halving the
 # rendered pixel count, so it is a capture ceiling rather than a drawing one.
 #
-# On a machine with a real GPU — a Mac, where Chromium uses Metal — launching
-# the browser locally avoids both the container and the attachment, and the
-# recording is captured at the frame rate Playwright asks for. Set
-# ``SCREENCAST_LOCAL_BROWSER=1`` there.
+# ``SCREENCAST_LOCAL_BROWSER=1`` launches the browser on the host instead. On a
+# machine with a real GPU that is the difference between a stutter and a clean
+# pan.
 LOCAL_BROWSER = os.environ.get("SCREENCAST_LOCAL_BROWSER", "") not in ("", "0", "false")
+
+# Capture through GNOME's shell recorder instead of Playwright's CDP screencast.
+#
+# The screencast throttles frame *delivery*: ~6 distinct frames a second
+# sustained, padded with duplicates, on a GPU-less VM and on a machine with a
+# working GPU alike. GNOME's recorder reads the composited output and measured
+# 19.4 distinct frames a second on the same page, 205 of 206 frames unique.
+#
+# Needs a live Wayland session on the recording machine, so it is opt-in.
+WAYLAND_CAPTURE = os.environ.get("SCREENCAST_WAYLAND_CAPTURE", "") not in ("", "0", "false")
+
+# What to ask GNOME for. The pipeline tops out below this on integrated
+# graphics — 19.4 measured against a request of 30 — but asking for less caps
+# it lower, and asking for more costs nothing.
+WAYLAND_CAPTURE_FPS = int(os.environ.get("SCREENCAST_CAPTURE_FPS", "30"))
+
+# Which binary to launch. Playwright refuses to install its bundled Chromium on
+# an OS it does not recognise (Ubuntu 26.04 among them), and a system Chrome is
+# the better choice on a recording rig anyway: it ships the vendor's GPU
+# allow-lists. Point this at the executable, e.g. /usr/bin/google-chrome.
+LOCAL_BROWSER_PATH = os.environ.get("SCREENCAST_BROWSER_PATH", "") or None
+
+# **Headless Chromium falls back to SwiftShader even when a GPU is present.**
+# Measured on an Intel Alder Lake box with /dev/dri readable and the iris driver
+# installed:
+#
+#   --headless=new                        ANGLE (Google, SwiftShader driver)
+#   --headless=new --disable-gpu          ANGLE (Google, SwiftShader driver)
+#   --headless=new --use-gl=angle
+#                  --use-angle=gl-egl     ANGLE (Intel, Mesa Intel(R) Graphics)
+#
+# So asking for headless is not enough; the GL backend has to be named. With
+# these flags the recording rig needs no console session and no X display.
+# Only when a window is actually shown. `--window-position` puts it somewhere
+# predictable; `--ozone-platform=wayland` makes it a native Wayland surface
+# rather than an Xwayland one, which is what the compositor can hand to the
+# recorder. `--no-sandbox` is deliberately absent: it raises Chrome's
+# "unsupported command-line flag" infobar, which would sit in frame.
+WINDOW_FLAGS = [
+    "--ozone-platform=wayland",
+    "--window-position=0,0",
+    f"--window-size={RECORDING_WIDTH},{RECORDING_HEIGHT}",
+    "--no-first-run",
+    "--disable-infobars",
+]
+
+GPU_FLAGS = [
+    "--use-gl=angle",
+    "--use-angle=gl-egl",
+    "--enable-gpu",
+    "--enable-gpu-rasterization",
+    "--ignore-gpu-blocklist",
+]
 
 
 @pytest.fixture(scope="session")
 def browser(playwright: Playwright) -> Generator[Browser, Any, None]:
     if LOCAL_BROWSER:
-        # Headed on purpose: headless Chromium still composites through SwiftShader
-        # on several platforms, which is the thing we are trying to get away from.
-        browser_instance = playwright.chromium.launch(headless=False)
+        # Headed when GNOME is doing the capturing, because there has to be a
+        # real window on the compositor for it to film. A headless browser
+        # draws nowhere: the first attempt at this recorded nothing at all and
+        # `window.screenX` was meaningless, so the capture area was refused.
+        browser_instance = playwright.chromium.launch(
+            headless=not WAYLAND_CAPTURE,
+            executable_path=LOCAL_BROWSER_PATH,
+            args=GPU_FLAGS + (WINDOW_FLAGS if WAYLAND_CAPTURE else []),
+        )
     else:
         browser_instance = playwright.chromium.connect_over_cdp(settings.PLAYWRIGHT_CDP_ENDPOINT)
     yield browser_instance
@@ -1426,12 +1486,25 @@ def recording_context(
 ) -> Generator[BrowserContext, Any, None]:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Playwright's own recorder is off when GNOME is doing the capturing;
+    # running both would encode the same thing twice and fight for the GPU.
+    video_options: dict[str, Any] = (
+        {}
+        if WAYLAND_CAPTURE
+        else {
+            "record_video_dir": str(OUTPUT_DIR),
+            "record_video_size": {"width": RECORDING_WIDTH, "height": RECORDING_HEIGHT},
+        }
+    )
+
     context = browser.new_context(
         base_url=browser_base_url,
         viewport={"width": RECORDING_WIDTH, "height": RECORDING_HEIGHT},
-        device_scale_factor=2,
-        record_video_dir=str(OUTPUT_DIR),
-        record_video_size={"width": RECORDING_WIDTH, "height": RECORDING_HEIGHT},
+        # A Wayland capture reads real pixels off the compositor, so the page
+        # must be laid out at the size it will be filmed at rather than
+        # supersampled for stills.
+        device_scale_factor=1 if WAYLAND_CAPTURE else 2,
+        **video_options,
     )
 
     # Prevent white flash — set background color before page content loads
@@ -1463,15 +1536,45 @@ def recording_page(
 ) -> Generator[Page, Any, None]:
     page = recording_context.new_page()
 
-    # Video capture starts with the page, so this is the zero point every
-    # narration offset — and every subtitle cue — is measured against.
-    _narration_state["t0"] = time.monotonic()
-
     # Replace the white about:blank with a branded splash screen.  This is
     # visible while the first real navigation loads.
     page.set_content(SPLASH_HTML, wait_until="commit")
 
     recording_name = _recording_name(request)
+
+    capture = None
+    if WAYLAND_CAPTURE:
+        # Film the page's own content box, not the window and not the screen.
+        #
+        # The window carries a title bar and a tab strip, and the screen around
+        # it carries the dock, the top bar and whatever else is open — a first
+        # test recorded a terminal sitting next to the browser. Asking the page
+        # where its content actually is puts the frame exactly on the page.
+        #
+        # These are logical pixels, which is what ScreencastArea expects; GNOME
+        # scales up to physical itself (a 1920x1080 request came back 3200x1800
+        # on a 166% display).
+        box = page.evaluate(
+            """() => ({
+                x: window.screenX + (window.outerWidth - window.innerWidth) / 2,
+                y: window.screenY + (window.outerHeight - window.innerHeight),
+                w: window.innerWidth,
+                h: window.innerHeight,
+            })"""
+        )
+        capture = wayland_capture.start(
+            OUTPUT_DIR / f"{recording_name}.capture.webm",
+            WAYLAND_CAPTURE_FPS,
+            (int(box["x"]), int(box["y"]), int(box["w"]), int(box["h"])),
+        )
+        # GNOME takes a moment to bring the pipeline up; starting the clock
+        # before the first frame exists would shift every narration offset.
+        time.sleep(1.5)
+
+    # Capture is running, so this is the zero point every narration offset —
+    # and every subtitle cue — is measured against.
+    _narration_state["t0"] = time.monotonic()
+    _narration_state["capture"] = capture
 
     narrator = Narrator.for_recording(recording_name)
     _narration_state["narrator"] = narrator
@@ -1508,12 +1611,57 @@ def recording_page(
     video = page.video
     page.close()
 
-    if video:
-        final_path = OUTPUT_DIR / f"{recording_name}.webm"
+    final_path = OUTPUT_DIR / f"{recording_name}.webm"
+
+    if capture is not None:
+        # Stop politely: GNOME writes the file when the recording ends, and a
+        # SIGKILL would leave the shell recording with nothing to stop it.
+        wayland_capture.stop(capture)
+        raw = OUTPUT_DIR / f"{recording_name}.capture.webm"
+        if raw.exists():
+            _normalise_capture(raw, final_path)
+        else:
+            # Say *why*. The first version of this printed only that there was
+            # no file, so two runs were spent guessing at a reason the helper
+            # had already written down.
+            out, err = capture.communicate(timeout=10)
+            raise RuntimeError(
+                f"wayland capture produced no file for {recording_name}\n"
+                f"  helper exit : {capture.returncode}\n"
+                f"  helper out  : {(out or '').strip()[:500]}\n"
+                f"  helper err  : {(err or '').strip()[:800]}"
+            )
+    elif video:
         video.save_as(str(final_path))
 
     if narrator is not None:
         _write_narration_manifest(recording_name, narrator, wall_duration_ms, _test_passed(request))
+
+
+def _normalise_capture(raw: Path, destination: Path) -> None:
+    """Scale a shell recording down to the recording's nominal size.
+
+    GNOME hands back physical pixels, so a 1920x1080 request on a fractional-
+    scaled display arrives as 3200x1800. Everything downstream — the hero
+    stills, the marketplace listings, the e2e baselines — expects 1920x1080,
+    and downscaling from a larger capture is free quality rather than a loss.
+
+    Timestamps pass through untouched, so the narration offsets still land.
+    """
+    subprocess.run(  # nosec B607 - ffmpeg by name from PATH, fixed argv, shell=False
+        [
+            "ffmpeg", "-hide_banner", "-nostats", "-loglevel", "error", "-y",
+            "-i", str(raw),
+            "-vf", f"scale={RECORDING_WIDTH}:{RECORDING_HEIGHT}:flags=lanczos",
+            "-fps_mode", "passthrough",
+            "-c:v", "libvpx-vp9", "-crf", "24", "-b:v", "0",
+            "-row-mt", "1", "-cpu-used", "4",
+            "-an",
+            str(destination),
+        ],
+        check=True,
+    )
+    raw.unlink()
 
 
 def _write_narration_manifest(
