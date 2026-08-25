@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from channels.db import database_sync_to_async
-from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from channels.generic.websocket import AsyncJsonWebsocketConsumer, AsyncWebsocketConsumer
 
 from sbomify.logging import getLogger
 
@@ -231,3 +231,24 @@ class WorkspaceConsumer(AsyncJsonWebsocketConsumer):
             if not _is_socket_closed(exc):
                 raise
             logger.debug("workspace_message send failed; socket already closed", exc_info=True)
+
+
+class UnknownPathConsumer(AsyncWebsocketConsumer):
+    """Refuse a WebSocket to a path this app does not serve.
+
+    Without a catch-all route, Channels raises ``ValueError: No route found for
+    path`` and the exception escapes the ASGI application: uvicorn logs a stack
+    and the error tracker records a fault, for what is only ever a client
+    asking for something that does not exist. Automated scanners probe paths
+    such as ``/wsproxy`` on anything reachable, so it fires without anyone
+    having done something wrong.
+
+    Closes before accepting, unlike ``WorkspaceConsumer._reject``. There the
+    handshake is accepted first so the close code can reach the client's
+    ``onclose``; here there is no client of ours to inform, so refusing the
+    handshake outright is both cheaper and the more accurate answer.
+    """
+
+    async def connect(self) -> None:
+        logger.debug("Refused a WebSocket to an unrouted path: %s", self.scope.get("path"))
+        await self.close(code=WS_CLOSE_POLICY_VIOLATION)
