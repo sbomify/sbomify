@@ -10,16 +10,14 @@
     {% elif done %}
         <h1 class="text-lg font-semibold text-text mb-2">You're unsubscribed</h1>
         <c-feedback.alert variant="success" class="mb-5">
-            We've stopped the onboarding emails to {{ email }}.
+        We've stopped the onboarding emails to {{ email }}.
         </c-feedback.alert>
         <p class="text-sm text-text-muted">
             You'll still get emails about your account, like billing notices and access requests.
         </p>
     {% elif already %}
         <h1 class="text-lg font-semibold text-text mb-2">Already unsubscribed</h1>
-        <p class="text-sm text-text-muted">
-            {{ email }} is not receiving onboarding emails. Nothing more to do.
-        </p>
+        <p class="text-sm text-text-muted">{{ email }} is not receiving onboarding emails. Nothing more to do.</p>
     {% else %}
         <h1 class="text-lg font-semibold text-text mb-2">Unsubscribe from onboarding emails</h1>
         <p class="text-sm text-text-muted mb-5">

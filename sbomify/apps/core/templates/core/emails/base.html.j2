@@ -236,13 +236,13 @@ Questions? We're here to help. <a href="{{ base_url }}/support/contact/">Get in 
 {% now "Y" as this_year %}
 <p>© {{ current_year|default:this_year }} sbomify. All rights reserved.</p>
 {% if unsubscribe_url %}
-    {% comment %}
+{% comment %}
     Only the onboarding sequence sets this. Account mail (billing, access
     decisions, token expiry) has nothing to opt out of, so it must not offer.
-    {% endcomment %}
-    <p style="font-size: 12px; color: #94a3b8">
-        Don't want setup tips? <a href="{{ unsubscribe_url }}" style="color: #94a3b8">Unsubscribe</a>
-    </p>
+{% endcomment %}
+<p style="font-size: 12px; color: #94a3b8">
+Don't want setup tips? <a href="{{ unsubscribe_url }}" style="color: #94a3b8">Unsubscribe</a>
+</p>
 {% endif %}
 </td>
 </tr>

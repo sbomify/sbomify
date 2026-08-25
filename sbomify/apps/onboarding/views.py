@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
@@ -9,6 +11,9 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from sbomify.apps.billing.config import is_billing_enabled
+
+if TYPE_CHECKING:
+    from .models import OnboardingStatus
 
 
 class OnboardingPlanSelectionView(LoginRequiredMixin, View):
@@ -62,7 +67,7 @@ class UnsubscribeView(View):
         )
 
     @staticmethod
-    def _status_for(token: str):
+    def _status_for(token: str) -> OnboardingStatus | None:
         from sbomify.apps.core.models import User
 
         from .models import OnboardingStatus
