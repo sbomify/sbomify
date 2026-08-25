@@ -115,6 +115,23 @@ def schedule_broadcast(workspace_key: str, message_type: str, data: dict[str, An
     )
 
 
+def _broadcast_release_artifacts_changed(release: Release) -> None:
+    """Tell the workspace a release's artifact set moved.
+
+    Reuses the ``release_updated`` message the release tables already listen
+    for, so a pin or an unpin repaints every open view instead of waiting for
+    someone to reload.
+    """
+    workspace_key = release.product.team.key
+    if not workspace_key:
+        return
+    schedule_broadcast(
+        workspace_key,
+        "release_updated",
+        {"release_id": str(release.id), "product_id": str(release.product.id), "name": release.name},
+    )
+
+
 @dataclass(frozen=True)
 class ProductLookupResult:
     """Container for a product API payload plus the ORM instance."""
@@ -3914,6 +3931,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                     }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
+            _broadcast_release_artifacts_changed(release)
 
             return 201, {
                 "id": str(artifact.id),
@@ -3957,6 +3975,7 @@ def add_artifacts_to_release(request: HttpRequest, release_id: str, payload: Rel
                     }
                 return 400, {"detail": result["error"], "error_code": ErrorCode.INTERNAL_ERROR}
             artifact = result["artifact"]
+            _broadcast_release_artifacts_changed(release)
 
             return 201, {
                 "id": str(artifact.id),
@@ -4011,6 +4030,7 @@ def remove_artifact_from_release(request: HttpRequest, release_id: str, artifact
         }
 
     artifact.delete()
+    _broadcast_release_artifacts_changed(release)
     return 204, None
 
 

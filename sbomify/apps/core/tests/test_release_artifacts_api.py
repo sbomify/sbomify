@@ -1,5 +1,6 @@
 import json
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -223,6 +224,49 @@ class TestAddArtifactsToReleaseAPI:
 
         # Verify artifact was created
         assert ReleaseArtifact.objects.filter(release=self.release, sbom=self.sbom).exists()
+
+    def test_pinning_an_artifact_broadcasts_to_the_workspace(
+        self, authenticated_api_client: tuple[Client, Any], django_capture_on_commit_callbacks: Any
+    ) -> None:
+        """Open release views repaint on the broadcast instead of waiting for a reload."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
+        with (
+            patch("sbomify.apps.core.apis.broadcast_to_workspace") as mock_broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            response = client.post(
+                f"/api/v1/releases/{self.release.id}/artifacts",
+                data=json.dumps({"sbom_id": str(self.sbom.id)}),
+                content_type="application/json",
+                **headers,
+            )
+
+        assert response.status_code == 201
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.kwargs["message_type"] == "release_updated"
+        assert mock_broadcast.call_args.kwargs["data"]["release_id"] == str(self.release.id)
+
+    def test_unpinning_an_artifact_broadcasts_to_the_workspace(
+        self, authenticated_api_client: tuple[Client, Any], django_capture_on_commit_callbacks: Any
+    ) -> None:
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+        artifact = ReleaseArtifact.objects.create(release=self.release, sbom=self.sbom)
+
+        with (
+            patch("sbomify.apps.core.apis.broadcast_to_workspace") as mock_broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            response = client.delete(
+                f"/api/v1/releases/{self.release.id}/artifacts/{artifact.id}",
+                **headers,
+            )
+
+        assert response.status_code == 204
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.kwargs["message_type"] == "release_updated"
 
     def test_add_duplicate_artifact_returns_409_conflict(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding a duplicate artifact returns 409 Conflict.

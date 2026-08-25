@@ -55,7 +55,11 @@ from sbomify.apps.teams.services.suppliers import (
     list_suppliers,
     update_supplier,
 )
-from sbomify.apps.teams.utils import on_demand_tls_cache_key, refresh_current_team_session
+from sbomify.apps.teams.utils import (
+    on_demand_tls_cache_key,
+    refresh_current_team_session,
+    update_user_teams_session,
+)
 from sbomify.logging import getLogger
 
 logger = getLogger(__name__)
@@ -266,6 +270,17 @@ def delete_from_s3(
 ) -> None:
     s3_client = S3Client("MEDIA")
     s3_client.delete_object(settings.AWS_MEDIA_STORAGE_BUCKET_NAME, filename)
+
+
+def _refresh_workspace_list_session(request: HttpRequest) -> None:
+    """Recompute the cached workspace list after a rename.
+
+    Token-authenticated callers have no session to update, so this is a no-op
+    for them.
+    """
+    user = getattr(request, "user", None)
+    if user is not None and user.is_authenticated and hasattr(request, "session"):
+        update_user_teams_session(request, user)
 
 
 @router.put(
@@ -1042,8 +1057,12 @@ def update_team(request: HttpRequest, team_key: str, payload: TeamUpdateSchema) 
             team.save()
 
         # The navbar reads the session's current_team; without this the old
-        # name survives every reload until the session cache expires.
+        # name survives every reload until the session cache expires. The
+        # sidebar and header are also cached fragments keyed on
+        # ``user_teams_version``, so the workspace list has to be recomputed
+        # too or the switcher keeps the old name regardless.
         refresh_current_team_session(request, team)
+        _refresh_workspace_list_session(request)
 
         return 200, _build_team_response(request, team)
 
@@ -1091,6 +1110,7 @@ def patch_team(request: HttpRequest, team_key: str, payload: TeamPatchSchema) ->
             team.save()
 
         refresh_current_team_session(request, team)
+        _refresh_workspace_list_session(request)
 
         return 200, _build_team_response(request, team)
 
