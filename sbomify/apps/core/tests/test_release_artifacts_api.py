@@ -85,6 +85,11 @@ class TestReleaseArtifactsAPI(TestCase):
             assert payload["pagination"]["total"] > 1, f"{mode} fixture proves nothing"
             assert payload["pagination"]["page_size"] >= payload["pagination"]["total"], mode
             assert len(payload["items"]) == payload["pagination"]["total"], mode
+            # Both modes have to report the same shape, or a client walking
+            # pages gets a different contract depending on what it asked for.
+            assert payload["pagination"]["page"] == 1, mode
+            assert payload["pagination"]["total_pages"] == 1, mode
+            assert payload["pagination"]["has_previous"] is False, mode
 
     def test_bom_type_survives_response_serialisation(self):
         """bom_type must reach the client through the response schema.
@@ -225,7 +230,9 @@ class TestAddArtifactsToReleaseAPI:
         self.release = Release.objects.create(name="v1.0.0", product=self.product, is_latest=False, is_prerelease=False)
 
         # Create component
-        self.component = Component.objects.create(name="Test Component", team=self.team, visibility=Component.Visibility.PRIVATE)
+        self.component = Component.objects.create(
+            name="Test Component", team=self.team, visibility=Component.Visibility.PRIVATE
+        )
 
         # Create SBOM
         self.sbom = SBOM.objects.create(name="Test SBOM", component=self.component, format="cyclonedx", version="1.0.0")

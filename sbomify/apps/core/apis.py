@@ -3847,9 +3847,11 @@ def list_release_artifacts(
         page_num = max(1, page_num)  # Ensure page is at least 1
         if page_size_num == -1:
             # Same contract as _paginate_queryset, which the existing-mode branch
-            # uses: -1 means every row. Clamping it to 1 here would hand the
-            # caller a single artifact and call it the whole list.
-            page_size_num = max(1, total_items)
+            # uses: -1 means every row, on page 1, in one page. Clamping it to 1
+            # here would hand the caller a single artifact and call it the whole
+            # list, and leaving page_num alone would report page 2 of 1.
+            page_num = 1
+            page_size_num = total_items
             paginated_artifacts = available_artifacts
         else:
             page_size_num = min(max(1, page_size_num), 100)  # Ensure page_size is between 1 and 100
@@ -3860,7 +3862,9 @@ def list_release_artifacts(
         # Create pagination metadata
         from sbomify.apps.core.schemas import PaginationMeta
 
-        total_pages = (total_items + page_size_num - 1) // page_size_num  # Ceiling division
+        # page_size_num is 0 only when -1 met an empty list, and _paginate_queryset
+        # calls that one page, not zero.
+        total_pages = (total_items + page_size_num - 1) // page_size_num if page_size_num else 1
 
         pagination_meta = PaginationMeta(
             total=total_items,
