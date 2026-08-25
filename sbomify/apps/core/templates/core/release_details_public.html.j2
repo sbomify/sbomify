@@ -164,7 +164,7 @@
                                 </div>
                                 <p class="text-xs text-text-muted m-0 mt-0.5"
                                    x-show="f.suppressed &amp;&amp; f.justification"
-                                   x-text="'VEX: ' + f.justification.replace(/_/g, ' ')"></p>
+                                   x-text="'VEX: ' + (f.justification_label || f.justification)"></p>
                             </div>
                         </div>
                     </template>
