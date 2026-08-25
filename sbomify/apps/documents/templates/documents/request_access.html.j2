@@ -41,9 +41,11 @@
                     {% endif %}
                 </p>
                 {% if was_rejected %}
-                    <c-feedback.alert variant="warning" icon="fas fa-circle-info" class="mb-4">
-                    Your earlier request was not approved. You can submit a new one.
-                    </c-feedback.alert>
+                    <div class="mb-4 px-4 py-3 rounded-xl border border-border text-sm"
+                         style="background: var(--bg-secondary);
+                                color: var(--text-primary)">
+                        Your earlier request was not approved. You can submit a new one.
+                    </div>
                 {% endif %}
                 <form method="post" action="{% url 'documents:request_access' team.key %}">
                     {% csrf_token %}

@@ -275,18 +275,23 @@ def delete_from_s3(
 def _refresh_workspace_list_session(request: HttpRequest) -> None:
     """Recompute the cached workspace list after a rename.
 
-    Only for callers that already carry a session. SessionMiddleware hands
-    every request a lazy SessionStore, so writing to it unconditionally would
-    mint a session row and a Set-Cookie for token clients that never asked for
-    one. An unsaved store has no ``session_key``, which is the tell.
+    Only for callers that already carry one. SessionMiddleware hands every
+    request a lazy SessionStore, so writing to it unconditionally would mint a
+    session row and a Set-Cookie for token clients that never asked for one.
     """
     session = getattr(request, "session", None)
-    if session is None or session.session_key is None:
+    user = getattr(request, "user", None)
+    if session is None or user is None or not user.is_authenticated:
         return
 
-    user = getattr(request, "user", None)
-    if user is not None and user.is_authenticated:
-        update_user_teams_session(request, user)
+    # Refresh a workspace list only where one already exists. session_key alone
+    # is the unloaded cookie value, so a token client sending a stale sessionid
+    # would pass that check and then get a fresh session minted on write. Reading
+    # a key loads the store, and a dead key loads as empty.
+    if "user_teams" not in session:
+        return
+
+    update_user_teams_session(request, user)
 
 
 @router.put(

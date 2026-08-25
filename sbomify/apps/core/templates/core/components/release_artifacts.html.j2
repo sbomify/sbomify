@@ -1,8 +1,7 @@
 {% load static %}
 {# The @ws:message handler repaints when someone pins or unpins in another tab or session. #}
 <div x-data="releaseArtifacts({ releaseId: '{{ release_id }}', productId: '{{ product_id }}', initialArtifacts: [], totalCount: 0, canEdit: {{ can_edit|yesno:'true,false' }}, isLatest: {{ is_latest|default:False|yesno:'true,false' }} })"
-     x-init="loadArtifacts()"
-     @ws:message.window="if ($event.detail.type === 'release_updated' && $event.detail.release_id === '{{ release_id }}') { loadArtifacts(); }">
+     @ws:message.window="if ($event.detail.type === 'release_updated' && $event.detail.release_id === '{{ release_id }}') { clearTimeout($el._wsDebounce); $el._wsDebounce = setTimeout(() => loadArtifacts(), 500); }">
     {# The shell draws the frame itself, so the table needs no card around it. #}
     <c-tables.shell>
     <c-tables.toolbar>
