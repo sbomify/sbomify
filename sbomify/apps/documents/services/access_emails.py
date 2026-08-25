@@ -15,6 +15,8 @@ sensible recovery beyond what is logged.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import wraps
 from urllib.parse import quote
 
 from django.conf import settings
@@ -33,6 +35,26 @@ logger = getLogger(__name__)
 # Replies to a decision notice should reach a human at sbomify, not bounce off
 # the unattended sender.
 SUPPORT_REPLY_TO = "hello@sbomify.com"
+
+
+def _never_raises(fn: Callable[..., None]) -> Callable[..., None]:
+    """Enforce this module's contract at the boundary rather than per function.
+
+    Building the context is as able to raise as sending is: ``reverse()`` after a
+    URL rename, or ``get_base_url()`` on a malformed APP_BASE_URL. Those calls sit
+    outside ``_send``, and a caller reaching here has already committed an
+    approval or a revocation, so an exception escaping would 500 a request whose
+    work is done and cannot be undone.
+    """
+
+    @wraps(fn)
+    def wrapper(*args: object, **kwargs: object) -> None:
+        try:
+            fn(*args, **kwargs)
+        except Exception:
+            logger.exception("Access-request notification failed in %s", fn.__name__)
+
+    return wrapper
 
 
 def _send(
@@ -112,6 +134,7 @@ def notify_admins_of_access_request(access_request: AccessRequest, team: Team, r
         logger.exception("Error notifying admins of access request %s", access_request.id)
 
 
+@_never_raises
 def notify_access_approved(access_request: AccessRequest) -> None:
     """Tell the requester they are in, with a link that lands them logged in."""
     login_url = reverse("core:keycloak_login")
@@ -128,6 +151,7 @@ def notify_access_approved(access_request: AccessRequest) -> None:
     )
 
 
+@_never_raises
 def notify_access_rejected(access_request: AccessRequest) -> None:
     """Tell the requester the request was not granted."""
     _send(
@@ -139,6 +163,7 @@ def notify_access_rejected(access_request: AccessRequest) -> None:
     )
 
 
+@_never_raises
 def notify_access_revoked(access_request: AccessRequest) -> None:
     """Tell the requester their access has been withdrawn."""
     _send(

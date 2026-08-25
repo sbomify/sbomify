@@ -50,6 +50,28 @@ class TestUnsubscribeView:
         status, _ = OnboardingStatus.objects.get_or_create(user=user)
         assert not status.drip_unsubscribed
 
+    def test_get_writes_nothing(self, client, user):
+        """A prefetcher following the footer link must not create a status row.
+
+        Signup creates one, so this only bites a user predating that signal, but
+        the drip clock falls back to created_at when drip_started_at is unset, so
+        a row created by a link scanner would start the sequence from today.
+        """
+        OnboardingStatus.objects.filter(user=user).delete()
+
+        client.get(get_unsubscribe_url(user.pk))
+
+        assert not OnboardingStatus.objects.filter(user=user).exists()
+
+    def test_post_records_a_user_with_no_status_row(self, client, user):
+        """The opt-out has to stick even for someone who has no row yet, or the
+        next eligibility check would make one and mail them."""
+        OnboardingStatus.objects.filter(user=user).delete()
+
+        client.post(get_unsubscribe_url(user.pk))
+
+        assert OnboardingStatus.objects.get(user=user).drip_unsubscribed
+
     def test_post_unsubscribes(self, client, user):
         response = client.post(get_unsubscribe_url(user.pk))
 

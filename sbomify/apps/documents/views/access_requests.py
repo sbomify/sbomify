@@ -181,6 +181,7 @@ def _dismiss_access_request_notification_if_no_pending(request: HttpRequest, tea
         request.session.save()
 
 
+@method_decorator(never_cache, name="dispatch")
 class AccessRequestView(View):
     """View for creating access requests (supports both authenticated and unauthenticated users)."""
 

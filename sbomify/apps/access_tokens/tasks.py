@@ -126,11 +126,14 @@ def warn_expiring_tokens() -> int:
                 delivered += 1
             except Exception:
                 logger.exception(f"Could not send expiry warning for token {token.id}")
-        if not delivered:
-            # Same reasoning as the no-recipient case: do not mark a threshold
-            # that nobody was told about, or the token expires in silence.
-            continue
         sent += delivered
+        if delivered < len(recipients):
+            # Same reasoning as the no-recipient case, and the same all-or-nothing
+            # behaviour the single multi-recipient message used to have: leave the
+            # thresholds unmarked so the next sweep retries. Whoever did receive it
+            # sees it twice, which is noise. Whoever did not would otherwise reach
+            # expiry in silence, which breaks their pipeline.
+            continue
 
         # Mark every due threshold, not only the tightest: once the 7-day
         # warning went out, a trailing 14-day one would read as noise.
