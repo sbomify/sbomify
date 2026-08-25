@@ -114,7 +114,9 @@
                             VEX
                         {% endif %}
                     </span>
-                    {% if vuln.vex_justification %}<div class="text-xs text-text-muted mt-1">{{ vuln.vex_justification }}</div>{% endif %}
+                    {% if vuln.vex_justification %}
+                        <div class="text-xs text-text-muted mt-1">{{ vuln.vex_justification_label }}</div>
+                    {% endif %}
                 {% elif vuln.vex_state == 'in_triage' %}
                     <span class="text-warning">Under investigation</span>
                 {% elif vuln.vex_state == 'resolved' %}

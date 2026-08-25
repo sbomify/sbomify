@@ -176,7 +176,7 @@
                                                 {% endif %}
                                                 {# VEX analysis state #}
                                                 {% if finding.analysis_state %}
-                                                    <c-badges.info title="{{ finding.analysis_justification|default:'' }} {{ finding.analysis_detail|default:'' }}">
+                                                    <c-badges.info title="{{ finding.analysis_justification|vex_justification_label }} {{ finding.analysis_detail|default:'' }}">
                                                     <i class="fas fa-clipboard-check mr-0.5"></i>{{ finding.analysis_state }}
                                                     </c-badges.info>
                                                 {% endif %}
