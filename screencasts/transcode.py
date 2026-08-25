@@ -14,16 +14,24 @@ Timestamps are passed through untouched, so this cannot shift the narration
 timeline: run it **before** ``mux_narration.py``, which reads the manifest and
 lays the audio on afterwards.
 
+Recordings are encoded several at a time. libvpx-vp9 stops scaling long before
+it saturates a modern desktop — one encode here sat at a load of 3 on 12
+threads — so the batch finishes far sooner running four encodes of four threads
+than one encode allowed to sprawl.
+
     python screencasts/transcode.py                    # every recording
     python screencasts/transcode.py marketplace_walkthrough
+    SCREENCAST_TRANSCODE_JOBS=1 python screencasts/transcode.py
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -39,6 +47,18 @@ CRF = 24
 # Idempotence marker, so a re-run after a partial failure does not re-encode
 # something already converted (which would compound generation loss).
 MARKER_SUFFIX = ".transcoded.json"
+
+# Pinned rather than left to libvpx, which sizes its pool from the whole
+# machine and would then have every concurrent encode contending for it.
+# Four is about where a single VP9 encode stops going faster.
+THREADS_PER_JOB = 4
+
+
+def _jobs() -> int:
+    override = os.environ.get("SCREENCAST_TRANSCODE_JOBS")
+    if override:
+        return max(1, int(override))
+    return max(1, (os.cpu_count() or THREADS_PER_JOB) // THREADS_PER_JOB)
 
 
 def transcode(name: str) -> None:
@@ -74,6 +94,8 @@ def transcode(name: str) -> None:
             "0",
             "-row-mt",
             "1",
+            "-threads",
+            str(THREADS_PER_JOB),
             "-cpu-used",
             "4",
             str(destination),
@@ -82,7 +104,7 @@ def transcode(name: str) -> None:
     )
     destination.replace(source)
     marker.write_text(json.dumps({"codec": "vp9", "crf": CRF}) + "\n")
-    print(f"[transcode] {name}: VP9 crf {CRF}, timestamps untouched")
+    print(f"[transcode] {name}: VP9 crf {CRF}, timestamps untouched", flush=True)
 
 
 def main() -> None:
@@ -100,8 +122,17 @@ def main() -> None:
         for p in OUTPUT_DIR.glob("*.webm")
         if not _PLAYWRIGHT_TEMP.fullmatch(p.stem) and not p.stem.endswith(_SIDECARS)
     )
-    for name in names:
-        transcode(name)
+    jobs = min(_jobs(), len(names)) or 1
+    if jobs == 1:
+        for name in names:
+            transcode(name)
+        return
+
+    print(f"[transcode] {len(names)} recording(s), {jobs} at a time", flush=True)
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        # list() so an exception in any encode surfaces here rather than being
+        # swallowed with the future that carried it.
+        list(pool.map(transcode, names))
 
 
 if __name__ == "__main__":

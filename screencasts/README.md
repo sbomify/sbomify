@@ -98,6 +98,19 @@ alongside them are incidental — a frame every 3s, wherever the cadence lands.
 Captions are burned into the video but hidden for the stills, on the assumption
 that the video plays muted and the listing writes its own captions.
 
+### Run the steps in order, and stop if one fails
+
+**transcode, then mux, then score.** Each reads what the last wrote, and only
+the first can safely be skipped in isolation — carrying on past a failed
+transcode leaves a recording that is muxed and scored and still VP8, which
+plays perfectly and reports nothing. That has happened: a crashed transcode
+pool left three of 27 unconverted and the remaining steps ran over them
+regardless. If transcode fails, fix it and re-run it before muxing.
+
+The video stream is copied by both later steps, so a recording caught in that
+state can be repaired in place with `-c:v libvpx-vp9 -crf 24 -c:a copy` rather
+than re-recorded; it costs the same encode it would have had.
+
 ### The music pass
 
 Every recording carries a bed:
