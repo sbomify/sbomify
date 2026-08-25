@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextvars
 import uuid
+from datetime import datetime
 from typing import Any
 
 from django.contrib.auth.models import AbstractUser
@@ -286,6 +287,26 @@ class Release(models.Model):
         """
         return slugify(self.name, allow_unicode=True)
 
+    @staticmethod
+    def _as_aware(value: Any) -> Any:
+        """Attach the current timezone to a naive datetime.
+
+        ``created_at`` is always aware (it comes from ``timezone.now()``), but
+        ``released_at`` arrives from callers: the API accepts an ISO-8601
+        string, and one without an offset parses to a naive datetime. Comparing
+        the two then raised ``can't compare offset-naive and offset-aware
+        datetimes``, which the release endpoints reported to the caller as
+        "Internal server error". Reading a bare timestamp as local time is what
+        the rest of Django does with one, so it is read that way here.
+
+        Anything that is not a datetime is handed back untouched. A date field
+        also accepts a string or an ``F()`` expression, and neither is this
+        function's business — the ORM resolves those on the way to the column.
+        """
+        if isinstance(value, datetime) and timezone.is_naive(value):
+            return timezone.make_aware(value)
+        return value
+
     def clean(self) -> None:
         """Ensure only one latest release per product and valid release dates."""
         if self.is_latest:
@@ -295,7 +316,11 @@ class Release(models.Model):
             if existing_latest.exists():
                 raise ValidationError("A product can only have one latest release.")
 
-        if self.created_at and self.released_at and self.released_at < self.created_at:
+        # Normalized for the comparison rather than assigned, so ``full_clean()``
+        # on its own stays free of side effects; ``save()`` does the writing.
+        created_at = self._as_aware(self.created_at)
+        released_at = self._as_aware(self.released_at)
+        if isinstance(created_at, datetime) and isinstance(released_at, datetime) and released_at < created_at:
             raise ValidationError("Release date cannot be earlier than creation date.")
 
     def save(self, *args: Any, **kwargs: Any) -> None:
@@ -305,6 +330,9 @@ class Release(models.Model):
         if self._state.adding and self.released_at is None:
             # Default release date to creation time for new records only
             self.released_at = self.created_at
+
+        self.created_at = self._as_aware(self.created_at)
+        self.released_at = self._as_aware(self.released_at)
 
         self.clean()
         super().save(*args, **kwargs)

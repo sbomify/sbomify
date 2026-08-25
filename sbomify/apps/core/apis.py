@@ -3030,14 +3030,30 @@ def _is_release_version_conflict(exc: IntegrityError) -> bool:
     ``sboms.utils._is_duplicate_integrity_error``: message text is
     driver-dependent, and getting this wrong would silently turn a real version
     conflict into an idempotent 200.
+
+    Falling through to the message needs both forms, because the drivers do not
+    agree on what a uniqueness violation mentions. Postgres names the
+    constraint; SQLite names the columns —
+
+        UNIQUE constraint failed: core_releases.product_id, core_releases.version
+
+    — so matching the constraint name alone missed it there, and a duplicate
+    version was reported to the caller as "Internal server error". The column
+    pair is what ``_is_release_name_conflict`` already matches on for the same
+    reason, and the two cannot be confused: one message says ``version`` and the
+    other says ``name``.
     """
     cause = exc.__cause__
     if cause is not None:
         diag = getattr(cause, "diag", None)
         if diag is not None and getattr(diag, "constraint_name", None) == _RELEASE_VERSION_CONSTRAINT:
             return True
-    # Postgres without diag, and SQLite, both name the constraint in the message.
-    return _RELEASE_VERSION_CONSTRAINT in str(exc).lower()
+
+    msg = str(exc).lower()
+    if _RELEASE_VERSION_CONSTRAINT in msg:
+        return True
+    is_unique = "unique" in msg or getattr(cause, "pgcode", None) == "23505"
+    return is_unique and "product_id" in msg and "version" in msg
 
 
 @router.post(
@@ -3180,6 +3196,11 @@ def create_release(request: HttpRequest, payload: ReleaseCreateSchema) -> Any:
             "detail": "A release with this name already exists for this product",
             "error_code": ErrorCode.DUPLICATE_NAME,
         }
+    except DjangoValidationError as e:
+        # A release whose date the model rejects is the caller's input, not a
+        # fault: reporting it as "Internal server error" told them nothing to
+        # act on, and put a plain 400 in the error tracker on every attempt.
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
     except Exception as e:
         log.error(f"Error creating release: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3274,6 +3295,8 @@ def update_release(request: HttpRequest, release_id: str, payload: ReleaseUpdate
         else:
             detail = "A release with this name or version already exists for this product"
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
     except Exception as e:
         log.error(f"Error updating release {release_id}: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}
@@ -3352,6 +3375,8 @@ def patch_release(request: HttpRequest, release_id: str, payload: ReleasePatchSc
         else:
             detail = "A release with this name or version already exists for this product"
         return 400, {"detail": detail, "error_code": ErrorCode.DUPLICATE_NAME}
+    except DjangoValidationError as e:
+        return 400, {"detail": "; ".join(e.messages), "error_code": ErrorCode.VALIDATION_ERROR}
     except Exception as e:
         log.error(f"Error patching release {release_id}: {e}")
         return 400, {"detail": "Internal server error", "error_code": ErrorCode.INTERNAL_ERROR}

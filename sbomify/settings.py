@@ -16,7 +16,7 @@ import os
 import sys
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlparse, urlunparse
 
 import dj_database_url
@@ -24,13 +24,20 @@ import redis
 import sentry_sdk
 from django.contrib import messages
 from dotenv import find_dotenv, load_dotenv
+from redis.asyncio.retry import Retry as AsyncRedisRetry
+from redis.backoff import ExponentialBackoff
+from redis.retry import Retry as RedisRetry
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.dramatiq import DramatiqIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from sbomify.apps.plugins.utils import get_sbomify_version
 from sbomify.logging_filters import is_benign_shielded_future_error
-from sbomify.sentry_config import resolve_environment, should_warn_missing_dsn
+from sbomify.sentry_config import (
+    resolve_environment,
+    should_warn_missing_dsn,
+    throttle_self_healing_notices,
+)
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -425,7 +432,49 @@ else:
         db_config_dict["OPTIONS"] = db_options
 
 
-DATABASES = {"default": db_config_dict}
+def apply_db_resilience(config: dict[str, Any]) -> dict[str, Any]:
+    """Add connection resilience to a database config, in place.
+
+    Applied to whichever branch above produced the config, because the two are
+    the same database reached two ways and resilience only one of them gets is
+    resilience the deployment may not have. ``DATABASE_URL`` is the production
+    form and ``dj_database_url`` sets none of this.
+
+    A function rather than inline statements so a test can read back what the
+    running app is really configured with, the way ``build_redis_caches`` is.
+    """
+    # Defaults to 0 — a connection per request, which is what this has always
+    # done. Raising it is an operational decision about the Postgres connection
+    # budget, so it is left to the environment rather than changed here.
+    config["CONN_MAX_AGE"] = int(os.environ.get("DATABASE_CONN_MAX_AGE", "0"))
+    # Only does anything once CONN_MAX_AGE is non-zero, and then it is what
+    # makes a reused connection safe: Django pings it at the start of a request
+    # and opens a fresh one if the server has gone away, instead of handing the
+    # view a socket that died during a restart or a failover.
+    config["CONN_HEALTH_CHECKS"] = True
+
+    # TCP keepalives, so a connection killed on the far side (a restart, a
+    # failover, an idle connection dropped by something in between) is detected
+    # within a minute — 30s idle, then three probes 10s apart — rather than
+    # blocking on a read that will never return. Long-lived worker connections
+    # are the ones that need it. ``connect_timeout`` bounds the other end of the
+    # same problem: a connect to a host that is up but not answering used to
+    # hang for the OS default.
+    #
+    # setdefault throughout, so an explicit value from the environment wins.
+    options: dict[str, Any] = dict(config.get("OPTIONS") or {})
+    options.setdefault("connect_timeout", int(os.environ.get("DATABASE_CONNECT_TIMEOUT", "10")))
+    options.setdefault("keepalives", 1)
+    options.setdefault("keepalives_idle", 30)
+    options.setdefault("keepalives_interval", 10)
+    options.setdefault("keepalives_count", 3)
+    config["OPTIONS"] = options
+    return config
+
+
+# ``dj_database_url.parse`` is typed as returning a TypedDict, which mypy will
+# not pass where a mutable dict is wanted even though that is what it is.
+DATABASES = {"default": apply_db_resilience(cast("dict[str, Any]", db_config_dict))}
 
 # Redis Configuration
 # REDIS_URL is the base connection URL (no database number, no query params):
@@ -554,11 +603,61 @@ _redis_resilience: dict[str, Any] = {
     "socket_connect_timeout": 5,
 }
 
+# The two errors that mean the connection went away rather than the command
+# being wrong: a broker restart, a failover, an idle socket the network reaped.
+# Nothing about the request is wrong, so it is worth another attempt on a fresh
+# connection — which is what redis-py's retry does, reconnecting first.
+_REDIS_TRANSIENT_ERRORS = [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError]
+
+
+def _redis_retry(asyncio: bool = False) -> Any:
+    """Reconnect-and-retry policy for one Redis client.
+
+    redis-py defaults to ``Retry(NoBackoff(), 0)`` — no retry at all — so every
+    client below re-raised the first refused or dropped connection at its
+    caller. For the channel layer and the task broker that meant a restart of
+    Redis surfaced as a failure per in-flight operation, when waiting a moment
+    and reconnecting would have served every one of them.
+
+    Three retries, sleeping 0.2s, 0.4s then 0.8s between them: long enough to
+    cover a restart or a failover, short enough that a caller is not left
+    hanging when Redis is genuinely gone. Built fresh per client because
+    ``Retry`` is mutable and redis-py updates the error list on the instance it
+    is handed.
+
+    The async client needs the async class — the sync one's ``call_with_retry``
+    is not awaitable, so sharing a single object between the two would break
+    the channel layer on its first retry rather than on none.
+    """
+    backoff = ExponentialBackoff(cap=1.0, base=0.1)
+    if asyncio:
+        return AsyncRedisRetry(backoff, 3)
+    return RedisRetry(backoff, 3)
+
+
+def build_redis_client_kwargs(*, ca_certs: str = "", asyncio: bool = False) -> dict[str, Any]:
+    """Every per-connection setting a Redis client of ours should be built with.
+
+    One function for the channel layer and the task broker, because the two
+    want the same treatment and had drifted: whatever is added here reaches
+    both, and a test can read back what either one really got.
+    """
+    kwargs: dict[str, Any] = {
+        **_redis_resilience,
+        "retry": _redis_retry(asyncio=asyncio),
+        "retry_on_error": list(_REDIS_TRANSIENT_ERRORS),
+    }
+    if ca_certs:
+        kwargs["ssl_ca_certs"] = ca_certs
+    return kwargs
+
+
 # The dict host form is how channels-redis forwards client kwargs (the CA
 # path already relied on it); the resilience kwargs ride the same way.
-_channels_host: dict[str, Any] = {"address": REDIS_CHANNELS_URL, **_redis_resilience}
-if REDIS_CA_CERTS:
-    _channels_host["ssl_ca_certs"] = REDIS_CA_CERTS
+_channels_host: dict[str, Any] = {
+    "address": REDIS_CHANNELS_URL,
+    **build_redis_client_kwargs(ca_certs=REDIS_CA_CERTS, asyncio=True),
+}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -571,13 +670,26 @@ CHANNEL_LAYERS = {
     },
 }
 
-# Pass a pre-built client because Dramatiq's RedisBroker creates a
-# ConnectionPool.from_url() that drops ssl_ca_certs kwargs.
-_dramatiq_redis_options: dict[str, Any] = (
-    {"client": redis.Redis.from_url(REDIS_WORKER_URL, ssl_ca_certs=REDIS_CA_CERTS, **_redis_resilience)}
-    if REDIS_CA_CERTS
-    else {"url": REDIS_WORKER_URL, **_redis_resilience}
-)
+
+def build_dramatiq_redis_options(location: str, ca_certs: str = "") -> dict[str, Any]:
+    """The broker's Redis client, always pre-built.
+
+    Dramatiq's ``RedisBroker``, given ``url``, builds the pool with
+    ``ConnectionPool.from_url(url)`` — no extra kwargs — and passes everything
+    else to ``redis.Redis(**parameters)``, which ignores per-connection kwargs
+    whenever a pool is supplied. So the url form silently dropped the whole
+    resilience set: no keepalive, no health check, no connect timeout, no retry,
+    on exactly the deployments that do not use TLS. Passing a client built here
+    is the only form that delivers them.
+
+    The pre-built client was already used for the TLS branch, because
+    ``ssl_ca_certs`` failed the same way and that failure was visible. The rest
+    failed quietly beside it.
+    """
+    return {"client": redis.Redis.from_url(location, **build_redis_client_kwargs(ca_certs=ca_certs))}
+
+
+_dramatiq_redis_options: dict[str, Any] = build_dramatiq_redis_options(REDIS_WORKER_URL, REDIS_CA_CERTS)
 DRAMATIQ_BROKER = {
     "BROKER": "dramatiq.brokers.redis.RedisBroker",
     "OPTIONS": _dramatiq_redis_options,
@@ -912,6 +1024,7 @@ sentry_sdk.init(
         DramatiqIntegration(),
         LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
     ],
+    before_send=throttle_self_healing_notices,
     traces_sampler=_sentry_traces_sampler,
     profiles_sample_rate=float(os.environ.get("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
     # CancelledError is expected under ASGI when clients disconnect mid-request.
