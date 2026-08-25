@@ -432,6 +432,29 @@ def test_a_malformed_cvss_entry_does_not_break_the_page(team, public_product):
     assert (list_public_advisories(make_request(), team).value or {})["advisories"][0]["cvss_score"] is None
 
 
+def test_detail_cvss_chips_label_their_version_or_fall_back_to_plain_cvss(team, public_product):
+    """A hand-entered score may carry no version, and "CVSS : 9.8" would read
+    as a broken label; the projection builds the label so the template cannot."""
+    advisory = SecurityAdvisory.objects.create(team=team, title="Labelled")
+    AdvisoryProduct.objects.create(advisory=advisory, product=public_product)
+    AdvisoryVulnerability.objects.create(
+        advisory=advisory,
+        cve_id="CVE-2026-30006",
+        cvss_scores=[
+            {"version": "3.1", "vector": "CVSS:3.1/AV:N", "base_score": 9.8},
+            {"version": "", "vector": "", "base_score": 7.5},
+            "nonsense",
+        ],
+    )
+    publish(advisory, visibility=SecurityAdvisory.Visibility.PUBLIC)
+
+    detail = get_public_advisory(make_request(), team, advisory.id).value
+    assert detail["vulnerabilities"][0]["cvss_scores"] == [
+        {"label": "CVSS 3.1", "base_score": 9.8},
+        {"label": "CVSS", "base_score": 7.5},
+    ]
+
+
 def test_severity_filter_narrows_the_list(team, public_product):
     severities(team, public_product, ["critical", "high", "low"])
     payload = browse(make_request(), team, severity=["critical", "high"])

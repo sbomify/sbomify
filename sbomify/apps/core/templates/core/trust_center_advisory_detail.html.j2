@@ -133,7 +133,7 @@ because *this* reader was let in, and a crawler is nobody's NDA holder.
                         {% endif %}
                         {% for cwe in vulnerability.cwe_ids %}<span class="tc-product-chip">{{ cwe }}</span>{% endfor %}
                         {% for score in vulnerability.cvss_scores %}
-                            <span class="tc-meta-item">CVSS {{ score.version }}: {{ score.base_score }}</span>
+                            <span class="tc-meta-item">{{ score.label }}: {{ score.base_score }}</span>
                         {% endfor %}
                     </div>
                     {% if vulnerability.description %}<div class="tc-prose">{{ vulnerability.description }}</div>{% endif %}

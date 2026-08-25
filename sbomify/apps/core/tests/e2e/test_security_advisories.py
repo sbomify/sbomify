@@ -74,6 +74,8 @@ def advisory_detail(team_with_business_plan, sample_user, product_factory):  # n
         ),
         identifier="CVE-2026-0001",
         remediation_status="investigating",
+        cvss_score=8.6,
+        cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N",
         products=[product],
     )
     yield SecurityAdvisory.objects.get(id=result.value)

@@ -7,50 +7,6 @@
     <div class="space-y-6">
         {# Components table #}
         {% include 'core/components_table.html.j2' %}
-        {# New component dialog #}
-        {% if has_crud_permissions %}
-            <div x-data="{ open: false, componentType: 'bom', isGlobal: false, get showGlobalToggle() { return this.componentType === 'document'; } }"
-                 @open-add-component-modal.window="open = true">
-                <c-modal id="addComponentModal" title="New component" icon="fas fa-puzzle-piece">
-                <form id="addComponentForm"
-                      method="post"
-                      action="{% url 'core:components_dashboard' %}">
-                    {% csrf_token %}
-                    <p class="text-sm text-text-muted mb-4">
-                        A component holds an SBOM or document artifact that you want to track and assess.
-                    </p>
-                    <div class="space-y-4">
-                        <div>
-                            <c-forms.label for="componentName" required>Name</c-forms.label>
-                            <c-forms.input id="componentName" name="name" required />
-                        </div>
-                        <div>
-                            <c-forms.label for="componentType" required>Type</c-forms.label>
-                            <c-forms.select id="componentType" name="component_type" x-model="componentType" required>
-                            <option value="bom">BOM</option>
-                            <option value="document">Document</option>
-                            </c-forms.select>
-                            <c-forms.hint>Choose the type of component you're creating</c-forms.hint>
-                        </div>
-                        <div x-show="showGlobalToggle" x-cloak>
-                            <c-forms.checkbox id="componentIsGlobal" name="is_global" x-model="isGlobal">
-                            Workspace-wide component
-                            </c-forms.checkbox>
-                            <c-forms.hint class="ml-8">
-                            Global components live at the workspace level and are not attached to any product. Use for documents and attestations.
-                            </c-forms.hint>
-                        </div>
-                    </div>
-                </form>
-                <c-slot name="footer">
-                <c-buttons.ghost @click="open = false">Cancel</c-buttons.ghost>
-                <c-buttons.primary type="submit" form="addComponentForm">
-                <i class="fas fa-plus mr-2" aria-hidden="true"></i>Create component
-                </c-buttons.primary>
-                </c-slot>
-                </c-modal>
-            </div>
-        {% endif %}
     </div>
 {% endblock %}
 {% block scripts %}{% endblock %}

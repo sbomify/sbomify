@@ -46,19 +46,27 @@ class TestLeafTags:
 
 class TestBlockTags:
     def test_content_is_placed_inside_the_container(self) -> None:
-        out = render('{% card title="Releases" %}{% badge text="3" %}{% endcard %}')
-        assert "tw-card" in out
+        out = render('{% page_header title="Releases" %}{% badge text="3" %}{% endpage_header %}')
+        assert "tw-page-header" in out
         assert "Releases" in out
-        # The badge must land inside the card body, not before the card.
-        assert out.index("tw-card-body") < out.index("tw-badge")
+        # The badge must land inside the header, after its title.
+        assert out.index("tw-page-header-title") < out.index("tw-badge")
 
     def test_nested_containers_compose(self) -> None:
-        out = render('{% card %}{% card variant="danger" title="Danger zone" %}{% endcard %}{% endcard %}')
-        assert "tw-dangerzone-card" in out
-        assert out.count("tw-card-body") == 2
+        out = render(
+            '{% page_header title="Products" %}'
+            '{% actions_menu label="Product actions" %}<span class="tw-dropdown-item">Open</span>{% endactions_menu %}'
+            "{% endpage_header %}"
+        )
+        assert "tw-page-header" in out
+        assert "Product actions" in out
+        assert out.index("tw-page-header") < out.index("tw-dropdown-item")
 
     def test_block_content_still_sees_the_outer_context(self) -> None:
-        out = render("{% card %}{{ product_name }}{% endcard %}", product_name="Acme Gateway")
+        out = render(
+            '{% page_header title="Products" %}{{ product_name }}{% endpage_header %}',
+            product_name="Acme Gateway",
+        )
         assert "Acme Gateway" in out
 
 

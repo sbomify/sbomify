@@ -41,6 +41,7 @@ from sbomify.apps.core.views.component_details_public import ComponentDetailsPub
 from sbomify.apps.core.views.component_item import ComponentItemPublicView as ComponentItemPublicView
 from sbomify.apps.core.views.component_item import ComponentItemView as ComponentItemView
 from sbomify.apps.core.views.component_scope import ComponentScopeView as ComponentScopeView
+from sbomify.apps.core.views.components_dashboard import ComponentCreateView as ComponentCreateView
 from sbomify.apps.core.views.components_dashboard import ComponentsDashboardView as ComponentsDashboardView
 from sbomify.apps.core.views.components_dashboard import ComponentsTableView as ComponentsTableView
 from sbomify.apps.core.views.dashboard import DashboardView as DashboardView
@@ -53,6 +54,7 @@ from sbomify.apps.core.views.product_links import ProductLinkRedirectView as Pro
 from sbomify.apps.core.views.product_links import ProductLinksView as ProductLinksView
 from sbomify.apps.core.views.product_releases_private import ProductReleasesPrivateView as ProductReleasesPrivateView
 from sbomify.apps.core.views.product_releases_public import ProductReleasesPublicView as ProductReleasesPublicView
+from sbomify.apps.core.views.products_dashboard import ProductCreateView as ProductCreateView
 from sbomify.apps.core.views.products_dashboard import ProductsDashboardView as ProductsDashboardView
 from sbomify.apps.core.views.products_dashboard import ProductsTableView as ProductsTableView
 from sbomify.apps.core.views.release_details_private import ReleaseDetailsPrivateView as ReleaseDetailsPrivateView
