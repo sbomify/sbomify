@@ -369,7 +369,7 @@ class TestAccessRequestApproval:
             role="guest",
         ).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    @patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
     def test_approve_access_request_sends_email(
         self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         pending_access_request, sample_user
@@ -493,7 +493,7 @@ class TestAccessRequestRejection:
         assert pending_access_request.status == AccessRequest.Status.REJECTED
         assert pending_access_request.decided_by == sample_user
 
-    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    @patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
     def test_reject_access_request_sends_email(
         self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         pending_access_request, sample_user
@@ -734,7 +734,7 @@ class TestAccessRequestRevocation:
             team=team_with_business_plan, user=guest_user
         ).exists()
 
-    @patch("sbomify.apps.documents.views.access_requests.EmailMultiAlternatives")
+    @patch("sbomify.apps.documents.services.access_emails.EmailMultiAlternatives")
     def test_revoke_access_request_sends_email(
         self, mock_email_cls, authenticated_web_client, team_with_business_plan,
         sample_user, guest_user
@@ -1448,22 +1448,23 @@ def test_access_request_notification_replies_to_requester(team_with_business_pla
     not to hello@sbomify.com, so admins reply to the person asking for access."""
     from django.core import mail
 
-    from sbomify.apps.documents.access_apis import (
-        _notify_admins_of_access_request as notify_api,
-    )
-    from sbomify.apps.documents.views.access_requests import (
-        _notify_admins_of_access_request as notify_view,
-    )
+    from sbomify.apps.documents import access_apis
+    from sbomify.apps.documents.services.access_emails import notify_admins_of_access_request
+    from sbomify.apps.documents.views import access_requests as access_views
+
+    # The API and the views used to carry a copy of this each, and the copies had
+    # drifted apart on how they select admins. Both now reference the one function.
+    assert access_apis.notify_admins_of_access_request is notify_admins_of_access_request
+    assert access_views.notify_admins_of_access_request is notify_admins_of_access_request
 
     Member.objects.get_or_create(user=sample_user, team=team_with_business_plan, defaults={"role": "owner"})
     access_request = AccessRequest.objects.create(
         team=team_with_business_plan, user=guest_user, status=AccessRequest.Status.PENDING
     )
 
-    for notify in (notify_view, notify_api):
-        mail.outbox = []
-        notify(access_request, team_with_business_plan)
-        assert mail.outbox, "expected an admin notification email"
-        message = mail.outbox[0]
-        assert message.to == [sample_user.email]
-        assert message.reply_to == [guest_user.email]
+    mail.outbox = []
+    notify_admins_of_access_request(access_request, team_with_business_plan)
+    assert mail.outbox, "expected an admin notification email"
+    message = mail.outbox[0]
+    assert message.to == [sample_user.email]
+    assert message.reply_to == [guest_user.email]

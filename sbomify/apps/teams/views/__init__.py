@@ -385,12 +385,15 @@ def accept_invite(request: HttpRequest, invite_token: str) -> HttpResponseNotFou
         membership = Member.objects.filter(user=request.user, team__key=matched.get("team_key")).first()
         if membership:
             switch_active_workspace(request, membership.team, membership.role)
-
-            messages.add_message(
-                request,
-                messages.INFO,
-                f"You have joined {membership.team.name} as {membership.role}",
-            )
+            # Login already accepted this one. It says so itself when it can, so
+            # repeating it here would be a second identical toast; the flag tells
+            # us when it could not and this is the only chance to announce it.
+            if not matched.get("announced"):
+                messages.add_message(
+                    request,
+                    messages.INFO,
+                    f"You have joined {membership.team.name} as {membership.role}",
+                )
             return redirect("core:dashboard")
 
         return error_response(request, HttpResponseNotFound("Unknown invitation"))

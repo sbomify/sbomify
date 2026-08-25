@@ -321,3 +321,11 @@ def vulnerability_findings(findings: Any) -> list[Any]:
     if not isinstance(findings, (list, tuple)):
         return []
     return [f for f in findings if isinstance(f, dict) and is_vulnerability(f)]
+
+
+@register.filter
+def vex_justification_label(value: object) -> str:
+    """Human wording for a stored finding's raw VEX justification enum."""
+    from sbomify.apps.vulnerability_scanning.utils import justification_label
+
+    return justification_label(value)

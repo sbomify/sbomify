@@ -168,18 +168,19 @@
             {% endif %}
         </section>
     {% endif %}
-    {# Security.txt (RFC 9116) #}
+    {# security.txt (RFC 9116) #}
     {% if team.is_public %}
         <section class="mt-8 pt-8 border-t border-border"
                  x-data="{ securityTxtEnabled: {{ security_txt_config.enabled|default:False|yesno:'true,false' }} }">
             <div class="flex flex-wrap items-center justify-between gap-3">
+                {# The filename is the name: RFC 9116 writes security.txt lowercase everywhere. #}
                 <h3 class="text-sm font-semibold text-text m-0">
-                    Security.txt
+                    security.txt
                     <span class="text-text-muted font-normal">(RFC 9116)</span>
                 </h3>
-                <span class="text-xs font-medium"
-                      :class="securityTxtEnabled ? 'text-success' : 'text-text-muted'"
-                      x-text="securityTxtEnabled ? 'Enabled' : 'Disabled'"></span>
+                {# TEA-style status badges; x-show keeps them live since this toggle saves via the form's Save. #}
+                <c-badges.success x-show="securityTxtEnabled" x-cloak>Enabled</c-badges.success>
+                <c-badges.secondary x-show="!securityTxtEnabled">Disabled</c-badges.secondary>
             </div>
             <p class="text-sm text-text-muted mt-1 m-0">
                 Help security researchers report vulnerabilities via a standard contact file.
@@ -226,6 +227,18 @@
                                class="text-primary hover:underline">Contact Profiles</a>.
                             </c-forms.hint>
                         </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <c-forms.label for="security_txt_csirt_email">CSIRT email</c-forms.label>
+                                <c-forms.input type="email" id="security_txt_csirt_email" name="security_txt_csirt_email" value="{{ security_txt_config.csirt_email|default:'' }}" placeholder="csirt@example.com" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Second contact line. BSI TR-03183-3 lists the CSIRT mailbox after the security contact.</c-forms.hint>
+                            </div>
+                            <div>
+                                <c-forms.label for="security_txt_report_url">Report page URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_report_url" name="security_txt_report_url" value="{{ security_txt_config.report_url|default:'' }}" placeholder="https://example.com/report-vulnerability" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Where researchers submit reports. Third contact line.</c-forms.hint>
+                            </div>
+                        </div>
                     </div>
                     {# Optional: Links #}
                     <div class="mb-6 pb-6 border-b border-border/50">
@@ -259,6 +272,11 @@
                                        name="security_txt_encryption_urls"
                                        :value="JSON.stringify(urls)">
                                 <c-forms.hint class="mt-1">PGP public keys for encrypted reports (multiple allowed per RFC 9116)</c-forms.hint>
+                            </div>
+                            <div>
+                                <c-forms.label for="security_txt_csaf_url">CSAF provider metadata URL</c-forms.label>
+                                <c-forms.input type="url" id="security_txt_csaf_url" name="security_txt_csaf_url" value="{{ security_txt_config.csaf_url|default:'' }}" placeholder="https://example.com/.well-known/csaf/provider-metadata.json" disabled="{{ can_administer|yesno:',1' }}" />
+                                <c-forms.hint class="mt-1">Link to your provider-metadata.json if you publish CSAF advisories.</c-forms.hint>
                             </div>
                             <div>
                                 <c-forms.label for="security_txt_acknowledgments_url">Acknowledgments URL</c-forms.label>

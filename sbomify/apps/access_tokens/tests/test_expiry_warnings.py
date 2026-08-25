@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 from django.core import mail
+from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 
 from sbomify.apps.access_tokens.models import AccessToken, TokenExpiryWarning
@@ -288,6 +289,36 @@ class TestEmailSweep:
 
         assert len(mail.outbox) == 1
         assert mail.outbox[0].to == [member.user.email]
+
+    def test_a_partly_delivered_warning_is_retried(
+        self, sample_team_with_owner_member: Any, guest_user: Any, mocker: Any
+    ) -> None:
+        """One owner's address bouncing must not burn the threshold for the rest.
+
+        A bot token warns every owner. If one send fails and the others succeed,
+        marking the threshold would leave that owner unwarned until the token
+        expired, so nothing is marked and the next sweep tries again.
+        """
+        member = sample_team_with_owner_member
+        second = type(member.user).objects.create_user(
+            username="owner2", email="owner2@example.com", password="password"
+        )
+        Member.objects.create(user=second, team=member.team, role="owner")
+        _bot_member(guest_user, member.team)
+        token = _token(guest_user, member.team, days=2, description="release bot")
+
+        real_send = EmailMultiAlternatives.send
+
+        def send_one_then_fail(self: Any, *args: Any, **kwargs: Any) -> Any:
+            if self.to == ["owner2@example.com"]:
+                raise OSError("mailbox unavailable")
+            return real_send(self, *args, **kwargs)
+
+        mocker.patch.object(EmailMultiAlternatives, "send", send_one_then_fail)
+
+        warn_expiring_tokens.fn()
+
+        assert token.expiry_warnings.count() == 0, "a partial delivery must not mark the threshold"
 
     def test_expired_and_eternal_tokens_are_ignored(self, sample_team_with_owner_member: Any) -> None:
         member = sample_team_with_owner_member

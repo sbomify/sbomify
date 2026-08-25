@@ -1,5 +1,6 @@
 import json
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -53,6 +54,42 @@ class TestReleaseArtifactsAPI(TestCase):
 
         # Add SBOM to release as artifact
         self.release_artifact = ReleaseArtifact.objects.create(release=self.release, sbom=self.sbom)
+
+    def test_page_size_minus_one_returns_every_artifact_in_both_modes(self):
+        """The table paginates client-side, so a clamped -1 would hide rows.
+
+        The available branch does its own clamping rather than going through
+        _paginate_queryset, so the two modes have to be checked separately.
+        """
+        # Available artifacts are drawn from the product's components, so the
+        # component has to be attached or that list stays empty.
+        self.product.components.add(self.component)
+        extras = [
+            SBOM.objects.create(
+                name=f"extra-sbom-{index}",
+                version=f"1.0.{index}",
+                format="cyclonedx",
+                format_version="1.6",
+                component=self.component,
+            )
+            for index in range(4)
+        ]
+        # Two pinned, two not, so neither mode is trivially satisfied.
+        for sbom in extras[:2]:
+            ReleaseArtifact.objects.get_or_create(release=self.release, sbom=sbom)
+
+        for mode in ("existing", "available"):
+            response = Client().get(f"/api/v1/releases/{self.release.id}/artifacts?mode={mode}&page_size=-1")
+            assert response.status_code == 200, mode
+            payload = json.loads(response.content)
+            assert payload["pagination"]["total"] > 1, f"{mode} fixture proves nothing"
+            assert payload["pagination"]["page_size"] >= payload["pagination"]["total"], mode
+            assert len(payload["items"]) == payload["pagination"]["total"], mode
+            # Both modes have to report the same shape, or a client walking
+            # pages gets a different contract depending on what it asked for.
+            assert payload["pagination"]["page"] == 1, mode
+            assert payload["pagination"]["total_pages"] == 1, mode
+            assert payload["pagination"]["has_previous"] is False, mode
 
     def test_bom_type_survives_response_serialisation(self):
         """bom_type must reach the client through the response schema.
@@ -193,7 +230,9 @@ class TestAddArtifactsToReleaseAPI:
         self.release = Release.objects.create(name="v1.0.0", product=self.product, is_latest=False, is_prerelease=False)
 
         # Create component
-        self.component = Component.objects.create(name="Test Component", team=self.team, visibility=Component.Visibility.PRIVATE)
+        self.component = Component.objects.create(
+            name="Test Component", team=self.team, visibility=Component.Visibility.PRIVATE
+        )
 
         # Create SBOM
         self.sbom = SBOM.objects.create(name="Test SBOM", component=self.component, format="cyclonedx", version="1.0.0")
@@ -223,6 +262,49 @@ class TestAddArtifactsToReleaseAPI:
 
         # Verify artifact was created
         assert ReleaseArtifact.objects.filter(release=self.release, sbom=self.sbom).exists()
+
+    def test_pinning_an_artifact_broadcasts_to_the_workspace(
+        self, authenticated_api_client: tuple[Client, Any], django_capture_on_commit_callbacks: Any
+    ) -> None:
+        """Open release views repaint on the broadcast instead of waiting for a reload."""
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+
+        with (
+            patch("sbomify.apps.core.apis.broadcast_to_workspace") as mock_broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            response = client.post(
+                f"/api/v1/releases/{self.release.id}/artifacts",
+                data=json.dumps({"sbom_id": str(self.sbom.id)}),
+                content_type="application/json",
+                **headers,
+            )
+
+        assert response.status_code == 201
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.kwargs["message_type"] == "release_updated"
+        assert mock_broadcast.call_args.kwargs["data"]["release_id"] == str(self.release.id)
+
+    def test_unpinning_an_artifact_broadcasts_to_the_workspace(
+        self, authenticated_api_client: tuple[Client, Any], django_capture_on_commit_callbacks: Any
+    ) -> None:
+        client, access_token = authenticated_api_client
+        headers = get_api_headers(access_token)
+        artifact = ReleaseArtifact.objects.create(release=self.release, sbom=self.sbom)
+
+        with (
+            patch("sbomify.apps.core.apis.broadcast_to_workspace") as mock_broadcast,
+            django_capture_on_commit_callbacks(execute=True),
+        ):
+            response = client.delete(
+                f"/api/v1/releases/{self.release.id}/artifacts/{artifact.id}",
+                **headers,
+            )
+
+        assert response.status_code == 204
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args.kwargs["message_type"] == "release_updated"
 
     def test_add_duplicate_artifact_returns_409_conflict(self, authenticated_api_client: tuple[Client, Any]) -> None:
         """Test that adding a duplicate artifact returns 409 Conflict.
